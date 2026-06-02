@@ -31,7 +31,14 @@ export type PrimaryActionKind =
 // because Fetch participates in the busy flag, but it is intentionally NOT
 // in PrimaryActionKind — Fetch is dropdown-only, so when fetch is in flight
 // the primary keeps its natural label and CommitArea suppresses the spinner.
-export type RemoteOpKind = 'push' | 'pull' | 'sync' | 'fetch' | 'publish' | 'rebase'
+export type RemoteOpKind =
+  | 'push'
+  | 'pull'
+  | 'sync'
+  | 'fetch'
+  | 'fast_forward'
+  | 'publish'
+  | 'rebase'
 
 export type PrimaryAction = {
   kind: PrimaryActionKind
@@ -70,6 +77,15 @@ const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string
   sync: 'Sync',
   publish: 'Publish Branch',
   create_pr: 'Create PR'
+}
+
+function reviewCopy(provider: HostedReviewCreationEligibility['provider'] | undefined): {
+  shortLabel: 'PR' | 'MR'
+  reviewLabel: 'pull request' | 'merge request'
+} {
+  return provider === 'gitlab'
+    ? { shortLabel: 'MR', reviewLabel: 'merge request' }
+    : { shortLabel: 'PR', reviewLabel: 'pull request' }
 }
 
 function describePushCount(ahead: number): string {
@@ -326,10 +342,11 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (hostedReviewCreation?.canCreate) {
+    const copy = reviewCopy(hostedReviewCreation.provider)
     return {
       kind: 'create_pr',
-      label: 'Create PR',
-      title: 'Create a pull request for this branch',
+      label: `Create ${copy.shortLabel}`,
+      title: `Create a ${copy.reviewLabel} for this branch`,
       disabled: false
     }
   }

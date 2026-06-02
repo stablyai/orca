@@ -1,10 +1,22 @@
 import { useState, useRef, useCallback } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Linking } from 'react-native'
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  Linking,
+  type LayoutChangeEvent
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
 import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
+import {
+  startPairingConnectionAttempt,
+  type PairingConnectionAttempt
+} from '../src/transport/pairing-connection-attempt'
 import { connect } from '../src/transport/rpc-client'
 import { saveHost, getNextHostName } from '../src/transport/host-store'
 import type { ConnectionLogEntry, PairingOffer, RpcResponse } from '../src/transport/types'
@@ -16,6 +28,8 @@ import { ConnectionLog } from '../src/components/ConnectionLog'
 // route surfaces as a real error with the log visible instead of a
 // silent infinite spinner.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
+const SCAN_RETICLE_SCALE = 0.62
+const SCAN_RETICLE_MAX_SIZE = 360
 
 function Step({ number, text }: { number: number; text: string }) {
   return (
@@ -35,13 +49,30 @@ export default function PairScanScreen() {
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
   const [errorMessage, setErrorMessage] = useState('')
   const [pasteVisible, setPasteVisible] = useState(false)
+  const [cameraBounds, setCameraBounds] = useState({ width: 0, height: 0 })
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
   const logsRef = useRef<ConnectionLogEntry[]>([])
   const processingRef = useRef(false)
+  const mountedRef = useRef(true)
+  const activePairingAttemptRef = useRef<PairingConnectionAttempt | null>(null)
+
+  const setPairScanRootRef = useCallback((node: View | null): void => {
+    if (node !== null) {
+      mountedRef.current = true
+      return
+    }
+    // Why: pairing attempts can outlive the visible route; dispose them when
+    // the scan screen detaches without a passive cleanup-only Effect.
+    mountedRef.current = false
+    activePairingAttemptRef.current?.dispose()
+    activePairingAttemptRef.current = null
+  }, [])
 
   const handleBarCodeScanned = useCallback(
     ({ data }: { data: string }) => {
-      if (processingRef.current) return
+      if (processingRef.current) {
+        return
+      }
       processingRef.current = true
 
       const offer = decodePairingUrl(data)
@@ -59,7 +90,9 @@ export default function PairScanScreen() {
 
   const handlePasteSubmit = useCallback((input: string) => {
     setPasteVisible(false)
-    if (processingRef.current) return
+    if (processingRef.current) {
+      return
+    }
     processingRef.current = true
 
     const offer = parsePairingCode(input)
@@ -73,35 +106,65 @@ export default function PairScanScreen() {
     void testAndSave(offer)
   }, [])
 
+  const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout
+    const nextBounds = {
+      width: Math.round(width),
+      height: Math.round(height)
+    }
+    setCameraBounds((currentBounds) =>
+      currentBounds.width === nextBounds.width && currentBounds.height === nextBounds.height
+        ? currentBounds
+        : nextBounds
+    )
+  }, [])
+
   async function testAndSave(offer: PairingOffer) {
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
     let client: ReturnType<typeof connect> | null = null
+    activePairingAttemptRef.current?.dispose()
 
     // Why: split the try/catch around the network call vs the local save
     // so a Keychain or AsyncStorage failure doesn't masquerade as a
     // "Cannot connect — same network?" error. Pairing reached the
     // desktop fine; the failure is local persistence.
     let response: RpcResponse
-    let timedOut = false
-    const overallTimer = setTimeout(() => {
-      timedOut = true
-      client?.close()
-    }, PAIRING_OVERALL_TIMEOUT_MS)
+    const attempt = startPairingConnectionAttempt({
+      timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+      closeClient: () => client?.close()
+    })
+    activePairingAttemptRef.current = attempt
     try {
       client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
         onLog: (entry) => {
+          if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
+            return
+          }
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
       })
       response = await client.sendRequest('status.get')
-      clearTimeout(overallTimer)
-      client.close()
-      client = null
+      const attemptIsCurrent = activePairingAttemptRef.current === attempt
+      attempt.dispose()
+      if (activePairingAttemptRef.current === attempt) {
+        activePairingAttemptRef.current = null
+      }
+      if (!mountedRef.current || !attemptIsCurrent) {
+        return
+      }
     } catch (err) {
-      clearTimeout(overallTimer)
+      const timedOut = attempt.timedOut
+      const attemptIsCurrent = activePairingAttemptRef.current === attempt
+      attempt.dispose()
+      if (activePairingAttemptRef.current === attempt) {
+        activePairingAttemptRef.current = null
+      }
+      if (!mountedRef.current || !attemptIsCurrent) {
+        return
+      }
       console.warn('[pair] connect failed', err)
       setStatus('error')
       setErrorMessage(
@@ -110,11 +173,13 @@ export default function PairScanScreen() {
           : 'Cannot connect — check that your computer is on the same network'
       )
       processingRef.current = false
-      client?.close()
       return
     }
 
     if (!response.ok) {
+      if (!mountedRef.current) {
+        return
+      }
       if (response.error.code === 'unauthorized') {
         setStatus('error')
         setErrorMessage('Authentication failed — token may be expired')
@@ -138,8 +203,14 @@ export default function PairScanScreen() {
         publicKeyB64: offer.publicKeyB64,
         lastConnected: Date.now()
       })
+      if (!mountedRef.current) {
+        return
+      }
       router.replace(`/h/${hostId}`)
     } catch (err) {
+      if (!mountedRef.current) {
+        return
+      }
       console.warn('[pair] save failed', err)
       setStatus('error')
       setErrorMessage(
@@ -164,10 +235,16 @@ export default function PairScanScreen() {
     paddingTop: insets.top + spacing.sm,
     paddingBottom: insets.bottom + spacing.sm
   }
+  // Why: iPad camera previews are often rectangular, but QR guides should
+  // stay square so the corners still describe the code shape.
+  const reticleSize = Math.min(
+    Math.round(Math.min(cameraBounds.width, cameraBounds.height) * SCAN_RETICLE_SCALE),
+    SCAN_RETICLE_MAX_SIZE
+  )
 
   if (!permission) {
     return (
-      <View style={[styles.container, containerPadding]}>
+      <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
         <ActivityIndicator color={colors.textSecondary} />
       </View>
     )
@@ -176,7 +253,7 @@ export default function PairScanScreen() {
   if (!permission.granted) {
     const canAskAgain = permission.canAskAgain !== false
     return (
-      <View style={[styles.container, containerPadding]}>
+      <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ChevronLeft size={22} color={colors.textSecondary} />
         </Pressable>
@@ -210,7 +287,7 @@ export default function PairScanScreen() {
           visible={pasteVisible}
           title="Paste pairing code"
           message="Copy the code shown under the QR on your computer."
-          placeholder="orca://pair#... or paste the code"
+          placeholder="orca://pair?code=... or paste the code"
           onSubmit={handlePasteSubmit}
           onCancel={() => setPasteVisible(false)}
         />
@@ -219,7 +296,7 @@ export default function PairScanScreen() {
   }
 
   return (
-    <View style={[styles.container, containerPadding]}>
+    <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
       <Pressable style={styles.backButton} onPress={() => router.back()}>
         <ChevronLeft size={22} color={colors.textSecondary} />
       </Pressable>
@@ -238,7 +315,7 @@ export default function PairScanScreen() {
               they cancel the sheet and the QR was scanned silently in
               the meantime. */}
           {!pasteVisible && (
-            <View style={styles.cameraWrap}>
+            <View style={styles.cameraWrap} onLayout={handleCameraLayout}>
               <CameraView
                 style={styles.camera}
                 facing="back"
@@ -246,10 +323,12 @@ export default function PairScanScreen() {
                 onBarcodeScanned={handleBarCodeScanned}
               />
               <View style={styles.reticle} pointerEvents="none">
-                <View style={[styles.corner, styles.cornerTL]} />
-                <View style={[styles.corner, styles.cornerTR]} />
-                <View style={[styles.corner, styles.cornerBL]} />
-                <View style={[styles.corner, styles.cornerBR]} />
+                <View style={[styles.reticleFrame, { width: reticleSize, height: reticleSize }]}>
+                  <View style={[styles.corner, styles.cornerTL]} />
+                  <View style={[styles.corner, styles.cornerTR]} />
+                  <View style={[styles.corner, styles.cornerBL]} />
+                  <View style={[styles.corner, styles.cornerBR]} />
+                </View>
               </View>
             </View>
           )}
@@ -306,7 +385,7 @@ export default function PairScanScreen() {
         visible={pasteVisible}
         title="Paste pairing code"
         message="Copy the code shown under the QR on your computer."
-        placeholder="orca://pair#... or paste the code"
+        placeholder="orca://pair?code=... or paste the code"
         onSubmit={handlePasteSubmit}
         onCancel={() => setPasteVisible(false)}
       />
@@ -376,6 +455,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
+  reticleFrame: {
+    position: 'relative'
+  },
   corner: {
     position: 'absolute',
     width: 28,
@@ -383,29 +465,29 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.7)'
   },
   cornerTL: {
-    top: '30%',
-    left: '20%',
+    top: 0,
+    left: 0,
     borderTopWidth: 2.5,
     borderLeftWidth: 2.5,
     borderTopLeftRadius: 6
   },
   cornerTR: {
-    top: '30%',
-    right: '20%',
+    top: 0,
+    right: 0,
     borderTopWidth: 2.5,
     borderRightWidth: 2.5,
     borderTopRightRadius: 6
   },
   cornerBL: {
-    bottom: '30%',
-    left: '20%',
+    bottom: 0,
+    left: 0,
     borderBottomWidth: 2.5,
     borderLeftWidth: 2.5,
     borderBottomLeftRadius: 6
   },
   cornerBR: {
-    bottom: '30%',
-    right: '20%',
+    bottom: 0,
+    right: 0,
     borderBottomWidth: 2.5,
     borderRightWidth: 2.5,
     borderBottomRightRadius: 6

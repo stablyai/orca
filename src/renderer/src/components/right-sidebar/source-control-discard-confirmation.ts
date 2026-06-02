@@ -69,9 +69,5 @@ export function getDiscardAreaConfirmationCopy(
             : `This will revert unstaged changes in ${count} files. This cannot be undone.`,
         confirmLabel: 'Discard all'
       }
-    default: {
-      const _exhaustive: never = area
-      return _exhaustive
-    }
   }
 }

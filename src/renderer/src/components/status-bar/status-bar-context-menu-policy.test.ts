@@ -12,6 +12,12 @@ function targetMatching(selector: string | null): EventTarget & {
   } as EventTarget & { closest: (value: string) => Element | null }
 }
 
+function textTargetInside(selector: string): EventTarget {
+  return {
+    parentElement: targetMatching(selector)
+  } as unknown as EventTarget
+}
+
 describe('shouldOpenStatusBarContextMenu', () => {
   it('opens for plain status-bar right-clicks', () => {
     expect(shouldOpenStatusBarContextMenu(targetMatching(null))).toBe(true)
@@ -31,5 +37,11 @@ describe('shouldOpenStatusBarContextMenu', () => {
 
   it('opens when the browser gives a non-element target', () => {
     expect(shouldOpenStatusBarContextMenu(null)).toBe(true)
+  })
+
+  it('honors exemptions when the event target is a text node inside the exempt surface', () => {
+    expect(
+      shouldOpenStatusBarContextMenu(textTargetInside(STATUS_BAR_CONTEXT_MENU_EXEMPT_SELECTOR))
+    ).toBe(false)
   })
 })

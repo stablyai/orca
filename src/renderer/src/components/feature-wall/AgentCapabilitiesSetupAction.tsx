@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Check, Globe2, Loader2, MonitorCog, Workflow } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Check, Globe2, Loader2, MonitorCog, Terminal, Workflow } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,13 @@ import {
   type OnboardingFeatureSetupId,
   type OnboardingFeatureSetupSelection
 } from '../onboarding/onboarding-feature-setup'
+import {
+  getAgentCapabilityStatusClassName,
+  getDefaultAgentCapabilitySetupSelection,
+  isAgentCapabilityReadinessChecking,
+  useAgentCapabilitySetupStatus,
+  type AgentCapabilityInstallStatus
+} from './agent-capability-setup-status'
 import { AgentsOrchestrationVisual } from './AgentsOrchestrationVisual'
 import { BrowserAnimatedVisual } from './BrowserAnimatedVisual'
 import { ComputerUseAnimatedVisual } from './ComputerUseAnimatedVisual'
@@ -21,7 +28,12 @@ export function AgentCapabilitiesSetupAction(props: {
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
   onBrowserUseSkillInstalledChange: (installed: boolean) => void
 }): React.JSX.Element {
-  const { reducedMotion } = props
+  const { reducedMotion, onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } =
+    props
+  const capabilitySetupStatus = useAgentCapabilitySetupStatus()
+  const { readiness } = capabilitySetupStatus
+  const featureSetupDefaultsAppliedRef = useRef(false)
+  const featureSetupChangedByUserRef = useRef(false)
   const [featureSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
     DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION
   )
@@ -30,6 +42,26 @@ export function AgentCapabilitiesSetupAction(props: {
     useState<OnboardingFeatureSetupSelection | null>(null)
   const [setupBusyLabel, setSetupBusyLabel] = useState<string | null>(null)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  useEffect(() => {
+    onBrowserUseSkillInstalledChange(readiness.browserUseSkillInstalled)
+  }, [onBrowserUseSkillInstalledChange, readiness.browserUseSkillInstalled])
+  useEffect(() => {
+    onOrchestrationSkillInstalledChange(readiness.orchestrationSkillInstalled)
+  }, [onOrchestrationSkillInstalledChange, readiness.orchestrationSkillInstalled])
+  useEffect(() => {
+    if (featureSetupDefaultsAppliedRef.current || featureSetupChangedByUserRef.current) {
+      return
+    }
+    if (isAgentCapabilityReadinessChecking(readiness)) {
+      return
+    }
+    featureSetupDefaultsAppliedRef.current = true
+    setFeatureSetup(getDefaultAgentCapabilitySetupSelection(readiness))
+  }, [readiness])
+  const handleFeatureSetupChange = useCallback((value: OnboardingFeatureSetupSelection): void => {
+    featureSetupChangedByUserRef.current = true
+    setFeatureSetup(value)
+  }, [])
   const handleStartFeatureSetup = useCallback(async (): Promise<void> => {
     if (setupBusyLabel !== null || featureSetupCommand !== null) {
       return
@@ -71,15 +103,16 @@ export function AgentCapabilitiesSetupAction(props: {
 
   return (
     <div className="space-y-5">
-      <AgentCapabilityAnimationCarousel reducedMotion={reducedMotion} />
       <AgentCapabilitySetupControls
         featureSetup={featureSetup}
-        onFeatureSetupChange={setFeatureSetup}
+        onFeatureSetupChange={handleFeatureSetupChange}
         featureSetupCommand={featureSetupCommand}
         featureSetupCommandSelection={featureSetupCommandSelection}
         setupBusyLabel={setupBusyLabel}
         onStartFeatureSetup={() => void handleStartFeatureSetup()}
+        installStatus={capabilitySetupStatus.installStatus}
       />
+      <AgentCapabilityAnimationCarousel reducedMotion={reducedMotion} />
     </div>
   )
 }
@@ -100,6 +133,11 @@ type AgentCapabilitySlide = {
 
 const AGENT_CAPABILITY_SETUP_ROWS: readonly AgentCapabilitySetupRow[] = [
   {
+    id: 'orchestration',
+    title: 'Agent Orchestration',
+    icon: <Workflow className="size-4" />
+  },
+  {
     id: 'browserUse',
     title: 'Agent Browser Use',
     icon: <Globe2 className="size-4" />
@@ -108,11 +146,6 @@ const AGENT_CAPABILITY_SETUP_ROWS: readonly AgentCapabilitySetupRow[] = [
     id: 'computerUse',
     title: 'Computer Use',
     icon: <MonitorCog className="size-4" />
-  },
-  {
-    id: 'orchestration',
-    title: 'Agent Orchestration',
-    icon: <Workflow className="size-4" />
   }
 ]
 
@@ -123,6 +156,7 @@ function AgentCapabilitySetupControls(props: {
   featureSetupCommandSelection: OnboardingFeatureSetupSelection | null
   setupBusyLabel: string | null
   onStartFeatureSetup: () => void
+  installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }): React.JSX.Element {
   const hasSelectedFeatures = hasSelectedOnboardingFeatureSetup(props.featureSetup)
   const showSetupAction = !props.featureSetupCommand
@@ -132,6 +166,7 @@ function AgentCapabilitySetupControls(props: {
       <AgentCapabilitySetupChecklist
         value={props.featureSetup}
         onChange={props.onFeatureSetupChange}
+        installStatus={props.installStatus}
       />
       {showSetupAction ? (
         <div className="mt-4 flex items-center">
@@ -142,8 +177,12 @@ function AgentCapabilitySetupControls(props: {
             disabled={!hasSelectedFeatures || Boolean(props.setupBusyLabel)}
             onClick={props.onStartFeatureSetup}
           >
-            {props.setupBusyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
-            {props.setupBusyLabel ?? 'Enable capabilities'}
+            {props.setupBusyLabel ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Terminal className="size-4" />
+            )}
+            {props.setupBusyLabel ?? 'Install CLI & Skills'}
           </Button>
         </div>
       ) : null}
@@ -160,12 +199,14 @@ function AgentCapabilitySetupControls(props: {
 function AgentCapabilitySetupChecklist(props: {
   value: OnboardingFeatureSetupSelection
   onChange: (value: OnboardingFeatureSetupSelection) => void
+  installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }): React.JSX.Element {
   return (
     <section className="mt-6">
       <div className="grid gap-3 md:grid-cols-3">
         {AGENT_CAPABILITY_SETUP_ROWS.map((row) => {
           const selected = props.value[row.id]
+          const installStatus = props.installStatus[row.id]
           return (
             <button
               key={row.id}
@@ -174,7 +215,7 @@ function AgentCapabilitySetupChecklist(props: {
               aria-checked={selected}
               aria-label={`${selected ? 'Disable' : 'Enable'} ${row.title}`}
               className={cn(
-                'flex min-h-28 flex-col rounded-lg border px-4 py-3 text-left transition-colors',
+                'flex min-h-24 flex-col rounded-lg border px-4 py-3 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                 selected
                   ? 'border-ring bg-accent text-foreground ring-2 ring-ring/25'
@@ -206,14 +247,47 @@ function AgentCapabilitySetupChecklist(props: {
                 </span>
               </span>
               <span className="mt-3 text-sm font-medium text-foreground">{row.title}</span>
-              <span className="mt-auto pt-3 text-[11px] font-medium text-muted-foreground">
-                {selected ? 'Included' : 'Skipped'}
-              </span>
+              <AgentCapabilityStatusNote status={installStatus} />
             </button>
           )
         })}
       </div>
     </section>
+  )
+}
+
+function AgentCapabilityStatusNote(props: {
+  status: AgentCapabilityInstallStatus
+}): React.JSX.Element {
+  if (props.status.installed) {
+    return (
+      <span className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="rounded-full border border-green-500/45 bg-green-500/10 px-2 py-0.5 text-[11px] font-semibold leading-none text-green-700 dark:text-green-300">
+          Installed
+        </span>
+        {props.status.label !== 'Installed' ? (
+          <span
+            className={cn(
+              'text-xs font-medium',
+              getAgentCapabilityStatusClassName(props.status.tone)
+            )}
+          >
+            {props.status.label}
+          </span>
+        ) : null}
+      </span>
+    )
+  }
+
+  return (
+    <span
+      className={cn(
+        'mt-1 text-xs font-medium',
+        getAgentCapabilityStatusClassName(props.status.tone)
+      )}
+    >
+      {props.status.label}
+    </span>
   )
 }
 
@@ -284,9 +358,7 @@ function AgentCapabilityAnimationCarousel(props: { reducedMotion: boolean }): Re
   return (
     <div className="rounded-xl border border-border bg-muted/20 p-3">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          {activeSlide.title}
-        </div>
+        <div className="text-xs font-semibold leading-none text-muted-foreground">Preview</div>
         <div className="flex items-center gap-1">
           {slides.map((slide, index) => (
             <button

@@ -66,6 +66,19 @@ export async function sendRequest<TResult>(
         )
       })
     })
+    // Why: a clean peer close (FIN, no 'error') before a terminal frame never
+    // settles the promise, so the call would otherwise hang until the full
+    // timeout fires. Reject promptly. finish() guards double-settle, so this
+    // no-ops on the normal success/error paths that already called socket.end().
+    socket.once('close', () => {
+      finish({
+        ok: false,
+        error: new RuntimeClientError(
+          'runtime_unavailable',
+          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+        )
+      })
+    })
     socket.on('data', (chunk) => {
       buffer += chunk
       // Why: the server may interleave `{"_keepalive":true}\n` frames with the

@@ -1,19 +1,15 @@
+/* eslint-disable max-lines -- Why: this suite covers one row-building seam
+   shared by retention, stale decay, and orchestration lineage regressions. */
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry,
-  type MigrationUnsupportedPtyEntry
+  type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
-import {
-  buildWorktreeAgentRows,
-  selectLiveAgentStatusEntriesForWorktree,
-  selectMigrationUnsupportedEntriesForWorktree,
-  selectRetainedAgentEntriesForWorktree
-} from './useWorktreeAgentRows'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
 const PANE_KEY_1 = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
@@ -115,6 +111,166 @@ describe('buildWorktreeAgentRows', () => {
     const done = rows.find((r) => r.paneKey === PANE_KEY_2)
     expect(working?.state).toBe('idle')
     expect(done?.state).toBe('done')
+  })
+
+  it('renders live worktree-attributed entries even when their tab is absent', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [],
+      entries: [
+        makeEntry(PANE_KEY_1, 1000, {
+          state: 'working',
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          prompt: 'child agent'
+        })
+      ],
+      retained: [],
+      now: 2000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1])
+    expect(rows[0]).toMatchObject({
+      state: 'working',
+      tab: {
+        id: 'tab-1',
+        worktreeId: 'wt-1'
+      }
+    })
+  })
+
+  it('uses runtime orchestration metadata for hook-reported live rows', () => {
+    const parent = makeEntry(PANE_KEY_1, 1000, {
+      prompt: 'parent',
+      state: 'working'
+    })
+    const child = makeEntry(PANE_KEY_2, 1200, {
+      prompt: 'child',
+      state: 'working'
+    })
+    const rows = applyAgentRowLineage(
+      buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1'), makeTab('tab-2')],
+        entries: [parent, child],
+        retained: [],
+        runtimeAgentOrchestrationByPaneKey: {
+          [PANE_KEY_2]: {
+            taskId: 'task-1',
+            dispatchId: 'ctx-1',
+            parentPaneKey: PANE_KEY_1
+          }
+        },
+        now: 2000
+      })
+    )
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1, PANE_KEY_2])
+    expect(rows[0].lineage).toMatchObject({ depth: 0, childCount: 1 })
+    expect(rows[1].lineage).toMatchObject({ depth: 1, childCount: 0 })
+    expect(rows[1].entry.orchestration).toMatchObject({ parentPaneKey: PANE_KEY_1 })
+  })
+
+  it('does not override current hook dispatch identity with mismatched runtime metadata', () => {
+    const currentParent = makeEntry(PANE_KEY_1, 1000, {
+      prompt: 'current parent',
+      state: 'done'
+    })
+    const staleParent = makeEntry(PANE_KEY_3, 1100, {
+      prompt: 'stale parent',
+      state: 'working'
+    })
+    const child = makeEntry(PANE_KEY_2, 1200, {
+      prompt: 'child',
+      state: 'working',
+      orchestration: {
+        taskId: 'task-2',
+        dispatchId: 'ctx-2',
+        parentPaneKey: PANE_KEY_1,
+        parentTerminalHandle: 'term-current'
+      }
+    })
+    const rows = applyAgentRowLineage(
+      buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1'), makeTab('tab-2'), makeTab('tab-3')],
+        entries: [currentParent, staleParent, child],
+        retained: [],
+        runtimeAgentOrchestrationByPaneKey: {
+          [PANE_KEY_2]: {
+            taskId: 'task-1',
+            dispatchId: 'ctx-1',
+            parentPaneKey: PANE_KEY_3,
+            parentTerminalHandle: 'term-stale'
+          }
+        },
+        now: 2000
+      })
+    )
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1, PANE_KEY_2, PANE_KEY_3])
+    expect(rows[0].lineage).toMatchObject({ depth: 0, childCount: 1 })
+    expect(rows[1].lineage).toMatchObject({ depth: 1, childCount: 0 })
+    expect(rows[1].entry.orchestration).toEqual({
+      taskId: 'task-2',
+      dispatchId: 'ctx-2',
+      parentPaneKey: PANE_KEY_1,
+      parentTerminalHandle: 'term-current'
+    })
+  })
+
+  it('uses runtime orchestration metadata for retained child rows', () => {
+    const parent = makeEntry(PANE_KEY_1, 1000, {
+      prompt: 'parent',
+      state: 'done'
+    })
+    const retainedChild = makeRetained(PANE_KEY_2, 'wt-1', 1200)
+    const rows = applyAgentRowLineage(
+      buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1')],
+        entries: [parent],
+        retained: [retainedChild],
+        runtimeAgentOrchestrationByPaneKey: {
+          [PANE_KEY_2]: {
+            taskId: 'task-1',
+            dispatchId: 'ctx-1',
+            parentPaneKey: PANE_KEY_1
+          }
+        },
+        now: 2000
+      })
+    )
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1, PANE_KEY_2])
+    expect(rows[0].lineage).toMatchObject({ depth: 0, childCount: 1 })
+    expect(rows[1].lineage).toMatchObject({ depth: 1, childCount: 0 })
+    expect(rows[1].entry.orchestration).toMatchObject({ parentPaneKey: PANE_KEY_1 })
+  })
+
+  it('groups child rows by parent terminal handle when parent pane key is missing', () => {
+    const parent = makeEntry(PANE_KEY_1, 1000, {
+      prompt: 'parent',
+      state: 'done',
+      terminalHandle: 'term-parent'
+    })
+    const child = makeEntry(PANE_KEY_2, 1200, {
+      prompt: 'child',
+      state: 'done',
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        parentTerminalHandle: 'term-parent'
+      }
+    })
+    const rows = applyAgentRowLineage(
+      buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1'), makeTab('tab-2')],
+        entries: [parent, child],
+        retained: [],
+        now: 2000
+      })
+    )
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1, PANE_KEY_2])
+    expect(rows[0].lineage).toMatchObject({ depth: 0, childCount: 1 })
+    expect(rows[1].lineage).toMatchObject({ depth: 1, childCount: 0 })
   })
 })
 
@@ -219,115 +375,5 @@ describe('applyAgentRowLineage', () => {
     ])
     expect(ordered[1].lineage).toMatchObject({ depth: 1, childCount: 1 })
     expect(ordered[2].lineage).toMatchObject({ depth: 1, childCount: 0 })
-  })
-})
-
-describe('selectMigrationUnsupportedEntriesForWorktree', () => {
-  it('returns raw migration records so shallow selectors can cache snapshots', () => {
-    const unsupported: MigrationUnsupportedPtyEntry = {
-      ptyId: 'pty-1',
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      leafId: '44444444-4444-4444-8444-444444444444',
-      paneKey: makePaneKey('tab-1', '44444444-4444-4444-8444-444444444444'),
-      reason: 'legacy-numeric-pane-key',
-      source: 'local',
-      updatedAt: 1000
-    }
-    const state = {
-      tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
-      agentStatusByPaneKey: {},
-      migrationUnsupportedByPtyId: { 'pty-1': unsupported },
-      retainedAgentsByPaneKey: {}
-    }
-
-    const first = selectMigrationUnsupportedEntriesForWorktree(state, 'wt-1')
-    const second = selectMigrationUnsupportedEntriesForWorktree(state, 'wt-1')
-
-    // Why: the Electron black-screen regression came from creating converted
-    // AgentStatusEntry objects inside the Zustand selector. Returning store
-    // records preserves element identity for useShallow.
-    expect(first).toEqual([unsupported])
-    expect(second).toEqual([unsupported])
-    expect(first).toBe(second)
-    expect(first[0]).toBe(second[0])
-  })
-})
-
-describe('selectLiveAgentStatusEntriesForWorktree', () => {
-  it('reuses unaffected worktree arrays when another worktree receives a same-state ping', () => {
-    const wt1Entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', prompt: 'first' })
-    const wt2Entry = makeEntry(PANE_KEY_2, 1000, { state: 'working', prompt: 'first' })
-    const state = {
-      tabsByWorktree: {
-        'wt-1': [makeTab('tab-1')],
-        'wt-2': [makeTab('tab-2')]
-      },
-      agentStatusByPaneKey: {
-        [PANE_KEY_1]: wt1Entry,
-        [PANE_KEY_2]: wt2Entry
-      },
-      migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {}
-    }
-
-    const firstWt1 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')
-    const firstWt2 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-2')
-    const nextState = {
-      ...state,
-      agentStatusByPaneKey: {
-        [PANE_KEY_1]: wt1Entry,
-        [PANE_KEY_2]: {
-          ...wt2Entry,
-          prompt: 'updated prompt preview',
-          updatedAt: 1100
-        }
-      }
-    }
-
-    const secondWt1 = selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')
-    const secondWt2 = selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-2')
-
-    // Why: WorktreeCard mounts one selector per visible card. A same-state
-    // hook ping for wt-2 must not make wt-1 pay a fresh array/render cost.
-    expect(secondWt1).toBe(firstWt1)
-    expect(secondWt2).not.toBe(firstWt2)
-    expect(secondWt2[0]?.prompt).toBe('updated prompt preview')
-  })
-})
-
-describe('selectRetainedAgentEntriesForWorktree', () => {
-  it('reuses unaffected worktree arrays when another worktree retained row changes', () => {
-    const wt1Retained = makeRetained(PANE_KEY_1, 'wt-1', 1000)
-    const wt2Retained = makeRetained(PANE_KEY_2, 'wt-2', 1000)
-    const state = {
-      tabsByWorktree: {},
-      agentStatusByPaneKey: {},
-      migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {
-        [PANE_KEY_1]: wt1Retained,
-        [PANE_KEY_2]: wt2Retained
-      }
-    }
-
-    const firstWt1 = selectRetainedAgentEntriesForWorktree(state, 'wt-1')
-    const firstWt2 = selectRetainedAgentEntriesForWorktree(state, 'wt-2')
-    const nextState = {
-      ...state,
-      retainedAgentsByPaneKey: {
-        [PANE_KEY_1]: wt1Retained,
-        [PANE_KEY_2]: {
-          ...wt2Retained,
-          startedAt: 1100
-        }
-      }
-    }
-
-    const secondWt1 = selectRetainedAgentEntriesForWorktree(nextState, 'wt-1')
-    const secondWt2 = selectRetainedAgentEntriesForWorktree(nextState, 'wt-2')
-
-    expect(secondWt1).toBe(firstWt1)
-    expect(secondWt2).not.toBe(firstWt2)
-    expect(secondWt2[0]?.startedAt).toBe(1100)
   })
 })

@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import { ClaudeIcon } from '../status-bar/icons'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import { CodexInlineIcon } from './feature-tour-preview-glyphs'
 
@@ -151,6 +152,8 @@ export function WorkbenchAnimatedVisual(props: {
 }): JSX.Element {
   const { reducedMotion, variant = 'tour' } = props
   const isTwoAgentsChecklist = variant === 'two-agents-checklist'
+  const splitRightShortcutLabel = useShortcutLabel('terminal.splitRight')
+  const splitDownShortcutLabel = useShortcutLabel('terminal.splitDown')
   const panelRef = useRef<HTMLDivElement | null>(null)
   const leftPaneRef = useRef<HTMLDivElement | null>(null)
   const splitRowRef = useRef<HTMLDivElement | null>(null)
@@ -416,9 +419,6 @@ export function WorkbenchAnimatedVisual(props: {
   const showRipple = phase.kind === 'right-click' || phase.kind === 'menu-click'
   const running = RUN_QUEUE[runIdx] ?? RUN_QUEUE[0]
   const promptAccentClass = isTwoAgentsChecklist ? 'text-foreground' : 'text-amber-600'
-  const isMac = navigator.userAgent.includes('Mac')
-  const splitRightShortcut = isMac ? '⌘D' : 'Ctrl+D'
-  const splitDownShortcut = isMac ? '⌘⇧D' : 'Ctrl+Shift+D'
 
   return (
     <div
@@ -432,9 +432,11 @@ export function WorkbenchAnimatedVisual(props: {
         <span className="size-2.5 rounded-full bg-emerald-400/70" />
       </div>
 
+      {/* Why: onboarding previews can flip theme without remounting this visual;
+          token-backed terminal chrome follows explicit and system theme changes. */}
       <div
         className={cn(
-          'grid bg-background font-mono text-[11px]',
+          'grid bg-[var(--editor-surface)] font-mono text-[11px]',
           reducedMotion
             ? 'transition-none'
             : 'transition-[grid-template-columns] duration-[600ms] ease-[cubic-bezier(.2,.8,.2,1)]',
@@ -450,14 +452,14 @@ export function WorkbenchAnimatedVisual(props: {
             <PlaywrightPane running={running} reducedMotion={reducedMotion} />
           )}
 
-          {/* Right-click context menu — light card, skeleton bars for the
+          {/* Right-click context menu — theme card, skeleton bars for the
               other items, real labels only for the two split actions. */}
           <ContextMenu
             shown={menuShown}
             splitRowActive={splitRowActive}
             splitRowRef={splitRowRef}
-            splitRightShortcut={splitRightShortcut}
-            splitDownShortcut={splitDownShortcut}
+            splitRightShortcutLabel={splitRightShortcutLabel}
+            splitDownShortcutLabel={splitDownShortcutLabel}
           />
         </div>
 
@@ -507,8 +509,8 @@ export function WorkbenchAnimatedVisual(props: {
         /* Standalone keyboard hint stays inside the visual so the tour copy can
             remain a single subheader line. */
         <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
-          Same pane: <kbd className={KBD_CLASS}>{splitRightShortcut}</kbd> splits right ·{' '}
-          <kbd className={KBD_CLASS}>{splitDownShortcut}</kbd> splits down
+          Same pane: <kbd className={KBD_CLASS}>{splitRightShortcutLabel}</kbd> splits right ·{' '}
+          <kbd className={KBD_CLASS}>{splitDownShortcutLabel}</kbd> splits down
         </div>
       )}
     </div>
@@ -639,8 +641,8 @@ function ContextMenu(props: {
   shown: boolean
   splitRowActive: boolean
   splitRowRef: React.RefObject<HTMLDivElement | null>
-  splitRightShortcut: string
-  splitDownShortcut: string
+  splitRightShortcutLabel: string
+  splitDownShortcutLabel: string
 }): JSX.Element {
   return (
     <div
@@ -667,7 +669,7 @@ function ContextMenu(props: {
         </span>
         <span className="whitespace-nowrap leading-none">Split Terminal Right</span>
         <span className="font-mono text-[11px] text-muted-foreground">
-          {props.splitRightShortcut}
+          {props.splitRightShortcutLabel}
         </span>
       </div>
       <div className="grid h-[22px] grid-cols-[18px_1fr_auto] items-center gap-2 rounded-[5px] px-1.5 py-1 pl-1.5">
@@ -676,7 +678,7 @@ function ContextMenu(props: {
         </span>
         <span className="whitespace-nowrap leading-none">Split Terminal Down</span>
         <span className="font-mono text-[11px] text-muted-foreground">
-          {props.splitDownShortcut}
+          {props.splitDownShortcutLabel}
         </span>
       </div>
       <CtxSeparator />

@@ -3,6 +3,7 @@ import { Star, X } from 'lucide-react'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { useAppStore } from '../store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 /**
  * Persistent "star Orca on GitHub" notification card.
@@ -19,6 +20,7 @@ export function StarNagCard(): React.JSX.Element | null {
   const [visible, setVisible] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(false)
+  const mountedRef = useMountedRef()
   // Why: UpdateCard lives at the same bottom-right slot. When it is visible
   // (any non-idle / non-not-available state), stack the star-nag card above
   // it instead of overlapping — we must not cover a pending update prompt
@@ -66,14 +68,20 @@ export function StarNagCard(): React.JSX.Element | null {
     }
     setBusy(true)
     setError(false)
-    const ok = await window.api.gh.starOrca()
-    setBusy(false)
+    const ok = await window.api.gh.starOrca('star_nag')
+    if (mountedRef.current) {
+      setBusy(false)
+    }
     if (!ok) {
-      setError(true)
+      if (mountedRef.current) {
+        setError(true)
+      }
       return
     }
     await window.api.starNag.complete()
-    setVisible(false)
+    if (mountedRef.current) {
+      setVisible(false)
+    }
   }
 
   return (

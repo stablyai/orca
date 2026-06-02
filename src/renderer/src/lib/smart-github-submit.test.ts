@@ -3,6 +3,7 @@ import {
   clearSmartGitHubSubmitLookupCacheForTests,
   getSmartGitHubSubmitIntent,
   getSmartGitHubSubmitResolution,
+  getSmartGitHubSubmitLookupCacheSizeForTests,
   lookupSmartGitHubSubmitItem
 } from './smart-github-submit'
 
@@ -178,6 +179,51 @@ describe('lookupSmartGitHubSubmitItem', () => {
     await expect(lookup()).resolves.toEqual(item)
     expect(workItemByOwnerRepo).toHaveBeenCalledTimes(2)
     expect(workItem).not.toHaveBeenCalled()
+  })
+
+  it('prunes expired distinct lookup entries on later lookups', async () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    const workItemByOwnerRepo = vi.fn()
+    const workItem = vi.fn().mockImplementation(({ number }) =>
+      Promise.resolve({
+        id: `issue-${number}`,
+        type: 'issue' as const,
+        number,
+        title: `Issue ${number}`,
+        state: 'open' as const,
+        url: `https://github.com/stablyai/orca/issues/${number}`,
+        labels: [],
+        updatedAt: '2026-05-26T00:00:00.000Z',
+        author: 'octocat',
+        repoId: 'repo-1'
+      })
+    )
+
+    try {
+      nowSpy.mockReturnValue(1_000)
+      await lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        intent: { kind: 'hash-number', number: 2049 },
+        workItem,
+        workItemByOwnerRepo
+      })
+      expect(getSmartGitHubSubmitLookupCacheSizeForTests()).toBe(1)
+
+      nowSpy.mockReturnValue(62_000)
+      await lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        intent: { kind: 'hash-number', number: 2050 },
+        workItem,
+        workItemByOwnerRepo
+      })
+
+      expect(getSmartGitHubSubmitLookupCacheSizeForTests()).toBe(1)
+      expect(workItem).toHaveBeenCalledTimes(2)
+    } finally {
+      nowSpy.mockRestore()
+    }
   })
 })
 

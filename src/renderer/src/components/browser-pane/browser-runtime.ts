@@ -13,6 +13,10 @@ export function clearLiveBrowserUrl(browserTabId: string): void {
   liveBrowserUrlByTabId.delete(browserTabId)
 }
 
+export function clearEvictedBrowserTab(browserTabId: string): void {
+  evictedBrowserTabIds.delete(browserTabId)
+}
+
 export function markEvictedBrowserTab(browserTabId: string): void {
   evictedBrowserTabIds.add(browserTabId)
 }
@@ -23,4 +27,8 @@ export function consumeEvictedBrowserTab(browserTabId: string): boolean {
     evictedBrowserTabIds.delete(browserTabId)
   }
   return wasEvicted
+}
+
+export function _getEvictedBrowserTabCountForTest(): number {
+  return evictedBrowserTabIds.size
 }

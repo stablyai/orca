@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/feature-interactions'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type { PersistedUIState } from '../../../../shared/types'
 import { defineMethod, type RpcMethod } from '../core'
 
@@ -24,6 +25,7 @@ const WorktreeCardProperty = z.enum([
   'ports',
   'inline-agents'
 ])
+const AgentActivityDisplayMode = z.enum(['compact', 'full'])
 const StatusBarItem = z.enum(['claude', 'codex', 'gemini', 'opencode-go', 'ssh', 'resource-usage'])
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
@@ -104,6 +106,10 @@ const SettingsUpdate = z
         value === null || value === 'blank' || isTuiAgent(value) ? value : undefined
       )
       .optional(),
+    disabledTuiAgents: z
+      .unknown()
+      .transform((value) => normalizeDisabledTuiAgents(value))
+      .optional(),
     defaultTaskSource: z.enum(['github', 'gitlab', 'linear']).optional(),
     defaultTaskViewPreset: z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
@@ -137,9 +143,9 @@ const UiUpdate = z
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
     worktreeCardProperties: z.array(WorktreeCardProperty).optional(),
+    agentActivityDisplayMode: AgentActivityDisplayMode.optional(),
     workspaceStatuses: z.array(WorkspaceStatusDefinition).optional(),
     workspaceBoardOpacity: z.number().finite().optional(),
-    workspaceBoardCompact: z.boolean().optional(),
     workspaceBoardColumnWidth: z.number().finite().optional(),
     _workspaceStatusesDefaultOrderMigrated: z.boolean().optional(),
     _workspaceStatusesDefaultWorkflowMigrated: z.boolean().optional(),

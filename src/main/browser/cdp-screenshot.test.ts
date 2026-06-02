@@ -189,6 +189,51 @@ describe('captureScreenshot', () => {
       'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
     )
   })
+
+  it('reports the original timeout when fallback encoding fails', async () => {
+    vi.useFakeTimers()
+
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    webContents.capturePage.mockResolvedValueOnce({
+      isEmpty: () => {
+        throw new Error('native image unavailable')
+      }
+    })
+    const onResult = vi.fn()
+    const onError = vi.fn()
+
+    captureScreenshot(webContents as never, { format: 'png' }, onResult, onError)
+    await vi.advanceTimersByTimeAsync(8000)
+
+    expect(onResult).not.toHaveBeenCalled()
+    expect(onError).toHaveBeenCalledWith(
+      'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
+    )
+  })
+
+  it('reports the timeout when both CDP and fallback capture stall', async () => {
+    vi.useFakeTimers()
+
+    const webContents = createMockWebContents()
+    webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    webContents.capturePage.mockImplementation(() => new Promise(() => {}))
+    const onResult = vi.fn()
+    const onError = vi.fn()
+
+    captureScreenshot(webContents as never, { format: 'png' }, onResult, onError)
+    await vi.advanceTimersByTimeAsync(8000)
+
+    expect(webContents.capturePage).toHaveBeenCalledTimes(1)
+    expect(onResult).not.toHaveBeenCalled()
+    expect(onError).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(onError).toHaveBeenCalledWith(
+      'Screenshot timed out — the browser tab may not be visible or the window may not have focus.'
+    )
+  })
 })
 
 describe('captureFullPageScreenshot', () => {

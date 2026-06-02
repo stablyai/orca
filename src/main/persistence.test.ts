@@ -16,7 +16,9 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import type {
   PersistedState,
+  ProjectGroup,
   Repo,
+  TerminalPaneLayoutNode,
   TerminalTab,
   WorktreeLineage,
   WorkspaceSessionState
@@ -219,6 +221,19 @@ function makeSessionWithBrowserHistory(count: number): WorkspaceSessionState {
   }
 }
 
+function makeBalancedLegacyPaneLayout(start: number, end: number): TerminalPaneLayoutNode {
+  if (end - start === 1) {
+    return { type: 'leaf', leafId: `pane:${start + 1}` }
+  }
+  const midpoint = Math.floor((start + end) / 2)
+  return {
+    type: 'split',
+    direction: 'horizontal',
+    first: makeBalancedLegacyPaneLayout(start, midpoint),
+    second: makeBalancedLegacyPaneLayout(midpoint, end)
+  }
+}
+
 describe('Store', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
@@ -249,7 +264,7 @@ describe('Store', () => {
     expect(settings.terminalUseSeparateLightTheme).toBe(true)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
-    expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
+    expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
     expect(settings.openInApplications).toEqual([])
     expect(settings.experimentalActivity).toBe(false)
     expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
@@ -349,12 +364,22 @@ describe('Store', () => {
           remoteWorkspaceSyncGracePeriodSeconds: 0
         },
         {
-          id: 'ssh-new-grace-period-wins',
-          label: 'New grace period',
+          id: 'ssh-synced-grace-wins-over-relay',
+          label: 'Synced grace wins',
           host: 'new.example.com',
           port: 22,
           username: 'dev',
           relayGracePeriodSeconds: 120,
+          remoteWorkspaceSyncEnabled: true,
+          remoteWorkspaceSyncGracePeriodSeconds: 0
+        },
+        {
+          id: 'ssh-form-default-relay-with-unlimited-sync',
+          label: 'Form-default relay with unlimited sync',
+          host: 'unlimited.example.com',
+          port: 22,
+          username: 'dev',
+          relayGracePeriodSeconds: 10800,
           remoteWorkspaceSyncEnabled: true,
           remoteWorkspaceSyncGracePeriodSeconds: 0
         }
@@ -366,7 +391,8 @@ describe('Store', () => {
 
     expect(targets[0]).not.toHaveProperty('relayGracePeriodSeconds')
     expect(targets[1].relayGracePeriodSeconds).toBe(0)
-    expect(targets[2].relayGracePeriodSeconds).toBe(120)
+    expect(targets[2].relayGracePeriodSeconds).toBe(0)
+    expect(targets[3].relayGracePeriodSeconds).toBe(0)
     for (const target of targets) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
@@ -376,7 +402,8 @@ describe('Store', () => {
     const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
     expect(persisted.sshTargets?.[0]).not.toHaveProperty('relayGracePeriodSeconds')
     expect(persisted.sshTargets?.[1]?.relayGracePeriodSeconds).toBe(0)
-    expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(120)
+    expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(0)
+    expect(persisted.sshTargets?.[3]?.relayGracePeriodSeconds).toBe(0)
     for (const target of persisted.sshTargets ?? []) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
@@ -594,6 +621,56 @@ describe('Store', () => {
     expect(reloaded.listAutomations()[0].reuseSession).toBe(false)
   })
 
+  it('persists automation precheck config and run results', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Conditional',
+      prompt: 'Run checks',
+      precheck: {
+        command: 'test -f ready',
+        timeoutSeconds: 30
+      },
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'skipped_precheck',
+      precheckResult: {
+        command: 'test -f ready',
+        exitCode: 1,
+        timedOut: false,
+        durationMs: 12,
+        stdout: '',
+        stderr: 'missing',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        error: null,
+        startedAt: 10,
+        completedAt: 22
+      },
+      error: 'Precheck exited with code 1.'
+    })
+
+    expect(store.listAutomations()[0].precheck).toEqual({
+      command: 'test -f ready',
+      timeoutSeconds: 30
+    })
+    expect(store.listAutomationRuns(automation.id)[0].precheckResult).toMatchObject({
+      exitCode: 1,
+      stderr: 'missing'
+    })
+    expect(store.updateAutomation(automation.id, { precheck: null }).precheck).toBeNull()
+  })
+
   it('numbers automation run titles per automation', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -783,7 +860,7 @@ describe('Store', () => {
     expect(store.getSettings().showGitIgnoredFiles).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
     expect(store.getSettings().experimentalActivity).toBe(false)
     expect(store.getSettings().experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(store.getSettings().experimentalTerminalAttention).toBe(false)
@@ -941,6 +1018,24 @@ describe('Store', () => {
     })
 
     const store = await createStore()
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
+  })
+
+  it('preserves a deliberate Jira provider opt-out after migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        visibleTaskProviders: ['gitlab'],
+        visibleTaskProvidersDefaultedForJira: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
     expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
   })
 
@@ -972,7 +1067,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('github')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'linear', 'jira'])
   })
 
   it('normalizes invalid task provider defaults on load', async () => {
@@ -980,7 +1075,7 @@ describe('Store', () => {
       schemaVersion: 1,
       repos: [],
       worktreeMeta: {},
-      settings: { visibleTaskProviders: ['gitlab'], defaultTaskSource: 'jira' as never },
+      settings: { visibleTaskProviders: ['gitlab'], defaultTaskSource: 'bitbucket' as never },
       ui: {},
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -988,7 +1083,7 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().defaultTaskSource).toBe('gitlab')
-    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab'])
+    expect(store.getSettings().visibleTaskProviders).toEqual(['gitlab', 'jira'])
   })
 
   it('normalizes persisted open-in applications on load', async () => {
@@ -1504,6 +1599,35 @@ describe('Store', () => {
     expect(store.getRepo('sibling')?.projectGroupId).toBe(sibling.id)
   })
 
+  it('creates a project group when persisted group history is very large', async () => {
+    const projectGroups: ProjectGroup[] = Array.from({ length: 130_000 }, (_, index) => ({
+      id: `group-${index}`,
+      name: `Group ${index}`,
+      parentPath: null,
+      parentGroupId: null,
+      createdFrom: 'manual',
+      tabOrder: index,
+      isCollapsed: false,
+      color: null,
+      createdAt: index,
+      updatedAt: index
+    }))
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      projectGroups
+    })
+    const store = await createStore()
+
+    const group = store.createProjectGroup({ name: 'New group', createdFrom: 'manual' })
+
+    expect(group.tabOrder).toBe(projectGroups.length)
+  })
+
   it('sanitizes invalid project group updates before persisting a repo', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({ name: 'Platform', createdFrom: 'manual' })
@@ -1604,6 +1728,26 @@ describe('Store', () => {
     expect(updated).not.toBeNull()
     expect(updated!.repoIcon).toBeUndefined()
     expect(store.getRepo('r1')!.repoIcon).toBeUndefined()
+  })
+
+  it('updateRepo normalizes custom repo badge colors before storing', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { badgeColor: ' ABCDEF ' })
+
+    expect(updated!.badgeColor).toBe('#abcdef')
+    expect(store.getRepo('r1')!.badgeColor).toBe('#abcdef')
+  })
+
+  it('updateRepo ignores invalid repo badge colors without clearing the existing color', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ badgeColor: '#123456' }))
+
+    const updated = store.updateRepo('r1', { badgeColor: 'blue' })
+
+    expect(updated!.badgeColor).toBe('#123456')
+    expect(store.getRepo('r1')!.badgeColor).toBe('#123456')
   })
 
   it('getRepo does not expose invalid persisted repo icons', async () => {
@@ -1806,6 +1950,71 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('notifies settings listeners with changed keys only', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings(
+      {
+        theme: 'dark',
+        disabledTuiAgents: ['codex', 'not-real', 'codex'] as never
+      },
+      { notifyListeners: true, originWebContentsId: 42 }
+    )
+
+    expect(listener).toHaveBeenCalledWith(
+      {
+        theme: 'dark',
+        disabledTuiAgents: ['codex']
+      },
+      expect.objectContaining({
+        theme: 'dark',
+        disabledTuiAgents: ['codex']
+      }),
+      42
+    )
+  })
+
+  it('does not notify settings listeners for unchanged scalar updates', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings({ theme: store.getSettings().theme }, { notifyListeners: true })
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('does not notify settings listeners unless requested by the producer', async () => {
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings({ theme: 'dark' })
+
+    expect(listener).not.toHaveBeenCalled()
+  })
+
+  it('normalizes disabled TUI agents on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          disabledTuiAgents: ['codex', 'not-real', 'codex', 'claude']
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().disabledTuiAgents).toEqual(['codex', 'claude'])
+
+    const updated = store.updateSettings({
+      disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
+    })
+    expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
+  })
+
   it('updateSettings keeps the legacy commit-message AI projection in sync', async () => {
     const store = await createStore()
     const current = store.getSettings().sourceControlAi!
@@ -1962,7 +2171,8 @@ describe('Store', () => {
       activeBrowserTabIdByWorktree: {},
       activeFileIdByWorktree: {},
       activeTabTypeByWorktree: {},
-      browserUrlHistory: []
+      browserUrlHistory: [],
+      defaultTerminalTabsAppliedByWorktreeId: {}
     }
     writeDataFile({
       schemaVersion: 1,
@@ -2066,6 +2276,23 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
+  it('updateUI persists sanitized per-worktree dotfile visibility', async () => {
+    const store = await createStore()
+    store.updateUI({
+      showDotfilesByWorktree: {
+        'repo-1::/repo': false,
+        'repo-2::/repo': true,
+        'repo-3::/repo': 'bad',
+        constructor: false
+      } as never
+    })
+
+    expect(store.getUI().showDotfilesByWorktree).toEqual({
+      'repo-1::/repo': false,
+      'repo-2::/repo': true
+    })
+  })
+
   it('migrates missing rightSidebarOpen from the legacy default setting', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -2161,6 +2388,19 @@ describe('Store', () => {
     })
   })
 
+  it('updateUI merges contextual tour seen ids instead of replacing stale snapshots', async () => {
+    const store = await createStore()
+
+    store.updateUI({
+      contextualToursSeenIds: ['browser']
+    })
+    store.updateUI({
+      contextualToursSeenIds: ['workspace-agent-sessions', 'unknown', 'browser'] as never
+    })
+
+    expect(store.getUI().contextualToursSeenIds).toEqual(['browser', 'workspace-agent-sessions'])
+  })
+
   it('normalizes malformed persisted feature discovery state on read', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -2169,6 +2409,7 @@ describe('Store', () => {
       settings: {},
       ui: {
         featureTipsSeenIds: ['voice-dictation', 'unknown-tip', 'voice-dictation'],
+        contextualToursSeenIds: ['tasks', 'unknown', 'tasks'] as never,
         featureInteractions: {
           tasks: { firstInteractedAt: 100 },
           automations: { firstInteractedAt: 150, interactionCount: 4 },
@@ -2183,6 +2424,7 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getUI().featureTipsSeenIds).toEqual(['voice-dictation'])
+    expect(store.getUI().contextualToursSeenIds).toEqual(['tasks'])
     expect(store.getUI().featureInteractions).toEqual({
       tasks: { firstInteractedAt: 100, interactionCount: 1 },
       automations: { firstInteractedAt: 150, interactionCount: 4 }
@@ -2872,6 +3114,71 @@ describe('Store', () => {
     expect(store.getWorkspaceSession()).toEqual(session)
   })
 
+  it('patches workspace session without replacing unchanged slices', async () => {
+    const store = await createStore()
+    const tabsByWorktree = {
+      wt1: [makeTerminalTab({ id: 'tab1', ptyId: null, worktreeId: 'wt1' })]
+    }
+    const terminalLayoutsByTabId = {
+      tab1: { root: null, activeLeafId: null, expandedLeafId: null }
+    }
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree,
+      terminalLayoutsByTabId,
+      activeConnectionIdsAtShutdown: ['ssh-1']
+    })
+
+    store.patchWorkspaceSession({
+      activeTabId: 'tab2',
+      activeConnectionIdsAtShutdown: undefined
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.activeTabId).toBe('tab2')
+    expect(session.tabsByWorktree).toEqual(tabsByWorktree)
+    expect(session.terminalLayoutsByTabId).toEqual(terminalLayoutsByTabId)
+    expect(session.activeConnectionIdsAtShutdown).toBeUndefined()
+  })
+
+  it('uses full normalization for structural workspace session patches', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
+    store.setWorkspaceSession({
+      activeRepoId: 'local-repo',
+      activeWorktreeId: 'local-repo::/worktree',
+      activeTabId: 'tab-local',
+      tabsByWorktree: {
+        'local-repo::/worktree': [
+          makeTerminalTab({
+            id: 'tab-local',
+            ptyId: 'pty-local',
+            worktreeId: 'local-repo::/worktree'
+          })
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    store.patchWorkspaceSession({
+      terminalLayoutsByTabId: {
+        'tab-local': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          buffersByLeafId: { [TEST_LEAF_1]: 'local-scrollback' },
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-local' }
+        }
+      }
+    })
+
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId['tab-local'].buffersByLeafId
+    ).toBeUndefined()
+  })
+
   it('strips local terminal scrollback buffers when setting workspace session', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
@@ -3522,6 +3829,62 @@ describe('Store', () => {
         ])
       })
     )
+  })
+
+  it('loads legacy pane aliases from very large persisted split layouts', async () => {
+    const leafCount = 130_000
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {
+        activeRepoId: 'r1',
+        activeWorktreeId: 'wt1',
+        activeTabId: 'tab1',
+        tabsByWorktree: {
+          wt1: [
+            {
+              id: 'tab1',
+              worktreeId: 'wt1',
+              title: 'Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1,
+              ptyId: 'large-pty'
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          tab1: {
+            root: makeBalancedLegacyPaneLayout(0, leafCount),
+            activeLeafId: 'pane:1',
+            expandedLeafId: null
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+    store.flush()
+
+    const persisted = readDataFile() as PersistedState
+    const aliasEntries = persisted.legacyPaneKeyAliasEntries
+    expect(aliasEntries).toHaveLength(leafCount + 1)
+    expect(
+      aliasEntries.some((entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === 'tab1:0')
+    ).toBe(true)
+    expect(
+      aliasEntries.some((entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === 'tab1:1')
+    ).toBe(true)
+    expect(
+      aliasEntries.some(
+        (entry) => entry.ptyId === 'large-pty' && entry.legacyPaneKey === `tab1:${leafCount}`
+      )
+    ).toBe(true)
   })
 
   it('converts unambiguous dev migration rows into persisted aliases', async () => {

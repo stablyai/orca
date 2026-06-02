@@ -6,11 +6,26 @@ import { usePromptCacheCountdownNow } from './prompt-cache-countdown-clock'
 import { getMostUrgentPromptCacheStartedAt } from './prompt-cache-timer-selection'
 
 /**
- * Per-worktree prompt-cache countdown, shown in the sidebar worktree card.
+ * The most-urgent cache start time when a countdown should show, else null.
+ * The worktree card uses it to both gate its metadata row and feed CacheTimer,
+ * so neither the card nor the timer subscribes twice to the same store slices.
  *
- * When a worktree has multiple Claude tabs, the timer shows the *most urgent*
- * (shortest remaining) countdown — if any tab's cache is about to expire, the
+ * When a worktree has multiple Claude tabs, this resolves the *most urgent*
+ * (shortest remaining) start time — if any tab's cache is about to expire, the
  * user should know.
+ */
+export function usePromptCacheCountdownStartedAt(worktreeId: string): number | null {
+  const enabled = useAppStore((s) => s.settings?.promptCacheTimerEnabled ?? false)
+  const ttlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
+  const startedAt = useAppStore((s) =>
+    getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
+  )
+  return enabled && ttlMs > 0 && startedAt != null ? startedAt : null
+}
+
+/**
+ * Per-worktree prompt-cache countdown, shown in the sidebar worktree card. The
+ * card renders this only once a cache is active, so it's a pure countdown view.
  *
  * Why: prompt caching (Anthropic API / Bedrock) has a TTL (default 5 min).
  * When the cache expires, the next request re-sends the full conversation as
@@ -18,24 +33,14 @@ import { getMostUrgentPromptCacheStartedAt } from './prompt-cache-timer-selectio
  * users decide whether to resume interaction before the cache drops.
  */
 export default function CacheTimer({
-  worktreeId
+  startedAt,
+  ttlMs
 }: {
-  worktreeId: string
-}): React.JSX.Element | null {
-  const enabled = useAppStore((s) => s.settings?.promptCacheTimerEnabled ?? false)
-  const ttlMs = useAppStore((s) => s.settings?.promptCacheTtlMs ?? 0)
-
-  const mostUrgentStartedAt = useAppStore((s) => {
-    return getMostUrgentPromptCacheStartedAt(s.tabsByWorktree[worktreeId], s.cacheTimerByKey)
-  })
-
-  const countdownActive = enabled && mostUrgentStartedAt != null && ttlMs > 0
-  const now = usePromptCacheCountdownNow(countdownActive)
-  const remainingMs = countdownActive ? Math.max(0, ttlMs - (now - mostUrgentStartedAt)) : null
-
-  if (remainingMs === null) {
-    return null
-  }
+  startedAt: number
+  ttlMs: number
+}): React.JSX.Element {
+  const now = usePromptCacheCountdownNow(true)
+  const remainingMs = Math.max(0, ttlMs - (now - startedAt))
 
   const totalSeconds = Math.ceil(remainingMs / 1000)
   const minutes = Math.floor(totalSeconds / 60)

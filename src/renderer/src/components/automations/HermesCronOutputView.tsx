@@ -13,7 +13,6 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import {
   formatAutomationSchedule,
@@ -33,8 +32,6 @@ type ParsedHermesOutput = {
 }
 
 const METADATA_LINE_PATTERN = /^\*\*([^*]+):\*\*\s+(.+?)\s*$/
-const CRON_FIELD_NAMES = ['minute', 'hour', 'day of month', 'month', 'weekday'] as const
-const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 function splitSections(content: string): ParsedSection[] {
   const lines = content.split(/\r?\n/)
@@ -113,81 +110,20 @@ function isErrorSection(section: ParsedSection): boolean {
   return /^error$/i.test(section.heading.trim())
 }
 
-function formatCronTime(hour: number, minute: number): string {
-  const date = new Date()
-  date.setHours(hour, minute, 0, 0)
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(date)
-}
-
-function parseSingleCronNumber(value: string, min: number, max: number): number | null {
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
-    return null
-  }
-  return parsed
-}
-
-function describeSimpleCron(parts: string[]): string | null {
-  const [minuteField, hourField, dayOfMonthField, monthField, weekdayField] = parts
-  const minute = parseSingleCronNumber(minuteField, 0, 59)
-  const hour = parseSingleCronNumber(hourField, 0, 23)
-  const time = minute !== null && hour !== null ? formatCronTime(hour, minute) : null
-
-  if (time && dayOfMonthField === '*' && monthField === '*' && weekdayField === '*') {
-    return `Runs daily at ${time}.`
-  }
-  if (
-    minute !== null &&
-    hourField === '*' &&
-    dayOfMonthField === '*' &&
-    monthField === '*' &&
-    weekdayField === '*'
-  ) {
-    return `Runs hourly at :${String(minute).padStart(2, '0')}.`
-  }
-  if (
-    time &&
-    dayOfMonthField === '*' &&
-    monthField === '*' &&
-    /^(?:1-5|MON-FRI)$/i.test(weekdayField)
-  ) {
-    return `Runs on weekdays at ${time}.`
-  }
-  const weekday = parseSingleCronNumber(weekdayField, 0, 7)
-  if (time && dayOfMonthField === '*' && monthField === '*' && weekday !== null) {
-    return `Runs every ${WEEKDAY_NAMES[weekday === 7 ? 0 : weekday]} at ${time}.`
-  }
-  const dayOfMonth = parseSingleCronNumber(dayOfMonthField, 1, 31)
-  if (time && dayOfMonth !== null && monthField === '*' && weekdayField === '*') {
-    return `Runs monthly on day ${dayOfMonth} at ${time}.`
-  }
-  return null
-}
-
-function describeCronFields(parts: string[]): string {
-  return parts.map((part, index) => `${CRON_FIELD_NAMES[index]} ${part}`).join(', ')
-}
-
-function getScheduleDescription(value: string): string | null {
+function getScheduleDisplay(value: string): string | null {
   const trimmed = value.trim()
   if (!isValidAutomationSchedule(trimmed)) {
     return null
   }
-  if (trimmed.includes('=')) {
-    return formatAutomationSchedule(trimmed)
-  }
-  const parts = trimmed.split(/\s+/)
-  if (parts.length !== 5) {
-    return null
-  }
-  return describeSimpleCron(parts) ?? `Cron fields: ${describeCronFields(parts)}.`
+  return formatAutomationSchedule(trimmed)
 }
 
 function isScheduleMetadataLabel(label: string): boolean {
   return /^(?:schedule|cron schedule|cron)$/i.test(label.trim())
+}
+
+function getMetadataDisplayLabel(label: string): string {
+  return isScheduleMetadataLabel(label) ? 'Schedule' : label
 }
 
 type MetadataIconStyle = { icon: LucideIcon; iconClass: string; ringClass: string }
@@ -299,26 +235,14 @@ function SectionCard({ title, accent = 'default', children }: SectionCardProps):
 }
 
 function MetadataValue({ label, value }: { label: string; value: string }): React.JSX.Element {
-  const scheduleDescription = isScheduleMetadataLabel(label) ? getScheduleDescription(value) : null
+  const scheduleDisplay = isScheduleMetadataLabel(label) ? getScheduleDisplay(value) : null
 
-  if (!scheduleDescription) {
+  if (!scheduleDisplay) {
     return <dd className="mt-0.5 break-all font-mono text-xs text-foreground">{value}</dd>
   }
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <dd
-          tabIndex={0}
-          className="mt-0.5 break-all rounded-sm font-mono text-xs text-foreground underline decoration-dotted underline-offset-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {value}
-        </dd>
-      </TooltipTrigger>
-      <TooltipContent side="top" sideOffset={4} className="max-w-64 text-left">
-        {scheduleDescription}
-      </TooltipContent>
-    </Tooltip>
+    <dd className="mt-0.5 break-words text-xs font-medium text-foreground">{scheduleDisplay}</dd>
   )
 }
 
@@ -367,7 +291,7 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
                 </span>
                 <div className="min-w-0 flex-1">
                   <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {entry.label}
+                    {getMetadataDisplayLabel(entry.label)}
                   </dt>
                   <MetadataValue label={entry.label} value={entry.value} />
                 </div>

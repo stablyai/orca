@@ -22,6 +22,10 @@ export type ForegroundTerminalOutputTarget = TerminalCursorSuppressionTarget & {
   write(data: string, callback?: () => void): void
 }
 
+type ForegroundTerminalWriteOptions = {
+  forceViewportRefresh?: boolean
+}
+
 const pendingViewportSettleRefreshByTerminal = new WeakMap<
   ForegroundTerminalOutputTarget,
   { kind: 'raf'; id: number } | { kind: 'timeout'; id: ReturnType<typeof setTimeout> }
@@ -123,20 +127,27 @@ function settleForegroundRender(
 
 export function writeForegroundTerminalChunk(
   terminal: ForegroundTerminalOutputTarget,
-  data: string
+  data: string,
+  options: ForegroundTerminalWriteOptions = {}
 ): void {
-  const beforeWriteViewport = captureViewportSnapshot(terminal)
+  const beforeWriteViewport = options.forceViewportRefresh
+    ? captureViewportSnapshot(terminal)
+    : null
   suppressForegroundTerminalCursor(terminal)
   // Why: a disposed terminal may never fire xterm's write callback; keep a
   // safety restore so the cursor cannot remain hidden after teardown races.
   scheduleForegroundTerminalCursorRestore(terminal, FOREGROUND_CURSOR_RESTORE_SAFETY_DELAY_MS)
   try {
     terminal.write(data, () => {
-      settleForegroundRender(terminal, beforeWriteViewport)
+      if (beforeWriteViewport) {
+        settleForegroundRender(terminal, beforeWriteViewport)
+      }
       scheduleForegroundTerminalCursorRestore(terminal)
     })
   } catch {
-    settleForegroundRender(terminal, beforeWriteViewport)
+    if (beforeWriteViewport) {
+      settleForegroundRender(terminal, beforeWriteViewport)
+    }
     restoreForegroundTerminalCursor(terminal)
   }
 }

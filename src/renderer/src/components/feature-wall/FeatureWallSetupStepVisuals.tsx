@@ -222,16 +222,12 @@ export function SetupWorkspacesVisual(props: { reducedMotion: boolean }): JSX.El
         </div>
       </div>
 
-      <div className="relative grid min-w-0 gap-3 md:grid-rows-[108px_minmax(0,1fr)]">
+      <div className="relative grid min-w-0 gap-3 md:grid-rows-[88px_minmax(0,1fr)]">
         <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background">
           <VisualTitlebar title="release notes - Claude Code" compact />
           <div className="space-y-1.5 p-2.5 font-mono text-[11px]">
             <TerminalLine>
               <Prompt>&gt;</Prompt> draft release notes
-            </TerminalLine>
-            <TerminalLine muted>
-              <ClaudeIcon size={12} />
-              Read changelog.md
             </TerminalLine>
             <TerminalLine muted>
               <WorkingSpinner size="xs" reducedMotion={reducedMotion} />
@@ -378,7 +374,7 @@ function NewWorkspaceModal(props: {
         <div className="mt-3 space-y-2">
           <ModalField label="Project" value="orca" />
           <ModalField label="Name" value={props.nameValue} typing={props.nameTyping} />
-          <ModalField label="Agent" value="Codex" />
+          <ModalField label="Agent" value="Codex" icon={<CodexInlineIcon />} />
         </div>
         <div
           ref={props.createButtonRef}
@@ -452,11 +448,17 @@ function useMeasuredCursor(
   return pos
 }
 
-function ModalField(props: { label: string; value: string; typing?: boolean }): JSX.Element {
+function ModalField(props: {
+  label: string
+  value: string
+  icon?: ReactNode
+  typing?: boolean
+}): JSX.Element {
   return (
     <div>
       <div className="text-[11px] font-medium text-muted-foreground">{props.label}</div>
-      <div className="mt-1 flex h-7 items-center rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground">
+      <div className="mt-1 flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground">
+        {props.icon ? <span className="flex size-3.5 shrink-0 items-center">{props.icon}</span> : null}
         <span className="truncate">{props.value}</span>
         {props.typing ? (
           <span className="ml-px inline-block h-[10px] w-[5px] animate-pulse bg-foreground" />

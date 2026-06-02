@@ -112,4 +112,20 @@ describe('project-groups', () => {
       ].sort()
     ).toEqual(['child', 'grandchild', 'root'])
   })
+
+  it('collects wide descendant groups without overflowing argument limits', () => {
+    const groups = [
+      { id: 'root', parentGroupId: null },
+      ...Array.from({ length: 130_000 }, (_, index) => ({
+        id: `child-${index}`,
+        parentGroupId: 'root'
+      }))
+    ]
+
+    const subtreeIds = getProjectGroupSubtreeIds(groups, 'root')
+
+    expect(subtreeIds.size).toBe(130_001)
+    expect(subtreeIds.has('root')).toBe(true)
+    expect(subtreeIds.has('child-129999')).toBe(true)
+  })
 })

@@ -5,6 +5,8 @@ import {
   GRAB_SECRET_PATTERNS
 } from '../../shared/browser-grab-types'
 
+const SAFE_GRAB_URL_PROTOCOLS = new Set(['http:', 'https:', 'file:'])
+
 /**
  * Re-validate and clamp all string, array, and budget fields in a grab payload
  * before forwarding to the renderer. This is the main-side safety net: even if
@@ -66,6 +68,12 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
     }
     try {
       const url = new URL(str)
+      if (url.protocol === 'about:') {
+        return url.toString() === 'about:blank' ? 'about:blank' : ''
+      }
+      if (!SAFE_GRAB_URL_PROTOCOLS.has(url.protocol)) {
+        return ''
+      }
       url.search = ''
       url.hash = ''
       return url.toString()

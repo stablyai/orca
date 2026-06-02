@@ -360,6 +360,7 @@ export async function importExternalPathsToRuntime(
       results.push(source)
       continue
     }
+    let createdDirectoryImportRoot: string | null = null
     try {
       const finalName = await deconflictRuntimeImportName(
         context,
@@ -378,6 +379,9 @@ export async function importExternalPathsToRuntime(
             { worktree: context.worktreeId, relativePath: entryRelativePath },
             { timeoutMs: 15_000 }
           )
+          if (source.kind === 'directory' && entry.relativePath === '') {
+            createdDirectoryImportRoot = entryRelativePath
+          }
           continue
         }
         await uploadRuntimeFileWithoutClobber(
@@ -396,6 +400,20 @@ export async function importExternalPathsToRuntime(
         renamed: finalName !== source.name
       })
     } catch (error) {
+      if (createdDirectoryImportRoot) {
+        // Why: match local directory imports by removing the no-clobber root
+        // Orca created when a nested runtime upload fails halfway through.
+        await callRuntimeRpc(
+          target,
+          'files.delete',
+          {
+            worktree: context.worktreeId,
+            relativePath: createdDirectoryImportRoot,
+            recursive: true
+          },
+          { timeoutMs: 15_000 }
+        ).catch(() => {})
+      }
       results.push({
         sourcePath: source.sourcePath,
         status: 'failed',

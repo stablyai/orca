@@ -7,97 +7,79 @@ import {
   shouldApplySuggestedName
 } from './worktree-name-suggestions'
 
+// Always selects the first element of the unused pool, so assertions are exact.
+const pickFirst = () => 0
+// Suggestions are lowercased (branch-name convention), so expectations are too.
+const lower = (index: number) => MARINE_CREATURES[index].toLowerCase()
+
 describe('getSuggestedCreatureName', () => {
-  it('returns the first creature name when no repo is selected', () => {
-    expect(getSuggestedCreatureName('', {}, false)).toBe(MARINE_CREATURES[0])
+  it('picks the first unused name when the RNG selects index 0', () => {
+    expect(getSuggestedCreatureName({}, pickFirst)).toBe(lower(0))
   })
 
-  it('skips names already used in the selected repo', () => {
+  it('dedupes against worktrees in EVERY repo, not just one', () => {
     expect(
       getSuggestedCreatureName(
-        'repo-1',
         {
-          'repo-1': [{ path: '/tmp/worktrees/Nautilus' }, { path: '/tmp/worktrees/Seahorse' }]
+          'repo-1': [{ path: '/tmp/worktrees/Nautilus' }],
+          'repo-2': [{ path: '/tmp/worktrees/Seahorse' }]
         },
-        true
+        pickFirst
       )
-    ).toBe('Starfish')
+    ).toBe(lower(2))
   })
 
-  it('checks all repos when nestWorkspaces is false', () => {
+  it('never reuses a name already used in another repo', () => {
+    // Regression guard: the old per-repo scoping would have returned Nautilus
+    // here because the active repo had no worktrees of its own.
     expect(
       getSuggestedCreatureName(
-        'repo-1',
-        {
-          'repo-1': [],
-          'repo-2': [{ path: '/tmp/worktrees/Nautilus' }]
-        },
-        false
-      )
-    ).toBe('Seahorse')
-  })
-
-  it('only checks the selected repo when nestWorkspaces is true', () => {
-    expect(
-      getSuggestedCreatureName(
-        'repo-1',
         {
           'repo-1': [],
-          'repo-2': [{ path: '/tmp/worktrees/Nautilus' }]
+          'repo-2': [{ path: `/tmp/worktrees/${MARINE_CREATURES[0]}` }]
         },
-        true
+        pickFirst
       )
-    ).toBe('Nautilus')
+    ).toBe(lower(1))
+  })
+
+  it('selects randomly from the unused pool', () => {
+    // random() = i/N ⇒ pickRandom returns the pool's i-th entry.
+    const pickIndex = (index: number, poolSize: number) => () => index / poolSize
+    expect(getSuggestedCreatureName({}, pickIndex(2, MARINE_CREATURES.length))).toBe(lower(2))
+    expect(getSuggestedCreatureName({}, pickIndex(5, MARINE_CREATURES.length))).toBe(lower(5))
   })
 
   it('falls back to suffixed variants after the base list is exhausted', () => {
     const usedWorktrees = MARINE_CREATURES.map((name) => ({ path: `/tmp/worktrees/${name}` }))
 
-    expect(
-      getSuggestedCreatureName(
-        'repo-1',
-        {
-          'repo-1': usedWorktrees
-        },
-        true
-      )
-    ).toBe(`${MARINE_CREATURES[0]}-2`)
+    expect(getSuggestedCreatureName({ 'repo-1': usedWorktrees }, pickFirst)).toBe(`${lower(0)}-2`)
   })
 
   it('treats used names case-insensitively', () => {
     expect(
-      getSuggestedCreatureName(
-        'repo-1',
-        {
-          'repo-1': [{ path: '/tmp/worktrees/nAuTiLuS' }]
-        },
-        true
-      )
-    ).toBe('Seahorse')
+      getSuggestedCreatureName({ 'repo-1': [{ path: '/tmp/worktrees/nAuTiLuS' }] }, pickFirst)
+    ).toBe(lower(1))
   })
 
   it('handles Windows-style worktree paths when deriving used basenames', () => {
     expect(
-      getSuggestedCreatureName(
-        'repo-1',
-        {
-          'repo-1': [{ path: 'C:\\worktrees\\Nautilus' }]
-        },
-        true
-      )
-    ).toBe('Seahorse')
+      getSuggestedCreatureName({ 'repo-1': [{ path: 'C:\\worktrees\\Nautilus' }] }, pickFirst)
+    ).toBe(lower(1))
   })
 
   it('handles stored worktree paths with trailing separators', () => {
     expect(
       getSuggestedCreatureName(
-        'repo-1',
         {
-          'repo-1': [{ path: 'C:\\worktrees\\Nautilus\\\\' }, { path: '/tmp/worktrees/Seahorse///' }]
+          'repo-1': [
+            { path: 'C:\\worktrees\\Nautilus\\\\' },
+            { path: '/tmp/worktrees/Seahorse///' }
+          ]
         },
-        true
+        pickFirst
       )
-    ).toBe('Starfish')
+    ).toBe(lower(2))
   })
 })
 
@@ -118,7 +100,7 @@ describe('shouldApplySuggestedName', () => {
 
 describe('MARINE_CREATURES', () => {
   it('is non-empty and unique after normalization and sanitization', () => {
-    expect(MARINE_CREATURES.length).toBeGreaterThanOrEqual(260)
+    expect(MARINE_CREATURES.length).toBeGreaterThanOrEqual(500)
 
     const normalizedNames = MARINE_CREATURES.map(normalizeSuggestedName)
     const sanitizedNames = MARINE_CREATURES.map((name) => sanitizeWorktreeName(name))
@@ -136,7 +118,13 @@ describe('MARINE_CREATURES', () => {
       'Hogchoker',
       'Hogsucker',
       'Mudsucker',
-      'Hardhead'
+      'Hardhead',
+      // Real marine organisms, but the bare word reads as a fruit, flower, or
+      // land insect rather than something from the sea.
+      'Olive',
+      'Tulip',
+      'Cone',
+      'Mantis'
     ]
 
     for (const disallowedName of disallowedNames) {

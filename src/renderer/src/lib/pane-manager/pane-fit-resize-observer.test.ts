@@ -32,7 +32,10 @@ function flushAnimationFrames(timestamp = 16): void {
   }
 }
 
-function createPane(): ManagedPaneInternal {
+function createPane(
+  proposeDimensions: () => { cols: number; rows: number } = () => ({ cols: 80, rows: 24 }),
+  options: { rect?: { width: number; height: number } } = {}
+): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
   return {
     id: 1,
@@ -43,7 +46,9 @@ function createPane(): ManagedPaneInternal {
       rows: 24
     } as never,
     container: { dataset: {} } as never,
-    xtermContainer: {} as never,
+    xtermContainer: {
+      getBoundingClientRect: () => options.rect ?? ({ width: 800, height: 600 } as DOMRect)
+    } as never,
     linkTooltip: {} as never,
     terminalGpuAcceleration: 'auto',
     gpuRenderingEnabled: true,
@@ -52,7 +57,7 @@ function createPane(): ManagedPaneInternal {
     hasComplexScriptOutput: false,
     fitAddon: {
       fit: vi.fn(),
-      proposeDimensions: vi.fn(() => ({ cols: 80, rows: 24 }))
+      proposeDimensions: vi.fn(proposeDimensions)
     } as never,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -101,7 +106,7 @@ describe('attachPaneFitResizeObserver', () => {
     vi.restoreAllMocks()
   })
 
-  it('coalesces repeated observer callbacks into a single fit per frame', () => {
+  it('coalesces repeated observer callbacks and fits once the grid is stable', () => {
     const pane = createPane()
 
     attachPaneFitResizeObserver(pane)
@@ -114,6 +119,57 @@ describe('attachPaneFitResizeObserver', () => {
     flushAnimationFrames()
 
     expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits through a transient grid wobble before fitting', () => {
+    const proposed = [
+      { cols: 80, rows: 24 },
+      { cols: 81, rows: 24 },
+      { cols: 81, rows: 24 }
+    ]
+    const pane = createPane(() => proposed.shift() ?? { cols: 81, rows: 24 })
+
+    attachPaneFitResizeObserver(pane)
+    mockResizeObservers[0]?.trigger()
+
+    flushAnimationFrames()
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+
+    flushAnimationFrames()
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips observer fits while the terminal has no visible geometry', () => {
+    const pane = createPane(() => ({ cols: 80, rows: 24 }), {
+      rect: { width: 0, height: 0 }
+    })
+
+    attachPaneFitResizeObserver(pane)
+    mockResizeObservers[0]?.trigger()
+    flushAnimationFrames()
+
+    expect(requestAnimationFrame).not.toHaveBeenCalled()
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+  })
+
+  it('throttles an endlessly unstable grid instead of fitting every frame', () => {
+    let cols = 80
+    const pane = createPane(() => {
+      cols = cols === 80 ? 81 : 80
+      return { cols, rows: 24 }
+    })
+
+    attachPaneFitResizeObserver(pane)
+    mockResizeObservers[0]?.trigger()
+
+    for (let i = 0; i < 10; i += 1) {
+      flushAnimationFrames()
+    }
+
+    expect(pane.fitAddon.fit).toHaveBeenCalledTimes(1)
+    expect(pane.pendingObservedFitRafId).toBeNull()
   })
 
   it('disconnects the observer and cancels any queued fit', () => {

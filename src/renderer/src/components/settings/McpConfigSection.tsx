@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import {
@@ -48,6 +49,8 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)
   const [createConfirm, setCreateConfirm] = useState(false)
+  const createConfirmResetTimerRef = useRef<number | null>(null)
+  const mountedRef = useMountedRef()
   const [inspectionUnavailableMessage, setInspectionUnavailableMessage] = useState<string | null>(
     null
   )
@@ -103,25 +106,34 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   const canCreateStarter = detectedCount === 0 && !inspectionUnavailable
 
   const loadConfigs = useCallback(async (): Promise<void> => {
+    if (!mountedRef.current) {
+      return
+    }
     setLoading(true)
     setInspectionUnavailableMessage(null)
 
     try {
       if (connectionId && sshConnectionStatus !== 'connected') {
-        setConfigs(missingInspections)
-        setInspectionUnavailableMessage('Connect this SSH repo to inspect or add MCP configs.')
+        if (mountedRef.current) {
+          setConfigs(missingInspections)
+          setInspectionUnavailableMessage('Connect this SSH repo to inspect or add MCP configs.')
+        }
         return
       }
 
       if (!connectionId && !canInspectLocalMcpConfigRoot(targetRootPath, isWindows)) {
-        setConfigs(missingInspections)
-        setInspectionUnavailableMessage('This workspace path is not available from this host.')
+        if (mountedRef.current) {
+          setConfigs(missingInspections)
+          setInspectionUnavailableMessage('This workspace path is not available from this host.')
+        }
         return
       }
 
       if (!connectionId && !(await window.api.shell.pathExists(targetRootPath))) {
-        setConfigs(missingInspections)
-        setInspectionUnavailableMessage('This workspace path is not available on disk.')
+        if (mountedRef.current) {
+          setConfigs(missingInspections)
+          setInspectionUnavailableMessage('This workspace path is not available on disk.')
+        }
         return
       }
 
@@ -200,20 +212,34 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           }
         })
       )
-      setConfigs(next)
+      if (mountedRef.current) {
+        setConfigs(next)
+      }
     } catch (error) {
-      setConfigs(missingInspections)
-      setInspectionUnavailableMessage(
-        extractIpcErrorMessage(error, 'Unable to inspect MCP configs.')
-      )
+      if (mountedRef.current) {
+        setConfigs(missingInspections)
+        setInspectionUnavailableMessage(
+          extractIpcErrorMessage(error, 'Unable to inspect MCP configs.')
+        )
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
-  }, [connectionId, isWindows, missingInspections, sshConnectionStatus, targetRootPath])
+  }, [connectionId, isWindows, missingInspections, mountedRef, sshConnectionStatus, targetRootPath])
+
+  const clearCreateConfirmResetTimer = useCallback((): void => {
+    if (createConfirmResetTimerRef.current !== null) {
+      window.clearTimeout(createConfirmResetTimerRef.current)
+      createConfirmResetTimerRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     void loadConfigs()
-  }, [loadConfigs])
+    return clearCreateConfirmResetTimer
+  }, [clearCreateConfirmResetTimer, loadConfigs])
 
   const handleOpen = (config: LoadedMcpConfigInspection): void => {
     setActiveWorktree(targetWorktreeId)
@@ -233,8 +259,14 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
   const handleCreateStarter = async (): Promise<void> => {
     if (!createConfirm) {
+      clearCreateConfirmResetTimer()
       setCreateConfirm(true)
-      window.setTimeout(() => setCreateConfirm(false), 3000)
+      createConfirmResetTimerRef.current = window.setTimeout(() => {
+        createConfirmResetTimerRef.current = null
+        if (mountedRef.current) {
+          setCreateConfirm(false)
+        }
+      }, 3000)
       return
     }
 
@@ -243,7 +275,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       // Why: v1 only creates the root workspace config so we do not need to
       // guess per-agent directory layouts or mutate agent-specific files.
       await window.api.fs.writeFile({ filePath: target, content: MCP_STARTER_CONFIG, connectionId })
-      setCreateConfirm(false)
+      clearCreateConfirmResetTimer()
+      if (mountedRef.current) {
+        setCreateConfirm(false)
+      }
       await loadConfigs()
       setActiveWorktree(targetWorktreeId)
       const targetGroupId = ensureWorktreeRootGroup(targetWorktreeId)

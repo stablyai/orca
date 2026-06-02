@@ -4,7 +4,7 @@ import type {
   FeatureWallSetupStep,
   FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import { getFeatureWallSetupSteps } from '../../../../shared/feature-wall-setup-steps'
+import { getFeatureWallSetupStepsForSection } from '../../../../shared/feature-wall-setup-steps'
 import { cn } from '@/lib/utils'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'
 import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
@@ -16,6 +16,7 @@ import {
   TwoAgentsAction,
   WorkspacesAction
 } from './FeatureWallSetupWorkflowActions'
+import { SetupStepPreview } from './SetupStepPreview'
 import { Button } from '@/components/ui/button'
 import { GitHubRow, LinearRow } from '../onboarding/IntegrationsStep'
 import { AgentStep } from '../onboarding/AgentStep'
@@ -44,7 +45,7 @@ function SetupStepRow(props: {
       onClick={onSelect}
       aria-current={active ? 'step' : undefined}
       className={cn(
-        'flex w-full items-start gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
+        'flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
         active
           ? 'border-border bg-accent text-accent-foreground'
           : 'border-border bg-card hover:bg-accent'
@@ -52,7 +53,7 @@ function SetupStepRow(props: {
     >
       <span
         className={cn(
-          'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border',
+          'flex size-5 shrink-0 items-center justify-center rounded-full border',
           done
             ? 'border-green-500/45 bg-green-500/10 text-green-600 dark:text-green-300'
             : 'border-border text-muted-foreground'
@@ -61,7 +62,9 @@ function SetupStepRow(props: {
         {done ? <Check className="size-3" /> : null}
       </span>
       <span className="min-w-0">
-        <span className="block text-sm font-medium leading-tight text-foreground">{step.name}</span>
+        <span className="block text-[15px] font-medium leading-tight text-foreground">
+          {step.name}
+        </span>
       </span>
     </button>
   )
@@ -69,22 +72,24 @@ function SetupStepRow(props: {
 
 function SetupSection(props: {
   title: string
-  count: string
+  steps: readonly FeatureWallSetupStep[]
   activeStepId: FeatureWallSetupStepId | null
   progress: FeatureWallSetupProgress
   onSelectStep: (id: FeatureWallSetupStepId) => void
 }): React.JSX.Element {
-  const steps = getFeatureWallSetupSteps()
+  const doneCount = props.steps.filter((step) => props.progress.stepDone[step.id]).length
   return (
     <section className="space-y-2">
       <div className="flex items-center justify-between gap-3">
         <h4 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
           {props.title}
         </h4>
-        <span className="font-mono text-xs text-muted-foreground">{props.count}</span>
+        <span className="font-mono text-xs text-muted-foreground">
+          {doneCount}/{props.steps.length}
+        </span>
       </div>
       <div className="space-y-1.5">
-        {steps.map((step) => (
+        {props.steps.map((step) => (
           <SetupStepRow
             key={step.id}
             step={step}
@@ -104,6 +109,7 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   if (!activeStep) {
     return null
   }
+  const activeDone = props.progress.stepDone[activeStep.id]
   if (activeStep.id === 'default-agent') {
     return <DefaultAgentAction />
   }
@@ -113,11 +119,11 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   if (activeStep.id === 'notifications') {
     return <NotificationAction />
   }
-  if (activeStep.id === 'two-agents') {
-    return <TwoAgentsAction reducedMotion={reducedMotion} />
+  if (activeStep.id === 'split-terminal') {
+    return <TwoAgentsAction reducedMotion={reducedMotion} done={activeDone} />
   }
-  if (activeStep.id === 'three-workspaces') {
-    return <WorkspacesAction reducedMotion={reducedMotion} />
+  if (activeStep.id === 'two-worktrees') {
+    return <WorkspacesAction reducedMotion={reducedMotion} done={activeDone} />
   }
   if (activeStep.id === 'task-sources') {
     return <TaskSourcesAction reducedMotion={reducedMotion} />
@@ -186,9 +192,6 @@ function TaskSourcesAction(props: { reducedMotion: boolean }): React.JSX.Element
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   return (
     <div className="space-y-5">
-      <div className="mx-auto h-[288px] w-full max-w-[520px]">
-        <TasksAnimatedVisual reducedMotion={props.reducedMotion} />
-      </div>
       <div className="grid gap-3 xl:grid-cols-2">
         <GitHubRow compact />
         <LinearRow compact />
@@ -205,6 +208,9 @@ function TaskSourcesAction(props: { reducedMotion: boolean }): React.JSX.Element
         <ArrowUpRight className="size-3.5" />
         See tasks
       </Button>
+      <SetupStepPreview className="mx-auto h-[220px] w-full max-w-[480px]">
+        <TasksAnimatedVisual reducedMotion={props.reducedMotion} />
+      </SetupStepPreview>
     </div>
   )
 }
@@ -214,13 +220,22 @@ export function FeatureWallSetupChecklist(
 ): React.JSX.Element {
   const { activeStep, progress, onSelectStep } = props
   const activeDone = activeStep ? progress.stepDone[activeStep.id] : false
+  const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
+  const setupSteps = getFeatureWallSetupStepsForSection('setup')
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
       <div className="space-y-5">
         <SetupSection
-          title="Core"
-          count={`${progress.coreDoneCount}/${progress.coreTotal}`}
+          title="Start here"
+          steps={parallelWorkSteps}
+          activeStepId={activeStep?.id ?? null}
+          progress={progress}
+          onSelectStep={onSelectStep}
+        />
+        <SetupSection
+          title="Setup"
+          steps={setupSteps}
           activeStepId={activeStep?.id ?? null}
           progress={progress}
           onSelectStep={onSelectStep}
@@ -232,10 +247,10 @@ export function FeatureWallSetupChecklist(
           <div className="flex h-full flex-col gap-4">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 space-y-1">
-                <div className="text-xl font-semibold leading-tight tracking-tight text-foreground">
+                <div className="text-2xl font-semibold leading-tight tracking-tight text-foreground">
                   {activeStep.name}
                 </div>
-                <p className="max-w-[58ch] text-sm leading-snug text-muted-foreground">
+                <p className="max-w-[58ch] text-base leading-normal text-muted-foreground">
                   {activeStep.description}
                 </p>
               </div>

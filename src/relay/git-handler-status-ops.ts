@@ -99,7 +99,11 @@ export async function getStatusOp(
       disableOptionalLocks: true
     })
     const parsed = parseStatusOutput(stdout)
-    entries.push(...parsed.entries)
+    // Why: huge worktrees can produce enough status rows to exceed JavaScript's
+    // spread-argument limit during routine source-control polling.
+    for (const entry of parsed.entries) {
+      entries.push(entry)
+    }
     head = parsed.head
     branch = parsed.branch
     upstreamStatus = parsed.upstreamStatus

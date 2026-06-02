@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
@@ -10,13 +10,47 @@ import type {
 } from '../../../../shared/types'
 import { createUISlice } from './ui'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
+import { createSettingsSearchState } from './settings-search-state'
 import type { AppState } from '../types'
 import type { ContextualTourId } from '../../../../shared/contextual-tours'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+
+const mocks = vi.hoisted(() => ({
+  sendBracketedPasteToRunningAgent: vi.fn(),
+  track: vi.fn(),
+  toastMessage: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn()
+}))
+
+vi.mock('@/lib/agent-paste-draft', () => ({
+  sendBracketedPasteToRunningAgent: mocks.sendBracketedPasteToRunningAgent
+}))
+
+vi.mock('@/lib/telemetry', () => ({
+  track: mocks.track
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    message: mocks.toastMessage,
+    success: mocks.toastSuccess,
+    error: mocks.toastError
+  }
+}))
 
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+beforeEach(() => {
+  mocks.sendBracketedPasteToRunningAgent.mockReset()
+  mocks.track.mockReset()
+  mocks.toastMessage.mockReset()
+  mocks.toastSuccess.mockReset()
+  mocks.toastError.mockReset()
 })
 
 function createUIStore(): StoreApi<AppState> {
@@ -29,6 +63,7 @@ function createUIStore(): StoreApi<AppState> {
     worktreesByRepo: {},
     rightSidebarOpen: false,
     rightSidebarWidth: 280,
+    ...createSettingsSearchState(args[0]),
     ...createWorktreeNavHistorySlice(...(args as Parameters<typeof createWorktreeNavHistorySlice>)),
     ...createUISlice(...(args as Parameters<typeof createUISlice>))
   })) as unknown as StoreApi<AppState>
@@ -60,6 +95,305 @@ function makePersistedUI(overrides: Partial<PersistedUIState> = {}): PersistedUI
     ...overrides
   }
 }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
+}
+
+describe('createUISlice agent send target mode', () => {
+  const worktreeId = 'wt-1'
+  const tabId = 'tab-1'
+  const readyLeafId = '11111111-1111-4111-8111-111111111111'
+  const workingLeafId = '22222222-2222-4222-8222-222222222222'
+  const readyPaneKey = makePaneKey(tabId, readyLeafId)
+  const workingPaneKey = makePaneKey(tabId, workingLeafId)
+
+  function seedAgentSendState(store: StoreApi<AppState>): void {
+    const now = Date.now()
+    store.setState({
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: tabId,
+            worktreeId,
+            ptyId: 'fallback-pty',
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: now
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: readyLeafId },
+            second: { type: 'leaf', leafId: workingLeafId }
+          },
+          activeLeafId: readyLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {
+            [readyLeafId]: 'pty-ready',
+            [workingLeafId]: 'pty-working'
+          }
+        }
+      },
+      agentStatusByPaneKey: {
+        [readyPaneKey]: {
+          state: 'done',
+          prompt: 'previous',
+          updatedAt: now,
+          stateStartedAt: now,
+          agentType: 'codex',
+          paneKey: readyPaneKey,
+          stateHistory: []
+        },
+        [workingPaneKey]: {
+          state: 'working',
+          prompt: 'busy',
+          updatedAt: now,
+          stateStartedAt: now,
+          agentType: 'codex',
+          paneKey: workingPaneKey,
+          stateHistory: []
+        }
+      }
+    } as Partial<AppState>)
+  }
+
+  it('opens target mode with derived eligible and disabled pane keys', () => {
+    const store = createUIStore()
+    seedAgentSendState(store)
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      eligiblePaneKeys: [readyPaneKey],
+      disabledPaneKeys: {
+        [workingPaneKey]: 'Agent is working'
+      },
+      status: 'open'
+    })
+    expect(store.getState().pendingRevealWorktree).toMatchObject({
+      worktreeId,
+      behavior: 'auto',
+      highlight: true
+    })
+  })
+
+  it('does not reveal the sidebar when the current workspace has no eligible targets', () => {
+    const store = createUIStore()
+    seedAgentSendState(store)
+    store.setState({
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: {
+            type: 'split',
+            direction: 'vertical',
+            first: { type: 'leaf', leafId: readyLeafId },
+            second: { type: 'leaf', leafId: workingLeafId }
+          },
+          activeLeafId: readyLeafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      }
+    })
+
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'browser-annotations',
+      prompt: 'Review this',
+      label: 'Browser annotations',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      eligiblePaneKeys: [],
+      disabledPaneKeys: {
+        [readyPaneKey]: 'Terminal is no longer available',
+        [workingPaneKey]: 'Terminal is no longer available'
+      }
+    })
+    expect(store.getState().pendingRevealWorktree).toBeNull()
+  })
+
+  it('sends to the live leaf PTY, runs delivery callback, tracks followup, and closes', async () => {
+    const store = createUIStore()
+    const onPromptDelivered = vi.fn()
+    seedAgentSendState(store)
+    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send',
+      onPromptDelivered
+    })
+
+    await expect(store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)).resolves.toBe(true)
+
+    expect(mocks.sendBracketedPasteToRunningAgent).toHaveBeenCalledWith({
+      ptyId: 'pty-ready',
+      content: 'Review this'
+    })
+    expect(onPromptDelivered).toHaveBeenCalledTimes(1)
+    expect(mocks.track).toHaveBeenCalledWith('agent_prompt_sent', {
+      agent_kind: 'codex',
+      launch_source: 'notes_send',
+      request_kind: 'followup'
+    })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Sent to Codex')
+    expect(store.getState().agentSendPopoverTargetMode).toBeNull()
+  })
+
+  it('keeps target mode open and does not run delivery callback when send fails', async () => {
+    const store = createUIStore()
+    const onPromptDelivered = vi.fn()
+    seedAgentSendState(store)
+    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(false)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send',
+      onPromptDelivered
+    })
+
+    await expect(store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)).resolves.toBe(false)
+
+    expect(onPromptDelivered).not.toHaveBeenCalled()
+    expect(mocks.track).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith("Couldn't send to Codex", {
+      description: 'Terminal is no longer available'
+    })
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      status: 'error',
+      error: 'Terminal is no longer available'
+    })
+  })
+
+  it('does not send to a working agent row', async () => {
+    const store = createUIStore()
+    seedAgentSendState(store)
+    mocks.sendBracketedPasteToRunningAgent.mockResolvedValue(true)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'browser-annotations',
+      prompt: 'Review this',
+      label: 'Browser annotations',
+      launchSource: 'notes_send'
+    })
+
+    await expect(store.getState().sendPromptToSidebarAgentTarget(workingPaneKey)).resolves.toBe(
+      false
+    )
+
+    expect(mocks.sendBracketedPasteToRunningAgent).not.toHaveBeenCalled()
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      status: 'open'
+    })
+  })
+
+  it('does not let an older send close a reopened popover with the same id', async () => {
+    const store = createUIStore()
+    const write = deferred<boolean>()
+    seedAgentSendState(store)
+    mocks.sendBracketedPasteToRunningAgent.mockReturnValue(write.promise)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
+    store.getState().closeAgentSendPopoverTargetMode('send-1')
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this again',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+    const reopenedMode = store.getState().agentSendPopoverTargetMode
+
+    write.resolve(true)
+    await expect(send).resolves.toBe(true)
+
+    expect(store.getState().agentSendPopoverTargetMode).toBe(reopenedMode)
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      prompt: 'Review this again',
+      status: 'open'
+    })
+  })
+
+  it('does not retarget the same popover while a send is in progress', async () => {
+    const store = createUIStore()
+    const write = deferred<boolean>()
+    seedAgentSendState(store)
+    mocks.sendBracketedPasteToRunningAgent.mockReturnValue(write.promise)
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review this',
+      label: 'This file',
+      launchSource: 'notes_send'
+    })
+
+    const send = store.getState().sendPromptToSidebarAgentTarget(readyPaneKey)
+    const sendingMode = store.getState().agentSendPopoverTargetMode
+    store.getState().openAgentSendPopoverTargetMode({
+      id: 'send-1',
+      worktreeId,
+      source: 'diff-notes',
+      prompt: 'Review everything',
+      label: 'All unsent notes',
+      launchSource: 'notes_send'
+    })
+
+    expect(store.getState().agentSendPopoverTargetMode).toBe(sendingMode)
+    expect(store.getState().agentSendPopoverTargetMode).toMatchObject({
+      id: 'send-1',
+      prompt: 'Review this',
+      status: 'sending',
+      sendingPaneKey: readyPaneKey
+    })
+
+    write.resolve(true)
+    await expect(send).resolves.toBe(true)
+  })
+})
 
 describe('createUISlice hydratePersistedUI', () => {
   it('defaults persisted right sidebar visibility to open', () => {
@@ -106,6 +440,60 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ rightSidebarTab: 'checks' }))
 
     expect(store.getState().rightSidebarTab).toBe('checks')
+  })
+
+  it('hydrates persisted per-worktree dotfile visibility', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showDotfilesByWorktree: {
+          'repo-1::/repo': false,
+          'repo-2::/repo': true
+        }
+      })
+    )
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({
+      'repo-1::/repo': false,
+      'repo-2::/repo': true
+    })
+  })
+
+  it('drops invalid persisted per-worktree dotfile visibility entries', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        showDotfilesByWorktree: {
+          'repo-1::/repo': false,
+          'repo-2::/repo': 'nope',
+          constructor: false
+        } as never
+      })
+    )
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
+  })
+
+  it('stores only per-worktree dotfile visibility opt-outs', () => {
+    const store = createUIStore()
+
+    store.getState().setShowDotfilesForWorktree('repo-1::/repo', false)
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
+
+    store.getState().setShowDotfilesForWorktree('repo-1::/repo', true)
+    expect(store.getState().showDotfilesByWorktree).toEqual({})
+  })
+
+  it('toggles per-worktree dotfile visibility independently', () => {
+    const store = createUIStore()
+
+    store.getState().toggleShowDotfilesForWorktree('repo-1::/repo')
+    store.getState().toggleShowDotfilesForWorktree('repo-2::/repo')
+    store.getState().toggleShowDotfilesForWorktree('repo-2::/repo')
+
+    expect(store.getState().showDotfilesByWorktree).toEqual({ 'repo-1::/repo': false })
   })
 
   it('falls back to explorer for invalid persisted right sidebar tabs', () => {
@@ -275,24 +663,6 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).not.toHaveBeenCalled()
   })
 
-  it('restores compact workspace board mode only from an explicit true', () => {
-    const store = createUIStore()
-
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        workspaceBoardCompact: true
-      })
-    )
-    expect(store.getState().workspaceBoardCompact).toBe(true)
-
-    store.getState().hydratePersistedUI(
-      makePersistedUI({
-        workspaceBoardCompact: 'yes' as unknown as boolean
-      })
-    )
-    expect(store.getState().workspaceBoardCompact).toBe(false)
-  })
-
   it('clamps persisted workspace board column width', () => {
     const store = createUIStore()
 
@@ -377,7 +747,9 @@ describe('createUISlice hydratePersistedUI', () => {
           githubItemsPreset: 'invalid',
           githubItemsQuery: 42,
           linearPreset: 'completed',
-          linearQuery: 'label:bug'
+          linearQuery: 'label:bug',
+          jiraPreset: 'reported',
+          jiraQuery: 99
         } as unknown as PersistedUIState['taskResumeState']
       })
     )
@@ -385,7 +757,8 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().taskResumeState).toEqual({
       githubMode: 'project',
       linearPreset: 'completed',
-      linearQuery: 'label:bug'
+      linearQuery: 'label:bug',
+      jiraPreset: 'reported'
     })
   })
 
@@ -590,6 +963,29 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().worktreeCardProperties).toEqual(expected)
     expect(setUI).toHaveBeenCalledWith({ worktreeCardProperties: expected })
   })
+
+  it('persists the agent activity display mode', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setAgentActivityDisplayMode('full')
+
+    expect(store.getState().agentActivityDisplayMode).toBe('full')
+    expect(setUI).toHaveBeenCalledWith({ agentActivityDisplayMode: 'full' })
+  })
+
+  it('normalizes invalid persisted agent activity display modes', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        agentActivityDisplayMode: 'bogus' as PersistedUIState['agentActivityDisplayMode']
+      })
+    )
+
+    expect(store.getState().agentActivityDisplayMode).toBe('compact')
+  })
 })
 
 describe('createUISlice settings navigation', () => {
@@ -657,6 +1053,87 @@ describe('createUISlice settings navigation', () => {
     store.getState().closeSettingsPage()
 
     expect(store.getState().activeView).toBe('tasks')
+  })
+
+  it('clears transient settings search when opening settings', () => {
+    const store = createUIStore()
+
+    store.setState({ settingsSearchInputQuery: 'terminal', settingsSearchQuery: 'terminal' })
+    store.getState().openSettingsPage()
+
+    expect(store.getState().activeView).toBe('settings')
+    expect(store.getState().settingsSearchInputQuery).toBe('')
+    expect(store.getState().settingsSearchQuery).toBe('')
+  })
+})
+
+describe('createUISlice new workspace draft', () => {
+  it('preserves Linear linked work item metadata and context', () => {
+    const store = createUIStore()
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'Fix launch context handoff',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        type: 'issue',
+        number: 0,
+        title: 'Fix launch context handoff',
+        url: 'https://linear.app/acme/issue/ENG-123/fix-launch-context-handoff',
+        linearIdentifier: 'ENG-123',
+        linkedContext: {
+          provider: 'linear',
+          version: 1,
+          renderedText: 'Identifier: ENG-123'
+        }
+      },
+      agent: 'claude',
+      linkedIssue: '',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft?.linkedWorkItem).toMatchObject({
+      linearIdentifier: 'ENG-123',
+      linkedContext: {
+        provider: 'linear',
+        version: 1,
+        renderedText: 'Identifier: ENG-123'
+      }
+    })
+  })
+
+  it('keeps older linked work item drafts without Linear context fields valid', () => {
+    const store = createUIStore()
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: 'Legacy issue',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        type: 'issue',
+        number: 42,
+        title: 'Legacy issue',
+        url: 'https://github.com/acme/repo/issues/42'
+      },
+      agent: 'claude',
+      linkedIssue: '42',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft?.linkedWorkItem).toEqual({
+      type: 'issue',
+      number: 42,
+      title: 'Legacy issue',
+      url: 'https://github.com/acme/repo/issues/42'
+    })
   })
 })
 
@@ -804,6 +1281,37 @@ describe('createUISlice feature tips', () => {
   })
 })
 
+describe('createUISlice setup guide sidebar dismissal', () => {
+  it('persists sidebar dismissal changes once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().setSetupGuideSidebarDismissed(true)
+    store.getState().setSetupGuideSidebarDismissed(true)
+
+    expect(store.getState().setupGuideSidebarDismissed).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ setupGuideSidebarDismissed: true })
+  })
+
+  it('hydrates only explicit sidebar dismissals as hidden', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ setupGuideSidebarDismissed: true }))
+    expect(store.getState().setupGuideSidebarDismissed).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ setupGuideSidebarDismissed: undefined }))
+    expect(store.getState().setupGuideSidebarDismissed).toBe(false)
+  })
+})
+
 describe('createUISlice feature interactions', () => {
   it('normalizes persisted feature interaction records during hydration', () => {
     const store = createUIStore()
@@ -863,7 +1371,8 @@ describe('createUISlice feature interactions', () => {
         makePersistedUI({
           featureInteractions: {
             tasks: { firstInteractedAt: 100, interactionCount: 3 }
-          }
+          },
+          contextualToursSeenIds: ['browser']
         })
       )
     )
@@ -881,7 +1390,8 @@ describe('createUISlice feature interactions', () => {
       makePersistedUI({
         featureInteractions: {
           tasks: { firstInteractedAt: 100, interactionCount: 2 }
-        }
+        },
+        contextualToursSeenIds: ['tasks']
       })
     )
     setMock.mockClear()
@@ -895,6 +1405,7 @@ describe('createUISlice feature interactions', () => {
       firstInteractedAt: 100,
       interactionCount: 3
     })
+    expect(store.getState().contextualToursSeenIds).toEqual(['tasks', 'browser'])
   })
 
   it('keeps newer optimistic interaction counts when persistence responses resolve out of order', async () => {
@@ -1095,6 +1606,34 @@ describe('createUISlice contextual tours', () => {
     expect(store.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(false)
   })
 
+  it('does not bias first-visit contextual tour telemetry from navigation actions', () => {
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="tasks-source-filters"]',
+      '[data-contextual-tour-target="automations-create"]',
+      '[data-contextual-tour-target="workspace-creation-project"]'
+    ])
+
+    const tasksStore = createUIStore()
+    tasksStore.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    tasksStore.getState().openTaskPage()
+    tasksStore.getState().requestContextualTour('tasks', 'tasks_open')
+    expect(tasksStore.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(false)
+
+    const automationsStore = createUIStore()
+    automationsStore.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    automationsStore.getState().openAutomationsPage()
+    automationsStore.getState().requestContextualTour('automations', 'automations_open')
+    expect(automationsStore.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(
+      false
+    )
+
+    const composerStore = createUIStore()
+    composerStore.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    composerStore.getState().openModal('new-workspace-composer')
+    composerStore.getState().requestContextualTour('workspace-creation', 'workspace_creation_modal')
+    expect(composerStore.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(false)
+  })
+
   it('does not mark seen when the required first target is absent', () => {
     const store = createUIStore()
     stubContextualTourTargets([])
@@ -1132,7 +1671,9 @@ describe('createUISlice contextual tours', () => {
 
   it('force-starts a tour from an explicit user action even after auto tours are unavailable', () => {
     const store = createUIStore()
-    stubContextualTourTargets(['[data-contextual-tour-target="workspace-agent-terminal-tip"]'])
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
     store.getState().hydratePersistedUI(
       makePersistedUI({
         contextualToursAutoEligible: false,
@@ -1142,13 +1683,35 @@ describe('createUISlice contextual tours', () => {
 
     store
       .getState()
-      .requestContextualTour('workspace-agent-sessions', 'setup_guide_try_it_out', false, {
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
         force: true
       })
 
     expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
-    expect(store.getState().activeContextualTourSource).toBe('setup_guide_try_it_out')
+    expect(store.getState().activeContextualTourSource).toBe('setup_guide_parallel_work')
     expect(store.getState().activeContextualTourWasFeaturePreviouslyInteracted).toBe(false)
+  })
+
+  it('preserves the bounded setup-guide parallel-work source on forced tour requests', () => {
+    const store = createUIStore()
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        contextualToursAutoEligible: false,
+        contextualToursSeenIds: ['workspace-agent-sessions']
+      })
+    )
+
+    store
+      .getState()
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
+        force: true
+      })
+
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourSource).toBe('setup_guide_parallel_work')
   })
 
   it('allows only workspace creation over its workspace composer modal', () => {
@@ -1170,7 +1733,7 @@ describe('createUISlice contextual tours', () => {
   it('advances across visible steps and leaves completion to the overlay', () => {
     const store = createUIStore()
     const visibleSelectors = [
-      '[data-contextual-tour-target="browser-address"], [data-orca-browser-address-bar="true"]',
+      '[data-contextual-tour-target="browser-grab-control"]',
       '[data-contextual-tour-target="browser-annotation-control"]'
     ]
     stubContextualTourTargets(visibleSelectors)
@@ -1178,14 +1741,14 @@ describe('createUISlice contextual tours', () => {
     store.getState().requestContextualTour('browser', 'browser_visible')
 
     store.getState().advanceContextualTour()
-    expect(store.getState().activeContextualTourStepIndex).toBe(2)
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
 
     store.getState().advanceContextualTour()
     expect(store.getState().activeContextualTourId).toBe('browser')
-    expect(store.getState().activeContextualTourStepIndex).toBe(2)
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
   })
 
-  it('completes the active split-pane tour when the split command interaction is recorded', () => {
+  it('advances the active split step when the split command interaction is recorded', () => {
     const setMock = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', {
       api: {
@@ -1195,23 +1758,55 @@ describe('createUISlice contextual tours', () => {
       }
     })
     const store = createUIStore()
-    stubContextualTourTargets(['[data-contextual-tour-target="workspace-agent-terminal-tip"]'])
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]',
+      '[data-contextual-tour-target="workspace-create-control"]'
+    ])
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
     setMock.mockClear()
     store
       .getState()
-      .requestContextualTour('workspace-agent-sessions', 'setup_guide_try_it_out', false, {
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
         force: true
       })
 
     store.getState().recordFeatureInteraction('terminal-pane-split')
 
-    expect(store.getState().activeContextualTourId).toBeNull()
-    expect(store.getState().contextualToursSeenIds).toEqual(['workspace-agent-sessions'])
-    expect(store.getState().lastCompletedContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
     expect(store.getState().featureInteractions['terminal-pane-split']).toMatchObject({
       interactionCount: 1
     })
+  })
+
+  it('opens the sidebar and advances the split step when the create-worktree target is hidden', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+    stubContextualTourTargets([
+      '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
+    ])
+    store.setState({ sidebarOpen: false })
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    store
+      .getState()
+      .requestContextualTour('workspace-agent-sessions', 'setup_guide_parallel_work', false, {
+        force: true
+      })
+
+    store.getState().recordFeatureInteraction('terminal-pane-split')
+
+    expect(store.getState().sidebarOpen).toBe(true)
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
+    expect(store.getState().activeContextualTourStepIndex).toBe(1)
+    expect(store.getState().contextualToursSeenIds).toEqual([])
+    expect(store.getState().lastCompletedContextualTourId).toBeNull()
   })
 
   it('marks the active contextual tour suppressed when its owning source disables', () => {
@@ -1229,6 +1824,28 @@ describe('createUISlice contextual tours', () => {
 
     store.getState().suppressContextualTour('browser', 'browser_visible')
     expect(store.getState().activeContextualTourSuppressed).toBe(true)
+  })
+
+  it('keeps an intentionally detached contextual tour active when its owning source disables', () => {
+    const store = createUIStore()
+    store.setState({
+      activeContextualTourId: 'workspace-agent-sessions',
+      activeContextualTourStepIndex: 3,
+      activeContextualTourSource: 'workspace_agent_sessions_visible',
+      activeContextualTourWasFeaturePreviouslyInteracted: false,
+      contextualTourShownThisSession: true
+    })
+
+    store
+      .getState()
+      .detachContextualTourSource('workspace-agent-sessions', 'workspace_agent_sessions_visible')
+    store
+      .getState()
+      .suppressContextualTour('workspace-agent-sessions', 'workspace_agent_sessions_visible')
+
+    expect(store.getState().activeContextualTourSourceDetached).toBe(true)
+    expect(store.getState().activeContextualTourSuppressed).toBe(false)
+    expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
   })
 
   it('cancels a not-yet-rendered tour without persistence churn', () => {
@@ -1334,6 +1951,36 @@ describe('createUISlice contextual tours', () => {
 })
 
 describe('createUISlice space navigation', () => {
+  it('records Space page opens as workspace cleanup interactions', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const now = 1_700_000_000_000
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+
+    try {
+      const store = createUIStore()
+      store.getState().hydratePersistedUI(makePersistedUI())
+      setMock.mockClear()
+
+      store.getState().openSpacePage()
+
+      const expected: FeatureInteractionState = {
+        'workspace-cleanup': { firstInteractedAt: now, interactionCount: 1 }
+      }
+      expect(store.getState().featureInteractions).toEqual(expected)
+      expect(setMock).toHaveBeenCalledWith({ featureInteractions: expected })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('returns to the tasks page after opening Space from an in-progress draft', () => {
     const store = createUIStore()
 

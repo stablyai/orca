@@ -16,7 +16,7 @@ describe('pairing offer', () => {
 
   it('encode then decode round-trips correctly', () => {
     const url = encodePairingOffer(offer)
-    expect(url).toMatch(/^orca:\/\/pair#/)
+    expect(url).toMatch(/^orca:\/\/pair\?code=/)
 
     const decoded = decodePairingOffer(url)
     expect(decoded).toEqual(offer)
@@ -24,16 +24,31 @@ describe('pairing offer', () => {
 
   it('encoded URL uses base64url (no +, /, or = characters)', () => {
     const url = encodePairingOffer(offer)
-    const fragment = url.split('#')[1]!
-    expect(fragment).not.toMatch(/[+/=]/)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+    expect(code).not.toMatch(/[+/=]/)
   })
 
   it('rejects URLs with wrong scheme', () => {
     expect(() => decodePairingOffer('https://example.com#abc')).toThrow('Invalid pairing URL')
   })
 
-  it('rejects URLs without fragment', () => {
+  it('rejects orca URLs outside the exact pairing route', () => {
+    const url = encodePairingOffer(offer)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+
+    expect(parsePairingCode(`orca://pairing?code=${code}`)).toBeNull()
+    expect(parsePairingCode(`orca://pair-extra?code=${code}`)).toBeNull()
+    expect(() => decodePairingOffer(`orca://pairing?code=${code}`)).toThrow('Invalid pairing URL')
+  })
+
+  it('rejects URLs without a pairing code', () => {
     expect(() => decodePairingOffer('orca://pair')).toThrow('Invalid pairing URL')
+  })
+
+  it('decodes legacy hash URLs', () => {
+    const url = encodePairingOffer(offer)
+    const code = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
+    expect(decodePairingOffer(`orca://pair#${code}`)).toEqual(offer)
   })
 
   it('rejects payloads with missing fields', () => {
@@ -70,7 +85,7 @@ describe('parsePairingCode', () => {
 
   it('parses a bare base64url payload (without scheme prefix)', () => {
     const url = encodePairingOffer(offer)
-    const base64url = url.split('#')[1]!
+    const base64url = new URLSearchParams(url.slice(url.indexOf('?') + 1)).get('code')!
     expect(parsePairingCode(base64url)).toEqual(offer)
   })
 

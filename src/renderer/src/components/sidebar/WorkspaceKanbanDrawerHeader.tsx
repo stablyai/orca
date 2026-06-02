@@ -1,16 +1,14 @@
 import React from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { SheetClose, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { WorkspaceStatusDefinition } from '../../../../shared/types'
 import SidebarFilter from './SidebarFilter'
 import WorkspaceKanbanSettingsMenu from './WorkspaceKanbanSettingsMenu'
 
 type WorkspaceKanbanDrawerHeaderProps = {
   selectedCount: number
-  compact: boolean
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  onCompactChange: (compact: boolean) => void
   onRenameStatus: (statusId: string, label: string) => void
   onChangeStatusColor: (statusId: string, color: string) => void
   onChangeStatusIcon: (statusId: string, icon: string) => void
@@ -18,20 +16,20 @@ type WorkspaceKanbanDrawerHeaderProps = {
   onRemoveStatus: (statusId: string) => void
   onAddStatus: () => void
   onFilterMenuOpenChange: (open: boolean) => void
+  onClose: () => void
 }
 
 export default function WorkspaceKanbanDrawerHeader({
   selectedCount,
-  compact,
   workspaceStatuses,
-  onCompactChange,
   onRenameStatus,
   onChangeStatusColor,
   onChangeStatusIcon,
   onMoveStatus,
   onRemoveStatus,
   onAddStatus,
-  onFilterMenuOpenChange
+  onFilterMenuOpenChange,
+  onClose
 }: WorkspaceKanbanDrawerHeaderProps): React.JSX.Element {
   return (
     <>
@@ -57,9 +55,7 @@ export default function WorkspaceKanbanDrawerHeader({
           onMenuOpenChange={onFilterMenuOpenChange}
         />
         <WorkspaceKanbanSettingsMenu
-          compact={compact}
           workspaceStatuses={workspaceStatuses}
-          onCompactChange={onCompactChange}
           onRenameStatus={onRenameStatus}
           onChangeStatusColor={onChangeStatusColor}
           onChangeStatusIcon={onChangeStatusIcon}
@@ -67,11 +63,9 @@ export default function WorkspaceKanbanDrawerHeader({
           onRemoveStatus={onRemoveStatus}
           onAddStatus={onAddStatus}
         />
-        <SheetClose asChild>
-          <Button variant="ghost" size="icon-xs" aria-label="Close">
-            <X className="size-3.5" />
-          </Button>
-        </SheetClose>
+        <Button variant="ghost" size="icon-xs" aria-label="Close" onClick={onClose}>
+          <X className="size-3.5" />
+        </Button>
       </div>
     </>
   )

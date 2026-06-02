@@ -94,27 +94,24 @@ export function useFeatureWallSessionDepth(
 
   const wasOpenRef = useRef(false)
   useEffect(() => {
-    const openedNow = isOpen && !wasOpenRef.current
-    wasOpenRef.current = isOpen
-    if (!openedNow) {
+    if (!isOpen) {
+      wasOpenRef.current = false
       return
     }
-    // Why: depth telemetry is per explicit tour session; persisted completion
-    // can color the UI but must not leak into current-session depth fields.
-    sessionDepthRef.current = {
-      visitedWorkflows: new Set(),
-      visitedAgentSteps: new Set(),
-      visitedWorkbenchSteps: new Set(),
-      visitedReviewSteps: new Set(),
-      lastGroupId: null
+    const openedNow = !wasOpenRef.current
+    wasOpenRef.current = true
+    if (openedNow) {
+      // Why: depth telemetry is per explicit tour session; persisted completion
+      // can color the UI but must not leak into current-session depth fields.
+      sessionDepthRef.current = {
+        visitedWorkflows: new Set(),
+        visitedAgentSteps: new Set(),
+        visitedWorkbenchSteps: new Set(),
+        visitedReviewSteps: new Set(),
+        lastGroupId: null
+      }
     }
     publishTourDepthSummary()
-  }, [isOpen, publishTourDepthSummary])
-
-  useEffect(() => {
-    if (isOpen) {
-      publishTourDepthSummary()
-    }
   }, [isOpen, publishTourDepthSummary])
 
   const markWorkflowVisitedForSession = useCallback(

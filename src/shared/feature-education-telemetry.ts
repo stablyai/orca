@@ -17,6 +17,7 @@ export const FEATURE_EDUCATION_SOURCES = [
   'automations_open',
   'workspace_creation_visible',
   'workspace_creation_modal',
+  'setup_guide_parallel_work',
   'unknown'
 ] as const
 

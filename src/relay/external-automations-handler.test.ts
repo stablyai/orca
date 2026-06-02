@@ -195,4 +195,46 @@ describe('ExternalAutomationsHandler', () => {
     ).resolves.toEqual({ total: 2, runs: [] })
     expect(readHermesRunRefs).toHaveBeenCalledTimes(2)
   })
+
+  it('evicts oldest remote Hermes count cache entries when many job ids are observed', async () => {
+    const { handler, requestHandlers } = createHandlerHarness()
+    const readHermesRunRefs = vi.fn(async (jobId: string) =>
+      jobId === 'job-0'
+        ? [{ id: 'job-0:2026-05-15_09-00-00.md', run_at: '2026-05-15T09:00:00' }]
+        : []
+    )
+    const handlerInternals = handler as unknown as {
+      readHermesRunRefs: typeof readHermesRunRefs
+    }
+    handlerInternals.readHermesRunRefs = readHermesRunRefs
+
+    await expect(
+      requestHandlers.get('externalAutomations.runs')?.({
+        provider: 'hermes',
+        jobId: 'job-0',
+        page: 1,
+        pageSize: 0
+      })
+    ).resolves.toEqual({ total: 1, runs: [] })
+
+    for (let i = 1; i <= 200; i += 1) {
+      await requestHandlers.get('externalAutomations.runs')?.({
+        provider: 'hermes',
+        jobId: `job-${i}`,
+        page: 1,
+        pageSize: 0
+      })
+    }
+
+    await expect(
+      requestHandlers.get('externalAutomations.runs')?.({
+        provider: 'hermes',
+        jobId: 'job-0',
+        page: 1,
+        pageSize: 0
+      })
+    ).resolves.toEqual({ total: 1, runs: [] })
+
+    expect(readHermesRunRefs).toHaveBeenCalledTimes(202)
+  })
 })

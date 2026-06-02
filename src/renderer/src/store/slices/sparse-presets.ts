@@ -130,6 +130,8 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
         description: message,
         duration: ERROR_TOAST_DURATION
       })
+      // Why: settings UI keeps confirmation/edit state until persistence succeeds.
+      throw err
     }
   }
 })

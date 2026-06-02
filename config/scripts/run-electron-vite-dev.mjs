@@ -241,12 +241,7 @@ function ensureRelativeSymlink(linkPath, target) {
 }
 
 function restoreElectronFrameworkSymlinks(appPath) {
-  const frameworkPath = path.join(
-    appPath,
-    'Contents',
-    'Frameworks',
-    'Electron Framework.framework'
-  )
+  const frameworkPath = path.join(appPath, 'Contents', 'Frameworks', 'Electron Framework.framework')
   const versionsPath = path.join(frameworkPath, 'Versions')
   if (!existsSync(path.join(versionsPath, 'A'))) {
     return

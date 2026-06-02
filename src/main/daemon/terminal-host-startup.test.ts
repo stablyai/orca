@@ -5,6 +5,7 @@ import type { SubprocessHandle } from './session'
 function mockSubprocess(): SubprocessHandle {
   return {
     pid: 1,
+    getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(),

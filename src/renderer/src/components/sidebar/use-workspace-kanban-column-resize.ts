@@ -28,19 +28,19 @@ export function useWorkspaceKanbanColumnResize(
   const draftWidthRef = useRef(columnWidth)
   const frameRef = useRef<number | null>(null)
 
-  useEffect(() => {
-    commitWidthRef.current = onCommitWidth
-  }, [onCommitWidth])
-
-  useEffect(() => {
-    const nextWidth = clampWorkspaceBoardColumnWidth(committedWidth)
-    committedWidthRef.current = nextWidth
-    if (resizingRef.current) {
-      return
+  commitWidthRef.current = onCommitWidth
+  const nextCommittedWidth = clampWorkspaceBoardColumnWidth(committedWidth)
+  if (committedWidthRef.current !== nextCommittedWidth) {
+    committedWidthRef.current = nextCommittedWidth
+    if (!resizingRef.current) {
+      draftWidthRef.current = nextCommittedWidth
+      if (columnWidth !== nextCommittedWidth) {
+        // Why: external width changes should be reflected before children
+        // render; during active drag the local draft remains authoritative.
+        setColumnWidth(nextCommittedWidth)
+      }
     }
-    draftWidthRef.current = nextWidth
-    setColumnWidth(nextWidth)
-  }, [committedWidth])
+  }
 
   const resetDocumentStyles = useCallback(() => {
     document.body.style.cursor = ''

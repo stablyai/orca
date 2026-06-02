@@ -16,6 +16,19 @@ import {
   getFeatureWallSetupProgress,
   type FeatureWallSetupProgress
 } from '../feature-wall/feature-wall-setup-progress'
+import type { ComputerUsePermissionStatusResult } from '../../../../shared/computer-use-permissions-types'
+
+export function getComputerUsePermissionSetupState(
+  status: ComputerUsePermissionStatusResult | null
+): { ready: boolean; unavailable: boolean } {
+  return {
+    ready:
+      status !== null &&
+      status.helperUnavailableReason === null &&
+      status.permissions.every((permission) => permission.status !== 'not-granted'),
+    unavailable: status !== null && status.helperUnavailableReason !== null
+  }
+}
 
 export function useSetupGuideProgress(
   shouldRefreshCoreState: boolean,
@@ -26,7 +39,7 @@ export function useSetupGuideProgress(
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
+  const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
@@ -37,6 +50,7 @@ export function useSetupGuideProgress(
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const [hasSetupScript, setHasSetupScript] = useState(false)
   const [computerUsePermissionsReady, setComputerUsePermissionsReady] = useState(false)
+  const [computerUseUnavailable, setComputerUseUnavailable] = useState(false)
   const { installed: detectedBrowserUseSkillInstalled } = useInstalledAgentSkill(
     ORCA_CLI_SKILL_NAME,
     {
@@ -112,16 +126,15 @@ export function useSetupGuideProgress(
     if (isStale()) {
       return
     }
-    setComputerUsePermissionsReady(
-      status !== null &&
-        status.helperUnavailableReason === null &&
-        status.permissions.every((permission) => permission.status !== 'not-granted')
-    )
+    const permissionState = getComputerUsePermissionSetupState(status)
+    setComputerUsePermissionsReady(permissionState.ready)
+    setComputerUseUnavailable(permissionState.unavailable)
   }, [])
 
   useEffect(() => {
     if (!shouldRefreshCoreState || !computerUseSkillInstalled) {
       setComputerUsePermissionsReady(false)
+      setComputerUseUnavailable(false)
       return
     }
     let stale = false
@@ -163,22 +176,24 @@ export function useSetupGuideProgress(
         browserUseSkillInstalled: browserUseSkillInstalled || detectedBrowserUseSkillInstalled,
         computerUseSkillInstalled,
         computerUsePermissionsReady,
+        computerUseUnavailable,
         orchestrationSkillInstalled:
           orchestrationSkillInstalled || detectedOrchestrationSkillInstalled,
         gitRepoCount,
         worktreesByRepo,
         tabsByWorktree,
-        agentStatusByPaneKey,
+        terminalLayoutsByTabId,
         hasSetupScript
       }),
     [
       browserUseSkillInstalled,
+      computerUseUnavailable,
       computerUsePermissionsReady,
       computerUseSkillInstalled,
       detectedBrowserUseSkillInstalled,
       detectedOrchestrationSkillInstalled,
       featureInteractions,
-      agentStatusByPaneKey,
+      terminalLayoutsByTabId,
       gitRepoCount,
       hasConnectedTaskSource,
       hasSetupScript,

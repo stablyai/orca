@@ -119,6 +119,7 @@ import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from './hosted-review'
 import { createLinearSlice } from './linear'
 import { createPreflightSlice } from './preflight'
+import { createJiraSlice } from './jira'
 import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
@@ -150,6 +151,7 @@ function createTestStore() {
     ...createHostedReviewSlice(...a),
     ...createLinearSlice(...a),
     ...createPreflightSlice(...a),
+    ...createJiraSlice(...a),
     ...createEditorSlice(...a),
     ...createStatsSlice(...a),
     ...createMemorySlice(...a),

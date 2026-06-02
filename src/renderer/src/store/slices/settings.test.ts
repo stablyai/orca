@@ -202,9 +202,11 @@ describe('createSettingsSlice runtime switching', () => {
       markdownViewMode: { '/env-1/repo/stale.md': 'rich' },
       editorViewMode: { '/env-1/repo/stale.md': 'changes' },
       editorCursorLine: { '/env-1/repo/stale.md': 4 },
+      showDotfilesByWorktree: { 'repo-env-1::/env-1/repo': false },
       gitIgnoredPathsByWorktree: { 'repo-env-1::/env-1/repo': ['dist/'] },
       prCache: { '/env-1/repo::main': { data: null, fetchedAt: Date.now() } },
-      linearIssueCache: { 'LIN-1': { data: { id: 'LIN-1' } as never, fetchedAt: Date.now() } }
+      linearIssueCache: { 'LIN-1': { data: { id: 'LIN-1' } as never, fetchedAt: Date.now() } },
+      jiraIssueCache: { 'JIRA-1': { data: { key: 'JIRA-1' } as never, fetchedAt: Date.now() } }
     })
 
     await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
@@ -254,11 +256,13 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().markdownViewMode).toEqual({})
     expect(store.getState().editorViewMode).toEqual({})
     expect(store.getState().editorCursorLine).toEqual({})
+    expect(store.getState().showDotfilesByWorktree).toEqual({})
     expect(store.getState().gitIgnoredPathsByWorktree).toEqual({})
     expect(store.getState().ptyIdsByTabId).toEqual({})
     expect(store.getState().browserTabsByWorktree).toEqual({})
     expect(store.getState().prCache).toEqual({})
     expect(store.getState().linearIssueCache).toEqual({})
+    expect(store.getState().jiraIssueCache).toEqual({})
   })
 
   it('does not close host-owned mirrored resources when a paired web client switches servers', async () => {

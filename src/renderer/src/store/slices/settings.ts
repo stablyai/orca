@@ -12,6 +12,7 @@ import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quic
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
+import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -82,6 +83,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     deferredSshSessionIdsByTabId: {},
     cacheTimerByKey: {},
     recentQuickCommandIdByGroup: {},
+    showDotfilesByWorktree: {},
     expandedDirs: {},
     pendingExplorerReveal: null,
     openFiles: [],
@@ -121,7 +123,18 @@ function runtimeScopedStateReset(): Partial<AppState> {
     linearStatusChecked: false,
     linearIssueCache: {},
     linearSearchCache: {},
-    linearTeamCache: {}
+    linearTeamCache: {},
+    linearProjectCache: {},
+    linearProjectDetailCache: {},
+    linearProjectIssueCache: {},
+    linearCustomViewCache: {},
+    linearCustomViewDetailCache: {},
+    linearCustomViewIssueCache: {},
+    linearCustomViewProjectCache: {},
+    jiraStatus: { connected: false, viewer: null },
+    jiraStatusChecked: false,
+    jiraIssueCache: {},
+    jiraSearchCache: {}
   }
 }
 
@@ -269,6 +282,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
             createId: createOpenInApplicationId
           }
         )
+      }
+      if ('disabledTuiAgents' in updates) {
+        sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
       }
       const nextSettings = await window.api.settings.set(sanitizedUpdates)
       set((s) => ({ settings: (nextSettings as GlobalSettings | undefined) ?? s.settings }))

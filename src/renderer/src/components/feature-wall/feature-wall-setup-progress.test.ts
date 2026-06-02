@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { FeatureWallSetupProgressInput } from './feature-wall-setup-progress'
 import { getFeatureWallSetupProgress } from './feature-wall-setup-progress'
-import { getFeatureWallSetupSteps } from '../../../../shared/feature-wall-setup-steps'
+import {
+  getFeatureWallSetupSteps,
+  getFeatureWallSetupStepsForSection,
+  getFirstIncompleteFeatureWallSetupStepId
+} from '../../../../shared/feature-wall-setup-steps'
 import type { Worktree } from '../../../../shared/types'
 
 function makeInput(
@@ -18,14 +22,37 @@ function makeInput(
     gitRepoCount: 0,
     worktreesByRepo: {},
     tabsByWorktree: {},
-    agentStatusByPaneKey: {},
+    terminalLayoutsByTabId: {},
     hasSetupScript: false,
     ...overrides
   }
 }
 
-function makeWorktree(id: string): Worktree {
-  return { id } as unknown as Worktree
+function makeWorktree(
+  id: string,
+  options: { createdAt?: number; isMainWorktree?: boolean; path?: string | null } = {}
+): Worktree {
+  return {
+    id,
+    path: options.path === null ? undefined : (options.path ?? `/repo/${id}`),
+    createdAt: options.createdAt,
+    isMainWorktree: options.isMainWorktree ?? false
+  } as unknown as Worktree
+}
+
+function makeSplitLayout(): FeatureWallSetupProgressInput['terminalLayoutsByTabId'][string] {
+  return {
+    root: {
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', leafId: 'leaf-1' },
+      second: { type: 'leaf', leafId: 'leaf-2' }
+    }
+  } as never
+}
+
+function makeLeafLayout(): FeatureWallSetupProgressInput['terminalLayoutsByTabId'][string] {
+  return { root: { type: 'leaf', leafId: 'leaf-1' } } as never
 }
 
 describe('getFeatureWallSetupProgress', () => {
@@ -40,20 +67,55 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.coreTotal).toBe(8)
   })
 
-  it('keeps Add 2 projects as the final core setup task', () => {
+  it('orders visible parallel work before setup tasks', () => {
     expect(getFeatureWallSetupSteps().map((step) => step.id)).toEqual([
-      'default-agent',
+      'split-terminal',
+      'two-worktrees',
       'notifications',
-      'two-agents',
-      'three-workspaces',
+      'default-agent',
       'task-sources',
-      'agent-capabilities',
       'setup-script',
-      'add-two-repos'
+      'add-two-repos',
+      'agent-capabilities'
     ])
   })
 
-  it('does not mark two agents complete from split-pane interaction alone', () => {
+  it('groups setup guide steps into Parallel work and Setup sections', () => {
+    expect(getFeatureWallSetupStepsForSection('parallel-work').map((step) => step.id)).toEqual([
+      'split-terminal',
+      'two-worktrees'
+    ])
+    expect(getFeatureWallSetupStepsForSection('setup').map((step) => step.id)).toEqual([
+      'notifications',
+      'default-agent',
+      'task-sources',
+      'setup-script',
+      'add-two-repos',
+      'agent-capabilities'
+    ])
+  })
+
+  it('auto-selects incomplete parallel work before setup steps', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        settings: {
+          defaultTuiAgent: 'claude',
+          notifications: { enabled: true, agentTaskComplete: true }
+        } as never,
+        hasConnectedTaskSource: true,
+        hasSetupScript: true,
+        gitRepoCount: 2,
+        browserUseSkillInstalled: true,
+        computerUseSkillInstalled: true,
+        computerUsePermissionsReady: true,
+        orchestrationSkillInstalled: true
+      })
+    )
+
+    expect(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)).toBe('split-terminal')
+  })
+
+  it('does not mark the step complete from split-pane interaction count alone', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         featureInteractions: {
@@ -62,114 +124,99 @@ describe('getFeatureWallSetupProgress', () => {
       })
     )
 
-    expect(progress.stepDone['two-agents']).toBe(false)
+    expect(progress.stepDone['split-terminal']).toBe(false)
   })
 
-  it('does not mark two agents complete from terminal titles alone', () => {
+  it('does not mark the step complete when a worktree tab has only a single pane', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
         tabsByWorktree: {
-          'worktree-1': [
-            { id: 'tab-1', title: 'Claude' },
-            { id: 'tab-2', title: 'Codex' }
-          ] as never
-        }
+          'worktree-1': [{ id: 'tab-1', title: 'Terminal' }] as never
+        },
+        terminalLayoutsByTabId: { 'tab-1': makeLeafLayout() }
       })
     )
 
-    expect(progress.stepDone['two-agents']).toBe(false)
+    expect(progress.stepDone['split-terminal']).toBe(false)
   })
 
-  it('marks two agents complete once two hook-reported agent sessions exist in one worktree', () => {
+  it('marks the step complete once a worktree terminal is split into two panes', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
         tabsByWorktree: {
-          'worktree-1': [
-            { id: 'tab-1', title: 'Terminal' },
-            { id: 'tab-2', title: 'Terminal' }
-          ] as never
+          'worktree-1': [{ id: 'tab-1', title: 'Terminal' }] as never
         },
-        agentStatusByPaneKey: {
-          'tab-1:00000000-0000-4000-8000-000000000001': {
-            paneKey: 'tab-1:00000000-0000-4000-8000-000000000001',
-            state: 'working',
-            prompt: 'first task',
-            updatedAt: 1,
-            stateStartedAt: 1,
-            agentType: 'claude',
-            stateHistory: []
-          },
-          'tab-2:00000000-0000-4000-8000-000000000002': {
-            paneKey: 'tab-2:00000000-0000-4000-8000-000000000002',
-            state: 'waiting',
-            prompt: 'second task',
-            updatedAt: 2,
-            stateStartedAt: 2,
-            agentType: 'codex',
-            stateHistory: []
-          }
-        }
+        terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() }
       })
     )
 
-    expect(progress.stepDone['two-agents']).toBe(true)
+    expect(progress.stepDone['split-terminal']).toBe(true)
   })
 
-  it('does not mark two agents complete when hook-reported agents are in separate worktrees', () => {
+  it('ignores split layouts for tabs that do not belong to a known worktree', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
-        worktreesByRepo: {
-          'repo-1': [makeWorktree('worktree-1')],
-          'repo-2': [makeWorktree('worktree-2')]
-        },
+        worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
         tabsByWorktree: {
-          'worktree-1': [{ id: 'tab-1', title: 'Terminal' }] as never,
-          'worktree-2': [{ id: 'tab-2', title: 'Terminal' }] as never
+          'worktree-1': [{ id: 'tab-1', title: 'Terminal' }] as never
         },
-        agentStatusByPaneKey: {
-          'tab-1:00000000-0000-4000-8000-000000000001': {
-            paneKey: 'tab-1:00000000-0000-4000-8000-000000000001',
-            state: 'working',
-            prompt: 'first task',
-            updatedAt: 1,
-            stateStartedAt: 1,
-            agentType: 'claude',
-            stateHistory: []
-          },
-          'tab-2:00000000-0000-4000-8000-000000000002': {
-            paneKey: 'tab-2:00000000-0000-4000-8000-000000000002',
-            state: 'working',
-            prompt: 'second task',
-            updatedAt: 2,
-            stateStartedAt: 2,
-            agentType: 'codex',
-            stateHistory: []
-          }
-        }
+        terminalLayoutsByTabId: { 'orphan-tab': makeSplitLayout() }
       })
     )
 
-    expect(progress.stepDone['two-agents']).toBe(false)
+    expect(progress.stepDone['split-terminal']).toBe(false)
   })
 
-  it('marks worktrees complete once two worktrees exist', () => {
+  it('does not mark the step complete from the main checkout alone', () => {
     expect(
       getFeatureWallSetupProgress(
-        makeInput({ worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] } })
-      ).stepDone['three-workspaces']
+        makeInput({
+          worktreesByRepo: { 'repo-1': [makeWorktree('main', { isMainWorktree: true })] }
+        })
+      ).stepDone['two-worktrees']
     ).toBe(false)
+  })
 
+  it('does not pre-complete the step when two repos contribute only main checkouts', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         worktreesByRepo: {
-          'repo-1': [makeWorktree('worktree-1'), makeWorktree('worktree-2')]
+          'repo-1': [makeWorktree('main-1', { isMainWorktree: true })],
+          'repo-2': [makeWorktree('main-2', { isMainWorktree: true })]
         }
       })
     )
 
-    expect(progress.stepDone['three-workspaces']).toBe(true)
+    expect(progress.stepDone['two-worktrees']).toBe(false)
+  })
+
+  it('does not mark the step complete from an unconfirmed non-main worktree placeholder', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        worktreesByRepo: {
+          'repo-1': [
+            makeWorktree('main', { isMainWorktree: true }),
+            makeWorktree('ssh-restored-placeholder', { path: null })
+          ]
+        }
+      })
+    )
+
+    expect(progress.stepDone['two-worktrees']).toBe(false)
+  })
+
+  it('marks the step complete once a non-main worktree exists beyond the main checkout', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        worktreesByRepo: {
+          'repo-1': [makeWorktree('main', { isMainWorktree: true }), makeWorktree('worktree-1')]
+        }
+      })
+    )
+
+    expect(progress.stepDone['two-worktrees']).toBe(true)
   })
 
   it('marks task sources complete for any supported connected provider', () => {
@@ -212,6 +259,20 @@ describe('getFeatureWallSetupProgress', () => {
         browserUseSkillInstalled: true,
         computerUseSkillInstalled: true,
         computerUsePermissionsReady: true,
+        orchestrationSkillInstalled: true
+      })
+    )
+
+    expect(progress.stepDone['agent-capabilities']).toBe(true)
+  })
+
+  it('does not block agent capabilities on unavailable Computer Use access', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        browserUseSkillInstalled: true,
+        computerUseSkillInstalled: true,
+        computerUsePermissionsReady: false,
+        computerUseUnavailable: true,
         orchestrationSkillInstalled: true
       })
     )

@@ -78,10 +78,10 @@ export function useFeatureWallTourTelemetry(args: {
   const telemetryRef = useRef<FeatureWallTourTelemetryState>(createFeatureWallTourTelemetryState())
   const sourceRef = useRef(source)
   const getDepthSummaryRef = useRef(getDepthSummary)
-  useEffect(() => {
-    sourceRef.current = source
-    getDepthSummaryRef.current = getDepthSummary
-  }, [getDepthSummary, source])
+  // Why: close telemetry may emit from stable callbacks; keep the payload
+  // inputs current before open/close Effects or unmount cleanup can run.
+  sourceRef.current = source
+  getDepthSummaryRef.current = getDepthSummary
 
   const emitCloseTelemetry = useCallback(() => {
     const payload = buildFeatureWallClosedTelemetry(
@@ -100,18 +100,18 @@ export function useFeatureWallTourTelemetry(args: {
   }, [])
 
   useEffect(() => {
-    if (isOpen && openFeatureWallTourTelemetrySession(telemetryRef.current, performance.now())) {
-      track('feature_wall_opened', { source })
-      return
-    }
     if (!isOpen) {
       emitCloseTelemetry()
+      return undefined
     }
-  }, [emitCloseTelemetry, isOpen, source])
 
-  useEffect(() => {
+    if (openFeatureWallTourTelemetrySession(telemetryRef.current, performance.now())) {
+      track('feature_wall_opened', { source: sourceRef.current })
+    }
+    // Why: the telemetry session opens from this Effect, so the same Effect
+    // owns close-on-unmount instead of a second cleanup-only Effect.
     return () => emitCloseTelemetry()
-  }, [emitCloseTelemetry])
+  }, [emitCloseTelemetry, isOpen])
 
   return { markExitAction }
 }

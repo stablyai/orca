@@ -1,17 +1,12 @@
+import {
+  filesystemPathHrefToFileUri,
+  filesystemPathToFileUri,
+  fileUriToFilesystemPath
+} from '../../../../shared/file-uri-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+
 function toFileUrl(filePath: string): string {
-  const normalizedPath = filePath.replaceAll('\\', '/')
-  const segments = normalizedPath.split('/').map((segment, index) => {
-    if (index === 0 && /^[A-Za-z]:$/.test(segment)) {
-      return segment
-    }
-    return encodeURIComponent(segment)
-  })
-
-  if (normalizedPath.startsWith('/')) {
-    return `file://${segments.join('/')}`
-  }
-
-  return `file:///${segments.join('/')}`
+  return filesystemPathToFileUri(filePath)
 }
 
 export function resolveMarkdownPreviewHref(rawUrl: string, filePath: string): URL | null {
@@ -20,6 +15,11 @@ export function resolveMarkdownPreviewHref(rawUrl: string, filePath: string): UR
   }
 
   try {
+    if (isWindowsAbsolutePathLike(rawUrl)) {
+      // Why: URL treats `C:\...` as a custom `c:` scheme unless we first
+      // normalize the drive path into the file URL form markdown previews use.
+      return new URL(filesystemPathHrefToFileUri(rawUrl))
+    }
     return new URL(rawUrl, toFileUrl(filePath))
   } catch {
     return null
@@ -123,14 +123,7 @@ export function resolveImageAbsolutePath(
     return null
   }
 
-  // Convert file:///path/to/file → /path/to/file (Unix)
-  // Convert file:///C:/path/to/file → C:/path/to/file (Windows)
-  let absolutePath = decodeURIComponent(resolved.pathname)
-  if (/^\/[A-Za-z]:\//.test(absolutePath)) {
-    absolutePath = absolutePath.slice(1)
-  }
-
-  return absolutePath
+  return fileUriToFilesystemPath(resolved)
 }
 
 export function fileUrlToAbsolutePath(fileUrl: URL): string | null {
@@ -138,10 +131,5 @@ export function fileUrlToAbsolutePath(fileUrl: URL): string | null {
     return null
   }
 
-  let absolutePath = decodeURIComponent(fileUrl.pathname)
-  if (/^\/[A-Za-z]:\//.test(absolutePath)) {
-    absolutePath = absolutePath.slice(1)
-  }
-
-  return absolutePath
+  return fileUriToFilesystemPath(fileUrl)
 }

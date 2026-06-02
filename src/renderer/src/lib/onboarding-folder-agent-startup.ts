@@ -1,5 +1,6 @@
 import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { GlobalSettings, OnboardingState } from '../../../shared/types'
 
@@ -20,7 +21,12 @@ export function buildOnboardingFolderAgentStartup(
   settings: GlobalSettings | null
 ): OnboardingFolderAgentStartup | undefined {
   const agent = settings?.defaultTuiAgent
-  if (!settings || !agent || agent === 'blank') {
+  if (
+    !settings ||
+    !agent ||
+    agent === 'blank' ||
+    !isTuiAgentEnabled(agent, settings.disabledTuiAgents)
+  ) {
     return undefined
   }
 

@@ -13,31 +13,55 @@ export function findTextMatchRanges(text: string, query: string): { start: numbe
     return []
   }
 
-  const normalizedText = text.toLocaleLowerCase()
+  const normalizedText = buildLocaleLowercaseIndex(text)
   const normalizedQuery = query.toLocaleLowerCase()
   const matches: { start: number; end: number }[] = []
   let searchStart = 0
 
-  while (searchStart <= normalizedText.length - normalizedQuery.length) {
-    const matchStart = normalizedText.indexOf(normalizedQuery, searchStart)
+  while (searchStart <= normalizedText.text.length - normalizedQuery.length) {
+    const matchStart = normalizedText.text.indexOf(normalizedQuery, searchStart)
     if (matchStart === -1) {
       break
     }
 
+    const matchEnd = matchStart + normalizedQuery.length
     matches.push({
-      start: matchStart,
-      // Why: use normalizedQuery.length (not query.length) because matchStart
-      // is an index into the locale-lowercased text. toLocaleLowerCase() can
-      // change string length (e.g. Turkish İ, German ß→ss), so the original
-      // query length would produce wrong range boundaries.
-      end: matchStart + normalizedQuery.length
+      start: normalizedText.originalStartByNormalizedOffset[matchStart] ?? text.length,
+      end: normalizedText.originalEndByNormalizedOffset[matchEnd - 1] ?? text.length
     })
     // Why: advance by at least 1 to guarantee forward progress even if a
     // future locale edge-case produces a zero-length normalizedQuery.
-    searchStart = matchStart + Math.max(normalizedQuery.length, 1)
+    searchStart = matchEnd + (normalizedQuery.length === 0 ? 1 : 0)
   }
 
   return matches
+}
+
+function buildLocaleLowercaseIndex(text: string): {
+  text: string
+  originalStartByNormalizedOffset: number[]
+  originalEndByNormalizedOffset: number[]
+} {
+  let normalized = ''
+  const originalStartByNormalizedOffset: number[] = []
+  const originalEndByNormalizedOffset: number[] = []
+  let originalOffset = 0
+
+  for (const char of text) {
+    const normalizedChar = char.toLocaleLowerCase()
+    const originalEnd = originalOffset + char.length
+    // Why: locale lowercasing can expand one original character into multiple
+    // UTF-16 code units (for example `İ` -> `i\u0307`). Search matches happen
+    // in normalized text but DOM slicing needs original offsets.
+    for (let i = 0; i < normalizedChar.length; i += 1) {
+      originalStartByNormalizedOffset.push(originalOffset)
+      originalEndByNormalizedOffset.push(originalEnd)
+    }
+    normalized += normalizedChar
+    originalOffset = originalEnd
+  }
+
+  return { text: normalized, originalStartByNormalizedOffset, originalEndByNormalizedOffset }
 }
 
 export function clearMarkdownPreviewSearchHighlights(root: HTMLElement): void {

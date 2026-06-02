@@ -107,8 +107,12 @@ const ACTIVE_EXECUTION_STATUS_RE = new RegExp(
   `(?:^|[\\r\\n])\\s*(?:${COMMAND_CODE_STATUS_GLYPH_RE_SOURCE}\\s*)?(?:Executing:\\s+\\S|Running\\s*\\()`
 )
 const IDLE_PROMPT_RE = /(?:^|[\r\n])\s*[❯>]\s+Ask your question\.\.\./
+const COMMAND_CODE_BANNER_RE = /\bCommand Code\b/
 
 function stripTerminalControl(data: string): string {
+  if (!terminalControlMayAffectText(data)) {
+    return data
+  }
   const withoutAnsi = data.replace(ANSI_ESCAPE_RE, '').replace(INCOMPLETE_ANSI_ESCAPE_RE, '')
   let output = ''
   for (let index = 0; index < withoutAnsi.length; index += 1) {
@@ -119,6 +123,21 @@ function stripTerminalControl(data: string): string {
     output += withoutAnsi[index]
   }
   return output
+}
+
+function terminalControlMayAffectText(data: string): boolean {
+  for (let index = 0; index < data.length; index += 1) {
+    const code = data.charCodeAt(index)
+    if (
+      code === 0x0d ||
+      code === 0x1b ||
+      (code <= 0x1f && code !== 0x0a) ||
+      (code >= 0x7f && code <= 0x9f)
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 function cleanPromptCandidate(value: string): string {
@@ -136,32 +155,55 @@ function isCommandCodeLaunchCommand(command: string | null | undefined): boolean
   return /(?:^|[\s;&|])(?:command-code|commandcode|cmdc)(?:\s|$)/.test(command)
 }
 
-function patternOverlapsCurrentRawText(
+function rawTextMayContainCommandCodeBanner(rawText: string): boolean {
+  // Why: every terminal pane observes this detector, but only Command Code
+  // panes need the ANSI/control stripping path. Use a broad no-false-negative
+  // letter prefilter so ANSI styling inside the banner words still works.
+  return rawText.includes('C') && rawText.includes('o') && rawText.includes('d')
+}
+
+function patternOverlapsSanitizedText(
   pattern: RegExp,
-  previousRawText: string,
-  currentRawText: string
+  previousTextLength: number,
+  combinedText: string
 ): boolean {
-  const previousLength = stripTerminalControl(previousRawText).length
-  const combinedText = stripTerminalControl(previousRawText + currentRawText)
   const re = new RegExp(pattern.source, 'g')
   for (const match of combinedText.matchAll(re)) {
     const start = match.index ?? 0
-    if (start + match[0].length > previousLength) {
+    if (start + match[0].length > previousTextLength) {
       return true
     }
   }
   return false
 }
 
-function isActiveStatusText(currentRawText: string, previousRawText = ''): boolean {
+type StatusScanContext = {
+  combinedText: string
+  previousTextLength: number
+  combinedTextWithChunkBoundary: string
+  previousTextWithChunkBoundaryLength: number
+}
+
+function patternOverlapsStatusContext(pattern: RegExp, context: StatusScanContext): boolean {
   return (
-    patternOverlapsCurrentRawText(ACTIVE_LLM_STATUS_RE, previousRawText, currentRawText) ||
-    patternOverlapsCurrentRawText(ACTIVE_EXECUTION_STATUS_RE, previousRawText, currentRawText)
+    patternOverlapsSanitizedText(pattern, context.previousTextLength, context.combinedText) ||
+    patternOverlapsSanitizedText(
+      pattern,
+      context.previousTextWithChunkBoundaryLength,
+      context.combinedTextWithChunkBoundary
+    )
   )
 }
 
-function isIdlePromptText(currentRawText: string, previousRawText = ''): boolean {
-  return patternOverlapsCurrentRawText(IDLE_PROMPT_RE, previousRawText, currentRawText)
+function isActiveStatusText(context: StatusScanContext): boolean {
+  return (
+    patternOverlapsStatusContext(ACTIVE_LLM_STATUS_RE, context) ||
+    patternOverlapsStatusContext(ACTIVE_EXECUTION_STATUS_RE, context)
+  )
+}
+
+function isIdlePromptText(context: StatusScanContext): boolean {
+  return patternOverlapsStatusContext(IDLE_PROMPT_RE, context)
 }
 
 export function createCommandCodeOutputStatusDetector(args: {
@@ -176,19 +218,39 @@ export function createCommandCodeOutputStatusDetector(args: {
   return {
     observe(data: string): boolean {
       const previousRawText = recentRawText
-      const scanText = stripTerminalControl(previousRawText + data)
-      const scanTextWithChunkBoundary = stripTerminalControl(
-        previousRawText ? `${previousRawText}\n${data}` : data
-      )
-      recentRawText = (previousRawText + data).slice(-RECENT_TEXT_LIMIT)
-      if (
-        !hasSeenCommandCodeUi &&
-        (/\bCommand Code\b/.test(scanText) || /\bCommand Code\b/.test(scanTextWithChunkBoundary))
-      ) {
+      const rawText = previousRawText + data
+      recentRawText = rawText.slice(-RECENT_TEXT_LIMIT)
+
+      if (!hasSeenCommandCodeUi) {
+        if (!rawTextMayContainCommandCodeBanner(rawText)) {
+          return false
+        }
+        const scanText = stripTerminalControl(rawText)
+        const scanTextWithChunkBoundary = previousRawText
+          ? stripTerminalControl(`${previousRawText}\n${data}`)
+          : scanText
+        if (
+          !COMMAND_CODE_BANNER_RE.test(scanText) &&
+          !COMMAND_CODE_BANNER_RE.test(scanTextWithChunkBoundary)
+        ) {
+          return false
+        }
         hasSeenCommandCodeUi = true
       }
-      if (!hasSeenCommandCodeUi) {
-        return false
+
+      const scanText = stripTerminalControl(rawText)
+      const scanTextWithChunkBoundary = previousRawText
+        ? stripTerminalControl(`${previousRawText}\n${data}`)
+        : scanText
+      const previousTextLength = previousRawText ? stripTerminalControl(previousRawText).length : 0
+      const previousTextWithChunkBoundaryLength = previousRawText
+        ? stripTerminalControl(`${previousRawText}\n`).length
+        : 0
+      const statusContext: StatusScanContext = {
+        combinedText: scanText,
+        previousTextLength,
+        combinedTextWithChunkBoundary: scanTextWithChunkBoundary,
+        previousTextWithChunkBoundaryLength
       }
       for (const promptMatch of scanText.matchAll(/(?:^|[\r\n])\s*[❯>]\s+([^\r\n]+)(?=[\r\n])/g)) {
         const prompt = cleanPromptCandidate(promptMatch[1] ?? '')
@@ -199,20 +261,14 @@ export function createCommandCodeOutputStatusDetector(args: {
       // Why: Command Code lacks a prompt-start hook. Its TUI prints these
       // status words while a submitted prompt is actively running, including
       // no-tool turns that would otherwise jump straight from idle to done.
-      if (
-        isActiveStatusText(data, previousRawText) ||
-        isActiveStatusText(data, `${previousRawText}\n`)
-      ) {
+      if (isActiveStatusText(statusContext)) {
         args.onWorking(lastSubmittedPrompt)
         return true
       }
       // Why: Command Code does not reliably emit a Stop hook for no-tool turns.
       // When a submitted prompt has returned to the idle composer, let the pane
       // connection settle-check the current row and mark that turn done.
-      if (
-        lastSubmittedPrompt &&
-        (isIdlePromptText(data, previousRawText) || isIdlePromptText(data, `${previousRawText}\n`))
-      ) {
+      if (lastSubmittedPrompt && isIdlePromptText(statusContext)) {
         args.onDone?.(lastSubmittedPrompt)
         return true
       }

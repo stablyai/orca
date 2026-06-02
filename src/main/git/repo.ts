@@ -1,7 +1,7 @@
 /* oxlint-disable max-lines */
 import { execSync } from 'child_process'
 import { existsSync, statSync } from 'fs'
-import { join, basename } from 'path'
+import { basename } from 'path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
 import type { BaseRefSearchResult } from '../../shared/types'
 import { buildHostedRemoteFileUrl, parseHostedRemote } from './hosted-remote-url'
@@ -53,25 +53,23 @@ export function isGitRepo(path: string): boolean {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return false
     }
-    // .git dir or file (for worktrees) or bare repo
-    if (existsSync(join(path, '.git'))) {
-      return true
-    }
-    // Might be a bare repo — ask git
-    const result = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
+    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
       cwd: path
     }).trim()
-    return result === 'true'
-  } catch {
-    // Also check if it's a bare repo
-    try {
-      const result = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
-        cwd: path
-      }).trim()
-      return result === 'true'
-    } catch {
-      return false
+    if (insideWorkTree === 'true') {
+      return true
     }
+  } catch {
+    // Fall through to the bare-repo probe below.
+  }
+
+  try {
+    const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
+      cwd: path
+    }).trim()
+    return bareRepo === 'true'
+  } catch {
+    return false
   }
 }
 
@@ -478,8 +476,39 @@ async function getDefaultBaseRefAsync(path: string): Promise<string | null> {
  * Why shared: the local path and the SSH relay path must send the exact
  * same argv so results cannot diverge between transports.
  */
-export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
-  const base = ['for-each-ref', '--format=%(refname)%00%(refname:short)', '--sort=-committerdate']
+const REF_SEARCH_CANDIDATE_MULTIPLIER = 4
+const REF_SEARCH_LEGACY_HEADROOM = 100
+
+function getRefSearchCandidateCount(limit: number, excludesRemoteHead: boolean): number {
+  if (!Number.isInteger(limit) || limit <= 0) {
+    throw new Error('invalid_limit')
+  }
+  const baseCount = limit * REF_SEARCH_CANDIDATE_MULTIPLIER
+  return excludesRemoteHead ? baseCount : baseCount + REF_SEARCH_LEGACY_HEADROOM
+}
+
+export function buildSearchBaseRefsArgv(
+  normalizedQuery: string,
+  limit: number,
+  options: { excludeRemoteHead?: boolean } = {}
+): string[] {
+  const excludeRemoteHead = options.excludeRemoteHead ?? true
+  const candidateCount = getRefSearchCandidateCount(limit, excludeRemoteHead)
+  const base = [
+    'for-each-ref',
+    '--format=%(refname)%00%(refname:short)',
+    '--sort=-committerdate',
+    ...(excludeRemoteHead
+      ? [
+          // Why: exclude remote HEAD pseudo-refs before --count so the bounded
+          // candidate window is spent on refs the picker can actually display.
+          '--exclude=refs/remotes/**/HEAD'
+        ]
+      : []),
+    // Why: empty Branch-tab searches use broad globs; cap git output before
+    // execFile/SSH buffers capture every ref in very large repositories.
+    `--count=${candidateCount}`
+  ]
   // Why: split on `/` so display-format queries (`upstream/main`) route
   // each token to one git ref segment. Filter empty tokens so trailing
   // (`upstream/`), leading (`/main`), or doubled (`upstream//main`)
@@ -510,6 +539,18 @@ export function buildSearchBaseRefsArgv(normalizedQuery: string): string[] {
   // branch is what makes re-typing a visible result actually find it.
   const segmented = tokens.map((token) => `*${token}*`).join('/')
   return [...base, `refs/remotes/${segmented}`, `refs/heads/${segmented}`]
+}
+
+export function isForEachRefExcludeUnsupportedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const maybe = error as { message?: unknown; stderr?: unknown; stdout?: unknown }
+  const text = [maybe.message, maybe.stderr, maybe.stdout]
+    .filter((value): value is string => typeof value === 'string')
+    .join('\n')
+    .toLowerCase()
+  return text.includes('unknown option') && text.includes('exclude')
 }
 
 /**
@@ -578,20 +619,32 @@ export async function searchBaseRefDetails(
   query: string,
   limit = 25
 ): Promise<BaseRefSearchResult[]> {
-  const normalizedQuery = normalizeRefSearchQuery(query)
-  if (!normalizedQuery) {
+  if (!Number.isInteger(limit) || limit <= 0) {
     return []
   }
+  const normalizedQuery = normalizeRefSearchQuery(query)
 
   try {
     // Why: argv (including the two-remote-glob rationale) lives in
     // buildSearchBaseRefsArgv so the SSH sibling cannot drift.
-    const [{ stdout }, remotes] = await Promise.all([
-      gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery), { cwd: path }),
-      listRemoteNames(path)
-    ])
+    const remotesPromise = listRemoteNames(path)
+    let result: { stdout: string }
+    try {
+      result = await gitExecFileAsync(buildSearchBaseRefsArgv(normalizedQuery, limit), {
+        cwd: path
+      })
+    } catch (err) {
+      if (!isForEachRefExcludeUnsupportedError(err)) {
+        throw err
+      }
+      result = await gitExecFileAsync(
+        buildSearchBaseRefsArgv(normalizedQuery, limit, { excludeRemoteHead: false }),
+        { cwd: path }
+      )
+    }
+    const remotes = await remotesPromise
 
-    return parseAndFilterSearchRefDetails(stdout, limit, remotes)
+    return parseAndFilterSearchRefDetails(result.stdout, limit, remotes)
   } catch (err) {
     // Why: surface the failure for diagnostics; callers treat `[]` as "no
     // matches", but silently swallowing the error makes a missing result
@@ -717,20 +770,21 @@ export async function getBranchConflictKind(
   }
 
   try {
+    const remoteNames = (await listRemoteNames(path)).sort((a, b) => b.length - a.length)
     const { stdout } = await gitExecFileAsync(
       ['for-each-ref', '--format=%(refname)', 'refs/remotes'],
       { cwd: path }
     )
-    // Why: refs have the form refs/remotes/<remote>/<branch>. We strip the
-    // first three segments so that e.g. "feature/dashboard" only matches
-    // "refs/remotes/origin/feature/dashboard", not "refs/remotes/origin/other/feature/dashboard".
     const hasRemoteConflict = stdout.split('\n').some((ref) => {
       const trimmed = ref.trim()
       if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
         return false
       }
-      const parts = trimmed.split('/')
-      return parts.slice(3).join('/') === branchName
+      const shortRef = trimmed.replace(/^refs\/remotes\//, '')
+      // Why: git allows slashes in remote names. Use the configured remote
+      // list so foo/bar/feature resolves as branch "feature" for remote
+      // "foo/bar", matching searchBaseRefDetails.
+      return resolveLocalBranchName(trimmed, shortRef, remoteNames) === branchName
     })
 
     return hasRemoteConflict ? 'remote' : null

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type JSX } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type JSX, type ReactNode } from 'react'
 import { GitBranch } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ClaudeIcon } from '../status-bar/icons'
@@ -8,7 +8,7 @@ import { CursorIcon } from './feature-tour-preview-glyphs'
 type ComputerUsePhase = 'inspect' | 'target' | 'click' | 'verified'
 
 const PHASES: readonly ComputerUsePhase[] = ['inspect', 'target', 'click', 'verified', 'verified']
-const PHASE_MS = 1100
+const PHASE_MS = 1350
 
 // Why: the visual must read as "an agent in an Orca worktree drives the
 // local app via the `orca computer` CLI" — each command on the left causes
@@ -47,13 +47,13 @@ export function ComputerUseAnimatedVisual(props: {
       const containerRect = container.getBoundingClientRect()
       const buttonRect = button.getBoundingClientRect()
 
-      const buttonX = buttonRect.left - containerRect.left + buttonRect.width / 2
+      const buttonX = buttonRect.left - containerRect.left + buttonRect.width * 0.78
       const buttonY = buttonRect.top - containerRect.top + buttonRect.height / 2
 
       const startX = containerRect.width * 0.35
       const startY = containerRect.height * 0.35
 
-      if (phase === 'inspect') {
+      if (phase === 'inspect' || phase === 'verified') {
         setCursorCoords({ x: startX, y: startY, visible: false })
       } else {
         setCursorCoords({ x: buttonX, y: buttonY, visible: true })
@@ -88,13 +88,13 @@ export function ComputerUseAnimatedVisual(props: {
         <div className="grid h-[253px] grid-rows-[58px_minmax(0,1fr)] bg-muted/10">
           <div className="border-b border-border bg-card px-4 py-2.5">
             <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="h-2.5 w-24 rounded-full bg-foreground/20" />
-                <div className="mt-2 h-2 w-36 rounded-full bg-muted-foreground/25" />
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <div className="h-2.5 w-24 max-w-full rounded-full bg-foreground/20" />
+                <div className="mt-2 h-2 w-36 max-w-full rounded-full bg-muted-foreground/25" />
               </div>
               <span
                 className={cn(
-                  'rounded-full border px-2 py-1 text-[11px] font-medium transition-colors',
+                  'shrink-0 rounded-full border px-2 py-1 text-[11px] font-medium transition-colors',
                   verified
                     ? 'border-primary/30 bg-primary/10 text-primary'
                     : 'border-border bg-muted/40 text-muted-foreground'
@@ -108,24 +108,23 @@ export function ComputerUseAnimatedVisual(props: {
           <div ref={containerRef} className="relative p-3">
             <div className="space-y-2">
               <AppRow width="78%" />
-              <AppRow width="58%" />
               <div
                 className={cn(
-                  'grid grid-cols-[minmax(0,1fr)_72px] items-center gap-3 rounded-lg border bg-card px-3 py-2.5 transition-[background-color,border-color,box-shadow]',
+                  'flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5 transition-[background-color,border-color,box-shadow]',
                   targetVisible
                     ? 'border-ring bg-accent/50 ring-2 ring-ring/30 shadow-xs'
                     : 'border-border'
                 )}
               >
-                <div className="min-w-0">
-                  <div className="h-2.5 w-28 rounded-full bg-foreground/20" />
-                  <div className="mt-2 h-2 w-40 rounded-full bg-muted-foreground/25" />
+                <div className="min-w-0 flex-1 overflow-hidden pr-1">
+                  <div className="h-2.5 w-1/2 max-w-16 rounded-full bg-foreground/20" />
+                  <div className="mt-2 h-2 w-3/5 max-w-20 rounded-full bg-muted-foreground/25" />
                 </div>
                 <div
                   ref={buttonRef}
                   aria-hidden
                   className={cn(
-                    'flex h-8 items-center justify-center rounded-md border px-2 text-xs font-medium transition-[background-color,color,transform]',
+                    'flex h-8 w-[72px] shrink-0 items-center justify-center rounded-md border px-2 text-xs font-medium transition-[background-color,color,transform]',
                     clicked
                       ? 'border-primary/30 bg-primary/10 text-primary'
                       : 'border-border bg-secondary text-secondary-foreground',
@@ -166,77 +165,91 @@ function AgentWorktreeTerminal(props: {
           <span className="truncate">{WORKTREE_LABEL}</span>
         </span>
       </div>
-      <div className="space-y-2 p-3 font-mono text-[10.5px] leading-snug">
-        <TerminalRequest text="approve the note in my app" />
-        <CliCommandBlock
-          commandLines={['orca computer get-app-state', '--app "Notes"']}
+      <div className="space-y-1.5 p-3 font-mono text-[10.5px] leading-snug">
+        <TerminalLine muted>
+          <span className="mr-1.5 text-foreground">●</span>
+          Claude Code session started
+        </TerminalLine>
+        <TerminalLine wrap>
+          <span className="mr-1.5 text-amber-600">&gt;</span>
+          approve the note in my app
+        </TerminalLine>
+        <ComputerActionLine
+          action="Computer"
+          target="inspect Notes"
           active={props.phase === 'inspect'}
           done={props.targetVisible}
-          output={
-            props.targetVisible ? (
-              <>
-                found &ldquo;Approve&rdquo; <span className="text-muted-foreground">[#7]</span>
-              </>
-            ) : null
-          }
         />
-        <CliCommandBlock
-          commandLines={['orca computer click', '--element-index 7']}
+        <TerminalLine visible={props.targetVisible} indent muted>
+          found &ldquo;Approve&rdquo; <span>[#7]</span>
+        </TerminalLine>
+        <ComputerActionLine
+          action="Computer"
+          target="click Approve"
           active={props.phase === 'target' || props.phase === 'click'}
           done={props.clicked}
-          output={props.clicked ? <>click sent</> : null}
         />
-        <CliCommandBlock
-          commandLines={['orca computer get-app-state', '--app "Notes" --json']}
+        <TerminalLine visible={props.clicked} indent muted>
+          click sent
+        </TerminalLine>
+        <ComputerActionLine
+          action="Computer"
+          target="verify Notes"
           active={props.phase === 'click'}
           done={props.verified}
-          output={
-            props.verified ? (
-              <>
-                <span aria-hidden>→</span> <span className="text-foreground">computer</span>
-              </>
-            ) : null
-          }
         />
+        <TerminalLine visible={props.verified} indent muted>
+          status: <span className="text-foreground">approved</span>
+        </TerminalLine>
       </div>
     </div>
   )
 }
 
-function TerminalRequest(props: { text: string }): JSX.Element {
-  return (
-    <div className="min-w-0 truncate text-muted-foreground">
-      <span>{props.text}</span>
-    </div>
-  )
-}
-
-function CliCommandBlock(props: {
-  commandLines: readonly string[]
+function ComputerActionLine(props: {
+  action: string
+  target: string
   active: boolean
   done: boolean
-  output: JSX.Element | null
 }): JSX.Element {
-  const commandTone = props.active || props.done ? 'text-foreground' : 'text-muted-foreground/65'
   return (
-    <div className="space-y-0.5">
-      <div className={cn('text-[11px]', commandTone)}>$</div>
-      <div className={cn('min-w-0 space-y-0.5 pl-2', commandTone)}>
-        {props.commandLines.map((line) => (
-          <div key={line} className="truncate">
-            {line}
-          </div>
-        ))}
-      </div>
-      <div
-        className={cn(
-          'min-h-[14px] truncate pl-2 text-muted-foreground transition-opacity duration-200',
-          props.output ? 'opacity-100' : 'opacity-0'
-        )}
-      >
-        {props.output ?? ' '}
-      </div>
+    <TerminalLine visible={props.active || props.done}>
+      {props.done ? <span className="mr-1.5 font-bold text-emerald-600">✓</span> : <RunSpinner />}
+      <span className="text-foreground">{props.action}</span>
+      <span className="ml-1.5 truncate text-muted-foreground">{props.target}</span>
+    </TerminalLine>
+  )
+}
+
+function TerminalLine(props: {
+  children: ReactNode
+  muted?: boolean
+  wrap?: boolean
+  indent?: boolean
+  visible?: boolean
+}): JSX.Element {
+  const visible = props.visible ?? true
+  return (
+    <div
+      className={cn(
+        'min-h-[15px] transition-opacity duration-200',
+        props.muted ? 'text-muted-foreground' : null,
+        props.indent ? 'pl-4' : null,
+        props.wrap ? 'whitespace-pre-wrap break-words' : 'truncate whitespace-pre',
+        visible ? 'opacity-100' : 'opacity-0'
+      )}
+    >
+      {props.children}
     </div>
+  )
+}
+
+function RunSpinner(): JSX.Element {
+  return (
+    <span
+      className="mr-1.5 inline-block size-2 animate-spin rounded-full border-[1.5px] border-foreground/20 border-t-foreground align-[-1px]"
+      aria-hidden
+    />
   )
 }
 

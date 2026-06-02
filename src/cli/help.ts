@@ -11,6 +11,9 @@ Startup:
   serve                     Start a headless Orca runtime server
   status                    Show app/runtime/graph readiness
 
+Diagnostics:
+  diagnostics memory        Collect a memory snapshot for Orca and managed terminals
+
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
   environment list          List saved remote Orca runtimes
@@ -161,6 +164,7 @@ Common Commands:
   orca open [--json]
   orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
   orca status [--json]
+  orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -169,7 +173,7 @@ Common Commands:
   orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
-  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]
+  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
   orca file open <path> [--worktree <selector>] [--json]
@@ -209,7 +213,7 @@ Wait Options:
 
 Output Options:
   --json                    Emit machine-readable JSON instead of human text
-  --pairing-code <code>      Connect to a remote Orca runtime using an orca://pair#... code
+  --pairing-code <code>      Connect to a remote Orca runtime using an orca://pair?... code
   --environment <selector>   Connect using a saved environment id or name
   --help                    Show this help message
 
@@ -254,6 +258,7 @@ Browser Options:
 Examples:
   $ orca open
   $ orca status --json
+  $ orca diagnostics memory --json
   $ orca repo list
   $ orca worktree create --repo name:orca --name cli-test-1 --issue 273
   $ orca worktree show --worktree branch:Jinwoo-H/cli
@@ -388,6 +393,8 @@ export function formatFlagHelp(flag: string): string {
     worktree:
       '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     workspace: '--workspace <selector> Existing worktree selector for automation runs',
+    'workspace-status':
+      '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
     prompt: '--prompt <text>        Automation prompt to pass to the agent',
     staged: '--staged               Open staged source-control changes',
     provider: '--provider <agent>     Agent id such as codex, claude, or gemini',

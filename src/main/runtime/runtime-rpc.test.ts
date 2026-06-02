@@ -5,8 +5,8 @@ import { join } from 'path'
 import { createConnection, type Socket } from 'net'
 import { EventEmitter } from 'events'
 import { describe, expect, it, vi } from 'vitest'
-import Database from 'better-sqlite3'
 import WebSocket from 'ws'
+import Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
@@ -762,6 +762,7 @@ describe('OrcaRuntimeRpcServer', () => {
       .mockResolvedValue({ hasUpstream: true, ahead: 1, behind: 0 })
     const rebaseRuntimeGitFromBase = vi.fn().mockResolvedValue({ ok: true })
     const abortRuntimeGitMerge = vi.fn().mockResolvedValue({ ok: true })
+    const abortRuntimeGitRebase = vi.fn().mockResolvedValue({ ok: true })
     const bulkStageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
     const bulkUnstageRuntimeGitPaths = vi.fn().mockResolvedValue({ ok: true })
     const getRuntimeGitDiff = vi.fn().mockResolvedValue({
@@ -817,6 +818,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const mergeRepoPR = vi.fn().mockResolvedValue({ ok: true })
     const addGitLabRepoIssueComment = vi.fn().mockResolvedValue({ ok: true })
     const addGitLabRepoMRComment = vi.fn().mockResolvedValue({ ok: true })
+    const resolveGitLabRepoMRDiscussion = vi.fn().mockResolvedValue({ ok: true })
     const mergeGitLabRepoMR = vi.fn().mockResolvedValue({ ok: true })
     const addGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({
       ok: true,
@@ -844,6 +846,7 @@ describe('OrcaRuntimeRpcServer', () => {
       getRuntimeGitUpstreamStatus,
       rebaseRuntimeGitFromBase,
       abortRuntimeGitMerge,
+      abortRuntimeGitRebase,
       bulkStageRuntimeGitPaths,
       bulkUnstageRuntimeGitPaths,
       getRuntimeGitDiff,
@@ -875,6 +878,7 @@ describe('OrcaRuntimeRpcServer', () => {
       mergeRepoPR,
       addGitLabRepoIssueComment,
       addGitLabRepoMRComment,
+      resolveGitLabRepoMRDiscussion,
       mergeGitLabRepoMR,
       addGitHubIssueCommentBySlug,
       updateGitHubIssueCommentBySlug,
@@ -1290,6 +1294,21 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     await server['handleWebSocketMessage'](
       JSON.stringify({
+        id: 'req_gitlab_resolve_mr_discussion',
+        method: 'gitlab.resolveMRDiscussion',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          iid: 456,
+          discussionId: 'discussion-1',
+          resolved: true
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
         id: 'req_gitlab_merge_mr',
         method: 'gitlab.mergeMR',
         deviceToken: mobile.token,
@@ -1406,6 +1425,16 @@ describe('OrcaRuntimeRpcServer', () => {
       JSON.stringify({
         id: 'req_git_abort_merge',
         method: 'git.abortMerge',
+        deviceToken: mobile.token,
+        params: { worktree: 'id:wt-1' }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_git_abort_rebase',
+        method: 'git.abortRebase',
         deviceToken: mobile.token,
         params: { worktree: 'id:wt-1' }
       }),
@@ -1626,6 +1655,9 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_bulk_stage', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_abort_merge', ok: true }))
     expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_git_abort_rebase', ok: true })
+    )
+    expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_git_bulk_unstage', ok: true })
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
@@ -1660,6 +1692,7 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(getRuntimeGitUpstreamStatus).toHaveBeenCalledWith('id:wt-1')
     expect(bulkStageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['a.ts', 'b.ts'])
     expect(abortRuntimeGitMerge).toHaveBeenCalledWith('id:wt-1')
+    expect(abortRuntimeGitRebase).toHaveBeenCalledWith('id:wt-1')
     expect(bulkUnstageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['c.ts'])
     expect(openMobileDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', true)
     expect(getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', false, undefined)
@@ -1733,7 +1766,7 @@ describe('OrcaRuntimeRpcServer', () => {
     })
     expect(listRepoLabels).toHaveBeenCalledWith('id:repo-1')
     expect(listRepoAssignableUsers).toHaveBeenCalledWith('id:repo-1')
-    expect(addRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done')
+    expect(addRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', null)
     expect(addRepoPRReviewComment).toHaveBeenCalledWith('id:repo-1', {
       prNumber: 456,
       commitId: 'abc123',
@@ -1748,7 +1781,8 @@ describe('OrcaRuntimeRpcServer', () => {
       body: 'fixed',
       threadId: 'thread-1',
       path: 'src/app.ts',
-      line: 10
+      line: 10,
+      prRepo: null
     })
     expect(getRepoPRFileContents).toHaveBeenCalledWith('id:repo-1', {
       prNumber: 456,
@@ -1772,6 +1806,13 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(mergeRepoPR).toHaveBeenCalledWith('id:repo-1', 456, 'squash', null)
     expect(addGitLabRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', undefined)
     expect(addGitLabRepoMRComment).toHaveBeenCalledWith('id:repo-1', 456, 'ship it', undefined)
+    expect(resolveGitLabRepoMRDiscussion).toHaveBeenCalledWith(
+      'id:repo-1',
+      456,
+      'discussion-1',
+      true,
+      undefined
+    )
     expect(mergeGitLabRepoMR).toHaveBeenCalledWith('id:repo-1', 456, 'merge', undefined)
     expect(updateGitHubProjectItemField).toHaveBeenCalledWith({
       projectId: 'project-1',
@@ -2489,6 +2530,46 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('destroys active Unix socket connections when the runtime stops', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1000,
+        longPollCap: 1
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const endpoint = metadata!.transports[0]!.endpoint
+
+        const session = openFramedSession(endpoint, {
+          id: 'req_stop',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_stop', wait: true, timeoutMs: 10_000 }
+        })
+        await waitFor(() => server['activeLongPolls'] === 1)
+
+        const stopResult = await Promise.race([
+          server.stop().then(() => 'stopped'),
+          sleep(500).then(() => 'timeout')
+        ])
+
+        expect(stopResult).toBe('stopped')
+        await session.done
+        await waitFor(() => server['activeLongPolls'] === 0)
+        expect(session.socket.destroyed).toBe(true)
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
     it('responds runtime_busy once the long-poll cap is saturated', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
@@ -2634,7 +2715,7 @@ describe('OrcaRuntimeRpcServer', () => {
     })
 
     it('hard-fails startup when the migration cannot be applied', () => {
-      // Simulate a migration error by monkey-patching better-sqlite3's exec.
+      // Simulate a migration error by monkey-patching the SQLite wrapper's exec.
       // If ALTER TABLE throws for any reason (e.g. disk full, permissions),
       // the constructor must propagate — not swallow and serve half-broken.
       //

@@ -100,7 +100,7 @@ export default function WebConnect({
             id="web-runtime-pairing-code"
             value={pairingCode}
             onChange={(event) => setPairingCode(event.target.value)}
-            placeholder="orca://pair#..."
+            placeholder="orca://pair?code=..."
             autoComplete="off"
             spellCheck={false}
           />

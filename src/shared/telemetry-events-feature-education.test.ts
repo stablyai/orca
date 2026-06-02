@@ -24,6 +24,24 @@ describe('feature education telemetry event schemas', () => {
     expect(parsed.success).toBe(true)
   })
 
+  it('accepts setup-guide contextual tour sources for shown and outcome telemetry', () => {
+    const shown = eventSchemas.contextual_tour_shown.safeParse({
+      tour_id: 'workspace-agent-sessions',
+      source: 'setup_guide_parallel_work',
+      was_feature_previously_interacted: false
+    })
+    const outcome = eventSchemas.contextual_tour_outcome.safeParse({
+      tour_id: 'workspace-agent-sessions',
+      source: 'setup_guide_parallel_work',
+      outcome: 'completed',
+      steps_seen: 2,
+      total_steps: 5
+    })
+
+    expect(shown.success).toBe(true)
+    expect(outcome.success).toBe(true)
+  })
+
   it('rejects contextual tour outcome payloads with impossible progress', () => {
     const parsed = eventSchemas.contextual_tour_outcome.safeParse({
       tour_id: 'tasks',

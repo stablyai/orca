@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: the relay protocol dispatcher keeps client
+   routing, request cancellation, and framing state together. */
 import {
   FrameDecoder,
   MessageType,
@@ -35,16 +37,26 @@ type RelayClient = {
   closed: boolean
 }
 
+type PendingRelayRequest = {
+  resolve: (result: unknown) => void
+  reject: (error: Error) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
+const RELAY_TO_CLIENT_REQUEST_TIMEOUT_MS = 30_000
+
 export class RelayDispatcher {
   private readonly primaryClient: RelayClient
   private readonly clients = new Map<number, RelayClient>()
   private requestHandlers = new Map<string, MethodHandler>()
   private notificationHandlers = new Map<string, NotificationHandler>()
   private readonly requestAborts = new ClientRequestAborts()
+  private pendingRelayRequests = new Map<number, PendingRelayRequest>()
   private clientDetachListeners = new Set<(clientId: number) => void>()
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
   private disposed = false
   private nextClientId = 1
+  private nextRequestId = 1
 
   constructor(write: (data: Buffer) => void) {
     this.primaryClient = this.createClient(write)
@@ -153,6 +165,60 @@ export class RelayDispatcher {
     }
   }
 
+  requestPrimary(
+    method: string,
+    params?: Record<string, unknown>,
+    options?: { timeoutMs?: number }
+  ): Promise<unknown> {
+    return this.requestClient(this.primaryClient.id, method, params, options)
+  }
+
+  requestAnyClient(
+    method: string,
+    params?: Record<string, unknown>,
+    options?: { timeoutMs?: number; excludeClientId?: number }
+  ): Promise<unknown> {
+    const candidates = Array.from(this.clients.values()).filter(
+      (client) => !client.closed && client.id !== options?.excludeClientId
+    )
+    // Why: detached relays keep the synthetic primary client object around even
+    // though the owning Orca is attached through a Unix-socket client. Prefer a
+    // real attached client so remote `orca` shims do not forward to dead stdout.
+    const target = candidates.find((client) => client !== this.primaryClient) ?? candidates[0]
+    if (!target) {
+      return Promise.reject(new Error('No owning Orca client is connected to the relay'))
+    }
+    return this.requestClient(target.id, method, params, options)
+  }
+
+  private requestClient(
+    clientId: number,
+    method: string,
+    params?: Record<string, unknown>,
+    options?: { timeoutMs?: number }
+  ): Promise<unknown> {
+    const client = this.clients.get(clientId)
+    if (this.disposed || !client || client.closed) {
+      return Promise.reject(new Error('Relay client is not connected'))
+    }
+    const id = this.nextRequestId++
+    const msg: JsonRpcRequest = {
+      jsonrpc: '2.0',
+      id,
+      method,
+      ...(params !== undefined ? { params } : {})
+    }
+    const timeoutMs = options?.timeoutMs ?? RELAY_TO_CLIENT_REQUEST_TIMEOUT_MS
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingRelayRequests.delete(id)
+        reject(new Error(`Request "${method}" timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
+      this.pendingRelayRequests.set(id, { resolve, reject, timer })
+      this.sendFrame(client, msg)
+    })
+  }
+
   dispose(): void {
     if (this.disposed) {
       return
@@ -162,6 +228,14 @@ export class RelayDispatcher {
       clearInterval(this.keepaliveTimer)
       this.keepaliveTimer = null
     }
+    for (const [id, pending] of this.pendingRelayRequests) {
+      clearTimeout(pending.timer)
+      pending.reject(new Error('Relay dispatcher disposed'))
+      this.pendingRelayRequests.delete(id)
+    }
+    // Why: dispose means this relay instance cannot send responses anymore;
+    // abort in-flight request work so stale SSH-side scans/watchers release.
+    this.requestAborts.abortAll()
   }
 
   private createClient(write: (data: Buffer) => void): RelayClient {
@@ -213,9 +287,28 @@ export class RelayDispatcher {
   ): void {
     if ('id' in msg && 'method' in msg) {
       void this.handleRequest(client, msg as JsonRpcRequest)
+    } else if ('id' in msg && ('result' in msg || 'error' in msg)) {
+      this.handleResponse(msg as JsonRpcResponse)
     } else if ('method' in msg && !('id' in msg)) {
       this.handleNotification(client, msg as JsonRpcNotification)
     }
+  }
+
+  private handleResponse(msg: JsonRpcResponse): void {
+    const pending = this.pendingRelayRequests.get(msg.id)
+    if (!pending) {
+      return
+    }
+    clearTimeout(pending.timer)
+    this.pendingRelayRequests.delete(msg.id)
+    if (msg.error) {
+      const error = new Error(msg.error.message) as Error & { code?: number; data?: unknown }
+      error.code = msg.error.code
+      error.data = msg.error.data
+      pending.reject(error)
+      return
+    }
+    pending.resolve(msg.result)
   }
 
   private async handleRequest(client: RelayClient, req: JsonRpcRequest): Promise<void> {

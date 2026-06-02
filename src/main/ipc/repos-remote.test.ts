@@ -11,6 +11,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { isGitRepo } from '../git/repo'
 
 const {
   handleMock,
@@ -40,7 +41,9 @@ const {
     exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
   },
   mockFilesystemProvider: {
-    readDir: vi.fn().mockResolvedValue([])
+    readDir: vi.fn().mockResolvedValue([]),
+    readFile: vi.fn().mockRejectedValue(new Error('not found')),
+    stat: vi.fn().mockRejectedValue(new Error('not found'))
   },
   mockMultiplexer: {
     request: vi.fn(),
@@ -135,8 +138,14 @@ describe('projectGroups IPC validation', () => {
     mockStore.getRepos.mockReturnValue([])
     mockFilesystemProvider.readDir.mockReset()
     mockFilesystemProvider.readDir.mockResolvedValue([])
+    mockFilesystemProvider.readFile.mockReset()
+    mockFilesystemProvider.readFile.mockRejectedValue(new Error('not found'))
+    mockFilesystemProvider.stat.mockReset()
+    mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
     mockGitProvider.isGitRepoAsync.mockReset()
     mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    vi.mocked(isGitRepo).mockReset()
+    vi.mocked(isGitRepo).mockReturnValue(true)
     mockMultiplexer.notify.mockReset()
     mockMultiplexer.request.mockReset()
 
@@ -167,6 +176,12 @@ describe('projectGroups IPC validation', () => {
       isRepo: path === '/srv/platform/api',
       rootPath: null
     }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
       dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
     )
@@ -181,6 +196,365 @@ describe('projectGroups IPC validation', () => {
       selectedPathKind: 'non_git_folder',
       repos: [{ path: '/srv/platform/api', displayName: 'api' }]
     })
+  })
+
+  it('detects nested bare repositories over a connected SSH filesystem', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/mirror.git/HEAD') {
+        return { type: 'file', size: 0, mtime: 0 }
+      }
+      if (path === '/srv/platform/mirror.git/objects' || path === '/srv/platform/mirror.git/refs') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? [{ name: 'mirror.git', isDirectory: true, isSymlink: false }]
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:scanNested')!(null, {
+      path: '/srv/platform',
+      connectionId: 'conn-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/platform',
+      selectedPathKind: 'non_git_folder',
+      repos: [{ path: '/srv/platform/mirror.git', displayName: 'mirror.git' }]
+    })
+  })
+
+  it('skips symlinked directories during SSH nested repository scans', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git' || path === '/srv/platform/linked-outside/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? [
+            { name: 'linked-outside', isDirectory: true, isSymlink: true },
+            { name: 'api', isDirectory: true, isSymlink: false }
+          ]
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:scanNested')!(null, {
+      path: '/srv/platform',
+      connectionId: 'conn-1'
+    })
+
+    expect((result as { repos: { path: string }[] }).repos.map((repo) => repo.path)).toEqual([
+      '/srv/platform/api'
+    ])
+  })
+
+  it('uses completed scan ids as an allowlist for nested imports', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api' || path === '/srv/platform/node_modules/hidden',
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      if (path === '/srv/platform/node_modules/hidden/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
+      if (dirPath === '/srv/platform') {
+        return [
+          { name: 'api', isDirectory: true, isSymlink: false },
+          { name: 'node_modules', isDirectory: true, isSymlink: false }
+        ]
+      }
+      return []
+    })
+
+    await handlers.get('projectGroups:scanNested')!(
+      { sender: { send: vi.fn() } },
+      {
+        path: '/srv/platform',
+        connectionId: 'conn-1',
+        scanId: 'scan-import-allowlist'
+      }
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: ['/srv/platform/api', '/srv/platform/node_modules/hidden'],
+      connectionId: 'conn-1',
+      scanId: 'scan-import-allowlist',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({ importedCount: 1, failedCount: 1 })
+    expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/srv/platform/api' })
+    )
+  })
+
+  it('does not reuse a completed nested scan id for a different SSH parent path', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Other',
+      parentPath: '/srv/other',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api' || path === '/srv/other/api',
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git' || path === '/srv/other/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
+      if (dirPath === '/srv/platform' || dirPath === '/srv/other') {
+        return [{ name: 'api', isDirectory: true, isSymlink: false }]
+      }
+      return []
+    })
+
+    await handlers.get('projectGroups:scanNested')!(
+      { sender: { send: vi.fn() } },
+      {
+        path: '/srv/platform',
+        connectionId: 'conn-1',
+        scanId: 'scan-parent-context'
+      }
+    )
+    mockStore.addRepo.mockClear()
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/other',
+      groupName: 'Other',
+      projectPaths: ['/srv/platform/api'],
+      connectionId: 'conn-1',
+      scanId: 'scan-parent-context',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({ importedCount: 0, failedCount: 1 })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    expect(mockFilesystemProvider.readDir).toHaveBeenCalledWith('/srv/other')
+  })
+
+  it('does not reuse a completed nested scan id for a different SSH connection', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api',
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
+    )
+
+    await handlers.get('projectGroups:scanNested')!(
+      { sender: { send: vi.fn() } },
+      {
+        path: '/srv/platform',
+        connectionId: 'conn-1',
+        scanId: 'scan-connection-context'
+      }
+    )
+    mockStore.addRepo.mockClear()
+
+    await expect(
+      handlers.get('projectGroups:importNested')!(null, {
+        parentPath: '/srv/platform',
+        groupName: 'Platform',
+        projectPaths: ['/srv/platform/api'],
+        connectionId: 'missing-conn',
+        scanId: 'scan-connection-context',
+        mode: 'group'
+      })
+    ).rejects.toThrow('ssh_connection_unavailable')
+
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prioritizes shallow sibling repositories before truncated SSH archive scans', async () => {
+    const archivedRepoNames = Array.from(
+      { length: 101 },
+      (_, index) => `archived-service-${String(index + 1).padStart(3, '0')}`
+    )
+    const archivedRepoPaths = archivedRepoNames.map((name) => `/srv/platform/archive/${name}`)
+    const gitRepos = new Set(['/srv/platform/z-web-client', ...archivedRepoPaths])
+
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: gitRepos.has(path),
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      const repoPath = path.replace(/\/\.git$/, '')
+      if (path.endsWith('/.git') && gitRepos.has(repoPath)) {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
+      if (dirPath === '/srv/platform') {
+        return [
+          { name: 'archive', isDirectory: true, isSymlink: false },
+          { name: 'z-web-client', isDirectory: true, isSymlink: false }
+        ]
+      }
+      if (dirPath === '/srv/platform/archive') {
+        return archivedRepoNames.map((name) => ({
+          name,
+          isDirectory: true,
+          isSymlink: false
+        }))
+      }
+      return []
+    })
+
+    const result = await handlers.get('projectGroups:scanNested')!(null, {
+      path: '/srv/platform',
+      connectionId: 'conn-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/platform',
+      selectedPathKind: 'non_git_folder',
+      truncated: true
+    })
+    expect((result as { repos: { path: string }[] }).repos).toHaveLength(100)
+    expect((result as { repos: { path: string }[] }).repos[0].path).toBe(
+      '/srv/platform/z-web-client'
+    )
+    expect((result as { repos: { path: string }[] }).repos.map((repo) => repo.path)).toContain(
+      '/srv/platform/z-web-client'
+    )
+  })
+
+  it('returns partial SSH scan results after cancellation', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git' || path === '/srv/platform/web/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? [
+            { name: 'api', isDirectory: true, isSymlink: false },
+            { name: 'web', isDirectory: true, isSymlink: false }
+          ]
+        : []
+    )
+    const event = {
+      sender: {
+        send: vi.fn((_channel: string, data: { scanId: string; scan: { repos: unknown[] } }) => {
+          if (data.scan.repos.length === 1) {
+            handlers.get('projectGroups:cancelNestedScan')!(null, { scanId: data.scanId })
+          }
+        })
+      }
+    }
+
+    const result = await handlers.get('projectGroups:scanNested')!(event, {
+      path: '/srv/platform',
+      connectionId: 'conn-1',
+      scanId: 'scan-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/platform',
+      stopped: true,
+      repos: [{ path: '/srv/platform/api' }]
+    })
+    expect(event.sender.send).toHaveBeenCalledWith(
+      'projectGroups:scanNestedProgress',
+      expect.objectContaining({ scanId: 'scan-1' })
+    )
+  })
+
+  it('returns partial local scan results after cancellation', async () => {
+    vi.mocked(isGitRepo).mockReturnValue(false)
+    const root = await mkdtemp(join(tmpdir(), 'orca-nested-local-cancel-'))
+    try {
+      await mkdir(join(root, 'api', '.git'), { recursive: true })
+      await mkdir(join(root, 'web', '.git'), { recursive: true })
+      const event = {
+        sender: {
+          send: vi.fn((_channel: string, data: { scanId: string; scan: { repos: unknown[] } }) => {
+            if (data.scan.repos.length === 1) {
+              handlers.get('projectGroups:cancelNestedScan')!(null, { scanId: data.scanId })
+            }
+          })
+        }
+      }
+
+      const result = await handlers.get('projectGroups:scanNested')!(event, {
+        path: root,
+        scanId: 'local-scan-1'
+      })
+
+      expect(result).toMatchObject({
+        selectedPath: root,
+        selectedPathKind: 'non_git_folder',
+        stopped: true,
+        repos: [{ path: join(root, 'api') }]
+      })
+      expect(event.sender.send).toHaveBeenCalledWith(
+        'projectGroups:scanNestedProgress',
+        expect.objectContaining({ scanId: 'local-scan-1' })
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('rejects local nested scans with relative paths', async () => {
@@ -209,6 +583,12 @@ describe('projectGroups IPC validation', () => {
       isRepo: path === '/srv/platform/api',
       rootPath: null
     }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
       dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
     )
@@ -234,6 +614,72 @@ describe('projectGroups IPC validation', () => {
     })
   })
 
+  it('imports a small selection from a large nested SSH scan', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const repoPaths = Array.from(
+      { length: 87 },
+      (_, index) => `/srv/platform/service-${String(index + 1).padStart(2, '0')}`
+    )
+    const selectedPaths = [repoPaths[2], repoPaths[41], repoPaths[86]]
+    mockStore.addRepo.mockClear()
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: repoPaths.includes(path),
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      const repoPath = path.replace(/\/\.git$/, '')
+      if (path.endsWith('/.git') && repoPaths.includes(repoPath)) {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? repoPaths.map((repoPath) => ({
+            name: repoPath.split('/').at(-1) ?? repoPath,
+            isDirectory: true,
+            isSymlink: false
+          }))
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: selectedPaths,
+      connectionId: 'conn-1',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({
+      importedCount: 3,
+      alreadyKnownCount: 0,
+      failedCount: 0
+    })
+    expect(mockStore.addRepo).toHaveBeenCalledTimes(3)
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[0], projectGroupId: group.id })
+    )
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[1], projectGroupId: group.id })
+    )
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: selectedPaths[2], projectGroupId: group.id })
+    )
+  })
+
   it('sanitizes unexpected nested import errors before returning results', async () => {
     const group = {
       id: 'group-1',
@@ -252,6 +698,12 @@ describe('projectGroups IPC validation', () => {
       isRepo: path === '/srv/platform/api',
       rootPath: null
     }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
       dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
     )
@@ -488,6 +940,42 @@ describe('repos:addRemote', () => {
       })
     )
     expect(result).toHaveProperty('repo.path', '/home/user/project')
+  })
+
+  it('uses the resolved git root basename for the default remote display name', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
+      isRepo: true,
+      rootPath: '/home/user/project'
+    })
+
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: '/home/user/project/src'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: '/home/user/project',
+        displayName: 'project'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'project')
+  })
+
+  it('derives default remote display names from Windows path separators', async () => {
+    const result = await handlers.get('repos:addRemote')!(null, {
+      connectionId: 'conn-1',
+      remotePath: 'C:\\Users\\alice\\project',
+      kind: 'folder'
+    })
+
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: 'C:\\Users\\alice\\project',
+        displayName: 'project'
+      })
+    )
+    expect(result).toHaveProperty('repo.displayName', 'project')
   })
 
   it('notifies renderer when remote repo is added', async () => {
@@ -1273,7 +1761,17 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
   })
 
-  it('short-circuits an empty query without calling the relay', async () => {
+  it('returns refs for an empty query so remote Branch pickers open populated', async () => {
+    const stdout = [
+      'refs/remotes/origin/main\0origin/main',
+      'refs/remotes/upstream/feature-x\0upstream/feature-x'
+    ].join('\n')
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\nupstream\n', stderr: '' })
+      }
+      return Promise.resolve({ stdout, stderr: '' })
+    })
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
       path: '/remote/repo',
@@ -1286,14 +1784,47 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: ''
     })
 
-    // Why: empty-query short-circuit must happen in the handler (mirrors the
-    // local path's normalizeRefSearchQuery guard). Without it a user-typed
-    // empty query would leak every ref from the remote.
-    expect(result).toEqual([])
-    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+    expect(result).toEqual(['origin/main', 'upstream/feature-x'])
+    expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=100')
+    expect(argv).toContain('refs/heads/**/**')
+    expect(argv).toContain('refs/heads/**/**/**')
+    expect(argv).toContain('refs/remotes/**/**')
+    expect(argv).toContain('refs/remotes/**/**/**')
   })
 
-  it('short-circuits a query containing only glob metacharacters', async () => {
+  it('sanitizes glob metacharacter-only queries into the empty-query branch list', async () => {
+    mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '***'
+    })
+
+    // Why: normalizeRefSearchQuery still strips glob metacharacters before
+    // building argv; the resulting empty query now intentionally lists refs.
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=100')
+    expect(argv).toContain('refs/heads/**/**')
+    expect(argv).toContain('refs/heads/**/**/**')
+    expect(argv).toContain('refs/remotes/**/**')
+    expect(argv).toContain('refs/remotes/**/**/**')
+  })
+
+  it('rejects invalid limits before building broad relay searches', async () => {
     mockStore.getRepo.mockReturnValue({
       id: 'r1',
       path: '/remote/repo',
@@ -1303,15 +1834,53 @@ describe('repos:searchBaseRefs SSH relay', () => {
 
     const result = await handlers.get('repos:searchBaseRefs')!(null, {
       repoId: 'r1',
-      query: '***'
+      query: '',
+      limit: 0.5
     })
 
-    // Why: normalizeRefSearchQuery strips `*?[]\`, so a query made up only of
-    // glob metacharacters normalizes to '' and must be treated like an empty
-    // query (no relay call, no leaked refs). Guards against glob injection
-    // via the SSH branch.
     expect(result).toEqual([])
     expect(mockGitProvider.exec).not.toHaveBeenCalled()
+  })
+
+  it('retries without --exclude for older git on SSH hosts', async () => {
+    const stdout = [
+      'refs/remotes/origin/main\0origin/main',
+      'refs/remotes/origin/HEAD\0origin/HEAD'
+    ].join('\n')
+    mockGitProvider.exec = vi.fn().mockImplementation((argv: string[]) => {
+      if (argv[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\n', stderr: '' })
+      }
+      if (argv.includes('--exclude=refs/remotes/**/HEAD')) {
+        return Promise.reject(
+          Object.assign(new Error("unknown option `exclude'"), {
+            stderr: "error: unknown option `exclude'"
+          })
+        )
+      }
+      return Promise.resolve({ stdout, stderr: '' })
+    })
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/remote/repo',
+      connectionId: 'conn-1',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: 1
+    })
+
+    expect(result).toEqual(['origin/main'])
+    const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )
+    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(forEachRefCalls[1][0]).toContain('--count=104')
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {
@@ -1331,7 +1900,9 @@ describe('repos:searchBaseRefs SSH relay', () => {
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream' })
 
     expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv, path] = mockGitProvider.exec.mock.calls[0]
+    const [argv, path] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
     expect(path).toBe('/remote/repo')
     expect(argv[0]).toBe('for-each-ref')
     expect(argv).toContain('refs/heads/**/*upstream*')
@@ -1340,7 +1911,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(argv).toContain('refs/remotes/**/*upstream*/**')
     // Guard against regression to the old origin-only glob.
     expect(argv).not.toContain('refs/remotes/origin/*upstream*')
-    expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('sends segmented argv for display-format queries like `upstream/main`', async () => {
@@ -1361,7 +1932,9 @@ describe('repos:searchBaseRefs SSH relay', () => {
     await handlers.get('repos:searchBaseRefs')!(null, { repoId: 'r1', query: 'upstream/main' })
 
     expect(mockGitProvider.exec).toHaveBeenCalledTimes(2)
-    const [argv] = mockGitProvider.exec.mock.calls[0]
+    const [argv] = mockGitProvider.exec.mock.calls.find(
+      (call) => (call[0] as string[])[0] === 'for-each-ref'
+    )!
     expect(argv).toContain('refs/remotes/*upstream*/*main*')
     expect(argv).toContain('refs/heads/*upstream*/*main*')
     // Regression guard: the literal slash must never appear inside a
@@ -1369,7 +1942,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
     // which fnmatch cannot match because `*` doesn't cross `/`.
     expect(argv).not.toContain('refs/remotes/*upstream/main*/*')
     expect(argv).not.toContain('refs/remotes/*/*upstream/main*')
-    expect(mockGitProvider.exec.mock.calls[1]).toEqual([['remote'], '/remote/repo'])
+    expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {

@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
@@ -24,6 +25,7 @@ type WorktreeTitleInlineRenameProps = {
   className?: string
   editingClassName?: string
   inputClassName?: string
+  titleWrapper?: (title: React.ReactElement) => React.ReactElement
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
 }
@@ -35,39 +37,44 @@ export function WorktreeTitleInlineRename({
   className,
   editingClassName,
   inputClassName,
+  titleWrapper,
   onEditingChange,
   onRename
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const editingRef = useRef(false)
   const savingRef = useRef(false)
+  const mountedRef = useRef(true)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => {
-    if (!editing) {
-      setValue(displayName)
-    }
-  }, [displayName, editing])
+  const handleRootRef = useCallback((node: HTMLSpanElement | null): void => {
+    // Why: rename can resolve after this inline title unmounts; the rendered
+    // root owns that stale-write guard without a mount-only Effect.
+    mountedRef.current = node !== null
+  }, [])
 
-  useEffect(() => {
-    onEditingChange?.(editing)
-    return () => {
-      if (editing) {
-        onEditingChange?.(false)
+  const setEditingMode = useCallback(
+    (nextEditing: boolean) => {
+      if (editingRef.current === nextEditing) {
+        return
       }
-    }
-  }, [editing, onEditingChange])
+      editingRef.current = nextEditing
+      setEditing(nextEditing)
+      // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
+      onEditingChange?.(nextEditing)
+    },
+    [onEditingChange]
+  )
 
-  useEffect(() => {
-    if (!editing) {
+  const handleInputRef = useCallback((input: HTMLInputElement | null) => {
+    if (!input) {
       return
     }
-    const input = inputRef.current
-    input?.focus()
+    input.focus()
     // Why: double-click rename should make replacing the workspace title a one-keystroke action.
-    input?.select()
-  }, [editing])
+    input.select()
+  }, [])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -81,15 +88,15 @@ export function WorktreeTitleInlineRename({
       event.preventDefault()
       event.stopPropagation()
       setValue(displayName)
-      setEditing(true)
+      setEditingMode(true)
     },
-    [disabled, displayName]
+    [disabled, displayName, setEditingMode]
   )
 
   const cancelRename = useCallback(() => {
     setValue(displayName)
-    setEditing(false)
-  }, [displayName])
+    setEditingMode(false)
+  }, [displayName, setEditingMode])
 
   const commitRename = useCallback(async () => {
     if (savingRef.current) {
@@ -106,14 +113,20 @@ export function WorktreeTitleInlineRename({
     setSaving(true)
     try {
       await onRename(commit.displayName)
-      setEditing(false)
+      if (mountedRef.current) {
+        setEditingMode(false)
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      }
     } finally {
       savingRef.current = false
-      setSaving(false)
+      if (mountedRef.current) {
+        setSaving(false)
+      }
     }
-  }, [cancelRename, displayName, onRename, value])
+  }, [cancelRename, displayName, onRename, setEditingMode, value])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -132,6 +145,7 @@ export function WorktreeTitleInlineRename({
   if (editing) {
     return (
       <span
+        ref={handleRootRef}
         className={cn(
           'relative grid min-w-0 truncate leading-tight text-foreground',
           showUnreadEmphasis ? 'font-semibold' : 'font-normal',
@@ -147,7 +161,7 @@ export function WorktreeTitleInlineRename({
           {displayName}
         </span>
         <Input
-          ref={inputRef}
+          ref={handleInputRef}
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
@@ -173,19 +187,34 @@ export function WorktreeTitleInlineRename({
     )
   }
 
-  return (
+  const title = (
     <span
+      ref={handleRootRef}
       className={cn(
-        'block min-w-0 truncate leading-tight text-foreground',
+        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
         showUnreadEmphasis ? 'font-semibold' : 'font-normal',
         className
       )}
       data-worktree-title-inline-rename=""
       onDoubleClick={startRename}
+      tabIndex={disabled ? undefined : 0}
     >
       {/* Why: visible text alone misses the unread state for assistive tech. */}
       {showUnreadEmphasis && <span className="sr-only">Unread: </span>}
       {displayName}
     </span>
+  )
+
+  if (titleWrapper) {
+    return titleWrapper(title)
+  }
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{title}</TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        {displayName}
+      </TooltipContent>
+    </Tooltip>
   )
 }

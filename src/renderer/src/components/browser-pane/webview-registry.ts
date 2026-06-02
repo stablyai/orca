@@ -11,6 +11,14 @@ export const parkedAtByTabId = new Map<string, number>()
 
 export const MAX_PARKED_WEBVIEWS = 6
 
+export type BrowserWebviewMemoryProfile = {
+  browserWebviewCount: number
+  parkedBrowserWebviewCount: number
+  registeredBrowserGuestCount: number
+  hiddenBrowserWebviewCount: number
+  maxParkedBrowserWebviews: number
+}
+
 let hiddenContainer: HTMLDivElement | null = null
 const DRAG_LISTENER_KEY = '__orcaBrowserPaneDragListeners'
 let dragListenersAttached = false
@@ -82,6 +90,23 @@ export function getHiddenContainer(): HTMLDivElement {
     document.body.appendChild(hiddenContainer)
   }
   return hiddenContainer
+}
+
+export function getBrowserWebviewMemoryProfile(): BrowserWebviewMemoryProfile {
+  let parkedBrowserWebviewCount = 0
+  for (const webview of webviewRegistry.values()) {
+    if (hiddenContainer && webview.parentElement === hiddenContainer) {
+      parkedBrowserWebviewCount += 1
+    }
+  }
+
+  return {
+    browserWebviewCount: webviewRegistry.size,
+    parkedBrowserWebviewCount,
+    registeredBrowserGuestCount: registeredWebContentsIds.size,
+    hiddenBrowserWebviewCount: hiddenContainer?.children.length ?? 0,
+    maxParkedBrowserWebviews: MAX_PARKED_WEBVIEWS
+  }
 }
 
 function applyWebviewsDragPassthrough(): void {

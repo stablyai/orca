@@ -6,7 +6,15 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
-import { CircleDot, ExternalLink, GitMerge, MonitorUp, Pencil, StickyNote } from 'lucide-react'
+import {
+  CircleDot,
+  ExternalLink,
+  GitMerge,
+  MonitorUp,
+  Pencil,
+  StickyNote,
+  Unlink
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -56,12 +64,15 @@ type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
 
 type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   children: React.ReactElement
+  branchName?: string
+  workspaceTitle?: string
   detailsAfter?: React.ReactNode
   onEditIssue: (event: React.MouseEvent) => void
   onEditComment: (event: React.MouseEvent) => void
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
   onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
   onOpenReviewInOrca?: (event: React.MouseEvent) => void
+  onUnlinkReview?: (event: React.MouseEvent) => void
 }
 
 function hasComment(comment: string | null): boolean {
@@ -266,12 +277,15 @@ export function WorktreeCardDetailsHover({
   review,
   comment,
   children,
+  branchName,
+  workspaceTitle,
   detailsAfter,
   onEditIssue,
   onEditComment,
   onOpenGitHubIssueInOrca,
   onOpenLinearIssueInOrca,
-  onOpenReviewInOrca
+  onOpenReviewInOrca,
+  onUnlinkReview
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
   const [open, setOpen] = React.useState(false)
   const dismissAndRun = React.useCallback(
@@ -282,7 +296,13 @@ export function WorktreeCardDetailsHover({
     []
   )
 
-  if (!hasWorktreeCardDetails({ issue, linearIssue, review, comment }) && !detailsAfter) {
+  const showIdentityHeader = Boolean(branchName || workspaceTitle)
+
+  if (
+    !showIdentityHeader &&
+    !hasWorktreeCardDetails({ issue, linearIssue, review, comment }) &&
+    !detailsAfter
+  ) {
     return children
   }
 
@@ -303,6 +323,23 @@ export function WorktreeCardDetailsHover({
         onDoubleClick={(event) => event.stopPropagation()}
       >
         <SelectedTextCopyMenu className="space-y-3">
+          {showIdentityHeader && (
+            <div className="min-w-0 border-l border-border/70 pl-2">
+              {/* Why: the closed card no longer carries a branch row; custom-titled
+                  worktrees still need their git branch available in the hover. */}
+              {branchName && (
+                <div className="truncate font-mono text-[11px] leading-none text-muted-foreground">
+                  {branchName}
+                </div>
+              )}
+              {workspaceTitle && workspaceTitle !== branchName && (
+                <div className="mt-1 truncate text-[13px] font-semibold leading-snug text-foreground">
+                  {workspaceTitle}
+                </div>
+              )}
+            </div>
+          )}
+
           {issue && (
             <WorktreeCardDetailSection>
               <DetailHeader
@@ -409,6 +446,14 @@ export function WorktreeCardDetailsHover({
                     {review.url && (
                       <MetadataActionIcon label={`View on ${reviewProvider}`} href={review.url}>
                         <ExternalLink className="size-3" />
+                      </MetadataActionIcon>
+                    )}
+                    {onUnlinkReview && (
+                      <MetadataActionIcon
+                        label={`Unlink ${reviewLabel}`}
+                        onClick={dismissAndRun(onUnlinkReview)}
+                      >
+                        <Unlink className="size-3" />
                       </MetadataActionIcon>
                     )}
                   </>

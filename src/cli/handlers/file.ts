@@ -104,7 +104,8 @@ async function openFileDiff(
     mode: 'diff',
     staged,
     opened: result.result.opened,
-    kind: result.result.kind
+    kind: result.result.kind,
+    ...(result.result.opened ? {} : { skipped: true, reason: `${result.result.kind} file` })
   }
 }
 
@@ -129,7 +130,9 @@ function formatFileOpen(result: RuntimeFileOpenResult): string {
 }
 
 function formatFileDiff(result: RuntimeFileOpenResult): string {
-  return `Opened diff for ${result.relativePath}.`
+  return result.opened
+    ? `Opened diff for ${result.relativePath}.`
+    : `Did not open diff for ${result.relativePath}: ${result.kind} file.`
 }
 
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
@@ -192,7 +195,9 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
             reason: 'unresolved conflict may not have a single diff target'
           })
         } else {
-          opened.push(await openFileDiff(ctx, worktree, entry.path, staged))
+          const record = await openFileDiff(ctx, worktree, entry.path, staged)
+          const records = record.opened ? opened : skipped
+          records.push(record)
         }
       }
     }

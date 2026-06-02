@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type JSX } from 'react'
 import {
   FEATURE_WALL_SETUP_STEP_IDS,
+  getFirstIncompleteFeatureWallSetupStepId,
   getFeatureWallSetupSteps
 } from '../../../../shared/feature-wall-setup-steps'
 import type { FeatureWallSetupStepId } from '../../../../shared/feature-wall-setup-steps'
@@ -38,12 +39,23 @@ export default function SetupGuideModal(): JSX.Element | null {
   const activeStep = setupSteps.find((step) => step.id === activeStepId) ?? setupSteps[0] ?? null
 
   useEffect(() => {
-    if (!isOpen || requestedStepId === null) {
+    if (!isOpen) {
+      setUserSelectedStep(false)
+      return
+    }
+    if (requestedStepId === null) {
       return
     }
     setUserSelectedStep(false)
     setActiveStepId(requestedStepId)
   }, [isOpen, requestedStepId])
+
+  useEffect(() => {
+    if (!isOpen || userSelectedStep || requestedStepId !== null) {
+      return
+    }
+    setActiveStepId(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone))
+  }, [isOpen, progress.stepDone, requestedStepId, userSelectedStep])
 
   useEffect(() => {
     if (
@@ -55,11 +67,9 @@ export default function SetupGuideModal(): JSX.Element | null {
     ) {
       return
     }
-    const nextUnfinishedCoreStep = getFeatureWallSetupSteps().find(
-      (step) => !progress.stepDone[step.id]
-    )
-    if (nextUnfinishedCoreStep && nextUnfinishedCoreStep.id !== activeStep.id) {
-      setActiveStepId(nextUnfinishedCoreStep.id)
+    const nextUnfinishedCoreStepId = getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
+    if (nextUnfinishedCoreStepId !== activeStep.id) {
+      setActiveStepId(nextUnfinishedCoreStepId)
     }
   }, [activeStep, isOpen, progress.stepDone, requestedStepId, userSelectedStep])
 

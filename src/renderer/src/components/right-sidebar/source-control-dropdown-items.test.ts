@@ -37,6 +37,7 @@ describe('resolveDropdownItems', () => {
       'create_pr',
       'push_create_pr',
       'pull',
+      'fast_forward',
       'sync',
       'rebase_base',
       'fetch',
@@ -174,6 +175,10 @@ describe('resolveDropdownItems', () => {
     expect(byKind.pull.title).toBe(
       'Nothing new to pull — remote only has older copies of local commits'
     )
+    expect(byKind.fast_forward.disabled).toBe(true)
+    expect(byKind.fast_forward.title).toBe(
+      'Nothing new to fast-forward — remote only has older copies of local commits'
+    )
     expect(byKind.commit_sync.label).toBe('Commit & Sync')
     expect(byKind.commit_sync.disabled).toBe(true)
     expect(byKind.commit_sync.title).toBe(
@@ -214,15 +219,24 @@ describe('resolveDropdownItems', () => {
     }
   })
 
-  it('shows a destructive Abort merge item only while a merge is in progress', () => {
+  it('shows a destructive abort item only while merge or rebase is in progress', () => {
     const mergeItems = resolveDropdownItems(
       inputs({
         conflictOperation: 'merge',
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+    const rebaseItems = resolveDropdownItems(
+      inputs({
+        conflictOperation: 'rebase',
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
     const mergeByKind = Object.fromEntries(
       mergeItems.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    const rebaseByKind = Object.fromEntries(
+      rebaseItems.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
 
     expect(mergeByKind.abort_merge).toMatchObject({
@@ -231,14 +245,23 @@ describe('resolveDropdownItems', () => {
       disabled: false,
       variant: 'destructive'
     })
+    expect(rebaseByKind.abort_rebase).toMatchObject({
+      label: 'Abort rebase',
+      title: 'Abort the rebase in progress',
+      disabled: false,
+      variant: 'destructive'
+    })
+    expect(mergeByKind.abort_rebase).toBeUndefined()
+    expect(rebaseByKind.abort_merge).toBeUndefined()
 
-    for (const conflictOperation of ['unknown', 'rebase', 'cherry-pick'] as const) {
+    for (const conflictOperation of ['unknown', 'cherry-pick'] as const) {
       const items = resolveDropdownItems(inputs({ conflictOperation }))
       expect(items.some((entry) => entry.kind === 'abort_merge')).toBe(false)
+      expect(items.some((entry) => entry.kind === 'abort_rebase')).toBe(false)
     }
   })
 
-  it('disables Abort merge while another action is busy', () => {
+  it('disables conflict abort actions while another action is busy', () => {
     const items = resolveDropdownItems(
       inputs({
         conflictOperation: 'merge',
@@ -246,15 +269,27 @@ describe('resolveDropdownItems', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+    const rebaseItems = resolveDropdownItems(
+      inputs({
+        conflictOperation: 'rebase',
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+      })
+    )
     const abortMerge = items.find((entry) => entry.kind === 'abort_merge')
+    const abortRebase = rebaseItems.find((entry) => entry.kind === 'abort_rebase')
 
     expect(abortMerge).toMatchObject({
       disabled: true,
       title: 'Operation in progress…'
     })
+    expect(abortRebase).toMatchObject({
+      disabled: true,
+      title: 'Operation in progress…'
+    })
   })
 
-  it('locks every item while a pull request operation is running', () => {
+  it('locks every item while a hosted review operation is running', () => {
     const items = resolveDropdownItems(
       inputs({
         isPullRequestOperationActive: true,
@@ -272,7 +307,7 @@ describe('resolveDropdownItems', () => {
     for (const entry of items) {
       if (entry.kind !== 'separator') {
         expect(entry.disabled).toBe(true)
-        expect(entry.title).toBe('Pull request operation in progress…')
+        expect(entry.title).toBe('Hosted review operation in progress…')
       }
     }
   })
@@ -292,6 +327,7 @@ describe('resolveDropdownItems', () => {
       'commit_sync',
       'push',
       'pull',
+      'fast_forward',
       'sync',
       'fetch',
       'publish'
@@ -317,6 +353,7 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.push.title).toBe('Publish the branch first to push commits')
     expect(byKind.pull.title).toBe('Publish the branch first to pull commits')
+    expect(byKind.fast_forward.title).toBe('Publish the branch first to fast-forward')
     expect(byKind.sync.title).toBe('Publish the branch first to sync commits')
     expect(byKind.fetch.title).toBe('Fetch from remote without merging')
     expect(byKind.fetch.disabled).toBe(false)
@@ -373,6 +410,22 @@ describe('resolveDropdownItems', () => {
     expect(byKind.publish.disabled).toBe(true)
   })
 
+  it('points an unpublished dirty branch with no commits at committing first', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        branchCommitsAhead: 0
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.publish.label).toBe('Commit Changes First')
+    expect(byKind.publish.title).toBe('Commit changes before publishing the branch')
+    expect(byKind.publish.disabled).toBe(true)
+  })
+
   it('does not mention Publish Branch when the linked PR is already merged', () => {
     const items = resolveDropdownItems(
       inputs({
@@ -385,6 +438,7 @@ describe('resolveDropdownItems', () => {
     )
     expect(byKind.push.title).toBe('PR is already merged')
     expect(byKind.pull.title).toBe('PR is already merged')
+    expect(byKind.fast_forward.title).toBe('PR is already merged')
     expect(byKind.sync.title).toBe('PR is already merged')
     expect(byKind.publish.label).toBe('PR Status')
     expect(byKind.publish.title).toBe('PR is already merged')
@@ -427,6 +481,27 @@ describe('resolveDropdownItems', () => {
     expect(byKind.sync.label).toBe('Sync (↓3 ↑2)')
   })
 
+  it('enables fast-forward only when the branch is behind with no local commits', () => {
+    const behindOnly = resolveDropdownItems(
+      inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 2 } })
+    )
+    const diverged = resolveDropdownItems(
+      inputs({ upstreamStatus: { hasUpstream: true, ahead: 1, behind: 2 } })
+    )
+    const behindOnlyByKind = Object.fromEntries(
+      behindOnly.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    const divergedByKind = Object.fromEntries(
+      diverged.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+
+    expect(behindOnlyByKind.fast_forward.label).toBe('Fast-forward (2)')
+    expect(behindOnlyByKind.fast_forward.title).toBe('Fast-forward 2 commits')
+    expect(behindOnlyByKind.fast_forward.disabled).toBe(false)
+    expect(divergedByKind.fast_forward.disabled).toBe(true)
+    expect(divergedByKind.fast_forward.title).toBe('Local commits prevent a fast-forward pull')
+  })
+
   it('enables the push-before-PR recovery action when review creation is only blocked by unpushed commits', () => {
     const items = resolveDropdownItems(
       inputs({
@@ -447,5 +522,47 @@ describe('resolveDropdownItems', () => {
     expect(byKind.create_pr.hint).toBe('Push first')
     expect(byKind.push_create_pr.label).toBe('Push before PR')
     expect(byKind.push_create_pr.disabled).toBe(false)
+  })
+
+  it('uses GitLab MR copy for create and push-before-create rows', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: false,
+          blockedReason: 'needs_push',
+          nextAction: 'push'
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.create_pr.label).toBe('Create MR')
+    expect(byKind.create_pr.hint).toBe('Push first')
+    expect(byKind.push_create_pr.label).toBe('Push before MR')
+    expect(byKind.push_create_pr.title).toBe('Push local commits before creating a merge request')
+    expect(byKind.push_create_pr.disabled).toBe(false)
+  })
+
+  it('uses GitLab auth copy when MR creation needs authentication', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: false,
+          blockedReason: 'auth_required',
+          nextAction: 'authenticate'
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
   })
 })

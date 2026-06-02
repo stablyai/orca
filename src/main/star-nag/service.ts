@@ -4,6 +4,12 @@ import { checkOrcaStarred } from '../github/client'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 
+type StarNagPromptSource = 'threshold' | 'force_show'
+
+type StarNagPromptSession = {
+  source: StarNagPromptSource
+}
+
 /**
  * Service that decides when to prompt the user with the "star Orca on GitHub"
  * notification. Counts agents spawned since the current app version was first
@@ -28,6 +34,10 @@ export class StarNagService {
   // tiny window between crossing the threshold and the first gh check
   // resolving.
   private evaluating = false
+  private pendingForceShow = false
+  // Why: dismissal backoff should only apply to a prompt that was actually
+  // delivered, and the dismissal payload needs the delivered prompt source.
+  private promptSession: StarNagPromptSession | null = null
 
   constructor(store: Store, stats: StatsCollector) {
     this.store = store
@@ -99,10 +109,10 @@ export class StarNagService {
     if (sinceBaseline < threshold) {
       return
     }
-    void this.maybeShow()
+    void this.maybeShow('threshold')
   }
 
-  private async maybeShow(): Promise<void> {
+  private async maybeShow(source: StarNagPromptSource): Promise<void> {
     if (this.promptVisible || this.evaluating) {
       return
     }
@@ -124,19 +134,62 @@ export class StarNagService {
         this.markCompleted()
         return
       }
-      this.promptVisible = true
-      this.broadcastShow()
+      if (this.store.getUI().starNagCompleted) {
+        this.pendingForceShow = false
+        return
+      }
+      if (this.promptVisible) {
+        return
+      }
+      this.broadcastShow(source)
     } finally {
       this.evaluating = false
+      this.flushPendingForceShow()
     }
   }
 
-  private broadcastShow(): void {
-    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
-    if (!win) {
+  private flushPendingForceShow(): void {
+    if (!this.pendingForceShow || this.evaluating) {
       return
     }
+    this.pendingForceShow = false
+    if (this.promptVisible) {
+      return
+    }
+    this.broadcastShow('force_show')
+  }
+
+  private broadcastShow(source: StarNagPromptSource): boolean {
+    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+    if (!win) {
+      this.promptVisible = false
+      this.promptSession = null
+      return false
+    }
     win.webContents.send('star-nag:show')
+    this.promptVisible = true
+    this.promptSession = { source }
+    this.logConsoleEvent('star_nag_shown', source)
+    return true
+  }
+
+  private logConsoleEvent(
+    event: 'star_nag_shown' | 'star_nag_dismissed',
+    source: StarNagPromptSource,
+    nextThreshold?: number
+  ): void {
+    const ui = this.store.getUI()
+    const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
+    const agentsSinceBaseline = this.stats.getTotalAgentsSpawned() - (ui.starNagBaselineAgents ?? 0)
+
+    console.info({
+      event,
+      app_version: app.getVersion(),
+      threshold,
+      agents_since_baseline: agentsSinceBaseline,
+      source,
+      ...(nextThreshold === undefined ? {} : { next_threshold: nextThreshold })
+    })
   }
 
   // ── Public actions (invoked from IPC) ─────────────────────────────
@@ -149,24 +202,40 @@ export class StarNagService {
    * more, etc.
    */
   private dismiss(): void {
+    const session = this.promptSession
+    if (!session) {
+      this.promptVisible = false
+      return
+    }
     const ui = this.store.getUI()
     const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
+    const nextThreshold = threshold * 2
+    this.logConsoleEvent('star_nag_dismissed', session.source, nextThreshold)
     this.store.updateUI({
-      starNagNextThreshold: threshold * 2,
+      starNagNextThreshold: nextThreshold,
       starNagBaselineAgents: this.stats.getTotalAgentsSpawned()
     })
     this.promptVisible = false
+    this.promptSession = null
   }
 
   /** User successfully starred → never nag again. */
   private markCompleted(): void {
     this.store.updateUI({ starNagCompleted: true })
     this.promptVisible = false
+    this.promptSession = null
+    this.pendingForceShow = false
   }
 
   /** Dev-only entry point: skip all gating and fire the notification. */
   private forceShow(): void {
-    this.promptVisible = true
-    this.broadcastShow()
+    if (this.promptVisible) {
+      return
+    }
+    if (this.evaluating) {
+      this.pendingForceShow = true
+      return
+    }
+    this.broadcastShow('force_show')
   }
 }

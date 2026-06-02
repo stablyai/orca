@@ -12,6 +12,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
     id: 'automation-1',
     name: 'Automation 1',
     prompt: 'Run checks',
+    precheck: null,
     agentId: 'codex',
     projectId: 'repo-1',
     executionTargetType: 'local',
@@ -47,6 +48,7 @@ function makeRun(overrides: Partial<AutomationRun> = {}): AutomationRun {
     chatSessionId: null,
     terminalSessionId: 'tab-1',
     outputSnapshot: null,
+    precheckResult: null,
     usage: null,
     error: null,
     startedAt: 1,
@@ -72,7 +74,7 @@ describe('automation run view state', () => {
     })
   })
 
-  it('falls back to opening the workspace when terminal history is gone', () => {
+  it('falls back to resuming the workspace when terminal history is gone', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun(),
@@ -81,8 +83,8 @@ describe('automation run view state', () => {
       })
     ).toMatchObject({
       availability: 'workspace',
-      actionLabel: 'Open workspace',
-      statusLabel: 'Opened workspace; original terminal is closed.',
+      actionLabel: 'Resume workspace',
+      statusLabel: 'Workspace is available; original terminal is closed.',
       canOpen: true
     })
   })
@@ -151,17 +153,21 @@ describe('canRerunAutomationRun', () => {
     }
   )
 
-  it.each(['pending', 'dispatching', 'dispatched', 'completed', 'skipped_missed'] as const)(
-    'hides rerun for non-recoverable status %s',
-    (status) => {
-      expect(
-        canRerunAutomationRun({
-          automation: makeAutomation(),
-          run: makeRun({ status })
-        })
-      ).toBe(false)
-    }
-  )
+  it.each([
+    'pending',
+    'dispatching',
+    'dispatched',
+    'completed',
+    'skipped_precheck',
+    'skipped_missed'
+  ] as const)('hides rerun for non-recoverable status %s', (status) => {
+    expect(
+      canRerunAutomationRun({
+        automation: makeAutomation(),
+        run: makeRun({ status })
+      })
+    ).toBe(false)
+  })
 
   it('requires the failed run to belong to the selected automation', () => {
     expect(

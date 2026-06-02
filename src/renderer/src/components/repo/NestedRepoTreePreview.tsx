@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { FolderTree, GitBranch } from 'lucide-react'
 import type { NestedRepoCandidate, NestedRepoScanResult } from '../../../../shared/types'
+import { cn } from '@/lib/utils'
 
 type TreeFolder = {
   key: string
@@ -123,16 +124,18 @@ function NestedRepoSelectAllRow({
   const allSelected = total > 0 && selectedCount === total
   const noneSelected = selectedCount === 0
   const isMixed = !allSelected && !noneSelected
-  const checkboxRef = useRef<HTMLInputElement | null>(null)
-  useEffect(() => {
-    if (checkboxRef.current) {
-      checkboxRef.current.indeterminate = isMixed
-    }
-  }, [isMixed])
+  const handleCheckboxRef = useCallback(
+    (checkbox: HTMLInputElement | null) => {
+      if (checkbox) {
+        checkbox.indeterminate = isMixed
+      }
+    },
+    [isMixed]
+  )
   return (
-    <label className="flex cursor-pointer items-center gap-2.5 bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50">
+    <label className="flex min-w-0 cursor-pointer items-center gap-2.5 bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50">
       <input
-        ref={checkboxRef}
+        ref={handleCheckboxRef}
         type="checkbox"
         className="size-3.5"
         checked={allSelected}
@@ -140,10 +143,10 @@ function NestedRepoSelectAllRow({
         onChange={onToggle}
         aria-label={allSelected ? 'Deselect all' : 'Select all'}
       />
-      <span className="text-[12.5px] font-semibold text-foreground">
+      <span className="min-w-0 truncate text-[12.5px] font-semibold text-foreground">
         {allSelected ? 'Deselect all' : 'Select all'}
       </span>
-      <span className="ml-auto text-[11px] text-muted-foreground">
+      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
         {selectedCount} of {total} selected
       </span>
     </label>
@@ -154,17 +157,24 @@ export function NestedRepoTreePreview({
   scan,
   selectedPaths,
   onSelectedPathsChange,
-  disabled = false
+  disabled = false,
+  className
 }: {
   scan: NestedRepoScanResult
   selectedPaths: Set<string>
   onSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
   disabled?: boolean
+  className?: string
 }) {
   const rows = useMemo(() => buildRows(scan), [scan])
 
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-background/60">
+    <div
+      className={cn(
+        'flex max-h-64 min-h-0 min-w-0 max-w-full flex-col overflow-hidden rounded-md border border-border bg-background/60',
+        className
+      )}
+    >
       <NestedRepoSelectAllRow
         total={scan.repos.length}
         selectedCount={selectedPaths.size}
@@ -178,12 +188,12 @@ export function NestedRepoTreePreview({
           })
         }}
       />
-      <ul className="scrollbar-sleek max-h-64 overflow-y-auto">
+      <ul className="scrollbar-sleek min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {rows.map((row) =>
           row.type === 'folder' ? (
             <li
               key={`folder:${row.key}`}
-              className="flex items-center gap-2.5 border-t border-border bg-muted/20 px-3 py-2 text-sm"
+              className="flex min-w-0 max-w-full items-center gap-2.5 overflow-hidden border-t border-border bg-muted/20 px-3 py-2 text-sm"
               style={{ paddingLeft: 12 + row.depth * 18 }}
             >
               <FolderTree className="size-3.5 shrink-0 text-muted-foreground" />
@@ -200,7 +210,7 @@ export function NestedRepoTreePreview({
           ) : (
             <li key={row.repo.path}>
               <label
-                className="flex cursor-pointer items-center gap-2.5 border-t border-border px-3 py-2 text-sm hover:bg-accent"
+                className="flex min-w-0 max-w-full cursor-pointer items-center gap-2.5 overflow-hidden border-t border-border px-3 py-2 text-sm hover:bg-accent"
                 style={{ paddingLeft: 12 + row.depth * 18 }}
               >
                 <input

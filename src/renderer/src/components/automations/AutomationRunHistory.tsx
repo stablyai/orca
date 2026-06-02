@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { AutomationRun } from '../../../../shared/automations-types'
@@ -28,18 +28,20 @@ export function AutomationRunHistory({
   worktreeMap,
   onOpenRun
 }: AutomationRunHistoryProps): React.JSX.Element {
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [selectedRunState, setSelectedRunState] = useState<{
+    automationId: string
+    runId: string | null
+  }>(() => ({
+    automationId,
+    runId: null
+  }))
   const runCountLabel = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length
     return `${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · ${completed} completed`
   }, [runs])
 
-  useEffect(() => {
-    setSelectedRunId((current) =>
-      current && runs.some((run) => run.id === current) ? current : (runs[0]?.id ?? null)
-    )
-  }, [automationId, runs])
-
+  const selectedRunId =
+    selectedRunState.automationId === automationId ? selectedRunState.runId : null
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null
 
   return (
@@ -74,7 +76,7 @@ export function AutomationRunHistory({
                   selectedRun?.id === run.id && 'bg-accent text-accent-foreground'
                 )}
                 onClick={() => {
-                  setSelectedRunId(run.id)
+                  setSelectedRunState({ automationId, runId: run.id })
                   onOpenRun(run)
                 }}
               >

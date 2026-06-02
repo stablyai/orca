@@ -3,9 +3,13 @@ import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
-import type { GlobalSettings, TerminalTab, Worktree } from '../../../../shared/types'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type {
+  GlobalSettings,
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab,
+  Worktree
+} from '../../../../shared/types'
 
 export type FeatureWallSetupProgressInput = {
   settings: GlobalSettings | null
@@ -14,11 +18,12 @@ export type FeatureWallSetupProgressInput = {
   browserUseSkillInstalled: boolean
   computerUseSkillInstalled: boolean
   computerUsePermissionsReady: boolean
+  computerUseUnavailable?: boolean
   orchestrationSkillInstalled: boolean
   gitRepoCount: number
   worktreesByRepo: Record<string, Worktree[]>
   tabsByWorktree: Record<string, TerminalTab[]>
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   hasSetupScript: boolean
 }
 
@@ -28,43 +33,41 @@ export type FeatureWallSetupProgress = {
   coreTotal: number
 }
 
-function hasTwoHookReportedAgentsInOneWorktree(input: FeatureWallSetupProgressInput): boolean {
+function isSplitLayout(node: TerminalPaneLayoutNode | null | undefined): boolean {
+  // A split node means the tab holds 2+ panes, regardless of what runs in them.
+  return Boolean(node) && node!.type === 'split'
+}
+
+function hasSplitTerminalInAnyWorktree(input: FeatureWallSetupProgressInput): boolean {
   const validWorktreeIds = new Set(
     Object.values(input.worktreesByRepo)
       .flat()
       .map((worktree) => worktree.id)
   )
-  const tabIdToWorktreeId = new Map<string, string>()
   for (const [worktreeId, tabs] of Object.entries(input.tabsByWorktree)) {
     if (!validWorktreeIds.has(worktreeId)) {
       continue
     }
     for (const tab of tabs) {
-      tabIdToWorktreeId.set(tab.id, worktreeId)
+      if (isSplitLayout(input.terminalLayoutsByTabId[tab.id]?.root)) {
+        return true
+      }
     }
-  }
-
-  const agentCountsByWorktree = new Map<string, number>()
-  for (const paneKey of Object.keys(input.agentStatusByPaneKey)) {
-    const parsed = parsePaneKey(paneKey)
-    if (!parsed) {
-      continue
-    }
-    const worktreeId = tabIdToWorktreeId.get(parsed.tabId)
-    if (!worktreeId) {
-      continue
-    }
-    const count = (agentCountsByWorktree.get(worktreeId) ?? 0) + 1
-    if (count >= 2) {
-      return true
-    }
-    agentCountsByWorktree.set(worktreeId, count)
   }
   return false
 }
 
-function countWorkspaces(worktreesByRepo: Record<string, Worktree[]>): number {
-  return Object.values(worktreesByRepo).reduce((sum, worktrees) => sum + worktrees.length, 0)
+function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree[]>): number {
+  // Why: imported git worktrees count as real parallel-work capacity, but
+  // partially hydrated placeholders can appear before a worktree path is known.
+  return Object.values(worktreesByRepo).reduce(
+    (sum, worktrees) =>
+      sum +
+      worktrees.filter(
+        (worktree) => !worktree.isMainWorktree && typeof worktree.path === 'string' && worktree.path
+      ).length,
+    0
+  )
 }
 
 export function getFeatureWallSetupProgress(
@@ -73,7 +76,7 @@ export function getFeatureWallSetupProgress(
   const agentCapabilitiesDone =
     input.browserUseSkillInstalled &&
     input.computerUseSkillInstalled &&
-    input.computerUsePermissionsReady &&
+    (input.computerUsePermissionsReady || input.computerUseUnavailable === true) &&
     input.orchestrationSkillInstalled
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
     'default-agent':
@@ -82,8 +85,8 @@ export function getFeatureWallSetupProgress(
     notifications:
       input.settings?.notifications.enabled === true &&
       input.settings.notifications.agentTaskComplete === true,
-    'two-agents': hasTwoHookReportedAgentsInOneWorktree(input),
-    'three-workspaces': countWorkspaces(input.worktreesByRepo) >= 2,
+    'split-terminal': hasSplitTerminalInAnyWorktree(input),
+    'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
     'task-sources': input.hasConnectedTaskSource,
     'agent-capabilities': agentCapabilitiesDone,
     'setup-script': input.hasSetupScript

@@ -16,6 +16,7 @@ import {
 } from '../ui/select'
 import { BellRing, Bot, FileAudio, Siren, Upload, Volume2 } from 'lucide-react'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 export { NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './notifications-search'
 
@@ -39,6 +40,29 @@ function isNotificationSoundId(
 type SystemNotificationSettingsCopy = {
   failureTitle: string
   failureDescription: string
+}
+
+type NotificationVolumeDraftState = {
+  sourceVolume: number
+  draft: number
+}
+
+export function createNotificationVolumeDraftState(
+  sourceVolume: number
+): NotificationVolumeDraftState {
+  return {
+    sourceVolume,
+    draft: sourceVolume
+  }
+}
+
+export function resolveNotificationVolumeDraftState(
+  state: NotificationVolumeDraftState,
+  sourceVolume: number
+): NotificationVolumeDraftState {
+  return state.sourceVolume === sourceVolume
+    ? state
+    : createNotificationVolumeDraftState(sourceVolume)
 }
 
 function getSystemNotificationSettingsCopy(
@@ -142,6 +166,7 @@ export function NotificationsPane({
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
+  const mountedRef = useMountedRef()
   const [isPickingSound, setIsPickingSound] = useState(false)
 
   const updateNotificationSettings = async (
@@ -159,14 +184,31 @@ export function NotificationsPane({
     })
   }
 
-  // Why: keep dragging local and persist only on Radix's commit event. That
-  // avoids IPC on every tick without a debounce timer that can race settings updates.
-  const [volumeDraft, setVolumeDraft] = useState(notificationSettings.customSoundVolume)
-
   useEffect(() => {
     notificationSettingsRef.current = notificationSettings
-    setVolumeDraft(notificationSettings.customSoundVolume)
   }, [notificationSettings])
+
+  // Why: keep dragging local and persist only on Radix's commit event. That
+  // avoids IPC on every tick without a debounce timer that can race settings updates.
+  const [volumeDraftState, setVolumeDraftState] = useState(() =>
+    createNotificationVolumeDraftState(notificationSettings.customSoundVolume)
+  )
+  const resolvedVolumeDraftState = resolveNotificationVolumeDraftState(
+    volumeDraftState,
+    notificationSettings.customSoundVolume
+  )
+  if (resolvedVolumeDraftState !== volumeDraftState) {
+    // Why: external settings writes should update the slider before paint, but
+    // unrelated notification toggles should not restart an in-progress drag.
+    setVolumeDraftState(resolvedVolumeDraftState)
+  }
+  const volumeDraft = resolvedVolumeDraftState.draft
+  const setVolumeDraft = (value: number): void => {
+    setVolumeDraftState((current) => ({
+      ...resolveNotificationVolumeDraftState(current, notificationSettings.customSoundVolume),
+      draft: value
+    }))
+  }
 
   const handleVolumeCommit = (value: number): void => {
     if (notificationSettingsRef.current.customSoundVolume !== value) {
@@ -203,7 +245,9 @@ export function NotificationsPane({
         await previewSound('custom')
       }
     } finally {
-      setIsPickingSound(false)
+      if (mountedRef.current) {
+        setIsPickingSound(false)
+      }
     }
   }
 

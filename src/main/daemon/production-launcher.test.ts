@@ -24,6 +24,7 @@ function createMockSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
   return {
     pid: 44444,
+    getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
@@ -123,6 +124,57 @@ describe('createProductionLauncher', () => {
     expect(handlers.exit).toHaveLength(0)
     expect(child.disconnect).toHaveBeenCalled()
     expect(child.unref).toHaveBeenCalled()
+  })
+
+  it('removes shutdown exit listener when force-kill timeout settles first', async () => {
+    vi.useFakeTimers()
+    try {
+      const handlers: Record<string, ((arg?: unknown) => void)[]> = {
+        message: [],
+        error: [],
+        exit: []
+      }
+      const child = {
+        pid: 12345,
+        killed: false,
+        on: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+          handlers[event]?.push(cb)
+          return child
+        }),
+        once: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+          handlers[event]?.push(cb)
+          return child
+        }),
+        off: vi.fn((event: string, cb: (arg?: unknown) => void) => {
+          handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+          return child
+        }),
+        kill: vi.fn(),
+        disconnect: vi.fn(),
+        unref: vi.fn()
+      }
+      forkMock.mockReturnValueOnce(child)
+
+      const launcher = createProductionLauncher({
+        getDaemonEntryPath: () => join(dir, 'daemon-entry.js')
+      })
+
+      const launch = launcher(socketPathFor(dir), tokenPathFor(dir))
+      handlers.message[0]?.({ type: 'ready' })
+      const handle = await launch
+
+      const shutdown = handle.shutdown()
+      expect(handlers.exit).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(5000)
+      await shutdown
+
+      expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
+      expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
+      expect(handlers.exit).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

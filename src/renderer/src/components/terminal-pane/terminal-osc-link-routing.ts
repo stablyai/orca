@@ -1,5 +1,6 @@
 import { resolveTerminalFileLinkText } from '@/lib/terminal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { isTerminalLinkActivation } from './terminal-link-handlers'
 import { resolveTerminalFileUrlTarget } from './terminal-file-url-target'
@@ -29,18 +30,37 @@ export function handleOscLink(
   // without holding a button) extends a selection until the next click/Esc.
   event?.preventDefault?.()
 
-  let parsed: URL
-  try {
-    parsed = new URL(rawText)
-  } catch {
+  const openDetectedPathLink = (): boolean => {
     const resolved = resolveTerminalFileLinkText(
       rawText,
       deps.startupCwd || deps.worktreePath,
       deps.terminalHomePath
     )
-    if (resolved) {
-      openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, deps)
+    if (!resolved) {
+      return false
     }
+    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+      ...deps,
+      openWithSystemDefault: Boolean(event?.shiftKey)
+    })
+    return true
+  }
+
+  if (
+    isWindowsAbsolutePathLike(rawText) &&
+    isWindowsAbsolutePathLike(deps.startupCwd || deps.worktreePath) &&
+    openDetectedPathLink()
+  ) {
+    // Why: `new URL("C:\\path\\file.ts")` succeeds with protocol `c:`;
+    // Windows OSC links need file-path routing before generic URL parsing.
+    return
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(rawText)
+  } catch {
+    openDetectedPathLink()
     return
   }
 
@@ -56,12 +76,19 @@ export function handleOscLink(
     // Why: file:// URIs should open inside Orca, not via the OS default editor
     // (shell.openPath). We extract the path from the URI and route it through
     // the same openDetectedFilePath logic used for detected file-path links.
-    // Only local files are supported — remote hosts (file://remote/...) are rejected
-    // because we cannot open them as local paths.
-    const resolved = resolveTerminalFileUrlTarget(parsed)
+    // Remote file hosts stay rejected; Windows local network shares are the
+    // exception because their standard URI form is file://server/share/path.
+    const allowUncHost =
+      navigator.userAgent.includes('Windows') &&
+      isWindowsAbsolutePathLike(deps.worktreePath) &&
+      !deps.runtimeEnvironmentId
+    const resolved = resolveTerminalFileUrlTarget(parsed, { allowUncHost })
     if (!resolved) {
       return
     }
-    openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, deps)
+    openDetectedFilePath(resolved.filePath, resolved.line, resolved.column, {
+      ...deps,
+      openWithSystemDefault: Boolean(event?.shiftKey)
+    })
   }
 }

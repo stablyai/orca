@@ -10,6 +10,7 @@ import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -29,7 +30,13 @@ export function FloatingTerminalWindowControls({
   const createTab = useAppStore((s) => s.createTab)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
 
-  const defaultAgent = defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
+  const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
+  const defaultAgent =
+    defaultTuiAgent &&
+    defaultTuiAgent !== 'blank' &&
+    isTuiAgentEnabled(defaultTuiAgent, disabledTuiAgents)
+      ? defaultTuiAgent
+      : null
   const defaultAgentLabel = useMemo(
     () =>
       defaultAgent

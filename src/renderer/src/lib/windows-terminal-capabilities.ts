@@ -2,108 +2,233 @@ import { useEffect, useState } from 'react'
 
 export type WindowsTerminalCapabilities = {
   wslAvailable: boolean
+  wslDistros: string[]
   pwshAvailable: boolean
+  gitBashAvailable: boolean
+  hostPlatform: NodeJS.Platform | null
+  isLoading: boolean
 }
 
 const UNAVAILABLE_CAPABILITIES: WindowsTerminalCapabilities = {
   wslAvailable: false,
-  pwshAvailable: false
+  wslDistros: [],
+  pwshAvailable: false,
+  gitBashAvailable: false,
+  hostPlatform: null,
+  isLoading: false
 }
 
 const CAPABILITY_CACHE_TTL_MS = 30_000
-let cachedCapabilities: WindowsTerminalCapabilities | null = null
-let cachedCapabilitiesLoadedAt = 0
-let pendingCapabilities: Promise<WindowsTerminalCapabilities> | null = null
-let latestCapabilityRequestId = 0
-const subscribers = new Set<(capabilities: WindowsTerminalCapabilities) => void>()
+const CAPABILITY_OWNER_CACHE_MAX = 32
+const cachedCapabilitiesByOwnerKey = new Map<
+  string,
+  { capabilities: WindowsTerminalCapabilities; loadedAt: number }
+>()
+const pendingCapabilitiesByOwnerKey = new Map<string, Promise<WindowsTerminalCapabilities>>()
+let nextCapabilityRequestId = 0
+const latestCapabilityRequestIdByOwnerKey = new Map<string, number>()
+const subscribersByOwnerKey = new Map<
+  string,
+  Set<(capabilities: WindowsTerminalCapabilities) => void>
+>()
 
-function publish(capabilities: WindowsTerminalCapabilities, loadedAt = Date.now()): void {
-  cachedCapabilities = capabilities
-  cachedCapabilitiesLoadedAt = loadedAt
-  for (const subscriber of subscribers) {
+type WindowsTerminalCapabilityHookState = {
+  ownerKey: string
+  capabilities: WindowsTerminalCapabilities
+}
+
+export function getWindowsTerminalCapabilityOwnerKey(
+  activeRuntimeEnvironmentId?: string | null
+): string {
+  const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
+  if (!isWebClient) {
+    return 'local'
+  }
+  // Why: paired web clients can switch hosts; Git Bash/WSL availability is
+  // host-owned, so a previous runtime's answer must not bleed into the next.
+  return `runtime:${activeRuntimeEnvironmentId?.trim() || 'none'}`
+}
+
+function publish(
+  capabilities: WindowsTerminalCapabilities,
+  ownerKey: string,
+  loadedAt = Date.now()
+): void {
+  cachedCapabilitiesByOwnerKey.delete(ownerKey)
+  cachedCapabilitiesByOwnerKey.set(ownerKey, { capabilities, loadedAt })
+  trimCapabilityOwnerCaches()
+  for (const subscriber of subscribersByOwnerKey.get(ownerKey) ?? []) {
     subscriber(capabilities)
   }
 }
 
-export function getCachedWindowsTerminalCapabilities(): WindowsTerminalCapabilities {
-  return cachedCapabilities ?? UNAVAILABLE_CAPABILITIES
+function pruneExpiredCapabilityOwners(now: number): void {
+  for (const [ownerKey, cached] of cachedCapabilitiesByOwnerKey) {
+    if (
+      now - cached.loadedAt >= CAPABILITY_CACHE_TTL_MS &&
+      !pendingCapabilitiesByOwnerKey.has(ownerKey) &&
+      !subscribersByOwnerKey.has(ownerKey)
+    ) {
+      cachedCapabilitiesByOwnerKey.delete(ownerKey)
+      latestCapabilityRequestIdByOwnerKey.delete(ownerKey)
+    }
+  }
+}
+
+function trimCapabilityOwnerCaches(): void {
+  while (cachedCapabilitiesByOwnerKey.size > CAPABILITY_OWNER_CACHE_MAX) {
+    const oldest = cachedCapabilitiesByOwnerKey.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    cachedCapabilitiesByOwnerKey.delete(oldest)
+    if (!pendingCapabilitiesByOwnerKey.has(oldest) && !subscribersByOwnerKey.has(oldest)) {
+      latestCapabilityRequestIdByOwnerKey.delete(oldest)
+    }
+  }
+}
+
+export function getCachedWindowsTerminalCapabilities(
+  ownerKey = 'local'
+): WindowsTerminalCapabilities {
+  return cachedCapabilitiesByOwnerKey.get(ownerKey)?.capabilities ?? UNAVAILABLE_CAPABILITIES
 }
 
 export function loadWindowsTerminalCapabilities(
   options: {
     force?: boolean
     now?: number
+    ownerKey?: string
   } = {}
 ): Promise<WindowsTerminalCapabilities> {
   const now = options.now ?? Date.now()
-  if (
-    cachedCapabilities &&
-    !options.force &&
-    now - cachedCapabilitiesLoadedAt < CAPABILITY_CACHE_TTL_MS
-  ) {
-    return Promise.resolve(cachedCapabilities)
+  const ownerKey = options.ownerKey ?? 'local'
+  pruneExpiredCapabilityOwners(now)
+  const cached = cachedCapabilitiesByOwnerKey.get(ownerKey)
+  if (cached && !options.force && now - cached.loadedAt < CAPABILITY_CACHE_TTL_MS) {
+    return Promise.resolve(cached.capabilities)
   }
+  const pendingCapabilities = pendingCapabilitiesByOwnerKey.get(ownerKey)
   if (pendingCapabilities && !options.force) {
     return pendingCapabilities
   }
 
-  // Why: Settings and the tab bar need one shared answer. Separate probes can
-  // leave Settings rendering without WSL while the "+" menu already shows it.
-  const requestId = ++latestCapabilityRequestId
-  pendingCapabilities = Promise.all([
+  // Why: Settings, status bar, and paired web tab bars need one shared answer.
+  // Separate probes can leave one surface showing stale Windows shell choices.
+  const requestId = ++nextCapabilityRequestId
+  latestCapabilityRequestIdByOwnerKey.set(ownerKey, requestId)
+  const nextPendingCapabilities = Promise.all([
     window.api.wsl.isAvailable().catch(() => false),
-    window.api.pwsh.isAvailable().catch(() => false)
+    window.api.wsl.listDistros().catch(() => []),
+    window.api.pwsh.isAvailable().catch(() => false),
+    window.api.gitBash.isAvailable().catch(() => false),
+    window.api.runtime
+      .getStatus()
+      .then((status) => status.hostPlatform ?? null)
+      .catch(() => null)
   ])
-    .then(([wslAvailable, pwshAvailable]) => {
-      const capabilities = { wslAvailable, pwshAvailable }
-      if (requestId === latestCapabilityRequestId) {
-        pendingCapabilities = null
-        publish(capabilities, now)
+    .then(([wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform]) => {
+      const capabilities = {
+        wslAvailable,
+        wslDistros,
+        pwshAvailable,
+        gitBashAvailable,
+        hostPlatform,
+        isLoading: false
+      }
+      if (requestId === latestCapabilityRequestIdByOwnerKey.get(ownerKey)) {
+        pendingCapabilitiesByOwnerKey.delete(ownerKey)
+        publish(capabilities, ownerKey, now)
         return capabilities
       }
-      return getCachedWindowsTerminalCapabilities()
+      return getCachedWindowsTerminalCapabilities(ownerKey)
     })
     .catch(() => {
-      if (requestId === latestCapabilityRequestId) {
-        pendingCapabilities = null
-        publish(UNAVAILABLE_CAPABILITIES, now)
+      if (requestId === latestCapabilityRequestIdByOwnerKey.get(ownerKey)) {
+        pendingCapabilitiesByOwnerKey.delete(ownerKey)
+        publish(UNAVAILABLE_CAPABILITIES, ownerKey, now)
         return UNAVAILABLE_CAPABILITIES
       }
-      return getCachedWindowsTerminalCapabilities()
+      return getCachedWindowsTerminalCapabilities(ownerKey)
     })
 
-  return pendingCapabilities
+  pendingCapabilitiesByOwnerKey.set(ownerKey, nextPendingCapabilities)
+  return nextPendingCapabilities
 }
 
-export function refreshWindowsTerminalCapabilities(): Promise<WindowsTerminalCapabilities> {
-  return loadWindowsTerminalCapabilities({ force: true })
+export function refreshWindowsTerminalCapabilities(
+  ownerKey = 'local'
+): Promise<WindowsTerminalCapabilities> {
+  return loadWindowsTerminalCapabilities({ force: true, ownerKey })
 }
 
-export function useWindowsTerminalCapabilities(enabled: boolean): WindowsTerminalCapabilities {
-  const [capabilities, setCapabilities] = useState(getCachedWindowsTerminalCapabilities)
+export function selectWindowsTerminalCapabilitiesForOwner(
+  state: WindowsTerminalCapabilityHookState,
+  enabled: boolean,
+  ownerKey: string
+): WindowsTerminalCapabilities {
+  if (!enabled) {
+    return UNAVAILABLE_CAPABILITIES
+  }
+  return state.ownerKey === ownerKey
+    ? state.capabilities
+    : (cachedCapabilitiesByOwnerKey.get(ownerKey)?.capabilities ?? UNAVAILABLE_CAPABILITIES)
+}
+
+export function useWindowsTerminalCapabilities(
+  enabled: boolean,
+  forceRefreshOnMount = false,
+  ownerKey = 'local'
+): WindowsTerminalCapabilities {
+  const [state, setState] = useState(() => ({
+    ownerKey,
+    capabilities: getCachedWindowsTerminalCapabilities(ownerKey)
+  }))
 
   useEffect(() => {
     if (!enabled) {
-      setCapabilities(UNAVAILABLE_CAPABILITIES)
+      setState({ ownerKey, capabilities: UNAVAILABLE_CAPABILITIES })
       return
     }
 
-    setCapabilities(getCachedWindowsTerminalCapabilities())
+    let cancelled = false
+    const cached = getCachedWindowsTerminalCapabilities(ownerKey)
+    const hasOwnerCache = cachedCapabilitiesByOwnerKey.has(ownerKey)
+    setState({
+      ownerKey,
+      capabilities: hasOwnerCache ? cached : { ...cached, isLoading: true }
+    })
+    const setCapabilities = (capabilities: WindowsTerminalCapabilities): void => {
+      setState({ ownerKey, capabilities })
+    }
+    const subscribers = subscribersByOwnerKey.get(ownerKey) ?? new Set()
     subscribers.add(setCapabilities)
-    void loadWindowsTerminalCapabilities().then(setCapabilities)
+    subscribersByOwnerKey.set(ownerKey, subscribers)
+    void loadWindowsTerminalCapabilities({ force: forceRefreshOnMount, ownerKey }).then(
+      (nextCapabilities) => {
+        if (!cancelled) {
+          setState({ ownerKey, capabilities: nextCapabilities })
+        }
+      }
+    )
 
     return () => {
-      subscribers.delete(setCapabilities)
+      cancelled = true
+      const currentSubscribers = subscribersByOwnerKey.get(ownerKey)
+      currentSubscribers?.delete(setCapabilities)
+      if (currentSubscribers?.size === 0) {
+        subscribersByOwnerKey.delete(ownerKey)
+      }
     }
-  }, [enabled])
+  }, [enabled, forceRefreshOnMount, ownerKey])
 
-  return enabled ? capabilities : UNAVAILABLE_CAPABILITIES
+  return selectWindowsTerminalCapabilitiesForOwner(state, enabled, ownerKey)
 }
 
 export function resetWindowsTerminalCapabilitiesForTests(): void {
-  cachedCapabilities = null
-  cachedCapabilitiesLoadedAt = 0
-  pendingCapabilities = null
-  latestCapabilityRequestId = 0
-  subscribers.clear()
+  cachedCapabilitiesByOwnerKey.clear()
+  pendingCapabilitiesByOwnerKey.clear()
+  nextCapabilityRequestId = 0
+  latestCapabilityRequestIdByOwnerKey.clear()
+  subscribersByOwnerKey.clear()
 }

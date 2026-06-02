@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GitExec } from './git-handler-ops'
-import { addWorktreeOp, removeWorktreeOp, worktreeIsCleanOp } from './git-handler-worktree-ops'
+import { addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
 
 function worktreeList(...entries: { path: string; branch?: string }[]): string {
   return entries
@@ -151,15 +151,81 @@ describe('removeWorktreeOp', () => {
 
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
-      '/repo$ worktree list --porcelain',
+      '/repo$ worktree list --porcelain -z',
       '/repo$ worktree remove /repo-feature',
       '/repo$ worktree prune',
-      '/repo$ worktree list --porcelain',
-      '/repo$ branch -D feature/test'
+      '/repo$ worktree list --porcelain -z',
+      '/repo$ branch -d -- feature/test'
     ])
   })
 
-  it('preserves the branch when removing an SSH worktree for an existing local branch', async () => {
+  it('preserves the branch (does not throw) when `branch -d` refuses an unmerged branch', async () => {
+    let listCount = 0
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        listCount += 1
+        return {
+          stdout:
+            listCount === 1
+              ? worktreeList(
+                  { path: '/repo', branch: 'main' },
+                  { path: '/repo-feature', branch: 'feature/test' }
+                )
+              : worktreeList({ path: '/repo', branch: 'main' }),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'branch' && args[1] === '-d') {
+        throw new Error('error: the branch feature/test is not fully merged')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    // The unmerged-branch refusal must be surfaced without failing workspace removal.
+    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({
+      preservedBranch: { branchName: 'feature/test', head: '1' }
+    })
+
+    expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
+  })
+
+  it('force-deletes the just-created branch during failed sparse setup rollback', async () => {
+    let listCount = 0
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        listCount += 1
+        return {
+          stdout:
+            listCount === 1
+              ? worktreeList(
+                  { path: '/repo', branch: 'main' },
+                  { path: '/repo-feature', branch: 'feature/test' }
+                )
+              : worktreeList({ path: '/repo', branch: 'main' }),
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await removeWorktreeOp(git, {
+      worktreePath: '/repo-feature',
+      force: true,
+      forceBranchDelete: true
+    })
+
+    expect(git).toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
+  })
+
+  it('skips branch deletion entirely when deleteBranch is false', async () => {
     const calls: string[] = []
     const git = vi.fn<GitExec>(async (args, cwd) => {
       calls.push(`${cwd}$ ${args.join(' ')}`)
@@ -182,7 +248,7 @@ describe('removeWorktreeOp', () => {
 
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
-      '/repo$ worktree list --porcelain',
+      '/repo$ worktree list --porcelain -z',
       '/repo$ worktree remove /repo-feature',
       '/repo$ worktree prune'
     ])
@@ -215,32 +281,7 @@ describe('removeWorktreeOp', () => {
 
     await removeWorktreeOp(git, { worktreePath: '/repo-feature' })
 
-    expect(git).not.toHaveBeenCalledWith(['branch', '-D', 'feature/test'], expect.any(String))
-  })
-})
-
-describe('worktreeIsCleanOp', () => {
-  it('reports clean SSH worktrees without returning porcelain output', async () => {
-    const git = vi.fn<GitExec>(async () => ({ stdout: '\n', stderr: '' }))
-
-    await expect(worktreeIsCleanOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({
-      clean: true,
-      stdout: undefined
-    })
-
-    expect(git).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all'],
-      '/repo-feature'
-    )
-  })
-
-  it('returns porcelain output for dirty SSH worktrees', async () => {
-    const stdout = ' M src/file.ts\n?? scratch.txt\n'
-    const git = vi.fn<GitExec>(async () => ({ stdout, stderr: '' }))
-
-    await expect(worktreeIsCleanOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({
-      clean: false,
-      stdout
-    })
+    expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
+    expect(git).not.toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
   })
 })

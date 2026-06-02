@@ -32,6 +32,11 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--body')
     expect(result).toMatch(/3-sentence summary/)
     expect(result).toContain('reportPath')
+    const workerDoneLine = result
+      .split('\n')
+      .find((line) => line.includes('"taskId"') && line.includes('filesModified'))
+    expect(workerDoneLine).toContain('dispatchId')
+    expect(workerDoneLine).toContain('ctx_def456')
   })
 
   it('CLI examples parse as valid shell (bash -n on the extracted block)', () => {

@@ -4,6 +4,7 @@ import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
 import type {} from '@tiptap/extension-mathematics'
 import {
+  ChevronRight,
   Heading1,
   Heading2,
   Heading3,
@@ -45,7 +46,9 @@ export type DocLinkMenuRow =
 
 export type SlashCommandId =
   | 'text'
+  | 'toggle-text'
   | 'heading-1'
+  | 'toggle-h1'
   | 'heading-2'
   | 'heading-3'
   | 'task-list'
@@ -121,6 +124,32 @@ function insertCodeBlock(editor: Editor, language: string, text: string): void {
   })
 }
 
+function insertToggle(editor: Editor, variant?: 'heading-1'): void {
+  const insertAt = editor.state.selection.from
+
+  editor
+    .chain()
+    .focus()
+    .insertContentAt(insertAt, {
+      type: 'details',
+      attrs: {
+        open: true,
+        ...(variant ? { variant } : {})
+      },
+      content: [
+        {
+          type: 'detailsSummary'
+        },
+        {
+          type: 'detailsContent',
+          content: [{ type: 'paragraph' }]
+        }
+      ]
+    })
+    .setTextSelection(insertAt + 1)
+    .run()
+}
+
 /**
  * Executes a slash command by first deleting the typed slash text, then
  * delegating to the command's run method. Image is special-cased because
@@ -159,6 +188,17 @@ export const slashCommands: SlashCommand[] = [
       // Use setHeading (not toggleHeading) so the slash command is idempotent —
       // invoking "/h1" on an existing H1 should keep it as H1, not revert to paragraph.
       editor.chain().focus().setHeading({ level: 1 }).run()
+    }
+  },
+  {
+    id: 'toggle-h1',
+    label: 'Toggle Heading 1',
+    aliases: ['toggle-h1', 'toggle heading', 'details heading', 'collapse heading'],
+    icon: icon(ChevronRight),
+    group: 'Headings',
+    description: 'Create a collapsible section with a large heading summary.',
+    run: (editor) => {
+      insertToggle(editor, 'heading-1')
     }
   },
   {
@@ -240,6 +280,17 @@ export const slashCommands: SlashCommand[] = [
     description: 'Start a normal paragraph.',
     run: (editor) => {
       editor.chain().focus().setParagraph().run()
+    }
+  },
+  {
+    id: 'toggle-text',
+    label: 'Toggle Text',
+    aliases: ['toggle', 'details', 'collapse', 'toggle-text'],
+    icon: icon(ChevronRight),
+    group: 'Basic blocks',
+    description: 'Create a collapsible text section.',
+    run: (editor) => {
+      insertToggle(editor)
     }
   },
   {

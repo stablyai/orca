@@ -49,6 +49,7 @@ function renderSurface(
     onSkip?: (id: ContextualTourId) => void
     onNext?: () => void
     onBack?: () => void
+    onStepAction?: Parameters<typeof ContextualTourOverlaySurface>[0]['onStepAction']
   } = {}
 ): ReactElement {
   const renderState = { ...baseRenderState, ...overrides }
@@ -62,6 +63,7 @@ function renderSurface(
     onSkip: callbacks.onSkip ?? vi.fn(),
     onBack: callbacks.onBack ?? vi.fn(),
     onNext: callbacks.onNext ?? vi.fn(),
+    onStepAction: callbacks.onStepAction ?? vi.fn(),
     onOverlayKeyDownCapture: handleContextualTourOverlayKeyDown
   })
 }
@@ -138,6 +140,7 @@ describe('ContextualTourOverlaySurface', () => {
     expect(markup).toContain('aria-valuenow="1"')
     expect(markup).toContain('aria-valuemax="3"')
     expect(markup).toContain('Step 1 of 3')
+    expect(markup).toContain('1 of 3')
     expect(markup).toContain('Choose the work source')
     expect(markup).toContain('Switch between connected providers')
     expect(markup).toContain('aria-label="Skip tour"')
@@ -155,7 +158,7 @@ describe('ContextualTourOverlaySurface', () => {
     const markup = renderToStaticMarkup(
       renderSurface({
         progress: { current: 2, total: 2 },
-        title: 'Start from tracked work',
+        title: 'Start from work items',
         isLastStep: true,
         isFirstStep: false
       })
@@ -163,7 +166,8 @@ describe('ContextualTourOverlaySurface', () => {
 
     expect(markup).toContain('aria-valuenow="2"')
     expect(markup).toContain('aria-valuemax="2"')
-    expect(markup).toContain('Start from tracked work')
+    expect(markup).toContain('2 of 2')
+    expect(markup).toContain('Start from work items')
     expect(markup).toContain('Done')
   })
 
@@ -222,6 +226,51 @@ describe('ContextualTourOverlaySurface', () => {
 
     expect(onSkip).toHaveBeenCalledWith('tasks')
     expect(onNext).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders configured step action labels and wires them through the action callback', () => {
+    const onStepAction = vi.fn()
+    const primaryAction = { kind: 'split-terminal-pane' as const, label: 'Split terminal' }
+    const secondaryAction = { kind: 'next' as const, label: 'Skip' }
+    const element = renderSurface(
+      {
+        primaryAction,
+        secondaryAction
+      },
+      { onStepAction }
+    )
+
+    findElementByText(element, 'Split terminal')?.props.onClick?.()
+    findElementByText(element, 'Skip')?.props.onClick?.()
+
+    expect(onStepAction).toHaveBeenCalledWith(primaryAction)
+    expect(onStepAction).toHaveBeenCalledWith(secondaryAction)
+  })
+
+  it('renders target rings only for steps that request a target pulse', () => {
+    const pulsedMarkup = renderToStaticMarkup(
+      renderSurface({
+        targetPulse: true,
+        title: 'Start another task in parallel'
+      })
+    )
+    const defaultMarkup = renderToStaticMarkup(renderSurface())
+
+    expect(pulsedMarkup).toContain('data-contextual-tour-target-rings')
+    expect(defaultMarkup).not.toContain('data-contextual-tour-target-rings')
+  })
+
+  it('can hide the primary action when the real target is the CTA', () => {
+    const markup = renderToStaticMarkup(
+      renderSurface({
+        hidePrimaryAction: true,
+        isLastStep: true,
+        title: 'Start another task in parallel'
+      })
+    )
+
+    expect(markup).not.toContain('Done')
+    expect(markup).not.toContain('Next')
   })
 
   it('handles Escape by clicking Skip before page-level handlers see it', () => {

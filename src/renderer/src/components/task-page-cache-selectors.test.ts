@@ -5,6 +5,7 @@ import { workItemsCacheKey, type CacheEntry } from '@/store/slices/github'
 import type { GitHubWorkItem, LinearIssue } from '../../../shared/types'
 import {
   buildTaskPageRepoSourceState,
+  deriveTaskPageGitHubWorkItemsFetchOptions,
   findTaskPageDialogWorkItem,
   findTaskPageLinearDrawerIssue,
   reconcileTaskPageItemsAfterLandingRefresh,
@@ -29,6 +30,21 @@ function linearIssue(id: string): LinearIssue {
 }
 
 describe('task page cache selectors', () => {
+  it('uses noCache only for nonce or preference forced GitHub work-item refreshes', () => {
+    expect(deriveTaskPageGitHubWorkItemsFetchOptions(true, false)).toEqual({
+      force: true,
+      noCache: true
+    })
+    expect(deriveTaskPageGitHubWorkItemsFetchOptions(false, true)).toEqual({
+      force: true,
+      noCache: false
+    })
+    expect(deriveTaskPageGitHubWorkItemsFetchOptions(false, false)).toEqual({
+      force: false,
+      noCache: false
+    })
+  })
+
   it('keeps the selected work-item cache slice shallow-equal across unrelated cache writes', () => {
     const repo = { id: 'repo-1', path: '/repo/one' }
     const selectedEntry = entry<GitHubWorkItem[]>([workItem('issue-1', 'repo-1')])
@@ -122,6 +138,27 @@ describe('task page cache selectors', () => {
       shouldReplaceTaskPageItemsAfterRefresh([first, second], [refreshedSecond, refreshedFirst])
     ).toBe(false)
     expect(next).toEqual([refreshedFirst, refreshedSecond])
+  })
+
+  it('merges landing refresh auto-merge state changes without reordering GitHub rows', () => {
+    const first = {
+      ...workItem('pr-1', 'repo-1'),
+      type: 'pr' as const,
+      state: 'open' as const,
+      autoMergeEnabled: false,
+      mergeQueueRequired: null,
+      updatedAt: '2026-01-01'
+    }
+    const refreshedFirst = {
+      ...first,
+      autoMergeEnabled: true,
+      mergeQueueRequired: true
+    }
+
+    const next = reconcileTaskPageItemsAfterLandingRefresh([first], [refreshedFirst])
+
+    expect(next).toEqual([refreshedFirst])
+    expect(shouldReplaceTaskPageItemsAfterRefresh([first], [refreshedFirst])).toBe(false)
   })
 
   it('replaces GitHub landing refresh rows when membership changes', () => {

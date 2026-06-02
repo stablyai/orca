@@ -19,6 +19,16 @@ export function checksPanelAsyncResultKey(
   }`
 }
 
+export function checksPanelHostedReviewAsyncResultKey(
+  repoId: string,
+  branch: string,
+  provider: string,
+  reviewNumber: number | null,
+  headSha?: string | null
+): string {
+  return `${repoId}::${branch}::${provider}::${reviewNumber ?? 'none'}::${headSha ?? 'none'}`
+}
+
 export function shouldCommitChecksPanelAsyncResult(
   currentKey: string,
   requestKey: string

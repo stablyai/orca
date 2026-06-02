@@ -35,6 +35,7 @@ export class UnixSocketTransport implements RpcTransport {
   private readonly keepaliveIntervalMs: number
   private server: Server | null = null
   private messageHandler: MessageHandler | null = null
+  private readonly activeSockets = new Set<Socket>()
 
   constructor({ endpoint, kind, keepaliveIntervalMs }: UnixSocketTransportOptions) {
     this.endpoint = endpoint
@@ -81,7 +82,7 @@ export class UnixSocketTransport implements RpcTransport {
     if (!server) {
       return
     }
-    await new Promise<void>((resolve, reject) => {
+    const closePromise = new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
           reject(error)
@@ -90,12 +91,19 @@ export class UnixSocketTransport implements RpcTransport {
         resolve()
       })
     })
+    // Why: server.close() stops accepting new connections but waits for
+    // existing sockets; long-poll keepalives can otherwise hold shutdown open.
+    for (const socket of Array.from(this.activeSockets)) {
+      socket.destroy()
+    }
+    await closePromise
     if (this.kind === 'unix' && existsSync(this.endpoint)) {
       rmSync(this.endpoint, { force: true })
     }
   }
 
   private handleConnection(socket: Socket): void {
+    this.activeSockets.add(socket)
     let buffer = ''
     let oversized = false
     // Why: each in-flight dispatch registers its own AbortController here so
@@ -104,7 +112,7 @@ export class UnixSocketTransport implements RpcTransport {
     // completing one dispatch does not abort any other dispatch still running
     // on the same socket — future-proofing for a persistent CLI socket that
     // multiplexes sequential requests.
-    const inflight = new Set<AbortController>()
+    const inflight = new Set<() => void>()
 
     socket.setEncoding('utf8')
     socket.setNoDelay(true)
@@ -114,11 +122,12 @@ export class UnixSocketTransport implements RpcTransport {
     socket.on('error', () => {
       socket.destroy()
     })
-    socket.on('close', () => {
-      for (const ctrl of inflight) {
-        ctrl.abort()
+    socket.once('close', () => {
+      for (const cleanup of inflight) {
+        cleanup()
       }
       inflight.clear()
+      this.activeSockets.delete(socket)
     })
     socket.on('data', (chunk: string) => {
       if (oversized) {
@@ -151,29 +160,37 @@ export class UnixSocketTransport implements RpcTransport {
   // Why: the keepalive timer is opt-in per request via `startKeepalive()`.
   // Short RPCs never call it and pay no timer overhead; only long-poll
   // handlers (e.g. orchestration.check --wait) arm it. See §3.1.
-  private dispatchMessage(
-    socket: Socket,
-    rawMessage: string,
-    inflight: Set<AbortController>
-  ): void {
+  private dispatchMessage(socket: Socket, rawMessage: string, inflight: Set<() => void>): void {
     let replied = false
     let keepaliveTimer: NodeJS.Timeout | null = null
-    // Why: per-dispatch AbortController so completing one request does not
-    // abort any sibling request running on the same connection. The
-    // connection-level `socket.on('close')` iterates `inflight` to cancel all
-    // outstanding dispatches at once.
+    // Why: each dispatch needs its own abort signal and keepalive timer
+    // cleanup. Socket close runs every cleanup without touching sibling
+    // dispatches that already replied on the same connection.
     const abortController = new AbortController()
-    inflight.add(abortController)
+    let cleanedUp = false
+    const cleanupDispatch = (abort: boolean): void => {
+      if (cleanedUp) {
+        return
+      }
+      cleanedUp = true
+      if (keepaliveTimer) {
+        clearInterval(keepaliveTimer)
+        keepaliveTimer = null
+      }
+      if (abort) {
+        abortController.abort()
+      }
+      inflight.delete(abortDispatch)
+    }
+    const abortDispatch = (): void => cleanupDispatch(true)
+    inflight.add(abortDispatch)
 
     const reply = (response: string): void => {
       if (replied) {
         return
       }
       replied = true
-      inflight.delete(abortController)
-      if (keepaliveTimer) {
-        clearInterval(keepaliveTimer)
-      }
+      cleanupDispatch(false)
       if (!socket.destroyed && socket.writable) {
         socket.write(`${response}\n`)
       }
@@ -185,6 +202,7 @@ export class UnixSocketTransport implements RpcTransport {
       }
       keepaliveTimer = setInterval(() => {
         if (replied || socket.destroyed || !socket.writable) {
+          cleanupDispatch(socket.destroyed || !socket.writable)
           return
         }
         socket.write('{"_keepalive":true}\n')

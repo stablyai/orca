@@ -7,11 +7,11 @@ type EnsureOrcaCliAvailableOptions = {
 }
 
 export const AGENT_SKILL_CLI_PREREQUISITE_NOTICE =
-  'Before opening setup, Orca may show a system prompt to register the orca command on PATH.'
+  'Before opening setup, Orca may show a system prompt to register the Orca CLI command on PATH.'
 
 export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Orca needs to register its CLI on PATH.'
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
-  'Approve the system prompt so skill setup can use the orca command.'
+  'Approve the system prompt so skill setup can use the Orca CLI command.'
 
 export function isOrcaCliAvailableOnPath(status: CliInstallStatus | null | undefined): boolean {
   return status?.state === 'installed' && status.pathConfigured
@@ -42,7 +42,7 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
 
     return status
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : 'Failed to register `orca` in PATH.')
+    toast.error(error instanceof Error ? error.message : 'Failed to register the Orca CLI in PATH.')
     return null
   }
 }
@@ -78,8 +78,8 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
 
   if (!status.pathConfigured) {
     // Why: the skill installer opens a real shell; agents only get the expected
-    // Orca affordances when that shell can resolve the `orca` command.
-    toast.warning('`orca` is not visible on PATH yet', {
+    // Orca affordances when that shell can resolve the Orca CLI command.
+    toast.warning('Orca CLI is not visible on PATH yet', {
       description:
         status.detail ?? 'Restart your shell or add the Orca CLI directory to PATH before setup.'
     })

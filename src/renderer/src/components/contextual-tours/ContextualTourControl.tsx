@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type { ContextualTourStepControl } from '../../../../shared/contextual-tours'
+import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from './contextual-tour-composer-events'
 
 export function ContextualTourControl({
   control
@@ -11,6 +12,18 @@ export function ContextualTourControl({
   switch (control.kind) {
     case 'auto-rename-branch-from-work':
       return <AutoRenameBranchFromWorkControl />
+  }
+}
+
+export function toggleAutoRenameBranchFromWork(args: {
+  enabled: boolean
+  updateSettings: (settings: { autoRenameBranchFromWork: boolean }) => void | Promise<unknown>
+  dispatchEvent: (event: Event) => void
+}): void {
+  const nextEnabled = !args.enabled
+  void args.updateSettings({ autoRenameBranchFromWork: nextEnabled })
+  if (nextEnabled) {
+    args.dispatchEvent(new Event(CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT))
   }
 }
 
@@ -24,7 +37,7 @@ function AutoRenameBranchFromWorkControl(): JSX.Element {
         <div className="min-w-0">
           <div className="text-xs font-medium text-foreground">Auto-name from first message</div>
           <div className="mt-0.5 text-[11px] leading-4 text-muted-foreground">
-            Works when you leave the generated name unchanged.
+            Auto-generates a new name when you leave this text box empty.
           </div>
         </div>
         <button
@@ -33,7 +46,11 @@ function AutoRenameBranchFromWorkControl(): JSX.Element {
           aria-checked={enabled}
           aria-label="Auto-name workspace from first agent message"
           onClick={() => {
-            void updateSettings({ autoRenameBranchFromWork: !enabled })
+            toggleAutoRenameBranchFromWork({
+              enabled,
+              updateSettings,
+              dispatchEvent: (event) => window.dispatchEvent(event)
+            })
           }}
           className={cn(
             'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors',

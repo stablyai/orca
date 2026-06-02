@@ -1,4 +1,4 @@
-import type { CheckStatus, PRConflictSummary, PRMergeableState } from './types'
+import type { CheckStatus, PRConflictSummary, PRMergeableState, PRReviewDecision } from './types'
 
 export type HostedReviewProvider =
   | 'github'
@@ -19,6 +19,10 @@ export type HostedReviewInfo = {
   status: CheckStatus
   updatedAt: string
   mergeable: PRMergeableState
+  reviewDecision?: PRReviewDecision | null
+  autoMergeEnabled?: boolean
+  mergeQueueRequired?: boolean | null
+  mergeStateStatus?: string | null
   headSha?: string
   conflictSummary?: PRConflictSummary
 }
@@ -156,6 +160,7 @@ export type HostedReviewQueueSummary = {
   updatedAt: string
   lastViewedAt?: number
   mergeable: PRMergeableState
+  mergeStateStatus?: string | null
   checksStatus: CheckStatus
   reviewDecision?: HostedReviewDecision
   threadSummary?: HostedReviewThreadSummary

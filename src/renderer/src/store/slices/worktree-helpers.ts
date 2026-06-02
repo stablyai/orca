@@ -3,23 +3,33 @@ import type {
   CreateSparseCheckoutRequest,
   DetectedWorktree,
   DetectedWorktreeListResult,
+  ForceDeleteWorktreeBranchResult,
   GitPushTarget,
+  RemoveWorktreeResult,
   SetupDecision,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
+  WorktreeStartupLaunch,
   Worktree,
   WorktreeBaseStatusEvent,
   WorktreeLineage,
   WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
 } from '../../../../shared/types'
+import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
   error: string | null
   canForceDelete: boolean
+}
+
+export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
+
+export type WorktreeMetaUpdateOptions = {
+  shouldApply?: WorktreeMetaUpdateGuard
 }
 
 export type WorktreeSlice = {
@@ -44,9 +54,10 @@ export type WorktreeSlice = {
    * their PTYs, and the resulting `updateTabPtyId`/`clearTabPtyId` calls
    * are all side-effects of the click — not real activity. On first
    * activation we tag every terminal tab with `pendingActivationSpawn` so
-   * the bump is suppressed. After the first activation we do NOT re-tag,
-   * so subsequent events on the worktree (codex restart, new pane spawn,
-   * agent output) count normally. Session-only; never persisted.
+   * the bump is suppressed. Split-layout tabs may carry a numeric count so
+   * every click-driven pane remount is suppressed. After the first activation
+   * we do NOT re-tag, so subsequent events on the worktree (codex restart,
+   * new pane spawn, agent output) count normally. Session-only; never persisted.
    */
   everActivatedWorktreeIds: Set<string>
   /**
@@ -67,7 +78,7 @@ export type WorktreeSlice = {
    */
   hasHydratedWorktreePurge: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
-  fetchWorktrees: (repoId: string) => Promise<void>
+  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
   fetchAllWorktrees: () => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
   updateWorktreeLineage: (
@@ -93,18 +104,31 @@ export type WorktreeSlice = {
     branchNameOverride?: string,
     workspaceStatus?: WorkspaceStatus,
     linkedGitLabMR?: number,
-    linkedGitLabIssue?: number
+    linkedGitLabIssue?: number,
+    startup?: WorktreeStartupLaunch
   ) => Promise<CreateWorktreeResult>
+  prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
     force?: boolean
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
+  markWorktreesDeleting: (worktreeIds: readonly string[]) => void
+  forceDeletePreservedBranch: (
+    worktreeId: string,
+    branchName: string,
+    expectedHead: string
+  ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
-  updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
+  updateWorktreeMeta: (
+    worktreeId: string,
+    updates: Partial<WorktreeMeta>,
+    options?: WorktreeMetaUpdateOptions
+  ) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>
   markWorktreeUnread: (worktreeId: string) => void
+  observeTerminalGitHubPullRequestLink: (worktreeId: string, link: TerminalGitHubPRLink) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches
    *  ghostty's "show until interact" model. Persists isUnread=false. */

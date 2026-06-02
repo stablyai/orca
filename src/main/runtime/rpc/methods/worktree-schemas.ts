@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -51,6 +52,13 @@ export const WorktreeCreate = z
     linkedGitLabIssue: TriStateLinkedIssue,
     comment: OptionalString,
     displayName: OptionalString,
+    telemetrySource: z
+      .unknown()
+      .transform((value) => {
+        const parsed = workspaceSourceSchema.safeParse(value)
+        return parsed.success ? parsed.data : undefined
+      })
+      .optional(),
     workspaceStatus: OptionalString,
     manualOrder: OptionalFiniteNumber,
     sparseCheckout: z
@@ -90,6 +98,7 @@ export const WorktreeCreate = z
     // Why: mobile clients pass a startup command (e.g. 'claude') so the first
     // terminal pane launches the selected agent instead of an idle shell.
     startupCommand: OptionalString,
+    startupEnv: z.record(z.string(), z.string()).optional(),
     // Why: task-driven mobile creates need desktop parity: the host chooses
     // the same default/detected agent and drafts the linked issue/PR URL into it.
     startupDraft: OptionalString,
@@ -106,6 +115,14 @@ export const WorktreeCreate = z
       })
     }
   })
+
+export const WorktreePrefetchCreateBase = z.object({
+  repo: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing repo selector')),
+  baseBranch: OptionalString
+})
 
 export const WorktreeSet = WorktreeSelector.extend({
   displayName: OptionalString,
@@ -151,6 +168,17 @@ export const WorktreeSet = WorktreeSelector.extend({
 export const WorktreeRemove = WorktreeSelector.extend({
   force: OptionalBoolean,
   runHooks: OptionalBoolean
+})
+
+export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
+  branchName: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing branch name')),
+  expectedHead: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string().min(1, 'Missing expected branch head'))
 })
 
 export const WorktreeResolvePrBase = z.object({

@@ -31,6 +31,7 @@ export type KeybindingActionId =
   | 'app.forceReload'
   | 'file.exportPdf'
   | 'workspace.create'
+  | 'workspace.delete'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -228,6 +229,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'create', 'new workspace'],
     defaultBindings: platformBindings(['Mod+N', 'Mod+Shift+N'])
+  },
+  {
+    id: 'workspace.delete',
+    title: 'Delete Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'workspace',
+      'current workspace',
+      'worktree',
+      'delete',
+      'remove',
+      'trash'
+    ],
+    // Why: ship the command now without claiming a default chord; user
+    // overrides still win automatically when a future default is assigned.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
   },
   {
     id: 'voice.dictation',
@@ -991,12 +1012,6 @@ function normalizeKeybindingArrayWithOptions(
   return normalized
 }
 
-export function normalizeKeybindingArray(
-  input: readonly string[]
-): KeybindingValidationResult | string[] {
-  return normalizeKeybindingArrayWithOptions(input)
-}
-
 function normalizeOptionsForAction(actionId: KeybindingActionId): NormalizeKeybindingOptions {
   return {
     allowBareKeybindings: DEFINITIONS_BY_ID.get(actionId)?.allowBareKeybindings === true
@@ -1438,31 +1453,6 @@ export function formatKeybindingList(
     .join(', ')
 }
 
-export function formatElectronAccelerator(binding: string): string | null {
-  const parsed = parseKeybinding(binding)
-  if (!parsed) {
-    return null
-  }
-  const parts: string[] = []
-  if (parsed.mod) {
-    parts.push('CmdOrCtrl')
-  }
-  if (parsed.meta) {
-    parts.push('Command')
-  }
-  if (parsed.control) {
-    parts.push('Control')
-  }
-  if (parsed.alt) {
-    parts.push('Alt')
-  }
-  if (parsed.shift) {
-    parts.push('Shift')
-  }
-  parts.push(formatElectronKeyToken(parsed.key))
-  return parts.join('+')
-}
-
 function formatKeyToken(token: string): string {
   const labels: Record<string, string> = {
     BracketLeft: '[',
@@ -1491,35 +1481,6 @@ function formatKeyToken(token: string): string {
     Delete: 'Delete',
     Insert: 'Insert',
     Tab: 'Tab',
-    Escape: 'Esc',
-    Space: 'Space'
-  }
-  return labels[token] ?? token
-}
-
-function formatElectronKeyToken(token: string): string {
-  const labels: Record<string, string> = {
-    BracketLeft: '[',
-    BracketRight: ']',
-    Minus: '-',
-    Underscore: '_',
-    Equal: '=',
-    Plus: 'Plus',
-    Comma: ',',
-    Period: '.',
-    Slash: '/',
-    Backslash: '\\',
-    Semicolon: ';',
-    Quote: "'",
-    Backquote: '`',
-    ArrowLeft: 'Left',
-    ArrowRight: 'Right',
-    ArrowUp: 'Up',
-    ArrowDown: 'Down',
-    PageUp: 'PageUp',
-    PageDown: 'PageDown',
-    NumpadAdd: 'numadd',
-    NumpadSubtract: 'numsub',
     Escape: 'Esc',
     Space: 'Space'
   }
@@ -1562,8 +1523,4 @@ export function findKeybindingConflicts(
       binding: conflictKey.slice(conflictKey.indexOf('\u0000') + 1),
       actionIds
     }))
-}
-
-export function getDefaultKeybindingOverrides(): KeybindingOverrides {
-  return {}
 }

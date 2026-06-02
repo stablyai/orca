@@ -22,6 +22,8 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
+import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
+import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
@@ -49,16 +51,19 @@ export function BottomDrawer({
   zIndex
 }: Props) {
   const [mounted, setMounted] = useState(visible)
+  const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
-  useEffect(() => {
-    if (visible) {
-      setMounted(true)
-    }
-  }, [visible])
+  // Why: opening drawers should mount before commit; waiting for a passive
+  // Effect adds a null render before every drawer can animate in.
+  if (resolvedMounted !== mounted) {
+    setMounted(resolvedMounted)
+  }
 
   // Why: hidden drawers are rendered by parent screens even while closed; keep
   // their Reanimated/Gesture setup out of hot paths like commit-message typing.
-  if (!mounted) return null
+  if (!resolvedMounted) {
+    return null
+  }
 
   return (
     <MountedBottomDrawer
@@ -93,6 +98,10 @@ function MountedBottomDrawer({
   const contentDragCanDismiss = useSharedValue(false)
   const { height: screenHeight } = useWindowDimensions()
   const insets = useSafeAreaInsets()
+  // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
+  // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
+  // transforms below) is unchanged, so phone behavior stays identical.
+  const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
 
   useEffect(() => {
     if (visible) {
@@ -114,7 +123,9 @@ function MountedBottomDrawer({
   // useAnimatedKeyboard). Keyboard event listeners work on both platforms
   // and give us the exact height to shift the drawer by.
   useEffect(() => {
-    if (!visible) return
+    if (!visible) {
+      return
+    }
 
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
@@ -135,7 +146,9 @@ function MountedBottomDrawer({
   }, [visible, insets.bottom])
 
   useEffect(() => {
-    if (!visible) return
+    if (!visible) {
+      return
+    }
 
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       onClose()
@@ -208,7 +221,9 @@ function MountedBottomDrawer({
       }
     })
     .onEnd((e) => {
-      if (!contentDragCanDismiss.value || scrollOffsetY.value > TOP_SCROLL_EPSILON) return
+      if (!contentDragCanDismiss.value || scrollOffsetY.value > TOP_SCROLL_EPSILON) {
+        return
+      }
 
       const translationY = e.translationY - contentDragStartY.value
       if (translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
@@ -258,11 +273,13 @@ function MountedBottomDrawer({
           <Pressable style={StyleSheet.absoluteFill} onPress={dismiss} />
         </Animated.View>
 
-        <View style={styles.anchor} pointerEvents="box-none">
+        <View style={[styles.anchor, isWideLayout && styles.anchorWide]} pointerEvents="box-none">
           <Animated.View
             style={[
               styles.drawer,
               {
+                width: '100%',
+                maxWidth: isWideLayout ? modalMaxWidth : undefined,
                 maxHeight: screenHeight - insets.top - spacing.lg,
                 paddingBottom: insets.bottom + spacing.lg
               },
@@ -339,6 +356,9 @@ const styles = StyleSheet.create({
   anchor: {
     flex: 1,
     justifyContent: 'flex-end'
+  },
+  anchorWide: {
+    alignItems: 'center'
   },
   drawer: {
     backgroundColor: colors.bgBase,

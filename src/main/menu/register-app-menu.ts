@@ -21,6 +21,7 @@ export function getNextDefaultOnAppearanceSettingValue(current: boolean | undefi
 
 type RegisterAppMenuOptions = {
   onOpenSettings: () => void
+  onOpenSetupGuide: (window?: Electron.BaseWindow | null) => void
   onOpenFeatureTour: (window?: Electron.BaseWindow | null) => void
   onOpenCrashReport: (window?: Electron.BaseWindow | null) => void
   onCheckForUpdates: (options: { includePrerelease: boolean }) => void
@@ -38,6 +39,7 @@ type RegisterAppMenuOptions = {
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const {
     onOpenSettings,
+    onOpenSetupGuide,
     onOpenFeatureTour,
     onOpenCrashReport,
     onCheckForUpdates,
@@ -104,6 +106,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   const featureTourItem: Electron.MenuItemConstructorOptions = {
     label: 'Explore Orca',
     click: (_menuItem, window) => onOpenFeatureTour(window)
+  }
+
+  const setupGuideItem: Electron.MenuItemConstructorOptions = {
+    label: 'Getting Started with Orca',
+    click: (_menuItem, window) => onOpenSetupGuide(window)
   }
 
   const crashReportItem: Electron.MenuItemConstructorOptions = {
@@ -284,6 +291,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
       crashReportItem,
       { type: 'separator' },
       featureTourItem,
+      setupGuideItem,
       ...(isMac
         ? []
         : ([

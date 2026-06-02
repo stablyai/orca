@@ -141,6 +141,39 @@ describe('getUpstreamStatus', () => {
     })
   })
 
+  it('keeps a configured upstream whose remote name contains a slash', async () => {
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'symbolic-ref') {
+        return Promise.resolve({ stdout: 'feature\n' })
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        return Promise.resolve({ stdout: 'origin/team/feature\n' })
+      }
+      if (args[0] === 'remote') {
+        return Promise.resolve({ stdout: 'origin\norigin/team\n' })
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
+        return Promise.resolve({ stdout: 'origin-feature-oid\n' })
+      }
+      if (args[0] === 'rev-list' && args.includes('HEAD...origin/team/feature')) {
+        return Promise.resolve({ stdout: '2\t0\n' })
+      }
+      if (args[0] === 'rev-list' && args.includes('HEAD...origin/feature')) {
+        return Promise.resolve({ stdout: '9\t9\n' })
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+
+    const result = await getUpstreamStatus('/repo')
+
+    expect(result).toEqual({
+      hasUpstream: true,
+      upstreamName: 'origin/team/feature',
+      ahead: 2,
+      behind: 0
+    })
+  })
+
   it('uses an explicit publish target instead of the configured upstream', async () => {
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: '', stderr: '' })

@@ -6,6 +6,7 @@ import {
   type HostProfile,
   type StoredHostProfile
 } from './types'
+import { getNextHostNameFromHosts } from './host-names'
 
 const STORAGE_KEY = 'orca:hosts'
 // Why: SecureStore keys must match [A-Za-z0-9._-]; colons are rejected.
@@ -38,7 +39,9 @@ let inflightLoad: Promise<HostProfile[]> | null = null
 export async function loadHosts(): Promise<HostProfile[]> {
   // Why: deduplicate concurrent loadHosts() calls so multiple screens
   // mounting simultaneously share one Keychain read pass.
-  if (inflightLoad) return inflightLoad
+  if (inflightLoad) {
+    return inflightLoad
+  }
   inflightLoad = doLoadHosts().finally(() => {
     inflightLoad = null
   })
@@ -47,14 +50,18 @@ export async function loadHosts(): Promise<HostProfile[]> {
 
 async function doLoadHosts(): Promise<HostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  if (!raw) return []
+  if (!raw) {
+    return []
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(raw)
   } catch {
     return []
   }
-  if (!Array.isArray(parsed)) return []
+  if (!Array.isArray(parsed)) {
+    return []
+  }
 
   const out: HostProfile[] = []
   for (const item of parsed) {
@@ -66,7 +73,9 @@ async function doLoadHosts(): Promise<HostProfile[]> {
       continue
     }
     const stored = StoredHostProfileSchema.safeParse(item)
-    if (!stored.success) continue
+    if (!stored.success) {
+      continue
+    }
 
     let token = tokenCache.get(stored.data.id)
     if (!token) {
@@ -96,14 +105,20 @@ async function doLoadHosts(): Promise<HostProfile[]> {
 
 async function loadStoredHosts(): Promise<StoredHostProfile[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY)
-  if (!raw) return []
+  if (!raw) {
+    return []
+  }
   try {
     const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
+    if (!Array.isArray(parsed)) {
+      return []
+    }
     return parsed.flatMap((item) => {
       // Why: same drop-old-records rule as loadHosts; keeps internal
       // mutators from re-persisting pre-v0.0.3 entries.
-      if (item && typeof item === 'object' && 'deviceToken' in item) return []
+      if (item && typeof item === 'object' && 'deviceToken' in item) {
+        return []
+      }
       const result = StoredHostProfileSchema.safeParse(item)
       return result.success ? [result.data] : []
     })
@@ -161,14 +176,7 @@ export async function renameHost(hostId: string, newName: string): Promise<void>
 
 export async function getNextHostName(): Promise<string> {
   const hosts = await loadStoredHosts()
-  const existingNumbers = hosts
-    .map((h) => {
-      const match = h.name.match(/^Host (\d+)$/)
-      return match ? parseInt(match[1]!, 10) : 0
-    })
-    .filter((n) => n > 0)
-  const next = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1
-  return `Host ${next}`
+  return getNextHostNameFromHosts(hosts)
 }
 
 export async function updateLastConnected(hostId: string): Promise<void> {

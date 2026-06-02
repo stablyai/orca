@@ -6,6 +6,7 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
 import { cn } from '@/lib/utils'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
@@ -39,6 +40,12 @@ const TASK_PROVIDER_OPTIONS: readonly {
     label: 'Linear',
     description: 'Show Linear in the Tasks source picker and sidebar shortcuts.',
     Icon: ({ className }) => <LinearIcon className={className} />
+  },
+  {
+    id: 'jira',
+    label: 'Jira',
+    description: 'Show Jira in the Tasks source picker and sidebar shortcuts.',
+    Icon: ({ className }) => <JiraIcon className={className} />
   }
 ]
 
@@ -79,6 +86,8 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
             'github',
             'gitlab',
             'linear',
+            'jira',
+            'atlassian',
             'display',
             'hide'
           ]}

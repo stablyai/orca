@@ -12,6 +12,10 @@ function item(id: string, depth = 0): { type: 'item'; worktree: { id: string }; 
   return { type: 'item', worktree: { id }, depth }
 }
 
+function importedCard(): { type: 'imported-worktrees-card' } {
+  return { type: 'imported-worktrees-card' }
+}
+
 describe('getWorktreeDragUnitGroups', () => {
   it('treats expanded lineage descendants as part of the parent drag unit', () => {
     const groups = getWorktreeDragUnitGroups([
@@ -30,6 +34,34 @@ describe('getWorktreeDragUnitGroups', () => {
           { worktreeId: 'parent', worktreeIds: ['parent', 'child', 'grandchild'] },
           { worktreeId: 'sibling', worktreeIds: ['sibling'] }
         ]
+      }
+    ])
+  })
+
+  it('ignores imported worktree card rows without splitting drag groups', () => {
+    const groups = getWorktreeDragUnitGroups([
+      header('repo:one'),
+      item('main'),
+      importedCard(),
+      item('feature'),
+      header('repo:two'),
+      importedCard(),
+      item('other')
+    ])
+
+    expect(groups).toEqual([
+      {
+        key: 'repo:one',
+        worktreeIds: ['main', 'feature'],
+        units: [
+          { worktreeId: 'main', worktreeIds: ['main'] },
+          { worktreeId: 'feature', worktreeIds: ['feature'] }
+        ]
+      },
+      {
+        key: 'repo:two',
+        worktreeIds: ['other'],
+        units: [{ worktreeId: 'other', worktreeIds: ['other'] }]
       }
     ])
   })

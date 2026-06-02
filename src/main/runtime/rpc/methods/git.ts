@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this table is the runtime git RPC contract; splitting it would make method coverage harder to audit. */
 import { defineMethod, type RpcMethod } from '../core'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
@@ -57,6 +58,11 @@ export const GIT_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => runtime.abortRuntimeGitMerge(params.worktree)
   }),
   defineMethod({
+    name: 'git.abortRebase',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+  }),
+  defineMethod({
     name: 'git.diff',
     params: GitDiff,
     handler: async (params, { runtime }) =>
@@ -102,6 +108,14 @@ export const GIT_METHODS: RpcMethod[] = [
       params.pushTarget === undefined
         ? runtime.pullRuntimeGit(params.worktree)
         : runtime.pullRuntimeGit(params.worktree, params.pushTarget)
+  }),
+  defineMethod({
+    name: 'git.fastForward',
+    params: GitTargetedRemote,
+    handler: async (params, { runtime }) =>
+      params.pushTarget === undefined
+        ? runtime.fastForwardRuntimeGit(params.worktree)
+        : runtime.fastForwardRuntimeGit(params.worktree, params.pushTarget)
   }),
   defineMethod({
     name: 'git.rebaseFromBase',

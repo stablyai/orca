@@ -19,6 +19,7 @@ export type CmdJActiveGroupSnapshot = {
 }
 
 export type CmdJQuickActionContext = {
+  activeView: AppState['activeView']
   activeWorktreeId: string | null
   activeWorktree: Worktree | null
   isLoading: boolean
@@ -29,6 +30,7 @@ export type CmdJQuickActionContext = {
   openNewMarkdownFile: (groupId: string) => Promise<void>
   openNewTerminalTab: (groupId: string) => Promise<void>
   openCreateWorkspace: () => void
+  deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
 }
 
@@ -108,6 +110,21 @@ export function getWorkspaceScopedActionAvailability(
   return { available: true }
 }
 
+export function getCurrentWorkspaceActionAvailability(
+  ctx: Pick<CmdJQuickActionContext, 'activeView' | 'activeWorktreeId' | 'isLoading' | 'sshStatus'>
+): CmdJQuickActionAvailability {
+  if (ctx.activeView !== 'terminal' || !ctx.activeWorktreeId) {
+    return { available: false, reason: 'no-active-workspace' }
+  }
+  if (ctx.isLoading) {
+    return { available: false, reason: 'loading' }
+  }
+  if (ctx.sshStatus != null && ctx.sshStatus !== 'connected') {
+    return { available: false, reason: 'ssh-disconnected' }
+  }
+  return { available: true }
+}
+
 export function buildCmdJQuickActionContext(args: {
   state: AppState
   activeGroupSnapshot: CmdJActiveGroupSnapshot | null
@@ -115,6 +132,7 @@ export function buildCmdJQuickActionContext(args: {
   openNewMarkdownFile: (groupId: string) => Promise<void>
   openNewTerminalTab: (groupId: string) => Promise<void>
   openCreateWorkspace: () => void
+  deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
 }): CmdJQuickActionContext {
   const activeWorktreeId = args.state.activeWorktreeId
@@ -135,6 +153,7 @@ export function buildCmdJQuickActionContext(args: {
       : 'local-desktop'
 
   return {
+    activeView: args.state.activeView,
     activeWorktreeId,
     activeWorktree,
     isLoading,
@@ -145,6 +164,7 @@ export function buildCmdJQuickActionContext(args: {
     openNewMarkdownFile: args.openNewMarkdownFile,
     openNewTerminalTab: args.openNewTerminalTab,
     openCreateWorkspace: args.openCreateWorkspace,
+    deleteActiveWorkspace: args.deleteActiveWorkspace,
     openAddQuickCommand: args.openAddQuickCommand
   }
 }

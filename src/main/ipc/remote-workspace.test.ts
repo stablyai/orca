@@ -35,14 +35,15 @@ vi.mock('./remote-workspace-events', () => ({
 }))
 
 import {
+  _resetRemoteWorkspaceCachesForTests,
   registerRemoteWorkspaceHandlers,
   remoteWorkspaceSessionMatchesSnapshot
 } from './remote-workspace'
 
-function snapshot(session: RemoteWorkspaceSession): RemoteWorkspaceSnapshot {
+function snapshot(session: RemoteWorkspaceSession, revision = 7): RemoteWorkspaceSnapshot {
   return {
     namespace: 'target',
-    revision: 7,
+    revision,
     updatedAt: 123,
     schemaVersion: 1,
     session
@@ -50,6 +51,7 @@ function snapshot(session: RemoteWorkspaceSession): RemoteWorkspaceSnapshot {
 }
 
 const baseSession = {
+  activeRepoId: null,
   activeWorktreeId: null,
   activeTabId: null,
   tabsByWorktree: {},
@@ -148,11 +150,15 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
   const requestByTargetId = new Map<string, ReturnType<typeof vi.fn>>()
   const muxByTargetId = new Map<string, { request: ReturnType<typeof vi.fn> }>()
+  const getRepoMock = vi.fn<Store['getRepo']>()
+  const getWorkspaceSessionMock = vi.fn<Store['getWorkspaceSession']>()
   const store = {
-    getRepo: vi.fn()
+    getRepo: getRepoMock,
+    getWorkspaceSession: getWorkspaceSessionMock
   } as unknown as Store
 
   beforeEach(() => {
+    _resetRemoteWorkspaceCachesForTests()
     handlers.clear()
     requestByTargetId.clear()
     muxByTargetId.clear()
@@ -165,6 +171,21 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
     getSshConnectionStoreMock.mockReturnValue({
       listTargets: () => targets
     })
+    getRepoMock.mockReset()
+    getWorkspaceSessionMock.mockReset()
+    getWorkspaceSessionMock.mockReturnValue(baseSession)
+    getRepoMock.mockImplementation((repoId: string) =>
+      repoId === 'repo-target-1'
+        ? ({
+            id: 'repo-target-1',
+            path: '/remote/repo',
+            displayName: 'Repo',
+            badgeColor: 'blue',
+            addedAt: 1,
+            connectionId: 'target-1'
+          } as never)
+        : undefined
+    )
     getActiveMultiplexerMock.mockReset()
     getActiveMultiplexerMock.mockImplementation((targetId: string) => {
       let mux = muxByTargetId.get(targetId)
@@ -202,7 +223,7 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
   })
 
   async function callSetForConnectedTargets(args: {
-    session: WorkspaceSessionState
+    session?: WorkspaceSessionState
     hydratedTargetIds?: unknown
   }): Promise<unknown> {
     const handler = handlers.get('remoteWorkspace:setForConnectedTargets')
@@ -241,5 +262,38 @@ describe('remoteWorkspace:setForConnectedTargets', () => {
       })
     )
     expect(requestByTargetId.get('target-2')).toBeUndefined()
+  })
+
+  it('can export from the persisted store session when no session argument is provided', async () => {
+    getWorkspaceSessionMock.mockReturnValue({
+      activeRepoId: 'repo-target-1',
+      activeWorktreeId: 'repo-target-1::/repo',
+      activeTabId: 'tab-store',
+      tabsByWorktree: {
+        'repo-target-1::/repo': [
+          {
+            id: 'tab-store',
+            title: 'Store shell',
+            ptyId: 'pty-store',
+            worktreeId: 'repo-target-1::/repo'
+          } as never
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    await callSetForConnectedTargets({ hydratedTargetIds: ['target-1'] })
+
+    expect(requestByTargetId.get('target-1')).toHaveBeenCalledWith(
+      'workspace.patch',
+      expect.objectContaining({
+        patch: expect.objectContaining({
+          session: expect.objectContaining({
+            activeWorktreePath: '/repo',
+            activeTabId: 'tab-store'
+          })
+        })
+      })
+    )
   })
 })

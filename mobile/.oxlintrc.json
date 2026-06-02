@@ -1,3 +1,23 @@
 {
-  "rules": {}
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "extends": ["../.oxlintrc.json"],
+  "rules": {
+    "react-hooks/exhaustive-deps": "off",
+    "react/no-unescaped-entities": "off",
+    "typescript/array-type": "off",
+    "typescript/consistent-type-definitions": "off",
+    "typescript/consistent-type-imports": "off",
+    "prefer-template": "off",
+    "no-useless-return": "off",
+    "unicorn/prefer-at": "off",
+    "unicorn/prefer-ternary": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.ts", "**/*.tsx"],
+      "rules": {
+        "max-lines": "off"
+      }
+    }
+  ]
 }

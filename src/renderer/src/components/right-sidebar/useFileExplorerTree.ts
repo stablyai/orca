@@ -5,7 +5,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import type { DirCache, TreeNode } from './file-explorer-types'
 import { splitPathSegments } from './path-tree'
 import { shouldIncludeFileExplorerEntry } from './file-explorer-entries'
-import { readRuntimeDirectory } from '@/runtime/runtime-file-client'
+import { readRuntimeDirectory, statRuntimePath } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-tracker'
 
@@ -16,7 +16,13 @@ type UseFileExplorerTreeResult = {
   rowsByPath: Map<string, TreeNode>
   rootCache: DirCache | undefined
   rootError: string | null
-  loadDir: (dirPath: string, depth: number, options?: { force?: boolean }) => Promise<boolean>
+  loadDir: (
+    dirPath: string,
+    depth: number,
+    options?: { force?: boolean; failOnError?: boolean }
+  ) => Promise<boolean>
+  statPath: (path: string) => Promise<{ isDirectory: boolean }>
+  markPathAsDirectory: (path: string) => void
   refreshTree: () => Promise<void>
   refreshDir: (dirPath: string) => Promise<void>
   resetAndLoad: () => void
@@ -34,7 +40,11 @@ export function useFileExplorerTree(
   const dirLoadTrackerRef = useRef(createFileExplorerDirLoadTracker())
 
   const loadDir = useCallback(
-    async (dirPath: string, depth: number, options?: { force?: boolean }) => {
+    async (
+      dirPath: string,
+      depth: number,
+      options?: { force?: boolean; failOnError?: boolean }
+    ) => {
       const cache = dirCacheRef.current
       if (!options?.force && (cache[dirPath]?.children.length > 0 || cache[dirPath]?.loading)) {
         return true
@@ -77,6 +87,7 @@ export function useFileExplorerTree(
               ? normalizeRelativePath(joinPath(dirPath, entry.name).slice(worktreePath.length + 1))
               : entry.name,
             isDirectory: entry.isDirectory,
+            isSymlink: entry.isSymlink,
             depth: depth + 1
           }))
         setDirCache((prev) => ({ ...prev, [dirPath]: { children, loading: false } }))
@@ -93,8 +104,44 @@ export function useFileExplorerTree(
           setRootError(error instanceof Error ? error.message : String(error))
         }
         setDirCache((prev) => ({ ...prev, [dirPath]: { children: [], loading: false } }))
-        return true
+        return !options?.failOnError
       }
+    },
+    [activeWorktreeId, worktreePath]
+  )
+
+  const markPathAsDirectory = useCallback((path: string) => {
+    setDirCache((prev) => {
+      let changed = false
+      const next: Record<string, DirCache> = {}
+      for (const [dirPath, cache] of Object.entries(prev)) {
+        let cacheChanged = false
+        const children = cache.children.map((child) => {
+          if (child.path !== path || child.isDirectory) {
+            return child
+          }
+          changed = true
+          cacheChanged = true
+          return { ...child, isDirectory: true }
+        })
+        next[dirPath] = cacheChanged ? { ...cache, children } : cache
+      }
+      return changed ? next : prev
+    })
+  }, [])
+
+  const statPath = useCallback(
+    async (path: string) => {
+      const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+      return statRuntimePath(
+        {
+          settings: useAppStore.getState().settings,
+          worktreeId: activeWorktreeId,
+          worktreePath,
+          connectionId
+        },
+        path
+      )
     },
     [activeWorktreeId, worktreePath]
   )
@@ -177,6 +224,8 @@ export function useFileExplorerTree(
     rootCache,
     rootError,
     loadDir,
+    statPath,
+    markPathAsDirectory,
     refreshTree,
     refreshDir,
     resetAndLoad

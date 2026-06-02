@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: editor tab rendering, drag behavior, rename handling, and its context menu share one tightly-coupled tab surface. */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import {
   X,
@@ -10,7 +10,9 @@ import {
   ExternalLink,
   Columns2,
   Rows2,
-  Pencil
+  Pencil,
+  Pin,
+  PinOff
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -57,6 +59,7 @@ const revealLabel = isMac
 export default function EditorFileTab({
   file,
   isActive,
+  isPinned,
   hasTabsToRight,
   statusByRelativePath,
   onActivate,
@@ -64,12 +67,14 @@ export default function EditorFileTab({
   onCloseToRight,
   onCloseAll,
   onPin,
+  onTogglePin,
   onSplitGroup,
   dragData,
   dropIndicator
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
+  isPinned: boolean
   hasTabsToRight: boolean
   statusByRelativePath: Map<string, GitFileStatus>
   onActivate: () => void
@@ -77,6 +82,7 @@ export default function EditorFileTab({
   onCloseToRight: () => void
   onCloseAll: () => void
   onPin?: () => void
+  onTogglePin: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
@@ -113,6 +119,7 @@ export default function EditorFileTab({
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
   const [isRenaming, setIsRenaming] = useState(false)
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const renameFocusFrameRef = useRef<number | null>(null)
   const skipMenuFocusRestoreRef = useRef(false)
   // Escape fires setIsRenaming(false), which unmounts the input. The browser
   // still fires focusout as the focused node is removed, so onBlur can invoke
@@ -160,26 +167,35 @@ export default function EditorFileTab({
     })
   }
 
-  useEffect(() => {
-    if (!isRenaming) {
-      return
-    }
-    const raf = requestAnimationFrame(() => {
-      const el = renameInputRef.current
-      if (!el) {
+  const setRenameInputElement = useCallback(
+    (input: HTMLInputElement | null) => {
+      if (renameFocusFrameRef.current !== null) {
+        cancelAnimationFrame(renameFocusFrameRef.current)
+        renameFocusFrameRef.current = null
+      }
+      renameInputRef.current = input
+      if (!input) {
         return
       }
-      el.focus()
-      const name = basename(file.filePath)
-      const dotIndex = name.lastIndexOf('.')
-      if (dotIndex > 0) {
-        el.setSelectionRange(0, dotIndex)
-      } else {
-        el.select()
-      }
-    })
-    return () => cancelAnimationFrame(raf)
-  }, [isRenaming, file.filePath])
+      // Why: Radix closes the context menu after onSelect; defer focus so its
+      // teardown cannot steal focus back or blur-commit the newly mounted input.
+      renameFocusFrameRef.current = requestAnimationFrame(() => {
+        renameFocusFrameRef.current = null
+        if (renameInputRef.current !== input) {
+          return
+        }
+        input.focus()
+        const name = basename(file.filePath)
+        const dotIndex = name.lastIndexOf('.')
+        if (dotIndex > 0) {
+          input.setSelectionRange(0, dotIndex)
+        } else {
+          input.select()
+        }
+      })
+    },
+    [file.filePath]
+  )
 
   const tabStatus =
     file.relativePath === 'All Changes'
@@ -211,6 +227,7 @@ export default function EditorFileTab({
   const tabRoot = (
     <div
       ref={setNodeRef}
+      data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
@@ -238,6 +255,9 @@ export default function EditorFileTab({
         if (e.button === 1) {
           e.preventDefault()
           e.stopPropagation()
+          if (isPinned) {
+            return
+          }
           onClose()
         }
       }}
@@ -260,10 +280,11 @@ export default function EditorFileTab({
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       )}
+      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="mr-1 flex min-w-0 items-baseline gap-1">
         {isRenaming ? (
           <Input
-            ref={renameInputRef}
+            ref={setRenameInputElement}
             data-tab-rename-input="true"
             aria-label={`Rename file ${basename(file.filePath)}`}
             defaultValue={basename(file.filePath)}
@@ -328,22 +349,24 @@ export default function EditorFileTab({
         {file.isDirty && (
           <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden" />
         )}
-        <button
-          className={`flex items-center justify-center w-4 h-4 rounded-sm ${
-            file.isDirty
-              ? 'hidden group-hover:flex text-muted-foreground hover:text-foreground hover:bg-muted'
-              : isActive
-                ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-          }`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            onClose()
-          }}
-        >
-          <X className="w-3 h-3" />
-        </button>
+        {!isPinned && (
+          <button
+            className={`flex items-center justify-center w-4 h-4 rounded-sm ${
+              file.isDirty
+                ? 'hidden group-hover:flex text-muted-foreground hover:text-foreground hover:bg-muted'
+                : isActive
+                  ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+            }`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              onClose()
+            }}
+          >
+            <X className="w-3 h-3" />
+          </button>
+        )}
       </div>
     </div>
   )
@@ -424,7 +447,18 @@ export default function EditorFileTab({
             Rename
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onClose}>Close</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onTogglePin}>
+            {isPinned ? (
+              <PinOff className="mr-1.5 size-3.5" />
+            ) : (
+              <Pin className="mr-1.5 size-3.5" />
+            )}
+            {isPinned ? 'Unpin Tab' : 'Pin Tab'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
+            Close
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseAll}>Close All Editor Tabs</DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
             Close Tabs To The Right

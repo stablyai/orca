@@ -198,6 +198,7 @@ describe('git RPC methods', () => {
       }),
       cancelRuntimeGenerateCommitMessage: vi.fn().mockResolvedValue({ ok: true }),
       abortRuntimeGitMerge: vi.fn().mockResolvedValue({ ok: true }),
+      abortRuntimeGitRebase: vi.fn().mockResolvedValue({ ok: true }),
       pushRuntimeGit: vi.fn().mockResolvedValue({ ok: true }),
       getRuntimeGitRemoteFileUrl: vi.fn().mockResolvedValue('https://example.com/file#L3')
     } as unknown as OrcaRuntimeService
@@ -218,6 +219,7 @@ describe('git RPC methods', () => {
       makeRequest('git.cancelGenerateCommitMessage', { worktree: 'id:wt-1' })
     )
     await dispatcher.dispatch(makeRequest('git.abortMerge', { worktree: 'id:wt-1' }))
+    await dispatcher.dispatch(makeRequest('git.abortRebase', { worktree: 'id:wt-1' }))
     await dispatcher.dispatch(
       makeRequest('git.push', {
         worktree: 'id:wt-1',
@@ -240,6 +242,7 @@ describe('git RPC methods', () => {
     })
     expect(runtime.cancelRuntimeGenerateCommitMessage).toHaveBeenCalledWith('id:wt-1')
     expect(runtime.abortRuntimeGitMerge).toHaveBeenCalledWith('id:wt-1')
+    expect(runtime.abortRuntimeGitRebase).toHaveBeenCalledWith('id:wt-1')
     expect(runtime.pushRuntimeGit).toHaveBeenCalledWith(
       'id:wt-1',
       true,
@@ -299,6 +302,24 @@ describe('git RPC methods', () => {
     )
 
     expect(runtime.fetchRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
+  })
+
+  it('forwards fast-forward push target to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      fastForwardRuntimeGit: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await dispatcher.dispatch(
+      makeRequest('git.fastForward', {
+        worktree: 'id:wt-1',
+        pushTarget
+      })
+    )
+
+    expect(runtime.fastForwardRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
   })
 
   it('forwards commit-message settings to the runtime', async () => {

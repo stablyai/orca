@@ -1,20 +1,50 @@
+/* eslint-disable max-lines -- Why: the Agents pane keeps catalog rows, default
+   selection, per-agent controls, and runtime location together so settings
+   reconciliation stays visible in one file. */
 import { useMemo, useState } from 'react'
 import { Check, ChevronDown, ExternalLink, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
+import {
+  AGENT_GENERATED_TAB_TITLES_DESCRIPTION,
+  AGENT_GENERATED_TAB_TITLES_TITLE
+} from './agent-generated-tab-title-copy'
+import { AgentLocationSetting } from './AgentLocationSetting'
 import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
-import { SettingsBadge, SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+import {
+  SettingsBadge,
+  SettingsSegmentedControl,
+  SettingsSubsectionHeader,
+  SettingsSwitchRow
+} from './SettingsFormControls'
+import {
+  isTuiAgentEnabled,
+  normalizeDisabledTuiAgents
+} from '../../../../shared/tui-agent-selection'
 
 export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
 type AgentsPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  wslSupportedPlatform?: boolean
+  wslAvailable?: boolean
+  wslDistros?: string[]
+  wslCapabilitiesLoading?: boolean
+}
+
+type AgentAvailabilityUpdateQueueOptions = {
+  getSettings: () => GlobalSettings | null | undefined
+  fallbackSettings: GlobalSettings
+  updateSettings: AgentsPaneProps['updateSettings']
+  agentId: TuiAgent
+  enabled: boolean
 }
 
 type AgentRowProps = {
@@ -23,9 +53,11 @@ type AgentRowProps = {
   homepageUrl: string
   defaultCmd: string
   isDetected: boolean
+  isEnabled: boolean
   isDefault: boolean
   cmdOverride: string | undefined
   onSetDefault: () => void
+  onSetEnabled: (enabled: boolean) => void
   onSaveOverride: (value: string) => void
 }
 
@@ -33,6 +65,78 @@ type AgentCommandOverrideInputProps = {
   defaultCmd: string
   cmdOverride: string | undefined
   onSaveOverride: (value: string) => void
+}
+
+type AgentAvailability = 'enabled' | 'disabled'
+
+type AgentAvailabilityControlProps = {
+  label: string
+  isEnabled: boolean
+  onSetEnabled: (enabled: boolean) => void
+}
+
+export function buildAgentAvailabilitySettingsUpdate(
+  settings: Pick<GlobalSettings, 'defaultTuiAgent' | 'disabledTuiAgents'>,
+  id: TuiAgent,
+  enabled: boolean
+): Pick<GlobalSettings, 'disabledTuiAgents'> & Partial<Pick<GlobalSettings, 'defaultTuiAgent'>> {
+  const latestDisabled = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
+  const nextDisabled = enabled
+    ? latestDisabled.filter((agent) => agent !== id)
+    : latestDisabled.includes(id)
+      ? latestDisabled
+      : [...latestDisabled, id]
+
+  return {
+    disabledTuiAgents: nextDisabled,
+    ...(settings.defaultTuiAgent === id && !enabled ? { defaultTuiAgent: null } : {})
+  }
+}
+
+export function createAgentAvailabilityUpdateQueue(): (
+  options: AgentAvailabilityUpdateQueueOptions
+) => Promise<void> {
+  let pendingUpdate: Promise<unknown> = Promise.resolve()
+
+  return ({ getSettings, fallbackSettings, updateSettings, agentId, enabled }) => {
+    // Why: serialize full-array replacements so each write sees the store after
+    // the previous IPC has reconciled, while preserving the user's requested state.
+    pendingUpdate = pendingUpdate
+      .catch(() => {})
+      .then(() =>
+        updateSettings(
+          buildAgentAvailabilitySettingsUpdate(getSettings() ?? fallbackSettings, agentId, enabled)
+        )
+      )
+    return pendingUpdate.then(() => undefined)
+  }
+}
+
+const enqueueAgentAvailabilityUpdate = createAgentAvailabilityUpdateQueue()
+
+export function AgentAvailabilityControl({
+  label,
+  isEnabled,
+  onSetEnabled
+}: AgentAvailabilityControlProps): React.JSX.Element {
+  const value: AgentAvailability = isEnabled ? 'enabled' : 'disabled'
+
+  return (
+    <SettingsSegmentedControl<AgentAvailability>
+      value={value}
+      onChange={(next) => {
+        if (next !== value) {
+          onSetEnabled(next === 'enabled')
+        }
+      }}
+      ariaLabel={`${label} availability`}
+      size="sm"
+      options={[
+        { value: 'enabled', label: 'Enabled' },
+        { value: 'disabled', label: 'Disabled' }
+      ]}
+    />
+  )
 }
 
 function AgentCommandOverrideInput({
@@ -98,21 +202,30 @@ function AgentRow({
   homepageUrl,
   defaultCmd,
   isDetected,
+  isEnabled,
   isDefault,
   cmdOverride,
   onSetDefault,
+  onSetEnabled,
   onSaveOverride
 }: AgentRowProps): React.JSX.Element {
   const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride))
+  const availabilityDescription = isEnabled
+    ? isDetected
+      ? 'Shown in launch and default choices.'
+      : 'Install to use in launch and default choices.'
+    : isDetected
+      ? 'Hidden from launch and default choices.'
+      : 'Hidden from launch and default choices if installed.'
 
   return (
-    <div className={cn('py-3', !isDetected && 'opacity-60')}>
-      <div className="flex items-center gap-3">
+    <div className={cn('py-3', !isDetected && 'opacity-70')}>
+      <div className="flex flex-wrap items-start gap-3">
         <div className="flex size-7 shrink-0 items-center justify-center rounded-md border border-border/50 bg-background/50">
           <AgentIcon agent={agentId} size={16} />
         </div>
 
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 sm:min-w-[12rem]">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium leading-none">{label}</span>
             {isDetected ? (
@@ -120,6 +233,7 @@ function AgentRow({
             ) : (
               <SettingsBadge tone="muted">Not installed</SettingsBadge>
             )}
+            {!isEnabled && <SettingsBadge tone="muted">Disabled</SettingsBadge>}
           </div>
           <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
             {cmdOverride ? (
@@ -131,10 +245,17 @@ function AgentRow({
               defaultCmd
             )}
           </div>
+          <div className="mt-1 text-[11px] text-muted-foreground">{availabilityDescription}</div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
-          {isDetected && (
+        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          <AgentAvailabilityControl
+            label={label}
+            isEnabled={isEnabled}
+            onSetEnabled={onSetEnabled}
+          />
+
+          {isDetected && isEnabled && (
             <Button
               type="button"
               variant={isDefault ? 'secondary' : 'ghost'}
@@ -234,7 +355,14 @@ function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps):
   )
 }
 
-export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React.JSX.Element {
+export function AgentsPane({
+  settings,
+  updateSettings,
+  wslSupportedPlatform = false,
+  wslAvailable = false,
+  wslDistros = [],
+  wslCapabilitiesLoading = false
+}: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
   // Why: refresh re-spawns the user's login shell to re-capture PATH
   // (preflight:refreshAgents on the main side). This handles the
@@ -249,9 +377,20 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
 
   const defaultAgent = settings.defaultTuiAgent
   const cmdOverrides = settings.agentCmdOverrides ?? {}
+  const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
 
   const setDefault = (id: TuiAgent | 'blank' | null): void => {
     updateSettings({ defaultTuiAgent: id })
+  }
+
+  const setAgentEnabled = (id: TuiAgent, enabled: boolean): void => {
+    void enqueueAgentAvailabilityUpdate({
+      getSettings: () => useAppStore.getState().settings,
+      fallbackSettings: settings,
+      updateSettings,
+      agentId: id,
+      enabled
+    })
   }
 
   const saveOverride = (id: TuiAgent, value: string): void => {
@@ -264,7 +403,14 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
     updateSettings({ agentCmdOverrides: next })
   }
 
-  const detectedAgents = AGENT_CATALOG.filter((a) => detectedIds === null || detectedIds.has(a.id))
+  // Why: null means detection is in flight, not "all agents are installed".
+  // Showing the full catalog here makes the default-agent picker flash invalid
+  // options while switching between Windows and WSL detection contexts.
+  const detectedAgents =
+    detectedIds === null ? [] : AGENT_CATALOG.filter((agent) => detectedIds.has(agent.id))
+  const enabledDetectedAgents = detectedAgents.filter((agent) =>
+    isTuiAgentEnabled(agent.id, disabledAgents)
+  )
   const undetectedAgents = AGENT_CATALOG.filter(
     (a) => detectedIds !== null && !detectedIds.has(a.id)
   )
@@ -273,11 +419,23 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
   // so the Auto pill should only light up when the default is null OR when a
   // selected agent id is no longer detected on PATH.
   const isAutoDefault =
-    defaultAgent === null || (defaultAgent !== 'blank' && !detectedIds?.has(defaultAgent))
+    defaultAgent === null ||
+    (defaultAgent !== 'blank' &&
+      (!detectedIds?.has(defaultAgent) || !isTuiAgentEnabled(defaultAgent, disabledAgents)))
   const isBlankDefault = defaultAgent === 'blank'
 
   return (
     <div className="space-y-8">
+      <AgentLocationSetting
+        settings={settings}
+        updateSettings={updateSettings}
+        refresh={refresh}
+        wslSupportedPlatform={wslSupportedPlatform}
+        wslAvailable={wslAvailable}
+        wslDistros={wslDistros}
+        wslCapabilitiesLoading={wslCapabilitiesLoading}
+      />
+
       <section className="space-y-4">
         <SettingsSubsectionHeader
           title="Default Agent"
@@ -300,7 +458,7 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
             {isBlankDefault && <Check className="size-3.5" />}
           </DefaultAgentPill>
 
-          {detectedAgents.map((agent) => {
+          {enabledDetectedAgents.map((agent) => {
             const isActive = defaultAgent === agent.id
             return (
               <DefaultAgentPill
@@ -318,6 +476,8 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
       </section>
 
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
+
+      <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
       <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
 
@@ -355,9 +515,11 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 homepageUrl={agent.homepageUrl}
                 defaultCmd={agent.cmd}
                 isDetected
+                isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                 isDefault={defaultAgent === agent.id}
                 cmdOverride={cmdOverrides[agent.id]}
                 onSetDefault={() => setDefault(agent.id)}
+                onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={(v) => saveOverride(agent.id, v)}
               />
             ))}
@@ -385,9 +547,11 @@ export function AgentsPane({ settings, updateSettings }: AgentsPaneProps): React
                 homepageUrl={agent.homepageUrl}
                 defaultCmd={agent.cmd}
                 isDetected={false}
+                isEnabled={isTuiAgentEnabled(agent.id, disabledAgents)}
                 isDefault={false}
                 cmdOverride={undefined}
                 onSetDefault={() => {}}
+                onSetEnabled={(enabled) => setAgentEnabled(agent.id, enabled)}
                 onSaveOverride={() => {}}
               />
             ))}
@@ -421,6 +585,28 @@ export function AgentStatusHooksSetting({
           })
         }
         ariaLabel={AGENT_STATUS_HOOKS_TITLE}
+      />
+    </section>
+  )
+}
+
+export function AgentGeneratedTabTitlesSetting({
+  settings,
+  updateSettings
+}: AgentsPaneProps): React.JSX.Element {
+  const enabled = settings.tabAutoGenerateTitle === true
+  return (
+    <section className="space-y-3">
+      <SettingsSwitchRow
+        label={AGENT_GENERATED_TAB_TITLES_TITLE}
+        description={AGENT_GENERATED_TAB_TITLES_DESCRIPTION}
+        checked={enabled}
+        onChange={() =>
+          updateSettings({
+            tabAutoGenerateTitle: !enabled
+          })
+        }
+        ariaLabel={AGENT_GENERATED_TAB_TITLES_TITLE}
       />
     </section>
   )

@@ -27,14 +27,19 @@ function createAnnotationDecorations(
   activeRange: RichMarkdownAnnotationHighlightRange | null,
   noteRanges: RichMarkdownAnnotationHighlightRange[]
 ): DecorationSet {
-  const decorations = [...noteRanges, ...(activeRange ? [activeRange] : [])]
+  const decorations = [
+    ...noteRanges.map((range) => ({ range, active: false })),
+    ...(activeRange ? [{ range: activeRange, active: true }] : [])
+  ]
     .map((range) => {
-      const from = Math.min(range.from, range.to)
-      const to = Math.max(range.from, range.to)
+      const from = Math.min(range.range.from, range.range.to)
+      const to = Math.max(range.range.from, range.range.to)
       return from === to
         ? null
         : Decoration.inline(from, to, {
-            class: 'rich-markdown-annotation-selection'
+            class: range.active
+              ? 'rich-markdown-annotation-selection rich-markdown-annotation-selection-active'
+              : 'rich-markdown-annotation-selection'
           })
     })
     .filter((decoration): decoration is Decoration => decoration !== null)

@@ -4,12 +4,14 @@ import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
+let devParentShutdownRequested = false
 
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'
 }
 
 function requestDevParentShutdown(): void {
+  devParentShutdownRequested = true
   app.quit()
 
   const forceExitTimer = setTimeout(() => {
@@ -22,6 +24,14 @@ function requestDevParentShutdown(): void {
   }, DEV_PARENT_SHUTDOWN_GRACE_MS)
 
   forceExitTimer.unref()
+}
+
+export function isDevParentShutdownRequested(): boolean {
+  return devParentShutdownRequested
+}
+
+export function resetDevParentShutdownRequestForTests(): void {
+  devParentShutdownRequested = false
 }
 
 export function installUncaughtPipeErrorGuard(): void {
@@ -201,6 +211,22 @@ export function installDevParentWatchdog(isDev: boolean): void {
   }, 1000)
 
   timer.unref()
+}
+
+export function installDevParentSignalQuit(isDev: boolean): void {
+  if (!isDev) {
+    return
+  }
+
+  const onSignal = (): void => {
+    // Why: run-electron-vite-dev forwards terminal shutdown signals to the
+    // Electron process group; those are dev-supervisor shutdowns too, so the
+    // detached daemon should not be preserved for warm reattach.
+    requestDevParentShutdown()
+  }
+
+  process.once('SIGINT', onSignal)
+  process.once('SIGTERM', onSignal)
 }
 
 export function enableMainProcessGpuFeatures(): void {

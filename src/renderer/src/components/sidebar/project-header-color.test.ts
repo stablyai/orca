@@ -19,8 +19,12 @@ describe('resolveRepoHeaderColor', () => {
     expect(resolveRepoHeaderColor(`  ${REPO_COLORS[4].toUpperCase()}  `)).toBe(REPO_COLORS[4])
   })
 
-  it('falls back for out-of-palette colors', () => {
-    expect(resolveRepoHeaderColor('#123456')).toBe(DEFAULT_REPO_BADGE_COLOR)
+  it('returns normalized custom hex colors', () => {
+    expect(resolveRepoHeaderColor(' #123ABC ')).toBe('#123abc')
+  })
+
+  it('falls back for invalid colors', () => {
+    expect(resolveRepoHeaderColor('blue')).toBe(DEFAULT_REPO_BADGE_COLOR)
   })
 })
 

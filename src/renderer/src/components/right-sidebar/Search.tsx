@@ -47,6 +47,8 @@ export default function Search(): React.JSX.Element {
   const revealRafRef = useRef<number | null>(null)
   const revealInnerRafRef = useRef<number | null>(null)
   const seededInputSelectionRafRef = useRef<number | null>(null)
+  const cleanupSearchPanelRef = useRef<() => void>(() => {})
+  const previousCleanupSearchPanelRef = useRef<(() => void) | null>(null)
   const includeInputRef = useRef<HTMLInputElement>(null)
   const excludeInputRef = useRef<HTMLInputElement>(null)
 
@@ -106,20 +108,40 @@ export default function Search(): React.JSX.Element {
     })
   }, [cancelSeededInputSelectionFrame])
 
-  // Focus input on mount
-  useEffect(() => {
-    inputRef.current?.focus()
+  const setSearchInputRef = useCallback((el: HTMLInputElement | null): void => {
+    inputRef.current = el
+    // Why: focusing belongs to the input mount; the object ref still backs
+    // seeded-search selection and result keyboard handlers.
+    if (el) {
+      el.focus()
+    }
   }, [])
 
-  // Cleanup debounce timer on unmount
-  useEffect(() => {
-    return () => {
-      cancelPendingSearch()
-      cancelSeededInputSelectionFrame()
-      cancelRevealFrame(revealRafRef)
-      cancelRevealFrame(revealInnerRafRef)
-    }
+  const cleanupCurrentSearchPanel = useCallback(() => {
+    cancelPendingSearch()
+    cancelSeededInputSelectionFrame()
+    cancelRevealFrame(revealRafRef)
+    cancelRevealFrame(revealInnerRafRef)
   }, [cancelPendingSearch, cancelSeededInputSelectionFrame])
+
+  cleanupSearchPanelRef.current = cleanupCurrentSearchPanel
+
+  useEffect(() => {
+    const previousCleanup = previousCleanupSearchPanelRef.current
+    previousCleanupSearchPanelRef.current = cleanupCurrentSearchPanel
+    if (previousCleanup && previousCleanup !== cleanupCurrentSearchPanel) {
+      previousCleanup()
+    }
+  }, [cleanupCurrentSearchPanel])
+
+  const setSearchPanelRef = useCallback((node: HTMLDivElement | null): void => {
+    if (node !== null) {
+      return
+    }
+    // Why: debounce, seeded focus, and reveal frames are scoped to this panel
+    // owner; clearing them from a stable root ref avoids a cleanup-only Effect.
+    cleanupSearchPanelRef.current()
+  }, [])
 
   useEffect(() => {
     if (!worktreePath) {
@@ -322,9 +344,9 @@ export default function Search(): React.JSX.Element {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div ref={setSearchPanelRef} className="flex flex-col h-full">
       <SearchHeader
-        inputRef={inputRef}
+        inputRef={setSearchInputRef}
         includeInputRef={includeInputRef}
         excludeInputRef={excludeInputRef}
         query={fileSearchQuery}

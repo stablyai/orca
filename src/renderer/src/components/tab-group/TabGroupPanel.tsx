@@ -113,6 +113,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
@@ -341,7 +342,7 @@ export default function TabGroupPanel({
             terminal-area tip instead of attaching to toolbar chrome. */}
         {isFocused ? (
           <div
-            className="pointer-events-none absolute inset-x-0 top-1/3 h-px"
+            className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
         ) : null}

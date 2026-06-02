@@ -21,8 +21,11 @@ const scanResult: NestedRepoScanResult = {
   ],
   truncated: false,
   timedOut: false,
+  stopped: false,
   durationMs: 42,
-  maxDepth: 3
+  maxDepth: 3,
+  maxRepos: 100,
+  timeoutMs: null
 }
 const attemptId = '2fbac1e3-5094-45b4-80a6-90281e6e9e09'
 const nextAttemptId = 'd22bb9e0-b7f8-480a-8a2a-9b34f84f2c42'

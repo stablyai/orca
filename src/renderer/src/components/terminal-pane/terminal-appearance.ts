@@ -1,6 +1,7 @@
 import type { IDisposable, IParser, ITheme } from '@xterm/xterm'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/types'
+import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
 import {
@@ -16,14 +17,7 @@ import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 
-// Contour/Kitty "color-scheme update" protocol (DEC mode 2031 + CSI 997):
-// the terminal pushes `CSI ?997;1n` for dark and `CSI ?997;2n` for light to
-// subscribed TUIs. This helper is the single source of truth so the push
-// site in applyTerminalAppearance and the subscribe-time seed in the
-// lifecycle hook cannot drift.
-export function mode2031SequenceFor(mode: 'dark' | 'light'): string {
-  return mode === 'dark' ? '\x1b[?997;1n' : '\x1b[?997;2n'
-}
+export { mode2031SequenceFor }
 
 // Why Pick<IParser, ...> over a hand-rolled structural type: keeps the helper
 // tied to xterm's canonical signature so any upstream tightening (added

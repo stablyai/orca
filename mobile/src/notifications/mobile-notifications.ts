@@ -58,10 +58,14 @@ function configureNotificationChannel(): void {
 
 async function showLocalNotification(event: NotificationEvent, hostId: string): Promise<void> {
   const enabled = await loadPushNotificationsEnabled()
-  if (!enabled) return
+  if (!enabled) {
+    return
+  }
 
   const granted = await ensureNotificationPermissions()
-  if (!granted) return
+  if (!granted) {
+    return
+  }
 
   await Notifications.scheduleNotificationAsync({
     content: {
@@ -99,10 +103,14 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       return
     }
     if (event.type === 'end') {
-      if (disposed) unsubscribeStream()
+      if (disposed) {
+        unsubscribeStream()
+      }
       return
     }
-    if (disposed) return
+    if (disposed) {
+      return
+    }
     if (event.type === 'notification') {
       void showLocalNotification(event as NotificationEvent, hostId)
     }
@@ -114,8 +122,10 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // unmount races with disconnect). sendRequest rejects immediately on a
     // closed client — swallow it since server-side cleanup happens via
     // connection-close anyway.
+    // Always drop the local stream first; readiness can race unmount and we
+    // must not retain the callback while waiting for a subscription id.
+    unsubscribeStream()
     if (subscriptionId) {
-      unsubscribeStream()
       unsubscribeServer(subscriptionId)
     }
   }

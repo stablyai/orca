@@ -6,6 +6,7 @@ import { assertRuntimeStatusCompatible } from './runtime-protocol-compat'
 
 export type RuntimeClientTarget = { kind: 'local' } | { kind: 'environment'; environmentId: string }
 
+const RUNTIME_COMPATIBILITY_CACHE_MAX = 32
 const compatibleRuntimeEnvironments = new Map<string, Promise<void>>()
 
 export class RuntimeRpcCallError extends Error {
@@ -79,6 +80,8 @@ async function ensureRuntimeEnvironmentCompatible(
 ): Promise<void> {
   const cached = compatibleRuntimeEnvironments.get(environmentId)
   if (cached) {
+    compatibleRuntimeEnvironments.delete(environmentId)
+    compatibleRuntimeEnvironments.set(environmentId, cached)
     await cached
     return
   }
@@ -93,12 +96,31 @@ async function ensureRuntimeEnvironmentCompatible(
     )
     assertRuntimeStatusCompatible(status)
   })()
-  compatibleRuntimeEnvironments.set(environmentId, check)
+  rememberRuntimeEnvironmentCompatibility(environmentId, check)
   try {
     await check
   } catch (error) {
-    compatibleRuntimeEnvironments.delete(environmentId)
+    if (compatibleRuntimeEnvironments.get(environmentId) === check) {
+      compatibleRuntimeEnvironments.delete(environmentId)
+    }
     throw error
+  }
+}
+
+function rememberRuntimeEnvironmentCompatibility(
+  environmentId: string,
+  check: Promise<void>
+): void {
+  // Why: saved/removed remote runtimes can churn through unique ids in long
+  // renderer sessions; successful compatibility promises should not grow forever.
+  compatibleRuntimeEnvironments.delete(environmentId)
+  compatibleRuntimeEnvironments.set(environmentId, check)
+  while (compatibleRuntimeEnvironments.size > RUNTIME_COMPATIBILITY_CACHE_MAX) {
+    const oldest = compatibleRuntimeEnvironments.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    compatibleRuntimeEnvironments.delete(oldest)
   }
 }
 

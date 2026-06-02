@@ -112,6 +112,10 @@ import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
 import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import {
+  getRemoteBrowserKeyboardShortcut,
+  getRemoteBrowserKeypressKey
+} from './remote-browser-keyboard'
+import {
   consumeBrowserFocusRequest,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   type BrowserFocusRequestDetail
@@ -522,52 +526,6 @@ function fileUrlToAbsolutePath(url: string): string | null {
 function getNotebookPathFromBrowserUrl(url: string): string | null {
   const filePath = fileUrlToAbsolutePath(url)
   return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
-}
-
-function getRemoteBrowserKeypressKey(event: React.KeyboardEvent): string | null {
-  if (event.key.length === 1) {
-    return event.key === ' ' ? 'Space' : event.key
-  }
-  if (event.metaKey || event.ctrlKey || event.altKey) {
-    return null
-  }
-  const supported = new Set([
-    'Enter',
-    'Backspace',
-    'Delete',
-    'Tab',
-    'Escape',
-    'ArrowUp',
-    'ArrowDown',
-    'ArrowLeft',
-    'ArrowRight',
-    'Home',
-    'End',
-    'PageUp',
-    'PageDown'
-  ])
-  return supported.has(event.key) ? event.key : null
-}
-
-function getRemoteBrowserKeyboardShortcut(event: React.KeyboardEvent): string | null {
-  const modifiers: string[] = []
-  if (event.metaKey) {
-    modifiers.push('Meta')
-  }
-  if (event.ctrlKey) {
-    modifiers.push('Control')
-  }
-  if (event.altKey) {
-    modifiers.push('Alt')
-  }
-  if (event.shiftKey && event.key.length !== 1) {
-    modifiers.push('Shift')
-  }
-  if (modifiers.length === 0 || ['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) {
-    return null
-  }
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
-  return `${modifiers.join('+')}+${key}`
 }
 
 function getRemoteBrowserMouseButton(button: number): 'left' | 'middle' | 'right' | null {
@@ -1196,6 +1154,7 @@ function RemoteBrowserPagePane({
         remoteTabRefreshTimerRef.current = null
       }
       clearPendingRemoteWheel()
+      restartRemoteStreamForViewportRef.current = () => {}
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
@@ -1797,12 +1756,6 @@ function RemoteBrowserPagePane({
   }, [restartRemoteStreamForViewport, startRemoteStream])
 
   useEffect(() => {
-    return () => {
-      restartRemoteStreamForViewportRef.current = () => {}
-    }
-  }, [])
-
-  useEffect(() => {
     if (!isActive) {
       return
     }
@@ -2124,7 +2077,7 @@ function RemoteBrowserPagePane({
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         const parsed = readRemoteContextMenuResult(result)
-        if (parsed) {
+        if (parsed && mountedRef.current && isCurrentRemoteOperationToken(operationToken)) {
           setContextMenu((current) =>
             current
               ? {
@@ -2175,7 +2128,13 @@ function RemoteBrowserPagePane({
           { ...params, key },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
-        if (key === 'Enter' || key === 'Meta+r' || key === 'Control+r') {
+        if (
+          key === 'Enter' ||
+          key === 'Meta+r' ||
+          key === 'Meta+Shift+r' ||
+          key === 'Control+r' ||
+          key === 'Control+Shift+r'
+        ) {
           scheduleRemoteTabInfoRefresh(operationToken, 400)
         }
       } catch (error) {
@@ -2536,6 +2495,20 @@ function RemoteBrowserPagePane({
   )
 }
 
+function preventAgentSendTargetOutsideDismiss(event: CustomEvent<{ originalEvent: Event }>) {
+  const target = event.detail.originalEvent.target
+  if (!(target instanceof Element)) {
+    return
+  }
+  if (
+    target.closest(
+      '[data-agent-send-target="eligible"], [data-agent-send-target="disabled"], [data-agent-send-target="sending"]'
+    )
+  ) {
+    event.preventDefault()
+  }
+}
+
 function BrowserPagePane({
   browserTab,
   workspaceId,
@@ -2559,6 +2532,18 @@ function BrowserPagePane({
 }): React.JSX.Element {
   const isPaintable = isActive || isAutomationVisible
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const setContainerRef = useCallback((node: HTMLDivElement | null): void => {
+    containerRef.current = node
+    if (node !== null) {
+      return
+    }
+    // Why: feedback timers are scoped to this pane owner and must not fire
+    // after the DOM owner is detached.
+    clearTimeout(grabToastTimerRef.current)
+    clearTimeout(annotationCopyTimerRef.current)
+  }, [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const browserTabIdRef = useRef(browserTab.id)
@@ -2633,6 +2618,13 @@ function BrowserPagePane({
     () => formatBrowserAnnotationsAsMarkdown(browserAnnotations),
     [browserAnnotations]
   )
+  const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
+  const closeAgentSendPopoverTargetMode = useAppStore((s) => s.closeAgentSendPopoverTargetMode)
+  const activeAgentSendTargetModeId = useAppStore((s) => s.agentSendPopoverTargetMode?.id ?? null)
+  const annotationBannerSendModeId = `browser-annotations:${browserTab.id}:banner`
+  const annotationTraySendModeId = `browser-annotations:${browserTab.id}:tray`
+  const [annotationBannerSendOpen, setAnnotationBannerSendOpen] = useState(false)
+  const [annotationTraySendOpen, setAnnotationTraySendOpen] = useState(false)
   const addBrowserPageAnnotation = useAppStore((s) => s.addBrowserPageAnnotation)
   const deleteBrowserPageAnnotation = useAppStore((s) => s.deleteBrowserPageAnnotation)
   const clearBrowserPageAnnotations = useAppStore((s) => s.clearBrowserPageAnnotations)
@@ -2689,17 +2681,6 @@ function BrowserPagePane({
     below: boolean
     payload: BrowserGrabPayload | null
   } | null>(null)
-  const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  // Why: clear the toast auto-dismiss timer on unmount so it cannot fire
-  // after the component is destroyed (prevents setState-on-unmounted warnings
-  // and stale rearm calls).
-  useEffect(() => {
-    return () => {
-      clearTimeout(grabToastTimerRef.current)
-      clearTimeout(annotationCopyTimerRef.current)
-    }
-  }, [])
 
   const grabRef = useRef(grab)
   grabRef.current = grab
@@ -4039,6 +4020,79 @@ function BrowserPagePane({
     annotationCopyTimerRef.current = setTimeout(() => setBrowserAnnotationsCopied(false), 1400)
   }, [browserAnnotationsPrompt, recordFeatureInteraction])
 
+  const handleAnnotationBannerSendOpenChange = useCallback(
+    (open: boolean): void => {
+      setAnnotationBannerSendOpen(open)
+      if (open) {
+        openAgentSendPopoverTargetMode({
+          id: annotationBannerSendModeId,
+          worktreeId,
+          source: 'browser-annotations',
+          prompt: browserAnnotationsPrompt,
+          label: 'Browser annotations',
+          launchSource: 'notes_send'
+        })
+      } else {
+        closeAgentSendPopoverTargetMode(annotationBannerSendModeId)
+      }
+    },
+    [
+      annotationBannerSendModeId,
+      browserAnnotationsPrompt,
+      closeAgentSendPopoverTargetMode,
+      openAgentSendPopoverTargetMode,
+      worktreeId
+    ]
+  )
+
+  const handleAnnotationTraySendOpenChange = useCallback(
+    (open: boolean): void => {
+      setAnnotationTraySendOpen(open)
+      if (open) {
+        openAgentSendPopoverTargetMode({
+          id: annotationTraySendModeId,
+          worktreeId,
+          source: 'browser-annotations',
+          prompt: browserAnnotationsPrompt,
+          label: 'Browser annotations',
+          launchSource: 'notes_send'
+        })
+      } else {
+        closeAgentSendPopoverTargetMode(annotationTraySendModeId)
+      }
+    },
+    [
+      annotationTraySendModeId,
+      browserAnnotationsPrompt,
+      closeAgentSendPopoverTargetMode,
+      openAgentSendPopoverTargetMode,
+      worktreeId
+    ]
+  )
+
+  useEffect(() => {
+    if (annotationBannerSendOpen && activeAgentSendTargetModeId !== annotationBannerSendModeId) {
+      setAnnotationBannerSendOpen(false)
+    }
+    if (annotationTraySendOpen && activeAgentSendTargetModeId !== annotationTraySendModeId) {
+      setAnnotationTraySendOpen(false)
+    }
+  }, [
+    activeAgentSendTargetModeId,
+    annotationBannerSendModeId,
+    annotationBannerSendOpen,
+    annotationTraySendModeId,
+    annotationTraySendOpen
+  ])
+
+  useEffect(
+    () => () => {
+      closeAgentSendPopoverTargetMode(annotationBannerSendModeId)
+      closeAgentSendPopoverTargetMode(annotationTraySendModeId)
+    },
+    [annotationBannerSendModeId, annotationTraySendModeId, closeAgentSendPopoverTargetMode]
+  )
+
   const handleClearBrowserAnnotations = useCallback((): void => {
     if (browserAnnotationsRef.current.length === 0) {
       return
@@ -4627,7 +4681,11 @@ function BrowserPagePane({
           </span>
           {grabIntent === 'annotate' && browserAnnotations.length > 0 ? (
             <>
-              <DropdownMenu>
+              <DropdownMenu
+                modal={false}
+                open={annotationBannerSendOpen}
+                onOpenChange={handleAnnotationBannerSendOpenChange}
+              >
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
@@ -4641,7 +4699,12 @@ function BrowserPagePane({
                     Send feedback to a new agent
                   </TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuContent
+                  align="end"
+                  className="min-w-[180px]"
+                  onInteractOutside={preventAgentSendTargetOutsideDismiss}
+                  onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+                >
                   <QuickLaunchAgentMenuItems
                     worktreeId={worktreeId}
                     groupId={activeGroupId ?? worktreeId}
@@ -4695,7 +4758,7 @@ function BrowserPagePane({
         </div>
       ) : null}
       <div
-        ref={containerRef}
+        ref={setContainerRef}
         className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
         onDragOver={handleInternalFileDragOver}
         onDrop={handleInternalFileDrop}
@@ -4813,7 +4876,11 @@ function BrowserPagePane({
               <div className="min-w-0 flex-1 text-sm font-medium">
                 {browserAnnotations.length} annotation{browserAnnotations.length === 1 ? '' : 's'}
               </div>
-              <DropdownMenu>
+              <DropdownMenu
+                modal={false}
+                open={annotationTraySendOpen}
+                onOpenChange={handleAnnotationTraySendOpenChange}
+              >
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
@@ -4827,7 +4894,12 @@ function BrowserPagePane({
                     Send feedback to a new agent
                   </TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuContent
+                  align="end"
+                  className="min-w-[180px]"
+                  onInteractOutside={preventAgentSendTargetOutsideDismiss}
+                  onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
+                >
                   <QuickLaunchAgentMenuItems
                     worktreeId={worktreeId}
                     groupId={activeGroupId ?? worktreeId}

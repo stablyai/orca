@@ -7,7 +7,8 @@ import { useAppStore } from '@/store'
 import type {
   ContextualTourId,
   ContextualTourStepPlacement,
-  ContextualTourStepControl
+  ContextualTourStepControl,
+  ContextualTourStepAction
 } from '../../../../shared/contextual-tours'
 import { ContextualTourArrow } from './ContextualTourArrow'
 import { ContextualTourControl } from './ContextualTourControl'
@@ -25,7 +26,11 @@ export type ActiveTourRenderState = {
   title: string
   body: string
   control?: ContextualTourStepControl
+  primaryAction?: ContextualTourStepAction
+  secondaryAction?: ContextualTourStepAction
   preferredPlacement?: ContextualTourStepPlacement
+  targetPulse?: boolean
+  hidePrimaryAction?: boolean
   isLastStep: boolean
   isFirstStep: boolean
   panelHost: HTMLElement | null
@@ -45,6 +50,7 @@ type ContextualTourOverlaySurfaceProps = {
   onSkip: (id: ContextualTourId) => void
   onBack: () => void
   onNext: () => void
+  onStepAction: (action: ContextualTourStepAction) => void
   onOverlayKeyDownCapture: (event: KeyboardEvent<HTMLDivElement>) => void
 }
 
@@ -73,6 +79,7 @@ export function ContextualTourOverlaySurface({
   onSkip,
   onBack,
   onNext,
+  onStepAction,
   onOverlayKeyDownCapture
 }: ContextualTourOverlaySurfaceProps): JSX.Element {
   const panelHostSlot = panelHost?.getAttribute('data-slot')
@@ -90,6 +97,21 @@ export function ContextualTourOverlaySurface({
   )
 
   const stepKey = `${activeTourId}-${renderState.progress.current}`
+  const defaultPrimaryAction = {
+    kind: renderState.isLastStep ? 'complete' : 'next',
+    label: renderState.isLastStep ? 'Done' : 'Next'
+  } satisfies ContextualTourStepAction
+  const primaryAction =
+    renderState.primaryAction ?? (renderState.hidePrimaryAction ? null : defaultPrimaryAction)
+  const showTargetRings = renderState.targetPulse === true
+  const targetRingStyle = showTargetRings
+    ? ({
+        left: renderState.rect.left,
+        top: renderState.rect.top,
+        width: renderState.rect.width,
+        height: renderState.rect.height
+      } satisfies CSSProperties)
+    : undefined
 
   const panel = (
     <section
@@ -132,10 +154,31 @@ export function ContextualTourOverlaySurface({
                 Back
               </Button>
             ) : null}
-            <Button type="button" size="xs" onClick={onNext}>
-              {renderState.isLastStep ? 'Done' : 'Next'}
-              {!renderState.isLastStep ? <ArrowRight /> : null}
-            </Button>
+            {renderState.secondaryAction ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => onStepAction(renderState.secondaryAction!)}
+              >
+                {renderState.secondaryAction.label}
+              </Button>
+            ) : null}
+            {primaryAction ? (
+              <Button
+                type="button"
+                size="xs"
+                onClick={
+                  primaryAction.kind === defaultPrimaryAction.kind &&
+                  primaryAction.label === defaultPrimaryAction.label
+                    ? onNext
+                    : () => onStepAction(primaryAction)
+                }
+              >
+                {primaryAction.label}
+                {primaryAction.kind === 'next' && !renderState.isLastStep ? <ArrowRight /> : null}
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -153,6 +196,14 @@ export function ContextualTourOverlaySurface({
       role="presentation"
       onKeyDownCapture={onOverlayKeyDownCapture}
     >
+      {showTargetRings ? (
+        <div
+          aria-hidden="true"
+          className="orca-contextual-tour-target-rings fixed z-[75]"
+          data-contextual-tour-target-rings=""
+          style={targetRingStyle}
+        />
+      ) : null}
       <div className="pointer-events-auto">
         {panelHost ? createPortal(panel, panelHost) : panel}
       </div>

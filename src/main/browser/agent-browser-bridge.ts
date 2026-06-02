@@ -54,6 +54,7 @@ import type {
 const EXEC_TIMEOUT_MS = 90_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
+const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
 
 type SessionState = {
   proxy: CdpWsProxy
@@ -168,6 +169,22 @@ function parseShellArgs(input: string): string[] {
     args.push(current)
   }
   return args
+}
+
+function stripAgentBrowserTargetArgs(args: string[]): string[] {
+  const stripped: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--cdp' || arg === '--session') {
+      index++
+      continue
+    }
+    if (arg.startsWith('--cdp=') || arg.startsWith('--session=')) {
+      continue
+    }
+    stripped.push(arg)
+  }
+  return stripped
 }
 
 // Why: agent-browser returns generic error messages for stale/unknown refs.
@@ -497,7 +514,9 @@ export class AgentBrowserBridge {
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
     if (browserPageId) {
-      await this.destroySession(`orca-tab-${browserPageId}`)
+      const sessionName = `orca-tab-${browserPageId}`
+      await this.destroySession(sessionName)
+      this.pendingInterceptRestore.delete(sessionName)
     }
     this.options.onTabsChanged?.(owningWorktreeId)
   }
@@ -565,6 +584,7 @@ export class AgentBrowserBridge {
     for (const [tabId, wcId] of tabs) {
       const wc = this.getWebContents(wcId)
       if (!wc) {
+        this.browserManager.unregisterGuest(tabId)
         continue
       }
       if (firstLiveWcId === null) {
@@ -689,10 +709,10 @@ export class AgentBrowserBridge {
     // directly via JS and dispatch input/change events for React/framework compat.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       await this.execAgentBrowser(sessionName, ['focus', element])
-      const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      const serializedValue = JSON.stringify(value)
       await this.execAgentBrowser(sessionName, [
         'eval',
-        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, '${escaped}'); } else { el.value = '${escaped}'; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
+        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, ${serializedValue}); } else { el.value = ${serializedValue}; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
       ])
       return { filled: element } as BrowserFillResult
     })
@@ -1119,19 +1139,33 @@ export class AgentBrowserBridge {
       }
       wc.reload()
       await new Promise<void>((resolve) => {
-        const onFinish = (): void => {
+        let settled = false
+        let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+
+        const finish = (): void => {
+          if (settled) {
+            return
+          }
+          settled = true
           wc.removeListener('did-finish-load', onFinish)
           wc.removeListener('did-fail-load', onFail)
+          if (fallbackTimer) {
+            clearTimeout(fallbackTimer)
+            fallbackTimer = null
+          }
           resolve()
         }
-        const onFail = (): void => {
-          wc.removeListener('did-finish-load', onFinish)
-          wc.removeListener('did-fail-load', onFail)
-          resolve()
-        }
+        const onFinish = (): void => finish()
+        const onFail = (): void => finish()
+
         wc.on('did-finish-load', onFinish)
         wc.on('did-fail-load', onFail)
-        setTimeout(onFinish, 10_000)
+        // Why: successful reloads must clear the fallback timer; otherwise each
+        // reload retains the webContents and listeners until the 10s timeout fires.
+        fallbackTimer = setTimeout(finish, 10_000)
+        if (typeof fallbackTimer.unref === 'function') {
+          fallbackTimer.unref()
+        }
       })
       return { url: wc.getURL(), title: wc.getTitle() }
     })
@@ -1680,12 +1714,9 @@ export class AgentBrowserBridge {
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: strip --cdp and --session from raw command to prevent session/target injection
-      const sanitized = command
-        .replace(/--cdp\s+\S+/g, '')
-        .replace(/--session\s+\S+/g, '')
-        .trim()
-      const args = parseShellArgs(sanitized)
+      // Why: strip target/session flags from raw passthrough commands so a
+      // caller cannot override Orca's selected browser page or CDP proxy.
+      const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -1698,6 +1729,7 @@ export class AgentBrowserBridge {
       promises.push(this.destroySession(sessionName))
     }
     await Promise.allSettled(promises)
+    this.pendingInterceptRestore.clear()
   }
 
   // ── Internal ──
@@ -1785,6 +1817,9 @@ export class AgentBrowserBridge {
       }
     }
 
+    if (queue && queue.length === 0 && this.commandQueues.get(sessionName) === queue) {
+      this.commandQueues.delete(sessionName)
+    }
     this.processingQueues.delete(sessionName)
   }
 
@@ -1815,6 +1850,7 @@ export class AgentBrowserBridge {
     }
 
     if (!this.getWebContents(webContentsId)) {
+      this.browserManager.unregisterGuest(browserPageId)
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${browserPageId} is no longer available`
@@ -1841,6 +1877,15 @@ export class AgentBrowserBridge {
         if (wcId === preferredWcId && this.getWebContents(wcId)) {
           return { browserPageId: tabId, webContentsId: wcId }
         }
+        if (wcId === preferredWcId) {
+          this.browserManager.unregisterGuest(tabId)
+          if (this.activeWebContentsId === wcId) {
+            this.activeWebContentsId = null
+          }
+          if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === wcId) {
+            this.activeWebContentsPerWorktree.delete(worktreeId)
+          }
+        }
       }
     }
 
@@ -1856,6 +1901,7 @@ export class AgentBrowserBridge {
         }
         return { browserPageId: tabId, webContentsId: wcId }
       }
+      this.browserManager.unregisterGuest(tabId)
     }
 
     throw new BrowserError(
@@ -1903,11 +1949,7 @@ export class AgentBrowserBridge {
       // across Orca restarts. A stale session ignores --cdp (already initialized) and
       // connects to the dead port. Must await close so the daemon forgets the session
       // before we pass --cdp with the new port.
-      await new Promise<void>((resolve) => {
-        execFile(this.agentBrowserBin, ['--session', sessionName, 'close'], { timeout: 3000 }, () =>
-          resolve()
-        )
-      })
+      await this.closeStaleAgentBrowserSession(sessionName)
 
       const proxy = new CdpWsProxy(wc)
       const cdpEndpoint = await proxy.start()
@@ -1940,8 +1982,21 @@ export class AgentBrowserBridge {
       return
     }
 
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      // Why: tab close can race with stale-session cleanup before sessions.set().
+      // Wait for creation to settle so a late proxy cannot survive the close.
+      try {
+        await pendingCreation
+      } catch {
+        // Creation failures are handled by the original caller; teardown still
+        // needs to reject queued work and clear any partial state below.
+      }
+    }
+
     const session = this.sessions.get(sessionName)
     if (!session) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
       return
     }
 
@@ -1950,19 +2005,7 @@ export class AgentBrowserBridge {
 
     // Why: queued commands would hang forever if we just delete the queue —
     // their promises would never resolve or reject. Drain and reject them.
-    const queue = this.commandQueues.get(sessionName)
-    this.commandQueues.delete(sessionName)
-    this.processingQueues.delete(sessionName)
-    if (queue) {
-      const err = new BrowserError(
-        'browser_tab_closed',
-        'Tab was closed while commands were queued'
-      )
-      for (const cmd of queue) {
-        cmd.reject(err)
-      }
-      queue.length = 0
-    }
+    this.rejectQueuedCommandsForClosedSession(sessionName)
 
     if (session.activeProcess) {
       // Why: queued command rejection is not enough when a daemon command is
@@ -1997,6 +2040,22 @@ export class AgentBrowserBridge {
     }
   }
 
+  private rejectQueuedCommandsForClosedSession(sessionName: string): void {
+    const queue = this.commandQueues.get(sessionName)
+    this.commandQueues.delete(sessionName)
+    this.processingQueues.delete(sessionName)
+    if (queue) {
+      const err = new BrowserError(
+        'browser_tab_closed',
+        'Tab was closed while commands were queued'
+      )
+      for (const cmd of queue) {
+        cmd.reject(err)
+      }
+      queue.length = 0
+    }
+  }
+
   private async execAgentBrowser(
     sessionName: string,
     commandArgs: string[],
@@ -2014,6 +2073,7 @@ export class AgentBrowserBridge {
     // could be destroyed. Check here to give a clear error instead of letting the
     // proxy fail with cryptic Electron debugger errors.
     if (!this.getWebContents(session.webContentsId)) {
+      await this.destroySession(sessionName)
       throw this.createPageUnavailableError(sessionName)
     }
 
@@ -2031,7 +2091,12 @@ export class AgentBrowserBridge {
       args.push('--cdp', String(port))
     }
 
-    args.push(...commandArgs, '--json')
+    // Why: exec passthrough can produce a large argv array; spreading it into
+    // push risks V8 argument limits before execFile receives the command.
+    for (const commandArg of commandArgs) {
+      args.push(commandArg)
+    }
+    args.push('--json')
 
     const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
     const translated = translateResult(stdout)
@@ -2081,6 +2146,40 @@ export class AgentBrowserBridge {
 
   private createPageUnavailableError(sessionName: string): BrowserError {
     return new BrowserError('browser_tab_not_found', pageUnavailableMessageForSession(sessionName))
+  }
+
+  private closeStaleAgentBrowserSession(sessionName: string): Promise<void> {
+    return new Promise((resolve) => {
+      let child: ReturnType<typeof execFile> | null = null
+      let settled = false
+
+      const finish = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        clearTimeout(timeout)
+        resolve()
+      }
+
+      // Why: this is best-effort daemon cleanup before creating a fresh session;
+      // a wedged close command must not block the real browser action.
+      const timeout = setTimeout(() => {
+        child?.kill()
+        finish()
+      }, STALE_SESSION_CLOSE_TIMEOUT_MS)
+
+      try {
+        child = execFile(
+          this.agentBrowserBin,
+          ['--session', sessionName, 'close'],
+          { timeout: STALE_SESSION_CLOSE_TIMEOUT_MS },
+          finish
+        )
+      } catch {
+        finish()
+      }
+    })
   }
 
   private createCommandError(

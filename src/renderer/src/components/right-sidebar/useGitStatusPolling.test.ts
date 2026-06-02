@@ -73,6 +73,8 @@ async function usePollingOnce(
   vi.doMock('@/store/selectors', () => ({
     useActiveWorktree: () =>
       options.pushTarget ? { ...worktree, pushTarget: options.pushTarget } : worktree,
+    useWorktreeById: () =>
+      options.pushTarget ? { ...worktree, pushTarget: options.pushTarget } : worktree,
     useAllWorktrees: () => [worktree],
     useRepoById: () => mockedRepo,
     useRepoMap: () => new Map([[mockedRepo.id, mockedRepo]])
@@ -233,6 +235,7 @@ describe('useGitStatusPolling', () => {
     }))
     vi.doMock('@/store/selectors', () => ({
       useActiveWorktree: () => worktree,
+      useWorktreeById: () => worktree,
       useAllWorktrees: () => [worktree],
       useRepoById: () => repo,
       useRepoMap: () => new Map([[repo.id, repo]])

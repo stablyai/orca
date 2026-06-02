@@ -15,6 +15,11 @@ type WorktreeBatchDeleteOptions = {
   onDeleted?: (worktreeIds: string[]) => void
 }
 
+type WorktreeDeleteWithToastOptions = {
+  force?: boolean
+  onForceDeleted?: (worktreeId: string) => void
+}
+
 // Why: a failed delete almost always means the worktree still has changes
 // that need attention (uncommitted work, unpushed commits, conflicts). The
 // "View" affordance should surface those changes directly, not just bring
@@ -35,8 +40,12 @@ function isStrictDescendantPath(parentPath: string, childPath: string): boolean 
 }
 
 export async function runWorktreeDeletesInParallel(
-  targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[]
+  targets: readonly Pick<Worktree, 'id' | 'displayName' | 'repoId' | 'path'>[],
+  options: WorktreeDeleteWithToastOptions = {}
 ): Promise<string[]> {
+  // Why: deletes are serialized per repo to avoid git lock races, but every
+  // selected/lineage workspace should show in-flight feedback immediately.
+  useAppStore.getState().markWorktreesDeleting(targets.map((target) => target.id))
   // Why: `git worktree remove`/`prune`/`branch -D` mutate repo-wide ref state
   // and contend on `.git/packed-refs.lock` and per-worktree HEAD.lock. Running
   // every target through Promise.all races those locks on the same repo and
@@ -63,9 +72,10 @@ export async function runWorktreeDeletesInParallel(
       const failedInGroup: (typeof group)[number][] = []
       for (const target of group) {
         if (failedInGroup.some((failed) => isStrictDescendantPath(target.path, failed.path))) {
+          useAppStore.getState().clearWorktreeDeleteState(target.id)
           continue
         }
-        const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName)
+        const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName, options)
         if (deleted) {
           deletedInGroup.push(target.id)
         } else {
@@ -96,11 +106,12 @@ export async function runWorktreeDeletesInParallel(
  */
 export function runWorktreeDeleteWithToast(
   worktreeId: string,
-  worktreeName: string
+  worktreeName: string,
+  options: WorktreeDeleteWithToastOptions = {}
 ): Promise<boolean> {
   const removeWorktree = useAppStore.getState().removeWorktree
 
-  return removeWorktree(worktreeId, false)
+  return removeWorktree(worktreeId, options.force === true)
     .then((result) => {
       if (result.ok) {
         return true
@@ -132,7 +143,9 @@ export function runWorktreeDeleteWithToast(
                           onClick: () => viewWorktreeDiff(worktreeId)
                         }
                       })
+                      return
                     }
+                    options.onForceDeleted?.(worktreeId)
                   })
                   .catch((err: unknown) => {
                     toast.error('Failed to delete workspace', {
@@ -166,23 +179,25 @@ export function runWorktreeDeleteWithToast(
  * running the delete immediately with toast feedback, or opening the
  * confirmation modal.
  *
- * Why folder-root removal is handled at the call site: disconnecting the
- * folder project branches to a different modal (`confirm-remove-folder`).
- * Keeping that decision adjacent to the caller avoids mixing project removal
- * into what is otherwise a workspace delete confirmation flow.
- *
- * The main-worktree / missing-record guard here is defense-in-depth — the
- * caller is responsible for disabling UI when this is known ahead of time,
- * but we still refuse to act if the record disappeared between render and
- * click (e.g. a concurrent delete or state reset).
+ * The missing-record guard here is defense-in-depth — the caller is
+ * responsible for disabling UI when this is known ahead of time, but we still
+ * refuse to act if the record disappeared between render and click (e.g. a
+ * concurrent delete or state reset).
  */
 export function runWorktreeDelete(worktreeId: string): void {
   const state = useAppStore.getState()
   const target = getWorktreeMapFromState(state).get(worktreeId) ?? null
-  // Guard: main worktrees cannot be deleted, and a missing record means the
-  // worktree was removed out from under us — either way, no-op silently
-  // rather than opening a modal with stale/invalid context.
-  if (!target || target.isMainWorktree) {
+  if (!target) {
+    return
+  }
+  if (target.isMainWorktree) {
+    const repo = state.repos.find((entry) => entry.id === target.repoId)
+    // Why: git refuses to delete the primary checkout, but users can still
+    // remove the owning project from Orca without deleting disk contents.
+    state.openModal('confirm-remove-folder', {
+      repoId: target.repoId,
+      displayName: repo?.displayName ?? target.displayName
+    })
     return
   }
   state.clearWorktreeDeleteState(worktreeId)
@@ -233,7 +248,9 @@ export function runWorktreeBatchDelete(
     !singleTargetHasLineageChildren &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false)
   if (skipConfirm) {
-    void runWorktreeDeletesInParallel(targets).then((deletedIds) => {
+    void runWorktreeDeletesInParallel(targets, {
+      onForceDeleted: (deletedId) => options.onDeleted?.([deletedId])
+    }).then((deletedIds) => {
       if (deletedIds.length > 0) {
         options.onDeleted?.(deletedIds)
       }

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -12,7 +12,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
-import type { RpcClient } from '../../../src/transport/rpc-client'
 import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import type { RpcSuccess } from '../../../src/transport/types'
@@ -38,17 +37,16 @@ export default function AccountsScreen() {
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
-  const clientRef = useRef<RpcClient | null>(null)
 
   useEffect(() => {
-    clientRef.current = client
-  }, [client])
-
-  useEffect(() => {
-    if (!hostId) return
+    if (!hostId) {
+      return
+    }
     let stale = false
     void loadHosts().then((hosts) => {
-      if (stale) return
+      if (stale) {
+        return
+      }
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
         setError('Host not found')
@@ -66,9 +64,13 @@ export default function AccountsScreen() {
   // when the user switches accounts. Falls back to a one-shot accounts.list
   // if the subscription stream errors.
   useEffect(() => {
-    if (!client || connState !== 'connected') return
+    if (!client || connState !== 'connected') {
+      return
+    }
     const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
-      if (!payload || typeof payload !== 'object') return
+      if (!payload || typeof payload !== 'object') {
+        return
+      }
       const evt = payload as { type?: string; snapshot?: AccountsSnapshot }
       if ((evt.type === 'ready' || evt.type === 'snapshot') && evt.snapshot) {
         setSnapshot(evt.snapshot)
@@ -79,7 +81,9 @@ export default function AccountsScreen() {
   }, [client, connState])
 
   const refresh = useCallback(async () => {
-    if (!client) return
+    if (!client) {
+      return
+    }
     setRefreshing(true)
     try {
       const res = await client.sendRequest('accounts.list')
@@ -98,7 +102,9 @@ export default function AccountsScreen() {
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
-      if (!client) return
+      if (!client) {
+        return
+      }
       setBusyAccountId(accountId ?? `${provider}:default`)
       const method = provider === 'claude' ? 'accounts.selectClaude' : 'accounts.selectCodex'
       try {
@@ -121,7 +127,9 @@ export default function AccountsScreen() {
   )
 
   const renderProviderSection = (provider: ProviderKey, title: string) => {
-    if (!snapshot) return null
+    if (!snapshot) {
+      return null
+    }
     const state = provider === 'claude' ? snapshot.claude : snapshot.codex
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon

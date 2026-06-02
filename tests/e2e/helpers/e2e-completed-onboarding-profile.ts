@@ -1,7 +1,7 @@
 import { ONBOARDING_FINAL_STEP } from '../../../src/shared/constants'
 import { FEATURE_INTERACTION_IDS } from '../../../src/shared/feature-interactions'
 
-const SEEN_FIRST_RUN_FEATURE_TIP_IDS = ['voice-dictation'] as const
+const SEEN_FIRST_RUN_FEATURE_TIP_IDS = ['voice-dictation', 'orca-cli'] as const
 const SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS = [
   'workspace-board',
   'browser',

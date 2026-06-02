@@ -121,6 +121,16 @@ describe('ProjectAddedDialog', () => {
     expect(markup).toContain('setup:orca:main')
   })
 
+  it('renders when older onboarding modal data uses projectId', async () => {
+    mocks.state.modalData = { projectId: 'repo-1' }
+    const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
+
+    const markup = renderToStaticMarkup(<ProjectAddedDialog />)
+
+    expect(markup).toContain('setup:orca')
+    expect(mocks.state.closeModal).not.toHaveBeenCalled()
+  })
+
   it('closes without rendering Git setup for folder repos', async () => {
     mocks.state.repos = [makeRepo({ kind: 'folder' })]
     const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')

@@ -66,11 +66,15 @@ describe('CLI remote WebSocket transport', () => {
       deviceToken: runtime.deviceToken,
       publicKeyB64: runtime.publicKeyB64
     }
-    const barePayload = encodePairingOffer(offer).split('#')[1]!
+    const pairingUrl = encodePairingOffer(offer)
+    const barePayload = new URLSearchParams(pairingUrl.slice(pairingUrl.indexOf('?') + 1)).get(
+      'code'
+    )!
 
     const client = new RuntimeClient('/tmp/unused', 5_000, barePayload)
     const status = await client.getCliStatus()
 
+    expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-ws-2')
   })
@@ -92,6 +96,7 @@ describe('CLI remote WebSocket transport', () => {
     const client = new RuntimeClient(userDataPath, 5_000, null, 'remote-dev')
     const status = await client.getCliStatus()
 
+    expect(status.result.app).toEqual({ running: false, pid: null })
     expect(status.result.runtime.reachable).toBe(true)
     expect(status.result.runtime.runtimeId).toBe('runtime-env-1')
   })

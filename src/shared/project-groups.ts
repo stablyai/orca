@@ -105,10 +105,9 @@ export function getProjectGroupSubtreeIds(
     if (!group.parentGroupId) {
       continue
     }
-    childGroupsByParentId.set(group.parentGroupId, [
-      ...(childGroupsByParentId.get(group.parentGroupId) ?? []),
-      group.id
-    ])
+    const children = childGroupsByParentId.get(group.parentGroupId) ?? []
+    children.push(group.id)
+    childGroupsByParentId.set(group.parentGroupId, children)
   }
 
   const subtreeIds = new Set<string>()
@@ -119,7 +118,11 @@ export function getProjectGroupSubtreeIds(
       continue
     }
     subtreeIds.add(groupId)
-    pending.push(...(childGroupsByParentId.get(groupId) ?? []))
+    // Why: imported project-group trees can be very wide; `push(...children)`
+    // can exceed V8's argument limit while collecting descendants.
+    for (const childGroupId of childGroupsByParentId.get(groupId) ?? []) {
+      pending.push(childGroupId)
+    }
   }
   return subtreeIds
 }

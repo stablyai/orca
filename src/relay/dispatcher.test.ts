@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- Why: dispatcher behavior is stateful across
+   primary, socket, timeout, and cancellation paths; keeping fixtures shared
+   makes regression tests easier to audit. */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { RelayDispatcher } from './dispatcher'
 import {
@@ -201,6 +204,61 @@ describe('RelayDispatcher', () => {
     expect(socketWritten).toHaveLength(1)
   })
 
+  it('forwards relay-originated requests to an owning socket client instead of the caller', async () => {
+    dispatcher.invalidateClient()
+    const ownerWritten: Buffer[] = []
+    const ownerId = dispatcher.attachClient((data) => {
+      ownerWritten.push(Buffer.from(data))
+    })
+    const cliId = dispatcher.attachClient(() => {})
+
+    const pending = dispatcher.requestAnyClient(
+      'orca.cli',
+      { argv: ['status'] },
+      { excludeClientId: cliId }
+    )
+
+    expect(ownerWritten).toHaveLength(1)
+    const requestFrame = decodeFirstFrame(ownerWritten[0])
+    const request = JSON.parse(requestFrame.payload.toString('utf-8')) as JsonRpcRequest
+    expect(request.method).toBe('orca.cli')
+    expect(request.params).toEqual({ argv: ['status'] })
+
+    dispatcher.feedClient(
+      ownerId,
+      encodeJsonRpcFrame({ jsonrpc: '2.0', id: request.id, result: { exitCode: 0 } }, 1, 0)
+    )
+
+    await expect(pending).resolves.toEqual({ exitCode: 0 })
+  })
+
+  it('prefers an owning socket client over the synthetic primary client', async () => {
+    const ownerWritten: Buffer[] = []
+    const ownerId = dispatcher.attachClient((data) => {
+      ownerWritten.push(Buffer.from(data))
+    })
+    const cliId = dispatcher.attachClient(() => {})
+
+    const pending = dispatcher.requestAnyClient(
+      'orca.cli',
+      { argv: ['status'] },
+      { excludeClientId: cliId }
+    )
+
+    expect(written).toHaveLength(0)
+    expect(ownerWritten).toHaveLength(1)
+    const requestFrame = decodeFirstFrame(ownerWritten[0])
+    const request = JSON.parse(requestFrame.payload.toString('utf-8')) as JsonRpcRequest
+    expect(request.method).toBe('orca.cli')
+
+    dispatcher.feedClient(
+      ownerId,
+      encodeJsonRpcFrame({ jsonrpc: '2.0', id: request.id, result: { exitCode: 0 } }, 1, 0)
+    )
+
+    await expect(pending).resolves.toEqual({ exitCode: 0 })
+  })
+
   it('isolates failed socket-client writes from other clients', () => {
     const goodSocketWritten: Buffer[] = []
     const failingClientId = dispatcher.attachClient(() => {
@@ -304,6 +362,28 @@ describe('RelayDispatcher', () => {
     dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
     await vi.advanceTimersByTimeAsync(0)
     dispatcher.invalidateClient()
+
+    expect(observedSignal?.aborted).toBe(true)
+    resolveHandler()
+    await vi.advanceTimersByTimeAsync(0)
+  })
+
+  it('aborts in-flight request contexts on dispose', async () => {
+    let observedSignal: AbortSignal | undefined
+    let resolveHandler!: () => void
+    dispatcher.onRequest(
+      'slow.method',
+      (_params, context) =>
+        new Promise((resolve) => {
+          observedSignal = context.signal
+          resolveHandler = () => resolve(null)
+        })
+    )
+
+    const req: JsonRpcRequest = { jsonrpc: '2.0', id: 101, method: 'slow.method' }
+    dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
+    await vi.advanceTimersByTimeAsync(0)
+    dispatcher.dispose()
 
     expect(observedSignal?.aborted).toBe(true)
     resolveHandler()

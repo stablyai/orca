@@ -18,6 +18,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
         'project icon',
         'repository icon',
         'color',
+        'hex',
         'badge',
         'emoji',
         'favicon'
@@ -30,6 +31,18 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
             title: 'Default Worktree Base',
             description: 'Default base branch or ref when creating worktrees.',
             keywords: [repo.displayName, 'base ref', 'branch']
+          },
+          {
+            title: 'Worktree Location',
+            description: 'Project-specific directory for new worktrees.',
+            keywords: [
+              repo.displayName,
+              'worktree path',
+              'workspace path',
+              'directory',
+              'relative',
+              '../worktrees'
+            ]
           },
           {
             title: 'Sparse Checkout Presets',
@@ -67,8 +80,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
               'branch name',
               'rename',
               'model',
-              'prompt',
-              'instructions'
+              'prompt'
             ]
           },
           {

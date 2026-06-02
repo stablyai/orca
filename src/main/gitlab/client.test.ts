@@ -165,7 +165,7 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
         }
       ])
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-        ['api', '--paginate', 'todos?state=pending&per_page=50'],
+        ['api', 'todos?state=pending&per_page=50'],
         { cwd: '/repo' }
       )
     })

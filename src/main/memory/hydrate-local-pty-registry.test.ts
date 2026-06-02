@@ -22,6 +22,8 @@ import type {
   unregisterPty as UnregisterFn
 } from './pty-registry'
 
+const LARGE_SESSION_COUNT = 150_000
+
 // Why: the hydrator pulls the daemon provider through this module-level
 // getter. Stubbing it lets us drive the offline / throwing / live paths
 // without spinning up real sockets.
@@ -62,6 +64,19 @@ function makeProvider(sessions: SessionInfo[]): Pick<DaemonPtyAdapter, 'listSess
   return {
     listSessions: vi.fn().mockResolvedValue(sessions)
   }
+}
+
+function makeLocalSessions(repoId: string, worktreePath: string, count: number): SessionInfo[] {
+  const sessions: SessionInfo[] = []
+  for (let index = 0; index < count; index += 1) {
+    const suffix = index.toString(16).padStart(8, '0')
+    sessions.push({
+      sessionId: `${repoId}::${worktreePath}@@${suffix}`,
+      pid: 1000 + index,
+      cwd: worktreePath
+    } as unknown as SessionInfo)
+  }
+  return sessions
 }
 
 // Why: the module under test memoizes `hasHydrated` at module scope so it
@@ -167,7 +182,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(entry!.paneKey).toBe('tab-1:1')
   })
 
-  it('skips SSH sessions (repo with non-null connectionId)', async () => {
+  it('skips SSH repos before enumerating worktrees', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
 
     const ptyId = 'repo-ssh::/remote/Stingray@@feedface'
@@ -185,6 +200,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     // visible to the local process sampler. Mirrors the spawn-time gate
     // around `registerPty` in `pty.ts`'s `pty:spawn` handler.
     expect(listRegisteredPtys()).toHaveLength(0)
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
   })
 
   it('registers a local session whose worktree is in the store with the daemon-published pid', async () => {
@@ -205,5 +221,25 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(entry).toBeDefined()
     expect(entry!.pid).toBe(4242)
     expect(entry!.worktreeId).toBe('repo-a::/local/Triton')
+  })
+
+  it('hydrates large daemon session lists', async () => {
+    const { hydrate, listRegisteredPtys } = await loadFresh()
+
+    const sessions = makeLocalSessions('repo-a', '/local/Triton', LARGE_SESSION_COUNT)
+    const provider = makeProvider(sessions)
+    getDaemonProviderMock.mockReturnValue(provider)
+    listRepoWorktreesMock.mockResolvedValue([
+      { path: '/local/Triton', head: '', branch: '', isBare: false, isMainWorktree: true }
+    ])
+
+    await hydrate(makeStore([{ id: 'repo-a', connectionId: null }]))
+
+    const registered = listRegisteredPtys()
+    expect(registered).toHaveLength(LARGE_SESSION_COUNT)
+    expect(registered[0]?.ptyId).toBe('repo-a::/local/Triton@@00000000')
+    expect(registered.at(-1)?.ptyId).toBe(
+      `repo-a::/local/Triton@@${(LARGE_SESSION_COUNT - 1).toString(16).padStart(8, '0')}`
+    )
   })
 })

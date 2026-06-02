@@ -1,15 +1,17 @@
 /* eslint-disable max-lines -- Why: shared type definitions for all runtime RPC methods live in one file for discoverability and import simplicity. */
-import type { AgentStatusEntry } from './agent-status-types'
+import type { AgentStatusEntry, AgentStatusOrchestrationContext } from './agent-status-types'
 import type {
   BaseRefSearchResult,
   BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileSource,
   GitWorktreeInfo,
+  RemoveWorktreeResult,
   Repo,
   TabGroupLayoutNode,
   TerminalColorOverrides,
   TerminalLayoutSnapshot,
+  TuiAgent,
   Worktree,
   WorktreeLineage,
   WorktreeLineageWarning
@@ -46,6 +48,7 @@ export type RuntimeStatus = {
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
+  hostPlatform?: NodeJS.Platform
   // COMPAT(runtimeStatusMobileAliases): added 2026-05-15 for mobile builds
   // that still read these names; new desktop/CLI code uses the fields above.
   protocolVersion?: number
@@ -98,6 +101,12 @@ export type RuntimeSyncWindowGraph = {
   mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[]
 }
 
+export type RuntimeSyncWindowGraphResult = RuntimeStatus & {
+  /** Main owns terminal handles/dispatches, so renderer graph sync returns the
+   *  parent metadata needed by title-derived agent rows without name guessing. */
+  agentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+}
+
 export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
@@ -107,6 +116,7 @@ export type RuntimeMobileSessionTerminalTab = {
   ptyId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
   agentStatus?: AgentStatusEntry | null
+  launchAgent?: TuiAgent
   parentLayout?: TerminalLayoutSnapshot
   isActive: boolean
 }
@@ -412,6 +422,11 @@ export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
   warnings: WorktreeLineageWarning[]
+  warning?: string
+}
+
+export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
+  removed: boolean
   warning?: string
 }
 

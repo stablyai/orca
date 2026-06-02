@@ -21,6 +21,7 @@ import type { SourceControlAiOperation } from '../../shared/source-control-ai-ty
 import { getRemoteFileUrl } from '../git/repo'
 import {
   abortMerge,
+  abortRebase,
   bulkDiscardChanges,
   bulkStageFiles,
   bulkUnstageFiles,
@@ -39,7 +40,7 @@ import {
 } from '../git/status'
 import { getHistory as getGitHistory } from '../git/history'
 import { getUpstreamStatus } from '../git/upstream'
-import { gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
+import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import {
   getSshGitProvider,
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
@@ -191,6 +192,20 @@ export class RuntimeGitCommands {
     return { ok: true }
   }
 
+  async abortRuntimeGitRebase(worktreeSelector: string): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      await provider.abortRebase(target.worktree.path)
+      return { ok: true }
+    }
+    await abortRebase(target.worktree.path)
+    return { ok: true }
+  }
+
   async getRuntimeGitDiff(
     worktreeSelector: string,
     filePath: string,
@@ -285,6 +300,23 @@ export class RuntimeGitCommands {
       return { ok: true }
     }
     await gitPull(target.worktree.path, pushTarget)
+    return { ok: true }
+  }
+
+  async fastForwardRuntimeGit(
+    worktreeSelector: string,
+    pushTarget?: GitPushTarget
+  ): Promise<{ ok: true }> {
+    const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
+    const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
+    if (target.connectionId) {
+      if (!provider) {
+        throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+      }
+      await provider.fastForwardBranch(target.worktree.path, pushTarget)
+      return { ok: true }
+    }
+    await gitFastForward(target.worktree.path, pushTarget)
     return { ok: true }
   }
 
@@ -450,7 +482,8 @@ export class RuntimeGitCommands {
       return generateCommitMessageFromContext(context, resolvedSettings.params, {
         kind: 'remote',
         cwd: target.worktree.path,
-        execute: (plan, cwd, timeoutMs) => provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+        execute: (plan, cwd, timeoutMs, operation) =>
+          provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
         missingBinaryLocation: 'remote PATH'
       })
     }
@@ -483,7 +516,7 @@ export class RuntimeGitCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
-      await provider?.cancelGenerateCommitMessage(target.worktree.path)
+      await provider?.cancelGenerateCommitMessage(target.worktree.path, 'commit-message')
       return { ok: true }
     }
     cancelGenerateCommitMessageLocal(target.worktree.path)
@@ -552,7 +585,8 @@ export class RuntimeGitCommands {
       return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
         kind: 'remote',
         cwd: target.worktree.path,
-        execute: (plan, cwd, timeoutMs) => provider!.executeCommitMessagePlan(plan, cwd, timeoutMs),
+        execute: (plan, cwd, timeoutMs, operation) =>
+          provider!.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
         missingBinaryLocation: 'remote PATH'
       })
     }
@@ -575,7 +609,7 @@ export class RuntimeGitCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = target.connectionId ? getSshGitProvider(target.connectionId) : null
     if (target.connectionId) {
-      await provider?.cancelGenerateCommitMessage(target.worktree.path)
+      await provider?.cancelGenerateCommitMessage(target.worktree.path, 'pull-request-fields')
       return { ok: true }
     }
     cancelGeneratePullRequestFieldsLocal(target.worktree.path)

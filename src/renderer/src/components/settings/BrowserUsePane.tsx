@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: Browser Use setup keeps enablement, CLI registration, skill install, cookie import, examples, and interaction tracking in one pane so the three-step setup state stays coherent. */
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Import, Loader2, MousePointerClick } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -17,6 +17,7 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import {
@@ -58,6 +59,16 @@ export function BrowserUseSetup({
   const [cliStatus, setCliStatus] = useState<CliInstallStatus | null>(null)
   const [cliLoading, setCliLoading] = useState(true)
   const [cliBusy, setCliBusy] = useState(false)
+  const mountedRef = useMountedRef()
+
+  const handleCliStatusChange = useCallback(
+    (nextStatus: CliInstallStatus): void => {
+      if (mountedRef.current) {
+        setCliStatus(nextStatus)
+      }
+    },
+    [mountedRef]
+  )
 
   // Why: the toggle gates only whether we show the setup instructions. We
   // persist it in localStorage instead of global settings because it has no
@@ -75,16 +86,20 @@ export function BrowserUseSetup({
     }
   }
 
-  const refreshCli = async (): Promise<void> => {
+  const refreshCli = useCallback(async (): Promise<void> => {
     setCliLoading(true)
     try {
-      setCliStatus(await window.api.cli.getInstallStatus())
+      handleCliStatusChange(await window.api.cli.getInstallStatus())
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+      }
     } finally {
-      setCliLoading(false)
+      if (mountedRef.current) {
+        setCliLoading(false)
+      }
     }
-  }
+  }, [handleCliStatusChange, mountedRef])
 
   useEffect(() => {
     // Why: skip IPC work when the feature is toggled off — the component
@@ -94,7 +109,7 @@ export function BrowserUseSetup({
     }
     void refreshCli()
     void fetchBrowserSessionProfiles()
-  }, [browserUseEnabled, fetchBrowserSessionProfiles])
+  }, [browserUseEnabled, fetchBrowserSessionProfiles, refreshCli])
 
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   // Why: this step explicitly imports into the default profile, so completion
@@ -121,13 +136,15 @@ export function BrowserUseSetup({
     setCliBusy(true)
     try {
       const next = await ensureOrcaCliAvailableForAgentSkillTerminal({
-        onStatusChange: setCliStatus
+        onStatusChange: handleCliStatusChange
       })
-      if (isOrcaCliAvailableOnPath(next)) {
-        toast.success('Registered `orca` in PATH.')
+      if (mountedRef.current && isOrcaCliAvailableOnPath(next)) {
+        toast.success('Registered the Orca CLI in PATH.')
       }
     } finally {
-      setCliBusy(false)
+      if (mountedRef.current) {
+        setCliBusy(false)
+      }
     }
   }
 
@@ -254,7 +271,7 @@ export function BrowserUseSetup({
       {showStep1 ? (
         <SearchableSetting
           title="Enable Orca CLI"
-          description="Register the orca shell command so agents can drive the browser."
+          description="Register the Orca CLI so agents can drive the browser."
           keywords={BROWSER_USE_PANE_SEARCH_ENTRIES[0].keywords}
           className="rounded-xl border border-border/60 bg-card/50 p-4"
         >
@@ -266,8 +283,8 @@ export function BrowserUseSetup({
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-sm font-medium">Enable Orca CLI</p>
               <p className="text-xs text-muted-foreground">
-                Registers the <code className="rounded bg-muted px-1 py-0.5 text-[11px]">orca</code>{' '}
-                command so agents can orchestrate the browser from their shell.
+                Registers the Orca CLI command so agents can orchestrate the browser from their
+                shell.
               </p>
               {cliStatus?.commandPath && cliEnabled ? (
                 <p className="text-[11px] text-muted-foreground">
@@ -328,7 +345,9 @@ export function BrowserUseSetup({
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
             onBeforeOpenTerminal={async () => {
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
-              await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setCliStatus })
+              await ensureOrcaCliAvailableForAgentSkillTerminal({
+                onStatusChange: handleCliStatusChange
+              })
             }}
             onRecheck={refreshSkill}
           />

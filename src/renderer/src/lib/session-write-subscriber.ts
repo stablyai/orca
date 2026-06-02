@@ -1,17 +1,20 @@
 import type { AppState } from '../store'
-import type { WorkspaceSessionState } from '../../../shared/types'
-import {
-  buildWorkspaceSessionPayload,
-  SESSION_RELEVANT_FIELDS,
-  shouldPersistWorkspaceSession
-} from './workspace-session'
+import type { WorkspaceSessionPatch } from '../../../shared/types'
+import { SESSION_RELEVANT_FIELDS, shouldPersistWorkspaceSession } from './workspace-session'
+import { buildWorkspaceSessionPatch } from './workspace-session-patch'
+
+type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
+
+export type WorkspaceSessionWrite = {
+  patch: WorkspaceSessionPatch
+}
 
 export type SessionWriteSubscriberDeps = {
   store: {
     subscribe: (listener: (state: AppState) => void) => () => void
     getState: () => AppState
   }
-  persist: (payload: WorkspaceSessionState) => void
+  persist: (payload: WorkspaceSessionWrite) => void
   shouldSchedulePersist?: () => boolean
   debounceMs?: number
 }
@@ -37,23 +40,23 @@ export function createSessionWriteSubscriber({
   // skip both the timer reset and the rebuild when none changed. `null`
   // sentinel guarantees the very first fire always proceeds.
   let prev: Record<string, unknown> | null = null
+  const pendingChangedFields = new Set<SessionRelevantField>()
 
   const unsub = store.subscribe((state) => {
     if (!shouldPersistWorkspaceSession(state)) {
       return
     }
-    let changed = false
+    const changedFields: SessionRelevantField[] = []
     if (prev === null) {
-      changed = true
+      changedFields.push(...SESSION_RELEVANT_FIELDS)
     } else {
       for (const key of SESSION_RELEVANT_FIELDS) {
         if (prev[key] !== state[key]) {
-          changed = true
-          break
+          changedFields.push(key)
         }
       }
     }
-    if (!changed) {
+    if (changedFields.length === 0) {
       return
     }
     const next: Record<string, unknown> = {}
@@ -61,11 +64,15 @@ export function createSessionWriteSubscriber({
       next[key] = state[key]
     }
     prev = next
+    for (const field of changedFields) {
+      pendingChangedFields.add(field)
+    }
     if (shouldSchedulePersist && !shouldSchedulePersist()) {
       if (timer !== null) {
         clearTimeout(timer)
         timer = null
       }
+      pendingChangedFields.clear()
       return
     }
     if (timer !== null) {
@@ -83,9 +90,16 @@ export function createSessionWriteSubscriber({
       // stale values for that field.
       const fresh = store.getState()
       if (!shouldPersistWorkspaceSession(fresh)) {
+        pendingChangedFields.clear()
         return
       }
-      persist(buildWorkspaceSessionPayload(fresh))
+      const changed = new Set(pendingChangedFields)
+      pendingChangedFields.clear()
+      const patch = buildWorkspaceSessionPatch(fresh, changed)
+      if (Object.keys(patch).length === 0) {
+        return
+      }
+      persist({ patch })
     }, debounceMs)
   })
 
@@ -94,5 +108,6 @@ export function createSessionWriteSubscriber({
     if (timer !== null) {
       clearTimeout(timer)
     }
+    pendingChangedFields.clear()
   }
 }

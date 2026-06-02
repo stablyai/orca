@@ -10,6 +10,8 @@ import {
   EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT
 } from './worktree-ownership'
 
+const LARGE_WORKSPACE_HISTORY_COUNT = 150_000
+
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-1',
@@ -170,6 +172,31 @@ describe('worktree ownership classification', () => {
         knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
       })
     ).toBe('orca-managed')
+  })
+
+  it('builds known layouts from large workspace history lists', () => {
+    const repo = makeRepo()
+    const workspaceDirHistory = Array.from(
+      { length: LARGE_WORKSPACE_HISTORY_COUNT },
+      (_, index) => ({
+        path: `/history/workspaces-${index}`,
+        nestWorkspaces: index % 2 === 0
+      })
+    )
+    const settings = makeSettings({
+      workspaceDir: '/new/workspaces',
+      workspaceDirHistory
+    })
+
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+
+    expect(layouts).toHaveLength(LARGE_WORKSPACE_HISTORY_COUNT + 1)
+    expect(layouts[0]).toEqual({ path: '/new/workspaces', nestWorkspaces: true })
+    expect(layouts[1]).toEqual({ path: '/history/workspaces-0', nestWorkspaces: true })
+    expect(layouts.at(-1)).toEqual({
+      path: `/history/workspaces-${LARGE_WORKSPACE_HISTORY_COUNT - 1}`,
+      nestWorkspaces: false
+    })
   })
 
   it('handles Windows drive casing and separators', () => {

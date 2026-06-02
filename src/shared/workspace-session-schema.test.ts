@@ -51,6 +51,62 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
   })
 
+  it('preserves a valid launchAgent on a terminal tab', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            launchAgent: 'codex'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].launchAgent).toBe('codex')
+    }
+  })
+
+  it('drops an unknown launchAgent without failing the whole session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'bash',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            launchAgent: 'some-retired-agent'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].launchAgent).toBeUndefined()
+    }
+  })
+
   it('rejects a session where ptyId is a number (schema drift)', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -75,6 +131,54 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.error).toContain('ptyId')
+    }
+  })
+
+  it('preserves generated terminal title fields for persistence hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Claude working',
+            defaultTitle: 'Terminal 1',
+            generatedTitle: 'Refactor auth',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'tab1',
+            entityId: 'tab1',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'terminal',
+            label: 'Claude working',
+            generatedLabel: 'Refactor auth',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
+      expect(result.value.unifiedTabs?.wt[0].generatedLabel).toBe('Refactor auth')
     }
   })
 
@@ -115,6 +219,26 @@ describe('parseWorkspaceSession', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.lastVisitedAtByWorktreeId).toEqual({ good: 1_700_000_000_000 })
+    }
+  })
+
+  it('accepts default-tab idempotency markers', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      defaultTerminalTabsAppliedByWorktreeId: {
+        'repo1::/path/wt1': true
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+        'repo1::/path/wt1': true
+      })
     }
   })
 

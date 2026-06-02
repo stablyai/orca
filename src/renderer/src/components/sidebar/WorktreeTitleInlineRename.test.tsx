@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   WorktreeTitleInlineRename,
   getWorktreeTitleRenameCommit
@@ -25,15 +26,19 @@ describe('getWorktreeTitleRenameCommit', () => {
 describe('WorktreeTitleInlineRename', () => {
   it('renders the title as the double-click inline rename target', () => {
     const markup = renderToStaticMarkup(
-      <WorktreeTitleInlineRename
-        displayName="Feature workspace"
-        showUnreadEmphasis
-        onRename={vi.fn()}
-      />
+      <TooltipProvider>
+        <WorktreeTitleInlineRename
+          displayName="Feature workspace"
+          showUnreadEmphasis
+          onRename={vi.fn()}
+        />
+      </TooltipProvider>
     )
 
     expect(markup).toContain('data-worktree-title-inline-rename=""')
     expect(markup).not.toContain('cursor-text')
+    expect(markup).not.toContain('title="Feature workspace"')
+    expect(markup).toContain('tabindex="0"')
     expect(markup).toContain('Unread:')
     expect(markup).toContain('Feature workspace')
   })

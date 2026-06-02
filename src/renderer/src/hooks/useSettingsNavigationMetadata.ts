@@ -92,21 +92,16 @@ export function buildSettingsNavigationMetadata({
     : RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
 
   return [
-    {
-      id: 'general',
-      title: 'General',
-      description: 'Workspace defaults, app setup, and maintenance.',
-      icon: SlidersHorizontal,
-      searchEntries: GENERAL_PANE_SEARCH_ENTRIES,
-      group: 'setup'
-    },
+    // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
+    // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
+    // order — keep each new entry beside its group's siblings.
     {
       id: 'agents',
       title: 'Agents',
       description: 'Manage AI agents, set a default, and customize commands.',
       icon: Bot,
       searchEntries: AGENTS_PANE_SEARCH_ENTRIES,
-      group: 'setup'
+      group: 'capabilities'
     },
     {
       id: 'accounts',
@@ -114,8 +109,46 @@ export function buildSettingsNavigationMetadata({
       description: 'Optional account switching for Claude, Codex, Gemini, and OpenCode Go.',
       icon: UserCog,
       searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES,
-      group: 'setup',
+      group: 'capabilities',
       badge: 'Optional'
+    },
+    {
+      id: 'orchestration',
+      title: 'Orchestration',
+      description: 'Coordinate multiple coding agents through Orca.',
+      icon: Network,
+      searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES,
+      group: 'capabilities'
+    },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'computer-use',
+            title: 'Computer Use',
+            description: 'Enable agents to control any app on your computer.',
+            icon: MousePointerClick,
+            searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
+            group: 'capabilities',
+            badge: 'Beta'
+          },
+          {
+            id: 'voice',
+            title: 'Voice',
+            description: 'Local speech-to-text dictation with on-device models.',
+            icon: Mic,
+            searchEntries: VOICE_PANE_SEARCH_ENTRIES,
+            group: 'capabilities',
+            badge: 'Beta'
+          }
+        ]
+      : []),
+    {
+      id: 'general',
+      title: 'General',
+      description: 'Workspace defaults, app setup, and maintenance.',
+      icon: SlidersHorizontal,
+      searchEntries: GENERAL_PANE_SEARCH_ENTRIES,
+      group: 'setup'
     },
     {
       id: 'integrations',
@@ -144,33 +177,9 @@ export function buildSettingsNavigationMetadata({
       group: 'workflows'
     },
     {
-      id: 'floating-workspace',
-      title: 'Floating Workspace',
-      description: 'Global terminal, browser, and markdown tabs.',
-      icon: PanelsTopLeft,
-      searchEntries: FLOATING_WORKSPACE_SEARCH_ENTRIES,
-      group: 'workflows'
-    },
-    {
-      id: 'appearance',
-      title: 'Appearance',
-      description: 'Theme, zoom, app font, sidebars, and status bar.',
-      icon: Palette,
-      searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES,
-      group: 'interface'
-    },
-    {
-      id: 'input',
-      title: 'Input & Editing',
-      description: 'Selection and editing behavior.',
-      icon: TextCursorInput,
-      searchEntries: INPUT_PANE_SEARCH_ENTRIES,
-      group: 'interface'
-    },
-    {
       id: 'terminal',
       title: 'Terminal',
-      description: 'Shells, terminal appearance, and pane behavior.',
+      description: 'Shells, renderer, sessions, and terminal behavior.',
       icon: SquareTerminal,
       searchEntries: terminalPaneSearchEntries,
       group: 'workflows'
@@ -192,7 +201,35 @@ export function buildSettingsNavigationMetadata({
             icon: Globe,
             searchEntries: BROWSER_PANE_SEARCH_ENTRIES,
             group: 'workflows'
-          },
+          }
+        ]
+      : []),
+    {
+      id: 'floating-workspace',
+      title: 'Floating Workspace',
+      description: 'Global terminal, browser, and markdown tabs.',
+      icon: PanelsTopLeft,
+      searchEntries: FLOATING_WORKSPACE_SEARCH_ENTRIES,
+      group: 'workflows'
+    },
+    {
+      id: 'appearance',
+      title: 'Appearance',
+      description: 'Theme, zoom, app and terminal appearance, sidebars, and status bar.',
+      icon: Palette,
+      searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES,
+      group: 'interface'
+    },
+    {
+      id: 'input',
+      title: 'Input & Editing',
+      description: 'Selection and editing behavior.',
+      icon: TextCursorInput,
+      searchEntries: INPUT_PANE_SEARCH_ENTRIES,
+      group: 'interface'
+    },
+    ...(showDesktopOnlySettings
+      ? [
           {
             id: 'notifications',
             title: 'Notifications',
@@ -204,12 +241,20 @@ export function buildSettingsNavigationMetadata({
         ]
       : []),
     {
-      id: 'orchestration',
-      title: 'Orchestration',
-      description: 'Coordinate multiple coding agents through Orca.',
-      icon: Network,
-      searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES,
-      group: 'capabilities'
+      id: 'shortcuts',
+      title: 'Shortcuts',
+      description: 'Keyboard shortcuts for common actions.',
+      icon: Keyboard,
+      searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES,
+      group: 'interface'
+    },
+    {
+      id: 'stats',
+      title: 'Stats & Usage',
+      description: 'Orca stats plus Claude, Codex, and OpenCode usage analytics.',
+      icon: BarChart3,
+      searchEntries: STATS_PANE_SEARCH_ENTRIES,
+      group: 'interface'
     },
     {
       id: 'servers',
@@ -239,24 +284,6 @@ export function buildSettingsNavigationMetadata({
             icon: Smartphone,
             searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
             group: 'remote'
-          },
-          {
-            id: 'computer-use',
-            title: 'Computer Use',
-            description: 'Enable agents to control any app on your computer.',
-            icon: MousePointerClick,
-            searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
-            group: 'capabilities',
-            badge: 'Beta'
-          },
-          {
-            id: 'voice',
-            title: 'Voice',
-            description: 'Local speech-to-text dictation with on-device models.',
-            icon: Mic,
-            searchEntries: VOICE_PANE_SEARCH_ENTRIES,
-            group: 'capabilities',
-            badge: 'Beta'
           }
         ]
       : []),
@@ -268,7 +295,7 @@ export function buildSettingsNavigationMetadata({
             description: 'macOS privacy access for terminal-launched developer tools.',
             icon: ShieldCheck,
             searchEntries: DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES,
-            group: 'safety'
+            group: 'security'
           }
         ]
       : []),
@@ -278,23 +305,7 @@ export function buildSettingsNavigationMetadata({
       description: 'Anonymous usage data and telemetry controls.',
       icon: Lock,
       searchEntries: PRIVACY_PANE_SEARCH_ENTRIES,
-      group: 'safety'
-    },
-    {
-      id: 'shortcuts',
-      title: 'Shortcuts',
-      description: 'Keyboard shortcuts for common actions.',
-      icon: Keyboard,
-      searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES,
-      group: 'interface'
-    },
-    {
-      id: 'stats',
-      title: 'Stats & Usage',
-      description: 'Orca stats plus Claude, Codex, and OpenCode usage analytics.',
-      icon: BarChart3,
-      searchEntries: STATS_PANE_SEARCH_ENTRIES,
-      group: 'interface'
+      group: 'security'
     },
     {
       id: 'experimental',

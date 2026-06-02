@@ -69,6 +69,7 @@ function mockBrowserManager(
     getWebContentsIdByTabId: () => tabs,
     getWorktreeIdForTab: (tabId: string) => worktrees.get(tabId),
     getGuestWebContentsId: vi.fn(() => null),
+    unregisterGuest: vi.fn(),
     ensureWebviewVisible: vi.fn(async () => () => {}),
     acquireAutomationVisibility: vi.fn(async () => () => {}),
     ...overrides
@@ -155,6 +156,40 @@ describe('AgentBrowserBridge', () => {
       (c[1] as string[]).includes('click')
     )
     expect(clickCall![1]).not.toContain('--cdp')
+  })
+
+  it('continues when stale agent-browser session close hangs during session creation', async () => {
+    vi.useFakeTimers()
+    try {
+      const closeKill = vi.fn()
+      execFileMock.mockImplementation(
+        (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+          if (args.includes('close')) {
+            return { kill: closeKill }
+          }
+          if (args.includes('snapshot')) {
+            cb(null, JSON.stringify({ success: true, data: { snapshot: 'ready' } }), '')
+            return { kill: vi.fn() }
+          }
+          throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
+        }
+      )
+
+      const promise = bridge.snapshot()
+      let settled = false
+      void promise.finally(() => {
+        settled = true
+      })
+
+      await vi.advanceTimersByTimeAsync(3_000)
+      await Promise.resolve()
+
+      expect(settled).toBe(true)
+      await expect(promise).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'ready' })
+      expect(closeKill).toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   // ── --json always appended ──
@@ -273,7 +308,9 @@ describe('AgentBrowserBridge', () => {
 
   it('strips --cdp and --session from exec commands', async () => {
     succeedWith({ output: 'ok' })
-    await bridge.exec('dblclick @e3 --cdp ws://evil --session hijack')
+    await bridge.exec(
+      'dblclick @e3 --cdp ws://evil --session hijack --cdp=ws://evil-equals --session=hijack-equals'
+    )
 
     // Why: find the actual exec call (contains 'dblclick'), not the stale-session close
     const execCall = execFileMock.mock.calls.find((c: unknown[]) =>
@@ -281,9 +318,11 @@ describe('AgentBrowserBridge', () => {
     )
     const args = execCall![1] as string[]
     // The bridge's own --session and --cdp (for session init) are expected.
-    // Verify the user-injected ones were stripped: no 'ws://evil' or 'hijack'
+    // Verify the user-injected ones were stripped, including --flag=value forms.
     expect(args.join(' ')).not.toContain('ws://evil')
+    expect(args.join(' ')).not.toContain('ws://evil-equals')
     expect(args.join(' ')).not.toContain('hijack')
+    expect(args.join(' ')).not.toContain('hijack-equals')
     expect(args).toContain('dblclick')
     expect(args).toContain('@e3')
   })
@@ -338,6 +377,21 @@ describe('AgentBrowserBridge', () => {
         { browserPageId: 'tab-b', active: false }
       ])
       expect(b.getActiveWebContentsId()).toBeNull()
+    })
+
+    it('unregisters stale tab-list entries when their WebContents is gone', () => {
+      const tabs = new Map([
+        ['tab-a', 1],
+        ['tab-b', 2]
+      ])
+      const wc2 = mockWebContents(2, 'https://b.com', 'B')
+      webContentsFromIdMock.mockImplementation((id: number) => (id === 2 ? wc2 : null))
+      const unregisterGuest = vi.fn()
+
+      const b = new AgentBrowserBridge(mockBrowserManager(tabs, new Map(), { unregisterGuest }))
+
+      expect(b.tabList().tabs).toMatchObject([{ browserPageId: 'tab-b', active: true }])
+      expect(unregisterGuest).toHaveBeenCalledWith('tab-a')
     })
   })
 
@@ -398,6 +452,19 @@ describe('AgentBrowserBridge', () => {
     expect(mouseCalls).toHaveLength(2)
     expect(mouseCalls[0]?.[1]).toMatchObject({ type: 'mousePressed', x: 10, y: 20 })
     expect(mouseCalls[1]?.[1]).toMatchObject({ type: 'mouseReleased', x: 10, y: 20 })
+  })
+
+  it('drops empty command queues after direct CDP commands finish', async () => {
+    const wc = mockWebContents(100)
+    wc.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await bridge.mouseClick(10, 20, 'right', undefined, 'tab-1')
+
+    expect(
+      (bridge as unknown as { commandQueues: Map<string, unknown[]> }).commandQueues.size
+    ).toBe(0)
+    expect((bridge as unknown as { processingQueues: Set<string> }).processingQueues.size).toBe(0)
   })
 
   // ── Command queue serialization ──
@@ -468,6 +535,51 @@ describe('AgentBrowserBridge', () => {
 
     await expect(snapshot).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
     expect(lifecycleEvents).toEqual(['acquire-100', 'command-snapshot', 'restore-100'])
+  })
+
+  it('clears reload fallback timer after the load event settles', async () => {
+    vi.useFakeTimers()
+    try {
+      succeedWith(null)
+      const wc = {
+        ...mockWebContents(100, 'https://reloaded.example', 'Reloaded'),
+        reload: vi.fn(),
+        on: vi.fn(),
+        removeListener: vi.fn()
+      }
+      webContentsFromIdMock.mockReturnValue(wc)
+
+      const result = bridge.reload()
+
+      await vi.waitFor(() => {
+        expect(wc.on).toHaveBeenCalledWith('did-finish-load', expect.any(Function))
+      })
+
+      const finishListener = wc.on.mock.calls.find(
+        ([event]) => event === 'did-finish-load'
+      )?.[1] as (() => void) | undefined
+      const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
+        | (() => void)
+        | undefined
+      expect(finishListener).toBeDefined()
+      expect(failListener).toBeDefined()
+      expect(vi.getTimerCount()).toBe(1)
+
+      finishListener!()
+
+      await expect(result).resolves.toEqual({
+        url: 'https://reloaded.example',
+        title: 'Reloaded'
+      })
+      expect(wc.removeListener).toHaveBeenCalledWith('did-finish-load', finishListener)
+      expect(wc.removeListener).toHaveBeenCalledWith('did-fail-load', failListener)
+      expect(vi.getTimerCount()).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(wc.removeListener).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('serializes screenshot visibility prep across sessions', async () => {
@@ -687,6 +799,53 @@ describe('AgentBrowserBridge', () => {
     expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
   })
 
+  it('tears down a session that finishes creating after destruction starts', async () => {
+    const commandCalls: string[][] = []
+    let releaseStaleClose: (() => void) | null = null
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        commandCalls.push(args)
+        if (args.includes('close') && !releaseStaleClose) {
+          releaseStaleClose = () => {
+            cb(null, JSON.stringify({ success: true, data: null }), '')
+          }
+          return { kill: vi.fn() }
+        }
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+        return { kill: vi.fn() }
+      }
+    )
+
+    const ensurePromise = (
+      bridge as unknown as {
+        ensureSession: (
+          sessionName: string,
+          browserPageId: string,
+          webContentsId: number
+        ) => Promise<void>
+      }
+    ).ensureSession('orca-tab-tab-1', 'tab-1', 100)
+
+    await vi.waitFor(() => {
+      expect(releaseStaleClose).not.toBeNull()
+    })
+    expect(CdpWsProxyMock.instances).toHaveLength(0)
+
+    const destroyPromise = (
+      bridge as unknown as { destroySession: (name: string) => Promise<void> }
+    ).destroySession('orca-tab-tab-1')
+
+    releaseStaleClose!()
+    await ensurePromise
+    await destroyPromise
+
+    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
+    const proxy = CdpWsProxyMock.instances[0] as { stop: ReturnType<typeof vi.fn> }
+    expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
+    expect(sessions.size).toBe(0)
+    expect(proxy.stop).toHaveBeenCalledTimes(1)
+  })
+
   it('cancels the command already running when a session is destroyed', async () => {
     succeedWith({ snapshot: 'initial' })
     await bridge.snapshot()
@@ -837,6 +996,33 @@ describe('AgentBrowserBridge', () => {
     expect(routeCalls[0]).toContain('https://new.example/**')
     expect(routeCalls[0]).not.toContain('https://old.example/**')
     expect(routeCalls[0]).toContain('--cdp')
+  })
+
+  it('clears pending intercept restore state when a swapped tab closes before reuse', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const mgr = mockBrowserManager(tabs)
+    const b = new AgentBrowserBridge(mgr)
+    b.setActiveTab(100)
+
+    succeedWith({ ok: true })
+    await b.interceptEnable(['https://old.example/**'])
+
+    tabs.set('tab-1', 200)
+    webContentsFromIdMock.mockReturnValue(mockWebContents(200))
+    succeedWith(null)
+    await b.onProcessSwap('tab-1', 200)
+
+    expect(
+      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
+        .size
+    ).toBe(1)
+
+    await b.onTabClosed(200)
+
+    expect(
+      (b as unknown as { pendingInterceptRestore: Map<string, string[]> }).pendingInterceptRestore
+        .size
+    ).toBe(0)
   })
 
   // ── Tab close clears active ──
@@ -1022,6 +1208,20 @@ describe('AgentBrowserBridge', () => {
     const args = execFileMock.mock.calls.at(-1)![1] as string[]
     expect(args).toContain('goto')
     expect(args).toContain('https://example.com')
+  })
+
+  it('builds valid fill eval JavaScript for multiline values', async () => {
+    succeedWith({ ok: true })
+
+    await bridge.fill('@textarea', "line one\nline two with 'quote' and \\ slash")
+
+    const evalCall = execFileMock.mock.calls.find((call: unknown[]) =>
+      (call[1] as string[]).includes('eval')
+    )
+    expect(evalCall).toBeDefined()
+    const args = evalCall![1] as string[]
+    const expression = args[args.indexOf('eval') + 1]
+    expect(() => new Function(expression)).not.toThrow()
   })
 
   // ── Cookie command arg building ──

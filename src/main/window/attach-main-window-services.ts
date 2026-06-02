@@ -33,14 +33,24 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
+import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
+import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+
+let appReloadHandlerTokenCounter = 0
+let activeAppReloadHandlerToken: number | null = null
+let runtimeNotifierTokenCounter = 0
+let activeRuntimeNotifierToken: number | null = null
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
   runtime: OrcaRuntimeService,
-  getSelectedCodexHomePath?: () => string | null,
-  prepareClaudeAuth?: () => Promise<ClaudeRuntimeAuthPreparation>,
+  getSelectedCodexHomePath?: (target?: CodexAccountSelectionTarget) => string | null,
+  prepareClaudeAuth?: (
+    target?: ClaudeAccountSelectionTarget
+  ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
   }
@@ -231,6 +241,8 @@ function registerAppReloadHandler(
 ): void {
   // Why: the process-global IPC handler can outlive the BrowserWindow, so keep
   // the registered WebContents and guard both lifetimes before using it.
+  const handlerToken = ++appReloadHandlerTokenCounter
+  activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
   ipcMain.removeHandler('app:reload')
   ipcMain.handle('app:reload', (event) => {
@@ -244,12 +256,23 @@ function registerAppReloadHandler(
     onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
     mainWebContents.reload()
   })
+  mainWindow.on('closed', () => {
+    if (activeAppReloadHandlerToken !== handlerToken) {
+      return
+    }
+    // Why: macOS can keep the process alive with no window, and this global
+    // handler otherwise keeps the closed BrowserWindow reachable until reopen.
+    ipcMain.removeHandler('app:reload')
+    activeAppReloadHandlerToken = null
+  })
 }
 
 function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService
 ): void {
+  const notifierToken = ++runtimeNotifierTokenCounter
+  activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
   const send = (channel: string, ...args: unknown[]): void => {
     if (!mainWindow.isDestroyed()) {
@@ -265,13 +288,15 @@ function registerRuntimeWindowLifecycle(
       repoId,
       worktreeId,
       setup?: CreateWorktreeResult['setup'],
-      startup?: WorktreeStartupLaunch
+      startup?: WorktreeStartupLaunch,
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
     ) => {
       send('ui:activateWorktree', {
         repoId,
         worktreeId,
         ...(setup ? { setup } : {}),
-        ...(startup ? { startup } : {})
+        ...(startup ? { startup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {})
       })
     },
     createTerminal: (worktreeId, opts) =>
@@ -364,30 +389,34 @@ function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     runtime.markGraphUnavailable(mainWindow.id)
+    if (activeRuntimeNotifierToken === notifierToken) {
+      // Why: the notifier closes over the BrowserWindow for mobile/CLI UI
+      // relays; clear it during the no-window gap so the runtime does not
+      // retain destroyed window graphs.
+      runtime.setNotifier(null)
+      activeRuntimeNotifierToken = null
+    }
   })
 }
 
 function registerFileDropRelay(mainWindow: BrowserWindow): void {
-  ipcMain.removeAllListeners('terminal:file-dropped-from-preload')
-  ipcMain.on(
-    'terminal:file-dropped-from-preload',
-    (
-      _event,
-      args:
-        | { paths: string[]; target: 'editor' }
-        | { paths: string[]; target: 'terminal'; tabId?: string }
-        | { paths: string[]; target: 'composer' }
-        | { paths: string[]; target: 'file-explorer'; destinationDir: string }
-    ) => {
-      if (mainWindow.isDestroyed()) {
-        return
-      }
-
-      // Why: relay exactly one IPC event per drop gesture so the renderer
-      // receives the full batch of paths without timer-based reconstruction.
-      mainWindow.webContents.send('terminal:file-drop', args)
+  const channel = 'terminal:file-dropped-from-preload'
+  ipcMain.removeAllListeners(channel)
+  const relayFileDrop = (_event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
+    if (mainWindow.isDestroyed()) {
+      return
     }
-  )
+
+    // Why: relay exactly one IPC event per drop gesture so the renderer
+    // receives the full batch of paths without timer-based reconstruction.
+    mainWindow.webContents.send('terminal:file-drop', args)
+  }
+  ipcMain.on(channel, relayFileDrop)
+  mainWindow.on('closed', () => {
+    // Why: macOS can keep the app process alive after the window closes; drop
+    // the relay closure so a destroyed BrowserWindow is not retained.
+    ipcMain.removeListener(channel, relayFileDrop)
+  })
 }
 
 export function registerUpdaterHandlers(_store: Store): void {

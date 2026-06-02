@@ -11,6 +11,7 @@ describe('Gitea pull request mappers', () => {
     expect(mapGiteaPullRequestState({ state: 'open' })).toBe('open')
     expect(mapGiteaPullRequestState({ state: 'closed' })).toBe('closed')
     expect(mapGiteaPullRequestState({ state: 'open', draft: true })).toBe('draft')
+    expect(mapGiteaPullRequestState({ state: 'closed', draft: true })).toBe('closed')
     expect(mapGiteaPullRequestState({ state: 'closed', merged: true })).toBe('merged')
   })
 

@@ -153,6 +153,11 @@ describe('SourceControl conflict resolution state', () => {
     expect(pickDefaultSourceControlAgent('codex', ['claude', 'codex'])).toBe('codex')
     expect(pickDefaultSourceControlAgent('blank', ['codex'])).toBe('codex')
     expect(pickDefaultSourceControlAgent('claude', [])).toBeNull()
+    expect(pickDefaultSourceControlAgent('codex', ['claude', 'codex'], ['codex'])).toBe('claude')
+    expect(
+      pickDefaultSourceControlAgent('blank', ['claude', 'codex'], ['claude', 'codex'])
+    ).toBeNull()
+    expect(pickDefaultSourceControlAgent(null, ['claude'], ['claude'])).toBeNull()
   })
 })
 

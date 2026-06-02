@@ -11,7 +11,11 @@ const args = new Set(process.argv.slice(2))
 const requestedApps = valueFlag('--apps')
 const includeScreenshot = args.has('--screenshot')
 const session = valueFlag('--session') ?? `computer-smoke-${process.pid}`
-const preferredApps = (requestedApps ?? process.env.ORCA_COMPUTER_SMOKE_APPS ?? 'Finder,TextEdit,Spotify,Slack,Microsoft Edge')
+const preferredApps = (
+  requestedApps ??
+  process.env.ORCA_COMPUTER_SMOKE_APPS ??
+  'Finder,TextEdit,Spotify,Slack,Microsoft Edge'
+)
   .split(',')
   .map((app) => app.trim())
   .filter(Boolean)
@@ -23,8 +27,12 @@ if (!existsSync(cliPath)) {
 const list = unwrapResult(runCli(['computer', 'list-apps', '--json']))
 const apps = Array.isArray(list.apps) ? list.apps : []
 const availableNames = new Set(apps.map((app) => String(app.name ?? '').toLowerCase()))
-const availableBundles = new Set(apps.map((app) => String(app.bundleId ?? '').toLowerCase()).filter(Boolean))
-const targets = preferredApps.filter((app) => availableNames.has(app.toLowerCase()) || availableBundles.has(app.toLowerCase()))
+const availableBundles = new Set(
+  apps.map((app) => String(app.bundleId ?? '').toLowerCase()).filter(Boolean)
+)
+const targets = preferredApps.filter(
+  (app) => availableNames.has(app.toLowerCase()) || availableBundles.has(app.toLowerCase())
+)
 
 console.log(`computer-use smoke: ${apps.length} apps listed`)
 if (targets.length === 0) {
@@ -34,16 +42,19 @@ if (targets.length === 0) {
 
 let failures = 0
 for (const app of targets) {
-  const result = runCli([
-    'computer',
-    'get-app-state',
-    '--session',
-    session,
-    '--app',
-    app,
-    ...(includeScreenshot ? [] : ['--no-screenshot']),
-    '--json'
-  ], { allowFailure: true })
+  const result = runCli(
+    [
+      'computer',
+      'get-app-state',
+      '--session',
+      session,
+      '--app',
+      app,
+      ...(includeScreenshot ? [] : ['--no-screenshot']),
+      '--json'
+    ],
+    { allowFailure: true }
+  )
 
   if (!result.ok) {
     failures += 1
@@ -57,15 +68,19 @@ for (const app of targets) {
   const lineCount = treeText.split('\n').filter(Boolean).length
   const secondaryActions = (treeText.match(/Secondary Actions:/g) ?? []).length
   const settable = (treeText.match(/\bsettable\b/g) ?? []).length
-  const screenshotState = state.screenshot ? `${state.screenshot.width}x${state.screenshot.height}` : 'missing'
-  console.log([
-    `computer-use smoke: ${snapshot.app.name}`,
-    `${snapshot.elementCount} elements`,
-    `${lineCount} lines`,
-    `${secondaryActions} secondary-action lines`,
-    `${settable} settable elements`,
-    `screenshot=${screenshotState}`
-  ].join(' | '))
+  const screenshotState = state.screenshot
+    ? `${state.screenshot.width}x${state.screenshot.height}`
+    : 'missing'
+  console.log(
+    [
+      `computer-use smoke: ${snapshot.app.name}`,
+      `${snapshot.elementCount} elements`,
+      `${lineCount} lines`,
+      `${secondaryActions} secondary-action lines`,
+      `${settable} settable elements`,
+      `screenshot=${screenshotState}`
+    ].join(' | ')
+  )
 }
 
 if (failures > 0) {
@@ -86,7 +101,8 @@ function runCli(cliArgs, options = {}) {
     encoding: 'utf8',
     env: {
       ...process.env,
-      ORCA_USER_DATA_PATH: process.env.ORCA_COMPUTER_SMOKE_USER_DATA_PATH ?? defaultDevUserDataPath()
+      ORCA_USER_DATA_PATH:
+        process.env.ORCA_COMPUTER_SMOKE_USER_DATA_PATH ?? defaultDevUserDataPath()
     }
   })
   if (child.status !== 0) {

@@ -142,4 +142,37 @@ describe('discoverInstalledAgentSkills', () => {
     secondScan.resolve(freshResult)
     await expect(forcedRefresh).resolves.toBe(freshResult)
   })
+
+  it('caches host and WSL discovery results separately', async () => {
+    const hostResult = discoveryResult([skill({ name: 'host-skill' })])
+    const wslResult = discoveryResult([skill({ name: 'wsl-skill' })])
+    const discover = vi
+      .fn<
+        (target?: {
+          runtime?: 'host' | 'wsl'
+          wslDistro?: string | null
+        }) => Promise<SkillDiscoveryResult>
+      >()
+      .mockResolvedValueOnce(hostResult)
+      .mockResolvedValueOnce(wslResult)
+    vi.stubGlobal('window', {
+      api: { skills: { discover } }
+    })
+
+    await expect(
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false)
+    ).resolves.toBe(hostResult)
+    await expect(
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false, {
+        runtime: 'wsl'
+      })
+    ).resolves.toBe(wslResult)
+    await expect(
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false)
+    ).resolves.toBe(hostResult)
+
+    expect(discover).toHaveBeenCalledTimes(2)
+    expect(discover).toHaveBeenNthCalledWith(1, undefined)
+    expect(discover).toHaveBeenNthCalledWith(2, { runtime: 'wsl', wslDistro: null })
+  })
 })

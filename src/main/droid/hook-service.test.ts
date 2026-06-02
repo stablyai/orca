@@ -63,6 +63,7 @@ describe('DroidHookService', () => {
         'PreToolUse',
         'SessionStart',
         'Stop',
+        'SubagentStop',
         'UserPromptSubmit'
       ].sort()
     )

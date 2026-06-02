@@ -14,6 +14,7 @@ describe('client UI RPC methods', () => {
   it('returns the runtime host agent settings needed by mobile create flows', async () => {
     const settings = {
       defaultTuiAgent: 'codex',
+      disabledTuiAgents: ['claude'],
       agentCmdOverrides: { codex: 'codex --profile work' },
       defaultTaskSource: 'gitlab',
       defaultTaskViewPreset: 'my-prs',
@@ -42,6 +43,7 @@ describe('client UI RPC methods', () => {
   it('persists the runtime host task source setting for mobile Tasks', async () => {
     const settings = {
       defaultTuiAgent: null,
+      disabledTuiAgents: ['claude'],
       agentCmdOverrides: {},
       defaultTaskSource: 'linear',
       defaultTaskViewPreset: 'issues',
@@ -66,6 +68,7 @@ describe('client UI RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('settings.update', {
         defaultTuiAgent: 'codex',
+        disabledTuiAgents: ['claude', 'not-real', 'claude'],
         defaultTaskSource: 'linear',
         defaultTaskViewPreset: 'my-prs',
         defaultRepoSelection: settings.defaultRepoSelection,
@@ -76,6 +79,7 @@ describe('client UI RPC methods', () => {
 
     expect(runtime.updateClientSettings).toHaveBeenCalledWith({
       defaultTuiAgent: 'codex',
+      disabledTuiAgents: ['claude'],
       defaultTaskSource: 'linear',
       defaultTaskViewPreset: 'my-prs',
       defaultRepoSelection: settings.defaultRepoSelection,
