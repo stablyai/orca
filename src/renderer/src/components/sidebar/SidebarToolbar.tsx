@@ -6,13 +6,13 @@ import {
   ExternalLink,
   FolderPlus,
   HardDrive,
-  ListChecks,
   MessageSquareText,
   RotateCw,
   School,
   Settings,
   Smartphone
 } from 'lucide-react'
+import logo from '../../../../../resources/logo.svg'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -167,7 +167,12 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               <DropdownMenuItem
                 onSelect={() => openModal('setup-guide', { telemetrySource: 'help_menu' })}
               >
-                <ListChecks className="size-3.5" />
+                <img
+                  src={logo}
+                  alt=""
+                  aria-hidden="true"
+                  className="size-3.5 object-contain invert opacity-55 dark:invert-0"
+                />
                 Onboarding checklist
               </DropdownMenuItem>
               <DropdownMenuItem
