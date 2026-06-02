@@ -1971,6 +1971,149 @@ export default function ChecksPanel(): React.JSX.Element {
     stateRequestKey
   ])
 
+  const refreshLinkedGitHubPullRequest = useCallback(
+    async (linkedPRNumber: number): Promise<void> => {
+      if (!repo || !branch) {
+        return
+      }
+      const requestContextKey = panelContextKey
+      const isCurrentRequestContext = (): boolean =>
+        panelContextKeyRef.current === requestContextKey
+      if (!isCurrentRequestContext()) {
+        return
+      }
+      setChecks([])
+      setComments([])
+      setChecksLoading(true)
+      setCommentsLoading(true)
+      let requestKey: string | null = null
+      try {
+        const refreshedPR = await fetchPRForBranch(repo.path, branch, {
+          force: true,
+          repoId: repo.id,
+          linkedPRNumber
+        })
+        if (!isCurrentRequestContext()) {
+          return
+        }
+        await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+          repoPath: repo.path,
+          repoId: repo.id,
+          branch,
+          linkedGitHubPR: linkedPRNumber,
+          linkedGitLabMR
+        })
+        if (!isCurrentRequestContext()) {
+          return
+        }
+        if (!refreshedPR) {
+          return
+        }
+        const refreshedRequestKey = checksPanelAsyncResultKey(
+          prCacheKey,
+          branch,
+          refreshedPR.number,
+          refreshedPR.prRepo,
+          refreshedPR.headSha
+        )
+        requestKey = refreshedRequestKey
+        if (!isCurrentRequestContext()) {
+          return
+        }
+        asyncResultKeyRef.current = refreshedRequestKey
+        await Promise.all([
+          fetchPRChecks(
+            repo.path,
+            refreshedPR.number,
+            branch,
+            refreshedPR.headSha,
+            refreshedPR.prRepo,
+            {
+              force: true,
+              repoId: repo.id
+            }
+          )
+            .then(
+              (result) => {
+                if (isCurrentAsyncResult(refreshedRequestKey)) {
+                  setChecks(result)
+                }
+              },
+              (err) => {
+                if (!isCurrentAsyncResult(refreshedRequestKey)) {
+                  return
+                }
+                console.warn('Failed to fetch PR checks:', err)
+                setChecks([])
+              }
+            )
+            .finally(() => {
+              if (isCurrentAsyncResult(refreshedRequestKey)) {
+                setChecksLoading(false)
+              }
+            }),
+          fetchPRComments(repo.path, refreshedPR.number, {
+            force: true,
+            repoId: repo.id,
+            prRepo: refreshedPR.prRepo
+          })
+            .then(
+              (result) => {
+                if (isCurrentAsyncResult(refreshedRequestKey)) {
+                  setComments(result)
+                }
+              },
+              (err) => {
+                if (!isCurrentAsyncResult(refreshedRequestKey)) {
+                  return
+                }
+                console.warn('Failed to fetch PR comments:', err)
+                setComments([])
+              }
+            )
+            .finally(() => {
+              if (isCurrentAsyncResult(refreshedRequestKey)) {
+                setCommentsLoading(false)
+              }
+            })
+        ])
+      } catch (err) {
+        if (
+          isCurrentRequestContext() &&
+          (requestKey === null || isCurrentAsyncResult(requestKey))
+        ) {
+          console.warn('Failed to refresh linked GitHub PR:', err)
+          setChecks([])
+          setComments([])
+        }
+      } finally {
+        if (requestKey === null && isCurrentRequestContext()) {
+          setChecksLoading(false)
+          setCommentsLoading(false)
+        }
+        if (requestKey !== null && isCurrentAsyncResult(requestKey)) {
+          setChecksLoading(false)
+          setCommentsLoading(false)
+        }
+      }
+    },
+    [
+      branch,
+      fetchHostedReviewForBranch,
+      fetchPRChecks,
+      fetchPRComments,
+      fetchPRForBranch,
+      isCurrentAsyncResult,
+      linkedGitLabMR,
+      panelContextKey,
+      pr?.headSha,
+      pr?.prRepo,
+      prCacheKey,
+      prNumber,
+      repo
+    ]
+  )
+
   // Open hosted review in browser
   const handleOpenPR = useCallback(() => {
     if (activeReview?.url) {
@@ -1995,9 +2138,15 @@ export default function ChecksPanel(): React.JSX.Element {
       currentIssue: activeWorktree.linkedIssue,
       currentPR: activeWorktree.linkedPR ?? activeReview.number,
       currentComment: activeWorktree.comment,
-      focus: 'pr'
+      focus: 'pr',
+      afterSave: ({ updates }: { updates?: { linkedPR?: unknown } }) => {
+        const nextLinkedPR = updates?.linkedPR
+        if (typeof nextLinkedPR === 'number') {
+          void refreshLinkedGitHubPullRequest(nextLinkedPR)
+        }
+      }
     })
-  }, [activeReview, activeWorktree, activeWorktreeId, openModal])
+  }, [activeReview, activeWorktree, activeWorktreeId, openModal, refreshLinkedGitHubPullRequest])
 
   const pushBeforeCreatePullRequest = useCallback(async (): Promise<boolean> => {
     if (!activeWorktreeId || !activeWorktree?.path) {
@@ -2108,64 +2257,7 @@ export default function ChecksPanel(): React.JSX.Element {
           })
           return
         }
-        const initialRequestKey = checksPanelAsyncResultKey(
-          prCacheKey,
-          branch,
-          prNumber,
-          pr?.prRepo,
-          pr?.headSha
-        )
-        const refreshedPR = await fetchPRForBranch(repo.path, branch, {
-          force: true,
-          repoId: repo.id,
-          linkedPRNumber: result.number
-        })
-        await refreshHostedReviewCard(fetchHostedReviewForBranch, {
-          repoPath: repo.path,
-          repoId: repo.id,
-          branch,
-          linkedGitHubPR: result.number,
-          linkedGitLabMR
-        })
-        if (refreshedPR) {
-          const requestKey = checksPanelAsyncResultKey(
-            prCacheKey,
-            branch,
-            refreshedPR.number,
-            refreshedPR.prRepo,
-            refreshedPR.headSha
-          )
-          if (!isCurrentAsyncResult(initialRequestKey) && !isCurrentAsyncResult(requestKey)) {
-            return
-          }
-          asyncResultKeyRef.current = requestKey
-          await Promise.all([
-            fetchPRChecks(
-              repo.path,
-              refreshedPR.number,
-              branch,
-              refreshedPR.headSha,
-              refreshedPR.prRepo,
-              {
-                force: true,
-                repoId: repo.id
-              }
-            ).then((result) => {
-              if (isCurrentAsyncResult(requestKey)) {
-                setChecks(result)
-              }
-            }),
-            fetchPRComments(repo.path, refreshedPR.number, {
-              force: true,
-              repoId: repo.id,
-              prRepo: refreshedPR.prRepo
-            }).then((result) => {
-              if (isCurrentAsyncResult(requestKey)) {
-                setComments(result)
-              }
-            })
-          ])
-        }
+        await refreshLinkedGitHubPullRequest(result.number)
       } catch {
         // The success toast keeps the hosted URL available; Checks can be refreshed manually.
       }
@@ -2175,16 +2267,9 @@ export default function ChecksPanel(): React.JSX.Element {
       fallbackGitHubPRNumber,
       fetchGitLabDetails,
       fetchHostedReviewForBranch,
-      fetchPRChecks,
-      fetchPRComments,
-      fetchPRForBranch,
-      isCurrentAsyncResult,
       linkedGitLabMR,
       linkedPR,
-      prCacheKey,
-      prNumber,
-      pr?.headSha,
-      pr?.prRepo,
+      refreshLinkedGitHubPullRequest,
       repo,
       setRightSidebarOpen,
       setRightSidebarTab,
