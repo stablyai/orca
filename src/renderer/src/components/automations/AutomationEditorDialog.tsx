@@ -300,7 +300,8 @@ export function AutomationEditorDialog({
             }
           >
             {draft.scope === 'global' &&
-            draft.launchTarget === 'floating' &&
+            draft.trigger === 'app_launch' &&
+            draft.action === 'terminal_command' &&
             !isHermesTarget ? null : (
               <>
                 <Field label="Project">
@@ -509,33 +510,9 @@ export function AutomationEditorDialog({
                 </Select>
               </Field>
             ) : null}
-            {draft.trigger === 'app_launch' &&
-            draft.action === 'terminal_command' &&
-            draft.scope === 'global' &&
-            !isHermesTarget ? (
-              <Field label="Launch in">
-                <Select
-                  value={draft.launchTarget}
-                  onValueChange={(launchTarget) =>
-                    onDraftChange((current) => ({
-                      ...current,
-                      launchTarget: launchTarget as AutomationLaunchTarget
-                    }))
-                  }
-                >
-                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                    <SelectItem value="floating">Floating workspace</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            ) : null}
             {draft.scope === 'global' &&
             draft.trigger === 'app_launch' &&
             draft.action === 'terminal_command' &&
-            draft.launchTarget === 'floating' &&
             !isHermesTarget ? (
               <Field label="Directory">
                 <div className="flex gap-2">

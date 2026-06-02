@@ -14,6 +14,7 @@ import {
   resolveStartupCommandTargets
 } from '@/lib/automation-startup-command-targets'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
 import { useAppStore } from '@/store'
 import type {
   AutomationDispatchResult,
@@ -31,10 +32,6 @@ import {
 
 const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
 const activeReuseDispatchTabIds = new Set<string>()
-
-// Why: track whether we've already revealed the floating workspace for global
-// startup commands on this session so we only open it once.
-let globalStartupFloatingRevealed = false
 
 function acquireReuseDispatchTab(tabId: string): (() => void) | null {
   if (activeReuseDispatchTabIds.has(tabId)) {
@@ -195,7 +192,7 @@ export function useAutomationDispatchEvents(): void {
           tab: { id: string }
         }[]
         try {
-          launched = await Promise.all(
+          const preparedTargets = await Promise.all(
             targets.map(async (worktree) => {
               const cwd =
                 'cwd' in worktree
@@ -210,19 +207,22 @@ export function useAutomationDispatchEvents(): void {
               if ('cwd' in worktree && !cwd) {
                 throw new Error('Global startup command directory is no longer trusted.')
               }
-              const store = useAppStore.getState()
-              const worktreeId = 'worktreeId' in worktree ? worktree.worktreeId : worktree.id
-              const tab = store.createTab(worktreeId, undefined, undefined, {
-                activate: false,
-                recordInteraction: false
-              })
-              store.queueTabStartupCommand(tab.id, { command, ...(cwd ? { cwd } : {}) })
-              store.setTabCustomTitle(tab.id, duplicateTitle ?? automation.name, {
-                recordInteraction: false
-              })
-              return { worktree, worktreeId, tab }
+              return { worktree, cwd }
             })
           )
+          launched = preparedTargets.map(({ worktree, cwd }) => {
+            const store = useAppStore.getState()
+            const worktreeId = 'worktreeId' in worktree ? worktree.worktreeId : worktree.id
+            const tab = store.createTab(worktreeId, undefined, undefined, {
+              activate: false,
+              recordInteraction: false
+            })
+            store.queueTabStartupCommand(tab.id, { command, ...(cwd ? { cwd } : {}) })
+            store.setTabCustomTitle(tab.id, duplicateTitle ?? automation.name, {
+              recordInteraction: false
+            })
+            return { worktree, worktreeId, tab }
+          })
         } catch (error) {
           await markDispatchResult({
             runId: run.id,
@@ -245,15 +245,12 @@ export function useAutomationDispatchEvents(): void {
           terminalSessionId: first.tab.id,
           error: null
         })
-        // Why: reveal the floating workspace so the user sees their global
-        // startup command terminals. Only open once per session to avoid
-        // toggling the panel closed on subsequent dispatches.
+        // Why: the event toggles, so only dispatch it when the panel is hidden.
         if (
           automation.launchTarget === 'floating' &&
           automation.scope === 'global' &&
-          !globalStartupFloatingRevealed
+          !isFloatingWorkspacePanelVisible()
         ) {
-          globalStartupFloatingRevealed = true
           window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
         }
         return

@@ -813,7 +813,8 @@ export default function AutomationsPage(): React.JSX.Element {
       trigger: latest.trigger ?? 'schedule',
       scope: latest.scope ?? 'project',
       globalCwd: latest.globalCwd ?? '',
-      launchTarget: latest.launchTarget ?? 'selected_worktree',
+      launchTarget:
+        latest.scope === 'global' ? 'floating' : (latest.launchTarget ?? 'selected_worktree'),
       agentId: latest.agentId,
       projectId: latest.projectId,
       workspaceMode: latest.workspaceMode,
@@ -938,7 +939,7 @@ export default function AutomationsPage(): React.JSX.Element {
       draft.scope === 'global' &&
       draft.trigger === 'app_launch' &&
       draft.action === 'terminal_command'
-    const isFloatingCommand = isGlobalCommand && draft.launchTarget === 'floating'
+    const isFloatingCommand = isGlobalCommand
     if (
       (!isGlobalCommand && !draft.projectId) ||
       (!isGlobalCommand &&
@@ -1075,7 +1076,9 @@ export default function AutomationsPage(): React.JSX.Element {
         globalCwd: isFloatingCommand ? draft.globalCwd : '',
         launchTarget:
           draft.trigger === 'app_launch' && draft.action === 'terminal_command'
-            ? (draft.launchTarget ?? 'selected_worktree')
+            ? isGlobalCommand
+              ? 'floating'
+              : (draft.launchTarget ?? 'selected_worktree')
             : 'selected_worktree',
         precheck,
         agentId: draft.agentId,
@@ -1107,7 +1110,9 @@ export default function AutomationsPage(): React.JSX.Element {
             globalCwd: isFloatingCommand ? draft.globalCwd : '',
             launchTarget:
               draft.trigger === 'app_launch' && draft.action === 'terminal_command'
-                ? (draft.launchTarget ?? 'selected_worktree')
+                ? isGlobalCommand
+                  ? 'floating'
+                  : (draft.launchTarget ?? 'selected_worktree')
                 : 'selected_worktree',
             precheck,
             agentId: draft.agentId,
