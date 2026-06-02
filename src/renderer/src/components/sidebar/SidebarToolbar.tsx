@@ -164,7 +164,9 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               </TooltipContent>
             </Tooltip>
             <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-48">
-              <DropdownMenuItem onSelect={() => openModal('setup-guide')}>
+              <DropdownMenuItem
+                onSelect={() => openModal('setup-guide', { telemetrySource: 'help_menu' })}
+              >
                 <ListChecks className="size-3.5" />
                 Getting started with Orca
               </DropdownMenuItem>

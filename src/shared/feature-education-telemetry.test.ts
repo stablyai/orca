@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { CONTEXTUAL_TOUR_IDS } from './contextual-tours'
 import {
   FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS,
-  normalizeFeatureEducationSource
+  normalizeFeatureEducationSource,
+  normalizeSetupGuideSource
 } from './feature-education-telemetry'
 
 describe('feature education telemetry constants', () => {
@@ -20,5 +21,12 @@ describe('feature education telemetry constants', () => {
     )
     expect(normalizeFeatureEducationSource('https://example.com/private')).toBe('unknown')
     expect(normalizeFeatureEducationSource(null)).toBe('unknown')
+  })
+
+  it('normalizes setup guide telemetry sources to a bounded fallback', () => {
+    expect(normalizeSetupGuideSource('sidebar')).toBe('sidebar')
+    expect(normalizeSetupGuideSource('settings')).toBe('settings')
+    expect(normalizeSetupGuideSource('help_menu')).toBe('help_menu')
+    expect(normalizeSetupGuideSource('private-source')).toBe('unknown')
   })
 })

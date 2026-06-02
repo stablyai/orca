@@ -1078,6 +1078,7 @@ describe('useIpcEvents updater integration', () => {
             leafId?: string
             splitFromLeafId?: string
             splitDirection?: 'horizontal' | 'vertical'
+            splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
           }) => void)
         | null
     } = { current: null }
@@ -1189,6 +1190,7 @@ describe('useIpcEvents updater integration', () => {
               leafId?: string
               splitFromLeafId?: string
               splitDirection?: 'horizontal' | 'vertical'
+              splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
             }) => void
           ) => {
             createTerminalListenerRef.current = listener
@@ -1468,7 +1470,8 @@ describe('useIpcEvents updater integration', () => {
       tabId: 'tab-existing',
       leafId: 'leaf-split',
       splitFromLeafId: 'leaf-source',
-      splitDirection: 'vertical'
+      splitDirection: 'vertical',
+      splitTelemetrySource: 'contextual_tour'
     })
 
     expect(createTab).not.toHaveBeenCalled()
@@ -1496,6 +1499,8 @@ describe('useIpcEvents updater integration', () => {
           paneRuntimeId: -1,
           direction: 'vertical',
           sourceLeafId: 'leaf-source',
+          sourcePtyId: 'pty-bg',
+          telemetrySource: 'contextual_tour',
           newLeafId: 'leaf-split',
           ptyId: 'pty-split'
         }

@@ -63,4 +63,26 @@ describe('feature education telemetry event schemas', () => {
 
     expect(parsed.success).toBe(false)
   })
+
+  it('accepts setup guide telemetry payloads with bounded help menu sources', () => {
+    expect(
+      eventSchemas.setup_guide_opened.safeParse({
+        source: 'help_menu',
+        initial_completed_count: 0,
+        total_steps: 8,
+        first_incomplete_step_id: 'split-terminal'
+      }).success
+    ).toBe(true)
+
+    expect(
+      eventSchemas.setup_guide_closed.safeParse({
+        source: 'help_menu',
+        outcome: 'dismissed',
+        initial_completed_count: 2,
+        final_completed_count: 2,
+        total_steps: 8,
+        active_step_id: 'notifications'
+      }).success
+    ).toBe(true)
+  })
 })

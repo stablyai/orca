@@ -113,3 +113,10 @@ export function getFirstIncompleteFeatureWallSetupStepId(
   const setupStep = getFeatureWallSetupStepsForSection('setup').find((step) => !stepDone[step.id])
   return setupStep?.id ?? FEATURE_WALL_SETUP_STEPS[0].id
 }
+
+export function isFeatureWallSetupStepId(value: unknown): value is FeatureWallSetupStepId {
+  return (
+    typeof value === 'string' &&
+    FEATURE_WALL_SETUP_STEP_IDS.includes(value as FeatureWallSetupStepId)
+  )
+}

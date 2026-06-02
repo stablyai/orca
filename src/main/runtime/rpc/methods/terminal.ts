@@ -12,6 +12,7 @@ import {
   encodeTerminalStreamText,
   type TerminalStreamFrame
 } from '../../../../shared/terminal-stream-protocol'
+import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../shared/feature-education-telemetry'
 
 // Why: when a mobile client subscribes the server resizes the PTY to phone
 // dims and serializes the buffer. Sending only the visible screen meant
@@ -352,7 +353,8 @@ const TerminalSplit = TerminalHandle.extend({
     .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
     .optional(),
   command: OptionalString,
-  env: z.record(z.string(), z.string()).optional()
+  env: z.record(z.string(), z.string()).optional(),
+  telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional()
 })
 
 const TerminalStop = z.object({
@@ -593,7 +595,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       split: await runtime.splitTerminal(params.terminal, {
         direction: params.direction,
         command: params.command,
-        env: params.env
+        env: params.env,
+        telemetrySource: params.telemetrySource
       })
     })
   }),

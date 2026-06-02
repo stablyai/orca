@@ -9,6 +9,7 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { AppState } from '../store/types'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
@@ -31,6 +32,10 @@ export function isWebRuntimeSessionActive(
     Boolean(activeRuntimeEnvironmentId?.trim())
   )
 }
+
+const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
+const WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS = 30_000
+let pendingWebRuntimeSplitMirrorTelemetryId = 0
 
 export async function createWebRuntimeSessionTerminal(args: {
   worktreeId: string
@@ -429,7 +434,8 @@ async function callWebRuntimeSessionTabMethod(
 
 export function splitWebRuntimeTerminal(
   ptyId: string | null | undefined,
-  direction: 'horizontal' | 'vertical'
+  direction: 'horizontal' | 'vertical',
+  telemetrySource: TerminalPaneSplitSource
 ): boolean {
   if (!ptyId) {
     return false
@@ -443,26 +449,109 @@ export function splitWebRuntimeTerminal(
   // Why: split requests from the paired web client must run on the host pane.
   // A local split would mint a web-only pane and the host would mirror it back
   // as a separate tab instead of preserving the terminal split layout.
+  const pendingMirrorSuppressionId = reservePendingWebRuntimeSplitMirrorTelemetry(ptyId, direction)
+  const releasePendingMirrorSuppression = schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
+    ptyId,
+    direction,
+    pendingMirrorSuppressionId
+  )
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,
       method: 'terminal.split',
       params: {
         terminal: remote.handle,
-        direction
+        direction,
+        telemetrySource
       },
       timeoutMs: 15_000
     })
     .then((response) => {
-      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<RuntimeTerminalSplit>)
+      unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>)
     })
     .catch((error) => {
+      releasePendingMirrorSuppression()
       console.warn(
         '[web-runtime-session] failed to split terminal:',
         error instanceof Error ? error.message : String(error)
       )
     })
   return true
+}
+
+export function consumePendingWebRuntimeSplitMirrorTelemetry(
+  sourcePtyId: string | null | undefined,
+  direction: 'horizontal' | 'vertical'
+): boolean {
+  if (!sourcePtyId) {
+    return false
+  }
+  const key = getPendingWebRuntimeSplitMirrorTelemetryKey(sourcePtyId, direction)
+  const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key)
+  const id = ids?.values().next().value
+  if (!ids || !id) {
+    return false
+  }
+  ids.delete(id)
+  if (ids.size === 0) {
+    pendingWebRuntimeSplitMirrorTelemetry.delete(key)
+  }
+  return true
+}
+
+function reservePendingWebRuntimeSplitMirrorTelemetry(
+  sourcePtyId: string,
+  direction: 'horizontal' | 'vertical'
+): string {
+  const id = String(++pendingWebRuntimeSplitMirrorTelemetryId)
+  const key = getPendingWebRuntimeSplitMirrorTelemetryKey(sourcePtyId, direction)
+  const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key) ?? new Set<string>()
+  ids.add(id)
+  pendingWebRuntimeSplitMirrorTelemetry.set(key, ids)
+  return id
+}
+
+function schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
+  sourcePtyId: string,
+  direction: 'horizontal' | 'vertical',
+  id: string
+): () => void {
+  let released = false
+  const release = (): void => {
+    if (released) {
+      return
+    }
+    released = true
+    releasePendingWebRuntimeSplitMirrorTelemetry(sourcePtyId, direction, id)
+  }
+  const timeout = globalThis.setTimeout(release, WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS)
+  return () => {
+    globalThis.clearTimeout(timeout)
+    release()
+  }
+}
+
+function releasePendingWebRuntimeSplitMirrorTelemetry(
+  sourcePtyId: string,
+  direction: 'horizontal' | 'vertical',
+  id: string
+): void {
+  const key = getPendingWebRuntimeSplitMirrorTelemetryKey(sourcePtyId, direction)
+  const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key)
+  if (!ids) {
+    return
+  }
+  ids.delete(id)
+  if (ids.size === 0) {
+    pendingWebRuntimeSplitMirrorTelemetry.delete(key)
+  }
+}
+
+function getPendingWebRuntimeSplitMirrorTelemetryKey(
+  sourcePtyId: string,
+  direction: 'horizontal' | 'vertical'
+): string {
+  return `${direction}:${sourcePtyId}`
 }
 
 export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boolean {

@@ -9,6 +9,7 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
+import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
@@ -2066,6 +2067,7 @@ export type PreloadApi = {
         leafId?: string
         splitFromLeafId?: string
         splitDirection?: 'horizontal' | 'vertical'
+        splitTelemetrySource?: TerminalPaneSplitSource
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
@@ -2091,6 +2093,7 @@ export type PreloadApi = {
         paneRuntimeId: number
         direction: 'horizontal' | 'vertical'
         command?: string
+        telemetrySource?: TerminalPaneSplitSource
       }) => void
     ) => () => void
     onRenameTerminal: (

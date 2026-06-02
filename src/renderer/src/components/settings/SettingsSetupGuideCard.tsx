@@ -76,7 +76,12 @@ export function SettingsSetupGuideCard(): React.JSX.Element | null {
           type="button"
           size="sm"
           className="w-fit shrink-0 whitespace-nowrap gap-1.5"
-          onClick={() => openModal('setup-guide', { setupStepId: firstUnfinishedStepId })}
+          onClick={() =>
+            openModal('setup-guide', {
+              setupStepId: firstUnfinishedStepId,
+              telemetrySource: 'settings'
+            })
+          }
         >
           {setupComplete ? 'Review setup' : 'Continue setup'}
           <ArrowRight className="size-4" />

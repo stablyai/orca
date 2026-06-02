@@ -336,7 +336,10 @@ function registerRuntimeWindowLifecycle(
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
           ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
-          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {})
+          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
+          ...(opts.splitTelemetrySource !== undefined
+            ? { splitTelemetrySource: opts.splitTelemetrySource }
+            : {})
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
@@ -344,7 +347,8 @@ function registerRuntimeWindowLifecycle(
         tabId,
         paneRuntimeId,
         direction: opts.direction,
-        command: opts.command
+        command: opts.command,
+        telemetrySource: opts.telemetrySource
       })
     },
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),

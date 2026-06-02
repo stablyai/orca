@@ -1,3 +1,5 @@
+/* eslint-disable max-lines -- Why: context-menu actions share pane refs, focus
+ * recovery, inherited-cwd split behavior, and agent-fork state in one hook. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -20,6 +22,8 @@ import {
   prepareAgentSessionForkFromPane,
   type PreparedAgentSessionFork
 } from './terminal-agent-session-fork'
+import { trackTerminalPaneSplit } from '@/lib/feature-education-telemetry'
+import { useAppStore } from '@/store'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -164,19 +168,25 @@ export function useTerminalPaneContextMenu({
   // mirror the Cmd+D path — sync split on confirmed OSC 7 cache hit,
   // otherwise fall back to async resolveSplitCwd.
   const splitWithInheritedCwd = useCallback(
-    (direction: 'vertical' | 'horizontal'): void => {
+    (
+      direction: 'vertical' | 'horizontal',
+      source: 'contextual_tour' | 'context_menu' = 'context_menu'
+    ): void => {
       const pane = resolveMenuPane()
       if (!pane) {
         return
       }
       onSplitPaneCommand?.()
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
-      if (splitWebRuntimeTerminal(ptyId, direction)) {
+      if (splitWebRuntimeTerminal(ptyId, direction, source)) {
         return
       }
       const cached = paneCwdRef.current.get(pane.id)
       if (cached?.confirmed && cached.cwd) {
-        managerRef.current?.splitPane(pane.id, direction, { cwd: cached.cwd })
+        const createdPane = managerRef.current?.splitPane(pane.id, direction, { cwd: cached.cwd })
+        if (createdPane) {
+          trackTerminalPaneSplit({ source, direction })
+        }
         return
       }
       const paneId = pane.id
@@ -187,7 +197,10 @@ export function useTerminalPaneContextMenu({
           sourcePtyId: ptyId,
           fallbackCwd
         })
-        managerRef.current?.splitPane(paneId, direction, { cwd })
+        const createdPane = managerRef.current?.splitPane(paneId, direction, { cwd })
+        if (createdPane) {
+          trackTerminalPaneSplit({ source, direction })
+        }
       })()
     },
     [fallbackCwd, managerRef, onSplitPaneCommand, paneCwdRef, paneTransportsRef, resolveMenuPane]
@@ -203,7 +216,7 @@ export function useTerminalPaneContextMenu({
         return
       }
       contextPaneIdRef.current = null
-      splitWithInheritedCwd(detail?.direction ?? 'vertical')
+      splitWithInheritedCwd(detail?.direction ?? 'vertical', getRequestedSplitTelemetrySource())
     }
     window.addEventListener(REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT, onRequestSplit)
     return () =>
@@ -343,4 +356,10 @@ export function useTerminalPaneContextMenu({
     onToggleExpand,
     onSetTitle: handleSetTitle
   }
+}
+
+function getRequestedSplitTelemetrySource(): 'contextual_tour' | 'context_menu' {
+  return useAppStore.getState().activeContextualTourId === 'workspace-agent-sessions'
+    ? 'contextual_tour'
+    : 'context_menu'
 }

@@ -69,6 +69,8 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const telemetryOutcomeSentRef = useRef(false)
   const telemetryStepsSeenRef = useRef<Set<number>>(new Set())
   const telemetryTotalStepsRef = useRef(1)
+  const telemetryFurthestStepIndexRef = useRef(0)
+  const telemetryDefinedStepCountRef = useRef(1)
 
   const activeTour = useMemo(
     () => (activeTourId ? getContextualTour(activeTourId) : null),
@@ -85,12 +87,19 @@ export function ContextualTourOverlay(): JSX.Element | null {
         return
       }
       telemetryOutcomeSentRef.current = true
+      const furthestStepIndex = telemetryFurthestStepIndexRef.current
       trackContextualTourOutcome({
         tourId: activeTourId,
         source: activeTourSource,
         outcome,
         stepsSeen: telemetryStepsSeenRef.current.size,
-        totalSteps: telemetryTotalStepsRef.current
+        totalSteps: telemetryTotalStepsRef.current,
+        ...(furthestStepIndex > 0
+          ? {
+              furthestStepIndex,
+              definedStepCount: telemetryDefinedStepCountRef.current
+            }
+          : {})
       })
     },
     [activeTourId, activeTourSource]
@@ -108,8 +117,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
     telemetryOutcomeSentRef.current = false
     telemetryStepsSeenRef.current = new Set()
     telemetryTotalStepsRef.current = 1
+    telemetryFurthestStepIndexRef.current = 0
+    telemetryDefinedStepCountRef.current = activeTour?.steps.length ?? 1
     setRenderState(null)
-  }, [activeTourId])
+  }, [activeTour?.steps.length, activeTourId])
 
   useEffect(() => {
     if (!activeTour || !activeTourId) {
@@ -159,6 +170,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     const targetExists = (selector: string): boolean =>
       getMeasurableContextualTourTarget(selector) !== null
     const visibleStepIndexes = getVisibleContextualTourStepIndexes(activeTour, targetExists)
+    telemetryDefinedStepCountRef.current = activeTour.steps.length
     telemetryTotalStepsRef.current = Math.max(
       telemetryTotalStepsRef.current,
       getContextualTourOutcomeStepTotal(visibleStepIndexes)
@@ -239,6 +251,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
     }
     telemetryTourIdRef.current = activeTourId
     telemetryStepsSeenRef.current.add(activeStepIndex)
+    telemetryFurthestStepIndexRef.current = Math.max(
+      telemetryFurthestStepIndexRef.current,
+      activeStepIndex + 1
+    )
     trackContextualTourShown({
       tourId: activeTourId,
       source: activeTourSource,
@@ -251,6 +267,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
       return
     }
     telemetryStepsSeenRef.current.add(activeStepIndex)
+    telemetryFurthestStepIndexRef.current = Math.max(
+      telemetryFurthestStepIndexRef.current,
+      activeStepIndex + 1
+    )
   }, [activeStepIndex, activeTourId, renderState])
 
   useEffect(() => {

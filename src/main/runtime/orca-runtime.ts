@@ -71,6 +71,7 @@ import type {
   WorkspaceCreateTelemetrySource
 } from '../../shared/types'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
+import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getNextProjectGroupOrder } from '../../shared/project-groups'
@@ -735,6 +736,7 @@ type RuntimeNotifier = {
       leafId?: string
       splitFromLeafId?: string
       splitDirection?: 'horizontal' | 'vertical'
+      splitTelemetrySource?: TerminalPaneSplitSource
     }
   ):
     | Promise<{ tabId: string; title?: string | null }>
@@ -743,7 +745,11 @@ type RuntimeNotifier = {
   splitTerminal(
     tabId: string,
     paneRuntimeId: number,
-    opts: { direction: 'horizontal' | 'vertical'; command?: string }
+    opts: {
+      direction: 'horizontal' | 'vertical'
+      command?: string
+      telemetrySource?: TerminalPaneSplitSource
+    }
   ): void
   renameTerminal(tabId: string, title: string | null): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
@@ -10112,12 +10118,13 @@ export class OrcaRuntimeService {
 
   async splitTerminal(
     handle: string,
-    opts: {
-      direction?: 'horizontal' | 'vertical'
-      command?: string
-      env?: Record<string, string>
-      activate?: boolean
-    } = {}
+	    opts: {
+	      direction?: 'horizontal' | 'vertical'
+	      command?: string
+	      env?: Record<string, string>
+	      activate?: boolean
+	      telemetrySource?: TerminalPaneSplitSource
+	    } = {}
   ): Promise<RuntimeTerminalSplit> {
     const livePty = this.getLivePtyForHandle(handle)
     if (livePty) {
@@ -10136,10 +10143,11 @@ export class OrcaRuntimeService {
       }
     }
 
-    this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
-      direction,
-      command: opts.command
-    })
+	    this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
+	      direction,
+	      command: opts.command,
+	      telemetrySource: opts.telemetrySource
+	    })
 
     const newHandle = await this.waitForNewLeafInTab(leaf.tabId, leafKeysBefore)
     return { handle: newHandle, tabId: leaf.tabId, paneRuntimeId: leaf.paneRuntimeId }
@@ -10147,12 +10155,13 @@ export class OrcaRuntimeService {
 
   private async splitPtyBackedTerminal(
     pty: RuntimePtyWorktreeRecord,
-    opts: {
-      direction?: 'horizontal' | 'vertical'
-      command?: string
-      env?: Record<string, string>
-      activate?: boolean
-    } = {}
+	    opts: {
+	      direction?: 'horizontal' | 'vertical'
+	      command?: string
+	      env?: Record<string, string>
+	      activate?: boolean
+	      telemetrySource?: TerminalPaneSplitSource
+	    } = {}
   ): Promise<RuntimeTerminalSplit> {
     if (!this.ptyController?.spawn) {
       throw new Error('runtime_unavailable')
@@ -10200,10 +10209,11 @@ export class OrcaRuntimeService {
         title: null,
         activate: opts.activate !== false,
         tabId: parentTabId,
-        leafId,
-        splitFromLeafId: parsedPaneKey.leafId,
-        splitDirection: direction
-      })
+	        leafId,
+	        splitFromLeafId: parsedPaneKey.leafId,
+	        splitDirection: direction,
+	        splitTelemetrySource: opts.telemetrySource
+	      })
     } catch (error) {
       this.ptyController.kill?.(result.id)
       throw error

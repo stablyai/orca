@@ -8,6 +8,7 @@ import { glApi } from './gitlab'
 import type { AppIdentity } from '../shared/app-identity'
 import type { CliInstallStatus } from '../shared/cli-install-types'
 import type { AgentHookInstallStatus } from '../shared/agent-hook-types'
+import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type {
   BaseRefSearchResult,
   BaseRefDefaultResult,
@@ -2689,6 +2690,7 @@ const api = {
         leafId?: string
         splitFromLeafId?: string
         splitDirection?: 'horizontal' | 'vertical'
+        splitTelemetrySource?: TerminalPaneSplitSource
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2704,6 +2706,7 @@ const api = {
           leafId?: string
           splitFromLeafId?: string
           splitDirection?: 'horizontal' | 'vertical'
+          splitTelemetrySource?: TerminalPaneSplitSource
         }
       ) => callback(data)
       ipcRenderer.on('ui:createTerminal', listener)
@@ -2749,6 +2752,7 @@ const api = {
         paneRuntimeId: number
         direction: 'horizontal' | 'vertical'
         command?: string
+        telemetrySource?: TerminalPaneSplitSource
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2758,6 +2762,7 @@ const api = {
           paneRuntimeId: number
           direction: 'horizontal' | 'vertical'
           command?: string
+          telemetrySource?: TerminalPaneSplitSource
         }
       ) => callback(data)
       ipcRenderer.on('ui:splitTerminal', listener)

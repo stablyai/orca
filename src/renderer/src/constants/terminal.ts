@@ -1,3 +1,5 @@
+import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
 export const PASTE_TERMINAL_TEXT_EVENT = 'orca-paste-terminal-text'
@@ -46,6 +48,8 @@ export type SplitTerminalPaneDetail = {
   direction: 'horizontal' | 'vertical'
   command?: string
   sourceLeafId?: string
+  sourcePtyId?: string
+  telemetrySource?: TerminalPaneSplitSource
   newLeafId?: string
   ptyId?: string
 }

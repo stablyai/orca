@@ -26,6 +26,11 @@ function expectParses(schema: ZodType, value: unknown): void {
   )
 }
 
+function expectRejects(schema: ZodType, value: unknown): void {
+  const result = schema.safeParse(value)
+  expect(result.success).toBe(false)
+}
+
 function methodParams(
   methods: readonly { name: string; params: ZodType | null }[],
   name: string
@@ -62,6 +67,14 @@ describe('RPC optional pipe schemas', () => {
 
   it('accepts omitted terminal and worktree optional fields while required fields are present', () => {
     expectParses(methodParams(TERMINAL_METHODS, 'terminal.split'), { terminal: 'terminal-1' })
+    expectParses(methodParams(TERMINAL_METHODS, 'terminal.split'), {
+      terminal: 'terminal-1',
+      telemetrySource: 'contextual_tour'
+    })
+    expectRejects(methodParams(TERMINAL_METHODS, 'terminal.split'), {
+      terminal: 'terminal-1',
+      telemetrySource: 'raw-source'
+    })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.create'), { repo: 'repo-1' })
     expectParses(methodParams(WORKTREE_METHODS, 'worktree.prefetchCreateBase'), { repo: 'repo-1' })
   })

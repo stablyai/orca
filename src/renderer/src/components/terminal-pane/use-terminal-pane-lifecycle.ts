@@ -3,6 +3,8 @@ import { useEffect, useRef } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { trackTerminalPaneSplit } from '@/lib/feature-education-telemetry'
+import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { useAppStore } from '@/store'
@@ -1119,11 +1121,26 @@ export function useTerminalPaneLifecycle({
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
       }
       if (detail.command) {
-        splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
+        const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
           mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
+        if (createdPane) {
+          trackTerminalPaneSplit({
+            source: detail.telemetrySource ?? 'command',
+            direction: detail.direction
+          })
+        }
       } else {
-        mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
+        const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
+        if (
+          createdPane &&
+          !consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
+        ) {
+          trackTerminalPaneSplit({
+            source: detail.telemetrySource ?? 'command',
+            direction: detail.direction
+          })
+        }
       }
     }
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)

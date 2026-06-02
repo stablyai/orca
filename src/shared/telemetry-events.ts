@@ -19,8 +19,12 @@ import { FEATURE_WALL_EXIT_ACTIONS, FEATURE_WALL_TOUR_DEPTH_STEPS } from './feat
 import {
   CONTEXTUAL_TOUR_OUTCOMES,
   FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS,
-  FEATURE_EDUCATION_SOURCES
+  FEATURE_EDUCATION_SOURCES,
+  SETUP_GUIDE_CLOSE_OUTCOMES,
+  SETUP_GUIDE_SOURCES,
+  TERMINAL_PANE_SPLIT_SOURCES
 } from './feature-education-telemetry'
+import { FEATURE_WALL_SETUP_STEP_IDS } from './feature-wall-setup-steps'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 import { appStarSourceSchema } from './gh-star-source'
@@ -1086,6 +1090,11 @@ const onboardingFeatureSetupTerminalInteractedSchema = z
 
 const featureEducationSourceSchema = z.enum(FEATURE_EDUCATION_SOURCES)
 const featureEducationContextualTourIdSchema = z.enum(FEATURE_EDUCATION_CONTEXTUAL_TOUR_IDS)
+const setupGuideSourceSchema = z.enum(SETUP_GUIDE_SOURCES)
+const setupGuideCloseOutcomeSchema = z.enum(SETUP_GUIDE_CLOSE_OUTCOMES)
+const setupGuideStepIdSchema = z.enum(FEATURE_WALL_SETUP_STEP_IDS)
+const setupGuideStepIdOrNoneSchema = z.enum([...FEATURE_WALL_SETUP_STEP_IDS, 'none'] as const)
+const terminalPaneSplitSourceSchema = z.enum(TERMINAL_PANE_SPLIT_SOURCES)
 
 const contextualTourShownSchema = z
   .object({
@@ -1101,11 +1110,72 @@ const contextualTourOutcomeSchema = z
     source: featureEducationSourceSchema,
     outcome: z.enum(CONTEXTUAL_TOUR_OUTCOMES),
     steps_seen: z.number().int().min(0).max(8),
-    total_steps: z.number().int().min(1).max(8)
+    total_steps: z.number().int().min(1).max(8),
+    furthest_step_index: z.number().int().min(1).max(8).optional(),
+    defined_step_count: z.number().int().min(1).max(8).optional()
   })
   .refine((payload) => payload.steps_seen <= payload.total_steps, {
     message: 'steps_seen must be less than or equal to total_steps',
     path: ['steps_seen']
+  })
+  .refine(
+    (payload) =>
+      payload.furthest_step_index === undefined ||
+      payload.defined_step_count === undefined ||
+      payload.furthest_step_index <= payload.defined_step_count,
+    {
+      message: 'furthest_step_index must be less than or equal to defined_step_count',
+      path: ['furthest_step_index']
+    }
+  )
+  .refine(
+    (payload) =>
+      (payload.furthest_step_index === undefined) === (payload.defined_step_count === undefined),
+    {
+      message: 'furthest_step_index and defined_step_count must be sent together',
+      path: ['defined_step_count']
+    }
+  )
+  .strict()
+
+const setupGuideOpenedSchema = z
+  .object({
+    source: setupGuideSourceSchema,
+    initial_completed_count: z.number().int().min(0).max(8),
+    total_steps: z.literal(8),
+    first_incomplete_step_id: setupGuideStepIdOrNoneSchema
+  })
+  .strict()
+
+const setupGuideClosedSchema = z
+  .object({
+    source: setupGuideSourceSchema,
+    outcome: setupGuideCloseOutcomeSchema,
+    initial_completed_count: z.number().int().min(0).max(8),
+    final_completed_count: z.number().int().min(0).max(8),
+    total_steps: z.literal(8),
+    active_step_id: setupGuideStepIdOrNoneSchema
+  })
+  .refine((payload) => payload.final_completed_count >= payload.initial_completed_count, {
+    message: 'final_completed_count must be greater than or equal to initial_completed_count',
+    path: ['final_completed_count']
+  })
+  .strict()
+
+const setupGuideStepCompletedSchema = z
+  .object({
+    step_id: setupGuideStepIdSchema,
+    section_id: z.enum(['parallel-work', 'setup']),
+    completed_count: z.number().int().min(1).max(8),
+    total_steps: z.literal(8),
+    setup_guide_visible: z.boolean()
+  })
+  .strict()
+
+const terminalPaneSplitSchema = z
+  .object({
+    source: terminalPaneSplitSourceSchema,
+    direction: z.enum(['vertical', 'horizontal'])
   })
   .strict()
 
@@ -1182,6 +1252,10 @@ export const eventSchemas = {
 
   contextual_tour_shown: contextualTourShownSchema,
   contextual_tour_outcome: contextualTourOutcomeSchema,
+  setup_guide_opened: setupGuideOpenedSchema,
+  setup_guide_closed: setupGuideClosedSchema,
+  setup_guide_step_completed: setupGuideStepCompletedSchema,
+  terminal_pane_split: terminalPaneSplitSchema,
 
   smart_sort_class_distribution: smartSortClassDistributionSchema,
   smart_sort_class_1_promotion: smartSortClass1PromotionSchema,

@@ -1579,10 +1579,10 @@ export default function TerminalPane({
   }, [cancelPendingRenameFrames, renamingPaneId])
 
   const contextMenu = useTerminalPaneContextMenu({
+    tabId,
     managerRef,
     paneTransportsRef,
     paneCwdRef,
-    tabId,
     worktreeId,
     groupId: quickCommandGroupId,
     fallbackCwd: cwd ?? '',

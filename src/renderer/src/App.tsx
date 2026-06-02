@@ -118,6 +118,7 @@ import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-t
 import type { OnboardingState } from '../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { ContextualTourOverlay } from './components/contextual-tours/ContextualTourOverlay'
+import { SetupGuideTelemetryObserver } from './components/setup-guide/SetupGuideTelemetryObserver'
 import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted
@@ -1936,6 +1937,7 @@ function App(): React.JSX.Element {
               </RecoverableRenderErrorBoundary>
             ) : null}
           </Suspense>
+          {persistedUIReady ? <SetupGuideTelemetryObserver /> : null}
           <ContextualTourOverlay />
           {/* Why: mount PetOverlay only after persisted UI hydration, with
           both independent pet toggles allowing it; otherwise a hidden pet
