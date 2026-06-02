@@ -3140,6 +3140,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     onCardDragStart={handleWorktreeCardDragStart}
                     onCardDragEnd={clearWorktreeDrag}
                     hideRepoBadge={groupBy === 'repo'}
+                    // Why: pinned worktrees only render in the Pinned group, so
+                    // isPinned marks the mixed-repo pinned section that needs icons.
+                    inPinnedSection={itemRow.worktree.isPinned}
                     lineageChildCount={itemRow.lineageChildCount}
                     lineageCollapsed={itemRow.lineageCollapsed}
                     lineageChildren={lineageChildren}
