@@ -1245,39 +1245,45 @@ const api = {
       query?: string
       limit?: number
       workspaceId?: string
+      force?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('linear:listProjects', args),
 
-    getProject: (args: { id: string; workspaceId: string }): Promise<unknown> =>
+    getProject: (args: { id: string; workspaceId: string; force?: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('linear:getProject', args),
 
     listProjectIssues: (args: {
       projectId: string
       limit?: number
       workspaceId: string
+      force?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('linear:listProjectIssues', args),
 
     listCustomViews: (args: {
       model: string
       limit?: number
       workspaceId?: string
+      force?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViews', args),
 
     getCustomView: (args: {
       viewId: string
       model: string
       workspaceId: string
+      force?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('linear:getCustomView', args),
 
     listCustomViewIssues: (args: {
       viewId: string
       limit?: number
       workspaceId: string
+      force?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewIssues', args),
 
     listCustomViewProjects: (args: {
       viewId: string
       limit?: number
       workspaceId: string
+      force?: boolean
     }): Promise<unknown> => ipcRenderer.invoke('linear:listCustomViewProjects', args),
 
     teamStates: (args: { teamId: string; workspaceId?: string }): Promise<unknown[]> =>

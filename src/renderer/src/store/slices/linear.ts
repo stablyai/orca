@@ -917,7 +917,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     let entry: InflightLinearCollectionRequest<LinearProjectSummary>
     const requestCacheGeneration = linearCacheGeneration
-    const promise = linearListProjects(get().settings, trimmed, limit, resolvedWorkspaceId)
+    const promise = linearListProjects(get().settings, trimmed, limit, resolvedWorkspaceId, {
+      force: options?.force
+    })
       .then((result) => {
         if (
           inflightProjectRequests.get(cacheKey) === entry &&
@@ -971,7 +973,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearDetailRequest<LinearProjectDetail | null>
-    const promise = linearGetProject(get().settings, id, workspaceId)
+    const promise = linearGetProject(get().settings, id, workspaceId, {
+      force: options?.force
+    })
       .then((project) => {
         if (inflightProjectDetailRequests.get(cacheKey) === entry) {
           set((s) => ({
@@ -1022,7 +1026,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     let entry: InflightLinearCollectionRequest<LinearIssue>
     const requestCacheGeneration = linearCacheGeneration
-    const promise = linearListProjectIssues(get().settings, projectId, limit, workspaceId)
+    const promise = linearListProjectIssues(get().settings, projectId, limit, workspaceId, {
+      force: options?.force
+    })
       .then((result) => {
         if (
           inflightProjectIssueRequests.get(cacheKey) === entry &&
@@ -1078,7 +1084,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     let entry: InflightLinearCollectionRequest<LinearCustomViewSummary>
     const requestCacheGeneration = linearCacheGeneration
-    const promise = linearListCustomViews(get().settings, model, limit, resolvedWorkspaceId)
+    const promise = linearListCustomViews(get().settings, model, limit, resolvedWorkspaceId, {
+      force: options?.force
+    })
       .then((result) => {
         if (
           inflightCustomViewRequests.get(cacheKey) === entry &&
@@ -1133,7 +1141,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
     }
 
     let entry: InflightLinearDetailRequest<LinearCustomViewSummary | null>
-    const promise = linearGetCustomView(get().settings, viewId, model, workspaceId)
+    const promise = linearGetCustomView(get().settings, viewId, model, workspaceId, {
+      force: options?.force
+    })
       .then((view) => {
         if (inflightCustomViewDetailRequests.get(cacheKey) === entry) {
           set((s) => ({
@@ -1184,7 +1194,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     let entry: InflightLinearCollectionRequest<LinearIssue>
     const requestCacheGeneration = linearCacheGeneration
-    const promise = linearListCustomViewIssues(get().settings, viewId, limit, workspaceId)
+    const promise = linearListCustomViewIssues(get().settings, viewId, limit, workspaceId, {
+      force: options?.force
+    })
       .then((result) => {
         if (
           inflightCustomViewIssueRequests.get(cacheKey) === entry &&
@@ -1233,7 +1245,9 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     let entry: InflightLinearCollectionRequest<LinearProjectSummary>
     const requestCacheGeneration = linearCacheGeneration
-    const promise = linearListCustomViewProjects(get().settings, viewId, limit, workspaceId)
+    const promise = linearListCustomViewProjects(get().settings, viewId, limit, workspaceId, {
+      force: options?.force
+    })
       .then((result) => {
         if (
           inflightCustomViewProjectRequests.get(cacheKey) === entry &&

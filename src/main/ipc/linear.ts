@@ -266,26 +266,43 @@ export function registerLinearHandlers(): void {
     'linear:listProjects',
     async (
       _event,
-      args?: { query?: string; limit?: number; workspaceId?: LinearWorkspaceSelection }
+      args?: {
+        query?: string
+        limit?: number
+        workspaceId?: LinearWorkspaceSelection
+        force?: boolean
+      }
     ) => {
       const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
-      return listProjects(args?.query, limit, normalizeWorkspaceSelection(args?.workspaceId))
+      return listProjects(
+        args?.query,
+        limit,
+        normalizeWorkspaceSelection(args?.workspaceId),
+        args?.force === true
+      )
     }
   )
 
   ipcMain.handle(
     'linear:getProject',
-    async (_event, args: { id: string; workspaceId?: string }) => {
+    async (_event, args: { id: string; workspaceId?: string; force?: boolean }) => {
       if (typeof args?.id !== 'string' || !args.id.trim()) {
         throw new Error('Project ID is required')
       }
-      return getProject(args.id.trim(), normalizeConcreteWorkspaceId(args.workspaceId))
+      return getProject(
+        args.id.trim(),
+        normalizeConcreteWorkspaceId(args.workspaceId),
+        args.force === true
+      )
     }
   )
 
   ipcMain.handle(
     'linear:listProjectIssues',
-    async (_event, args: { projectId: string; limit?: number; workspaceId?: string }) => {
+    async (
+      _event,
+      args: { projectId: string; limit?: number; workspaceId?: string; force?: boolean }
+    ) => {
       if (typeof args?.projectId !== 'string' || !args.projectId.trim()) {
         throw new Error('Project ID is required')
       }
@@ -293,7 +310,8 @@ export function registerLinearHandlers(): void {
       return listProjectIssues(
         args.projectId.trim(),
         limit,
-        normalizeConcreteWorkspaceId(args.workspaceId)
+        normalizeConcreteWorkspaceId(args.workspaceId),
+        args.force === true
       )
     }
   )
@@ -306,13 +324,15 @@ export function registerLinearHandlers(): void {
         model?: LinearCustomViewModel
         limit?: number
         workspaceId?: LinearWorkspaceSelection
+        force?: boolean
       }
     ) => {
       const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
       return listCustomViews(
         normalizeCustomViewModel(args?.model),
         limit,
-        normalizeWorkspaceSelection(args?.workspaceId)
+        normalizeWorkspaceSelection(args?.workspaceId),
+        args?.force === true
       )
     }
   )
@@ -321,7 +341,12 @@ export function registerLinearHandlers(): void {
     'linear:getCustomView',
     async (
       _event,
-      args: { viewId: string; model?: LinearCustomViewModel; workspaceId?: string }
+      args: {
+        viewId: string
+        model?: LinearCustomViewModel
+        workspaceId?: string
+        force?: boolean
+      }
     ) => {
       if (typeof args?.viewId !== 'string' || !args.viewId.trim()) {
         throw new Error('Custom view ID is required')
@@ -329,14 +354,18 @@ export function registerLinearHandlers(): void {
       return getCustomView(
         args.viewId.trim(),
         normalizeCustomViewModel(args.model),
-        normalizeConcreteWorkspaceId(args.workspaceId)
+        normalizeConcreteWorkspaceId(args.workspaceId),
+        args.force === true
       )
     }
   )
 
   ipcMain.handle(
     'linear:listCustomViewIssues',
-    async (_event, args: { viewId: string; limit?: number; workspaceId?: string }) => {
+    async (
+      _event,
+      args: { viewId: string; limit?: number; workspaceId?: string; force?: boolean }
+    ) => {
       if (typeof args?.viewId !== 'string' || !args.viewId.trim()) {
         throw new Error('Custom view ID is required')
       }
@@ -344,14 +373,18 @@ export function registerLinearHandlers(): void {
       return listCustomViewIssues(
         args.viewId.trim(),
         limit,
-        normalizeConcreteWorkspaceId(args.workspaceId)
+        normalizeConcreteWorkspaceId(args.workspaceId),
+        args.force === true
       )
     }
   )
 
   ipcMain.handle(
     'linear:listCustomViewProjects',
-    async (_event, args: { viewId: string; limit?: number; workspaceId?: string }) => {
+    async (
+      _event,
+      args: { viewId: string; limit?: number; workspaceId?: string; force?: boolean }
+    ) => {
       if (typeof args?.viewId !== 'string' || !args.viewId.trim()) {
         throw new Error('Custom view ID is required')
       }
@@ -359,7 +392,8 @@ export function registerLinearHandlers(): void {
       return listCustomViewProjects(
         args.viewId.trim(),
         limit,
-        normalizeConcreteWorkspaceId(args.workspaceId)
+        normalizeConcreteWorkspaceId(args.workspaceId),
+        args.force === true
       )
     }
   )

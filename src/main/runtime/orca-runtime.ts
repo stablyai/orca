@@ -12507,53 +12507,68 @@ export class OrcaRuntimeService {
   linearListProjects(
     query?: string,
     limit = 20,
-    workspaceId?: LinearWorkspaceSelection
+    workspaceId?: LinearWorkspaceSelection,
+    force?: boolean
   ): ReturnType<typeof listLinearProjects> {
-    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
-  linearGetProject(id: string, workspaceId: string): ReturnType<typeof getLinearProject> {
-    return getLinearProject(id, workspaceId)
+  linearGetProject(
+    id: string,
+    workspaceId: string,
+    force?: boolean
+  ): ReturnType<typeof getLinearProject> {
+    return getLinearProject(id, workspaceId, force)
   }
 
   linearListProjectIssues(
     projectId: string,
     limit = 20,
-    workspaceId: string
+    workspaceId: string,
+    force?: boolean
   ): ReturnType<typeof listLinearProjectIssues> {
-    return listLinearProjectIssues(projectId, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearProjectIssues(projectId, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
   linearListCustomViews(
     model: LinearCustomViewModel,
     limit = 20,
-    workspaceId?: LinearWorkspaceSelection
+    workspaceId?: LinearWorkspaceSelection,
+    force?: boolean
   ): ReturnType<typeof listLinearCustomViews> {
-    return listLinearCustomViews(model, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearCustomViews(model, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
   linearGetCustomView(
     viewId: string,
     model: LinearCustomViewModel,
-    workspaceId: string
+    workspaceId: string,
+    force?: boolean
   ): ReturnType<typeof getLinearCustomView> {
-    return getLinearCustomView(viewId, model, workspaceId)
+    return getLinearCustomView(viewId, model, workspaceId, force)
   }
 
   linearListCustomViewIssues(
     viewId: string,
     limit = 20,
-    workspaceId: string
+    workspaceId: string,
+    force?: boolean
   ): ReturnType<typeof listLinearCustomViewIssues> {
-    return listLinearCustomViewIssues(viewId, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearCustomViewIssues(viewId, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
   linearListCustomViewProjects(
     viewId: string,
     limit = 20,
-    workspaceId: string
+    workspaceId: string,
+    force?: boolean
   ): ReturnType<typeof listLinearCustomViewProjects> {
-    return listLinearCustomViewProjects(viewId, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearCustomViewProjects(
+      viewId,
+      Math.min(Math.max(1, limit), 50),
+      workspaceId,
+      force
+    )
   }
 
   linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {

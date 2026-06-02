@@ -210,6 +210,7 @@ describe('createLinearSlice caching', () => {
       items: [{ id: 'LIN-CACHED' }],
       errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
     })
+    expect(linearListProjectIssues.mock.calls[0][4]).toEqual({ force: true })
   })
 
   it('surfaces scoped custom-view project failures alongside cached rows', async () => {
@@ -233,6 +234,30 @@ describe('createLinearSlice caching', () => {
       items: [{ id: 'project-cached' }],
       errors: [{ workspaceId: 'workspace-1', type: 'rate_limited', message: 'slow down' }]
     })
+    expect(linearListCustomViewProjects.mock.calls[0][4]).toEqual({ force: true })
+  })
+
+  it('surfaces scoped custom-view issue failures alongside cached rows', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearCustomViewIssueCache: {
+        'workspace-1::custom-view-issues::view-1::20': {
+          data: { items: [issue('LIN-CACHED')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListCustomViewIssues.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearCustomViewIssues('view-1', 'workspace-1', 20, {
+        force: true
+      })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+    expect(linearListCustomViewIssues.mock.calls[0][4]).toEqual({ force: true })
   })
 
   it('surfaces top-level project list failures alongside cached rows', async () => {
@@ -277,6 +302,7 @@ describe('createLinearSlice caching', () => {
       items: [{ id: 'view-cached' }],
       errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
     })
+    expect(linearListCustomViews.mock.calls[0][4]).toEqual({ force: true })
   })
 
   it('fetches custom views by exact id for saved-context restore', async () => {
@@ -292,7 +318,9 @@ describe('createLinearSlice caching', () => {
       store.getState().fetchLinearCustomView('view-1', 'workspace-1', 'project', { force: true })
     ).resolves.toMatchObject({ id: 'view-1' })
 
-    expect(linearGetCustomView).toHaveBeenCalledWith(null, 'view-1', 'project', 'workspace-1')
+    expect(linearGetCustomView).toHaveBeenCalledWith(null, 'view-1', 'project', 'workspace-1', {
+      force: true
+    })
   })
 
   it('fails forced exact custom-view validation instead of reopening stale cache', async () => {

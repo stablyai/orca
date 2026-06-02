@@ -1375,32 +1375,42 @@ export type PreloadApi = {
       query?: string
       limit?: number
       workspaceId?: LinearWorkspaceSelection
+      force?: boolean
     }) => Promise<LinearCollectionResult<LinearProjectSummary>>
-    getProject: (args: { id: string; workspaceId: string }) => Promise<LinearProjectDetail | null>
+    getProject: (args: {
+      id: string
+      workspaceId: string
+      force?: boolean
+    }) => Promise<LinearProjectDetail | null>
     listProjectIssues: (args: {
       projectId: string
       limit?: number
       workspaceId: string
+      force?: boolean
     }) => Promise<LinearCollectionResult<LinearIssue>>
     listCustomViews: (args: {
       model: LinearCustomViewModel
       limit?: number
       workspaceId?: LinearWorkspaceSelection
+      force?: boolean
     }) => Promise<LinearCollectionResult<LinearCustomViewSummary>>
     getCustomView: (args: {
       viewId: string
       model: LinearCustomViewModel
       workspaceId: string
+      force?: boolean
     }) => Promise<LinearCustomViewSummary | null>
     listCustomViewIssues: (args: {
       viewId: string
       limit?: number
       workspaceId: string
+      force?: boolean
     }) => Promise<LinearCollectionResult<LinearIssue>>
     listCustomViewProjects: (args: {
       viewId: string
       limit?: number
       workspaceId: string
+      force?: boolean
     }) => Promise<LinearCollectionResult<LinearProjectSummary>>
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
