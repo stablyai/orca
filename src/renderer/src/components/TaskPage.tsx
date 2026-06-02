@@ -2555,26 +2555,29 @@ export default function TaskPage(): React.JSX.Element {
     () => SOURCE_OPTIONS.filter((source) => visibleTaskProviders.includes(source.id)),
     [visibleTaskProviders]
   )
-  const hideJiraTaskSource = useCallback(() => {
-    const visibleWithoutJira = preferredVisibleTaskProviders.filter(
-      (provider) => provider !== 'jira'
-    )
-    // Why: an empty provider list normalizes back to "all providers"; keep
-    // one non-Jira source visible so opting out actually hides Jira.
-    const nextVisibleTaskProviders: TaskProvider[] =
-      visibleWithoutJira.length > 0 ? visibleWithoutJira : ['github']
-    const nextDefaultTaskSource = resolveVisibleTaskProvider(
-      defaultTaskSource,
-      nextVisibleTaskProviders
-    )
+  const hideTaskSource = useCallback(
+    (provider: TaskProvider, label: string) => {
+      const visibleWithoutProvider = preferredVisibleTaskProviders.filter(
+        (visibleProvider) => visibleProvider !== provider
+      )
+      // Why: an empty provider list normalizes back to "all providers"; keep
+      // one other source visible so opting out actually hides this provider.
+      const nextVisibleTaskProviders: TaskProvider[] =
+        visibleWithoutProvider.length > 0 ? visibleWithoutProvider : ['github']
+      const nextDefaultTaskSource = resolveVisibleTaskProvider(
+        defaultTaskSource,
+        nextVisibleTaskProviders
+      )
 
-    void updateSettings({
-      visibleTaskProviders: nextVisibleTaskProviders,
-      defaultTaskSource: nextDefaultTaskSource
-    }).catch(() => {
-      toast.error('Failed to hide Jira.')
-    })
-  }, [defaultTaskSource, preferredVisibleTaskProviders, updateSettings])
+      void updateSettings({
+        visibleTaskProviders: nextVisibleTaskProviders,
+        defaultTaskSource: nextDefaultTaskSource
+      }).catch(() => {
+        toast.error(`Failed to hide ${label}.`)
+      })
+    },
+    [defaultTaskSource, preferredVisibleTaskProviders, updateSettings]
+  )
 
   // Why: seed the preset + query from the user's saved default synchronously
   // so the first fetch effect issues exactly one request keyed to the final
@@ -7639,7 +7642,7 @@ export default function TaskPage(): React.JSX.Element {
                   >
                     Connect Jira
                   </Button>
-                  <Button variant="outline" onClick={hideJiraTaskSource}>
+                  <Button variant="outline" onClick={() => hideTaskSource('jira', 'Jira')}>
                     Hide Jira
                   </Button>
                 </div>
