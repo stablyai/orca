@@ -65,8 +65,18 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
+    // Why: stream the hook payload to a temp file and have curl read it via
+    // `--data-urlencode name@file`, instead of inlining `payload=$VALUE` on the
+    // command line. The payload is the only unbounded field — tool output can be
+    // tens of KB — and inlining it produced multi-KB `curl` command lines that
+    // endpoint security tools (e.g. Microsoft Defender) flag as oversized /
+    // suspicious process command lines. The urlencoded body on the wire is
+    // identical, so the agent-hook receiver needs no change. `trap ... EXIT`
+    // removes the temp file on every exit path.
+    'payload_file=$(mktemp "${TMPDIR:-/tmp}/orca-agent-hook.XXXXXX") || exit 0',
+    'trap \'rm -f "$payload_file"\' EXIT',
+    'cat > "$payload_file"',
+    'if [ ! -s "$payload_file" ]; then',
     '  exit 0',
     'fi',
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in POSIX
@@ -80,7 +90,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload=${payload}" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@${payload_file}" >/dev/null 2>&1 || true',
     'exit 0',
     ''
   ].join('\n')

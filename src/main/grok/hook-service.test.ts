@@ -62,7 +62,11 @@ describe('GrokHookService', () => {
 
     const script = readFileSync(join(homeDir, '.orca', 'agent-hooks', 'grok-hook.sh'), 'utf8')
     expect(script).toContain('/hook/grok')
-    expect(script).toContain('payload=$(cat)')
+    // Why: payload is streamed to a temp file and posted via name@file so it
+    // never lands on the curl command line (MDE oversized-command-line FP).
+    expect(script).toContain('cat > "$payload_file"')
+    expect(script).toContain('--data-urlencode "payload@${payload_file}"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
   })
 
   it('preserves user-authored hook entries in the Orca Grok config file', () => {

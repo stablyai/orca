@@ -74,8 +74,13 @@ describe('AntigravityHookService', () => {
     )
     expect(script).toContain('/hook/antigravity')
     expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
-    expect(script).toContain('payload=$(cat)')
-    expect(script).toContain("payload='{}'")
+    // Why: payload is streamed to a temp file and posted via name@file so it
+    // never lands on the curl command line (MDE oversized-command-line FP).
+    expect(script).toContain('cat > "$payload_file"')
+    expect(script).toContain('--data-urlencode "payload@${payload_file}"')
+    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    // Empty-stdin events still post {} so a status row shows.
+    expect(script).toContain("printf '%s' '{}' > \"$payload_file\"")
     expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
     expect(script).toContain('{"decision":""}')
   })
