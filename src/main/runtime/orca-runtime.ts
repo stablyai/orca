@@ -73,7 +73,7 @@ import type {
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
-import { clampLinearPlainIssueListLimit } from '../../shared/linear-issue-list-limits'
+import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -12476,7 +12476,7 @@ export class OrcaRuntimeService {
     limit = 20,
     workspaceId?: LinearWorkspaceSelection
   ): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, clampLinearPlainIssueListLimit(limit), workspaceId)
+    return listLinearIssues(filter, clampLinearIssueListLimit(limit), workspaceId)
   }
 
   linearCreateIssue(
@@ -12554,7 +12554,7 @@ export class OrcaRuntimeService {
     workspaceId: string,
     force?: boolean
   ): ReturnType<typeof listLinearProjectIssues> {
-    return listLinearProjectIssues(projectId, Math.min(Math.max(1, limit), 50), workspaceId, force)
+    return listLinearProjectIssues(projectId, clampLinearIssueListLimit(limit), workspaceId, force)
   }
 
   linearListCustomViews(
@@ -12581,7 +12581,7 @@ export class OrcaRuntimeService {
     workspaceId: string,
     force?: boolean
   ): ReturnType<typeof listLinearCustomViewIssues> {
-    return listLinearCustomViewIssues(viewId, Math.min(Math.max(1, limit), 50), workspaceId, force)
+    return listLinearCustomViewIssues(viewId, clampLinearIssueListLimit(limit), workspaceId, force)
   }
 
   linearListCustomViewProjects(

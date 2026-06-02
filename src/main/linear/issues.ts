@@ -8,7 +8,7 @@ import type {
   LinearCollectionResult,
   LinearWorkspaceSelection
 } from '../../shared/types'
-import { clampLinearPlainIssueListLimit } from '../../shared/linear-issue-list-limits'
+import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import {
   acquire,
   release,
@@ -324,7 +324,7 @@ export async function listIssues(
   limit = 20,
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearCollectionResult<LinearIssue>> {
-  const effectiveLimit = clampLinearPlainIssueListLimit(limit)
+  const effectiveLimit = clampLinearIssueListLimit(limit)
   const entries = getClients(workspaceId)
   if (entries.length === 0) {
     return { items: [] }

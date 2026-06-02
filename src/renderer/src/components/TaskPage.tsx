@@ -187,9 +187,9 @@ import type {
   TaskViewPresetId
 } from '../../../shared/types'
 import {
-  LINEAR_PLAIN_ISSUE_LIST_MAX,
-  clampLinearPlainIssueListLimit
-} from '../../../shared/linear-issue-list-limits'
+  LINEAR_ISSUE_LIST_MAX,
+  clampLinearIssueListLimit
+} from '../../../shared/linear-issue-read-limits'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
@@ -3153,6 +3153,7 @@ export default function TaskPage(): React.JSX.Element {
   const [linearProjectIssuesResult, setLinearProjectIssuesResult] = useState<
     LinearCollectionResult<LinearIssue>
   >({ items: [] })
+  const [linearProjectIssueLimit, setLinearProjectIssueLimit] = useState(LINEAR_ITEM_LIMIT)
   const [linearProjectIssuesLoading, setLinearProjectIssuesLoading] = useState(false)
   const [linearProjectIssuesError, setLinearProjectIssuesError] = useState<string | null>(null)
   const [linearCustomViewModel, setLinearCustomViewModel] = useState<LinearCustomViewModel>('issue')
@@ -3168,6 +3169,7 @@ export default function TaskPage(): React.JSX.Element {
   const [linearCustomViewIssuesResult, setLinearCustomViewIssuesResult] = useState<
     LinearCollectionResult<LinearIssue>
   >({ items: [] })
+  const [linearCustomViewIssueLimit, setLinearCustomViewIssueLimit] = useState(LINEAR_ITEM_LIMIT)
   const [linearCustomViewProjectsResult, setLinearCustomViewProjectsResult] = useState<
     LinearCollectionResult<LinearProjectSummary>
   >({ items: [] })
@@ -3201,7 +3203,9 @@ export default function TaskPage(): React.JSX.Element {
       setSelectedLinearCustomView(null)
       setLinearProjectParentView(null)
       setLinearProjectIssuesResult({ items: [] })
+      setLinearProjectIssueLimit(LINEAR_ITEM_LIMIT)
       setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewIssueLimit(LINEAR_ITEM_LIMIT)
       setLinearCustomViewProjectsResult({ items: [] })
       setLinearMode(mode)
       setTaskResumeState({ linearMode: mode, linearContext: undefined })
@@ -3225,7 +3229,9 @@ export default function TaskPage(): React.JSX.Element {
         setLinearCustomViewProjectsResult({ items: [] })
       }
       setLinearProjectIssuesResult({ items: [] })
+      setLinearProjectIssueLimit(LINEAR_ITEM_LIMIT)
       setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewIssueLimit(LINEAR_ITEM_LIMIT)
       setSelectedLinearProject(project)
       setLinearProjectTab('overview')
       setLinearMode('projects')
@@ -3248,7 +3254,9 @@ export default function TaskPage(): React.JSX.Element {
       setSelectedLinearProjectDetail(null)
       setLinearProjectParentView(null)
       setLinearProjectIssuesResult({ items: [] })
+      setLinearProjectIssueLimit(LINEAR_ITEM_LIMIT)
       setLinearCustomViewIssuesResult({ items: [] })
+      setLinearCustomViewIssueLimit(LINEAR_ITEM_LIMIT)
       setLinearCustomViewProjectsResult({ items: [] })
       setSelectedLinearCustomView(view)
       setLinearMode('views')
@@ -3700,13 +3708,29 @@ export default function TaskPage(): React.JSX.Element {
     !activeLinearIssueContextLabel &&
     appliedLinearSearch.trim().length === 0 &&
     linearIssuesHasMore &&
-    linearIssueLimit < LINEAR_PLAIN_ISSUE_LIST_MAX
+    linearIssueLimit < LINEAR_ISSUE_LIST_MAX
+  const canLoadMoreLinearProjectIssues =
+    selectedLinearProject !== null &&
+    linearProjectTab === 'issues' &&
+    Boolean(linearProjectIssuesResult.hasMore) &&
+    linearProjectIssueLimit < LINEAR_ISSUE_LIST_MAX
+  const canLoadMoreLinearCustomViewIssues =
+    selectedLinearCustomView?.model === 'issue' &&
+    Boolean(linearCustomViewIssuesResult.hasMore) &&
+    linearCustomViewIssueLimit < LINEAR_ISSUE_LIST_MAX
   const handleLoadMoreLinearIssues = useCallback(() => {
     setLinearIssueLimit((limit) =>
-      Math.min(
-        clampLinearPlainIssueListLimit(limit) + LINEAR_ITEM_LIMIT,
-        LINEAR_PLAIN_ISSUE_LIST_MAX
-      )
+      Math.min(clampLinearIssueListLimit(limit) + LINEAR_ITEM_LIMIT, LINEAR_ISSUE_LIST_MAX)
+    )
+  }, [])
+  const handleLoadMoreLinearProjectIssues = useCallback(() => {
+    setLinearProjectIssueLimit((limit) =>
+      Math.min(clampLinearIssueListLimit(limit) + LINEAR_ITEM_LIMIT, LINEAR_ISSUE_LIST_MAX)
+    )
+  }, [])
+  const handleLoadMoreLinearCustomViewIssues = useCallback(() => {
+    setLinearCustomViewIssueLimit((limit) =>
+      Math.min(clampLinearIssueListLimit(limit) + LINEAR_ITEM_LIMIT, LINEAR_ISSUE_LIST_MAX)
     )
   }, [])
 
@@ -5389,7 +5413,7 @@ export default function TaskPage(): React.JSX.Element {
     setLinearError(null)
 
     const trimmed = appliedLinearSearch.trim()
-    const effectiveLinearIssueLimit = clampLinearPlainIssueListLimit(linearIssueLimit)
+    const effectiveLinearIssueLimit = clampLinearIssueListLimit(linearIssueLimit)
     const readArgs =
       trimmed.length > 0
         ? ({ kind: 'search', query: trimmed, limit: LINEAR_ITEM_LIMIT } as const)
@@ -5404,7 +5428,7 @@ export default function TaskPage(): React.JSX.Element {
       const collection = cachedResult as LinearCollectionResult<LinearIssue>
       setLinearIssues(collection.items)
       setLinearIssuesHasMore(
-        Boolean(collection.hasMore) && effectiveLinearIssueLimit < LINEAR_PLAIN_ISSUE_LIST_MAX
+        Boolean(collection.hasMore) && effectiveLinearIssueLimit < LINEAR_ISSUE_LIST_MAX
       )
     }
 
@@ -5464,7 +5488,7 @@ export default function TaskPage(): React.JSX.Element {
         } else {
           const collection = result as LinearCollectionResult<LinearIssue>
           setLinearIssuesHasMore(
-            Boolean(collection.hasMore) && effectiveLinearIssueLimit < LINEAR_PLAIN_ISSUE_LIST_MAX
+            Boolean(collection.hasMore) && effectiveLinearIssueLimit < LINEAR_ISSUE_LIST_MAX
           )
           setLinearIssues((current) =>
             shouldProbeOnLanding
@@ -5607,10 +5631,11 @@ export default function TaskPage(): React.JSX.Element {
     let cancelled = false
     setLinearProjectIssuesLoading(true)
     setLinearProjectIssuesError(null)
+    const effectiveLimit = clampLinearIssueListLimit(linearProjectIssueLimit)
     void listLinearProjectIssues(
       selectedLinearProject.id,
       selectedLinearProject.workspaceId,
-      LINEAR_ITEM_LIMIT,
+      effectiveLimit,
       { force: linearRefreshNonce > 0 }
     )
       .then((result) => {
@@ -5630,7 +5655,13 @@ export default function TaskPage(): React.JSX.Element {
     return () => {
       cancelled = true
     }
-  }, [linearProjectTab, linearRefreshNonce, listLinearProjectIssues, selectedLinearProject])
+  }, [
+    linearProjectIssueLimit,
+    linearProjectTab,
+    linearRefreshNonce,
+    listLinearProjectIssues,
+    selectedLinearProject
+  ])
 
   useEffect(() => {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'views') {
@@ -5687,12 +5718,13 @@ export default function TaskPage(): React.JSX.Element {
     let cancelled = false
     setLinearCustomViewContentsLoading(true)
     setLinearCustomViewContentsError(null)
+    const issueLimit = clampLinearIssueListLimit(linearCustomViewIssueLimit)
     const request =
       selectedLinearCustomView.model === 'issue'
         ? listLinearCustomViewIssues(
             selectedLinearCustomView.id,
             selectedLinearCustomView.workspaceId,
-            LINEAR_ITEM_LIMIT,
+            issueLimit,
             { force: linearRefreshNonce > 0 }
           )
         : listLinearCustomViewProjects(
@@ -5726,6 +5758,7 @@ export default function TaskPage(): React.JSX.Element {
     }
   }, [
     linearRefreshNonce,
+    linearCustomViewIssueLimit,
     listLinearCustomViewIssues,
     listLinearCustomViewProjects,
     selectedLinearCustomView
@@ -8666,16 +8699,20 @@ export default function TaskPage(): React.JSX.Element {
               {selectedLinearProject && linearProjectTab === 'issues' ? (
                 <LinearCollectionNotice
                   errors={linearProjectIssuesResult.errors}
-                  hasMore={linearProjectIssuesResult.hasMore}
+                  hasMore={canLoadMoreLinearProjectIssues}
                   count={linearProjectIssuesResult.items.length}
                   label="project issues"
+                  onLoadMore={handleLoadMoreLinearProjectIssues}
+                  loading={linearProjectIssuesLoading}
                 />
               ) : selectedLinearCustomView?.model === 'issue' ? (
                 <LinearCollectionNotice
                   errors={linearCustomViewIssuesResult.errors}
-                  hasMore={linearCustomViewIssuesResult.hasMore}
+                  hasMore={canLoadMoreLinearCustomViewIssues}
                   count={linearCustomViewIssuesResult.items.length}
                   label="view issues"
+                  onLoadMore={handleLoadMoreLinearCustomViewIssues}
+                  loading={linearCustomViewContentsLoading}
                 />
               ) : (
                 <LinearCollectionNotice

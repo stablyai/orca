@@ -155,6 +155,17 @@ describe('Linear project queries', () => {
     })
   })
 
+  it('allows project issue reads above the old 50 item cap', async () => {
+    rawRequest.mockResolvedValueOnce(projectIssuesResponse('LIN-120'))
+    const { listProjectIssues } = await import('./projects')
+
+    await expect(listProjectIssues('project-1', 120, 'workspace-1')).resolves.toMatchObject({
+      items: [{ id: 'LIN-120' }]
+    })
+
+    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({ first: 120 })
+  })
+
   it('lets manual custom view list refresh bypass older in-flight reads', async () => {
     const staleRequest = deferred<ReturnType<typeof customViewsResponse>>()
     const refreshRequest = deferred<ReturnType<typeof customViewsResponse>>()
@@ -237,5 +248,16 @@ describe('Linear project queries', () => {
     await expect(stalePromise).resolves.toMatchObject({
       items: [{ id: 'ISSUE-STALE' }]
     })
+  })
+
+  it('allows issue custom view reads above the old 50 item cap', async () => {
+    rawRequest.mockResolvedValueOnce(customViewIssuesResponse('ISSUE-120'))
+    const { listCustomViewIssues } = await import('./projects')
+
+    await expect(listCustomViewIssues('view-1', 120, 'workspace-1')).resolves.toMatchObject({
+      items: [{ id: 'ISSUE-120' }]
+    })
+
+    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({ first: 120 })
   })
 })

@@ -216,6 +216,25 @@ describe('createLinearSlice caching', () => {
     expect(linearListProjectIssues.mock.calls[0][4]).toEqual({ force: true })
   })
 
+  it('caches project issue reads by the expanded effective limit', async () => {
+    const store = createTestStore()
+    linearListProjectIssues.mockResolvedValueOnce({ items: [issue('LIN-120')], hasMore: true })
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 120)
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-120' }],
+      hasMore: true
+    })
+
+    expect(linearListProjectIssues).toHaveBeenCalledWith(null, 'project-1', 120, 'workspace-1', {
+      force: undefined
+    })
+    expect(
+      store.getState().linearProjectIssueCache['workspace-1::project-issues::project-1::120']?.data
+    ).toMatchObject({ items: [{ id: 'LIN-120' }] })
+  })
+
   it('surfaces scoped custom-view project failures alongside cached rows', async () => {
     const store = createTestStore()
     const rateLimitError = Object.assign(new Error('slow down'), { status: 429 })
@@ -261,6 +280,26 @@ describe('createLinearSlice caching', () => {
       errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
     })
     expect(linearListCustomViewIssues.mock.calls[0][4]).toEqual({ force: true })
+  })
+
+  it('caches issue custom-view reads by the expanded effective limit', async () => {
+    const store = createTestStore()
+    linearListCustomViewIssues.mockResolvedValueOnce({ items: [issue('LIN-120')], hasMore: true })
+
+    await expect(
+      store.getState().listLinearCustomViewIssues('view-1', 'workspace-1', 120)
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-120' }],
+      hasMore: true
+    })
+
+    expect(linearListCustomViewIssues).toHaveBeenCalledWith(null, 'view-1', 120, 'workspace-1', {
+      force: undefined
+    })
+    expect(
+      store.getState().linearCustomViewIssueCache['workspace-1::custom-view-issues::view-1::120']
+        ?.data
+    ).toMatchObject({ items: [{ id: 'LIN-120' }] })
   })
 
   it('surfaces top-level project list failures alongside cached rows', async () => {

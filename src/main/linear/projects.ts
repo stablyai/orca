@@ -12,6 +12,7 @@ import type {
   LinearWorkspaceError,
   LinearWorkspaceSelection
 } from '../../shared/types'
+import { clampLinearIssueListLimit } from '../../shared/linear-issue-read-limits'
 import {
   acquire,
   clearToken,
@@ -827,7 +828,7 @@ export async function listProjectIssues(
   if (!id) {
     throw new Error('Project ID is required')
   }
-  const first = clampLimit(limit)
+  const first = clampLinearIssueListLimit(limit)
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
   return readConcreteCollection(
     `listProjectIssues:${concreteWorkspaceId}:${id}:${first}`,
@@ -932,7 +933,7 @@ export async function listCustomViewIssues(
   if (!id) {
     throw new Error('Custom view ID is required')
   }
-  const first = clampLimit(limit)
+  const first = clampLinearIssueListLimit(limit)
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
   return readConcreteCollection(
     `listCustomViewIssues:${concreteWorkspaceId}:${id}:${first}`,
