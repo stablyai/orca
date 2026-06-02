@@ -29,6 +29,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+    this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
     this.getPort = vi.fn(() => 9222)
@@ -535,6 +536,41 @@ describe('AgentBrowserBridge', () => {
 
     await expect(snapshot).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
     expect(lifecycleEvents).toEqual(['acquire-100', 'command-snapshot', 'restore-100'])
+  })
+
+  it('re-resolves the page after automation visibility re-registers the webview', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const wc100 = mockWebContents(100)
+    const wc200 = mockWebContents(200, 'https://example.com/reloaded', 'Reloaded')
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === 100) {
+        return wc100
+      }
+      if (id === 200) {
+        return wc200
+      }
+      return null
+    })
+
+    const acquireAutomationVisibility = vi.fn(async () => {
+      tabs.set('tab-1', 200)
+      return vi.fn()
+    })
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, undefined, {
+        acquireAutomationVisibility
+      })
+    )
+    b.setActiveTab(100)
+
+    succeedWith({ snapshot: 'tree' })
+    await expect(b.snapshot()).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
+
+    expect(acquireAutomationVisibility).toHaveBeenCalledWith(100)
+    const createdProxyIds = CdpWsProxyMock.instances.map(
+      (instance) => (instance as { _wc?: { id?: number } })._wc?.id
+    )
+    expect(createdProxyIds).toEqual([100, 200])
   })
 
   it('clears reload fallback timer after the load event settles', async () => {

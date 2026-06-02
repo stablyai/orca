@@ -1769,6 +1769,7 @@ export class AgentBrowserBridge {
         execute: (() =>
           this.executeWithVisibleTarget(
             sessionName,
+            worktreeId,
             target,
             execute,
             options
@@ -1782,6 +1783,7 @@ export class AgentBrowserBridge {
 
   private async executeWithVisibleTarget<T>(
     sessionName: string,
+    worktreeId: string | undefined,
     target: ResolvedBrowserCommandTarget,
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions
@@ -1794,10 +1796,48 @@ export class AgentBrowserBridge {
     // automation lease makes only this target paintable without selecting it.
     const restore = await this.browserManager.acquireAutomationVisibility(target.webContentsId)
     try {
-      return await execute(sessionName, target)
+      const visibleTarget = await this.refreshTargetAfterAutomationVisibility(
+        sessionName,
+        worktreeId,
+        target,
+        options
+      )
+      return await execute(sessionName, visibleTarget)
     } finally {
       restore()
     }
+  }
+
+  private async refreshTargetAfterAutomationVisibility(
+    sessionName: string,
+    worktreeId: string | undefined,
+    target: ResolvedBrowserCommandTarget,
+    options: EnqueueTargetedCommandOptions
+  ): Promise<ResolvedBrowserCommandTarget> {
+    const visibleTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+    if (visibleTarget.webContentsId === target.webContentsId) {
+      return visibleTarget
+    }
+
+    if (this.activeWebContentsId === target.webContentsId) {
+      this.activeWebContentsId = visibleTarget.webContentsId
+    }
+    if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === target.webContentsId) {
+      this.activeWebContentsPerWorktree.set(worktreeId, visibleTarget.webContentsId)
+    }
+
+    if (options.ensureSession !== false) {
+      // Why: making a parked webview paintable can re-register the same browser
+      // page with a new guest webContents. The stable page id should win over the
+      // stale pre-lease session so CLI DOM commands attach to the live guest.
+      await this.restartSessionForTarget(
+        sessionName,
+        visibleTarget.browserPageId,
+        visibleTarget.webContentsId
+      )
+    }
+
+    return visibleTarget
   }
 
   private async processQueue(sessionName: string): Promise<void> {
@@ -1973,6 +2013,49 @@ export class AgentBrowserBridge {
     } finally {
       this.pendingSessionCreation.delete(sessionName)
     }
+  }
+
+  private async restartSessionForTarget(
+    sessionName: string,
+    browserPageId: string,
+    webContentsId: number
+  ): Promise<void> {
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      await pendingCreation.catch(() => {})
+    }
+
+    const session = this.sessions.get(sessionName)
+    if (session) {
+      this.sessions.delete(sessionName)
+      this.pendingSessionCreation.delete(sessionName)
+      if (session.activeProcess) {
+        this.cancelledProcesses.add(session.activeProcess)
+        try {
+          session.activeProcess.kill()
+        } catch {
+          // Process may already be exiting.
+        }
+        session.activeProcess = null
+      }
+
+      const destroy = (async (): Promise<void> => {
+        try {
+          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'])
+        } catch {
+          // Session may already be dead.
+        }
+        await session.proxy.stop()
+      })()
+      this.pendingSessionDestruction.set(sessionName, destroy)
+      try {
+        await destroy
+      } finally {
+        this.pendingSessionDestruction.delete(sessionName)
+      }
+    }
+
+    await this.ensureSession(sessionName, browserPageId, webContentsId)
   }
 
   private async destroySession(sessionName: string): Promise<void> {
