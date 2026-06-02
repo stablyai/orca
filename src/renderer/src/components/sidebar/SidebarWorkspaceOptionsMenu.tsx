@@ -273,14 +273,11 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         </DropdownMenuSub>
 
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger
-            disabled={cardLayout === 'compact'}
-            className="data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
-          >
+          <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
               <span>Show properties</span>
               {cardLayout === 'compact' ? (
-                <span className="text-[11px] font-medium text-muted-foreground">Detailed only</span>
+                <span className="text-[11px] font-medium text-muted-foreground">Hover</span>
               ) : visiblePropertyCount > 0 ? (
                 <span className="text-[11px] font-medium text-muted-foreground">
                   {visiblePropertyCount}

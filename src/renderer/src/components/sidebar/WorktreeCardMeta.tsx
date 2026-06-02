@@ -67,6 +67,8 @@ type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   branchName?: string
   workspaceTitle?: string
   detailsAfter?: React.ReactNode
+  openDelay?: number
+  closeDelay?: number
   onEditIssue: (event: React.MouseEvent) => void
   onEditComment: (event: React.MouseEvent) => void
   onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
@@ -280,6 +282,8 @@ export function WorktreeCardDetailsHover({
   branchName,
   workspaceTitle,
   detailsAfter,
+  openDelay = 250,
+  closeDelay = 120,
   onEditIssue,
   onEditComment,
   onOpenGitHubIssueInOrca,
@@ -311,7 +315,7 @@ export function WorktreeCardDetailsHover({
   const issueLabels = issue?.labels ?? []
 
   return (
-    <HoverCard open={open} onOpenChange={setOpen} openDelay={250} closeDelay={120}>
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={openDelay} closeDelay={closeDelay}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent
         side="right"

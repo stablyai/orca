@@ -268,13 +268,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const deleteModifierPressed = useWorkspaceDeleteModifierPressed()
 
   const showDetailedCardProperties = !compactCards
-  const showPR = showDetailedCardProperties && cardProps.includes('pr')
-  const showIssue = showDetailedCardProperties && cardProps.includes('issue')
-  const showLinearIssue = showDetailedCardProperties && cardProps.includes('linear-issue')
-  const showComment = showDetailedCardProperties && cardProps.includes('comment')
-  const showPorts = showDetailedCardProperties && cardProps.includes('ports')
+  const showIssue = cardProps.includes('issue')
+  const showLinearIssue = cardProps.includes('linear-issue')
+  const showPR = cardProps.includes('pr')
+  const showComment = cardProps.includes('comment')
+  const showPorts = cardProps.includes('ports')
 
-  // Skip hosted-review fetches when the corresponding card sections are hidden.
+  // Skip hosted-review fetches when the corresponding card surfaces are hidden.
   // This preference is purely presentational, so background refreshes would
   // spend rate limit budget on data the user cannot see.
   useEffect(() => {
@@ -327,7 +327,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     showPR
   ])
 
-  // Same rationale for issues: once that section is hidden, polling only burns
+  // Same rationale for issues: once that surface is hidden, polling only burns
   // GitHub calls and keeps stale-but-invisible data warm for no user benefit.
   useEffect(() => {
     // Why: paired web startup can render hundreds of visible workspace cards.
@@ -627,17 +627,37 @@ const WorktreeCard = React.memo(function WorktreeCard({
       : undefined
 
   const titleDetailsWrapper =
-    compactCards && showBranchIdentityHover
+    compactCards && (showBranchIdentityHover || hasDetails || hasPorts)
       ? (title: React.ReactElement) => (
           <WorktreeCardDetailsHover
-            issue={null}
-            linearIssue={null}
-            review={null}
-            comment={null}
+            issue={metaIssue}
+            linearIssue={metaLinearIssue}
+            review={metaReview}
+            comment={metaComment}
             branchName={showBranchIdentityHover ? branch : undefined}
             workspaceTitle={worktree.displayName}
+            detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
+            openDelay={100}
             onEditIssue={handleEditIssue}
             onEditComment={handleEditComment}
+            onOpenGitHubIssueInOrca={
+              metaIssue && 'url' in metaIssue && metaIssue.url
+                ? handleOpenGitHubIssueInOrca
+                : undefined
+            }
+            onOpenLinearIssueInOrca={linearIssue?.url ? handleOpenLinearIssueInOrca : undefined}
+            onOpenReviewInOrca={
+              metaReview?.url && metaReview.provider === 'github'
+                ? handleOpenReviewInOrca
+                : undefined
+            }
+            // Why: compact mode hides the metadata badge row, so title hover
+            // carries the same explicit-link affordance without adding chrome.
+            onUnlinkReview={
+              metaReview?.provider === 'github' && worktree.linkedPR !== null
+                ? handleUnlinkReview
+                : undefined
+            }
           >
             {title}
           </WorktreeCardDetailsHover>
