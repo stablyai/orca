@@ -47,6 +47,12 @@ function formatGrace(minutes: number): string {
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
 }
 
+function formatAutomationTrigger(automation: Automation): string {
+  return automation.trigger === 'app_launch'
+    ? 'On Orca launch'
+    : formatAutomationSchedule(automation.rrule)
+}
+
 function ToolbarIconButton({
   label,
   children,
@@ -108,9 +114,11 @@ export function AutomationDetail({
   const agentLabel =
     AGENT_CATALOG.find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
   const runLocationLabel =
-    automation.workspaceMode === 'new_per_run'
-      ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
-      : workspaceName
+    automation.scope === 'global' && automation.launchTarget === 'floating'
+      ? (automation.globalCwd ?? workspaceName)
+      : automation.workspaceMode === 'new_per_run'
+        ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
+        : workspaceName
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -123,7 +131,9 @@ export function AutomationDetail({
             </Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
-            {projectName} / {workspaceName}
+            {automation.scope === 'global' && automation.launchTarget === 'floating'
+              ? `Floating / ${runLocationLabel}`
+              : `${projectName} / ${workspaceName}`}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -158,24 +168,52 @@ export function AutomationDetail({
       ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
-        <DetailMetric label="Schedule" value={formatAutomationSchedule(automation.rrule)} />
+        <DetailMetric label="Trigger" value={formatAutomationTrigger(automation)} />
         <DetailMetric
           label="Next run"
           value={
-            automation.enabled
-              ? formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
-              : 'Paused'
+            automation.trigger === 'app_launch'
+              ? automation.enabled
+                ? 'Next Orca launch'
+                : 'Paused'
+              : automation.enabled
+                ? formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
+                : 'Paused'
           }
         />
         <DetailMetric
-          label={automation.workspaceMode === 'new_per_run' ? 'Create from' : 'Run location'}
+          label={
+            automation.scope === 'global' && automation.launchTarget === 'floating'
+              ? 'Directory'
+              : automation.workspaceMode === 'new_per_run'
+                ? 'Create from'
+                : 'Run location'
+          }
           value={runLocationLabel}
         />
+        {automation.scope === 'global' &&
+        automation.trigger === 'app_launch' &&
+        automation.action === 'terminal_command' ? (
+          <DetailMetric
+            label="Launch target"
+            value={
+              automation.launchTarget === 'floating' ? 'Floating workspace' : 'Selected worktree'
+            }
+          />
+        ) : null}
         <DetailMetric
-          label="Session"
-          value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
+          label="Action"
+          value={automation.action === 'terminal_command' ? 'Terminal command' : 'Agent prompt'}
         />
-        <DetailMetric label="Grace" value={formatGrace(automation.missedRunGraceMinutes)} />
+        {automation.action === 'terminal_command' ? null : (
+          <DetailMetric
+            label="Session"
+            value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
+          />
+        )}
+        {automation.trigger === 'app_launch' ? null : (
+          <DetailMetric label="Grace" value={formatGrace(automation.missedRunGraceMinutes)} />
+        )}
         <DetailMetric
           label="Precheck"
           value={
@@ -184,13 +222,15 @@ export function AutomationDetail({
               : 'None'
           }
         />
-        <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase text-muted-foreground">Agent</div>
-          <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
-            <AgentIcon agent={automation.agentId} size={16} />
-            <span className="truncate">{agentLabel}</span>
+        {automation.action === 'terminal_command' ? null : (
+          <div className="min-w-0">
+            <div className="text-[11px] font-medium uppercase text-muted-foreground">Agent</div>
+            <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
+              <AgentIcon agent={automation.agentId} size={16} />
+              <span className="truncate">{agentLabel}</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">
@@ -207,12 +247,18 @@ export function AutomationDetail({
       </div>
 
       <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">Prompt</div>
+        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">
+          {automation.action === 'terminal_command' ? 'Command' : 'Prompt'}
+        </div>
         <div className="px-3 py-3">
           <div className="min-w-0">
-            <div className="text-[11px] font-medium uppercase text-muted-foreground">Prompt</div>
+            <div className="text-[11px] font-medium uppercase text-muted-foreground">
+              {automation.action === 'terminal_command' ? 'Command' : 'Prompt'}
+            </div>
             <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">
-              {automation.prompt}
+              {automation.action === 'terminal_command'
+                ? (automation.command ?? '')
+                : automation.prompt}
             </p>
           </div>
         </div>

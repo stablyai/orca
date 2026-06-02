@@ -1095,12 +1095,14 @@ export function connectPanePty(
   const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || null
   const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
+  const startupCwd = paneStartup?.cwd?.trim()
+  const transportCwd = startupCwd ? startupCwd : deps.cwd
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
   }
   const transportOptions = {
-    cwd: deps.cwd,
+    cwd: transportCwd,
     env: paneEnv,
     command: shouldDeliverStartupViaTerminalPaste ? undefined : paneStartup?.command,
     connectionId,

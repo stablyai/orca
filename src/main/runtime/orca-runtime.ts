@@ -1576,6 +1576,12 @@ export class OrcaRuntimeService {
     return this.store.createAutomation({
       name: input.name,
       prompt: input.prompt,
+      action: input.action,
+      command: input.command,
+      trigger: input.trigger,
+      scope: input.scope,
+      globalCwd: input.globalCwd,
+      launchTarget: input.launchTarget,
       precheck: input.precheck,
       agentId: input.agentId,
       projectId: target.projectId,
@@ -1602,6 +1608,24 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'prompt')) {
       patch.prompt = updates.prompt
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'action')) {
+      patch.action = updates.action
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'command')) {
+      patch.command = updates.command
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'trigger')) {
+      patch.trigger = updates.trigger
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'scope')) {
+      patch.scope = updates.scope
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'globalCwd')) {
+      patch.globalCwd = updates.globalCwd
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'launchTarget')) {
+      patch.launchTarget = updates.launchTarget
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'precheck')) {
       patch.precheck = updates.precheck
@@ -1633,7 +1657,8 @@ export class OrcaRuntimeService {
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
-      hasRuntimeAutomationUpdateValue(updates, 'workspaceMode')
+      hasRuntimeAutomationUpdateValue(updates, 'workspaceMode') ||
+      hasRuntimeAutomationUpdateValue(updates, 'scope')
     if (targetChanged) {
       const target = await this.resolveAutomationTarget(updates, current)
       if (patch.reuseSession === true && target.workspaceMode !== 'existing') {
@@ -1674,6 +1699,7 @@ export class OrcaRuntimeService {
       workspace?: string
       workspaceMode?: AutomationWorkspaceMode
       baseBranch?: string | null
+      scope?: Automation['scope']
     },
     current?: Automation
   ): Promise<{
@@ -1681,6 +1707,9 @@ export class OrcaRuntimeService {
     workspaceMode: AutomationWorkspaceMode
     workspaceId?: string | null
   }> {
+    if (input.scope === 'global') {
+      return { projectId: '', workspaceMode: 'existing', workspaceId: null }
+    }
     const hasRepo = input.repo !== undefined
     const hasWorkspace = input.workspace !== undefined
     if (

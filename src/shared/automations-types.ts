@@ -4,6 +4,15 @@ export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
 export type AutomationExecutionTargetType = 'local' | 'ssh'
 export type AutomationSchedulerOwner = 'local_host_service' | 'ssh_bridge' | 'remote_host_service'
 export type AutomationMissedRunPolicy = 'run_once_within_grace'
+export type AutomationAction = 'agent_prompt' | 'terminal_command'
+export type AutomationTrigger = 'schedule' | 'app_launch'
+export type AutomationScope = 'project' | 'global'
+export type AutomationLaunchTarget =
+  | 'floating'
+  | 'selected_worktree'
+  | 'main'
+  | 'open_worktrees'
+  | 'main_and_open_worktrees'
 export type AutomationRunStatus =
   | 'pending'
   | 'dispatching'
@@ -11,10 +20,11 @@ export type AutomationRunStatus =
   | 'completed'
   | 'skipped_precheck'
   | 'skipped_missed'
+  | 'skipped_duplicate'
   | 'skipped_unavailable'
   | 'skipped_needs_interactive_auth'
   | 'dispatch_failed'
-export type AutomationRunTrigger = 'scheduled' | 'manual'
+export type AutomationRunTrigger = 'scheduled' | 'manual' | 'app_launch'
 
 export type AutomationSchedulePreset = 'hourly' | 'daily' | 'weekdays' | 'weekly' | 'custom'
 export type AutomationRunUsageProvider = 'claude' | 'codex'
@@ -78,6 +88,12 @@ export type Automation = {
   id: string
   name: string
   prompt: string
+  action?: AutomationAction
+  command?: string
+  trigger?: AutomationTrigger
+  scope?: AutomationScope
+  globalCwd?: string
+  launchTarget?: AutomationLaunchTarget
   precheck: AutomationPrecheck | null
   agentId: TuiAgent
   projectId: string
@@ -126,6 +142,12 @@ export type AutomationRun = {
 export type AutomationCreateInput = {
   name: string
   prompt: string
+  action?: AutomationAction
+  command?: string
+  trigger?: AutomationTrigger
+  scope?: AutomationScope
+  globalCwd?: string
+  launchTarget?: AutomationLaunchTarget
   precheck?: AutomationPrecheck | null
   agentId: TuiAgent
   projectId: string
@@ -145,6 +167,12 @@ export type AutomationUpdateInput = Partial<
     Automation,
     | 'name'
     | 'prompt'
+    | 'action'
+    | 'command'
+    | 'trigger'
+    | 'scope'
+    | 'globalCwd'
+    | 'launchTarget'
     | 'precheck'
     | 'agentId'
     | 'projectId'

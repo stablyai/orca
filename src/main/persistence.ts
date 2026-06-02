@@ -424,8 +424,24 @@ function normalizeAutomationPrecheckResult(
 }
 
 function normalizeAutomationSessionReuse(automation: Automation): Automation {
+  const action = automation.action === 'terminal_command' ? 'terminal_command' : 'agent_prompt'
+  const trigger = automation.trigger === 'app_launch' ? 'app_launch' : 'schedule'
+  const scope = automation.scope === 'global' ? 'global' : 'project'
+  const launchTarget =
+    automation.launchTarget === 'main' ||
+    automation.launchTarget === 'open_worktrees' ||
+    automation.launchTarget === 'main_and_open_worktrees'
+      ? automation.launchTarget
+      : 'selected_worktree'
   return {
     ...automation,
+    action,
+    command: typeof automation.command === 'string' ? automation.command : '',
+    trigger,
+    scope,
+    globalCwd:
+      scope === 'global' && typeof automation.globalCwd === 'string' ? automation.globalCwd : '',
+    launchTarget,
     precheck: normalizeAutomationPrecheck(automation.precheck),
     reuseSession: automation.workspaceMode === 'existing' && automation.reuseSession === true
   }
@@ -2512,6 +2528,12 @@ export class Store {
       id: randomUUID(),
       name: input.name.trim() || 'Untitled automation',
       prompt: input.prompt,
+      action: input.action ?? 'agent_prompt',
+      command: input.command ?? '',
+      trigger: input.trigger ?? 'schedule',
+      scope: input.scope ?? 'project',
+      globalCwd: input.scope === 'global' ? (input.globalCwd ?? '').trim() : '',
+      launchTarget: input.launchTarget ?? 'selected_worktree',
       precheck: normalizeAutomationPrecheck(input.precheck),
       agentId: input.agentId,
       projectId: input.projectId,
@@ -2556,6 +2578,15 @@ export class Store {
       ...updates,
       name:
         updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
+      action: updates.action ?? current.action ?? 'agent_prompt',
+      command: updates.command ?? current.command ?? '',
+      trigger: updates.trigger ?? current.trigger ?? 'schedule',
+      scope: updates.scope ?? current.scope ?? 'project',
+      globalCwd:
+        (updates.scope ?? current.scope) === 'global'
+          ? (updates.globalCwd ?? current.globalCwd ?? '').trim()
+          : '',
+      launchTarget: updates.launchTarget ?? current.launchTarget ?? 'selected_worktree',
       precheck: Object.hasOwn(updates, 'precheck')
         ? normalizeAutomationPrecheck(updates.precheck)
         : normalizeAutomationPrecheck(current.precheck),

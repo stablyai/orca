@@ -16,6 +16,12 @@ import { isValidAutomationCronSchedule } from '../../../../shared/automation-sch
 const BASE_DRAFT: AutomationDraft = {
   name: '',
   prompt: '',
+  action: 'agent_prompt',
+  command: '',
+  trigger: 'schedule',
+  scope: 'project',
+  globalCwd: '',
+  launchTarget: 'selected_worktree',
   agentId: 'codex',
   projectId: '',
   workspaceMode: 'existing',
