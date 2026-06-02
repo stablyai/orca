@@ -76,7 +76,7 @@ function SettingsSetupGuideNavRow({
     <button
       type="button"
       aria-current={setupActive ? 'page' : undefined}
-      aria-label={`Get started with Orca, ${progress.doneCount} of ${progress.total} done. Show setup guide.`}
+      aria-label={`Onboarding checklist, ${progress.doneCount} of ${progress.total} done. Show setup guide.`}
       onClick={(event) =>
         onSelect({
           metaKey: event.metaKey,
@@ -93,7 +93,7 @@ function SettingsSetupGuideNavRow({
       )}
     >
       <ListChecks className="size-4 shrink-0" />
-      <span className="truncate">Get started with Orca</span>
+      <span className="truncate">Onboarding checklist</span>
       <SetupGuideProgressRing
         done={progress.doneCount}
         total={progress.total}

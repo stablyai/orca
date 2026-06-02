@@ -904,7 +904,7 @@ function Settings(): React.JSX.Element {
 
                 <SettingsSection
                   id="setup-guide"
-                  title="Get started with Orca"
+                  title="Onboarding checklist"
                   description="Finish the core workflows that make Orca useful for parallel agent work."
                   searchEntries={getSectionSearchEntries('setup-guide')}
                   bodyClassName="overflow-hidden p-0"

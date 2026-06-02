@@ -144,14 +144,14 @@ export function buildSettingsNavigationMetadata({
       : []),
     {
       id: 'setup-guide',
-      title: 'Get started with Orca',
+      title: 'Onboarding checklist',
       description: 'Finish the onboarding checklist for core Orca workflows.',
       icon: ListChecks,
       searchEntries: [
         {
-          title: 'Get started with Orca',
+          title: 'Onboarding checklist',
           description: 'Open the onboarding checklist for setup and milestone steps.',
-          keywords: ['setup guide', 'onboarding checklist', 'getting started']
+          keywords: ['setup guide', 'get started with Orca', 'getting started']
         }
       ],
       group: 'setup'
