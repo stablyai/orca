@@ -209,10 +209,9 @@ export function attachMainWindowServices(
   registerBrowserDownloadHandler(browserSession)
 
   mainWindow.on('closed', () => {
-    // Why: parked browser webviews can outlive the visible tab body until the
-    // renderer process exits. Clearing main-owned guest registrations on window
-    // close prevents stale tab→webContents ids from leaking across app relaunch
-    // or hot-reload cycles.
+    // Why: browser webviews are renderer-owned guest surfaces. Clearing
+    // main-owned guest registrations on window close prevents stale
+    // tab→webContents ids from leaking across app relaunch or hot-reload cycles.
     browserManager.unregisterAll()
   })
 }

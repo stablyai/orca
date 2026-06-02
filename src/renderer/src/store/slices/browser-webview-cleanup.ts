@@ -1,5 +1,4 @@
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/types'
-import { clearEvictedBrowserTab } from '../../components/browser-pane/browser-runtime'
 import {
   destroyPersistentWebview,
   moveFocusToRendererBeforeFocusedWebviewHidden
@@ -8,9 +7,6 @@ import {
 export { moveFocusToRendererBeforeFocusedWebviewHidden }
 
 export function destroyRemovedBrowserWebview(browserPageId: string): void {
-  // Why: eviction notices are intentionally kept while the page model exists,
-  // but once the backing page is gone there is no future mount to consume it.
-  clearEvictedBrowserTab(browserPageId)
   destroyPersistentWebview(browserPageId)
 }
 

@@ -1,32 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import {
-  _getEvictedBrowserTabCountForTest,
-  clearEvictedBrowserTab,
-  consumeEvictedBrowserTab,
-  markEvictedBrowserTab
-} from './browser-runtime'
+import { clearLiveBrowserUrl, getLiveBrowserUrl, rememberLiveBrowserUrl } from './browser-runtime'
 
-describe('browser runtime eviction notices', () => {
+describe('browser runtime live URL cache', () => {
   beforeEach(() => {
-    clearEvictedBrowserTab('page-1')
-    clearEvictedBrowserTab('page-2')
+    clearLiveBrowserUrl('page-1')
   })
 
-  it('clears an eviction notice without waiting for the page to remount', () => {
-    markEvictedBrowserTab('page-1')
+  it('remembers and clears the last live URL for a browser page', () => {
+    rememberLiveBrowserUrl('page-1', 'https://example.com/')
 
-    expect(_getEvictedBrowserTabCountForTest()).toBe(1)
+    expect(getLiveBrowserUrl('page-1')).toBe('https://example.com/')
 
-    clearEvictedBrowserTab('page-1')
+    clearLiveBrowserUrl('page-1')
 
-    expect(consumeEvictedBrowserTab('page-1')).toBe(false)
-    expect(_getEvictedBrowserTabCountForTest()).toBe(0)
-  })
-
-  it('keeps active eviction notices consumable', () => {
-    markEvictedBrowserTab('page-2')
-
-    expect(consumeEvictedBrowserTab('page-2')).toBe(true)
-    expect(consumeEvictedBrowserTab('page-2')).toBe(false)
+    expect(getLiveBrowserUrl('page-1')).toBeNull()
   })
 })
