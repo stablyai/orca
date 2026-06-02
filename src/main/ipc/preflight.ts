@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { getAzureDevOpsAuthStatus } from '../azure-devops/client'
@@ -144,10 +144,16 @@ async function isCommandOnPath(command: string, wslTarget?: WslPreflightTarget):
   }
 }
 
-const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).map(([id, config]) => ({
-  id,
-  cmd: config.detectCmd
-}))
+const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).flatMap(([id, config]) =>
+  getTuiAgentDetectCommands(config).map((cmd) => ({
+    id,
+    cmd
+  }))
+)
+
+function uniqueAgentIds(ids: Iterable<string>): string[] {
+  return [...new Set(ids)]
+}
 
 function getPreflightWslTarget(context?: PreflightRuntimeContext): WslPreflightTarget | null {
   if (process.platform !== 'win32') {
@@ -184,7 +190,7 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       installed: await isCommandOnPath(cmd, wslTarget ?? undefined)
     }))
   )
-  return checks.filter((c) => c.installed).map((c) => c.id)
+  return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
 }
 
 export type RefreshAgentsResult = {
@@ -233,7 +239,7 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_AGENT_COMMANDS
   })) as { agents: string[] }
-  return result.agents
+  return uniqueAgentIds(result.agents)
 }
 
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {

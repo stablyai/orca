@@ -201,7 +201,9 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   {
     id: 'mistral-vibe',
     label: 'Mistral Vibe',
-    cmd: 'mistral-vibe',
+    // Why: `uv tool install mistral-vibe` exposes the interactive CLI as
+    // `vibe`; the package name is not the executable users put on PATH.
+    cmd: 'vibe',
     faviconDomain: 'mistral.ai',
     homepageUrl: 'https://github.com/mistralai/mistral-vibe'
   },
