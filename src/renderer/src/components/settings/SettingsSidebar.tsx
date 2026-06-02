@@ -81,7 +81,7 @@ function SettingsSetupGuideNavRow({
         })
       }
       className={cn(
-        'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
         setupActive
           ? 'bg-accent font-medium text-accent-foreground'
           : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
@@ -96,11 +96,16 @@ function SettingsSetupGuideNavRow({
           setupActive ? 'opacity-75' : 'opacity-45'
         )}
       />
-      <span className="truncate">Onboarding checklist</span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[13px] font-medium leading-4">Onboarding checklist</span>
+        <span className="truncate text-[11px] font-normal leading-4 text-muted-foreground">
+          {progress.doneCount}/{progress.total} complete
+        </span>
+      </span>
       <SetupGuideProgressRing
         done={progress.doneCount}
         total={progress.total}
-        className="ml-auto"
+        className="ml-auto shrink-0"
       />
     </button>
   )
@@ -119,6 +124,7 @@ export function SettingsSidebar({
 }: SettingsSidebarProps): React.JSX.Element {
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
   const setupActive = activeSectionId === 'setup-guide'
+  const showSetupGuideTopRow = setupGuideProgress.doneCount < setupGuideProgress.total
   const searchShortcutHint = useShortcutLabel('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
@@ -141,6 +147,16 @@ export function SettingsSidebar({
           Back to app
         </Button>
       </div>
+
+      {showSetupGuideTopRow ? (
+        <div className="border-b border-border/50 px-3 py-3">
+          <SettingsSetupGuideNavRow
+            progress={setupGuideProgress}
+            setupActive={setupActive}
+            onSelect={(modifiers) => onSelectSection('setup-guide', modifiers)}
+          />
+        </div>
+      ) : null}
 
       <div className="border-b border-border/50 px-3 py-3">
         <div className="relative">
@@ -168,14 +184,6 @@ export function SettingsSidebar({
                 {group.title}
               </p>
               <div className="space-y-1">
-                {group.id === 'setup' ? (
-                  <SettingsSetupGuideNavRow
-                    progress={setupGuideProgress}
-                    setupActive={setupActive}
-                    onSelect={(modifiers) => onSelectSection('setup-guide', modifiers)}
-                  />
-                ) : null}
-
                 {group.sections
                   .filter((section) => section.id !== 'setup-guide')
                   .map((section) => {
