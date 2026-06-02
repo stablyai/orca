@@ -43,6 +43,7 @@ import { ComputerUsePane } from './ComputerUsePane'
 import { MobileSettingsPane } from './MobileSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
+import { AdvancedPane } from './AdvancedPane'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSetupGuideCard } from './SettingsSetupGuideCard'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
@@ -88,6 +89,7 @@ const SETTINGS_NAV_GROUPS = [
   { id: 'interface', title: 'Interface' },
   { id: 'remote', title: 'Remote Access' },
   { id: 'security', title: 'Privacy & Security' },
+  { id: 'advanced', title: 'Advanced' },
   { id: 'experimental', title: 'Experimental' }
 ] as const
 
@@ -1246,6 +1248,19 @@ function Settings(): React.JSX.Element {
                 >
                   {isSectionMounted('privacy') ? <PrivacyPane settings={settings} /> : null}
                 </SettingsSection>
+
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="advanced"
+                    title="Advanced"
+                    description="Low-level compatibility settings for troubleshooting."
+                    searchEntries={getSectionSearchEntries('advanced')}
+                  >
+                    {isSectionMounted('advanced') ? (
+                      <AdvancedPane settings={settings} updateSettings={updateSettings} />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
 
                 <SettingsSection
                   id="experimental"

@@ -27,7 +27,8 @@ import {
   Smartphone,
   SquareTerminal,
   TextCursorInput,
-  UserCog
+  UserCog,
+  Wrench
 } from 'lucide-react'
 import type { Repo } from '../../../shared/types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
@@ -59,6 +60,7 @@ import { COMPUTER_USE_PANE_SEARCH_ENTRIES } from '@/components/settings/computer
 import { VOICE_PANE_SEARCH_ENTRIES } from '@/components/settings/voice-pane-search'
 import { DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES } from '@/components/settings/developer-permissions-search'
 import { PRIVACY_PANE_SEARCH_ENTRIES } from '@/components/settings/privacy-search'
+import { ADVANCED_PANE_SEARCH_ENTRIES } from '@/components/settings/advanced-search'
 import { SHORTCUTS_PANE_SEARCH_ENTRIES } from '@/components/settings/shortcuts-search'
 import { STATS_PANE_SEARCH_ENTRIES } from '@/components/stats/stats-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from '@/components/settings/experimental-search'
@@ -305,6 +307,18 @@ export function buildSettingsNavigationMetadata({
       searchEntries: PRIVACY_PANE_SEARCH_ENTRIES,
       group: 'security'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'advanced',
+            title: 'Advanced',
+            description: 'Low-level compatibility settings for troubleshooting.',
+            icon: Wrench,
+            searchEntries: ADVANCED_PANE_SEARCH_ENTRIES,
+            group: 'advanced'
+          }
+        ]
+      : []),
     {
       id: 'experimental',
       title: 'Experimental',

@@ -7,7 +7,7 @@ import { useAppStore } from '../store'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
 import { Progress } from './ui/progress'
-import { AlertCircle, Check, Loader2, Minus, X } from 'lucide-react'
+import { AlertCircle, Check, Loader2, Minus, Network, RotateCw, X } from 'lucide-react'
 import type { ChangelogData } from '../../../shared/types'
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -26,13 +26,25 @@ function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
 }
 
+export function isHttp2ProtocolError(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return (
+    normalized.includes('err_http2_protocol_error') ||
+    normalized.includes('http2_protocol_error') ||
+    (normalized.includes('http/2') && normalized.includes('protocol'))
+  )
+}
+
 type ErrorCardModel = {
+  variant?: 'default' | 'http1Compatibility'
   title: string
   summary: string
   message: string
   releaseUrl: string
   primaryAction?: {
     label: string
+    pendingLabel?: string
+    isPending?: boolean
     onClick: () => void
   }
 }
@@ -100,6 +112,8 @@ export function UpdateCard() {
   const [mediaFailed, setMediaFailed] = useState(false)
   const [mediaLoaded, setMediaLoaded] = useState(false)
   const [installError, setInstallError] = useState<string | null>(null)
+  const [compatibilityRelaunching, setCompatibilityRelaunching] = useState(false)
+  const [compatibilitySetupError, setCompatibilitySetupError] = useState<string | null>(null)
   // Why: the version-based dismiss gate at the bottom of the visibility
   // section intentionally keeps error cards visible so a download failure
   // still surfaces even if the user previously dismissed the "available"
@@ -332,32 +346,61 @@ export function UpdateCard() {
     })
   }
 
+  const handleEnableHttp1Compatibility = () => {
+    setCompatibilityRelaunching(true)
+    setCompatibilitySetupError(null)
+    void window.api.settings
+      .set({ electronHttp1CompatibilityMode: true })
+      .then(() => window.api.app.relaunch())
+      .catch((error) => {
+        const message = String((error as Error)?.message ?? error)
+        console.error('[updates] failed to enable HTTP/1.1 compatibility:', error)
+        setCompatibilitySetupError(`Could not enable compatibility mode. ${message}`)
+        setCompatibilityRelaunching(false)
+      })
+  }
+
+  const isHttp2UpdateError = status.state === 'error' && isHttp2ProtocolError(status.message)
   const errorCard: ErrorCardModel | null =
     status.state === 'error'
-      ? {
-          // Why: title is scoped to the operation that failed so check-time
-          // failures (commonly GitHub-side) don't read as a bug in Orca.
-          title: cachedVersion ? 'Update Error' : 'Update Check Failed',
-          summary: cachedVersion
-            ? 'Could not complete the update.'
-            : 'Could not check for updates.',
-          message: status.message,
-          releaseUrl: releaseUrlForVersion(cachedVersion),
-          // Why: check-time failures are often transient (offline, GitHub
-          // hiccup), so offer a Re-check next to "Download Manually" instead
-          // of forcing the user into the manual fallback.
-          primaryAction: cachedVersion
-            ? {
-                label: 'Retry Download',
-                onClick: handleUpdate
-              }
-            : {
-                label: 'Re-check',
-                onClick: () => {
-                  void window.api.updater.check({ includePrerelease: false })
+      ? isHttp2UpdateError
+        ? {
+            variant: 'http1Compatibility',
+            title: 'HTTP/2 Download Blocked',
+            summary: 'Orca can retry through HTTP/1.1 compatibility mode.',
+            message: compatibilitySetupError ?? status.message,
+            releaseUrl: releaseUrlForVersion(cachedVersion),
+            primaryAction: {
+              label: 'Enable & Restart',
+              pendingLabel: 'Restarting...',
+              isPending: compatibilityRelaunching,
+              onClick: handleEnableHttp1Compatibility
+            }
+          }
+        : {
+            // Why: title is scoped to the operation that failed so check-time
+            // failures (commonly GitHub-side) don't read as a bug in Orca.
+            title: cachedVersion ? 'Update Error' : 'Update Check Failed',
+            summary: cachedVersion
+              ? 'Could not complete the update.'
+              : 'Could not check for updates.',
+            message: status.message,
+            releaseUrl: releaseUrlForVersion(cachedVersion),
+            // Why: check-time failures are often transient (offline, GitHub
+            // hiccup), so offer a Re-check next to "Download Manually" instead
+            // of forcing the user into the manual fallback.
+            primaryAction: cachedVersion
+              ? {
+                  label: 'Retry Download',
+                  onClick: handleUpdate
                 }
-              }
-        }
+              : {
+                  label: 'Re-check',
+                  onClick: () => {
+                    void window.api.updater.check({ includePrerelease: false })
+                  }
+                }
+          }
       : installError
         ? {
             title: 'Update Error',
@@ -466,6 +509,7 @@ export function UpdateCard() {
           summary={errorCard.summary}
           message={errorCard.message}
           releaseUrl={errorCard.releaseUrl}
+          variant={errorCard.variant}
           primaryAction={errorCard.primaryAction}
           onClose={handleCollapseWithAnimation}
         />
@@ -831,6 +875,7 @@ function DownloadingContent({
 // ── Error card content ───────────────────────────────────────────────
 
 function ErrorCardContent({
+  variant = 'default',
   title,
   summary,
   message,
@@ -838,20 +883,31 @@ function ErrorCardContent({
   primaryAction,
   onClose
 }: {
+  variant?: 'default' | 'http1Compatibility'
   title: string
   summary: string
   message: string
   releaseUrl: string
   primaryAction?: {
     label: string
+    pendingLabel?: string
+    isPending?: boolean
     onClick: () => void
   }
   onClose: () => void
 }) {
+  const isCompatibility = variant === 'http1Compatibility'
+  const Icon = isCompatibility ? Network : AlertCircle
   return (
     <div className="flex flex-col gap-3 p-4">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50 text-muted-foreground">
+          <Icon className="size-4" />
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <p className="text-sm leading-relaxed text-muted-foreground">{summary}</p>
+        </div>
         <Button
           variant="ghost"
           size="icon"
@@ -863,14 +919,39 @@ function ErrorCardContent({
         </Button>
       </div>
 
-      <p className="text-sm text-muted-foreground">
-        {summary} {message}
-      </p>
+      {isCompatibility ? (
+        <div className="rounded-md border border-border/70 bg-muted/30 px-3 py-2">
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            This turns on a process-wide Electron networking switch after restart. Use it for
+            corporate VPNs or proxies that reject HTTP/2 update downloads.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="rounded-md bg-muted/40 px-3 py-2">
+        <p className="mb-1 text-[11px] font-medium uppercase text-muted-foreground">Last error</p>
+        <p className="scrollbar-sleek max-h-20 overflow-auto break-words font-mono text-xs leading-relaxed text-muted-foreground">
+          {message}
+        </p>
+      </div>
 
       <div className="flex gap-2">
         {primaryAction && (
-          <Button variant="default" size="sm" onClick={primaryAction.onClick} className="flex-1">
-            {primaryAction.label}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={primaryAction.onClick}
+            disabled={primaryAction.isPending}
+            className="flex-1 gap-1.5"
+          >
+            {primaryAction.isPending ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : isCompatibility ? (
+              <RotateCw className="size-3.5" />
+            ) : null}
+            {primaryAction.isPending && primaryAction.pendingLabel
+              ? primaryAction.pendingLabel
+              : primaryAction.label}
           </Button>
         )}
         <Button

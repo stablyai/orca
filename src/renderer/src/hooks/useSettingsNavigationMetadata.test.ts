@@ -55,6 +55,7 @@ describe('settings navigation metadata', () => {
     expect(webIds).not.toContain('mobile')
     expect(webIds).not.toContain('computer-use')
     expect(webIds).not.toContain('voice')
+    expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
     expect(webIds).toContain('repo-repo-1')
   })
@@ -69,6 +70,14 @@ describe('settings navigation metadata', () => {
 
     expect(sections.find((section) => section.id === 'computer-use')?.badge).toBeUndefined()
     expect(sections.find((section) => section.id === 'voice')?.badge).toBeUndefined()
+  })
+
+  it('places Advanced near the bottom on desktop without putting it under Experimental', () => {
+    const desktopIds = ids()
+
+    expect(desktopIds).toContain('advanced')
+    expect(desktopIds.indexOf('advanced')).toBeLessThan(desktopIds.indexOf('experimental'))
+    expect(desktopIds.indexOf('privacy')).toBeLessThan(desktopIds.indexOf('advanced'))
   })
 
   it('keeps macOS permissions mac-only', () => {

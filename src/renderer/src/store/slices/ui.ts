@@ -65,6 +65,7 @@ import {
 } from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
+import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   getSetupScriptPromptDismissalKey
@@ -605,32 +606,7 @@ export type UISlice = {
   openSettingsPage: () => void
   closeSettingsPage: () => void
   settingsNavigationTarget: {
-    pane:
-      | 'general'
-      | 'integrations'
-      | 'accounts'
-      | 'browser'
-      | 'git'
-      | 'appearance'
-      | 'input'
-      | 'tasks'
-      | 'floating-workspace'
-      | 'terminal'
-      | 'quick-commands'
-      | 'notifications'
-      | 'computer-use'
-      | 'developer-permissions'
-      | 'privacy'
-      | 'shortcuts'
-      | 'stats'
-      | 'repo'
-      | 'agents'
-      | 'voice'
-      | 'experimental'
-      | 'orchestration'
-      | 'servers'
-      | 'mobile'
-      | 'ssh'
+    pane: SettingsNavTarget
     repoId: string | null
     sectionId?: string
     intent?: 'add-quick-command'

@@ -1,4 +1,5 @@
-import { homedir } from 'os'
+import { mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -186,6 +187,76 @@ describe('shouldInstallManagedHooks', () => {
     const { shouldInstallManagedHooks } = await import('./configure-process')
 
     expect(shouldInstallManagedHooks(false)).toBe(true)
+  })
+})
+
+describe('configureElectronNetworkCompatibility', () => {
+  const tempDirs: string[] = []
+  const originalEnvValue = process.env.ORCA_DISABLE_HTTP2
+
+  function createUserDataDir(settings: Record<string, unknown>): string {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-http1-compat-'))
+    tempDirs.push(userDataPath)
+    writeFileSync(join(userDataPath, 'orca-data.json'), JSON.stringify({ settings }), 'utf-8')
+    return userDataPath
+  }
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true })
+    }
+    if (originalEnvValue === undefined) {
+      delete process.env.ORCA_DISABLE_HTTP2
+    } else {
+      process.env.ORCA_DISABLE_HTTP2 = originalEnvValue
+    }
+  })
+
+  it('enables HTTP/1.1 compatibility when the persisted setting is on', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = createUserDataDir({ electronHttp1CompatibilityMode: true })
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(true)
+  })
+
+  it('leaves HTTP/2 enabled by default', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+    const userDataPath = createUserDataDir({})
+
+    expect(shouldDisableHttp2ForElectronNetworking({ env: {}, userDataPath })).toBe(false)
+  })
+
+  it('lets the environment override force compatibility on', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+
+    expect(
+      shouldDisableHttp2ForElectronNetworking({
+        env: { ORCA_DISABLE_HTTP2: 'true' },
+        userDataPath: createUserDataDir({ electronHttp1CompatibilityMode: false })
+      })
+    ).toBe(true)
+  })
+
+  it('lets the environment override force compatibility off', async () => {
+    const { shouldDisableHttp2ForElectronNetworking } = await import('./configure-process')
+
+    expect(
+      shouldDisableHttp2ForElectronNetworking({
+        env: { ORCA_DISABLE_HTTP2: '0' },
+        userDataPath: createUserDataDir({ electronHttp1CompatibilityMode: true })
+      })
+    ).toBe(false)
+  })
+
+  it('appends Electron disable-http2 before sessions are created', async () => {
+    const { app } = await import('electron')
+    const { configureElectronNetworkCompatibility } = await import('./configure-process')
+    const userDataPath = createUserDataDir({ electronHttp1CompatibilityMode: true })
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    configureElectronNetworkCompatibility({ env: {}, userDataPath })
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-http2')
   })
 })
 

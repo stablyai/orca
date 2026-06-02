@@ -44,6 +44,7 @@ import {
 } from './menu/register-app-menu'
 import { checkForUpdatesFromMenu, isQuittingForUpdate } from './updater'
 import {
+  configureElectronNetworkCompatibility,
   configureDevUserDataPath,
   configureOrcaUserDataPathEnv,
   enableMainProcessGpuFeatures,
@@ -370,6 +371,7 @@ if (hasSingleInstanceLock) {
     packaged: app.isPackaged,
     platform: process.platform
   })
+  configureElectronNetworkCompatibility()
   enableMainProcessGpuFeatures()
 }
 
@@ -543,6 +545,7 @@ function openMainWindow(): BrowserWindow {
     {
       onBeforeRelaunch: () => {
         isQuitting = true
+        store?.flush()
       }
     }
   )

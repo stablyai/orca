@@ -231,6 +231,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalScrollbackBytes: 10_000_000,
     httpProxyUrl: '',
     httpProxyBypassRules: '',
+    electronHttp1CompatibilityMode: false,
     openLinksInApp: true,
     openInApplications: [],
     rightSidebarOpenByDefault: true,

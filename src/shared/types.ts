@@ -2029,6 +2029,9 @@ export type GlobalSettings = {
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
   httpProxyBypassRules?: string
+  /** Why: corporate TLS-intercepting proxies can break Electron HTTP/2 downloads;
+   *  this opt-in compatibility mode applies Chromium's process-wide HTTP/1.1 switch. */
+  electronHttp1CompatibilityMode?: boolean
   /** Why: opening arbitrary links inside Orca uses an isolated guest browser surface.
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */

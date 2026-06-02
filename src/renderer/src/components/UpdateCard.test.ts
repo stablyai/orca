@@ -6,6 +6,7 @@ import { getDefaultUIState } from '../../../shared/constants'
 import type { ChangelogData, UpdateStatus } from '../../../shared/types'
 import { createUISlice } from '../store/slices/ui'
 import type { AppState } from '../store/types'
+import { isHttp2ProtocolError } from './UpdateCard'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -524,6 +525,15 @@ describe('UpdateCard visibility gates', () => {
         hasStartedDownload: false
       })
     ).toBe('hidden')
+  })
+})
+
+describe('HTTP/2 update error detection', () => {
+  it('recognizes Electron HTTP/2 protocol failures without matching generic errors', () => {
+    expect(isHttp2ProtocolError('net::ERR_HTTP2_PROTOCOL_ERROR')).toBe(true)
+    expect(isHttp2ProtocolError('Download failed: HTTP/2 protocol error')).toBe(true)
+    expect(isHttp2ProtocolError('Download failed: socket hang up')).toBe(false)
+    expect(isHttp2ProtocolError('HTTP proxy authentication failed')).toBe(false)
   })
 })
 
