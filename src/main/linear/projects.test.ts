@@ -59,12 +59,19 @@ function rawCustomView(id: string) {
 }
 
 function projectIssuesResponse(issueId: string) {
+  return projectIssuesConnectionResponse([issueId])
+}
+
+function projectIssuesConnectionResponse(
+  issueIds: string[],
+  pageInfo: { hasNextPage: boolean; endCursor?: string | null } = { hasNextPage: false }
+) {
   return {
     data: {
       project: {
         issues: {
-          nodes: [rawIssue(issueId)],
-          pageInfo: { hasNextPage: false }
+          nodes: issueIds.map((issueId) => rawIssue(issueId)),
+          pageInfo
         }
       }
     }
@@ -105,13 +112,20 @@ function customViewProjectsResponse(projectId: string) {
 }
 
 function customViewIssuesResponse(issueId: string) {
+  return customViewIssuesConnectionResponse([issueId])
+}
+
+function customViewIssuesConnectionResponse(
+  issueIds: string[],
+  pageInfo: { hasNextPage: boolean; endCursor?: string | null } = { hasNextPage: false }
+) {
   return {
     data: {
       customView: {
         modelName: 'Issue',
         issues: {
-          nodes: [rawIssue(issueId)],
-          pageInfo: { hasNextPage: false }
+          nodes: issueIds.map((issueId) => rawIssue(issueId)),
+          pageInfo
         }
       }
     }
@@ -155,15 +169,45 @@ describe('Linear project queries', () => {
     })
   })
 
-  it('allows project issue reads above the old 50 item cap', async () => {
-    rawRequest.mockResolvedValueOnce(projectIssuesResponse('LIN-120'))
+  it('loads project issue reads above Linear connection page size', async () => {
+    rawRequest
+      .mockResolvedValueOnce(
+        projectIssuesConnectionResponse(
+          Array.from({ length: 50 }, (_, index) => `LIN-${index + 1}`),
+          { hasNextPage: true, endCursor: 'project-cursor-50' }
+        )
+      )
+      .mockResolvedValueOnce(
+        projectIssuesConnectionResponse(
+          Array.from({ length: 50 }, (_, index) => `LIN-${index + 51}`),
+          { hasNextPage: true, endCursor: 'project-cursor-100' }
+        )
+      )
+      .mockResolvedValueOnce(
+        projectIssuesConnectionResponse(
+          Array.from({ length: 20 }, (_, index) => `LIN-${index + 101}`),
+          { hasNextPage: false }
+        )
+      )
     const { listProjectIssues } = await import('./projects')
 
-    await expect(listProjectIssues('project-1', 120, 'workspace-1')).resolves.toMatchObject({
-      items: [{ id: 'LIN-120' }]
-    })
+    const result = await listProjectIssues('project-1', 120, 'workspace-1')
 
-    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({ first: 120 })
+    expect(result.items).toHaveLength(120)
+    expect(result.hasMore).toBe(false)
+    expect(rawRequest).toHaveBeenCalledTimes(3)
+    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({ id: 'project-1', first: 50 })
+    expect(rawRequest.mock.calls[0]?.[1]).not.toHaveProperty('after')
+    expect(rawRequest.mock.calls[1]?.[1]).toMatchObject({
+      id: 'project-1',
+      first: 50,
+      after: 'project-cursor-50'
+    })
+    expect(rawRequest.mock.calls[2]?.[1]).toMatchObject({
+      id: 'project-1',
+      first: 20,
+      after: 'project-cursor-100'
+    })
   })
 
   it('lets manual custom view list refresh bypass older in-flight reads', async () => {
@@ -250,14 +294,44 @@ describe('Linear project queries', () => {
     })
   })
 
-  it('allows issue custom view reads above the old 50 item cap', async () => {
-    rawRequest.mockResolvedValueOnce(customViewIssuesResponse('ISSUE-120'))
+  it('loads issue custom view reads above Linear connection page size', async () => {
+    rawRequest
+      .mockResolvedValueOnce(
+        customViewIssuesConnectionResponse(
+          Array.from({ length: 50 }, (_, index) => `ISSUE-${index + 1}`),
+          { hasNextPage: true, endCursor: 'view-cursor-50' }
+        )
+      )
+      .mockResolvedValueOnce(
+        customViewIssuesConnectionResponse(
+          Array.from({ length: 50 }, (_, index) => `ISSUE-${index + 51}`),
+          { hasNextPage: true, endCursor: 'view-cursor-100' }
+        )
+      )
+      .mockResolvedValueOnce(
+        customViewIssuesConnectionResponse(
+          Array.from({ length: 20 }, (_, index) => `ISSUE-${index + 101}`),
+          { hasNextPage: false }
+        )
+      )
     const { listCustomViewIssues } = await import('./projects')
 
-    await expect(listCustomViewIssues('view-1', 120, 'workspace-1')).resolves.toMatchObject({
-      items: [{ id: 'ISSUE-120' }]
-    })
+    const result = await listCustomViewIssues('view-1', 120, 'workspace-1')
 
-    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({ first: 120 })
+    expect(result.items).toHaveLength(120)
+    expect(result.hasMore).toBe(false)
+    expect(rawRequest).toHaveBeenCalledTimes(3)
+    expect(rawRequest.mock.calls[0]?.[1]).toMatchObject({ id: 'view-1', first: 50 })
+    expect(rawRequest.mock.calls[0]?.[1]).not.toHaveProperty('after')
+    expect(rawRequest.mock.calls[1]?.[1]).toMatchObject({
+      id: 'view-1',
+      first: 50,
+      after: 'view-cursor-50'
+    })
+    expect(rawRequest.mock.calls[2]?.[1]).toMatchObject({
+      id: 'view-1',
+      first: 20,
+      after: 'view-cursor-100'
+    })
   })
 })

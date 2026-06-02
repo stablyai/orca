@@ -46,6 +46,20 @@ function rawIssue(id: string, updatedAt = '2026-01-01T00:00:00.000Z') {
   }
 }
 
+function issueConnectionResponse(
+  ids: string[],
+  pageInfo: { hasNextPage: boolean; endCursor?: string | null } = { hasNextPage: false }
+) {
+  return {
+    data: {
+      issues: {
+        nodes: ids.map((id) => rawIssue(id)),
+        pageInfo
+      }
+    }
+  }
+}
+
 describe('Linear issue queries', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -138,6 +152,36 @@ describe('Linear issue queries', () => {
     await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject({
       items: [{ id: 'LIN-1' }],
       hasMore: true
+    })
+  })
+
+  it('loads plain issue lists past Linear connection page size with cursors', async () => {
+    rawRequest
+      .mockResolvedValueOnce(
+        issueConnectionResponse(
+          Array.from({ length: 50 }, (_, index) => `LIN-${index + 1}`),
+          { hasNextPage: true, endCursor: 'cursor-50' }
+        )
+      )
+      .mockResolvedValueOnce(
+        issueConnectionResponse(
+          Array.from({ length: 22 }, (_, index) => `LIN-${index + 51}`),
+          { hasNextPage: false, endCursor: null }
+        )
+      )
+    const { listIssues } = await import('./issues')
+
+    const result = await listIssues('all', 72, 'workspace-1')
+
+    expect(result.items).toHaveLength(72)
+    expect(result.hasMore).toBe(false)
+    expect(rawRequest).toHaveBeenCalledTimes(2)
+    expect(rawRequest.mock.calls[0][1]).toMatchObject({ first: 50, orderBy: 'updatedAt' })
+    expect(rawRequest.mock.calls[0][1]).not.toHaveProperty('after')
+    expect(rawRequest.mock.calls[1][1]).toMatchObject({
+      first: 22,
+      after: 'cursor-50',
+      orderBy: 'updatedAt'
     })
   })
 
