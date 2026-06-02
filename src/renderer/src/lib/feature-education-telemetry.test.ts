@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getSetupGuideStepSection,
   persistEmittedSetupGuideStepId,
@@ -9,7 +9,6 @@ import {
   trackTerminalPaneSplit
 } from './feature-education-telemetry'
 
-const consoleInfoMock = vi.hoisted(() => vi.fn())
 const trackMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./telemetry', () => ({
@@ -17,7 +16,6 @@ vi.mock('./telemetry', () => ({
 }))
 
 afterEach(() => {
-  consoleInfoMock.mockClear()
   trackMock.mockClear()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
@@ -25,8 +23,6 @@ afterEach(() => {
 })
 
 describe('feature education telemetry helpers', () => {
-  beforeEachConsoleInfo()
-
   it('adds stable tour-depth fields to contextual tour outcomes', () => {
     trackContextualTourOutcome({
       tourId: 'workspace-agent-sessions',
@@ -38,7 +34,7 @@ describe('feature education telemetry helpers', () => {
       definedStepCount: 5
     })
 
-    expectLoggedFeatureEducationTelemetry('contextual_tour_outcome', {
+    expectTrackedFeatureEducationTelemetry('contextual_tour_outcome', {
       tour_id: 'workspace-agent-sessions',
       source: 'setup_guide_parallel_work',
       outcome: 'completed',
@@ -47,7 +43,6 @@ describe('feature education telemetry helpers', () => {
       furthest_step_index: 5,
       defined_step_count: 5
     })
-    expect(trackMock).not.toHaveBeenCalled()
   })
 
   it('omits stable tour-depth fields before any defined step is reached', () => {
@@ -59,14 +54,13 @@ describe('feature education telemetry helpers', () => {
       totalSteps: 3
     })
 
-    expectLoggedFeatureEducationTelemetry('contextual_tour_outcome', {
+    expectTrackedFeatureEducationTelemetry('contextual_tour_outcome', {
       tour_id: 'workspace-agent-sessions',
       source: 'setup_guide_parallel_work',
       outcome: 'cancelled',
       steps_seen: 0,
       total_steps: 3
     })
-    expect(trackMock).not.toHaveBeenCalled()
   })
 
   it('keeps setup guide close counts schema-valid if durable progress decreases', () => {
@@ -79,7 +73,7 @@ describe('feature education telemetry helpers', () => {
       activeStepId: 'notifications'
     })
 
-    expectLoggedFeatureEducationTelemetry('setup_guide_closed', {
+    expectTrackedFeatureEducationTelemetry('setup_guide_closed', {
       source: 'help_menu',
       outcome: 'dismissed',
       initial_completed_count: 4,
@@ -87,7 +81,6 @@ describe('feature education telemetry helpers', () => {
       total_steps: 8,
       active_step_id: 'notifications'
     })
-    expect(trackMock).not.toHaveBeenCalled()
   })
 
   it('tracks setup guide step completion with bounded section and count fields', () => {
@@ -98,14 +91,13 @@ describe('feature education telemetry helpers', () => {
       setupGuideVisible: true
     })
 
-    expectLoggedFeatureEducationTelemetry('setup_guide_step_completed', {
+    expectTrackedFeatureEducationTelemetry('setup_guide_step_completed', {
       step_id: 'split-terminal',
       section_id: 'parallel-work',
       completed_count: 8,
       total_steps: 8,
       setup_guide_visible: true
     })
-    expect(trackMock).not.toHaveBeenCalled()
     expect(getSetupGuideStepSection('notifications')).toBe('setup')
   })
 
@@ -123,11 +115,10 @@ describe('feature education telemetry helpers', () => {
   it('tracks terminal pane split with explicit source and direction', () => {
     trackTerminalPaneSplit({ source: 'keyboard', direction: 'horizontal' })
 
-    expectLoggedFeatureEducationTelemetry('terminal_pane_split', {
+    expectTrackedFeatureEducationTelemetry('terminal_pane_split', {
       source: 'keyboard',
       direction: 'horizontal'
     })
-    expect(trackMock).not.toHaveBeenCalled()
   })
 
   it('caps terminal pane split telemetry by source and direction for each UTC day', () => {
@@ -140,28 +131,25 @@ describe('feature education telemetry helpers', () => {
     trackTerminalPaneSplit({ source: 'keyboard', direction: 'vertical' })
     trackTerminalPaneSplit({ source: 'context_menu', direction: 'horizontal' })
 
-    expect(consoleInfoMock).toHaveBeenCalledTimes(3)
-    expect(consoleInfoMock).toHaveBeenNthCalledWith(
+    expect(trackMock).toHaveBeenCalledTimes(3)
+    expect(trackMock).toHaveBeenNthCalledWith(
       1,
-      '[feature-education-telemetry:test-mode]',
       'terminal_pane_split',
       {
         source: 'keyboard',
         direction: 'horizontal'
       }
     )
-    expect(consoleInfoMock).toHaveBeenNthCalledWith(
+    expect(trackMock).toHaveBeenNthCalledWith(
       2,
-      '[feature-education-telemetry:test-mode]',
       'terminal_pane_split',
       {
         source: 'keyboard',
         direction: 'vertical'
       }
     )
-    expect(consoleInfoMock).toHaveBeenNthCalledWith(
+    expect(trackMock).toHaveBeenNthCalledWith(
       3,
-      '[feature-education-telemetry:test-mode]',
       'terminal_pane_split',
       {
         source: 'context_menu',
@@ -172,23 +160,12 @@ describe('feature education telemetry helpers', () => {
     vi.setSystemTime(new Date('2026-06-03T00:00:00.000Z'))
     trackTerminalPaneSplit({ source: 'keyboard', direction: 'horizontal' })
 
-    expect(consoleInfoMock).toHaveBeenCalledTimes(4)
-    expect(trackMock).not.toHaveBeenCalled()
+    expect(trackMock).toHaveBeenCalledTimes(4)
   })
 })
 
-function beforeEachConsoleInfo(): void {
-  beforeEach(() => {
-    vi.spyOn(console, 'info').mockImplementation(consoleInfoMock)
-  })
-}
-
-function expectLoggedFeatureEducationTelemetry(name: string, props: Record<string, unknown>): void {
-  expect(consoleInfoMock).toHaveBeenCalledWith(
-    '[feature-education-telemetry:test-mode]',
-    name,
-    props
-  )
+function expectTrackedFeatureEducationTelemetry(name: string, props: Record<string, unknown>): void {
+  expect(trackMock).toHaveBeenCalledWith(name, props)
 }
 
 function createMemoryStorage(): Storage {
