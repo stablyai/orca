@@ -111,7 +111,7 @@ yay -S stably-orca-git
 </p>
 
 - **iOS:** [App Store からダウンロード](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [GitHub Releases から APK をダウンロード](https://github.com/stablyai/orca/releases/download/mobile-v0.0.10/app-release.apk)
+- **Android:** [GitHub Releases から APK をダウンロード](https://github.com/stablyai/orca/releases/download/mobile-v0.0.11/app-release.apk)
 
 ---
 

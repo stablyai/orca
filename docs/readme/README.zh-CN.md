@@ -111,7 +111,7 @@ yay -S stably-orca-git
 </p>
 
 - **iOS:** [从 App Store 下载](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [从 GitHub Releases 下载 APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.10/app-release.apk)
+- **Android:** [从 GitHub Releases 下载 APK](https://github.com/stablyai/orca/releases/download/mobile-v0.0.11/app-release.apk)
 
 ---
 
