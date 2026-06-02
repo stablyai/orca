@@ -65,10 +65,11 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(markup).toContain('data-browser-pane-active="false"')
   })
 
-  it('unmounts browser panes when their worktree is not visible', () => {
+  it('keeps the selected browser pane mounted but inactive when its worktree is not visible', () => {
     const markup = renderOverlay({ isWorktreeActive: false })
 
-    expect(markup).not.toContain('data-browser-pane-id="browser-a"')
+    expect(markup).toContain('data-browser-pane-id="browser-a"')
+    expect(markup).toContain('data-browser-pane-active="false"')
     expect(markup).not.toContain('data-browser-pane-id="browser-b"')
   })
 })
