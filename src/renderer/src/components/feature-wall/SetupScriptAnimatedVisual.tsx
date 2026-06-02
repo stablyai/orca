@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Why: this is a single storyboarded setup-script animation; splitting the phase markup from target measurement makes the visual harder to verify. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this visual is a timed storyboard; phase and typed-name state intentionally advance from animation effects and the reduced-motion gate. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX, ReactNode, RefObject } from 'react'
 import { FolderGit2, Plus, TerminalSquare } from 'lucide-react'
@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { ClaudeIcon } from '../status-bar/icons'
 import { CodexInlineIcon, CursorIcon, WorkingSpinner } from './feature-tour-preview-glyphs'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
+import { SetupScriptNewWorkspaceModal } from './SetupScriptNewWorkspaceModal'
+import { SetupScriptWorkspaceListCard } from './SetupScriptWorkspaceListCard'
 
 const PHASES = [
   { name: 'create-init', duration: 1200 },
@@ -157,7 +159,7 @@ export function SetupScriptAnimatedVisual(props: { reducedMotion: boolean }): JS
         </div>
 
         <div className="mt-1 flex flex-col gap-1.5 min-w-0 flex-1">
-          <WorkspaceListCard
+          <SetupScriptWorkspaceListCard
             title="release notes"
             active={!isWorkspaceActive}
             prompt="draft release notes"
@@ -166,7 +168,7 @@ export function SetupScriptAnimatedVisual(props: { reducedMotion: boolean }): JS
             reducedMotion={reducedMotion}
           />
 
-          <WorkspaceListCard
+          <SetupScriptWorkspaceListCard
             title="checkout fix"
             active={isWorkspaceActive}
             prompt="fix checkout timeout"
@@ -319,7 +321,7 @@ export function SetupScriptAnimatedVisual(props: { reducedMotion: boolean }): JS
         </div>
 
         {/* Create Worktree Modal Overlay */}
-        <NewWorkspaceModal
+        <SetupScriptNewWorkspaceModal
           visible={modalVisible}
           nameValue={modalNameValue}
           nameTyping={phase === 'modal-typing'}
@@ -381,112 +383,6 @@ function useMeasuredCursor(
   }, [createButtonRef, plusRef, reducedMotion, rootRef, target])
 
   return pos
-}
-
-function WorkspaceListCard(props: {
-  title: string
-  active: boolean
-  prompt?: string
-  icon?: ReactNode
-  state: 'idle' | 'starting' | 'setup' | 'working'
-  reducedMotion: boolean
-  className?: string
-}): JSX.Element {
-  return (
-    <div
-      className={cn(
-        'rounded-md border border-sidebar-border px-2 py-1.5 transition-colors duration-300',
-        props.active ? 'bg-sidebar-accent' : 'bg-sidebar',
-        props.className
-      )}
-    >
-      <div className="flex items-center gap-1.5">
-        <span
-          className={cn(
-            'size-1.5 shrink-0 rounded-full transition-colors duration-300',
-            props.active ? 'bg-emerald-500' : 'bg-muted-foreground/35'
-          )}
-        />
-        <span className="truncate text-xs font-semibold text-sidebar-foreground">
-          {props.title}
-        </span>
-      </div>
-      {props.prompt && (
-        <div className="mt-1.5 grid grid-cols-[8px_14px_minmax(0,1fr)] items-center gap-1.5">
-          {props.state === 'working' || props.state === 'starting' || props.state === 'setup' ? (
-            <WorkingSpinner size="xs" reducedMotion={props.reducedMotion} />
-          ) : (
-            <span className="size-1.5 rounded-full bg-muted-foreground/35" />
-          )}
-          <span className="flex size-3.5 items-center justify-center text-sidebar-foreground/65">
-            {props.icon}
-          </span>
-          <span className="truncate font-mono text-[10px] text-sidebar-foreground/65">
-            {props.state === 'setup' ? 'running setup' : props.prompt}
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function NewWorkspaceModal(props: {
-  visible: boolean
-  nameValue: string
-  nameTyping: boolean
-  createHovered: boolean
-  createClicked: boolean
-  createButtonRef: RefObject<HTMLDivElement | null>
-}): JSX.Element {
-  return (
-    <div
-      className={cn(
-        'pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-background/55 backdrop-blur-[1px] transition-opacity duration-300 z-40',
-        props.visible ? 'opacity-100' : 'opacity-0'
-      )}
-      aria-hidden
-    >
-      <div
-        className={cn(
-          'relative w-[min(240px,92%)] rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg transition-[opacity,transform] duration-300',
-          props.visible
-            ? 'translate-y-0 scale-100 opacity-100'
-            : 'translate-y-2 scale-[0.98] opacity-0'
-        )}
-      >
-        <div className="text-xs font-semibold leading-none text-foreground">Create Worktree</div>
-        <div className="mt-2.5 space-y-1.5">
-          <ModalField label="Project" value="orca" />
-          <ModalField label="Name" value={props.nameValue} typing={props.nameTyping} />
-          <ModalField label="Agent" value="Codex" />
-        </div>
-        <div
-          ref={props.createButtonRef}
-          className={cn(
-            'mt-3 flex h-7 w-full items-center justify-center rounded-md bg-primary px-3 text-[11px] font-medium text-primary-foreground transition-all duration-200',
-            props.createHovered ? 'opacity-90' : null,
-            props.createClicked ? 'scale-[0.98]' : null
-          )}
-        >
-          Create worktree
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ModalField(props: { label: string; value: string; typing?: boolean }): JSX.Element {
-  return (
-    <div className="flex items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-2 py-1 text-[11px]">
-      <span className="text-muted-foreground">{props.label}</span>
-      <div className="flex items-center font-mono font-medium text-foreground min-w-0">
-        <span className="truncate">{props.value}</span>
-        {props.typing ? (
-          <span className="ml-px inline-block h-2.5 w-[5px] animate-pulse bg-foreground" />
-        ) : null}
-      </div>
-    </div>
-  )
 }
 
 function TerminalLine(props: {

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import type { SlashCommandId } from './rich-markdown-commands'
-import { slashCommands } from './rich-markdown-commands'
+import type { SlashCommandId } from './rich-markdown-slash-commands'
+import { slashCommands } from './rich-markdown-slash-commands'
 
 function roundTripMarkdown(content: string): string {
   const editor = new Editor({

@@ -13,13 +13,10 @@ import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { useLocalImagePick } from './useLocalImagePick'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { getConnectionId } from '@/lib/connection-context'
-import { slashCommands, syncDocLinkMenu, syncSlashMenu } from './rich-markdown-commands'
-import type {
-  DocLinkMenuRow,
-  DocLinkMenuState,
-  SlashCommand,
-  SlashMenuState
-} from './rich-markdown-commands'
+import { syncDocLinkMenu } from './rich-markdown-commands'
+import type { DocLinkMenuRow, DocLinkMenuState } from './rich-markdown-commands'
+import { slashCommands, syncSlashMenu } from './rich-markdown-slash-commands'
+import type { SlashCommand, SlashMenuState } from './rich-markdown-slash-commands'
 import { getMarkdownDocCompletionDocuments } from './markdown-doc-completions'
 import { RichMarkdownSearchBar } from './RichMarkdownSearchBar'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
@@ -1375,7 +1372,11 @@ export default function RichMarkdownEditor({
     if (canAnnotateRichMarkdown) {
       return
     }
+    // Why: disabling annotations must immediately remove stale popovers and
+    // highlights that cannot be derived from the next non-annotatable render.
+    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setAnnotationTarget(null)
+    // oxlint-disable-next-line react-doctor/no-adjust-state-on-prop-change
     setAnnotationPopover(null)
     clearAllAnnotationHighlights()
   }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights])

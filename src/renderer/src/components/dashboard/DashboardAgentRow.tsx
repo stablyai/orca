@@ -1,13 +1,13 @@
-/* eslint-disable max-lines */
 import React, { useState, useCallback } from 'react'
-import { X, Wrench, ChevronDown, Send } from 'lucide-react'
+import { X, ChevronDown, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
+import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
+import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 
@@ -529,121 +529,17 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
           )}
         </span>
       </div>
-      {/* Why: tool row and message row both carry different info — tool shows
-          the mechanical step (Bash: ...), message shows the agent's narration
-          ("let me verify the test ordering"). Antigravity can emit working
-          hooks without tool metadata between tool events, so the empty tool
-          slot must be a real line box instead of whitespace that can collapse.
-          Tool slot only reserves height while working, since done/blocked rows
-          shouldn't show a dangling wrench. */}
-      {isWorking && (
-        <div
-          data-agent-row-tool-slot=""
-          className="mt-0.5 min-w-0 pl-5 text-[10px] leading-snug text-muted-foreground/70"
-        >
-          {toolName ? (
-            <>
-              {/* Why: header (wrench + tool name) stays on one line. When
-                  collapsed, the input truncates inline next to the name. When
-                  expanded, the input moves to its own block below so long
-                  commands wrap to a consistent left margin instead of the
-                  jagged shape that flex-wrapping produces. */}
-              <div
-                data-agent-row-tool-header="true"
-                className={cn(
-                  'flex h-[1lh] min-w-0 items-center gap-1',
-                  !expanded && 'overflow-hidden'
-                )}
-              >
-                <Wrench className="size-2.5 shrink-0" />
-                <code className="shrink-0 font-mono text-[10px]">{toolName}</code>
-                {!expanded && toolInput && (
-                  <span className="min-w-0 truncate text-muted-foreground/60" title={toolInput}>
-                    {toolInput}
-                  </span>
-                )}
-              </div>
-              {/* Why: grid-rows [0fr]→[1fr] is the CSS-only height animation
-                  pattern — outer grid track interpolates smoothly while the
-                  inner min-h-0 + overflow-hidden clips content during the
-                  transition. This avoids measuring heights in JS and still
-                  animates unknown content sizes. */}
-              {toolInput && (
-                <div
-                  className={cn(
-                    'grid transition-[grid-template-rows,margin-top] duration-200 ease-out',
-                    expanded ? 'mt-0.5 grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                  )}
-                >
-                  <pre className="min-h-0 overflow-hidden whitespace-pre-wrap break-words font-mono text-[10px] text-muted-foreground/60">
-                    {toolInput}
-                  </pre>
-                </div>
-              )}
-            </>
-          ) : (
-            <span data-agent-row-tool-placeholder="true" aria-hidden className="block h-[1lh]" />
-          )}
-        </div>
-      )}
-      {/* Why: message slot is always reserved in collapsed view so the row
-          height stays fixed as lastAssistantMessage arrives/clears. The
-          expand animation lives on the CommentMarkdown itself (height +
-          interpolate-size) so the body reveals smoothly instead of snapping
-          open. When the message is empty we still render a placeholder in
-          the collapsed view to preserve the reserved line height.
-
-          Interrupted gets its visible text on this secondary line, where the
-          agent response normally appears. That keeps the prompt line clean
-          while making the red status dot's meaning visible without hover. */}
-      {isInterrupted || lastAssistantMessage ? (
-        <div className="mt-0.5 flex min-w-0 items-start gap-1.5 pl-5">
-          {isInterrupted && (
-            <span
-              className="shrink-0 text-[10px] leading-snug text-muted-foreground/80"
-              aria-label="Interrupted by user"
-            >
-              interrupted
-            </span>
-          )}
-          {lastAssistantMessage && (
-            <CommentMarkdown
-              content={lastAssistantMessage}
-              // Why: animate between a 1-line clipped height and the content's
-              // natural height using Chromium's `interpolate-size: allow-keywords`
-              // so the message body expands/collapses smoothly instead of
-              // snapping. Height transition + overflow-hidden keeps the inline-
-              // flattened preview clipped during the interpolation. Render the
-              // markdown in both states; in the collapsed view we force every
-              // nested element inline so `truncate` can ellipsize the whole
-              // thing on one line. The [&_*]:inline descendant selector flattens
-              // the markdown tree (lists, pre, headings, blockquotes) into inline
-              // flow; block margins and list markers are suppressed by
-              // [&_*]:!m-0 / [&_ul]:list-none so the preview reads as a single
-              // clean line.
-              className={cn(
-                'min-w-0 flex-1 overflow-hidden text-[10px] leading-snug text-muted-foreground/80',
-                'transition-[height] duration-200 ease-out [interpolate-size:allow-keywords]',
-                expanded ? 'h-auto' : 'h-[1lh]',
-                // Why: in collapsed mode we need a single truncated line. Markdown
-                // blocks (pre, lists, headings) are flattened inline and forced
-                // to inherit `white-space: nowrap` so <pre>/<code>'s preserved
-                // newlines don't break out of the truncation container. The
-                // `!` prefixes override CommentMarkdown's own layout styles so
-                // nothing (margins, list markers, block line-breaks) can push
-                // the preview onto a second line.
-                !expanded &&
-                  'truncate whitespace-nowrap [&_*]:inline [&_*]:!whitespace-nowrap [&_*]:!m-0 [&_*]:!p-0 [&_ul]:list-none [&_ol]:list-none [&_br]:hidden'
-              )}
-              title={!expanded ? lastAssistantMessage : undefined}
-            />
-          )}
-        </div>
-      ) : (
-        !expanded && (
-          <div className="mt-0.5 pl-5 text-[10px] leading-snug text-muted-foreground/70"> </div>
-        )
-      )}
+      <DashboardAgentRowToolStep
+        expanded={expanded}
+        isWorking={isWorking}
+        toolName={toolName}
+        toolInput={toolInput}
+      />
+      <DashboardAgentRowMessage
+        expanded={expanded}
+        isInterrupted={isInterrupted}
+        lastAssistantMessage={lastAssistantMessage}
+      />
     </div>
   )
 })
