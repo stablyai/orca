@@ -37,6 +37,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'terminalLayoutsByTabId'
   | 'activeTabIdByWorktree'
   | 'openFiles'
+  | 'editorDrafts'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
   | 'browserTabsByWorktree'
@@ -70,6 +71,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'terminalLayoutsByTabId',
   'activeTabIdByWorktree',
   'openFiles',
+  'editorDrafts',
   'activeFileIdByWorktree',
   'activeTabTypeByWorktree',
   'browserTabsByWorktree',
@@ -99,6 +101,7 @@ void _exhaustive
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
 export function buildEditorSessionData(
   openFiles: OpenFile[],
+  editorDrafts: Record<string, string>,
   activeFileIdByWorktree: Record<string, string | null>,
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 ): Pick<
@@ -110,13 +113,15 @@ export function buildEditorSessionData(
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
+    const dirtyDraftContent = f.isDirty ? editorDrafts[f.id] : undefined
     arr.push({
       filePath: f.filePath,
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
       language: f.language,
       isPreview: f.isPreview || undefined,
-      runtimeEnvironmentId: f.runtimeEnvironmentId
+      runtimeEnvironmentId: f.runtimeEnvironmentId,
+      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {})
     })
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
@@ -329,6 +334,7 @@ export function buildWorkspaceSessionPayload(
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
     ...buildEditorSessionData(
       snapshot.openFiles,
+      snapshot.editorDrafts,
       snapshot.activeFileIdByWorktree,
       snapshot.activeTabTypeByWorktree
     ),

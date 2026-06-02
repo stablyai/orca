@@ -135,8 +135,8 @@ import type {
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import {
-  ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
-  type EditorSaveDirtyFilesDetail
+  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
+  type EditorPrepareHotExitDetail
 } from '../shared/editor-save-events'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
@@ -173,15 +173,13 @@ let nativeFileDropListenerRegistered = false
 type AppRestartPrepOptions = {
   startedEventName: string
   abortedEventName: string
-  continueOnSaveFailure: boolean
-  saveFailureLogPrefix: string
 }
 
-function requestDirtyEditorFileSave(): Promise<void> {
+function requestEditorHotExitBackup(): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let claimed = false
     window.dispatchEvent(
-      new CustomEvent<EditorSaveDirtyFilesDetail>(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
+      new CustomEvent<EditorPrepareHotExitDetail>(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, {
         detail: {
           claim: () => {
             claimed = true
@@ -194,9 +192,8 @@ function requestDirtyEditorFileSave(): Promise<void> {
       })
     )
 
-    // Why: restart paths can run when no editor surface is mounted. When
-    // nothing claims the request there are no in-memory editor buffers to
-    // flush, so proceed with the normal shutdown path immediately.
+    // Why: restart paths can run before the editor autosave controller mounts.
+    // With no claimant, there are no renderer-owned dirty buffers to back up.
     if (!claimed) {
       resolve()
     }
@@ -205,20 +202,15 @@ function requestDirtyEditorFileSave(): Promise<void> {
 
 async function prepareRendererForAppRestart({
   startedEventName,
-  abortedEventName,
-  continueOnSaveFailure,
-  saveFailureLogPrefix
+  abortedEventName
 }: AppRestartPrepOptions): Promise<void> {
   window.dispatchEvent(new Event(startedEventName))
 
   try {
-    await requestDirtyEditorFileSave()
+    await requestEditorHotExitBackup()
   } catch (error) {
-    if (!continueOnSaveFailure) {
-      window.dispatchEvent(new Event(abortedEventName))
-      throw error
-    }
-    console.warn(saveFailureLogPrefix, error)
+    window.dispatchEvent(new Event(abortedEventName))
+    throw error
   }
 
   // Dispatch beforeunload now so terminal buffers are captured while panes are
@@ -402,9 +394,7 @@ const api = {
     restart: async (): Promise<void> => {
       await prepareRendererForAppRestart({
         startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
-        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
-        continueOnSaveFailure: false,
-        saveFailureLogPrefix: '[app-restart] Saving dirty files before restart failed:'
+        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT
       })
       try {
         return await ipcRenderer.invoke('app:restart')
@@ -2112,15 +2102,9 @@ const api = {
     download: () => ipcRenderer.invoke('updater:download'),
     dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
     quitAndInstall: async (): Promise<void> => {
-      // Why: update installs must proceed even when a dirty-file auto-save
-      // fails; otherwise a downloaded update can get stuck behind hidden editor
-      // state. Manual app restart uses the same prep but aborts on save failure.
       await prepareRendererForAppRestart({
         startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-        continueOnSaveFailure: true,
-        saveFailureLogPrefix:
-          '[updater] Saving dirty files before quit failed; proceeding with install anyway:'
+        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
       })
       try {
         return await ipcRenderer.invoke('updater:quitAndInstall')

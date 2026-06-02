@@ -135,7 +135,8 @@ const persistedOpenFileSchema = z.object({
   worktreeId: z.string(),
   language: z.string(),
   isPreview: z.boolean().optional(),
-  runtimeEnvironmentId: z.string().nullable().optional()
+  runtimeEnvironmentId: z.string().nullable().optional(),
+  dirtyDraftContent: z.string().optional()
 })
 
 // ─── Browser ────────────────────────────────────────────────────────

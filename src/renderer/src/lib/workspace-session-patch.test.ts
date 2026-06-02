@@ -22,6 +22,7 @@ function createSnapshot(
       'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
     },
     activeTabIdByWorktree: { 'wt-1': 'tab-1', 'wt-2': 'tab-2' },
+    editorDrafts: {},
     openFiles: [
       {
         filePath: '/tmp/demo.ts',
@@ -102,6 +103,36 @@ describe('buildWorkspaceSessionPatch', () => {
         }
       ]
     })
+  })
+
+  it('derives editor session keys when only editor drafts change', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        openFiles: [
+          {
+            id: '/tmp/demo.ts',
+            filePath: '/tmp/demo.ts',
+            relativePath: 'demo.ts',
+            worktreeId: 'wt-1',
+            language: 'typescript',
+            mode: 'edit',
+            isDirty: true
+          } as never
+        ],
+        editorDrafts: { '/tmp/demo.ts': 'edited' }
+      }),
+      ['editorDrafts']
+    )
+
+    expect(Object.keys(patch).sort()).toEqual(
+      ['activeFileIdByWorktree', 'activeTabTypeByWorktree', 'openFilesByWorktree'].sort()
+    )
+    expect(patch.openFilesByWorktree?.['wt-1'][0]).toEqual(
+      expect.objectContaining({
+        filePath: '/tmp/demo.ts',
+        dirtyDraftContent: 'edited'
+      })
+    )
   })
 
   it('sanitizes terminal tabs and prunes local buffers when tab topology changes', () => {

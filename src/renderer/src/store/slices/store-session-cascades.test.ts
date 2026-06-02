@@ -1829,7 +1829,8 @@ describe('hydrateEditorSession', () => {
             relativePath: 'note.md',
             worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
             language: 'markdown',
-            runtimeEnvironmentId: null
+            runtimeEnvironmentId: null,
+            dirtyDraftContent: ''
           }
         ]
       },
@@ -1845,9 +1846,11 @@ describe('hydrateEditorSession', () => {
         id: fileId,
         filePath,
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        runtimeEnvironmentId: null
+        runtimeEnvironmentId: null,
+        isDirty: true
       })
     ])
+    expect(s.editorDrafts).toEqual({ [fileId]: '' })
     expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
   })
 
