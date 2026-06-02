@@ -179,7 +179,7 @@
     "sherpa-onnx-win-x64": "1.12.37"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,mts,cts}": [
+    "*.{ts,tsx,js,jsx,mjs,mts,cts}": [
       "oxlint",
       "oxlint --config config/oxlint-react-doctor.json --deny-warnings",
       "oxfmt --write"
