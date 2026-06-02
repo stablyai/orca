@@ -13,6 +13,9 @@
 | `src/renderer/src/components/right-sidebar/HostedReviewActions.tsx` | Removed `eslint-disable max-lines`; extracted GitLab MR merge presentation to `gitlab-mr-merge-state.ts`; verified with focused `oxlint` and `typecheck:web`. |
 | `src/renderer/src/components/settings/RuntimePairingUrlGenerator.tsx` | Removed `eslint-disable max-lines`; extracted generated URL rows to `RuntimePairingGeneratedUrlRows.tsx`; verified with focused `oxlint` and `typecheck:web`. |
 | `src/renderer/src/components/stats/UsageOverviewPane.tsx` | Removed `eslint-disable max-lines`; extracted overview display sections to `usage-overview-sections.tsx`; verified with focused `oxlint`, `typecheck:web`, and the usage overview model test. |
+| `src/renderer/src/components/settings/ManageSessionsSection.tsx` | Removed `eslint-disable max-lines`; extracted the kill-session confirmation dialog to `ManageSessionKillDialog.tsx`; verified with focused `oxlint`, `typecheck:web`, and the configured Vitest run. |
+| `src/renderer/src/components/settings/AutoRenameBranchFromWorkSetting.tsx` | Removed `eslint-disable max-lines`; extracted the branch prompt editor to `AutoRenameBranchPromptEditor.tsx`; verified with focused `oxlint`, `typecheck:web`, and the configured Vitest run. |
+| `src/renderer/src/components/sidebar/AddRepoSteps.tsx` | Removed `eslint-disable max-lines`; extracted the remote-project step to `AddRepoRemoteStep.tsx`; verified with focused `oxlint`, `typecheck:web`, and the configured Vitest run. |
 
 ## Remaining
 
@@ -91,12 +94,9 @@
 | `src/renderer/src/components/tab-bar/EditorFileTab.tsx` | 489/400 | +89 | 528 | `eslint-disable` |
 | `src/renderer/src/components/feature-wall/SetupScriptAnimatedVisual.tsx` | 475/400 | +75 | 512 | `eslint-disable` |
 | `src/renderer/src/components/sidebar/WorktreeCardMeta.tsx` | 472/400 | +72 | 505 | `eslint-disable` |
-| `src/renderer/src/components/sidebar/AddRepoSteps.tsx` | 470/400 | +70 | 511 | `eslint-disable` |
 | `src/renderer/src/components/automations/AutomationEditorDialog.tsx` | 467/400 | +67 | 480 | `eslint-disable` |
 | `src/renderer/src/components/dashboard/DashboardAgentRow.tsx` | 459/400 | +59 | 651 | `eslint-disable` |
-| `src/renderer/src/components/settings/AutoRenameBranchFromWorkSetting.tsx` | 457/400 | +57 | 483 | `eslint-disable` |
 | `src/renderer/src/components/editor/rich-markdown-commands.tsx` | 455/400 | +55 | 547 | `eslint-disable` |
-| `src/renderer/src/components/settings/ManageSessionsSection.tsx` | 442/400 | +42 | 539 | `eslint-disable` |
 | `mobile/app/troubleshoot.tsx` | 436/400 | +36 | 463 | `none` |
 | `src/renderer/src/components/mobile/MobilePage.tsx` | 433/400 | +33 | 501 | `eslint-disable` |
 | `mobile/app/h/[hostId]/files/[worktreeId].tsx` | 402/400 | +2 | 420 | `none` |
