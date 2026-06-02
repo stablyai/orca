@@ -158,6 +158,7 @@ describe('BrowserSessionRegistry', () => {
     expect(mockSession.removeListener).toHaveBeenCalledWith('will-download', downloadHandler)
     expect(mockSession.setPermissionRequestHandler).toHaveBeenLastCalledWith(null)
     expect(mockSession.setPermissionCheckHandler).toHaveBeenLastCalledWith(null)
+    expect(mockSession.setDevicePermissionHandler).toHaveBeenLastCalledWith(null)
     expect(mockSession.setDisplayMediaRequestHandler).toHaveBeenLastCalledWith(null)
   })
 
