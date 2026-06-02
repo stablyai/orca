@@ -1826,16 +1826,16 @@ export class AgentBrowserBridge {
       this.activeWebContentsPerWorktree.set(worktreeId, visibleTarget.webContentsId)
     }
 
-    if (options.ensureSession !== false) {
-      // Why: making a parked webview paintable can re-register the same browser
-      // page with a new guest webContents. The stable page id should win over the
-      // stale pre-lease session so CLI DOM commands attach to the live guest.
-      await this.restartSessionForTarget(
-        sessionName,
-        visibleTarget.browserPageId,
-        visibleTarget.webContentsId
-      )
-    }
+    // Why: making a parked webview paintable can re-register the same browser
+    // page with a new guest webContents. Tear down any stale named session now;
+    // DOM commands recreate immediately, direct-CDP commands let the next DOM
+    // command recreate against the live guest.
+    await this.restartSessionForTarget(
+      sessionName,
+      visibleTarget.browserPageId,
+      visibleTarget.webContentsId,
+      { recreate: options.ensureSession !== false }
+    )
 
     return visibleTarget
   }
@@ -2018,7 +2018,8 @@ export class AgentBrowserBridge {
   private async restartSessionForTarget(
     sessionName: string,
     browserPageId: string,
-    webContentsId: number
+    webContentsId: number,
+    options: { recreate: boolean } = { recreate: true }
   ): Promise<void> {
     const pendingCreation = this.pendingSessionCreation.get(sessionName)
     if (pendingCreation) {
@@ -2027,6 +2028,9 @@ export class AgentBrowserBridge {
 
     const session = this.sessions.get(sessionName)
     if (session) {
+      if (session.activeInterceptPatterns.length > 0) {
+        this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+      }
       this.sessions.delete(sessionName)
       this.pendingSessionCreation.delete(sessionName)
       if (session.activeProcess) {
@@ -2055,7 +2059,9 @@ export class AgentBrowserBridge {
       }
     }
 
-    await this.ensureSession(sessionName, browserPageId, webContentsId)
+    if (options.recreate) {
+      await this.ensureSession(sessionName, browserPageId, webContentsId)
+    }
   }
 
   private async destroySession(sessionName: string): Promise<void> {
