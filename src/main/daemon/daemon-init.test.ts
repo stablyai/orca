@@ -772,7 +772,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).toHaveBeenCalledWith(
       '/fake/app/out/main/daemon-entry.js',
       ['--socket', '/fake/socket', '--token', '/fake/token'],
-      expect.objectContaining({ detached: true })
+      expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
   })
 
@@ -898,7 +898,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(forkMock).toHaveBeenCalledWith(
       '/fake/app/out/main/daemon-entry.js',
       ['--socket', '/fake/socket', '--token', '/fake/token'],
-      expect.objectContaining({ detached: true })
+      expect.objectContaining({ cwd: '/fake/userData', detached: true })
     )
   })
 

@@ -224,15 +224,8 @@ export function FeatureWallSetupChecklist(
   const setupSteps = getFeatureWallSetupStepsForSection('setup')
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
-      <div className="space-y-5">
-        <SetupSection
-          title="Start here"
-          steps={parallelWorkSteps}
-          activeStepId={activeStep?.id ?? null}
-          progress={progress}
-          onSelectStep={onSelectStep}
-        />
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+      <div className="scrollbar-sleek min-h-0 space-y-5 overflow-y-auto pr-1">
         <SetupSection
           title="Setup"
           steps={setupSteps}
@@ -240,9 +233,16 @@ export function FeatureWallSetupChecklist(
           progress={progress}
           onSelectStep={onSelectStep}
         />
+        <SetupSection
+          title="Milestones"
+          steps={parallelWorkSteps}
+          activeStepId={activeStep?.id ?? null}
+          progress={progress}
+          onSelectStep={onSelectStep}
+        />
       </div>
 
-      <section className="min-h-[420px] rounded-xl border border-border bg-card p-5">
+      <section className="scrollbar-sleek min-h-0 overflow-y-auto rounded-xl border border-border bg-card p-5">
         {activeStep ? (
           <div className="flex h-full flex-col gap-4">
             <div className="flex items-start justify-between gap-4">

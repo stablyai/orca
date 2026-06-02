@@ -168,7 +168,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
                 onSelect={() => openModal('setup-guide', { telemetrySource: 'help_menu' })}
               >
                 <ListChecks className="size-3.5" />
-                Getting started with Orca
+                Onboarding checklist
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="whitespace-nowrap"
@@ -176,7 +176,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
                 onSelect={handleShowOnboarding}
               >
                 <School className="size-3.5" />
-                Explore Orca
+                Show onboarding
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setFeedbackOpen(true)}>
                 <MessageSquareText className="size-3.5" />

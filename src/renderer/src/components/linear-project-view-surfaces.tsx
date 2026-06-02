@@ -79,6 +79,9 @@ type LinearCollectionNoticeProps = {
   hasMore?: boolean
   count: number
   label: string
+  onLoadMore?: () => void
+  loading?: boolean
+  loadMoreLabel?: string
 }
 
 function textFromUnknown(value: unknown): string | null {
@@ -165,7 +168,10 @@ export function LinearCollectionNotice({
   errors,
   hasMore,
   count,
-  label
+  label,
+  onLoadMore,
+  loading = false,
+  loadMoreLabel = 'Load more'
 }: LinearCollectionNoticeProps): React.JSX.Element | null {
   if (!hasMore && (!errors || errors.length === 0)) {
     return null
@@ -183,8 +189,30 @@ export function LinearCollectionNotice({
         </div>
       ) : null}
       {hasMore ? (
-        <div>
-          Showing first {count} {label}. Search or open Linear for the full set.
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span>
+            Showing first {count} {label}.
+            {onLoadMore ? ' Fetch more in Orca.' : ' Search or open Linear for the full set.'}
+          </span>
+          {onLoadMore ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              onClick={onLoadMore}
+              disabled={loading}
+              className="h-7 shrink-0 gap-1 border-border/60 bg-background/70"
+            >
+              {loading ? (
+                <>
+                  <RefreshCw className="size-3.5 animate-spin" />
+                  Loading
+                </>
+              ) : (
+                loadMoreLabel
+              )}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>

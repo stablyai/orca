@@ -34,7 +34,6 @@ import {
   PullRequestIcon,
   prStateColor,
   ConflictingFilesSection,
-  ConflictTriageStrip,
   MergeConflictNotice,
   ChecksList,
   PRCommentsList,
@@ -2397,6 +2396,8 @@ export default function ChecksPanel(): React.JSX.Element {
   }
 
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
+  const shouldShowReviewTriageStrip =
+    activeConflictReview !== null || getBrokenChecks(checks).length > 0
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* Hosted review header */}
@@ -2487,32 +2488,25 @@ export default function ChecksPanel(): React.JSX.Element {
         )}
       </div>
 
+      {shouldShowReviewTriageStrip && (
+        <PRTriageStrip
+          review={activeConflictReview ?? activeReview}
+          reviewKind={reviewShortLabel}
+          checks={checks}
+          isResolvingConflictsWithAI={isResolvingConflictsWithAI}
+          onResolveConflictsWithAI={() => void handleResolveConflictsWithAI()}
+          resolveConflictsDisabled={Boolean(aiActionDisabledReason)}
+          resolveConflictsDisabledReason={aiActionDisabledReason}
+          isFixingChecksWithAI={isFixingChecksWithAI}
+          onFixChecksWithAI={() => void handleFixChecksWithAI()}
+          fixChecksDisabled={Boolean(aiActionDisabledReason)}
+          fixChecksDisabledReason={aiActionDisabledReason}
+        />
+      )}
       {activeConflictReview && (
         <>
           {/* Why: the triage strip owns the single Resolve action for PR and MR
               conflicts; the file list and fallback notice are informational. */}
-          {pr ? (
-            <PRTriageStrip
-              pr={pr}
-              checks={checks}
-              isResolvingConflictsWithAI={isResolvingConflictsWithAI}
-              onResolveConflictsWithAI={() => void handleResolveConflictsWithAI()}
-              resolveConflictsDisabled={Boolean(aiActionDisabledReason)}
-              resolveConflictsDisabledReason={aiActionDisabledReason}
-              isFixingChecksWithAI={isFixingChecksWithAI}
-              onFixChecksWithAI={() => void handleFixChecksWithAI()}
-              fixChecksDisabled={Boolean(aiActionDisabledReason)}
-              fixChecksDisabledReason={aiActionDisabledReason}
-            />
-          ) : (
-            <ConflictTriageStrip
-              reviewKind={activeConflictReview.provider === 'gitlab' ? 'MR' : 'PR'}
-              isResolvingConflictsWithAI={isResolvingConflictsWithAI}
-              onResolveConflictsWithAI={() => void handleResolveConflictsWithAI()}
-              resolveConflictsDisabled={Boolean(aiActionDisabledReason)}
-              resolveConflictsDisabledReason={aiActionDisabledReason}
-            />
-          )}
           <ConflictingFilesSection pr={activeConflictReview} />
           <MergeConflictNotice
             pr={activeConflictReview}

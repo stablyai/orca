@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   Globe,
   Monitor,
-  FolderPlus,
   FolderTree,
   Lightbulb,
   Loader2,
@@ -184,10 +183,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   // Why: a dropped path is modal data, so ordinary state updates must not
   // re-run the import while the Add Project dialog advances through steps.
   const droppedLocalPathHandledRef = useRef<string | null>(null)
-  // Why: header add-menu routing is modal data; handle it once per modal open
-  // so later state updates don't kick the user back to the requested entry step.
-  const initialStepHandledRef = useRef<string | null>(null)
-  const autoBrowseHandledRef = useRef(false)
   // Why: track whether we've already auto-filled for this entry into the clone step,
   // so a late settings hydration still gets a chance to set the default.
   const cloneStepAutoFilledRef = useRef(false)
@@ -279,11 +274,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const isOpen = activeModal === 'add-repo'
   const droppedLocalPath =
     typeof modalData.droppedLocalPath === 'string' ? modalData.droppedLocalPath : ''
-  const initialStep =
-    modalData.initialStep === 'clone' || modalData.initialStep === 'remote'
-      ? modalData.initialStep
-      : 'add'
-  const autoBrowse = modalData.autoBrowse === true
   const projectId = addedRepo?.id ?? ''
   const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
 
@@ -361,8 +351,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   useEffect(() => {
     if (!isOpen) {
       droppedLocalPathHandledRef.current = null
-      initialStepHandledRef.current = null
-      autoBrowseHandledRef.current = false
       resetState()
     }
   }, [isOpen, resetState])
@@ -501,35 +489,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       }
     }
   }, [handleAddLocalPath])
-
-  useEffect(() => {
-    if (!isOpen) {
-      return
-    }
-    const routeKey = `${initialStep}:${autoBrowse ? 'browse' : 'manual'}`
-    if (initialStepHandledRef.current === routeKey) {
-      return
-    }
-    initialStepHandledRef.current = routeKey
-    if (initialStep === 'clone') {
-      setCloneError(null)
-      setStep('clone')
-      return
-    }
-    if (initialStep === 'remote') {
-      void handleOpenRemoteStep()
-      return
-    }
-    setStep('add')
-  }, [autoBrowse, handleOpenRemoteStep, initialStep, isOpen])
-
-  useEffect(() => {
-    if (!isOpen || !autoBrowse || autoBrowseHandledRef.current) {
-      return
-    }
-    autoBrowseHandledRef.current = true
-    void handleBrowse()
-  }, [autoBrowse, handleBrowse, isOpen])
 
   const handleImportNestedRepos = useCallback(
     async (mode: 'group' | 'separate') => {
@@ -1245,20 +1204,20 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               <span>Want to import many repos at once? Select the parent folder.</span>
             </div>
 
+            {/* Secondary link rather than a fourth card — create-from-scratch
+               is a less common path than importing. See orca#763. */}
             <div className="flex items-center justify-center pt-1">
-              <Button
+              <button
                 type="button"
                 onClick={() => {
                   setCreateError(null)
                   setStep('create')
                 }}
                 disabled={isAdding}
-                variant="outline"
-                size="sm"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
               >
-                <FolderPlus className="size-3.5" />
                 Or start a new project from scratch
-              </Button>
+              </button>
             </div>
           </>
         ) : step === 'remote' ? (

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the smart name field owns source tabs,
 search orchestration, and result rendering so the unified create flow stays
 in one predictable form control instead of splitting state across fragments. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this component's existing reset effects need a dedicated refactor outside the Linear API compatibility change. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CaseSensitive,
@@ -552,7 +553,7 @@ export default function SmartWorkspaceNameField({
     const trimmed = debouncedQuery.trim()
     const request = trimmed
       ? searchLinearIssues(trimmed, RESULT_LIMIT)
-      : listLinearIssues('assigned', RESULT_LIMIT)
+      : listLinearIssues('assigned', RESULT_LIMIT).then((result) => result.items)
     void request
       .then((issues) => {
         if (!stale) {

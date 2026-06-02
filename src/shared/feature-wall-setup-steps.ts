@@ -25,16 +25,16 @@ export type FeatureWallSetupSectionId = 'parallel-work' | 'setup'
 export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
   {
     id: 'split-terminal',
-    name: 'Run two things in the same terminal',
-    subtitle: 'Run two things in the same terminal',
-    description: 'Keep an agent, dev server, or REPL visible side by side in one worktree.'
+    name: 'Split a terminal',
+    subtitle: 'Split a terminal',
+    description: 'Using this, you can run 2 agents side-by-side.'
   },
   {
     id: 'two-worktrees',
-    name: 'Work on a second task in its own worktree',
-    subtitle: 'Work on a second task in its own worktree',
+    name: 'Multi-task',
+    subtitle: 'Multi-task',
     description:
-      'Let agents tackle separate changes in separate worktrees without stepping on each other.'
+      'Have 2 worktrees at once. Each one is isolated (even in the same project). Perfect for working on 2 features at once.'
   },
   {
     id: 'notifications',

@@ -37,7 +37,7 @@ describe('linear RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       linearSearchIssues: vi.fn().mockResolvedValue([{ id: 'issue-1' }]),
-      linearListIssues: vi.fn().mockResolvedValue([{ id: 'issue-2' }]),
+      linearListIssues: vi.fn().mockResolvedValue({ items: [{ id: 'issue-2' }], hasMore: true }),
       linearGetIssue: vi.fn().mockResolvedValue({ id: 'issue-3' }),
       linearCreateIssue: vi.fn().mockResolvedValue({ ok: true, id: 'issue-4' }),
       linearUpdateIssue: vi.fn().mockResolvedValue({ ok: true }),
@@ -170,43 +170,54 @@ describe('linear RPC methods', () => {
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
     await dispatcher.dispatch(makeRequest('linear.listTeams', { workspaceId: 'all' }))
-    await dispatcher.dispatch(makeRequest('linear.listProjects', { query: 'roadmap', limit: 5 }))
     await dispatcher.dispatch(
-      makeRequest('linear.getProject', { id: 'project-1', workspaceId: 'workspace-1' })
+      makeRequest('linear.listProjects', { query: 'roadmap', limit: 5, force: true })
+    )
+    await dispatcher.dispatch(
+      makeRequest('linear.getProject', {
+        id: 'project-1',
+        workspaceId: 'workspace-1',
+        force: true
+      })
     )
     await dispatcher.dispatch(
       makeRequest('linear.listProjectIssues', {
         projectId: 'project-1',
         limit: 10,
-        workspaceId: 'workspace-1'
+        workspaceId: 'workspace-1',
+        force: true
       })
     )
     await dispatcher.dispatch(
       makeRequest('linear.listCustomViews', {
         model: 'project',
         limit: 10,
-        workspaceId: 'workspace-1'
+        workspaceId: 'workspace-1',
+        force: true
       })
     )
     await dispatcher.dispatch(
       makeRequest('linear.getCustomView', {
         viewId: 'view-1',
         model: 'project',
-        workspaceId: 'workspace-1'
+        workspaceId: 'workspace-1',
+        force: true
       })
     )
     await dispatcher.dispatch(
       makeRequest('linear.listCustomViewIssues', {
         viewId: 'view-1',
         limit: 10,
-        workspaceId: 'workspace-1'
+        workspaceId: 'workspace-1',
+        force: true
       })
     )
     await dispatcher.dispatch(
       makeRequest('linear.listCustomViewProjects', {
         viewId: 'view-2',
         limit: 10,
-        workspaceId: 'workspace-1'
+        workspaceId: 'workspace-1',
+        force: true
       })
     )
     await dispatcher.dispatch(
@@ -220,13 +231,33 @@ describe('linear RPC methods', () => {
     )
 
     expect(runtime.linearListTeams).toHaveBeenCalledWith('all')
-    expect(runtime.linearListProjects).toHaveBeenCalledWith('roadmap', 5, undefined)
-    expect(runtime.linearGetProject).toHaveBeenCalledWith('project-1', 'workspace-1')
-    expect(runtime.linearListProjectIssues).toHaveBeenCalledWith('project-1', 10, 'workspace-1')
-    expect(runtime.linearListCustomViews).toHaveBeenCalledWith('project', 10, 'workspace-1')
-    expect(runtime.linearGetCustomView).toHaveBeenCalledWith('view-1', 'project', 'workspace-1')
-    expect(runtime.linearListCustomViewIssues).toHaveBeenCalledWith('view-1', 10, 'workspace-1')
-    expect(runtime.linearListCustomViewProjects).toHaveBeenCalledWith('view-2', 10, 'workspace-1')
+    expect(runtime.linearListProjects).toHaveBeenCalledWith('roadmap', 5, undefined, true)
+    expect(runtime.linearGetProject).toHaveBeenCalledWith('project-1', 'workspace-1', true)
+    expect(runtime.linearListProjectIssues).toHaveBeenCalledWith(
+      'project-1',
+      10,
+      'workspace-1',
+      true
+    )
+    expect(runtime.linearListCustomViews).toHaveBeenCalledWith('project', 10, 'workspace-1', true)
+    expect(runtime.linearGetCustomView).toHaveBeenCalledWith(
+      'view-1',
+      'project',
+      'workspace-1',
+      true
+    )
+    expect(runtime.linearListCustomViewIssues).toHaveBeenCalledWith(
+      'view-1',
+      10,
+      'workspace-1',
+      true
+    )
+    expect(runtime.linearListCustomViewProjects).toHaveBeenCalledWith(
+      'view-2',
+      10,
+      'workspace-1',
+      true
+    )
     expect(runtime.linearTeamStates).toHaveBeenCalledWith('team-1', 'workspace-1')
     expect(runtime.linearTeamLabels).toHaveBeenCalledWith('team-1', 'workspace-1')
     expect(runtime.linearTeamMembers).toHaveBeenCalledWith('team-1', 'workspace-1')

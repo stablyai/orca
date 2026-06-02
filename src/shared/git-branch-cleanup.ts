@@ -37,6 +37,31 @@ export async function getBranchCleanupTargetRefs(
   return candidates
 }
 
+export async function refreshBranchCleanupTargetRefs(
+  runGit: GitBranchCleanupExec,
+  targetRefs: readonly string[]
+): Promise<void> {
+  const remotesStdout = await readOptionalGitStdout(runGit, ['remote'])
+  const remotes = (remotesStdout ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((remote) => remote && !remote.startsWith('-'))
+    .sort((left, right) => right.length - left.length)
+  const fetchedRemotes = new Set<string>()
+
+  for (const targetRef of targetRefs) {
+    const remote = remotes.find((candidate) => targetRef.startsWith(`refs/remotes/${candidate}/`))
+    if (!remote || fetchedRemotes.has(remote)) {
+      continue
+    }
+    fetchedRemotes.add(remote)
+    // Why: deleting a worktree often follows a PR merge. Refresh the saved base
+    // before deciding a local branch is unpublished, but keep network failures
+    // non-fatal so offline cleanup preserves today's safe behavior.
+    await readOptionalGitStdout(runGit, ['fetch', '--prune', remote])
+  }
+}
+
 async function resolveCommitOid(runGit: GitBranchCleanupExec, ref: string): Promise<string | null> {
   return readOptionalGitStdout(runGit, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
 }

@@ -31,7 +31,7 @@ describe('worktree list indentation', () => {
     expect(getProjectGroupHeaderPaddingLeft(100)).toBe(70)
   })
 
-  it('keeps flat section headers closer to the sidebar edge than project headers', () => {
-    expect(WORKTREE_SECTION_HEADER_PADDING_LEFT).toBeLessThan(getProjectGroupHeaderPaddingLeft(0))
+  it('aligns flat section headers with top-level project headers', () => {
+    expect(WORKTREE_SECTION_HEADER_PADDING_LEFT).toBe(getProjectGroupHeaderPaddingLeft(0))
   })
 })

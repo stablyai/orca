@@ -260,6 +260,9 @@ export type Worktree = {
    *  seed a replacement terminal if the user later reopens the worktree after
    *  closing every visible surface. */
   createdWithAgent?: TuiAgent
+  /** True while an auto-named workspace is waiting for the first agent message
+   *  to drive the branch/title rename. */
+  pendingFirstAgentMessageRename?: boolean
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
@@ -314,6 +317,8 @@ export type WorktreeMeta = {
   createdAt?: number
   /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */
   createdWithAgent?: TuiAgent
+  /** See {@link Worktree.pendingFirstAgentMessageRename}. */
+  pendingFirstAgentMessageRename?: boolean
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
@@ -1578,6 +1583,9 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
+  /** Set when the renderer knows this auto-generated branch should be renamed
+   *  from the first agent message. */
+  pendingFirstAgentMessageRename?: boolean
   /** Telemetry-only: which UI surface initiated this create. Threaded from
    *  the renderer entry point so main can emit `workspace_created` with the
    *  correct `source`. `unknown` is a valid wire value — an unrecognized

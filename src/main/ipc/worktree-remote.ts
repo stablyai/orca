@@ -1374,6 +1374,9 @@ export async function createRemoteWorktree(
         ? { displayName: effectiveRequestedName }
         : {}),
     ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
+      ? { pendingFirstAgentMessageRename: true }
+      : {}),
     ...(sparseDirectories.length > 0
       ? {
           sparseDirectories,
@@ -1801,6 +1804,9 @@ export async function createLocalWorktree(
         }
       : {}),
     ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
+    ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
+      ? { pendingFirstAgentMessageRename: true }
+      : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
     ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
     ...(args.linkedLinearIssue !== undefined ? { linkedLinearIssue: args.linkedLinearIssue } : {}),

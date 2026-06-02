@@ -1684,18 +1684,6 @@ export function connectPanePty(
         !foreground &&
         canUseMainBufferSnapshot(transport.getPtyId()) &&
         isHiddenStartupRendererQueryWindowActive()
-      if (
-        !foreground &&
-        canUseMainBufferSnapshot(transport.getPtyId()) &&
-        !parseHiddenStartupOutput
-      ) {
-        respondToSkippedMode2031Subscribe(data)
-        // Why: hidden panes do not need live xterm parsing. Main already
-        // retains the PTY buffer, so defer display work until the pane is
-        // visible and restore from that snapshot instead.
-        markHiddenOutputRestoreNeeded()
-        return
-      }
       if (hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }

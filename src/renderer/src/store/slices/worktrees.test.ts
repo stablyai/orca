@@ -1100,7 +1100,8 @@ describe('createWorktree base status merge', () => {
       linkedPR: 456,
       createdWithAgent: 'codex',
       linkedLinearIssue: 'ENG-123',
-      workspaceStatus: 'in-review'
+      workspaceStatus: 'in-review',
+      pendingFirstAgentMessageRename: true
     })
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
@@ -1120,7 +1121,11 @@ describe('createWorktree base status merge', () => {
         'codex',
         'ENG-123',
         undefined,
-        'in-review'
+        'in-review',
+        undefined,
+        undefined,
+        undefined,
+        true
       )
 
     expect(mockApi.worktrees.create).toHaveBeenCalledWith(
@@ -1131,7 +1136,8 @@ describe('createWorktree base status merge', () => {
         linkedPR: 456,
         createdWithAgent: 'codex',
         linkedLinearIssue: 'ENG-123',
-        workspaceStatus: 'in-review'
+        workspaceStatus: 'in-review',
+        pendingFirstAgentMessageRename: true
       })
     )
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
@@ -1139,7 +1145,8 @@ describe('createWorktree base status merge', () => {
       linkedPR: 456,
       createdWithAgent: 'codex',
       linkedLinearIssue: 'ENG-123',
-      workspaceStatus: 'in-review'
+      workspaceStatus: 'in-review',
+      pendingFirstAgentMessageRename: true
     })
   })
 
@@ -1936,6 +1943,31 @@ describe('worktree remote runtime mutations', () => {
     })
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0]?.comment).toBe('remote note')
+  })
+
+  it('clears pending first-agent rename when the title is updated', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      displayName: 'Nautilus',
+      pendingFirstAgentMessageRename: true
+    })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    await store.getState().updateWorktreeMeta(wt.id, { displayName: 'Fix auth' })
+
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      updates: { displayName: 'Fix auth', pendingFirstAgentMessageRename: false }
+    })
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      displayName: 'Fix auth',
+      pendingFirstAgentMessageRename: false
+    })
   })
 
   it('resolves and persists a push target when manually linking a GitHub PR', async () => {

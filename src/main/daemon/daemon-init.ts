@@ -217,6 +217,9 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
 
     const userDataPath = app.getPath('userData')
     const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
+      // Why: detached daemons can outlive dev worktrees. Starting from
+      // userData keeps process.cwd() valid after a repo/worktree is deleted.
+      cwd: userDataPath,
       // Why: detached + unref lets the daemon outlive the Electron process.
       // stdio 'ignore' prevents the child from holding the parent's stdout
       // open, which would prevent Electron from exiting cleanly.

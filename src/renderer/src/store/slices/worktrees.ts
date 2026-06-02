@@ -186,6 +186,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.lastActivityAt === candidate.lastActivityAt &&
       worktree.workspaceStatus === candidate.workspaceStatus &&
       worktree.createdWithAgent === candidate.createdWithAgent &&
+      worktree.pendingFirstAgentMessageRename === candidate.pendingFirstAgentMessageRename &&
       worktree.baseRef === candidate.baseRef &&
       worktree.pushTarget?.remoteName === candidate.pushTarget?.remoteName &&
       worktree.pushTarget?.branchName === candidate.pushTarget?.branchName &&
@@ -1001,7 +1002,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     workspaceStatus,
     linkedGitLabMR,
     linkedGitLabIssue,
-    startup
+    startup,
+    pendingFirstAgentMessageRename
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -1040,6 +1042,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(linkedPR !== undefined ? { linkedPR } : {}),
             ...(pushTarget ? { pushTarget } : {}),
             ...(createdWithAgent ? { createdWithAgent } : {}),
+            ...(pendingFirstAgentMessageRename === true && createdWithAgent
+              ? { pendingFirstAgentMessageRename: true }
+              : {}),
             ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
@@ -1066,6 +1071,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(linkedPR !== undefined ? { linkedPR } : {}),
                     ...(pushTarget ? { pushTarget } : {}),
                     ...(createdWithAgent ? { createdWithAgent } : {}),
+                    ...(pendingFirstAgentMessageRename === true && createdWithAgent
+                      ? { pendingFirstAgentMessageRename: true }
+                      : {}),
                     ...(linkedLinearIssue !== undefined ? { linkedLinearIssue } : {}),
                     ...(manualOrder !== undefined ? { manualOrder } : {}),
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
@@ -1506,10 +1514,12 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const targetEnriched = resolvedPushTarget
       ? { ...updates, pushTarget: resolvedPushTarget }
       : updates
-    const enriched =
-      'comment' in targetEnriched
-        ? { ...targetEnriched, lastActivityAt: Date.now() }
+    const renameCleared =
+      'displayName' in targetEnriched
+        ? { ...targetEnriched, pendingFirstAgentMessageRename: false }
         : targetEnriched
+    const enriched =
+      'comment' in renameCleared ? { ...renameCleared, lastActivityAt: Date.now() } : renameCleared
 
     let didApply = false
     set((s) => {
@@ -2131,8 +2141,16 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         tabs.every((tab) => !tabHasLivePty(s.ptyIdsByTabId, tab.id))
       const isFirstActivation = worktreeId != null && !s.everActivatedWorktreeIds.has(worktreeId)
       const shouldTagTabs = worktreeId != null && tabs.length > 0 && isFirstActivation
+      // Why: when every PTY for the worktree's tabs is dead, the existing
+      // (hidden) TerminalPane wraps a dead transport. Once activeWorktreeId
+      // commits, that pane becomes visible and accepts keystrokes that the
+      // dead transport silently drops. Bump generation in the SAME set() so
+      // React/Zustand commit activation and the remount key in one render —
+      // no visible-but-dead-transport window. First-activation tagging
+      // (shouldTagTabs without allDead) does not remount panes and stays on
+      // the deferred path below.
       shouldPrepareTerminalTabs = Boolean(
-        worktreeId && tabs.length > 0 && (allDead || shouldTagTabs)
+        worktreeId && tabs.length > 0 && shouldTagTabs && !allDead
       )
       shouldTagTerminalTabs = shouldTagTabs
       const nextEverActivated = isFirstActivation
@@ -2144,6 +2162,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const nextDetectedWorktrees = shouldClearUnread
         ? applyDetectedWorktreeUpdates(s.detectedWorktreesByRepo, worktreeId, metaUpdates)
         : s.detectedWorktreesByRepo
+      const tabsByWorktreeUpdate =
+        allDead && worktreeId != null
+          ? {
+              tabsByWorktree: {
+                ...s.tabsByWorktree,
+                [worktreeId]: tabs.map((tab) => ({
+                  ...tab,
+                  generation: (tab.generation ?? 0) + 1,
+                  pendingActivationSpawn: getActivationSpawnSuppression(
+                    s.terminalLayoutsByTabId[tab.id]
+                  )
+                }))
+              }
+            }
+          : {}
 
       const nextActiveTabTypeByWorktree =
         s.activeTabTypeByWorktree[worktreeId] === activeTabType
@@ -2177,7 +2210,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
         ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
           ? { detectedWorktreesByRepo: nextDetectedWorktrees }
-          : {})
+          : {}),
+        ...tabsByWorktreeUpdate
       }
     })
 

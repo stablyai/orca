@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  getActiveAgentNoteTarget,
   getActiveTerminalNoteTarget,
   sendNotesToActiveAgentSession
 } from './active-agent-note-send'
+import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import { makePaneKey } from '../../../shared/stable-pane-id'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const NOW = 1_700_000_000_000
 
 const testState = vi.hoisted(() => ({
   appState: {
@@ -13,9 +20,16 @@ const testState = vi.hoisted(() => ({
     tabsByWorktree: {
       'wt-1': [{ id: 'tab-1' }]
     },
-    terminalLayoutsByTabId: {
-      'tab-1': { activeLeafId: 'leaf-1' }
+    ptyIdsByTabId: {
+      'tab-1': ['pty-1']
     },
+    terminalLayoutsByTabId: {
+      'tab-1': {
+        activeLeafId: '11111111-1111-4111-8111-111111111111',
+        ptyIdsByLeafId: { '11111111-1111-4111-8111-111111111111': 'pty-1' }
+      }
+    },
+    agentStatusByPaneKey: {},
     settings: {}
   } as {
     activeWorktreeId: string | null
@@ -23,7 +37,12 @@ const testState = vi.hoisted(() => ({
     activeTabId: string | null
     activeTabIdByWorktree: Record<string, string | null>
     tabsByWorktree: Record<string, { id: string }[]>
-    terminalLayoutsByTabId: Record<string, { activeLeafId: string | null }>
+    ptyIdsByTabId: Record<string, string[]>
+    terminalLayoutsByTabId: Record<
+      string,
+      { activeLeafId: string | null; ptyIdsByLeafId?: Record<string, string | undefined> }
+    >
+    agentStatusByPaneKey: Record<string, AgentStatusEntry>
     settings: Record<string, unknown>
   },
   callRuntimeRpc: vi.fn(),
@@ -54,9 +73,13 @@ describe('active agent note send', () => {
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1' }]
       },
-      terminalLayoutsByTabId: {
-        'tab-1': { activeLeafId: 'leaf-1' }
+      ptyIdsByTabId: {
+        'tab-1': ['pty-1']
       },
+      terminalLayoutsByTabId: {
+        'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' } }
+      },
+      agentStatusByPaneKey: {},
       settings: {}
     }
     testState.callRuntimeRpc.mockReset()
@@ -67,7 +90,7 @@ describe('active agent note send', () => {
   it('resolves the current worktree terminal pane from renderer state', () => {
     expect(getActiveTerminalNoteTarget(testState.appState, 'wt-1')).toEqual({
       tabId: 'tab-1',
-      leafId: 'leaf-1'
+      leafId: LEAF_ID
     })
   })
 
@@ -77,7 +100,7 @@ describe('active agent note send', () => {
 
     expect(getActiveTerminalNoteTarget(testState.appState, 'wt-1')).toEqual({
       tabId: 'tab-1',
-      leafId: 'leaf-1'
+      leafId: LEAF_ID
     })
   })
 
@@ -87,8 +110,48 @@ describe('active agent note send', () => {
 
     expect(getActiveTerminalNoteTarget(testState.appState, 'wt-1')).toEqual({
       tabId: 'tab-1',
-      leafId: 'leaf-1'
+      leafId: LEAF_ID
     })
+  })
+
+  it('does not offer the active terminal send target when the focused pane has no agent status', () => {
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
+  })
+
+  it('offers the active terminal send target when the focused pane is a fresh agent session', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    testState.appState.agentStatusByPaneKey = {
+      [paneKey]: agentStatusEntry(paneKey, { updatedAt: NOW })
+    }
+
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toEqual({
+      tabId: 'tab-1',
+      leafId: LEAF_ID
+    })
+  })
+
+  it('does not offer the active terminal send target for stale or unfocused agent status', () => {
+    const focusedPaneKey = makePaneKey('tab-1', LEAF_ID)
+    const otherPaneKey = makePaneKey('tab-1', OTHER_LEAF_ID)
+    testState.appState.agentStatusByPaneKey = {
+      [focusedPaneKey]: agentStatusEntry(focusedPaneKey, { updatedAt: NOW - 31 * 60 * 1000 }),
+      [otherPaneKey]: agentStatusEntry(otherPaneKey, { updatedAt: NOW })
+    }
+
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
+  })
+
+  it('does not offer the active terminal send target when the focused pane pty is not live', () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    testState.appState.ptyIdsByTabId = { 'tab-1': [] }
+    testState.appState.terminalLayoutsByTabId = {
+      'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' } }
+    }
+    testState.appState.agentStatusByPaneKey = {
+      [paneKey]: agentStatusEntry(paneKey, { updatedAt: NOW })
+    }
+
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
   })
 
   it('sends notes only after the active terminal is verified as an idle agent', async () => {
@@ -102,7 +165,7 @@ describe('active agent note send', () => {
               worktreePath: '/repo',
               branch: 'main',
               tabId: 'tab-1',
-              leafId: 'leaf-1',
+              leafId: LEAF_ID,
               title: 'Codex',
               connected: true,
               writable: true,
@@ -163,7 +226,7 @@ describe('active agent note send', () => {
               worktreePath: '/repo',
               branch: 'main',
               tabId: 'tab-1',
-              leafId: 'leaf-1',
+              leafId: LEAF_ID,
               title: 'zsh',
               connected: true,
               writable: true,
@@ -204,7 +267,7 @@ describe('active agent note send', () => {
               worktreePath: '/repo',
               branch: 'main',
               tabId: 'tab-1',
-              leafId: 'leaf-1',
+              leafId: LEAF_ID,
               title: 'Codex',
               connected: true,
               writable: true,
@@ -248,3 +311,20 @@ describe('active agent note send', () => {
     expect(testState.callRuntimeRpc).not.toHaveBeenCalled()
   })
 })
+
+function agentStatusEntry(
+  paneKey: string,
+  overrides: Partial<AgentStatusEntry> = {}
+): AgentStatusEntry {
+  const updatedAt = overrides.updatedAt ?? NOW
+  return {
+    state: 'done',
+    prompt: '',
+    updatedAt,
+    stateStartedAt: updatedAt,
+    agentType: 'codex',
+    paneKey,
+    stateHistory: [],
+    ...overrides
+  }
+}

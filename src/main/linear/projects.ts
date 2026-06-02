@@ -439,12 +439,16 @@ function clampLimit(limit = 20): number {
   return Math.min(Math.max(1, Math.floor(limit)), 50)
 }
 
-function coalesce<T>(key: string, load: () => Promise<T>): Promise<T> {
+function coalesce<T>(key: string, load: () => Promise<T>, force = false): Promise<T> {
   const existing = inFlight.get(key) as Promise<T> | undefined
-  if (existing) {
+  if (existing && !force) {
     return existing
   }
-  const promise = load().finally(() => inFlight.delete(key))
+  const promise = load().finally(() => {
+    if (inFlight.get(key) === promise) {
+      inFlight.delete(key)
+    }
+  })
   inFlight.set(key, promise)
   return promise
 }
@@ -690,79 +694,92 @@ function mapCustomViewForWorkspace(
 async function readCollection<T>(
   key: string,
   workspaceId: LinearWorkspaceSelection | null | undefined,
-  load: (entry: LinearClientForWorkspace) => Promise<LinearCollectionResult<T>>
+  load: (entry: LinearClientForWorkspace) => Promise<LinearCollectionResult<T>>,
+  force = false
 ): Promise<LinearCollectionResult<T>> {
-  return coalesce(key, async () => {
-    const entries = getClients(workspaceId)
-    if (entries.length === 0) {
-      return { items: [] }
-    }
+  return coalesce(
+    key,
+    async () => {
+      const entries = getClients(workspaceId)
+      if (entries.length === 0) {
+        return { items: [] }
+      }
 
-    const results = await Promise.all(
-      entries.map(async (entry) => {
-        await acquire()
-        try {
-          return await load(entry)
-        } catch (error) {
-          if (isAuthError(error)) {
-            clearToken(entry.workspace.id)
-          } else {
-            console.warn('[linear] project/view read failed:', error)
+      const results = await Promise.all(
+        entries.map(async (entry) => {
+          await acquire()
+          try {
+            return await load(entry)
+          } catch (error) {
+            if (isAuthError(error)) {
+              clearToken(entry.workspace.id)
+            } else {
+              console.warn('[linear] project/view read failed:', error)
+            }
+            if (shouldFailWholeRequest(workspaceId)) {
+              throw error
+            }
+            return { items: [], errors: [workspaceError(entry, error)] }
+          } finally {
+            release()
           }
-          if (shouldFailWholeRequest(workspaceId)) {
-            throw error
-          }
-          return { items: [], errors: [workspaceError(entry, error)] }
-        } finally {
-          release()
-        }
-      })
-    )
+        })
+      )
 
-    return {
-      items: results.flatMap((result) => result.items),
-      errors: results.flatMap((result) => result.errors ?? []).length
-        ? results.flatMap((result) => result.errors ?? [])
-        : undefined,
-      hasMore: results.some((result) => result.hasMore)
-    }
-  })
+      return {
+        items: results.flatMap((result) => result.items),
+        errors: results.flatMap((result) => result.errors ?? []).length
+          ? results.flatMap((result) => result.errors ?? [])
+          : undefined,
+        hasMore: results.some((result) => result.hasMore)
+      }
+    },
+    force
+  )
 }
 
 async function readConcreteCollection<T>(
   key: string,
   workspaceId: LinearConcreteWorkspaceId,
-  load: (entry: LinearClientForWorkspace) => Promise<LinearCollectionResult<T>>
+  load: (entry: LinearClientForWorkspace) => Promise<LinearCollectionResult<T>>,
+  force = false
 ): Promise<LinearCollectionResult<T>> {
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
-  return readCollection(key, concreteWorkspaceId, load)
+  return readCollection(key, concreteWorkspaceId, load, force)
 }
 
 export async function listProjects(
   query: string | undefined,
   limit = 20,
-  workspaceId?: LinearWorkspaceSelection | null
+  workspaceId?: LinearWorkspaceSelection | null,
+  force = false
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
   const first = clampLimit(limit)
   const trimmed = query?.trim()
   const key = `listProjects:${workspaceId ?? 'default'}:${trimmed ?? ''}:${first}`
-  return readCollection(key, workspaceId, async (entry) => {
-    const variables = trimmed ? { term: trimmed, first } : { first, orderBy: 'updatedAt' }
-    const result = await entry.client.client.rawRequest<
-      ProjectConnectionResponse,
-      LinearRawVariables
-    >(trimmed ? SEARCH_PROJECTS_QUERY : PROJECTS_QUERY, variables)
-    const connection = trimmed ? result.data?.searchProjects : result.data?.projects
-    return {
-      items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
-      hasMore: !!connection?.pageInfo?.hasNextPage
-    }
-  })
+  return readCollection(
+    key,
+    workspaceId,
+    async (entry) => {
+      const variables = trimmed ? { term: trimmed, first } : { first, orderBy: 'updatedAt' }
+      const result = await entry.client.client.rawRequest<
+        ProjectConnectionResponse,
+        LinearRawVariables
+      >(trimmed ? SEARCH_PROJECTS_QUERY : PROJECTS_QUERY, variables)
+      const connection = trimmed ? result.data?.searchProjects : result.data?.projects
+      return {
+        items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
+        hasMore: !!connection?.pageInfo?.hasNextPage
+      }
+    },
+    force
+  )
 }
 
 export async function getProject(
   id: string,
-  workspaceId: LinearConcreteWorkspaceId
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
 ): Promise<LinearProjectDetail | null> {
   const projectId = id.trim()
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
@@ -770,34 +787,41 @@ export async function getProject(
     throw new Error('Project ID is required')
   }
   const key = `getProject:${concreteWorkspaceId}:${projectId}`
-  return coalesce(key, async () => {
-    const entries = getClients(concreteWorkspaceId)
-    const entry = entries[0]
-    if (!entry) {
-      return null
-    }
-    await acquire()
-    try {
-      const result = await entry.client.client.rawRequest<
-        ProjectConnectionResponse,
-        LinearRawVariables
-      >(PROJECT_QUERY, { id: projectId })
-      return result.data?.project ? mapProjectDetailForWorkspace(entry, result.data.project) : null
-    } catch (error) {
-      if (isAuthError(error)) {
-        clearToken(entry.workspace.id)
+  return coalesce(
+    key,
+    async () => {
+      const entries = getClients(concreteWorkspaceId)
+      const entry = entries[0]
+      if (!entry) {
+        return null
       }
-      throw error
-    } finally {
-      release()
-    }
-  })
+      await acquire()
+      try {
+        const result = await entry.client.client.rawRequest<
+          ProjectConnectionResponse,
+          LinearRawVariables
+        >(PROJECT_QUERY, { id: projectId })
+        return result.data?.project
+          ? mapProjectDetailForWorkspace(entry, result.data.project)
+          : null
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        throw error
+      } finally {
+        release()
+      }
+    },
+    force
+  )
 }
 
 export async function listProjectIssues(
   projectId: string,
   limit = 20,
-  workspaceId: LinearConcreteWorkspaceId
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const id = projectId.trim()
   if (!id) {
@@ -822,37 +846,45 @@ export async function listProjectIssues(
         items: (connection?.nodes ?? []).map((issue) => mapIssueForWorkspace(entry, issue)),
         hasMore: !!connection?.pageInfo?.hasNextPage
       }
-    }
+    },
+    force
   )
 }
 
 export async function listCustomViews(
   model: LinearCustomViewModel,
   limit = 20,
-  workspaceId?: LinearWorkspaceSelection | null
+  workspaceId?: LinearWorkspaceSelection | null,
+  force = false
 ): Promise<LinearCollectionResult<LinearCustomViewSummary>> {
   const first = clampLimit(limit)
   const key = `listCustomViews:${workspaceId ?? 'default'}:${model}:${first}`
   const filter = { modelName: { eq: model === 'project' ? 'Project' : 'Issue' } }
-  return readCollection(key, workspaceId, async (entry) => {
-    const result = await entry.client.client.rawRequest<
-      CustomViewConnectionResponse,
-      LinearRawVariables
-    >(CUSTOM_VIEWS_QUERY, { first, filter, orderBy: 'updatedAt' })
-    const connection = result.data?.customViews
-    return {
-      items: (connection?.nodes ?? [])
-        .map((view) => mapCustomViewForWorkspace(entry, view))
-        .filter((view): view is LinearCustomViewSummary => !!view && view.model === model),
-      hasMore: !!connection?.pageInfo?.hasNextPage
-    }
-  })
+  return readCollection(
+    key,
+    workspaceId,
+    async (entry) => {
+      const result = await entry.client.client.rawRequest<
+        CustomViewConnectionResponse,
+        LinearRawVariables
+      >(CUSTOM_VIEWS_QUERY, { first, filter, orderBy: 'updatedAt' })
+      const connection = result.data?.customViews
+      return {
+        items: (connection?.nodes ?? [])
+          .map((view) => mapCustomViewForWorkspace(entry, view))
+          .filter((view): view is LinearCustomViewSummary => !!view && view.model === model),
+        hasMore: !!connection?.pageInfo?.hasNextPage
+      }
+    },
+    force
+  )
 }
 
 export async function getCustomView(
   viewId: string,
   model: LinearCustomViewModel,
-  workspaceId: LinearConcreteWorkspaceId
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
 ): Promise<LinearCustomViewSummary | null> {
   const id = viewId.trim()
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
@@ -860,36 +892,41 @@ export async function getCustomView(
     throw new Error('Custom view ID is required')
   }
   const key = `getCustomView:${concreteWorkspaceId}:${model}:${id}`
-  return coalesce(key, async () => {
-    const entries = getClients(concreteWorkspaceId)
-    const entry = entries[0]
-    if (!entry) {
-      return null
-    }
-    await acquire()
-    try {
-      const result = await entry.client.client.rawRequest<
-        CustomViewConnectionResponse,
-        LinearRawVariables
-      >(CUSTOM_VIEW_QUERY, { id })
-      const view = result.data?.customView
-      const mapped = view ? mapCustomViewForWorkspace(entry, view) : null
-      return mapped?.model === model ? mapped : null
-    } catch (error) {
-      if (isAuthError(error)) {
-        clearToken(entry.workspace.id)
+  return coalesce(
+    key,
+    async () => {
+      const entries = getClients(concreteWorkspaceId)
+      const entry = entries[0]
+      if (!entry) {
+        return null
       }
-      throw error
-    } finally {
-      release()
-    }
-  })
+      await acquire()
+      try {
+        const result = await entry.client.client.rawRequest<
+          CustomViewConnectionResponse,
+          LinearRawVariables
+        >(CUSTOM_VIEW_QUERY, { id })
+        const view = result.data?.customView
+        const mapped = view ? mapCustomViewForWorkspace(entry, view) : null
+        return mapped?.model === model ? mapped : null
+      } catch (error) {
+        if (isAuthError(error)) {
+          clearToken(entry.workspace.id)
+        }
+        throw error
+      } finally {
+        release()
+      }
+    },
+    force
+  )
 }
 
 export async function listCustomViewIssues(
   viewId: string,
   limit = 20,
-  workspaceId: LinearConcreteWorkspaceId
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const id = viewId.trim()
   if (!id) {
@@ -914,14 +951,16 @@ export async function listCustomViewIssues(
         items: (connection?.nodes ?? []).map((issue) => mapIssueForWorkspace(entry, issue)),
         hasMore: !!connection?.pageInfo?.hasNextPage
       }
-    }
+    },
+    force
   )
 }
 
 export async function listCustomViewProjects(
   viewId: string,
   limit = 20,
-  workspaceId: LinearConcreteWorkspaceId
+  workspaceId: LinearConcreteWorkspaceId,
+  force = false
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
   const id = viewId.trim()
   if (!id) {
@@ -946,6 +985,7 @@ export async function listCustomViewProjects(
         items: (connection?.nodes ?? []).map((project) => mapProjectForWorkspace(entry, project)),
         hasMore: !!connection?.pageInfo?.hasNextPage
       }
-    }
+    },
+    force
   )
 }

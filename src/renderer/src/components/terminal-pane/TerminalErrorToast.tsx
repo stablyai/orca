@@ -3,13 +3,19 @@ const STALE_NODE_PTY_DAEMON_MARKERS = [
   "Daemon's node-pty install is gone",
   'node-pty: posix_spawn failed: ENOENT'
 ]
+const STALE_DAEMON_CWD_MARKERS = [
+  "Daemon's working directory is gone",
+  'node-pty: daemon_cwd failed: ENOENT'
+]
 
 function isSshError(error: string): boolean {
   return error.startsWith(SSH_PREFIX)
 }
 
 export function shouldOfferDaemonRestart(error: string): boolean {
-  return STALE_NODE_PTY_DAEMON_MARKERS.every((marker) => error.includes(marker))
+  return [STALE_NODE_PTY_DAEMON_MARKERS, STALE_DAEMON_CWD_MARKERS].some((markers) =>
+    markers.every((marker) => error.includes(marker))
+  )
 }
 
 export function TerminalErrorToast({

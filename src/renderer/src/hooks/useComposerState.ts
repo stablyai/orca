@@ -1924,6 +1924,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         workspaceName,
         preserveWorkspaceNameEdits: branchNameOverridePreservesNameEdits
       })
+      const createDisplayName = smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title
+      // Why: the first-work hook only renames blank, auto-generated git workspaces
+      // that actually launch an agent. Persist that known-pending state for the card.
+      const pendingFirstAgentMessageRename =
+        selectedRepoIsGit &&
+        settings?.autoRenameBranchFromWork === true &&
+        !name.trim() &&
+        Boolean(tuiAgent) &&
+        !effectiveBranchNameOverride &&
+        !createDisplayName
       const result = await createWorktree(
         repoId,
         workspaceName,
@@ -1936,7 +1946,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             }
           : undefined,
         telemetrySource,
-        smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title,
+        createDisplayName,
         submitLinkedIssueNumber ?? undefined,
         submitLinkedPR ?? undefined,
         pushTarget,
@@ -1945,7 +1955,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         effectiveBranchNameOverride,
         resolvedInitialWorkspaceStatus,
         linkedGitLabMR ?? undefined,
-        linkedGitLabIssue ?? undefined
+        linkedGitLabIssue ?? undefined,
+        undefined,
+        pendingFirstAgentMessageRename
       )
       const worktree = result.worktree
 
@@ -2041,6 +2053,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     linkedGitLabIssue,
     linkedGitLabMR,
     linkedWorkItem,
+    name,
     normalizedSparseDirectories,
     note,
     onCreated,
@@ -2056,6 +2069,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepoIsGit,
     selectedRepoRequiresConnection,
     settings?.agentCmdOverrides,
+    settings?.autoRenameBranchFromWork,
     setSidebarOpen,
     setupDecision,
     sparseEnabled,
@@ -2151,6 +2165,16 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           workspaceName,
           preserveWorkspaceNameEdits: branchNameOverridePreservesNameEdits
         })
+        const createDisplayName = smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title
+        // Why: quick create uses the same blank-name creature branch flow; the card
+        // needs an explicit marker rather than guessing from the generated title.
+        const pendingFirstAgentMessageRename =
+          selectedRepoIsGit &&
+          settings?.autoRenameBranchFromWork === true &&
+          !name.trim() &&
+          Boolean(agent) &&
+          !effectiveBranchNameOverride &&
+          !createDisplayName
         const result = await createWorktree(
           repoId,
           workspaceName,
@@ -2163,7 +2187,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             : undefined,
           telemetrySource,
-          smartGitHubResolution?.displayName ?? submitLinkedWorkItem?.title,
+          createDisplayName,
           submitLinkedIssueNumber ?? undefined,
           submitLinkedPR ?? undefined,
           pushTarget,
@@ -2172,7 +2196,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           effectiveBranchNameOverride,
           resolvedInitialWorkspaceStatus,
           linkedGitLabMR ?? undefined,
-          linkedGitLabIssue ?? undefined
+          linkedGitLabIssue ?? undefined,
+          undefined,
+          pendingFirstAgentMessageRename
         )
         const worktree = result.worktree
 
@@ -2325,6 +2351,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       selectedRepoIsGit,
       selectedRepoRequiresConnection,
       settings?.agentCmdOverrides,
+      settings?.autoRenameBranchFromWork,
       disabledTuiAgents,
       setSidebarOpen,
       setupDecision,

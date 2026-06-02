@@ -193,7 +193,9 @@ export function CombinedDiffFileTree({
   }
 
   return (
-    <aside className="sticky top-0 flex h-full max-h-full w-64 shrink-0 self-start flex-col border-r border-border bg-background">
+    // Why: this column must be height-bounded so the file list, not the page,
+    // owns overflow when review diffs have more files than fit on screen.
+    <aside className="flex min-h-0 w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-background">
       <div className="sticky top-0 z-20 shrink-0 bg-background">
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

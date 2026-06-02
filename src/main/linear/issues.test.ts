@@ -58,19 +58,23 @@ describe('Linear issue queries', () => {
     })
     const { listIssues } = await import('./issues')
 
-    await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject([
-      {
-        id: 'LIN-1',
-        labels: ['Bug'],
-        labelIds: ['label-1'],
-        workspaceId: 'workspace-1',
-        team: { id: 'team-1' },
-        estimate: 3
-      }
-    ])
+    await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject({
+      items: [
+        {
+          id: 'LIN-1',
+          labels: ['Bug'],
+          labelIds: ['label-1'],
+          workspaceId: 'workspace-1',
+          team: { id: 'team-1' },
+          estimate: 3
+        }
+      ],
+      hasMore: false
+    })
 
     expect(rawRequest).toHaveBeenCalledTimes(1)
     expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssues')
+    expect(rawRequest.mock.calls[0][0]).toContain('pageInfo')
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
   })
 
@@ -114,13 +118,64 @@ describe('Linear issue queries', () => {
     })
     const { listIssues } = await import('./issues')
 
-    await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject([
+    await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject({
+      items: [
+        {
+          id: 'LIN-1',
+          labels: ['Bug'],
+          labelIds: ['label-1', 'label-2']
+        }
+      ]
+    })
+  })
+
+  it('marks plain list results as having more when Linear has a next page', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: true } } }
+    })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject({
+      items: [{ id: 'LIN-1' }],
+      hasMore: true
+    })
+  })
+
+  it('marks multi-workspace plain lists as having more when the merged result is clipped', async () => {
+    getClients.mockReturnValue([
+      makeEntry(),
       {
-        id: 'LIN-1',
-        labels: ['Bug'],
-        labelIds: ['label-1', 'label-2']
+        ...makeEntry(),
+        workspace: {
+          ...makeEntry().workspace,
+          id: 'workspace-2',
+          organizationName: 'Second Workspace'
+        }
       }
     ])
+    rawRequest
+      .mockResolvedValueOnce({
+        data: {
+          issues: {
+            nodes: [rawIssue('LIN-OLD', '2026-01-01T00:00:00.000Z')],
+            pageInfo: { hasNextPage: false }
+          }
+        }
+      })
+      .mockResolvedValueOnce({
+        data: {
+          issues: {
+            nodes: [rawIssue('LIN-NEW', '2026-02-01T00:00:00.000Z')],
+            pageInfo: { hasNextPage: false }
+          }
+        }
+      })
+    const { listIssues } = await import('./issues')
+
+    await expect(listIssues('all', 1, 'all')).resolves.toMatchObject({
+      items: [{ id: 'LIN-NEW' }],
+      hasMore: true
+    })
   })
 
   it('sends estimate updates through to Linear', async () => {

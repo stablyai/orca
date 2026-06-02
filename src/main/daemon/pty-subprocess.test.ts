@@ -1,6 +1,6 @@
 /* oxlint-disable max-lines -- Why: exercises full PTY subprocess surface (spawn setup, signal routing, data events, platform-specific shell configs, and Windows PowerShell implementations) with co-located test scenarios to prevent fixture drift. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, rmSync } from 'fs'
+import { mkdtempSync, realpathSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
@@ -131,6 +131,41 @@ describe('createPtySubprocess', () => {
         cwd: '/home/user',
         name: 'xterm-256color'
       })
+    )
+  })
+
+  it('repairs a deleted macOS daemon cwd before spawning node-pty', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    const originalCwd = process.cwd()
+    const deletedDaemonCwd = mkdtempSync(join(tmpdir(), 'orca-deleted-daemon-cwd-'))
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+
+    try {
+      process.chdir(deletedDaemonCwd)
+      rmSync(deletedDaemonCwd, { recursive: true, force: true })
+
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        cwd: originalCwd,
+        env: { SHELL: '/bin/bash' }
+      })
+
+      expect(process.cwd()).toBe(realpathSync(userDataPath))
+    } finally {
+      process.chdir(originalCwd)
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/bash',
+      expect.any(Array),
+      expect.objectContaining({ cwd: originalCwd })
     )
   })
 

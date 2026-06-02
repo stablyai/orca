@@ -18,6 +18,12 @@ export function getWorktreeTitleRenameCommit(
   return { kind: 'save', displayName: trimmed }
 }
 
+export function isWorktreeTitleTruncated(
+  element: Pick<HTMLElement, 'clientWidth' | 'scrollWidth'>
+): boolean {
+  return element.scrollWidth > element.clientWidth
+}
+
 type WorktreeTitleInlineRenameProps = {
   displayName: string
   disabled?: boolean
@@ -44,15 +50,54 @@ export function WorktreeTitleInlineRename({
   const editingRef = useRef(false)
   const savingRef = useRef(false)
   const mountedRef = useRef(true)
+  const titleElementRef = useRef<HTMLSpanElement | null>(null)
+  const titleResizeObserverRef = useRef<ResizeObserver | null>(null)
+  const removeTitleResizeListenerRef = useRef<(() => void) | null>(null)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
+  const [titleTruncated, setTitleTruncated] = useState(false)
 
-  const handleRootRef = useCallback((node: HTMLSpanElement | null): void => {
-    // Why: rename can resolve after this inline title unmounts; the rendered
-    // root owns that stale-write guard without a mount-only Effect.
-    mountedRef.current = node !== null
+  const measureTitleTruncated = useCallback((element: HTMLSpanElement | null) => {
+    const nextTruncated = element ? isWorktreeTitleTruncated(element) : false
+    setTitleTruncated((current) => (current === nextTruncated ? current : nextTruncated))
   }, [])
+
+  const handleRootRef = useCallback(
+    (node: HTMLSpanElement | null): void => {
+      titleResizeObserverRef.current?.disconnect()
+      titleResizeObserverRef.current = null
+      removeTitleResizeListenerRef.current?.()
+      removeTitleResizeListenerRef.current = null
+
+      // Why: rename can resolve after this inline title unmounts; the rendered
+      // root owns that stale-write guard without a mount-only Effect.
+      mountedRef.current = node !== null
+      titleElementRef.current = node
+      if (!node || editingRef.current) {
+        measureTitleTruncated(null)
+        return
+      }
+
+      measureTitleTruncated(node)
+      const updateTitleTruncated = () => measureTitleTruncated(node)
+      if (typeof ResizeObserver === 'undefined') {
+        window.addEventListener('resize', updateTitleTruncated)
+        removeTitleResizeListenerRef.current = () =>
+          window.removeEventListener('resize', updateTitleTruncated)
+        return
+      }
+
+      // Why: compact sidebar width changes can make a readable title become
+      // clipped; the tooltip should track the rendered geometry, not just text.
+      const observer = new ResizeObserver(updateTitleTruncated)
+      observer.observe(node)
+      titleResizeObserverRef.current = observer
+    },
+    [measureTitleTruncated]
+  )
+
+  const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
 
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
@@ -60,11 +105,14 @@ export function WorktreeTitleInlineRename({
         return
       }
       editingRef.current = nextEditing
+      if (nextEditing) {
+        measureTitleTruncated(null)
+      }
       setEditing(nextEditing)
       // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
       onEditingChange?.(nextEditing)
     },
-    [onEditingChange]
+    [measureTitleTruncated, onEditingChange]
   )
 
   const handleInputRef = useCallback((input: HTMLInputElement | null) => {
@@ -145,6 +193,7 @@ export function WorktreeTitleInlineRename({
   if (editing) {
     return (
       <span
+        key={`editing:${titleElementKey}`}
         ref={handleRootRef}
         className={cn(
           'relative grid min-w-0 truncate leading-tight text-foreground',
@@ -189,6 +238,7 @@ export function WorktreeTitleInlineRename({
 
   const title = (
     <span
+      key={`title:${titleElementKey}`}
       ref={handleRootRef}
       className={cn(
         'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
@@ -207,6 +257,10 @@ export function WorktreeTitleInlineRename({
 
   if (titleWrapper) {
     return titleWrapper(title)
+  }
+
+  if (!titleTruncated) {
+    return title
   }
 
   return (

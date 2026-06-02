@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { Bold, Code2, Italic, List, LoaderCircle, Quote, Send } from 'lucide-react'
+import { Bold, Code2, Italic, List, Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -232,15 +232,11 @@ export function RightPanelCommentComposer({
             <Button
               type="button"
               size="xs"
+              aria-label={submitLabel}
               disabled={disabled || submitting || body.trim().length === 0}
               onClick={() => void submit()}
             >
-              {submitting ? (
-                <LoaderCircle className="size-3 animate-spin" />
-              ) : (
-                <Send className="size-3" />
-              )}
-              {submitLabel}
+              {submitting ? 'Sending...' : submitLabel}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

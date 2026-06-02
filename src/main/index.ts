@@ -198,7 +198,10 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         return !!meta?.orcaCreationSource && meta.preserveBranchOnDelete !== true
       },
       setDisplayName: (worktreeId, displayName) => {
-        currentStore.setWorktreeMeta(worktreeId, { displayName })
+        currentStore.setWorktreeMeta(worktreeId, {
+          displayName,
+          pendingFirstAgentMessageRename: false
+        })
       },
       resolveWorktreeIdForTab: (tabId) => currentStore.getWorktreeIdForTab(tabId),
       onRenamed: (repoId) => currentRuntime.notifyBranchRenamed(repoId)

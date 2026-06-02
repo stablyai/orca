@@ -31,9 +31,12 @@ export function ReviewNotesSendMenuContent({
   onPromptDelivered?: () => void
 }): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
-  const canSendToActiveTerminal = useCanSendNotesToActiveTerminal(worktreeId)
+  const canSendToActiveAgent = useCanSendNotesToActiveTerminal(worktreeId)
 
   const sendToActiveAgent = useCallback(() => {
+    if (!hasPrompt || !canSendToActiveAgent) {
+      return
+    }
     const pending = toast.loading('Sending notes to active agent...')
     void sendNotesToActiveAgentSession({ worktreeId, prompt })
       .then((result) => {
@@ -51,13 +54,13 @@ export function ReviewNotesSendMenuContent({
       .finally(() => {
         toast.dismiss(pending)
       })
-  }, [worktreeId, prompt, onPromptDelivered])
+  }, [canSendToActiveAgent, hasPrompt, worktreeId, prompt, onPromptDelivered])
 
   return (
     <>
       <DropdownMenuLabel>Send notes to</DropdownMenuLabel>
       <DropdownMenuItem
-        disabled={!hasPrompt || !canSendToActiveTerminal}
+        disabled={!hasPrompt || !canSendToActiveAgent}
         onSelect={sendToActiveAgent}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >

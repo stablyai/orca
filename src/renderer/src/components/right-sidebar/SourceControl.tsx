@@ -20,8 +20,6 @@ import {
   FolderOpen,
   GitMerge,
   GitPullRequestArrow,
-  List,
-  ListTree,
   MessageSquare,
   Trash,
   Trash2,
@@ -160,7 +158,6 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
-  GlobalSettings,
   SourceControlViewMode,
   TuiAgent
 } from '../../../../shared/types'
@@ -369,57 +366,6 @@ type PullRequestGenerationRecords = Record<string, PullRequestGenerationRecord>
 
 export function normalizeSourceControlViewMode(value: unknown): SourceControlViewMode {
   return value === 'tree' || value === 'list' ? value : 'list'
-}
-
-export function getNextSourceControlViewMode(mode: SourceControlViewMode): SourceControlViewMode {
-  return mode === 'tree' ? 'list' : 'tree'
-}
-
-export type SourceControlViewModePreferenceWriteState = {
-  writeChain: Promise<void>
-  writeSeq: number
-}
-
-export function requestSourceControlViewModePreferenceWrite({
-  hydrated,
-  currentMode,
-  writeState,
-  setOptimisticMode,
-  updateSettings
-}: {
-  hydrated: boolean
-  currentMode: SourceControlViewMode
-  writeState: SourceControlViewModePreferenceWriteState
-  setOptimisticMode: (mode: SourceControlViewMode | null) => void
-  updateSettings: (
-    updates: Pick<GlobalSettings, 'sourceControlViewMode'>
-  ) => Promise<GlobalSettings | void>
-}): SourceControlViewMode | null {
-  if (!hydrated) {
-    return null
-  }
-  const next = getNextSourceControlViewMode(currentMode)
-  const writeSeq = writeState.writeSeq + 1
-  writeState.writeSeq = writeSeq
-  setOptimisticMode(next)
-
-  // Why: settings writes cross IPC. Queue them so rapid toolbar clicks keep
-  // the user's final intent as the persisted value even if earlier writes
-  // would otherwise resolve after later clicks.
-  const write = writeState.writeChain
-    .catch(() => undefined)
-    .then(() => updateSettings({ sourceControlViewMode: next }))
-    .then(() => undefined)
-  writeState.writeChain = write
-  void write
-    .finally(() => {
-      if (writeState.writeSeq === writeSeq) {
-        setOptimisticMode(null)
-      }
-    })
-    .catch(() => undefined)
-
-  return next
 }
 
 type GitStatusSourceControlTreeNode = SourceControlTreeNode<
@@ -1122,7 +1068,6 @@ function SourceControlInner(): React.JSX.Element {
   const isRemoteOperationActive = useAppStore((s) => s.isRemoteOperationActive)
   const inFlightRemoteOpKind = useAppStore((s) => s.inFlightRemoteOpKind)
   const settings = useAppStore((s) => s.settings)
-  const updateSettings = useAppStore((s) => s.updateSettings)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const hostedReviewCache = useAppStore((s) => s.hostedReviewCache)
@@ -1279,26 +1224,10 @@ function SourceControlInner(): React.JSX.Element {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     createDefaultCollapsedSections
   )
-  const [optimisticSourceControlViewMode, setOptimisticSourceControlViewMode] =
-    useState<SourceControlViewMode | null>(null)
-  const sourceControlViewModeWriteStateRef = useRef<SourceControlViewModePreferenceWriteState>({
-    writeChain: Promise.resolve(),
-    writeSeq: 0
-  })
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
     settings?.sourceControlViewMode
   )
-  const sourceControlViewMode = optimisticSourceControlViewMode ?? persistedSourceControlViewMode
-  const isSourceControlViewModeHydrated = settings !== null
-  const handleToggleSourceControlViewMode = useCallback(() => {
-    requestSourceControlViewModePreferenceWrite({
-      hydrated: isSourceControlViewModeHydrated,
-      currentMode: sourceControlViewMode,
-      writeState: sourceControlViewModeWriteStateRef.current,
-      setOptimisticMode: setOptimisticSourceControlViewMode,
-      updateSettings
-    })
-  }, [isSourceControlViewModeHydrated, sourceControlViewMode, updateSettings])
+  const sourceControlViewMode = persistedSourceControlViewMode
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
@@ -4169,14 +4098,11 @@ function SourceControlInner(): React.JSX.Element {
           )}
         </div>
 
-        {scope === 'all' && (
+        {scope === 'all' && shouldShowCompareSummary(branchSummary) && (
           <div className="border-b border-border px-3 py-2">
             <CompareSummary
               summary={branchSummary}
-              viewMode={sourceControlViewMode}
               onChangeBaseRef={() => setBaseRefDialogOpen(true)}
-              onToggleViewMode={handleToggleSourceControlViewMode}
-              viewModeToggleDisabled={!isSourceControlViewModeHydrated}
               onRetry={() => void refreshBranchCompare()}
             />
           </div>
@@ -5946,21 +5872,25 @@ export function CommitArea({
   )
 }
 
+export function shouldShowCompareSummary(summary: GitBranchCompareSummary | null): boolean {
+  if (!summary || summary.status === 'loading') {
+    return true
+  }
+  if (summary.status !== 'ready') {
+    return true
+  }
+  return typeof summary.commitsAhead === 'number' && summary.commitsAhead > 0
+}
+
 export function CompareSummary({
   summary,
-  viewMode,
   onChangeBaseRef,
-  onToggleViewMode,
-  viewModeToggleDisabled,
   onRetry
 }: {
   summary: GitBranchCompareSummary | null
-  viewMode: SourceControlViewMode
   onChangeBaseRef: () => void
-  onToggleViewMode: () => void
-  viewModeToggleDisabled?: boolean
   onRetry: () => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   if (!summary || summary.status === 'loading') {
     return (
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -5982,36 +5912,33 @@ export function CompareSummary({
             label="Change base ref"
             onClick={onChangeBaseRef}
           />
-          <CompareSummaryToolbarButton
-            icon={viewMode === 'tree' ? List : ListTree}
-            label={viewMode === 'tree' ? 'Show changes as list' : 'Show changes as tree'}
-            onClick={onToggleViewMode}
-            disabled={viewModeToggleDisabled}
-          />
           <CompareSummaryToolbarButton icon={RefreshCw} label="Retry" onClick={onRetry} />
         </div>
       </div>
     )
   }
 
+  const commitsAhead = summary.commitsAhead
+  const showCommitsAhead = typeof commitsAhead === 'number' && commitsAhead > 0
+  const commitsAheadTitle = showCommitsAhead
+    ? `${commitsAhead} ${commitsAhead === 1 ? 'commit' : 'commits'} ahead of ${summary.baseRef}`
+    : undefined
+
+  if (!showCommitsAhead) {
+    return null
+  }
+
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-      {summary.commitsAhead !== undefined && (
-        <span title={`Comparing against ${summary.baseRef}`}>
-          {summary.commitsAhead} commits ahead of {summary.baseRef}
-        </span>
-      )}
+      <span className="flex min-w-0 items-center gap-1" title={commitsAheadTitle}>
+        <ArrowUp className="size-3" />
+        <span>{commitsAhead} ahead</span>
+      </span>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <CompareSummaryToolbarButton
           icon={Settings2}
           label="Change base ref"
           onClick={onChangeBaseRef}
-        />
-        <CompareSummaryToolbarButton
-          icon={viewMode === 'tree' ? List : ListTree}
-          label={viewMode === 'tree' ? 'Show changes as list' : 'Show changes as tree'}
-          onClick={onToggleViewMode}
-          disabled={viewModeToggleDisabled}
         />
         <CompareSummaryToolbarButton
           icon={RefreshCw}
@@ -6026,13 +5953,11 @@ export function CompareSummary({
 export function CompareSummaryToolbarButton({
   icon: Icon,
   label,
-  onClick,
-  disabled = false
+  onClick
 }: {
   icon: LucideIcon
   label: string
   onClick: () => void
-  disabled?: boolean
 }): React.JSX.Element {
   return (
     <Tooltip>
@@ -6041,17 +5966,9 @@ export function CompareSummaryToolbarButton({
           type="button"
           variant="ghost"
           size="icon-xs"
-          className={cn(
-            'text-muted-foreground hover:text-foreground',
-            disabled && 'cursor-not-allowed opacity-50'
-          )}
+          className="text-muted-foreground hover:text-foreground"
           aria-label={label}
-          aria-disabled={disabled}
-          onClick={() => {
-            if (!disabled) {
-              onClick()
-            }
-          }}
+          onClick={onClick}
         >
           <Icon className="size-3.5" />
         </Button>
@@ -6410,7 +6327,7 @@ export function OperationBanner({
 
   return (
     <div className="rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center justify-center gap-2">
         <Icon className="size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="text-xs font-medium text-foreground">{label}</span>
       </div>

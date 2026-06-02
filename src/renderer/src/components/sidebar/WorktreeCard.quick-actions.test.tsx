@@ -171,6 +171,20 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
+  it('renders the pending first-agent rename title button', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ pendingFirstAgentMessageRename: true })}
+        repo={makeRepo()}
+        isActive={false}
+      />
+    )
+
+    expect(markup).toContain('aria-label="Will be renamed from first agent message"')
+    expect(markup).toContain('rename pending')
+    expect(markup).toContain('Will be renamed from first agent message')
+  })
+
   it('renders the repeated branch metadata row in detailed cards', () => {
     worktreeCardProperties = []
 
@@ -186,6 +200,23 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('quick-action')
     expect(markup).toContain('text-[11px] text-muted-foreground truncate leading-none')
     expect(markup).toContain('data-worktree-card-meta-row=""')
+    expect(markup).toContain('tabindex="0"')
+  })
+
+  it('does not reserve an empty metadata row for detached git worktrees', () => {
+    worktreeCardProperties = []
+
+    const markup = renderToStaticMarkup(
+      <WorktreeCard
+        worktree={makeWorktree({ displayName: 'orca', branch: '' })}
+        repo={makeRepo()}
+        isActive={false}
+        hideRepoBadge
+      />
+    )
+
+    expect(markup).toContain('orca')
+    expect(markup).not.toContain('data-worktree-card-meta-row=""')
     expect(markup).toContain('tabindex="0"')
   })
 

@@ -11,7 +11,7 @@ const agents = [
   entry('codex', 'Codex', 'codex'),
   entry('copilot', 'GitHub Copilot', 'copilot'),
   entry('opencode', 'OpenCode', 'opencode'),
-  entry('mistral-vibe', 'Mistral Vibe', 'mistral-vibe'),
+  entry('mistral-vibe', 'Mistral Vibe', 'vibe'),
   entry('qwen-code', 'Qwen Code', 'qwen-code'),
   entry('crush', 'Charm', 'crush'),
   entry('antigravity', 'Antigravity', 'agy'),

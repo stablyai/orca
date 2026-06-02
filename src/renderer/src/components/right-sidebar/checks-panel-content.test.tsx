@@ -1,15 +1,21 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRCheckDetail, PRComment, PRInfo } from '../../../../shared/types'
 import {
   CheckJobLogTail,
+  ChecksList,
   ConflictTriageStrip,
   getFailedChecksForDetails,
   MergeConflictNotice,
   PRCommentsList,
   PRTriageStrip
 } from './checks-panel-content'
+
+function renderWithTooltips(element: React.ReactElement): string {
+  return renderToStaticMarkup(React.createElement(TooltipProvider, null, element))
+}
 
 function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
   return {
@@ -99,10 +105,62 @@ describe('MergeConflictNotice', () => {
     expect(markup).toContain('Resolve')
     expect(markup).toContain('lucide-sparkles')
   })
+
+  it('renders the CI fix action for failing non-conflict checks', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PRTriageStrip, {
+        review: makePR({ mergeable: 'MERGEABLE' }),
+        checks: [{ name: 'verify', status: 'completed', conclusion: 'failure', url: null }],
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {},
+        isFixingChecksWithAI: false,
+        onFixChecksWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('1 failing check')
+    expect(markup).toContain('Fix')
+    expect(markup).toContain('data-variant="outline"')
+    expect(markup).toContain('lucide-sparkles')
+    expect(markup).not.toContain('Fix with AI')
+    expect(markup).not.toContain('Resolve')
+  })
+})
+
+describe('ChecksList', () => {
+  it('puts the hosted details link in the check row as an icon affordance', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(ChecksList, {
+          checks: [
+            {
+              name: 'verify',
+              status: 'completed',
+              conclusion: 'failure',
+              url: 'https://github.com/acme/widgets/actions/runs/1'
+            }
+          ],
+          checksLoading: false,
+          checkDetailsContextKey: 'repo:42',
+          onLoadCheckDetails: async () => null
+        })
+      )
+    )
+
+    expect(markup).toContain('aria-label="Open check details"')
+    expect(markup).toContain('lucide-external-link')
+    expect(markup).toContain('Failed')
+    expect(markup.indexOf('Failed')).toBeLessThan(markup.indexOf('aria-label="Open check details"'))
+    expect(markup).toContain('text-muted-foreground')
+    expect(markup).not.toContain('opacity-0')
+    expect(markup).not.toContain('Open details')
+  })
 })
 
 describe('PRCommentsList', () => {
-  it('places the collapsed add-comment action after existing comments', () => {
+  it('places the collapsed add-comment action in the comments header', () => {
     const comments: PRComment[] = [
       {
         id: 1,
@@ -114,7 +172,7 @@ describe('PRCommentsList', () => {
       }
     ]
 
-    const markup = renderToStaticMarkup(
+    const markup = renderWithTooltips(
       React.createElement(PRCommentsList, {
         comments,
         commentsLoading: false,
@@ -122,14 +180,16 @@ describe('PRCommentsList', () => {
       })
     )
 
-    expect(markup.indexOf('Existing review context')).toBeLessThan(
-      markup.indexOf('Add a comment...')
+    expect(markup.indexOf('aria-label="Add comment"')).toBeLessThan(
+      markup.indexOf('Existing review context')
     )
+    expect(markup).toContain('lucide-plus')
+    expect(markup).not.toContain('Add a comment...')
     expect(markup).not.toContain('Add a PR comment')
   })
 
-  it('uses the collapsed composer as the empty comments state', () => {
-    const markup = renderToStaticMarkup(
+  it('uses the header plus action as the empty comments state', () => {
+    const markup = renderWithTooltips(
       React.createElement(PRCommentsList, {
         comments: [],
         commentsLoading: false,
@@ -137,7 +197,9 @@ describe('PRCommentsList', () => {
       })
     )
 
-    expect(markup).toContain('Start conversation...')
+    expect(markup).toContain('aria-label="Start conversation"')
+    expect(markup).toContain('lucide-plus')
+    expect(markup).not.toContain('Start conversation...')
     expect(markup).not.toContain('No comments yet')
     expect(markup).not.toContain('Add a comment')
     expect((markup.match(/lucide-message-square/g) ?? []).length).toBe(1)

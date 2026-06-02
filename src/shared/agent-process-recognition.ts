@@ -1,4 +1,4 @@
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './types'
 
@@ -32,7 +32,7 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   AGENT_TYPE_IDS.add(agent)
   for (const candidate of [
     config.expectedProcess,
-    config.detectCmd,
+    ...getTuiAgentDetectCommands(config),
     firstCommandToken(config.launchCmd)
   ]) {
     const normalized = normalizeProcessName(candidate)

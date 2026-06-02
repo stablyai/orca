@@ -109,23 +109,62 @@ function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): Dae
   )
 }
 
+function isExistingDirectory(path: string | undefined): path is string {
+  if (!path) {
+    return false
+  }
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function repairDaemonCwd(): string | null {
+  const candidates = [
+    process.env.ORCA_USER_DATA_PATH,
+    getDefaultCwd(),
+    process.platform === 'win32' ? 'C:\\' : '/'
+  ]
+  for (const candidate of candidates) {
+    if (isExistingDirectory(candidate)) {
+      try {
+        process.chdir(candidate)
+        return candidate
+      } catch {
+        // Try the next stable cwd candidate.
+      }
+    }
+  }
+  return null
+}
+
+function preflightDaemonCwd(): void {
+  let daemonCwd = '<unavailable>'
+  try {
+    daemonCwd = process.cwd()
+    if (isExistingDirectory(daemonCwd)) {
+      return
+    }
+  } catch {
+    // Recover below; process.cwd() throws after the original cwd is deleted.
+  }
+
+  // Why: older detached daemons were launched from the repo cwd. If that
+  // worktree disappears, node-pty's macOS spawn-helper can fail even when the
+  // requested terminal cwd is valid.
+  if (repairDaemonCwd()) {
+    return
+  }
+  throw formatMissingDaemonPathError('cwd', daemonCwd)
+}
+
 function preflightMacNodePtySpawnEnvironment(): void {
   if (process.platform !== 'darwin') {
     return
   }
 
-  let daemonCwd: string
-  try {
-    daemonCwd = process.cwd()
-    if (!statSync(daemonCwd).isDirectory()) {
-      throw formatMissingDaemonPathError('cwd', daemonCwd)
-    }
-  } catch (error) {
-    if (error instanceof DaemonProtocolError) {
-      throw error
-    }
-    throw formatMissingDaemonPathError('cwd', '<unavailable>')
-  }
+  preflightDaemonCwd()
 
   let candidates: string[]
   try {

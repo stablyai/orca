@@ -1383,10 +1383,11 @@ export function registerWorktreeHandlers(
   ipcMain.handle(
     'worktrees:updateMeta',
     (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
-      const meta = store.setWorktreeMeta(
-        args.worktreeId,
-        stripOrcaProvenanceMetaUpdates(args.updates)
-      )
+      const updates =
+        args.updates.displayName !== undefined
+          ? { ...args.updates, pendingFirstAgentMessageRename: false }
+          : args.updates
+      const meta = store.setWorktreeMeta(args.worktreeId, stripOrcaProvenanceMetaUpdates(updates))
       // Do NOT call notifyWorktreesChanged here. The renderer applies meta
       // updates optimistically before calling this IPC, so a notification
       // would trigger a redundant fetchWorktrees round-trip that bumps

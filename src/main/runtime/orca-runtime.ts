@@ -73,6 +73,7 @@ import type {
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
+import { clampLinearPlainIssueListLimit } from '../../shared/linear-issue-list-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -7600,6 +7601,7 @@ export class OrcaRuntimeService {
     activate?: boolean
     setupDecision?: 'run' | 'skip' | 'inherit'
     createdWithAgent?: TuiAgent
+    pendingFirstAgentMessageRename?: boolean
     startup?: WorktreeStartupLaunch
     startupDraft?: string
     startupDraftPaste?: WorktreeStartupDraftPaste
@@ -7975,6 +7977,9 @@ export class OrcaRuntimeService {
         : {}),
       ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
       ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
+      ...(args.pendingFirstAgentMessageRename === true && effectiveCreatedWithAgent
+        ? { pendingFirstAgentMessageRename: true }
+        : {}),
       ...(args.comment !== undefined ? { comment: args.comment } : {}),
       ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
       ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
@@ -8236,6 +8241,7 @@ export class OrcaRuntimeService {
       runHooks?: boolean
       setupDecision?: 'run' | 'skip' | 'inherit'
       createdWithAgent?: TuiAgent
+      pendingFirstAgentMessageRename?: boolean
       startup?: WorktreeStartupLaunch
       startupDraftPaste?: WorktreeStartupDraftPaste
     }
@@ -8270,7 +8276,10 @@ export class OrcaRuntimeService {
         ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
         ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus as never } : {}),
         ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
-        ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {})
+        ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
+        ...(args.pendingFirstAgentMessageRename === true
+          ? { pendingFirstAgentMessageRename: true }
+          : {})
       },
       repo,
       this.store as unknown as Store,
@@ -8830,7 +8839,13 @@ export class OrcaRuntimeService {
     }
     this.store.setWorktreeMeta(
       worktree.id,
-      stripOrcaProvenanceMetaUpdates(omitUndefinedProperties(metaUpdates))
+      stripOrcaProvenanceMetaUpdates(
+        omitUndefinedProperties(
+          metaUpdates.displayName !== undefined
+            ? { ...metaUpdates, pendingFirstAgentMessageRename: false }
+            : metaUpdates
+        )
+      )
     )
     // Why: unlike renderer-initiated optimistic updates, CLI callers need an
     // explicit push so the editor refreshes metadata changed outside the UI.
@@ -12459,7 +12474,7 @@ export class OrcaRuntimeService {
     limit = 20,
     workspaceId?: LinearWorkspaceSelection
   ): ReturnType<typeof listLinearIssues> {
-    return listLinearIssues(filter, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearIssues(filter, clampLinearPlainIssueListLimit(limit), workspaceId)
   }
 
   linearCreateIssue(
@@ -12517,53 +12532,68 @@ export class OrcaRuntimeService {
   linearListProjects(
     query?: string,
     limit = 20,
-    workspaceId?: LinearWorkspaceSelection
+    workspaceId?: LinearWorkspaceSelection,
+    force?: boolean
   ): ReturnType<typeof listLinearProjects> {
-    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
-  linearGetProject(id: string, workspaceId: string): ReturnType<typeof getLinearProject> {
-    return getLinearProject(id, workspaceId)
+  linearGetProject(
+    id: string,
+    workspaceId: string,
+    force?: boolean
+  ): ReturnType<typeof getLinearProject> {
+    return getLinearProject(id, workspaceId, force)
   }
 
   linearListProjectIssues(
     projectId: string,
     limit = 20,
-    workspaceId: string
+    workspaceId: string,
+    force?: boolean
   ): ReturnType<typeof listLinearProjectIssues> {
-    return listLinearProjectIssues(projectId, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearProjectIssues(projectId, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
   linearListCustomViews(
     model: LinearCustomViewModel,
     limit = 20,
-    workspaceId?: LinearWorkspaceSelection
+    workspaceId?: LinearWorkspaceSelection,
+    force?: boolean
   ): ReturnType<typeof listLinearCustomViews> {
-    return listLinearCustomViews(model, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearCustomViews(model, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
   linearGetCustomView(
     viewId: string,
     model: LinearCustomViewModel,
-    workspaceId: string
+    workspaceId: string,
+    force?: boolean
   ): ReturnType<typeof getLinearCustomView> {
-    return getLinearCustomView(viewId, model, workspaceId)
+    return getLinearCustomView(viewId, model, workspaceId, force)
   }
 
   linearListCustomViewIssues(
     viewId: string,
     limit = 20,
-    workspaceId: string
+    workspaceId: string,
+    force?: boolean
   ): ReturnType<typeof listLinearCustomViewIssues> {
-    return listLinearCustomViewIssues(viewId, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearCustomViewIssues(viewId, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
   linearListCustomViewProjects(
     viewId: string,
     limit = 20,
-    workspaceId: string
+    workspaceId: string,
+    force?: boolean
   ): ReturnType<typeof listLinearCustomViewProjects> {
-    return listLinearCustomViewProjects(viewId, Math.min(Math.max(1, limit), 50), workspaceId)
+    return listLinearCustomViewProjects(
+      viewId,
+      Math.min(Math.max(1, limit), 50),
+      workspaceId,
+      force
+    )
   }
 
   linearTeamStates(teamId: string, workspaceId?: string): ReturnType<typeof getLinearTeamStates> {

@@ -3,7 +3,8 @@ import { stat } from 'fs/promises'
 import { join, posix, win32 } from 'path'
 import {
   branchHasNoUnmergedChangesOnAnyTarget,
-  getBranchCleanupTargetRefs
+  getBranchCleanupTargetRefs,
+  refreshBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import type {
@@ -622,6 +623,7 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
 ): Promise<boolean> {
   const runGit = (args: string[]) => gitExecFileAsync(args, { cwd: repoPath })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
+  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
   // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch
   // whose changes are already on the base ref. Delete only when Git can prove
   // the branch contributes no tree changes to that base.

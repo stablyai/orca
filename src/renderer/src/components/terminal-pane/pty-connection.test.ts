@@ -2759,42 +2759,18 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('restores visible pane PTY bytes from the main snapshot when the document was hidden', async () => {
-    const visibilityListeners = new Set<() => void>()
-    const documentStub = {
-      visibilityState: 'hidden' as DocumentVisibilityState,
-      addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
-        if (type === 'visibilitychange' && typeof listener === 'function') {
-          visibilityListeners.add(listener as () => void)
-        }
-      }),
-      removeEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
-        if (type === 'visibilitychange' && typeof listener === 'function') {
-          visibilityListeners.delete(listener as () => void)
-        }
-      })
+  it('routes visible pane PTY bytes through the background scheduler when the document is hidden', async () => {
+    ;(globalThis as { document?: Pick<Document, 'visibilityState'> }).document = {
+      visibilityState: 'hidden'
     }
-    ;(globalThis as { document?: Document }).document = documentStub as unknown as Document
     const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-id')
-    const capturedDataCallback: {
-      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
-    } = { current: null }
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
-    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
-      typeof vi.fn
-    >
-    const backgroundedOutput = 'backgrounded document output\r\n'
-    getMainBufferSnapshot.mockResolvedValue({
-      data: backgroundedOutput,
-      cols: 120,
-      rows: 40,
-      seq: backgroundedOutput.length
-    })
 
     const pane = createPane(1)
     const manager = createManager(1)
@@ -2808,73 +2784,15 @@ describe('connectPanePty', () => {
 
     expect(capturedDataCallback.current).not.toBeNull()
     vi.useFakeTimers()
-    capturedDataCallback.current?.(backgroundedOutput, {
-      seq: backgroundedOutput.length,
-      rawLength: backgroundedOutput.length
-    })
+    capturedDataCallback.current?.('backgrounded document output\r\n')
 
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(backgroundedOutput, expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      'backgrounded document output\r\n',
+      expect.any(Function)
+    )
 
     vi.advanceTimersByTime(50)
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(backgroundedOutput, expect.any(Function))
-
-    documentStub.visibilityState = 'visible'
-    for (const listener of visibilityListeners) {
-      listener()
-    }
-    await flushAsyncTicks(20)
-
-    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
-    expect(pane.terminal.write).toHaveBeenCalledWith(backgroundedOutput, expect.any(Function))
-  })
-
-  it('restores ordinary hidden pane output from the main snapshot on foreground output', async () => {
-    const { connectPanePty } = await import('./pty-connection')
-    const transport = createMockTransport('pty-id')
-    const capturedDataCallback: {
-      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
-    } = { current: null }
-    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-      capturedDataCallback.current = callbacks.onData ?? null
-      return 'pty-id'
-    })
-    transportFactoryQueue.push(transport)
-    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
-      typeof vi.fn
-    >
-    const hidden = 'hidden output\r\n'
-    const live = 'visible-after\r\n'
-    getMainBufferSnapshot.mockResolvedValue({
-      data: `${hidden}${live}`,
-      cols: 120,
-      rows: 40,
-      seq: hidden.length + live.length
-    })
-
-    const pane = createPane(1)
-    const manager = createManager(1)
-    const deps = createDeps({
-      isVisibleRef: { current: false }
-    })
-    const disposable = connectPanePty(pane as never, manager as never, deps as never)
-    await flushAsyncTicks(6)
-
-    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
-    vi.useFakeTimers()
-    vi.advanceTimersByTime(50)
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
-
-    ;(deps.isVisibleRef as { current: boolean }).current = true
-    capturedDataCallback.current?.(live, {
-      seq: hidden.length + live.length,
-      rawLength: live.length
-    })
-    await flushAsyncTicks(20)
-
-    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
-    expect(pane.terminal.write).toHaveBeenCalledWith(`${hidden}${live}`, expect.any(Function))
-    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
-    disposable.dispose()
+    expect(pane.terminal.write).toHaveBeenCalledWith('backgrounded document output\r\n')
   })
 
   it('keeps hidden Codex telemetry startup output parsing briefly', async () => {
@@ -2986,7 +2904,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('answers mode 2031 in hidden snapshot-backed chunks skipped from xterm parsing', async () => {
+  it('writes mode 2031 through hidden xterm parsing', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -3009,10 +2927,12 @@ describe('connectPanePty', () => {
     )
     await flushAsyncTicks(6)
 
+    vi.useFakeTimers()
     capturedDataCallback.current?.('\x1b[?2031h')
+    vi.advanceTimersByTime(50)
 
-    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;2n')
-    expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b[?2031h', expect.any(Function))
+    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[?997;2n')
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?2031h')
 
     binding.dispose()
   })

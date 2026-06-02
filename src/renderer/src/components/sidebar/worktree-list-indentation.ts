@@ -1,6 +1,8 @@
 export const SIDEBAR_TREE_INDENT = 18
-export const WORKTREE_SECTION_HEADER_PADDING_LEFT = 6
 export const PROJECT_GROUP_HEADER_BASE_PADDING = 10
+// Why: workspace/status headers and project headers occupy the same sidebar
+// row role, so their titles should not shift when switching grouping modes.
+export const WORKTREE_SECTION_HEADER_PADDING_LEFT = PROJECT_GROUP_HEADER_BASE_PADDING
 export const PROJECT_GROUP_HEADER_INDENT = 10
 export const MAX_PROJECT_GROUP_HEADER_DEPTH = 6
 

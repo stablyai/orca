@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { EyeOff } from 'lucide-react'
 import {
   FEATURE_WALL_SETUP_STEP_IDS,
   getFirstIncompleteFeatureWallSetupStepId,
@@ -12,8 +13,11 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { FeatureWallSetupChecklist } from '../feature-wall/FeatureWallSetupChecklist'
+import { SetupGuideProgressRing } from './SetupGuideProgressRing'
 import { useSetupGuideProgress } from './use-setup-guide-progress'
 import { useSetupGuideOpenCloseTelemetry } from './use-setup-guide-telemetry'
 
@@ -21,6 +25,7 @@ export default function SetupGuideModal(): JSX.Element | null {
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
+  const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
   const isOpen = activeModal === 'setup-guide'
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
   const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(
@@ -98,6 +103,10 @@ export default function SetupGuideModal(): JSX.Element | null {
     }
   }
 
+  const handleHideFromSidebar = useCallback((): void => {
+    setSetupGuideSidebarDismissed(true)
+  }, [setSetupGuideSidebarDismissed])
+
   if (!isOpen) {
     return null
   }
@@ -108,18 +117,38 @@ export default function SetupGuideModal(): JSX.Element | null {
         className="grid h-[min(780px,calc(100vh-2rem))] w-[min(1080px,calc(100vw-2rem))] max-w-none grid-rows-[auto_minmax(0,1fr)] gap-0 p-0 sm:max-w-none"
         tabIndex={-1}
       >
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Hide checklist from sidebar"
+              onClick={handleHideFromSidebar}
+              className="absolute right-10 top-3.5 text-muted-foreground"
+            >
+              <EyeOff className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            This will hide the checklist from the sidebar
+          </TooltipContent>
+        </Tooltip>
         <DialogHeader className="gap-1 border-b border-border px-7 py-4">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
             <DialogTitle className="text-lg">Getting started</DialogTitle>
-            <span className="mr-7 font-mono text-xs text-muted-foreground">
-              {progress.coreDoneCount}/{progress.coreTotal}
-            </span>
+            <SetupGuideProgressRing
+              done={progress.coreDoneCount}
+              total={progress.coreTotal}
+              className="text-green-600 dark:text-green-300"
+              sizeClassName="size-5"
+            />
           </div>
           <DialogDescription className="text-sm text-muted-foreground">
             Finish the core workflows that make Orca useful for parallel agent work.
           </DialogDescription>
         </DialogHeader>
-        <div className="scrollbar-sleek min-h-0 overflow-y-auto px-7 py-6">
+        <div className="min-h-0 overflow-hidden px-7 py-6">
           <FeatureWallSetupChecklist
             activeStep={activeStep}
             progress={progress}
