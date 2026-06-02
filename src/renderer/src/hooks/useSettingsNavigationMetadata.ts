@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { useMemo } from 'react'
+import { createElement, useMemo } from 'react'
 // Why: this registry mirrors the Settings sidebar in one neutral module so
 // Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
 // imports; the boundary is enforced by a focused architecture test.
@@ -29,6 +29,8 @@ import {
   TextCursorInput,
   UserCog
 } from 'lucide-react'
+import type { LucideProps } from 'lucide-react'
+import logo from '../../../../resources/logo.svg'
 import type { Repo } from '../../../shared/types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import { useAppStore } from '@/store'
@@ -63,6 +65,16 @@ import { SHORTCUTS_PANE_SEARCH_ENTRIES } from '@/components/settings/shortcuts-s
 import { STATS_PANE_SEARCH_ENTRIES } from '@/components/stats/stats-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { cn } from '@/lib/utils'
+
+function OrcaLogoSettingsIcon({ className }: LucideProps) {
+  return createElement('img', {
+    src: logo,
+    alt: '',
+    'aria-hidden': true,
+    className: cn('object-contain invert dark:invert-0', className)
+  })
+}
 
 export function isWebClientLocation(): boolean {
   return (
@@ -146,7 +158,7 @@ export function buildSettingsNavigationMetadata({
       id: 'setup-guide',
       title: 'Onboarding checklist',
       description: 'Finish the onboarding checklist for core Orca workflows.',
-      icon: ListChecks,
+      icon: OrcaLogoSettingsIcon,
       searchEntries: [
         {
           title: 'Onboarding checklist',

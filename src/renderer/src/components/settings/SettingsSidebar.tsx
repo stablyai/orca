@@ -1,13 +1,8 @@
 import type { RefObject } from 'react'
-import {
-  ArrowLeft,
-  ListChecks,
-  Search,
-  Server,
-  type LucideIcon,
-  type LucideProps
-} from 'lucide-react'
+import { ArrowLeft, Search, Server } from 'lucide-react'
+import logo from '../../../../../resources/logo.svg'
 import type { RepoIcon } from '../../../../shared/repo-icon'
+import type { SettingsNavIcon } from '@/lib/settings-navigation-types'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '../repo/repo-icon'
@@ -20,7 +15,7 @@ import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress
 type NavSection = {
   id: string
   title: string
-  icon: LucideIcon | ((props: LucideProps) => React.JSX.Element)
+  icon: SettingsNavIcon
   badge?: string
 }
 
@@ -92,7 +87,15 @@ function SettingsSetupGuideNavRow({
           : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
       )}
     >
-      <ListChecks className="size-4 shrink-0" />
+      <img
+        src={logo}
+        alt=""
+        aria-hidden="true"
+        className={cn(
+          'size-4 shrink-0 object-contain invert dark:invert-0',
+          setupActive ? 'opacity-75' : 'opacity-45'
+        )}
+      />
       <span className="truncate">Onboarding checklist</span>
       <SetupGuideProgressRing
         done={progress.doneCount}
