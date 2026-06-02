@@ -201,7 +201,7 @@ export function CompactAgentSummaryButton({
                   <AgentStateDot state={group.state} size="sm" />
                   {/* Why: same-state agent identities read as one status cluster;
                       overlapping them saves width without merging different states. */}
-                  <span className="inline-flex shrink-0 items-center -space-x-1 pl-0.5">
+                  <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
                     {iconAgents.map((agent) => (
                       <span
                         key={agent.paneKey}
