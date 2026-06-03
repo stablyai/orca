@@ -65,6 +65,16 @@ class FakeProvider extends EventEmitter {
   unref = vi.fn()
 }
 
+function pendingConnectThatRejectsOnAbort(signal?: AbortSignal): Promise<never> {
+  return new Promise((_resolve, reject) => {
+    signal?.addEventListener(
+      'abort',
+      () => reject(new Error('native macOS helper app startup was cancelled')),
+      { once: true }
+    )
+  })
+}
+
 async function loadClientModule() {
   vi.resetModules()
   return await import('./macos-native-provider-client')
@@ -190,7 +200,9 @@ describe('MacOSNativeProviderClient', () => {
   it('rejects helper spawn errors before socket connection and removes temp state', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
-    connectMacOSProviderSocketMock.mockReturnValue(new Promise(() => {}))
+    connectMacOSProviderSocketMock.mockImplementation((_path, _timeout, signal?: AbortSignal) =>
+      pendingConnectThatRejectsOnAbort(signal)
+    )
 
     const call = client.capabilities()
     await vi.waitFor(() => expect(providers).toHaveLength(1))
@@ -211,7 +223,9 @@ describe('MacOSNativeProviderClient', () => {
   it('rejects helper exits before socket connection and aborts the pending connect', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
-    connectMacOSProviderSocketMock.mockReturnValue(new Promise(() => {}))
+    connectMacOSProviderSocketMock.mockImplementation((_path, _timeout, signal?: AbortSignal) =>
+      pendingConnectThatRejectsOnAbort(signal)
+    )
 
     const call = client.capabilities()
     await vi.waitFor(() => expect(providers).toHaveLength(1))

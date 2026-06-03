@@ -198,7 +198,7 @@ export class MacOSNativeProviderClient {
     try {
       const socket = await Promise.race([
         connectMacOSProviderSocket(this.socketPath, HELPER_CONNECT_TIMEOUT_MS, connectAbort.signal),
-        providerFailure.promise.finally(() => connectAbort.abort())
+        providerFailure.promise
       ])
       providerFailure.cleanup()
       socket.setEncoding('utf8')
