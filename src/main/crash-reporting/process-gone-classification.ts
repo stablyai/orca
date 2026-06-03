@@ -8,6 +8,7 @@ const RECOVERABLE_UTILITY_SERVICE_NAMES = new Set([
   'network.mojom.NetworkService'
 ])
 const RECOVERABLE_CHILD_PROCESS_REASONS = new Set(['abnormal-exit', 'crashed', 'killed'])
+const NON_RECOVERABLE_RENDERER_REASONS = new Set(['integrity-failure', 'launch-failed'])
 
 function isWindowsControlTerminationExitCode(exitCode: number | null): boolean {
   if (exitCode === null) {
@@ -89,6 +90,11 @@ export function shouldRecoverRendererAfterProcessGone({
   expectedTeardown: ExpectedTeardownScope
 }): boolean {
   if (expectedTeardown === 'app-shutdown') {
+    return false
+  }
+  // Why: these mean Chromium could not start or trust the renderer process;
+  // retrying the same BrowserWindow load can loop indefinitely on Windows.
+  if (NON_RECOVERABLE_RENDERER_REASONS.has(reason)) {
     return false
   }
   return !(reason === 'killed' && expectedTeardown === 'renderer-reload')
