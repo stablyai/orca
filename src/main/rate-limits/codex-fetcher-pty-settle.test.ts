@@ -18,6 +18,11 @@ vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
+// Auth gate is covered separately; these tests assume a signed-in Codex.
+vi.mock('./codex-auth-presence', () => ({
+  codexAuthExists: vi.fn(() => true)
+}))
+
 import { fetchCodexRateLimits } from './codex-fetcher'
 
 function makeDisposable() {
