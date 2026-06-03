@@ -192,6 +192,20 @@ describe('keybindings', () => {
     // browser.reload, but the two live in different scopes (tabs vs browser),
     // so customizing tab.rename to its default must not flag a conflict.
     expect(findKeybindingConflicts('darwin', { 'tab.rename': ['Mod+R'] })).toEqual([])
+    // Why: tab/workspace rename share the same active workspace keydown path,
+    // so Settings must reject user overrides that make one shadow the other.
+    expect(findKeybindingConflicts('darwin', { 'workspace.rename': ['Mod+R'] })).toEqual([
+      {
+        binding: 'Mod+R',
+        actionIds: ['workspace.rename', 'tab.rename']
+      }
+    ])
+    expect(findKeybindingConflicts('darwin', { 'tab.rename': ['Mod+Alt+R'] })).toEqual([
+      {
+        binding: 'Mod+Alt+R',
+        actionIds: ['workspace.rename', 'tab.rename']
+      }
+    ])
   })
 
   it('keeps equalize pane sizes unassigned until users customize it', () => {

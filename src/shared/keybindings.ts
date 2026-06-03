@@ -236,6 +236,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'Rename worktree',
     group: 'Global',
     scope: 'global',
+    conflictGroup: 'workspace-shell',
     searchKeywords: ['shortcut', 'global', 'worktree', 'rename', 'workspace', 'title'],
     // Why: macOS only. On Windows/Linux Ctrl+Alt+R has no safe default, and the
     // chord families there (Ctrl+R reverse-search, Ctrl+Shift+R reload) are
@@ -426,6 +427,7 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     title: 'Rename active tab',
     group: 'Tabs',
     scope: 'tabs',
+    conflictGroup: 'workspace-shell',
     searchKeywords: ['shortcut', 'tab', 'rename', 'title', 'label'],
     // Why: macOS only. Cmd+R is free in the app/terminal focus zone (the
     // browser pane owns its own Cmd+R reload). On Windows/Linux Ctrl+R is the

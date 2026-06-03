@@ -62,6 +62,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
+import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { DictationController } from './components/dictation/DictationController'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
@@ -1175,7 +1176,8 @@ function App(): React.JSX.Element {
       // app-level mod shortcuts (B, L, Shift+E/F/G) have no panel-level
       // counterpart, so suppressing them here would silently no-op when
       // focus lives inside the floating panel.
-      if (isFloatingWorkspacePanelFocused()) {
+      const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
+      if (floatingWorkspaceFocused) {
         if (
           isFloatingWorkspacePanelShortcut(e, shortcutPlatform, null, keybindings, {
             context,
@@ -1214,7 +1216,7 @@ function App(): React.JSX.Element {
       // focus zone because the browser pane owns its own Cmd+R reload and that
       // focus never reaches this renderer-window handler. Only terminal tabs
       // have an inline title editor, so other active tab types fall through.
-      if (workspaceActive && matchShortcut('tab.rename')) {
+      if (workspaceActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
         const store = useAppStore.getState()
         if (store.activeTabType === 'terminal' && store.activeTabId) {
           e.preventDefault()
@@ -1227,13 +1229,17 @@ function App(): React.JSX.Element {
       // Why: open the active worktree's inline title editor. Open/reveal it
       // first so the card is mounted and visible even when sidebar filters or
       // collapse state would otherwise hide it.
-      if (workspaceActive && matchShortcut('workspace.rename') && activeWorktreeId) {
+      if (
+        workspaceActive &&
+        !floatingWorkspaceFocused &&
+        matchShortcut('workspace.rename') &&
+        activeWorktreeId
+      ) {
         e.preventDefault()
         notifyTerminalCapture('workspace.rename')
         const store = useAppStore.getState()
         store.setSidebarOpen(true)
-        store.revealWorktreeInSidebar(activeWorktreeId)
-        store.setRenamingWorktreeId(activeWorktreeId)
+        requestScrollToCurrentWorkspaceRevealAndRename()
         return
       }
 
