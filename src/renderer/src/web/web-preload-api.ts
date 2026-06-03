@@ -567,6 +567,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     agentStatus: {
       onSet: () => noopUnsubscribe,
+      onClear: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),
       inferInterrupt: () => Promise.resolve(false),
       onMigrationUnsupported: () => noopUnsubscribe,
