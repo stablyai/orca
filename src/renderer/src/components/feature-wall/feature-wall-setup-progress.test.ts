@@ -115,11 +115,23 @@ describe('getFeatureWallSetupProgress', () => {
     expect(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)).toBe('split-terminal')
   })
 
-  it('does not mark the step complete from split-pane interaction count alone', () => {
+  it('marks the step complete from durable terminal-pane split interaction state', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         featureInteractions: {
           'terminal-pane-split': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        }
+      })
+    )
+
+    expect(progress.stepDone['split-terminal']).toBe(true)
+  })
+
+  it('does not mark the step complete from generic pane interaction state', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          'terminal-panes': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
         }
       })
     )
@@ -153,6 +165,33 @@ describe('getFeatureWallSetupProgress', () => {
     )
 
     expect(progress.stepDone['split-terminal']).toBe(true)
+  })
+
+  it('keeps the step complete after the split tab closes when the split was recorded', () => {
+    const withSplit = getFeatureWallSetupProgress(
+      makeInput({
+        worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
+        tabsByWorktree: {
+          'worktree-1': [{ id: 'tab-1', title: 'Terminal' }] as never
+        },
+        terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() }
+      })
+    )
+
+    expect(withSplit.stepDone['split-terminal']).toBe(true)
+
+    const afterClosingSplitTab = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          'terminal-pane-split': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        },
+        worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
+        tabsByWorktree: { 'worktree-1': [] },
+        terminalLayoutsByTabId: {}
+      })
+    )
+
+    expect(afterClosingSplitTab.stepDone['split-terminal']).toBe(true)
   })
 
   it('ignores split layouts for tabs that do not belong to a known worktree', () => {

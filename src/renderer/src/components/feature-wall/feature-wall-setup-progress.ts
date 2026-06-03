@@ -1,4 +1,5 @@
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
+import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
@@ -87,7 +88,9 @@ export function getFeatureWallSetupProgress(
     notifications:
       input.settings?.notifications.enabled === true &&
       input.settings.notifications.agentTaskComplete === true,
-    'split-terminal': hasSplitTerminalInAnyWorktree(input),
+    'split-terminal':
+      hasFeatureInteraction(input.featureInteractions, 'terminal-pane-split') ||
+      hasSplitTerminalInAnyWorktree(input),
     'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
     'task-sources': input.hasConnectedTaskSource,
     'agent-capabilities': agentCapabilitiesDone,

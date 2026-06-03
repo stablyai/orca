@@ -25,6 +25,13 @@ import {
 } from '../../runtime/web-runtime-session'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 
+export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
+  if (!createdTerminal) {
+    return
+  }
+  useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+}
+
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
 
@@ -420,6 +427,7 @@ export function useTabGroupWorkspaceModel({
           return
         }
         const terminal = createTab(worktreeId, newGroupId)
+        recordTerminalTabGroupSplit(terminal)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
         return

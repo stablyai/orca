@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   isWebRuntimeSessionActive: vi.fn(() => false),
   openFile: vi.fn(),
   pinFile: vi.fn(),
+  recordFeatureInteraction: vi.fn(),
   setActiveBrowserTab: vi.fn(),
   setActiveFile: vi.fn(),
   setActiveTab: vi.fn(),
@@ -143,6 +144,7 @@ function resetStore(): void {
     focusGroup: mocks.focusGroup,
     openFile: mocks.openFile,
     pinFile: mocks.pinFile,
+    recordFeatureInteraction: mocks.recordFeatureInteraction,
     setActiveBrowserTab: mocks.setActiveBrowserTab,
     setActiveFile: mocks.setActiveFile,
     setActiveTab: mocks.setActiveTab,
@@ -196,5 +198,20 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     const event = mocks.dispatchEvent.mock.calls[0]?.[0] as CustomEvent<{ tabId: string }>
     expect(event.type).toBe(TOGGLE_TERMINAL_PANE_EXPAND_EVENT)
     expect(event.detail).toEqual({ tabId: 'terminal-1' })
+  })
+
+  it('records terminal split completion when splitting a single terminal tab group', async () => {
+    mocks.createEmptySplitGroup.mockReturnValue('group-2')
+    mocks.createTab.mockReturnValue({ id: 'terminal-2' })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.createSplitGroup('right')
+
+    expect(mocks.createEmptySplitGroup).toHaveBeenCalledWith('wt-1', 'group-1', 'right')
+    expect(mocks.createTab).toHaveBeenCalledWith('wt-1', 'group-2')
+    expect(mocks.recordFeatureInteraction).toHaveBeenCalledWith('terminal-pane-split')
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-2')
+    expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
   })
 })
