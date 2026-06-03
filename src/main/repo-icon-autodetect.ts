@@ -309,7 +309,8 @@ export async function detectRepoIcon({
 /**
  * Detect a repo's icon and its fork upstream together. The upstream is resolved
  * once and reused for the avatar so a fork shows the upstream owner's avatar.
- * Returns a spread-ready slice of `Repo` (keys omitted when absent).
+ * Returns a spread-ready slice of `Repo`. For git repos, `upstream: null`
+ * is a resolved "not a fork" marker and prevents repeated best-effort probes.
  */
 export async function detectRepoIconAndUpstream({
   repoPath,
@@ -319,11 +320,11 @@ export async function detectRepoIconAndUpstream({
   repoPath: string
   kind: RepoKind
   connectionId?: string | null
-}): Promise<{ repoIcon?: RepoIcon; upstream?: GitHubRepositoryIdentity }> {
+}): Promise<{ repoIcon?: RepoIcon; upstream?: GitHubRepositoryIdentity | null }> {
   const upstream = kind === 'git' ? await getRepoUpstream(repoPath, connectionId) : null
   const repoIcon = await detectRepoIcon({ repoPath, kind, connectionId, upstream })
   return {
     ...(repoIcon ? { repoIcon } : {}),
-    ...(upstream ? { upstream } : {})
+    ...(kind === 'git' ? { upstream: upstream ?? null } : {})
   }
 }

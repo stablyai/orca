@@ -162,6 +162,7 @@ type WebGitHubApi = NonNullable<PreloadApi['gh']>
 type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
 type WebGitHubRouteKey =
   | 'repoSlug'
+  | 'repoUpstream'
   | 'prForBranch'
   | 'issue'
   | 'workItem'
@@ -209,6 +210,7 @@ type WebGitHubRouteKey =
   | 'updateIssueTypeBySlug'
 type WebGitHubRuntimeMethod =
   | 'github.repoSlug'
+  | 'github.repoUpstream'
   | 'github.prForBranch'
   | 'github.issue'
   | 'github.workItem'
@@ -309,6 +311,7 @@ type WebKeybindingDocument = {
 
 export const GITHUB_WEB_RPC_METHODS = {
   repoSlug: 'github.repoSlug',
+  repoUpstream: 'github.repoUpstream',
   prForBranch: 'github.prForBranch',
   issue: 'github.issue',
   workItem: 'github.workItem',
@@ -1394,6 +1397,8 @@ function createGitHubApi(): WebGitHubApi {
   const githubApi = {
     viewer: () => Promise.resolve(null),
     repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
+    repoUpstream: (args) =>
+      route<WebGitHubResult<'repoUpstream'>>(GITHUB_WEB_RPC_METHODS.repoUpstream, args),
     prForBranch: (args) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {

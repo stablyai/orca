@@ -606,11 +606,17 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
             continue
           }
+          const detected = await detectRepoIconAndUpstream({
+            repoPath,
+            kind: 'git',
+            connectionId: args.connectionId
+          })
           const repo: Repo = {
             id: randomUUID(),
             path: repoPath,
             displayName: getRepoName(repoPath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
+            ...detected,
             addedAt: Date.now(),
             kind: 'git',
             ...(args.connectionId ? { connectionId: args.connectionId } : {}),
@@ -1055,6 +1061,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'displayName'
             | 'badgeColor'
             | 'repoIcon'
+            | 'upstream'
             | 'hookSettings'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'

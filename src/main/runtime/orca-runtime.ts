@@ -5875,6 +5875,7 @@ export class OrcaRuntimeService {
         | 'displayName'
         | 'badgeColor'
         | 'repoIcon'
+        | 'upstream'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -6117,9 +6118,7 @@ export class OrcaRuntimeService {
           updates.repoIcon = githubAvatarIcon(upstream)
         }
         store.updateRepo(repo.id, updates)
-        if (upstream) {
-          changed = true
-        }
+        changed = true
       }
       if (changed) {
         this.notifier?.reposChanged()

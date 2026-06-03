@@ -698,6 +698,7 @@ export type PreloadApi = {
           | 'displayName'
           | 'badgeColor'
           | 'repoIcon'
+          | 'upstream'
           | 'hookSettings'
           | 'worktreeBaseRef'
           | 'worktreeBasePath'

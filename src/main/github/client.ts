@@ -1425,14 +1425,15 @@ export async function getRepoUpstream(
   repoPath: string,
   connectionId?: string | null
 ): Promise<OwnerRepo | null> {
-  const upstreamRemote = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
-  if (upstreamRemote) {
-    return upstreamRemote
-  }
   const origin = await getOwnerRepo(repoPath, connectionId)
   if (!origin) {
     return null
   }
+  const upstreamRemote = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
+  if (upstreamRemote && !sameOwnerRepo(upstreamRemote, origin)) {
+    return upstreamRemote
+  }
+  await acquire()
   try {
     const { stdout } = await ghExecFileAsync(
       ['repo', 'view', `${origin.owner}/${origin.repo}`, '--json', 'isFork,parent'],
@@ -1449,6 +1450,8 @@ export async function getRepoUpstream(
     return data.isFork && owner && repo ? { owner, repo } : null
   } catch {
     return null
+  } finally {
+    release()
   }
 }
 

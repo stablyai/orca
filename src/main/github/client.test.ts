@@ -93,6 +93,7 @@ vi.mock('./rate-limit', () => ({
 import {
   getPRComments,
   getPRForBranch,
+  getRepoUpstream,
   getWorkItem,
   getPullRequestPushTarget,
   mergePR,
@@ -1412,6 +1413,58 @@ describe('getPRForBranch', () => {
       branchName: 'fix-sidebar'
     })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('resolves a distinct upstream remote as the repo upstream', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+
+    await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
+
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('does not treat a same-repository upstream remote as a fork', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'StablyAI', repo: 'Orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ isFork: false, parent: null })
+    })
+
+    await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
+
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['repo', 'view', 'StablyAI/Orca', '--json', 'isFork,parent'],
+      { cwd: '/repo-root', timeout: 10_000 }
+    )
+  })
+
+  it('does not mark an upstream-only GitHub remote as a fork', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce(null)
+
+    await expect(getRepoUpstream('/repo-root')).resolves.toBeNull()
+
+    expect(getOwnerRepoForRemoteMock).not.toHaveBeenCalled()
+    expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the GitHub parent when no upstream remote is configured', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'tmchow', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce(null)
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        isFork: true,
+        parent: { name: 'orca', owner: { login: 'stablyai' } }
+      })
+    })
+
+    await expect(getRepoUpstream('/repo-root')).resolves.toEqual({
+      owner: 'stablyai',
+      repo: 'orca'
+    })
   })
 
   it('probes additional PR repo candidates when the first lookup is not found', async () => {

@@ -28,6 +28,7 @@ type RepoUpdate = Partial<
     | 'displayName'
     | 'badgeColor'
     | 'repoIcon'
+    | 'upstream'
     | 'hookSettings'
     | 'worktreeBaseRef'
     | 'worktreeBasePath'

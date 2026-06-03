@@ -1830,6 +1830,29 @@ describe('Store', () => {
     expect(store.getRepos()[0]!.repoIcon).toBeUndefined()
   })
 
+  it('updateRepo normalizes and persists repo upstream metadata', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      upstream: { owner: ' stablyai ', repo: ' orca ' }
+    })
+    expect(updated!.upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
+
+    store.updateRepo('r1', { upstream: null })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.upstream).toBeNull()
+  })
+
+  it('getRepo does not expose invalid persisted repo upstream metadata', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: '', repo: 42 } as never }))
+
+    expect(store.getRepo('r1')!.upstream).toBeUndefined()
+    expect(store.getRepos()[0]!.upstream).toBeUndefined()
+  })
+
   it('updateRepo returns null for nonexistent id', async () => {
     const store = await createStore()
     expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
