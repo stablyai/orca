@@ -93,6 +93,8 @@ const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
+const FOREGROUND_ANSI_BURST_IMMEDIATE_CHARS = 64 * 1024
+const FOREGROUND_ANSI_BURST_WINDOW_MS = 16
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 16 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
 // Why: this is only shown if renderer backlog overflowed and main-owned
@@ -1710,12 +1712,32 @@ export function connectPanePty(
       recordTerminalOutput(pane.terminal)
     }
 
-    function isLatencySensitiveForegroundOutput(data: string): boolean {
-      if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
+    let foregroundAnsiBurstStartedAt = Number.NEGATIVE_INFINITY
+    let foregroundAnsiBurstChars = 0
+
+    function isWithinForegroundAnsiBurstBudget(data: string, now: number): boolean {
+      if (!data.includes('\x1b[')) {
+        foregroundAnsiBurstStartedAt = Number.NEGATIVE_INFINITY
+        foregroundAnsiBurstChars = 0
         return true
       }
-      const recentInput =
-        performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+
+      if (now - foregroundAnsiBurstStartedAt > FOREGROUND_ANSI_BURST_WINDOW_MS) {
+        foregroundAnsiBurstStartedAt = now
+        foregroundAnsiBurstChars = 0
+      }
+      foregroundAnsiBurstChars += data.length
+      // Why: OpenTUI-like renderers emit many tiny cursor-addressed frames in
+      // one task; after the first frame budget, they are throughput work.
+      return foregroundAnsiBurstChars <= FOREGROUND_ANSI_BURST_IMMEDIATE_CHARS
+    }
+
+    function isLatencySensitiveForegroundOutput(data: string): boolean {
+      const now = performance.now()
+      if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
+        return isWithinForegroundAnsiBurstBudget(data, now)
+      }
+      const recentInput = now - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
       return (
         recentInput && data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS && data.includes('\x1b[')
       )
