@@ -38,6 +38,8 @@ import AutoRenameBranchHint from '@/components/new-workspace/AutoRenameBranchHin
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 
 type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 
@@ -87,6 +89,9 @@ type NewWorkspaceComposerCardProps = {
   sparsePresets: SparsePreset[]
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
+  injectIssueContent: boolean
+  onInjectIssueContentChange: (value: boolean) => void
+  hasSelectedWorkItem: boolean
 }
 
 const SSH_STATUS_LABELS: Record<SshConnectionStatus, string> = {
@@ -252,7 +257,10 @@ export default function NewWorkspaceComposerCard({
   canUseSparseCheckout,
   sparsePresets,
   sparseSelectedPresetId,
-  onSparseSelectPreset
+  onSparseSelectPreset,
+  injectIssueContent,
+  onInjectIssueContentChange,
+  hasSelectedWorkItem
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
   const openModal = useAppStore((s) => s.openModal)
@@ -495,6 +503,18 @@ export default function NewWorkspaceComposerCard({
               agentTrigger?.focus()
             }}
           />
+          {hasSelectedWorkItem && (
+            <div className="flex items-center space-x-2 mt-2">
+              <Switch
+                id="inject-issue-content"
+                checked={injectIssueContent}
+                onCheckedChange={onInjectIssueContentChange}
+              />
+              <Label htmlFor="inject-issue-content" className="text-sm">
+                Inject issue content into agent chat
+              </Label>
+            </div>
+          )}
         </div>
 
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">

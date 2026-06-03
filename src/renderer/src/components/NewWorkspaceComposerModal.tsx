@@ -233,6 +233,9 @@ function QuickTabBody({
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
+        injectIssueContent={cardProps.injectIssueContent}
+        onInjectIssueContentChange={cardProps.onInjectIssueContentChange}
+        hasSelectedWorkItem={cardProps.hasSelectedWorkItem}
       />
       <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
     </>

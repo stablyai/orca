@@ -1018,7 +1018,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedGitLabMR,
     linkedGitLabIssue,
     startup,
-    pendingFirstAgentMessageRename
+    pendingFirstAgentMessageRename,
+    injectIssueContent
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -1064,7 +1065,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
+            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+            ...(injectIssueContent !== undefined ? { injectIssueContent } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -1094,6 +1096,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
                     ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+                    ...(injectIssueContent !== undefined ? { injectIssueContent } : {}),
                     ...(startup
                       ? {
                           startupCommand: startup.command,

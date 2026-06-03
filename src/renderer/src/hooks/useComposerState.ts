@@ -222,6 +222,9 @@ export type ComposerCardProps = {
   /** ID of the selected sparse preset. Null means sparse checkout is off. */
   sparseSelectedPresetId: string | null
   onSparseSelectPreset: (preset: SparsePreset | null) => void
+  injectIssueContent: boolean
+  onInjectIssueContentChange: (value: boolean) => void
+  hasSelectedWorkItem: boolean
 }
 
 export type UseComposerStateResult = {
@@ -236,6 +239,8 @@ export type UseComposerStateResult = {
   submitQuick: (agent: TuiAgent | null) => Promise<void>
   /** Invoked by the Enter handler to re-check whether submission should fire. */
   createDisabled: boolean
+  injectIssueContent: boolean
+  setInjectIssueContent: (value: boolean | null) => void
 }
 
 // Why: both the full-page TaskPage composer and the Cmd+J modal can be
@@ -481,6 +486,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [linkItemsLoading, setLinkItemsLoading] = useState(false)
   const [linkDirectItem, setLinkDirectItem] = useState<GitHubWorkItem | null>(null)
   const [linkDirectLoading, setLinkDirectLoading] = useState(false)
+  const [injectIssueContent, setInjectIssueContent] = useState<boolean | null>(null)
 
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
@@ -752,6 +758,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     () => normalizeGitHubLinkQuery(linkDebouncedQuery),
     [linkDebouncedQuery]
   )
+
+  const effectiveInjectIssueContent = useMemo(() => {
+    if (injectIssueContent !== null) {
+      return injectIssueContent
+    }
+    const preference = settings?.issueContentInjection ?? 'always'
+    return preference === 'always'
+  }, [injectIssueContent, settings?.issueContentInjection])
 
   const filteredLinkItems = useMemo(() => {
     if (normalizedLinkQuery.directNumber !== null) {
@@ -1957,9 +1971,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         resolvedInitialWorkspaceStatus,
         linkedGitLabMR ?? undefined,
         linkedGitLabIssue ?? undefined,
-        undefined,
-        pendingFirstAgentMessageRename
-      )
+          undefined,
+          pendingFirstAgentMessageRename,
+          effectiveInjectIssueContent
+        )
       const worktree = result.worktree
 
       const trimmedNote = note.trim()
@@ -2082,7 +2097,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     tuiAgent,
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
-    workspaceSeedName
+    workspaceSeedName,
+    effectiveInjectIssueContent
   ])
 
   const submitQuick = useCallback(
@@ -2199,7 +2215,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           linkedGitLabMR ?? undefined,
           linkedGitLabIssue ?? undefined,
           undefined,
-          pendingFirstAgentMessageRename
+          pendingFirstAgentMessageRename,
+          effectiveInjectIssueContent
         )
         const worktree = result.worktree
 
@@ -2364,7 +2381,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       commitHookCheckIfCurrent,
       loadHookCheckForRepo,
       setupConfig,
-      setupPolicy
+      setupPolicy,
+      effectiveInjectIssueContent
     ]
   )
 
@@ -2450,7 +2468,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     canUseSparseCheckout: selectedRepoIsGit && !selectedRepo?.connectionId,
     sparsePresets,
     sparseSelectedPresetId,
-    onSparseSelectPreset: handleSparseSelectPreset
+    onSparseSelectPreset: handleSparseSelectPreset,
+    injectIssueContent: effectiveInjectIssueContent,
+    onInjectIssueContentChange: setInjectIssueContent,
+    hasSelectedWorkItem: linkedWorkItem !== null
   }
 
   return {
@@ -2461,6 +2482,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     nameInputRef,
     submit,
     submitQuick,
-    createDisabled
+    createDisabled,
+    injectIssueContent: effectiveInjectIssueContent,
+    setInjectIssueContent
   }
 }
