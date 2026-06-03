@@ -1921,6 +1921,9 @@ export type FloatingTerminalCwdRequest = {
   requireTrusted?: boolean
 }
 
+/** Controls whether issue content is injected into agent chats after worktree creation. */
+export type IssueContentInjectionPreference = 'always' | 'never' | 'ask'
+
 export type GlobalSettings = {
   workspaceDir: string
   nestWorkspaces: boolean
@@ -2289,6 +2292,8 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+  /** Controls whether issue content is injected into agent chats after worktree creation. */
+  issueContentInjection?: IssueContentInjectionPreference
 }
 
 export type OrcaWorkspaceLayout = {
