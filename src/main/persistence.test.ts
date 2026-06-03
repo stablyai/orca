@@ -404,6 +404,56 @@ describe('Store', () => {
     expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
   })
 
+  it('recovers a close timestamp when closed onboarding omits the closedAt key', async () => {
+    // Why: a persisted block missing `closedAt` entirely (vs an explicit null)
+    // must still stay closed via outcome recovery, guarding the
+    // `'closedAt' in raw` sanitizer branch separately from the null case.
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).not.toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('does not mutate gate fields for a consistent closed-onboarding existing user', async () => {
+    // Why: the gate must be idempotent. A user already persisted as
+    // closed+completed must round-trip unchanged — the backfill path must not
+    // fire and stomp the real closedAt with a fresh Date.now() each launch.
+    const consistent = {
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 123,
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: true
+      }
+    }
+    writeDataFile(consistent)
+
+    const store = await createStore()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+
+    store.flush()
+    const persisted = readDataFile() as typeof consistent
+
+    // Flushing the loaded state preserves the persisted gate fields verbatim.
+    expect(persisted.onboarding.closedAt).toBe(123)
+    expect(persisted.onboarding.outcome).toBe('completed')
+    expect(persisted.ui.setupGuideSidebarDismissed).toBe(true)
+  })
+
   it.each([
     [4, 3],
     [5, 4],
