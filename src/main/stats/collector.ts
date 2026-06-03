@@ -2,14 +2,14 @@ import { app } from 'electron'
 import { readFileSync, mkdirSync, existsSync, renameSync } from 'fs'
 import { join, dirname } from 'path'
 import type { StatsSummary } from '../../shared/types'
-import { writeJsonInChunks } from './stats-json-writer'
+import { writeUtf8FileInChunksSync } from '../../shared/utf8-file-writer'
 import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 
 const STATS_SCHEMA_VERSION = 1
 // Why 1000 (was 10000): the events array is a bounded "fun stats" log. A smaller
 // cap bounds the JSON written on each save which, together with the chunked write
 // in writeToDiskSync, keeps Orca clear of an Electron/Node abort when encoding a
-// very large string to UTF-8 (see writeJsonInChunks).
+// very large string to UTF-8 (see writeUtf8FileInChunksSync).
 const MAX_EVENTS = 1_000
 // Why: countedPRs is a deduplication registry that grows with every PR created
 // through Orca. Without a cap, a heavily-used instance accumulates thousands of
@@ -273,7 +273,7 @@ export class StatsCollector {
     // Why unique temp file: same race-safe pattern as persistence.ts:120 —
     // synchronous flushes can race the debounced writer during shutdown.
     const tmpFile = `${statsFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeJsonInChunks(tmpFile, JSON.stringify(data))
+    writeUtf8FileInChunksSync(tmpFile, JSON.stringify(data))
     renameSync(tmpFile, statsFile)
   }
 }
