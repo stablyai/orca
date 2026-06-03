@@ -160,4 +160,43 @@ describe('AddRepoLocalStartStep', () => {
       root.unmount()
     })
   })
+
+  it('keeps More options mounted while closing so it can animate out', async () => {
+    const { container, root } = await renderLocalStartStepDom(false)
+    const toggle = findButton(container, 'More options')
+    const controlledId = toggle.getAttribute('aria-controls')
+    if (!controlledId) {
+      throw new Error('More options control is missing aria-controls')
+    }
+
+    expect(document.getElementById(controlledId)).toBeNull()
+
+    await act(async () => {
+      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const openPanel = document.getElementById(controlledId)
+    expect(openPanel).not.toBeNull()
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(findButton(container, 'Clone from URL').disabled).toBe(false)
+
+    await act(async () => {
+      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    const closingPanel = document.getElementById(controlledId)
+    expect(closingPanel).not.toBeNull()
+    expect(closingPanel?.getAttribute('aria-hidden')).toBe('true')
+    expect(findButton(container, 'Clone from URL').disabled).toBe(true)
+
+    await act(async () => {
+      closingPanel?.dispatchEvent(new Event('transitionend', { bubbles: true }))
+    })
+
+    expect(document.getElementById(controlledId)).toBeNull()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })
