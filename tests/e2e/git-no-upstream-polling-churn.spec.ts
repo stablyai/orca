@@ -3,6 +3,11 @@ import { existsSync, readFileSync, realpathSync } from 'fs'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 
+// Repro command:
+//   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/git-no-upstream-polling-churn.spec.ts --config tests/playwright.config.ts --project electron-headless --reporter=json
+// Trigger: active worktree branch "Initi-Project" has no configured upstream
+// and no same-name origin ref, then the source-control poller runs for 7.2s.
+
 type DiagnosticsStatus = {
   localFileEnabled: boolean
   bundleEnabled: boolean

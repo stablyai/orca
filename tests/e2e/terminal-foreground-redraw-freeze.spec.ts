@@ -5,6 +5,14 @@ import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
 
+// Repro commands:
+//   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "active OpenTUI-style"
+//   git clone https://github.com/anomalyco/opencode.git .tmp/opencode
+//   node tests/e2e/capture-opencode-tui-repro.mjs
+//   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-foreground-redraw-freeze.spec.ts --config tests/playwright.config.ts --project electron-headless -g "captured OpenCode/OpenTUI" --reporter=json
+// The captured replay uses an artificial OpenCode source-tree harness that
+// imports OpenCode's spinner frames and emits real OpenTUI <=2KB redraw chunks.
+
 type SchedulerDebugSnapshot = {
   deferredForegroundEnqueueCount: number
   foregroundWriteCount: number
@@ -194,7 +202,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
     const frames = loadCapturedOpenCodeSmallRedrawFrames()
     test.skip(
       frames.length === 0,
-      `OpenCode PTY capture missing; generate ${OPENCODE_CAPTURE_PATH} from anomalyco/opencode first`
+      `OpenCode PTY capture missing; run "git clone https://github.com/anomalyco/opencode.git .tmp/opencode" then "node tests/e2e/capture-opencode-tui-repro.mjs" to generate ${OPENCODE_CAPTURE_PATH}`
     )
 
     await waitForSessionReady(orcaPage)

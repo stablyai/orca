@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+// Repro command:
+//   pnpm exec vitest run --config config/vitest.config.ts src/main/git/status-upstream-probe-churn.test.ts -t "missing-upstream polling churn"
+
 const { existsSyncMock, gitExecFileAsyncMock, readFileMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),

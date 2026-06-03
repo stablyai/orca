@@ -10,6 +10,9 @@ import type * as UseNotificationDispatchModule from './use-notification-dispatch
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
+// Repro command:
+//   pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts -t "OpenTUI-style small ANSI redraw"
+
 // Why: the fresh-spawn and reattach paths now chain pre-signal → spawn →
 // register/settle through multiple microtasks. Tests that previously flushed
 // once with `await Promise.resolve()` must drain a few extra ticks before
