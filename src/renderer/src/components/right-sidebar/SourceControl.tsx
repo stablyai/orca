@@ -4020,9 +4020,31 @@ function SourceControlInner(): React.JSX.Element {
       if (paths.length === 0) {
         return
       }
+      if (area === 'untracked') {
+        // Why: untracked deletes are intentionally one-click in Source Control;
+        // git.discard still enforces path safety in the active provider.
+        void handleRevertAllInArea(area, paths)
+        return
+      }
       setPendingDiscard({ kind: 'area', area, paths })
     },
-    [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
+    [activeWorktreeId, grouped, handleRevertAllInArea, isExecutingBulk, worktreePath]
+  )
+
+  const requestDiscardPaths = useCallback(
+    (area: DiscardAllArea, paths: readonly string[]): void => {
+      if (paths.length === 0) {
+        return
+      }
+      if (area === 'untracked') {
+        // Why: untracked deletes are intentionally one-click in Source Control;
+        // git.discard still enforces path safety in the active provider.
+        void handleRevertAllInArea(area, paths)
+        return
+      }
+      setPendingDiscard({ kind: 'area', area, paths })
+    },
+    [handleRevertAllInArea]
   )
 
   const requestDiscardEntry = useCallback(
@@ -4030,9 +4052,15 @@ function SourceControlInner(): React.JSX.Element {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
+      if (entry.area === 'untracked') {
+        // Why: untracked deletes are intentionally one-click in Source Control;
+        // git.discard still enforces path safety in the active provider.
+        void handleDiscard(entry.path)
+        return
+      }
       setPendingDiscard({ kind: 'entry', entry })
     },
-    [activeWorktreeId, isExecutingBulk, worktreePath]
+    [activeWorktreeId, handleDiscard, isExecutingBulk, worktreePath]
   )
 
   const confirmPendingDiscard = useCallback((): void => {
@@ -4572,13 +4600,7 @@ function SourceControlInner(): React.JSX.Element {
                                   isExecutingBulk={isExecutingBulk}
                                   isCollapsed={collapsedTreeDirs.has(node.key)}
                                   onToggle={() => toggleTreeDir(node.key)}
-                                  onRequestDiscardPaths={(discardArea, paths) =>
-                                    setPendingDiscard({
-                                      kind: 'area',
-                                      area: discardArea,
-                                      paths
-                                    })
-                                  }
+                                  onRequestDiscardPaths={requestDiscardPaths}
                                   onStagePaths={handleStageAllPaths}
                                   onUnstagePaths={handleUnstagePaths}
                                 />

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: the Jira drawer co-locates preview,
    metadata edits, and comments so the task page has one full issue surface. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Jira issue hydration, comments, transitions, priorities, and user options are loaded from provider IPC for the selected issue. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,

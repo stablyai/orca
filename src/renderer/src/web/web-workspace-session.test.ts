@@ -32,7 +32,6 @@ describe('sanitizeWebRuntimeWorkspaceSession', () => {
         }
       },
       activeWorktreeIdsOnShutdown: ['repo-1::/worktree'],
-      sleptWorktreeIds: { 'repo-1::/worktree': true },
       openFilesByWorktree: {
         'repo-1::/worktree': [
           {
@@ -147,7 +146,6 @@ describe('sanitizeWebRuntimeWorkspaceSession', () => {
     })
     expect(sanitized.remoteSessionIdsByTabId).toBeUndefined()
     expect(sanitized.activeWorktreeIdsOnShutdown).toBeUndefined()
-    expect(sanitized.sleptWorktreeIds).toEqual({ 'repo-1::/worktree': true })
     expect(sanitized.unifiedTabs).toBeUndefined()
     expect(sanitized.tabGroups).toBeUndefined()
   })

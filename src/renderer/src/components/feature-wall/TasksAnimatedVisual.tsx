@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this visual is a timed storyboard; phase and cursor state intentionally advance from animation effects and reduced-motion gates. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ArrowRight, CircleDot } from 'lucide-react'
@@ -10,9 +11,7 @@ type Issue = {
   title: string
 }
 
-const ISSUES: readonly Issue[] = [
-  { number: 1842, title: 'Worktree picker truncates names' }
-]
+const ISSUES: readonly Issue[] = [{ number: 1842, title: 'Worktree picker truncates names' }]
 
 type Phase =
   | { kind: 'idle' }

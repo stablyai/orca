@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => {
   const state = {
     activeWorktreeId: null as string | null,
-    markWorktreeSlept: vi.fn(),
     setActiveWorktree: vi.fn(),
     shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
     shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
@@ -45,7 +44,6 @@ import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
 describe('runSleepWorktree', () => {
   beforeEach(() => {
     mocks.state.setActiveWorktree.mockClear()
-    mocks.state.markWorktreeSlept.mockClear()
     mocks.state.shutdownWorktreeBrowsers.mockClear().mockResolvedValue(undefined)
     mocks.state.shutdownWorktreeTerminals.mockClear().mockResolvedValue(undefined)
     mocks.state.suppressPtyExit.mockClear()
@@ -72,7 +70,6 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-1', {
       keepIdentifiers: true
     })
-    expect(mocks.state.markWorktreeSlept).toHaveBeenCalledWith('wt-1')
     const browsersCallOrder = mocks.state.shutdownWorktreeBrowsers.mock.invocationCallOrder[0]
     const terminalsCallOrder = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
     expect(browsersCallOrder).toBeLessThan(terminalsCallOrder)
@@ -132,7 +129,6 @@ describe('runSleepWorktree', () => {
     await runSleepWorktree('wt-1')
 
     expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalled()
-    expect(mocks.state.markWorktreeSlept).not.toHaveBeenCalled()
     expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep workspace',
@@ -153,12 +149,10 @@ describe('runSleepWorktree', () => {
     expect(mocks.state.shutdownWorktreeTerminals).not.toHaveBeenCalledWith('wt-1', {
       keepIdentifiers: true
     })
-    expect(mocks.state.markWorktreeSlept).not.toHaveBeenCalledWith('wt-1')
     expect(mocks.state.shutdownWorktreeBrowsers).toHaveBeenCalledWith('wt-2')
     expect(mocks.state.shutdownWorktreeTerminals).toHaveBeenCalledWith('wt-2', {
       keepIdentifiers: true
     })
-    expect(mocks.state.markWorktreeSlept).toHaveBeenCalledWith('wt-2')
     expect(mocks.toastError).toHaveBeenCalledWith(
       'Failed to sleep some workspaces',
       expect.objectContaining({ description: 'first failed' })

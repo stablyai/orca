@@ -254,8 +254,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
       z.record(z.string(), z.number().finite().nonnegative())
     )
     .optional(),
-  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
-  sleptWorktreeIds: z.record(z.string(), z.literal(true)).optional()
+  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional()
 })
 
 export type ParsedWorkspaceSession =

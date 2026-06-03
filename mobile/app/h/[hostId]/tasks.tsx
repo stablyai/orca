@@ -111,6 +111,10 @@ import {
   resolveVisibleTaskProvider,
   type TaskProvider
 } from '../../../src/tasks/mobile-task-providers'
+import {
+  extractLinearIssueReadItems,
+  type LinearMobileIssue
+} from '../../../src/tasks/linear-mobile-issue-read'
 import { MOBILE_TUI_AGENT_AUTO_PICK_ORDER } from '../../../src/tasks/mobile-tui-agents'
 import { resolveComposerBranchSelection } from '../../../src/tasks/mobile-composer-branch-selection'
 import {
@@ -276,25 +280,7 @@ type LinearIssueChild = {
   url: string
 }
 
-type LinearIssue = {
-  id: string
-  workspaceId?: string
-  workspaceName?: string
-  identifier: string
-  title: string
-  description?: string
-  url: string
-  state: { name: string; type: string; color: string }
-  team: { id: string; name: string; key: string }
-  project?: LinearProject
-  subIssues?: LinearIssueChild[]
-  labels: string[]
-  labelIds?: string[]
-  assignee?: { id?: string; displayName: string }
-  estimate?: number | null
-  priority: number
-  updatedAt: string
-}
+type LinearIssue = LinearMobileIssue
 
 type LinearState = {
   id: string
@@ -3524,7 +3510,7 @@ export default function MobileTasksScreen() {
           if (!isSuccess(response)) {
             throw new Error(response.error.message)
           }
-          const issues = response.result as LinearIssue[]
+          const issues = extractLinearIssueReadItems(response.result)
           const filtered =
             selectedLinearTeamIds.size > 0
               ? issues.filter((issue) => selectedLinearTeamIds.has(issue.team.id))

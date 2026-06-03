@@ -17,6 +17,7 @@ import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 
@@ -543,7 +544,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (target.kind === 'environment') {
         await Promise.allSettled(
           worktreeIds.map((worktreeId) =>
-            callRuntimeRpc(target, 'terminal.stop', { worktree: worktreeId }, { timeoutMs: 15_000 })
+            callRuntimeRpc(
+              target,
+              'terminal.stop',
+              { worktree: toRuntimeWorktreeSelector(worktreeId) },
+              { timeoutMs: 15_000 }
+            )
           )
         )
       }
@@ -601,21 +607,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         // Drop this repo's timestamps explicitly so they cannot survive prune
         // forever after the repo is removed.
         let nextLastVisitedAtByWorktreeId = s.lastVisitedAtByWorktreeId
-        let nextSleptWorktreeIds = s.sleptWorktreeIds
         for (const id of Object.keys(s.lastVisitedAtByWorktreeId)) {
           if (getRepoIdFromWorktreeId(id) === projectId) {
             if (nextLastVisitedAtByWorktreeId === s.lastVisitedAtByWorktreeId) {
               nextLastVisitedAtByWorktreeId = { ...s.lastVisitedAtByWorktreeId }
             }
             delete nextLastVisitedAtByWorktreeId[id]
-          }
-        }
-        for (const id of Object.keys(s.sleptWorktreeIds)) {
-          if (getRepoIdFromWorktreeId(id) === projectId) {
-            if (nextSleptWorktreeIds === s.sleptWorktreeIds) {
-              nextSleptWorktreeIds = { ...s.sleptWorktreeIds }
-            }
-            delete nextSleptWorktreeIds[id]
           }
         }
         const nextRepos = s.repos.filter((r) => r.id !== projectId)
@@ -637,7 +634,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           activeFileId: activeFileCleared ? null : s.activeFileId,
           activeTabType: activeFileCleared ? 'terminal' : s.activeTabType,
           lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
-          sleptWorktreeIds: nextSleptWorktreeIds,
           sortEpoch: s.sortEpoch + 1,
           // Why: removing the last repo while in settings leaves activeView as
           // 'settings', which renders an empty settings pane instead of Landing.
