@@ -127,6 +127,18 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.stepDone['split-terminal']).toBe(true)
   })
 
+  it('does not mark the step complete from malformed durable terminal-pane split state', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          'terminal-pane-split': { firstInteractedAt: Number.NaN, interactionCount: 1 }
+        }
+      })
+    )
+
+    expect(progress.stepDone['split-terminal']).toBe(false)
+  })
+
   it('does not mark the step complete from generic pane interaction state', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
