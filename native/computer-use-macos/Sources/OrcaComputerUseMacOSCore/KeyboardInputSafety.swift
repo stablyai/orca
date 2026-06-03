@@ -1,5 +1,13 @@
 public enum KeyboardInputSafety {
-    public static func allowsSyntheticInput(targetWindowFocused: Bool) -> Bool {
-        targetWindowFocused
+    public enum FocusFailure: Equatable {
+        case targetNotFocused
+        case targetNotFocusedAfterRestore
+    }
+
+    public static func syntheticInputFocusFailure(targetWindowFocused: Bool, restoreWindowRequested: Bool) -> FocusFailure? {
+        guard !targetWindowFocused else {
+            return nil
+        }
+        return restoreWindowRequested ? .targetNotFocusedAfterRestore : .targetNotFocused
     }
 }
