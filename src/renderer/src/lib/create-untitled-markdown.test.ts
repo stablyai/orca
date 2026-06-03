@@ -162,6 +162,9 @@ describe('createUntitledMarkdownFile', () => {
       isBinary: false
     })
     const writeFile = vi.fn().mockResolvedValueOnce(undefined)
+    const pathExists = vi.fn(async ({ filePath }: { filePath: string }) =>
+      filePath.endsWith('/.orca/templates')
+    )
     const unsubscribe = subscribeMarkdownTemplatePicker((request) => {
       const template = request.templates[0]
       if (!template) {
@@ -175,7 +178,7 @@ describe('createUntitledMarkdownFile', () => {
         shell: { pathExists: vi.fn() },
         fs: {
           createFile,
-          pathExists: vi.fn().mockResolvedValue(false),
+          pathExists,
           readDir,
           readFile,
           stat,
