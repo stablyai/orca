@@ -10,6 +10,7 @@ import {
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { makePaneKey, isTerminalLeafId } from '../../../shared/stable-pane-id'
 import { isExplicitAgentStatusFresh } from './agent-status'
 
@@ -194,9 +195,8 @@ async function findActiveRuntimeTerminal(
   const { terminals } = await callRuntimeRpc<RuntimeTerminalListResult>(
     runtimeTarget,
     'terminal.list',
-    // Why: worktree ids can look like branch names or paths; the runtime selector
-    // accepts raw values, but the id: prefix keeps the lookup unambiguous.
-    { worktree: `id:${worktreeId}`, limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT },
+    // Why: worktree ids can look like branch names or paths; keep the lookup unambiguous.
+    { worktree: toRuntimeWorktreeSelector(worktreeId), limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT },
     { timeoutMs: ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS }
   )
   return (

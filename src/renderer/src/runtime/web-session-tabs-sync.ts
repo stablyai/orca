@@ -38,6 +38,7 @@ import {
   toWebTerminalSurfaceTabId,
   WEB_TERMINAL_SURFACE_TAB_PREFIX
 } from './web-runtime-session'
+import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -2159,7 +2160,7 @@ export function useWebSessionTabsSync(): void {
         {
           selector: environmentId,
           method: 'session.tabs.subscribe',
-          params: { worktree: `id:${activeWorktreeId}` },
+          params: { worktree: toRuntimeWorktreeSelector(activeWorktreeId) },
           timeoutMs: 15_000
         },
         {

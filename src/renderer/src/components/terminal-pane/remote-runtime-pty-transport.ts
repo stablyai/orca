@@ -115,7 +115,7 @@ export function createRemoteRuntimePtyTransport(
     if (!worktreeId) {
       return null
     }
-    const worktree = `id:${worktreeId}`
+    const worktree = toRuntimeWorktreeSelector(worktreeId)
     const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
       worktree,
       tabId: hostTabId

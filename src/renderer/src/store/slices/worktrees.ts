@@ -234,10 +234,6 @@ function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
   return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
 }
 
-function toRuntimeWorktreeIdSelector(worktreeId: string): string {
-  return `id:${worktreeId}`
-}
-
 const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
   'Worktree has uncommitted or untracked changes',
   'contains modified or untracked files',
@@ -523,7 +519,7 @@ async function persistWorktreeMeta(
   await callRuntimeRpc(
     target,
     'worktree.set',
-    { worktree: toRuntimeWorktreeIdSelector(worktreeId), ...updates },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), ...updates },
     { timeoutMs: 15_000 }
   )
 }
@@ -879,8 +875,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               target,
               'worktree.set',
               {
-                worktree: toRuntimeWorktreeIdSelector(worktreeId),
-                ...(args.parentWorktreeId ? { parentWorktree: `id:${args.parentWorktreeId}` } : {}),
+                worktree: toRuntimeWorktreeSelector(worktreeId),
+                ...(args.parentWorktreeId
+                  ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
+                  : {}),
                 ...(args.noParent === true ? { noParent: true } : {})
               },
               { timeoutMs: 15_000 }
