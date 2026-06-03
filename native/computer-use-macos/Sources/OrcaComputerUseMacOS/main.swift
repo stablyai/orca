@@ -273,11 +273,9 @@ final class Provider {
     }
 
     private func currentKeyboardSnapshot(params: [String: JSONValue]) throws -> Snapshot {
-        let snapshot = try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
-        if params["restoreWindow"]?.bool != true && !isTargetWindowFocused(snapshot) {
-            throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; retry with --restore-window or use set-value for editable elements")
-        }
-        return snapshot
+        // Why: AX text replacement/select-all do not post global input, so only
+        // synthetic fallback paths require the target window to be focused.
+        try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
     }
 
     private func cachedSnapshot(params: [String: JSONValue]) throws -> Snapshot? {
@@ -671,12 +669,14 @@ final class Provider {
 
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.typeText(try requiredString(params, "text"), pid: snapshot.app.pid)
         return actionMetadata(path: "synthetic")
     }
 
     private func pressKey(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pressKey(try requiredString(params, "key"), pid: snapshot.app.pid)
         return actionMetadata(path: "synthetic")
     }
@@ -691,6 +691,7 @@ final class Provider {
                 verification: TextInput.selectionVerification(focused.element)
             )
         }
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pressKey(key, pid: snapshot.app.pid)
         return actionMetadata(
             path: "synthetic",
@@ -705,6 +706,7 @@ final class Provider {
         if let focused = focusedRecord(snapshot), let verification = TextInput.replaceSelection(focused.element, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pasteText(text, pid: snapshot.app.pid)
         return actionMetadata(
             path: "clipboard",
@@ -934,6 +936,21 @@ private func isTargetWindowFocused(_ snapshot: Snapshot) -> Bool {
     }
     let intersection = frame.intersection(snapshot.windowBounds)
     return !intersection.isNull && intersection.area >= min(frame.area, snapshot.windowBounds.area) * 0.75
+}
+
+private func requireTargetWindowFocused(_ snapshot: Snapshot, restoreWindowRequested: Bool) throws {
+    guard let failure = KeyboardInputSafety.syntheticInputFocusFailure(
+        targetWindowFocused: isTargetWindowFocused(snapshot),
+        restoreWindowRequested: restoreWindowRequested
+    ) else {
+        return
+    }
+    switch failure {
+    case .targetNotFocused:
+        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; retry with --restore-window or use set-value for editable elements")
+    case .targetNotFocusedAfterRestore:
+        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; --restore-window was requested but the target is still not focused; bring it forward manually or check Accessibility permissions")
+    }
 }
 
 private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, focused: AXUIElement, explicitTarget: Bool) -> AXUIElement? {
@@ -3044,11 +3061,11 @@ private final class SocketListener: @unchecked Sendable {
             close(socketFd)
             socketFd = -1
         }
-        unlink(socketPath)
+        // Why: the parent owns the private temp directory cleanup; the helper
+        // must not unlink arbitrary caller-supplied paths on shutdown.
     }
 
     private func bindSocket() throws {
-        unlink(socketPath)
         socketFd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard socketFd >= 0 else {
             throw ProviderError.coded("accessibility_error", "failed to create computer-use socket")
@@ -3072,9 +3089,16 @@ private final class SocketListener: @unchecked Sendable {
             }
         }
         guard result == 0 else {
-            let message = String(cString: strerror(errno))
+            let bindErrno = errno
+            let message = String(cString: strerror(bindErrno))
             close(socketFd)
             socketFd = -1
+            if UnixSocketPathSafety.shouldRejectExistingPathAfterBindFailure(
+                bindErrno: bindErrno,
+                existingMode: existingPathMode(socketPath)
+            ) {
+                throw ProviderError.coded("invalid_argument", "refusing to replace non-socket file at computer-use socket path")
+            }
             throw ProviderError.coded("accessibility_error", "failed to bind computer-use socket: \(message)")
         }
         chmod(socketPath, 0o600)
@@ -3124,6 +3148,14 @@ private final class SocketListener: @unchecked Sendable {
     }
 }
 
+private func existingPathMode(_ path: String) -> mode_t? {
+    var statInfo = stat()
+    guard lstat(path, &statInfo) == 0 else {
+        return nil
+    }
+    return statInfo.st_mode
+}
+
 private func peerProcessId(_ fd: Int32) -> pid_t? {
     var pid = pid_t(0)
     var length = socklen_t(MemoryLayout<pid_t>.size)
@@ -3153,7 +3185,11 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     else {
         return false
     }
-    return bundleId == "com.stablyai.orca" || bundleId == "com.github.Electron"
+    // Why: dev validation runs from per-worktree wrapper apps with stable
+    // Orca-owned bundle ids; the sidecar peer check must still authorize them.
+    return bundleId == "com.stablyai.orca" ||
+        bundleId.hasPrefix("com.stablyai.orca.dev.") ||
+        bundleId == "com.github.Electron"
 }
 
 private func parentProcessId(_ pid: pid_t) -> pid_t? {
@@ -3334,7 +3370,6 @@ if arguments.first == "--agent" {
         let valueIndex = index + 1
         guard valueIndex < arguments.count else { return nil }
         let tokenPath = arguments[valueIndex]
-        defer { unlink(tokenPath) }
         return try? String(contentsOfFile: tokenPath, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

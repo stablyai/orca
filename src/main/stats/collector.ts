@@ -1,11 +1,16 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'fs'
+import { readFileSync, mkdirSync, existsSync, renameSync } from 'fs'
 import { join, dirname } from 'path'
 import type { StatsSummary } from '../../shared/types'
+import { writeUtf8FileInChunksSync } from '../../shared/utf8-file-writer'
 import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 
 const STATS_SCHEMA_VERSION = 1
-const MAX_EVENTS = 10_000
+// Why 1000 (was 10000): the events array is a bounded "fun stats" log. A smaller
+// cap bounds the JSON written on each save which, together with the chunked write
+// in writeToDiskSync, keeps Orca clear of an Electron/Node abort when encoding a
+// very large string to UTF-8 (see writeUtf8FileInChunksSync).
+const MAX_EVENTS = 1_000
 // Why: countedPRs is a deduplication registry that grows with every PR created
 // through Orca. Without a cap, a heavily-used instance accumulates thousands of
 // URL strings across months. 2000 entries is about 6-12 months of active use
@@ -149,7 +154,7 @@ export class StatsCollector {
       this.onAgentStop(ptyId, now)
     }
     this.cancelPendingSave()
-    this.writeToDiskSync()
+    this.writeToDiskBestEffort()
   }
 
   // ── Persistence ───────────────────────────────────────────────────
@@ -226,11 +231,7 @@ export class StatsCollector {
     }
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
-      try {
-        this.writeToDiskSync()
-      } catch (err) {
-        console.error('[stats] Failed to write stats:', err)
-      }
+      this.writeToDiskBestEffort()
     }, DEBOUNCE_MS)
   }
 
@@ -238,6 +239,16 @@ export class StatsCollector {
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
+    }
+  }
+
+  private writeToDiskBestEffort(): void {
+    try {
+      this.writeToDiskSync()
+    } catch (err) {
+      // Why best-effort: stats are non-critical. Catchable disk errors should
+      // not crash shutdown; native Electron CHECK aborts are avoided upstream.
+      console.error('[stats] Failed to write stats:', err)
     }
   }
 
@@ -262,7 +273,7 @@ export class StatsCollector {
     // Why unique temp file: same race-safe pattern as persistence.ts:120 —
     // synchronous flushes can race the debounced writer during shutdown.
     const tmpFile = `${statsFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(data), 'utf-8')
+    writeUtf8FileInChunksSync(tmpFile, JSON.stringify(data))
     renameSync(tmpFile, statsFile)
   }
 }

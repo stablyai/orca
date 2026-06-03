@@ -29,7 +29,7 @@ export type StatsAggregates = {
   // Bounded in practice (a few hundred at most).
   countedPRs: string[]
   // Why persisted here instead of derived from events[0].at:
-  // The event log is bounded to 10K entries. Once trimmed, events[0].at
+  // The event log is bounded before writes. Once trimmed, events[0].at
   // would jump forward, making "tracking since..." inaccurate. This field
   // is set once on the very first event and never updated.
   firstEventAt: number | null
