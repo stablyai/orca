@@ -18,7 +18,7 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
 // panel it owns. The active tab also lifts its background with a subtle
 // color-mix wash (uniform in light and dark, unlike `accent` whose contrast
 // against `card` is lopsided across themes); this bar is the crisp selection
-// marker layered on top. `primary` stays
+// marker layered on top. `foreground` keeps the marker neutral and
 // high-contrast in both light and dark, unlike the old dark-navy hairline,
 // which read as just another border. z-10 keeps it above the bg lift and the
 // unread amber wash. Horizontal inset is 0 (not -1px): negative insets on the
@@ -26,4 +26,10 @@ export function getDropIndicatorClasses(dropIndicator: DropIndicator): string {
 // flips the strip between "fits exactly" and "overflows by 1px", which jitters
 // every tab by 1px because the browser preserves scrollLeft near the end.
 export const ACTIVE_TAB_INDICATOR_CLASSES =
-  'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-primary z-10'
+  'pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-foreground z-10'
+
+export function getTabRootStateClasses(isActive: boolean): string {
+  return isActive
+    ? 'bg-[color-mix(in_srgb,var(--foreground)_10%,var(--card))] text-foreground'
+    : 'bg-card text-muted-foreground hover:text-foreground'
+}
