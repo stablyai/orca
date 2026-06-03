@@ -263,7 +263,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       resolvedBranchNameOverride,
       undefined,
       item.type === 'mr' && item.number ? item.number : undefined,
-      item.type === 'issue' && item.number && isGitLabIssueUrl(item.url) ? item.number : undefined
+      item.type === 'issue' && item.number && isGitLabIssueUrl(item.url) ? item.number : undefined,
+      undefined, // startup
+      undefined, // pendingFirstAgentMessageRename
+      true // injectIssueContent - default to true for direct launches
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path

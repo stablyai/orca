@@ -30,6 +30,7 @@ import type {
   SetupRunPolicy,
   SparsePreset,
   TuiAgent,
+  Worktree,
   WorktreeMeta,
   WorkspaceStatus,
   WorkspaceCreateTelemetrySource
@@ -93,6 +94,11 @@ import {
   getWorkspaceCreateErrorToastMessage,
   type WorkspaceCreateErrorDisplay
 } from '@/lib/workspace-create-error-format'
+import {
+  resolveInjectionDecision,
+  fetchIssueContent,
+  injectIssueContentIntoAgent
+} from '@/lib/inject-issue-content'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
 import {
   resolveComposerBranchNameOverrideForCreate,
@@ -241,6 +247,15 @@ export type UseComposerStateResult = {
   createDisabled: boolean
   injectIssueContent: boolean
   setInjectIssueContent: (value: boolean | null) => void
+  pendingInjection: {
+    worktree: Worktree
+    repoPath: string | undefined
+    primaryTabId: string | null
+  } | null
+  injectionDialogOpen: boolean
+  setInjectionDialogOpen: (open: boolean) => void
+  handleConfirmInjection: () => Promise<void>
+  handleCancelInjection: () => void
 }
 
 // Why: both the full-page TaskPage composer and the Cmd+J modal can be
@@ -487,6 +502,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [linkDirectItem, setLinkDirectItem] = useState<GitHubWorkItem | null>(null)
   const [linkDirectLoading, setLinkDirectLoading] = useState(false)
   const [injectIssueContent, setInjectIssueContent] = useState<boolean | null>(null)
+  const [pendingInjection, setPendingInjection] = useState<{
+    worktree: Worktree
+    repoPath: string | undefined
+    primaryTabId: string | null
+  } | null>(null)
+  const [injectionDialogOpen, setInjectionDialogOpen] = useState(false)
 
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
@@ -1846,6 +1867,92 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [updateWorktreeMeta]
   )
 
+  const handleConfirmInjection = useCallback(async (): Promise<void> => {
+    if (!pendingInjection) {
+      return
+    }
+    setInjectionDialogOpen(false)
+
+    const fetchResult = await fetchIssueContent({
+      worktree: pendingInjection.worktree,
+      settings: settings ?? { activeRuntimeEnvironmentId: null },
+      repoPath: pendingInjection.repoPath
+    })
+
+    if (!fetchResult.success) {
+      toast.error('Failed to fetch issue content')
+      setPendingInjection(null)
+      return
+    }
+
+    if (!pendingInjection.primaryTabId) {
+      toast.warning('No agent tab found')
+      setPendingInjection(null)
+      return
+    }
+
+    const injectResult = await injectIssueContentIntoAgent({
+      tabId: pendingInjection.primaryTabId,
+      content: fetchResult.content
+    })
+    if (!injectResult.success) {
+      toast.error('Failed to inject issue content')
+    }
+
+    setPendingInjection(null)
+  }, [pendingInjection, settings])
+
+  const handleCancelInjection = useCallback((): void => {
+    setInjectionDialogOpen(false)
+    setPendingInjection(null)
+  }, [])
+
+  const handleIssueContentInjection = useCallback(
+    async (
+      worktree: Worktree,
+      activation: { primaryTabId: string | null } | false,
+      injectIssueContentOverride: boolean | undefined
+    ): Promise<void> => {
+      if (
+        activation === false ||
+        !activation.primaryTabId ||
+        !(worktree.linkedIssue || worktree.linkedLinearIssue)
+      ) {
+        return
+      }
+
+      const decision = resolveInjectionDecision(
+        settings?.issueContentInjection,
+        injectIssueContentOverride
+      )
+
+      if (decision === 'inject') {
+        const fetchResult = await fetchIssueContent({
+          worktree,
+          settings: settings ?? { activeRuntimeEnvironmentId: null },
+          repoPath: selectedRepo?.path
+        })
+        if (fetchResult.success) {
+          const injectResult = await injectIssueContentIntoAgent({
+            tabId: activation.primaryTabId,
+            content: fetchResult.content
+          })
+          if (!injectResult.success) {
+            toast.warning('Failed to inject issue content')
+          }
+        }
+      } else if (decision === 'ask') {
+        setPendingInjection({
+          worktree,
+          repoPath: selectedRepo?.path,
+          primaryTabId: activation.primaryTabId
+        })
+        setInjectionDialogOpen(true)
+      }
+    },
+    [settings, selectedRepo, setPendingInjection, setInjectionDialogOpen]
+  )
+
   const submit = useCallback(async (): Promise<void> => {
     if (
       !repoId ||
@@ -2041,6 +2148,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           startup: startupPlan
         })
       }
+
+      await handleIssueContentInjection(
+        result.worktree,
+        activation,
+        injectIssueContent ?? undefined
+      )
+
       setSidebarOpen(true)
       if (persistDraft) {
         clearNewWorkspaceDraft()
@@ -2098,7 +2212,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     shouldWaitForIssueAutomationCheck,
     shouldWaitForSetupCheck,
     workspaceSeedName,
-    effectiveInjectIssueContent
+    effectiveInjectIssueContent,
+    injectIssueContent,
+    settings,
+    handleIssueContentInjection
   ])
 
   const submitQuick = useCallback(
@@ -2327,6 +2444,13 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             startup: startupPlan
           })
         }
+
+        await handleIssueContentInjection(
+          result.worktree,
+          activation,
+          injectIssueContent ?? undefined
+        )
+
         setSidebarOpen(true)
         if (persistDraft) {
           clearNewWorkspaceDraft()
@@ -2382,7 +2506,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       loadHookCheckForRepo,
       setupConfig,
       setupPolicy,
-      effectiveInjectIssueContent
+      effectiveInjectIssueContent,
+      injectIssueContent,
+      settings,
+      handleIssueContentInjection
     ]
   )
 
@@ -2484,6 +2611,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     submitQuick,
     createDisabled,
     injectIssueContent: effectiveInjectIssueContent,
-    setInjectIssueContent
+    setInjectIssueContent,
+    pendingInjection,
+    injectionDialogOpen,
+    setInjectionDialogOpen,
+    handleConfirmInjection,
+    handleCancelInjection
   }
 }

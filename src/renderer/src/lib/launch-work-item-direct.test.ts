@@ -135,7 +135,10 @@ describe('launchWorkItemDirect', () => {
       'feature/fix',
       undefined,
       undefined,
-      undefined
+      undefined,
+      undefined,
+      undefined,
+      true
     )
   })
 
@@ -170,7 +173,10 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       undefined,
-      undefined
+      undefined,
+      undefined,
+      undefined,
+      true
     )
   })
 })

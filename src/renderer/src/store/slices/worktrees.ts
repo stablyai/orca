@@ -1029,6 +1029,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     ]
     const nextCandidateName = (current: string, attempt: number): string =>
       attempt === 0 ? current : `${current}-${attempt + 1}`
+    // Why: injection is handled entirely on the renderer side after
+    // createWorktree resolves, so it never travels through IPC.
+    void injectIssueContent
+
     const isBranchNameOverrideConflict = (error: Error): boolean =>
       Boolean(
         branchNameOverride &&
@@ -1065,8 +1069,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
-            ...(injectIssueContent !== undefined ? { injectIssueContent } : {})
+            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -1096,7 +1099,6 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                     ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
                     ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
                     ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
-                    ...(injectIssueContent !== undefined ? { injectIssueContent } : {}),
                     ...(startup
                       ? {
                           startupCommand: startup.command,
