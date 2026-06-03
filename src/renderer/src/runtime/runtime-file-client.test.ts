@@ -14,6 +14,7 @@ import {
   readRuntimeFileContent,
   readRuntimeFilePreview,
   renameRuntimePath,
+  runtimePathExists,
   searchRuntimeFiles,
   statRuntimePath,
   subscribeRuntimeFileChanges,
@@ -33,6 +34,7 @@ const fsCreateFile = vi.fn()
 const fsRename = vi.fn()
 const fsDeletePath = vi.fn()
 const fsStat = vi.fn()
+const fsPathExists = vi.fn()
 const fsImportExternalPaths = vi.fn()
 const fsStageExternalPathsForRuntimeUpload = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -51,6 +53,7 @@ beforeEach(() => {
   fsRename.mockReset()
   fsDeletePath.mockReset()
   fsStat.mockReset()
+  fsPathExists.mockReset()
   fsImportExternalPaths.mockReset()
   fsStageExternalPathsForRuntimeUpload.mockReset()
   runtimeEnvironmentCall.mockReset()
@@ -82,6 +85,7 @@ beforeEach(() => {
         rename: fsRename,
         deletePath: fsDeletePath,
         stat: fsStat,
+        pathExists: fsPathExists,
         importExternalPaths: fsImportExternalPaths,
         stageExternalPathsForRuntimeUpload: fsStageExternalPathsForRuntimeUpload
       },
@@ -1095,6 +1099,28 @@ describe('runtime file client', () => {
       params: { worktree: 'wt-1', relativePath: 'readme.md' },
       timeoutMs: 15_000
     })
+  })
+
+  it('uses quiet local path existence checks when no runtime environment is active', async () => {
+    fsPathExists.mockResolvedValueOnce(false)
+
+    await expect(
+      runtimePathExists(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          connectionId: 'ssh-1'
+        },
+        '/repo/untitled.md'
+      )
+    ).resolves.toBe(false)
+
+    expect(fsPathExists).toHaveBeenCalledWith({
+      filePath: '/repo/untitled.md',
+      connectionId: 'ssh-1'
+    })
+    expect(fsStat).not.toHaveBeenCalled()
   })
 
   it('does not fall back to client-local stat for remote-owned paths outside the worktree', async () => {

@@ -1772,6 +1772,7 @@ export type PreloadApi = {
       filePath: string
       connectionId?: string
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
+    pathExists: (args: { filePath: string; connectionId?: string }) => Promise<boolean>
     listFiles: (args: {
       rootPath: string
       connectionId?: string

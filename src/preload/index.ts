@@ -2179,6 +2179,8 @@ const api = {
       connectionId?: string
     }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
       ipcRenderer.invoke('fs:stat', args),
+    pathExists: (args: { filePath: string; connectionId?: string }): Promise<boolean> =>
+      ipcRenderer.invoke('fs:pathExists', args),
     listFiles: (args: {
       rootPath: string
       connectionId?: string
