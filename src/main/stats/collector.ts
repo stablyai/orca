@@ -1,7 +1,8 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'fs'
+import { readFileSync, mkdirSync, existsSync, renameSync, unlinkSync } from 'fs'
 import { join, dirname } from 'path'
 import type { StatsSummary } from '../../shared/types'
+import { writeStatsJsonFileSync } from './stats-json-writer'
 import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 
 const STATS_SCHEMA_VERSION = 1
@@ -262,7 +263,19 @@ export class StatsCollector {
     // Why unique temp file: same race-safe pattern as persistence.ts:120 —
     // synchronous flushes can race the debounced writer during shutdown.
     const tmpFile = `${statsFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(data), 'utf-8')
-    renameSync(tmpFile, statsFile)
+    let renamed = false
+    try {
+      writeStatsJsonFileSync(tmpFile, data)
+      renameSync(tmpFile, statsFile)
+      renamed = true
+    } finally {
+      if (!renamed) {
+        try {
+          unlinkSync(tmpFile)
+        } catch {
+          // Best-effort cleanup; the write already failed, swallow secondary error.
+        }
+      }
+    }
   }
 }
