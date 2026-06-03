@@ -355,13 +355,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     }
   }, [isOpen, resetState])
 
-  const isInputStep =
-    step === 'add' ||
-    step === 'clone' ||
-    step === 'remote' ||
-    step === 'create' ||
-    step === 'nested'
-
   const handleAddLocalPath = useCallback(
     async (path: string, source: AddRepoExistingWorkspaceSource) => {
       if (settings?.activeRuntimeEnvironmentId?.trim()) {
@@ -994,7 +987,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           step === 'nested' ? 'max-h-[calc(100vh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)]' : ''
         }`}
       >
-        {/* Step indicator row — back button (step 2 only), dots, X is rendered by DialogContent */}
+        {/* Back actions live above the title; the close button is rendered by DialogContent. */}
         <div className="flex items-center justify-center -mt-1">
           {(step === 'clone' || step === 'remote' || step === 'create') && (
             <button
@@ -1024,14 +1017,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
               Add another project
             </button>
           )}
-          <div className="flex items-center gap-1.5">
-            <div
-              className={`size-1.5 rounded-full transition-colors ${isInputStep ? 'bg-foreground' : 'bg-muted-foreground/30'}`}
-            />
-            <div
-              className={`size-1.5 rounded-full transition-colors ${step === 'setup' ? 'bg-foreground' : 'bg-muted-foreground/30'}`}
-            />
-          </div>
         </div>
 
         {step === 'add' && isRuntimeEnvironmentActive ? (

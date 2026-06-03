@@ -272,7 +272,7 @@ Dashboard caveats:
 
 - Treat `onboarding_step_* { value_kind: 'agent_setup' }`, `onboarding_step_* { value_kind: 'tour' }`, and `onboarding_tour_outcome` as historical first-run onboarding signals after this rollout.
 - Do not use absence of new `agent_setup` or `tour` onboarding rows as a drop-off signal; those steps no longer exist in active onboarding.
-- Segment numeric onboarding step analysis across this boundary. The active final step changed from seven-step onboarding to `ONBOARDING_FINAL_STEP = 5`.
+- Segment numeric onboarding step analysis across this boundary. The active final step changed from seven-step onboarding to `ONBOARDING_FINAL_STEP = 4`.
 - Continue using `contextual_tour_shown` and `contextual_tour_outcome` from PR #2734 for current feature-education exposure and outcome analysis.
 
 ## Updating This File

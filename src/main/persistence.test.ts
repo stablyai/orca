@@ -289,10 +289,11 @@ describe('Store', () => {
   })
 
   it.each([
+    [3, 2],
     [4, 3],
-    [5, 4],
-    [6, 4],
-    [9, 4]
+    [5, 3],
+    [6, 3],
+    [9, 3]
   ])(
     'migrates legacy open onboarding progress %i before applying the current step bound',
     async (legacyStep, expectedStep) => {
@@ -315,13 +316,13 @@ describe('Store', () => {
     }
   )
 
-  it('keeps current onboarding progress marked as the five-step flow', async () => {
+  it('keeps current onboarding progress marked as the four-step flow', async () => {
     writeDataFile({
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
         closedAt: null,
         outcome: null,
-        lastCompletedStep: 4,
+        lastCompletedStep: 3,
         checklist: {}
       }
     })
@@ -330,7 +331,7 @@ describe('Store', () => {
     const onboarding = store.getOnboarding()
 
     expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
-    expect(onboarding.lastCompletedStep).toBe(4)
+    expect(onboarding.lastCompletedStep).toBe(3)
   })
 
   it('migrates legacy completed onboarding progress to the current final step', async () => {
@@ -348,7 +349,7 @@ describe('Store', () => {
 
     expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
     expect(onboarding.outcome).toBe('completed')
-    expect(onboarding.lastCompletedStep).toBe(5)
+    expect(onboarding.lastCompletedStep).toBe(4)
   })
 
   it('preserves legacy none grouping as ungrouped workspaces', async () => {

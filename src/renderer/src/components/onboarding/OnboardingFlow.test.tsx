@@ -31,21 +31,21 @@ describe('OnboardingFlow', () => {
       />
     )
 
-    expect(html).toContain('Set up GitHub tasks')
+    expect(html).toContain('Set up notifications')
     expect(html).not.toContain('Set up Orca for agents')
     expect(html).not.toContain('Explore Orca')
     expect(html).not.toContain('Take the tour')
-    expect(html).toContain('Continue')
-    expect(html).toContain('Skip to project setup')
+    expect(html).toContain('Add your first project')
+    expect(html).not.toContain('Point Orca at some code')
   })
 
   it.each([
-    [4, 'Set up GitHub tasks'],
-    [5, 'Point Orca at some code'],
-    [6, 'Point Orca at some code'],
-    [9, 'Point Orca at some code']
+    [3, 'Set up GitHub tasks'],
+    [4, 'Set up notifications'],
+    [5, 'Set up notifications'],
+    [9, 'Set up notifications']
   ])(
-    'resumes legacy onboarding progress %i at the matching five-step page',
+    'resumes legacy onboarding progress %i at the matching four-step page',
     (legacyStep, title) => {
       const html = renderToStaticMarkup(
         <OnboardingFlow
@@ -77,15 +77,17 @@ describe('OnboardingFlow', () => {
       <OnboardingFlow
         onboarding={{
           ...getDefaultOnboardingState(),
-          lastCompletedStep: 3
+          lastCompletedStep: 2
         }}
         onOnboardingChange={vi.fn()}
       />
     )
 
-    expect(html).toContain('Point Orca at some code')
+    expect(html).toContain('Set up notifications')
+    expect(html).toContain('Add your first project')
     expect(html).not.toContain('Set up GitHub tasks')
     expect(html).not.toContain('Connect your task sources')
+    expect(html).not.toContain('Point Orca at some code')
   })
 
   it('shows only GitHub on the task setup page when the GitHub CLI is missing', () => {
@@ -101,7 +103,7 @@ describe('OnboardingFlow', () => {
       <OnboardingFlow
         onboarding={{
           ...getDefaultOnboardingState(),
-          lastCompletedStep: 3
+          lastCompletedStep: 2
         }}
         onOnboardingChange={vi.fn()}
       />
