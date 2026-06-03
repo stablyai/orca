@@ -1,11 +1,21 @@
 import { app } from 'electron'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync } from 'fs'
+import { readFileSync, mkdirSync, existsSync, renameSync, openSync, writeSync, closeSync } from 'fs'
 import { join, dirname } from 'path'
 import type { StatsSummary } from '../../shared/types'
 import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 
 const STATS_SCHEMA_VERSION = 1
-const MAX_EVENTS = 10_000
+// Why 1000 (was 10000): the events array is a bounded "fun stats" log. A smaller
+// cap bounds the JSON written on each save which, together with the chunked write
+// in writeToDiskSync, keeps Orca clear of an Electron/Node abort when encoding a
+// very large string to UTF-8 (see writeJsonInChunks).
+const MAX_EVENTS = 1_000
+// Why chunked writes: Electron's bundled Node/V8 aborts the whole process with an
+// uncatchable CHECK (`(length + 1) <= capacity` in Utf8Value/SetLengthAndZeroTerminate)
+// when a large string is encoded to UTF-8 in a single fs write. A ~600KB stats file
+// reproduces it reliably; host Node does not. Writing in 64KB slices keeps each
+// native UTF-8 conversion small and sidesteps the bug.
+const STATS_WRITE_CHUNK_BYTES = 65_536
 // Why: countedPRs is a deduplication registry that grows with every PR created
 // through Orca. Without a cap, a heavily-used instance accumulates thousands of
 // URL strings across months. 2000 entries is about 6-12 months of active use
@@ -47,6 +57,32 @@ function getDefaultStatsFile(): StatsFile {
     schemaVersion: STATS_SCHEMA_VERSION,
     events: [],
     aggregates: getDefaultAggregates()
+  }
+}
+
+/**
+ * Write `json` to `path` in fixed-size slices via a single file descriptor.
+ *
+ * Why not writeFileSync(path, json): Electron's bundled Node aborts the process
+ * when encoding a large string to UTF-8 in one shot (see STATS_WRITE_CHUNK_BYTES).
+ * Each slice is small enough to encode safely; the boundary never splits a UTF-16
+ * surrogate pair, so multi-byte/astral content is preserved byte-for-byte.
+ */
+function writeJsonInChunks(path: string, json: string): void {
+  const fd = openSync(path, 'w')
+  try {
+    let index = 0
+    while (index < json.length) {
+      let end = Math.min(index + STATS_WRITE_CHUNK_BYTES, json.length)
+      const lastUnit = json.charCodeAt(end - 1)
+      if (end < json.length && lastUnit >= 0xd800 && lastUnit <= 0xdbff) {
+        end -= 1
+      }
+      writeSync(fd, json.slice(index, end))
+      index = end
+    }
+  } finally {
+    closeSync(fd)
   }
 }
 
@@ -262,7 +298,7 @@ export class StatsCollector {
     // Why unique temp file: same race-safe pattern as persistence.ts:120 —
     // synchronous flushes can race the debounced writer during shutdown.
     const tmpFile = `${statsFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(data), 'utf-8')
+    writeJsonInChunks(tmpFile, JSON.stringify(data))
     renameSync(tmpFile, statsFile)
   }
 }
