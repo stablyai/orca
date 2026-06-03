@@ -233,7 +233,7 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([feature2.id])
   })
 
-  it('includes valid lineage parents even when another filter would hide the parent', () => {
+  it('does not include slept lineage parents when sleeping workspaces are hidden', () => {
     const parent = makeWorktree('parent')
     const child = makeWorktree('child')
     const lineage = makeWorktreeLineage(child, parent)
@@ -248,7 +248,31 @@ describe('computeVisibleWorktreeIds', () => {
       })
     )
 
-    expect(result).toEqual([parent.id, child.id])
+    expect(result).toEqual([child.id])
+  })
+
+  it('stops lineage restoration at a slept ancestor when sleeping workspaces are hidden', () => {
+    const grandparent = makeWorktree('grandparent', 'repo1')
+    const parent = makeWorktree('parent', 'repo1')
+    const child = makeWorktree('child', 'repo2')
+    const parentLineage = makeWorktreeLineage(parent, grandparent)
+    const childLineage = makeWorktreeLineage(child, parent)
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [grandparent, parent], repo2: [child] },
+      [child.id, parent.id, grandparent.id],
+      visibleOptions({
+        filterRepoIds: ['repo2'],
+        showSleepingWorkspaces: false,
+        sleptWorktreeIds: { [parent.id]: true },
+        worktreeLineageById: {
+          [parent.id]: parentLineage,
+          [child.id]: childLineage
+        }
+      })
+    )
+
+    expect(result).toEqual([child.id])
   })
 
   it('does not resurrect stale lineage parents', () => {
