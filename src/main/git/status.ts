@@ -47,6 +47,10 @@ type EffectiveUpstreamStatusCacheEntry = {
 
 const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
 
+export function clearEffectiveUpstreamStatusCacheForTests(): void {
+  effectiveUpstreamStatusCache.clear()
+}
+
 export type GetStatusOptions = {
   includeIgnored?: boolean
 }

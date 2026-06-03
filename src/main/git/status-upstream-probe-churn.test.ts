@@ -25,7 +25,7 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
-import { getStatus } from './status'
+import { clearEffectiveUpstreamStatusCacheForTests, getStatus } from './status'
 
 function getGitArgs(call: unknown[]): string[] {
   return call[0] as string[]
@@ -33,6 +33,7 @@ function getGitArgs(call: unknown[]): string[] {
 
 describe('getStatus missing-upstream polling churn', () => {
   beforeEach(() => {
+    clearEffectiveUpstreamStatusCacheForTests()
     existsSyncMock.mockReset()
     gitExecFileAsyncMock.mockReset()
     readFileMock.mockReset()

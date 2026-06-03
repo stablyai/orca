@@ -21,6 +21,7 @@ import { useAppStore } from '../../store'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
+  getTabRootStateClasses,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
@@ -218,9 +219,7 @@ export default function SortableTab({
       // tab still reads as "selected + has activity". The wash is
       // rendered as an absolutely-positioned child below so the ::after
       // pseudo-element stays free for the drop indicator.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
-        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-      }`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
