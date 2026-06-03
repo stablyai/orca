@@ -6,6 +6,7 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageScope,
   OpenCodeUsageSessionRow,
+  OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
 import type { AppState } from '../types'
@@ -100,44 +101,54 @@ export const createOpenCodeUsageSlice: StateCreator<AppState, [], [], OpenCodeUs
         return
       }
 
-      const nextScanState = (await window.api.openCodeUsage.refresh({
-        force: opts?.forceRefresh ?? false
-      })) as OpenCodeUsageScanState
       const { openCodeUsageScope, openCodeUsageRange } = get()
+      const snapshot = (await window.api.openCodeUsage.getSnapshot({
+        scope: openCodeUsageScope,
+        range: openCodeUsageRange,
+        limit: 10
+      })) as OpenCodeUsageSnapshot
+      const hasCachedSnapshot =
+        snapshot.scanState.lastScanCompletedAt !== null || snapshot.scanState.hasAnyOpenCodeData
 
-      const [summary, daily, modelBreakdown, projectBreakdown, recentSessions] = await Promise.all([
-        window.api.openCodeUsage.getSummary({
-          scope: openCodeUsageScope,
-          range: openCodeUsageRange
-        }) as Promise<OpenCodeUsageSummary>,
-        window.api.openCodeUsage.getDaily({
-          scope: openCodeUsageScope,
-          range: openCodeUsageRange
-        }) as Promise<OpenCodeUsageDailyPoint[]>,
-        window.api.openCodeUsage.getBreakdown({
-          scope: openCodeUsageScope,
-          range: openCodeUsageRange,
-          kind: 'model'
-        }) as Promise<OpenCodeUsageBreakdownRow[]>,
-        window.api.openCodeUsage.getBreakdown({
-          scope: openCodeUsageScope,
-          range: openCodeUsageRange,
-          kind: 'project'
-        }) as Promise<OpenCodeUsageBreakdownRow[]>,
-        window.api.openCodeUsage.getRecentSessions({
-          scope: openCodeUsageScope,
-          range: openCodeUsageRange,
-          limit: 10
-        }) as Promise<OpenCodeUsageSessionRow[]>
-      ])
+      if (hasCachedSnapshot) {
+        set({
+          openCodeUsageScanState:
+            opts?.forceRefresh === true
+              ? { ...snapshot.scanState, isScanning: true }
+              : snapshot.scanState,
+          openCodeUsageSummary: snapshot.summary,
+          openCodeUsageDaily: snapshot.daily,
+          openCodeUsageModelBreakdown: snapshot.modelBreakdown,
+          openCodeUsageProjectBreakdown: snapshot.projectBreakdown,
+          openCodeUsageRecentSessions: snapshot.recentSessions
+        })
+      } else {
+        set({
+          openCodeUsageScanState: {
+            ...scanState,
+            isScanning: true,
+            lastScanError: null
+          }
+        })
+      }
+
+      await window.api.openCodeUsage.refresh({
+        force: opts?.forceRefresh ?? false
+      })
+      const { openCodeUsageScope: refreshedScope, openCodeUsageRange: refreshedRange } = get()
+      const refreshedSnapshot = (await window.api.openCodeUsage.getSnapshot({
+        scope: refreshedScope,
+        range: refreshedRange,
+        limit: 10
+      })) as OpenCodeUsageSnapshot
 
       set({
-        openCodeUsageScanState: nextScanState,
-        openCodeUsageSummary: summary,
-        openCodeUsageDaily: daily,
-        openCodeUsageModelBreakdown: modelBreakdown,
-        openCodeUsageProjectBreakdown: projectBreakdown,
-        openCodeUsageRecentSessions: recentSessions
+        openCodeUsageScanState: refreshedSnapshot.scanState,
+        openCodeUsageSummary: refreshedSnapshot.summary,
+        openCodeUsageDaily: refreshedSnapshot.daily,
+        openCodeUsageModelBreakdown: refreshedSnapshot.modelBreakdown,
+        openCodeUsageProjectBreakdown: refreshedSnapshot.projectBreakdown,
+        openCodeUsageRecentSessions: refreshedSnapshot.recentSessions
       })
     } catch (error) {
       console.error('Failed to fetch OpenCode usage:', error)

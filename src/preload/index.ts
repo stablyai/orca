@@ -3015,6 +3015,8 @@ const api = {
       ipcRenderer.invoke('claudeUsage:setEnabled', args),
     refresh: (args?: { force?: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('claudeUsage:refresh', args),
+    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeUsage:getSnapshot', args),
     getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
@@ -3031,6 +3033,8 @@ const api = {
       ipcRenderer.invoke('codexUsage:setEnabled', args),
     refresh: (args?: { force?: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('codexUsage:refresh', args),
+    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
+      ipcRenderer.invoke('codexUsage:getSnapshot', args),
     getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
@@ -3047,6 +3051,8 @@ const api = {
       ipcRenderer.invoke('openCodeUsage:setEnabled', args),
     refresh: (args?: { force?: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:refresh', args),
+    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
+      ipcRenderer.invoke('openCodeUsage:getSnapshot', args),
     getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
