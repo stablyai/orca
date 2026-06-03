@@ -304,6 +304,28 @@ describe('Store', () => {
     expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
   })
 
+  it('persists the existing-user onboarding backfill back to disk', async () => {
+    // Why: the upgrade-cohort backfill only happens once at load. It must be
+    // written back so the completed/dismissed gate survives the next launch
+    // without re-deriving it from a still-missing onboarding block.
+    writeDataFile({
+      schemaVersion: 1,
+      ui: {}
+    })
+
+    const store = await createStore()
+    store.flush()
+    const persisted = readDataFile() as {
+      onboarding?: { closedAt: number | null; outcome: string | null; lastCompletedStep: number }
+      ui?: { setupGuideSidebarDismissed?: boolean }
+    }
+
+    expect(persisted.onboarding?.closedAt).not.toBeNull()
+    expect(persisted.onboarding?.outcome).toBe('completed')
+    expect(persisted.onboarding?.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(persisted.ui?.setupGuideSidebarDismissed).toBe(true)
+  })
+
   it('keeps the setup guide sidebar entry available while onboarding is open', async () => {
     writeDataFile({
       onboarding: {
