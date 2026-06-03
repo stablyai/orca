@@ -29,6 +29,7 @@ import {
   getActiveRuntimeTarget,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
@@ -1175,7 +1176,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         : callRuntimeRpc<RemoveWorktreeResult>(
             target,
             'worktree.rm',
-            { worktree: worktreeId, force, runHooks: !skipArchive },
+            { worktree: toRuntimeWorktreeSelector(worktreeId), force, runHooks: !skipArchive },
             { timeoutMs: 60_000 }
           ))
 
@@ -1457,7 +1458,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         : callRuntimeRpc<ForceDeleteWorktreeBranchResult>(
             target,
             'worktree.forceDeleteBranch',
-            { worktree: worktreeId, branchName, expectedHead },
+            { worktree: toRuntimeWorktreeSelector(worktreeId), branchName, expectedHead },
             { timeoutMs: 15_000 }
           ))
       toast.success('Local branch deleted', {
