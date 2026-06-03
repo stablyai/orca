@@ -165,7 +165,7 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.stepDone['split-terminal']).toBe(false)
   })
 
-  it('marks the step complete once a worktree terminal is split into two panes', () => {
+  it('does not mark the step complete from a live split layout without durable state', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
@@ -176,12 +176,15 @@ describe('getFeatureWallSetupProgress', () => {
       })
     )
 
-    expect(progress.stepDone['split-terminal']).toBe(true)
+    expect(progress.stepDone['split-terminal']).toBe(false)
   })
 
-  it('keeps the step complete after the split tab closes when the split was recorded', () => {
+  it('keeps the step complete after the split tab closes from durable state', () => {
     const withSplit = getFeatureWallSetupProgress(
       makeInput({
+        featureInteractions: {
+          'terminal-pane-split': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        },
         worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
         tabsByWorktree: {
           'worktree-1': [{ id: 'tab-1', title: 'Terminal' }] as never
