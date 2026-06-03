@@ -13,6 +13,7 @@ import {
   Eye,
   FolderInput,
   FolderPlus,
+  Loader2,
   Plus,
   Shapes,
   SlidersHorizontal,
@@ -829,6 +830,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
   const settings = useAppStore((s) => s.settings)
+  const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
 
   useEffect(
     () =>
@@ -3159,11 +3161,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
             const renderLineageChildCard = (child: WorktreeItemRow) => {
               const isActive = activeWorktreeId === child.worktree.id
+              const isDeleting = deleteStateByWorktreeId[child.worktree.id]?.isDeleting ?? false
               const revealHighlightTone =
                 agentSendTargetWorktreeId === child.worktree.id ? 'ai' : 'default'
               const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
                 event.preventDefault()
                 event.stopPropagation()
+                if (isDeleting) {
+                  return
+                }
                 const selectionOnly = onSelectionGesture(event, child.worktree.id)
                 if (selectionOnly) {
                   return
@@ -3199,6 +3205,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       role="option"
                       aria-selected={selectedWorktreeIds.has(child.worktree.id)}
                       aria-current={isActive ? 'page' : undefined}
+                      aria-busy={isDeleting}
                       data-worktree-card-surface="true"
                       data-worktree-card-active={isActive ? 'true' : undefined}
                       className={cn(
@@ -3210,7 +3217,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ],
                         isActive
                           ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-                          : 'worktree-sidebar-card-hover'
+                          : 'worktree-sidebar-card-hover',
+                        isDeleting && 'cursor-not-allowed opacity-50 grayscale'
                       )}
                       data-scroll-reveal-highlight={
                         highlightedRevealWorktreeId === child.worktree.id ? 'true' : undefined
@@ -3218,6 +3226,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       onClick={handleClick}
                       onDoubleClick={(event) => event.stopPropagation()}
                     >
+                      {isDeleting && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
+                          <div className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm">
+                            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                            Deleting…
+                          </div>
+                        </div>
+                      )}
                       <div
                         className="flex min-w-0 flex-1 items-start gap-1.5 pl-2"
                         style={
