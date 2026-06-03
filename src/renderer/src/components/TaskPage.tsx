@@ -3759,6 +3759,8 @@ export default function TaskPage(): React.JSX.Element {
       : selectedLinearCustomView?.model === 'issue'
         ? canLoadMoreLinearCustomViewIssues
         : canLoadMorePlainLinearIssues
+  const activeLinearIssueCanRequestMore =
+    activeLinearIssueCanLoadMore && !activeLinearIssueHasCollectionError
   const activeLinearIssueLimit =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssueLimit
@@ -3850,24 +3852,28 @@ export default function TaskPage(): React.JSX.Element {
     return displayedLinearIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
   }, [activeLinearIssueContextLabel, displayedLinearIssues, linearTeamSelection])
 
+  const orderedLinearIssues = useMemo(
+    () => [...filteredLinearIssues].sort((a, b) => compareLinearIssues(a, b, linearOrderBy)),
+    [filteredLinearIssues, linearOrderBy]
+  )
   const loadedLinearIssuePages = Math.max(
     1,
-    Math.ceil(filteredLinearIssues.length / LINEAR_ITEM_LIMIT)
+    Math.ceil(orderedLinearIssues.length / LINEAR_ITEM_LIMIT)
   )
   const linearIssueTotalPages =
-    filteredLinearIssues.length === 0
+    orderedLinearIssues.length === 0
       ? 1
-      : loadedLinearIssuePages + (activeLinearIssueCanLoadMore ? 1 : 0)
+      : loadedLinearIssuePages + (activeLinearIssueCanRequestMore ? 1 : 0)
   const visibleLinearIssuePage = Math.min(
     activeLinearIssuePage,
     Math.max(0, loadedLinearIssuePages - 1)
   )
   const pagedLinearIssues = useMemo(() => {
     const start = visibleLinearIssuePage * LINEAR_ITEM_LIMIT
-    return filteredLinearIssues.slice(start, start + LINEAR_ITEM_LIMIT)
-  }, [filteredLinearIssues, visibleLinearIssuePage])
+    return orderedLinearIssues.slice(start, start + LINEAR_ITEM_LIMIT)
+  }, [orderedLinearIssues, visibleLinearIssuePage])
   const showLinearIssuePagination =
-    filteredLinearIssues.length > 0 &&
+    orderedLinearIssues.length > 0 &&
     !activeLinearIssueError &&
     linearIssueTotalPages > 1 &&
     !(activeLinearIssueLoading && activeLinearIssues.length === 0)
@@ -3934,6 +3940,13 @@ export default function TaskPage(): React.JSX.Element {
     ]
   )
 
+  const showLinearEmptyFilteredLoadMore =
+    orderedLinearIssues.length === 0 && !activeLinearIssueError && activeLinearIssueCanRequestMore
+  const handleLinearEmptyFilteredLoadMore = useCallback(() => {
+    setActiveLinearIssueLoadingTargetPage(null)
+    ensureActiveLinearIssueLimit(activeLinearIssueLimit + LINEAR_ITEM_LIMIT)
+  }, [activeLinearIssueLimit, ensureActiveLinearIssueLimit, setActiveLinearIssueLoadingTargetPage])
+
   useEffect(() => {
     if (activeLinearIssueLoading || activeLinearIssueLoadingTargetPage === null) {
       return
@@ -3942,7 +3955,7 @@ export default function TaskPage(): React.JSX.Element {
     const maxLoadedPage = Math.max(0, loadedLinearIssuePages - 1)
     const targetPageLoaded = activeLinearIssueLoadingTargetPage <= maxLoadedPage
     const targetPageCannotLoad =
-      !activeLinearIssueCanLoadMore || activeLinearIssueLimit >= LINEAR_ISSUE_LIST_MAX
+      !activeLinearIssueCanRequestMore || activeLinearIssueLimit >= LINEAR_ISSUE_LIST_MAX
     if (targetPageLoaded || targetPageCannotLoad) {
       setActiveLinearIssuePage(Math.min(activeLinearIssueLoadingTargetPage, maxLoadedPage))
       setActiveLinearIssueLoadingTargetPage(null)
@@ -3954,7 +3967,8 @@ export default function TaskPage(): React.JSX.Element {
     // until the requested page exists or Linear reports exhaustion.
     ensureActiveLinearIssueLimit(activeLinearIssueLimit + LINEAR_ITEM_LIMIT)
   }, [
-    activeLinearIssueCanLoadMore,
+    activeLinearIssueCanRequestMore,
+    activeLinearIssueHasCollectionError,
     activeLinearIssueLimit,
     activeLinearIssueLoading,
     activeLinearIssueLoadingTargetPage,
@@ -8863,9 +8877,12 @@ export default function TaskPage(): React.JSX.Element {
                 <>
                   <LinearCollectionNotice
                     errors={linearProjectIssuesResult.errors}
-                    hasMore={false}
+                    hasMore={showLinearEmptyFilteredLoadMore}
                     count={linearProjectIssuesResult.items.length}
                     label="project issues"
+                    onLoadMore={handleLinearEmptyFilteredLoadMore}
+                    loading={activeLinearIssueLoading}
+                    loadMoreLabel="Fetch more"
                   />
                   {showLinearIssuePagination ? (
                     <div className="flex-none border-t border-border/50 bg-muted/50">
@@ -8882,9 +8899,12 @@ export default function TaskPage(): React.JSX.Element {
                 <>
                   <LinearCollectionNotice
                     errors={linearCustomViewIssuesResult.errors}
-                    hasMore={false}
+                    hasMore={showLinearEmptyFilteredLoadMore}
                     count={linearCustomViewIssuesResult.items.length}
                     label="view issues"
+                    onLoadMore={handleLinearEmptyFilteredLoadMore}
+                    loading={activeLinearIssueLoading}
+                    loadMoreLabel="Fetch more"
                   />
                   {showLinearIssuePagination ? (
                     <div className="flex-none border-t border-border/50 bg-muted/50">
@@ -8900,9 +8920,12 @@ export default function TaskPage(): React.JSX.Element {
               ) : (
                 <>
                   <LinearCollectionNotice
-                    hasMore={false}
+                    hasMore={showLinearEmptyFilteredLoadMore}
                     count={linearIssues.length}
                     label="issues"
+                    onLoadMore={handleLinearEmptyFilteredLoadMore}
+                    loading={activeLinearIssueLoading}
+                    loadMoreLabel="Fetch more"
                   />
                   {showLinearIssuePagination ? (
                     <div className="flex-none border-t border-border/50 bg-muted/50">

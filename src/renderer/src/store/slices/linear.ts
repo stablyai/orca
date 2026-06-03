@@ -270,6 +270,30 @@ function collectionWithWorkspaceError<T>(
   }
 }
 
+function largestCachedCollectionBelowLimit<T>(
+  cache: Record<string, CacheEntry<LinearCollectionResult<T>>>,
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  mode: string,
+  scopeId: string,
+  limit: number
+): LinearCollectionResult<T> | null {
+  const keyPrefix = `${linearCollectionCacheKey(workspaceId, mode, scopeId)}::`
+  let best: { limit: number; data: LinearCollectionResult<T> } | null = null
+  for (const [key, entry] of Object.entries(cache)) {
+    if (!entry?.data || !key.startsWith(keyPrefix)) {
+      continue
+    }
+    const cachedLimit = Number(key.slice(keyPrefix.length))
+    if (!Number.isFinite(cachedLimit) || cachedLimit >= limit) {
+      continue
+    }
+    if (!best || cachedLimit > best.limit) {
+      best = { limit: cachedLimit, data: entry.data }
+    }
+  }
+  return best?.data ?? null
+}
+
 function patchLinearIssueCollectionCache(
   cache: Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>,
   issueId: string,
@@ -1087,7 +1111,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           set({ linearStatus: { connected: false, viewer: null } })
         }
         const fallback =
-          get().linearProjectIssueCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
+          get().linearProjectIssueCache[cacheKey]?.data ??
+          largestCachedCollectionBelowLimit(
+            get().linearProjectIssueCache,
+            workspaceId,
+            'project-issues',
+            projectId,
+            effectiveLimit
+          ) ??
+          emptyLinearCollection<LinearIssue>()
         return collectionWithWorkspaceError(fallback, workspaceId, error)
       })
       .finally(() => {
@@ -1267,7 +1299,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           set({ linearStatus: { connected: false, viewer: null } })
         }
         const fallback =
-          get().linearCustomViewIssueCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
+          get().linearCustomViewIssueCache[cacheKey]?.data ??
+          largestCachedCollectionBelowLimit(
+            get().linearCustomViewIssueCache,
+            workspaceId,
+            'custom-view-issues',
+            viewId,
+            effectiveLimit
+          ) ??
+          emptyLinearCollection<LinearIssue>()
         return collectionWithWorkspaceError(fallback, workspaceId, error)
       })
       .finally(() => {
