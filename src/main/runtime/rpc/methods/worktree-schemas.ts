@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/types'
 import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
 import {
   OptionalBoolean,
@@ -8,6 +9,16 @@ import {
   OptionalString,
   TriStateLinkedIssue
 } from '../schemas'
+
+const OptionalTuiAgent = z
+  .unknown()
+  .superRefine((value, ctx) => {
+    if (value !== undefined && !isTuiAgent(value)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Unknown TUI agent' })
+    }
+  })
+  .transform((value): TuiAgent | undefined => (isTuiAgent(value) ? value : undefined))
+  .optional()
 
 export const WorktreeListParams = z.object({
   repo: OptionalString,
@@ -99,6 +110,10 @@ export const WorktreeCreate = z
     // terminal pane launches the selected agent instead of an idle shell.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
+    // Why: CLI clients should not hardcode agent launch quoting because SSH
+    // workspaces execute in a different shell than the client process.
+    startupAgent: OptionalTuiAgent,
+    startupPrompt: OptionalString,
     // Why: task-driven mobile creates need desktop parity: the host chooses
     // the same default/detected agent and drafts the linked issue/PR URL into it.
     startupDraft: OptionalString,
@@ -112,6 +127,12 @@ export const WorktreeCreate = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Choose either --parent-worktree or --no-parent, not both.'
+      })
+    }
+    if (params.startupPrompt !== undefined && params.startupAgent === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'startupPrompt requires startupAgent'
       })
     }
   })

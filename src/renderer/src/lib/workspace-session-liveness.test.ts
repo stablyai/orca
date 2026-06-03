@@ -13,6 +13,7 @@ function createSnapshot(
     terminalLayoutsByTabId: {},
     activeTabIdByWorktree: {},
     openFiles: [],
+    editorDrafts: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},
@@ -29,6 +30,7 @@ function createSnapshot(
     lastKnownRelayPtyIdByTabId: {},
     lastVisitedAtByWorktreeId: {},
     defaultTerminalTabsAppliedByWorktreeId: {},
+    sleptWorktreeIds: {},
     ...overrides
   }
 }

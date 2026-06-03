@@ -438,6 +438,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
     set((s) => {
       const existingTabs = s.browserTabsByWorktree[worktreeId] ?? []
+      const nextSleptWorktreeIds = s.sleptWorktreeIds[worktreeId]
+        ? (() => {
+            const next = { ...s.sleptWorktreeIds }
+            delete next[worktreeId]
+            return next
+          })()
+        : s.sleptWorktreeIds
       const nextTabBarOrder = (() => {
         const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
         const terminalIds = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
@@ -502,7 +509,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               [workspaceId]: true,
               [page.id]: true
             }
-          : s.pendingAddressBarFocusByTabId
+          : s.pendingAddressBarFocusByTabId,
+        ...(nextSleptWorktreeIds !== s.sleptWorktreeIds
+          ? { sleptWorktreeIds: nextSleptWorktreeIds }
+          : {})
       }
     })
 

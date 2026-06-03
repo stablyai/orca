@@ -776,8 +776,22 @@ export async function runtimePathExists(
   context: RuntimeFileOperationArgs,
   absolutePath: string
 ): Promise<boolean> {
+  const remoteArgs = getRemoteFileArgs(context, absolutePath)
+  if (!remoteArgs) {
+    assertLocalFilesystemFallbackAllowed(context)
+    return window.api.fs.pathExists({
+      filePath: absolutePath,
+      connectionId: context.connectionId
+    })
+  }
+
   try {
-    await statRuntimePath(context, absolutePath)
+    await callRuntimeRpc(
+      remoteArgs.target,
+      'files.stat',
+      { worktree: remoteArgs.worktreeId, relativePath: remoteArgs.relativePath },
+      { timeoutMs: 15_000 }
+    )
     return true
   } catch (err) {
     const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase()

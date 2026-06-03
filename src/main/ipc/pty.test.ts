@@ -560,6 +560,18 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe('/tmp/user-opencode-config')
     })
 
+    it('does not treat inherited Orca OpenCode config as user config without a source dir', async () => {
+      const env = await spawnAndGetEnv({
+        OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
+        ORCA_OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay'
+      })
+
+      expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined)
+      expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+      expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
+      expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
     it('restores user OpenCode config when agent status hooks are disabled in a nested Orca shell', async () => {
       const env = await spawnAndGetEnv(
         {

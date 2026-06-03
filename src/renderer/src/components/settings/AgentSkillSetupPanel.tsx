@@ -3,6 +3,7 @@ import { RefreshCw, Terminal } from 'lucide-react'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
+import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
@@ -31,6 +32,7 @@ type AgentSkillSetupPanelProps = {
   getPrerequisiteStatus?: () => Promise<SkillPrerequisiteStatus>
   isPrerequisiteAvailable?: (status: SkillPrerequisiteStatus) => boolean
   onBeforeOpenTerminal?: () => void | Promise<void>
+  showInstallWhenInstalled?: boolean
   showRecheckWhenInstalled?: boolean
   onRecheck: () => void | Promise<void>
 }
@@ -56,6 +58,7 @@ export function AgentSkillSetupPanel({
   getPrerequisiteStatus,
   isPrerequisiteAvailable = isOrcaCliAvailableOnPath,
   onBeforeOpenTerminal,
+  showInstallWhenInstalled = true,
   showRecheckWhenInstalled = true,
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
@@ -112,27 +115,29 @@ export function AgentSkillSetupPanel({
   }
   const actionRow = (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          void (async () => {
-            try {
-              await onBeforeOpenTerminal?.()
-              await refreshPreInstallNotice()
-            } finally {
-              if (mountedRef.current) {
-                setTerminalOpen(true)
+      {!installed || showInstallWhenInstalled ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void (async () => {
+              try {
+                await onBeforeOpenTerminal?.()
+                await refreshPreInstallNotice()
+              } finally {
+                if (mountedRef.current) {
+                  setTerminalOpen(true)
+                }
               }
-            }
-          })()
-        }}
-        disabled={terminalOpen || installDisabled}
-      >
-        <Terminal className="size-3.5" />
-        Install
-      </Button>
+            })()
+          }}
+          disabled={terminalOpen || installDisabled}
+        >
+          <Terminal className="size-3.5" />
+          Install
+        </Button>
+      ) : null}
       {!installed || showRecheckWhenInstalled ? (
         <Button
           type="button"
@@ -201,6 +206,7 @@ export function AgentSkillSetupPanel({
             shellOverride={terminalShellOverride}
             terminalTopMarginPx={0}
             autoScrollIntoView={false}
+            onTerminalExit={notifyInstalledAgentSkillsChanged}
           />
         </div>
       ) : null}

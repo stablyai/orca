@@ -76,7 +76,7 @@ else
   ZIP_PATH="$PWD/orca-launch-diagnostics-${TAG}-${TIMESTAMP}.zip"
 fi
 
-log() {
+diag_log() {
   printf '[orca-diagnostics] %s\n' "$*"
 }
 
@@ -100,7 +100,7 @@ cleanup() {
   if [[ "$KEEP" -eq 0 ]]; then
     rm -rf "$WORK_DIR"
   else
-    log "kept working directory: $WORK_DIR"
+    diag_log "kept working directory: $WORK_DIR"
   fi
 }
 trap cleanup EXIT
@@ -143,11 +143,11 @@ ensure_no_existing_orca() {
 
 download_and_copy_app() {
   local url="https://github.com/$REPO/releases/download/$TAG/$ASSET"
-  log "downloading $url"
+  diag_log "downloading $url"
   curl -fL --retry 3 --retry-delay 2 -o "$DMG_PATH" "$url"
   shasum -a 256 "$DMG_PATH" >"$OUT_DIR/dmg.sha256" || true
 
-  log "mounting DMG"
+  diag_log "mounting DMG"
   hdiutil attach "$DMG_PATH" -nobrowse -readonly -mountpoint "$MOUNT_DIR" >"$OUT_DIR/hdiutil-attach.txt"
   local source_app
   source_app="$(find "$MOUNT_DIR" -maxdepth 1 -name '*.app' -type d | head -n 1)"
@@ -156,7 +156,7 @@ download_and_copy_app() {
     exit 1
   fi
 
-  log "copying app to isolated temp path"
+  diag_log "copying app to isolated temp path"
   ditto "$source_app" "$APP_DIR"
   hdiutil detach "$MOUNT_DIR" -quiet
 }
@@ -189,7 +189,7 @@ start_log_stream() {
   local file="$1"
   local predicate='process == "Orca" OR eventMessage CONTAINS[c] "Orca" OR eventMessage CONTAINS[c] "com.stablyai.orca"'
   if command -v log >/dev/null 2>&1; then
-    log stream --style compact --predicate "$predicate" >"$file" 2>&1 &
+    command log stream --style compact --predicate "$predicate" >"$file" 2>&1 &
     echo "$!"
   else
     echo ""
@@ -270,7 +270,7 @@ run_launchservices_probe() {
   local stream_file="$OUT_DIR/$label.system-stream.log"
   local stream_pid
 
-  log "running LaunchServices probe: $label"
+  diag_log "running LaunchServices probe: $label"
   stream_pid="$(start_log_stream "$stream_file")"
   {
     echo "label=$label"
@@ -313,7 +313,7 @@ run_direct_exec_probe() {
   local stream_file="$OUT_DIR/$label.system-stream.log"
   local stream_pid
 
-  log "running direct exec probe"
+  diag_log "running direct exec probe"
   stream_pid="$(start_log_stream "$stream_file")"
   {
     echo "label=$label"
@@ -335,8 +335,8 @@ run_direct_exec_probe() {
 write_system_log_snapshot() {
   local predicate='process == "Orca" OR eventMessage CONTAINS[c] "Orca" OR eventMessage CONTAINS[c] "com.stablyai.orca"'
   if command -v log >/dev/null 2>&1; then
-    log "capturing recent unified log snapshot"
-    log show --style syslog --last 10m --predicate "$predicate" >"$OUT_DIR/system-log-last-10m.log" 2>&1 || true
+    diag_log "capturing recent unified log snapshot"
+    command log show --style syslog --last 10m --predicate "$predicate" >"$OUT_DIR/system-log-last-10m.log" 2>&1 || true
   fi
 }
 
@@ -350,9 +350,9 @@ package_results() {
     echo "  $ZIP_PATH"
   } >"$OUT_DIR/README.txt"
 
-  log "creating zip"
+  diag_log "creating zip"
   (cd "$OUT_DIR" && zip -qry "$ZIP_PATH" .)
-  log "wrote $ZIP_PATH"
+  diag_log "wrote $ZIP_PATH"
 }
 
 write_environment_report

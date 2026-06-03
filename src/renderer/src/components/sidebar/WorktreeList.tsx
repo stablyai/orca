@@ -13,6 +13,7 @@ import {
   Eye,
   FolderInput,
   FolderPlus,
+  Loader2,
   Plus,
   Shapes,
   SlidersHorizontal,
@@ -106,7 +107,6 @@ import {
 } from './visible-worktrees'
 import {
   getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs,
   getWorktreeSectionTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
 import { selectTerminalLayoutRootsForWorktrees } from './worktree-card-status-inputs'
@@ -183,6 +183,7 @@ import {
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import ImportedWorktreesVisibilityLine from './ImportedWorktreesVisibilityLine'
 import {
@@ -829,6 +830,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
   const settings = useAppStore((s) => s.settings)
+  const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
 
   useEffect(
     () =>
@@ -2821,6 +2823,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
                           {row.label}
                         </div>
+                        <RepoForkIndicator upstream={row.repo?.upstream} />
                         <SectionMetricsBadge
                           count={row.count}
                           summary={sectionActivity}
@@ -3140,6 +3143,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     onCardDragStart={handleWorktreeCardDragStart}
                     onCardDragEnd={clearWorktreeDrag}
                     hideRepoBadge={groupBy === 'repo'}
+                    // Why: pinned worktrees only render in the Pinned group, so
+                    // isPinned marks the mixed-repo pinned section that needs icons.
+                    inPinnedSection={itemRow.worktree.isPinned}
                     lineageChildCount={itemRow.lineageChildCount}
                     lineageCollapsed={itemRow.lineageCollapsed}
                     lineageChildren={lineageChildren}
@@ -3159,11 +3165,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
 
             const renderLineageChildCard = (child: WorktreeItemRow) => {
               const isActive = activeWorktreeId === child.worktree.id
+              const isDeleting = deleteStateByWorktreeId[child.worktree.id]?.isDeleting ?? false
               const revealHighlightTone =
                 agentSendTargetWorktreeId === child.worktree.id ? 'ai' : 'default'
               const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
                 event.preventDefault()
                 event.stopPropagation()
+                if (isDeleting) {
+                  return
+                }
                 const selectionOnly = onSelectionGesture(event, child.worktree.id)
                 if (selectionOnly) {
                   return
@@ -3199,6 +3209,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       role="option"
                       aria-selected={selectedWorktreeIds.has(child.worktree.id)}
                       aria-current={isActive ? 'page' : undefined}
+                      aria-busy={isDeleting}
                       data-worktree-card-surface="true"
                       data-worktree-card-active={isActive ? 'true' : undefined}
                       className={cn(
@@ -3210,7 +3221,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ],
                         isActive
                           ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-                          : 'worktree-sidebar-card-hover'
+                          : 'worktree-sidebar-card-hover',
+                        isDeleting && 'cursor-not-allowed opacity-50 grayscale'
                       )}
                       data-scroll-reveal-highlight={
                         highlightedRevealWorktreeId === child.worktree.id ? 'true' : undefined
@@ -3218,6 +3230,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       onClick={handleClick}
                       onDoubleClick={(event) => event.stopPropagation()}
                     >
+                      {isDeleting && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
+                          <div className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm">
+                            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                            Deleting…
+                          </div>
+                        </div>
+                      )}
                       <div
                         className="flex min-w-0 flex-1 items-start gap-1.5 pl-2"
                         style={
@@ -3463,6 +3483,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
+  const sleptWorktreeIds = useAppStore((s) => s.sleptWorktreeIds)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
@@ -3476,6 +3497,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
   const revealWorktreeInSidebar = useAppStore((s) => s.revealWorktreeInSidebar)
+  const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
   const clearPendingRevealWorktreeId = useAppStore((s) => s.clearPendingRevealWorktreeId)
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
   // Why: agent-send eligibility only matters while the picker is open. When it
@@ -3517,16 +3539,6 @@ const WorktreeList = React.memo(function WorktreeList({
     agentTargetTabsByWorktree,
     agentTargetTerminalLayoutsByTabId
   ])
-
-  // Read tabsByWorktree when needed for filtering or sorting
-  const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
-  const tabsByWorktree = useAppStore((s) =>
-    needsActivityMaps ? getVisibleWorktreeTerminalActivityTabs(s.tabsByWorktree) : null
-  )
-  const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
-  const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
-  )
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
@@ -3795,9 +3807,7 @@ const WorktreeList = React.memo(function WorktreeList({
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
-      tabsByWorktree,
-      ptyIdsByTabId,
-      browserTabsByWorktree,
+      sleptWorktreeIds,
       hideDefaultBranchWorkspace,
       repoMap,
       worktreeLineageById
@@ -3819,9 +3829,7 @@ const WorktreeList = React.memo(function WorktreeList({
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     repoMap,
-    tabsByWorktree,
-    ptyIdsByTabId,
-    browserTabsByWorktree,
+    sleptWorktreeIds,
     sortedIds,
     worktreeMap,
     worktreeLineageById,
@@ -4365,30 +4373,16 @@ const WorktreeList = React.memo(function WorktreeList({
 
   const pinWorktree = useCallback(
     (worktreeId: string) => {
-      const current = worktreeMap.get(worktreeId)
-      if (!current || current.isPinned) {
-        return
-      }
-      void updateWorktreeMeta(worktreeId, { isPinned: true })
+      setWorktreesPinnedAndReveal([worktreeId], true)
     },
-    [updateWorktreeMeta, worktreeMap]
+    [setWorktreesPinnedAndReveal]
   )
 
   const pinWorktrees = useCallback(
     (worktreeIds: readonly string[]) => {
-      const updates = new Map<string, { isPinned: true }>()
-      for (const worktreeId of worktreeIds) {
-        const current = worktreeMap.get(worktreeId)
-        if (!current || current.isPinned) {
-          continue
-        }
-        updates.set(worktreeId, { isPinned: true })
-      }
-      if (updates.size > 0) {
-        void updateWorktreesMeta(updates)
-      }
+      setWorktreesPinnedAndReveal(worktreeIds, true)
     },
-    [updateWorktreesMeta, worktreeMap]
+    [setWorktreesPinnedAndReveal]
   )
 
   const reorderWorktrees = useCallback(

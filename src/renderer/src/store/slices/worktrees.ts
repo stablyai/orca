@@ -45,6 +45,7 @@ const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
+const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -656,6 +657,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     activeTabIdByWorktree: omitByWorktree(s.activeTabIdByWorktree),
     tabBarOrderByWorktree: omitByWorktree(s.tabBarOrderByWorktree),
     pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
+    sleptWorktreeIds: omitByWorktree(s.sleptWorktreeIds),
     rightSidebarTabByWorktree: omitByWorktree(s.rightSidebarTabByWorktree),
     // Split-tab / unified tab state
     unifiedTabsByWorktree: omitByWorktree(s.unifiedTabsByWorktree),
@@ -922,15 +924,28 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return worktree
         }
         const nextHead = identity.head ?? worktree.head
-        const nextBranch = identity.branch ?? worktree.branch
+        const nextBranch = identity.branch === null ? '' : (identity.branch ?? worktree.branch)
         if (nextHead === worktree.head && nextBranch === worktree.branch) {
           return worktree
         }
         changed = true
         // Why: terminal branch switches only patch branch/head here; auto-derived
         // titles need the same branch derivation that full worktree listing uses.
-        const wasAutoDerived = worktree.displayName === branchName(worktree.branch)
-        const nextDisplayName = wasAutoDerived ? branchName(nextBranch) : worktree.displayName
+        const currentBranchName = branchName(worktree.branch)
+        const wasAutoDerived = worktree.displayName === currentBranchName
+        const wasDetachedAutoDerived =
+          worktree.branch === '' &&
+          nextBranch !== '' &&
+          detachedHeadAutoDerivedDisplayNames.get(worktreeId) === worktree.displayName
+        const nextDisplayName =
+          (wasAutoDerived || wasDetachedAutoDerived) && nextBranch
+            ? branchName(nextBranch)
+            : worktree.displayName
+        if (identity.branch === null && wasAutoDerived) {
+          detachedHeadAutoDerivedDisplayNames.set(worktreeId, worktree.displayName)
+        } else if (identity.branch !== undefined) {
+          detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
+        }
         return { ...worktree, head: nextHead, branch: nextBranch, displayName: nextDisplayName }
       })
 
@@ -1320,6 +1335,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 return next
               })()
             : s.lastVisitedAtByWorktreeId
+        const nextSleptWorktreeIds =
+          worktreeId in s.sleptWorktreeIds
+            ? (() => {
+                const next = { ...s.sleptWorktreeIds }
+                delete next[worktreeId]
+                return next
+              })()
+            : s.sleptWorktreeIds
         return {
           worktreesByRepo: next,
           worktreeLineageById: nextLineage,
@@ -1378,6 +1401,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           activeTabType: removedActiveWorktree || activeFileCleared ? 'terminal' : s.activeTabType,
           everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
           lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
+          sleptWorktreeIds: nextSleptWorktreeIds,
           sortEpoch: s.sortEpoch + 1
         }
       })
@@ -1674,6 +1698,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
     )
+  },
+
+  setWorktreesPinnedAndReveal: (worktreeIds, isPinned) => {
+    // Skip worktrees already in the target state so a no-op toggle doesn't
+    // scroll the viewport away from where the user is.
+    const updates = new Map<string, Partial<WorktreeMeta>>()
+    let revealWorktreeId: string | null = null
+    for (const worktreeId of worktreeIds) {
+      const current = get().getKnownWorktreeById(worktreeId)
+      if (!current || current.isPinned === isPinned) {
+        continue
+      }
+      updates.set(worktreeId, { isPinned })
+      if (revealWorktreeId === null) {
+        revealWorktreeId = worktreeId
+      }
+    }
+    if (revealWorktreeId === null) {
+      return
+    }
+    // updateWorktreesMeta applies its store update synchronously (only the
+    // persistence is async), so the reveal below resolves against a render
+    // where the row already sits in its new section.
+    void get().updateWorktreesMeta(updates)
+    get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
   },
 
   markWorktreeUnread: (worktreeId) => {
@@ -2156,6 +2205,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const nextEverActivated = isFirstActivation
         ? new Set([...s.everActivatedWorktreeIds, worktreeId!])
         : s.everActivatedWorktreeIds
+      const nextSleptWorktreeIds =
+        worktreeId in s.sleptWorktreeIds
+          ? (() => {
+              const next = { ...s.sleptWorktreeIds }
+              delete next[worktreeId]
+              return next
+            })()
+          : s.sleptWorktreeIds
       const nextWorktrees = shouldClearUnread
         ? applyWorktreeUpdates(s.worktreesByRepo, worktreeId, metaUpdates)
         : s.worktreesByRepo
@@ -2190,6 +2247,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         s.activeTabId !== activeTabId ||
         nextActiveTabTypeByWorktree !== s.activeTabTypeByWorktree ||
         nextEverActivated !== s.everActivatedWorktreeIds ||
+        nextSleptWorktreeIds !== s.sleptWorktreeIds ||
         nextWorktrees !== s.worktreesByRepo ||
         nextDetectedWorktrees !== s.detectedWorktreesByRepo
       if (!hasStateChange) {
@@ -2207,6 +2265,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeTabTypeByWorktree: nextActiveTabTypeByWorktree,
         activeTabId,
         everActivatedWorktreeIds: nextEverActivated,
+        ...(nextSleptWorktreeIds !== s.sleptWorktreeIds
+          ? { sleptWorktreeIds: nextSleptWorktreeIds }
+          : {}),
         ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
         ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
           ? { detectedWorktreesByRepo: nextDetectedWorktrees }

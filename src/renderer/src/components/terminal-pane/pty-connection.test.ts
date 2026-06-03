@@ -475,6 +475,9 @@ describe('connectPanePty', () => {
           dispatch: vi.fn().mockResolvedValue({ delivered: true }),
           playSound: vi.fn().mockResolvedValue({ played: true })
         },
+        runtime: {
+          restoreTerminalFit: vi.fn().mockResolvedValue({ restored: true })
+        },
         agentStatus: {
           inferInterrupt: vi.fn().mockResolvedValue(false)
         }
@@ -1943,7 +1946,7 @@ describe('connectPanePty', () => {
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
   })
 
-  it('does not infer interrupts when mobile presence lock blocks terminal input', async () => {
+  it('reclaims and replays terminal input when mobile presence lock is active', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
@@ -1988,10 +1991,51 @@ describe('connectPanePty', () => {
       }
       terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
-      vi.advanceTimersByTime(500)
+      ;(onDataHandler as unknown as (data: string) => void)('x')
+      await flushAsyncTicks()
 
-      expect(transport.sendInput).not.toHaveBeenCalled()
+      expect(window.api.runtime.restoreTerminalFit).toHaveBeenCalledWith(ptyId)
+      expect(window.api.runtime.restoreTerminalFit).toHaveBeenCalledTimes(1)
+      expect(transport.sendInput).toHaveBeenCalledWith('\x03')
+      expect(transport.sendInput).toHaveBeenCalledWith('x')
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+    } finally {
+      setDriverForPty(ptyId, { kind: 'idle' })
+    }
+  })
+
+  it('lets remote locked terminal input reach the runtime transport for reclaim', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+
+    const ptyId = 'remote:env-1@@terminal-1'
+    setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+    try {
+      const transport = createMockTransport(ptyId)
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
+        ptyIdsByTabId: { 'tab-1': [ptyId] }
+      }
+
+      const pane = createPane(1)
+      let onDataHandler: ((data: string) => void) | null = null
+      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+        onDataHandler = handler
+        return { dispose: vi.fn() }
+      }) as typeof pane.terminal.onData)
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
+      if (!onDataHandler) {
+        throw new Error('expected onData handler to be registered')
+      }
+      ;(onDataHandler as unknown as (data: string) => void)('x')
+      await flushAsyncTicks()
+
+      expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
+      expect(transport.sendInput).toHaveBeenCalledWith('x')
     } finally {
       setDriverForPty(ptyId, { kind: 'idle' })
     }
@@ -3608,6 +3652,264 @@ describe('connectPanePty', () => {
     expect(transport.attach).not.toHaveBeenCalled()
     await flushAsyncTicks()
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'pty-local-detached')
+  })
+
+  it('restores a detached local PTY from the reattach snapshot when remounted', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: 'snapshot-after-parking' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'wt-1@@detached-local' }]
+      },
+      settings: {
+        ...mockStoreState.settings
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.connect).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 'wt-1@@detached-local' })
+    )
+    expect(transport.attach).not.toHaveBeenCalled()
+    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[2J\x1b[3J\x1b[H', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith('snapshot-after-parking', expect.any(Function))
+    expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(1, 'wt-1@@detached-local')
+  })
+
+  it('prefers the bounded main snapshot when a parked local PTY remounts', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('wt-1@@detached-local')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          isReattach: true,
+          snapshot: 'provider-stale-snapshot'
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    getMainBufferSnapshot.mockResolvedValue({
+      data: 'main-headless-current\r\n',
+      cols: 100,
+      rows: 30,
+      seq: 42
+    })
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'wt-1@@detached-local' }]
+      },
+      settings: {
+        ...mockStoreState.settings
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(30)
+
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('wt-1@@detached-local', {
+      scrollbackRows: 5000
+    })
+    expect(pane.terminal.resize).toHaveBeenCalledWith(100, 30)
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'main-headless-current\r\n',
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      'provider-stale-snapshot',
+      expect.any(Function)
+    )
+  })
+
+  it('replays foreground bytes that arrive while a parked reattach snapshot is in flight', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('wt-1@@detached-local')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks: ConnectCallbacks }) => {
+        capturedDataCallback.current = callbacks.onData ?? null
+        if (sessionId) {
+          return {
+            id: sessionId,
+            isReattach: true,
+            snapshot: 'provider-stale-snapshot'
+          }
+        }
+        return null
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const snapshot = createDeferred<{ data: string; cols: number; rows: number; seq: number }>()
+    getMainBufferSnapshot.mockReturnValue(snapshot.promise)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'wt-1@@detached-local' }]
+      },
+      settings: {
+        ...mockStoreState.settings
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(8)
+    expect(capturedDataCallback.current).not.toBeNull()
+    expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+
+    const live = 'live-after-snapshot-start\r\n'
+    capturedDataCallback.current?.(live, {
+      seq: 100 + live.length,
+      rawLength: live.length
+    })
+    snapshot.resolve({
+      data: 'main-before-live\r\n',
+      cols: 120,
+      rows: 40,
+      seq: 100
+    })
+    await flushAsyncTicks(30)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('main-before-live\r\n', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      'provider-stale-snapshot',
+      expect.any(Function)
+    )
+  })
+
+  it('does not paint stale fallback data when disposed during parked snapshot restore', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('wt-1@@detached-local')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          isReattach: true,
+          snapshot: 'provider-stale-snapshot'
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const snapshot = createDeferred<{ data: string; cols: number; rows: number; seq: number }>()
+    getMainBufferSnapshot.mockReturnValue(snapshot.promise)
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'wt-1@@detached-local' }]
+      },
+      settings: {
+        ...mockStoreState.settings
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    const binding = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(8)
+    expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+
+    binding.dispose()
+    snapshot.resolve({
+      data: 'main-after-dispose\r\n',
+      cols: 120,
+      rows: 40,
+      seq: 100
+    })
+    await flushAsyncTicks(30)
+
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      'main-after-dispose\r\n',
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      'provider-stale-snapshot',
+      expect.any(Function)
+    )
+    expect(window.api.pty.settlePaneSerializer).not.toHaveBeenCalled()
+  })
+
+  it('keeps fresh cold-restore content when main has no parked reattach snapshot', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: sessionId,
+          coldRestore: { scrollback: 'cold-restore-scrollback', cwd: '/tmp/wt-1' }
+        }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'wt-1@@detached-local' }]
+      },
+      settings: {
+        ...mockStoreState.settings
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'cold-restore-scrollback',
+      expect.any(Function)
+    )
+    expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith('wt-1@@detached-local')
   })
 
   it('attaches remote runtime PTY handles instead of creating a replacement terminal', async () => {

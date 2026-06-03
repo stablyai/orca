@@ -83,6 +83,10 @@ export type Repo = {
   displayName: string
   badgeColor: string
   repoIcon?: RepoIcon | null
+  /** Set when the repo is a fork: the upstream/parent owner/repo. Drives the
+   *  default avatar (upstream owner, not the personal fork) and the fork
+   *  indicator. Absent = not a fork, or fork status not yet resolved. */
+  upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string
@@ -656,6 +660,8 @@ export type PersistedOpenFile = {
   language: string
   isPreview?: boolean
   runtimeEnvironmentId?: string | null
+  /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
+  dirtyDraftContent?: string
 }
 
 export type WorkspaceSessionState = {
@@ -713,6 +719,9 @@ export type WorkspaceSessionState = {
    *  considered. Persisted so closing all tabs and re-opening the workspace
    *  does not recreate the template. */
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
+  /** Worktrees the user explicitly slept. Inactive terminal state alone does
+   *  not imply sleep; a worktree only sleeps through the user sleep action. */
+  sleptWorktreeIds?: Record<string, true>
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
@@ -2029,6 +2038,9 @@ export type GlobalSettings = {
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
   httpProxyBypassRules?: string
+  /** Why: corporate TLS-intercepting proxies can break Electron HTTP/2 downloads;
+   *  this opt-in compatibility mode applies Chromium's process-wide HTTP/1.1 switch. */
+  electronHttp1CompatibilityMode?: boolean
   /** Why: opening arbitrary links inside Orca uses an isolated guest browser surface.
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
@@ -2336,6 +2348,7 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
+  notificationId?: string
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
@@ -2365,6 +2378,10 @@ export type NotificationDispatchResult = {
     | 'cooldown'
     | 'not-supported'
     | 'not-displayed'
+}
+
+export type NotificationDismissResult = {
+  dismissed: number
 }
 
 export type NotificationSoundResult = {

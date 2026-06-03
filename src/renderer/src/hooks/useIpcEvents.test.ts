@@ -148,7 +148,7 @@ describe('buildNewWorkspaceShortcutModalData', () => {
     } as never)
 
     expect(data.telemetrySource).toBe('shortcut')
-    expect(data.prefilledName).toBe('fix-linear-context-handoff')
+    expect(data.prefilledName).toBe('eng-123-fix-linear-context-handoff')
     expect(data.linkedWorkItem).toMatchObject({
       type: 'issue',
       number: 0,
@@ -220,6 +220,7 @@ describe('useIpcEvents browser tab create routing', () => {
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
       fetchWorktrees: vi.fn(),
+      fetchWorktreeLineage: vi.fn(),
       setActiveView: vi.fn(),
       activeModal: null,
       closeModal: vi.fn(),
@@ -688,6 +689,7 @@ describe('useIpcEvents updater integration', () => {
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
       fetchWorktrees: vi.fn(),
+      fetchWorktreeLineage: vi.fn(),
       setActiveView: vi.fn(),
       activeModal: null,
       closeModal: vi.fn(),
@@ -1078,7 +1080,12 @@ describe('useIpcEvents updater integration', () => {
             leafId?: string
             splitFromLeafId?: string
             splitDirection?: 'horizontal' | 'vertical'
-            splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
+            splitTelemetrySource?:
+              | 'contextual_tour'
+              | 'keyboard'
+              | 'context_menu'
+              | 'command'
+              | 'unknown'
           }) => void)
         | null
     } = { current: null }
@@ -1190,7 +1197,12 @@ describe('useIpcEvents updater integration', () => {
               leafId?: string
               splitFromLeafId?: string
               splitDirection?: 'horizontal' | 'vertical'
-              splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
+              splitTelemetrySource?:
+                | 'contextual_tour'
+                | 'keyboard'
+                | 'context_menu'
+                | 'command'
+                | 'unknown'
             }) => void
           ) => {
             createTerminalListenerRef.current = listener
@@ -2501,6 +2513,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
     toolInput?: string
     lastAssistantMessage?: string
     interrupted?: boolean
+    terminalHandle?: string
+    orchestration?: {
+      taskId?: string
+      dispatchId?: string
+      parentTerminalHandle?: string
+      parentPaneKey?: string
+      coordinatorHandle?: string
+      orchestrationRunId?: string
+    }
     connectionId?: string | null
     receivedAt: number
     stateStartedAt: number
@@ -2531,6 +2552,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
       fetchWorktrees: vi.fn(),
+      fetchWorktreeLineage: vi.fn(),
       setActiveView: vi.fn(),
       activeModal: null,
       closeModal: vi.fn(),
@@ -3938,6 +3960,145 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(hydrateBrowserSession).not.toHaveBeenCalled()
   })
 
+  it('merges remote slept and default-terminal markers for the changed target only', async () => {
+    const hydrateWorkspaceSession = vi.fn()
+    const onChangedListenerRef: {
+      current:
+        | ((event: {
+            targetId: string
+            sourceClientId?: string
+            snapshot: Record<string, unknown>
+          }) => void)
+        | null
+    } = { current: null }
+    const localWorktreeId = 'repo-local::/local'
+    const remoteWorktreeId = 'repo-remote::/repo'
+    const setRemoteWorkspaceSyncStatus = vi.fn()
+    const storeState: StoreLike = buildStoreState({
+      workspaceSessionReady: true,
+      activeRepoId: 'repo-local',
+      activeWorktreeId: localWorktreeId,
+      activeTabId: 'tab-local',
+      repos: [
+        { id: 'repo-local', connectionId: null },
+        { id: 'repo-remote', connectionId: 'conn-1' }
+      ],
+      worktreesByRepo: {
+        'repo-local': [{ id: localWorktreeId, repoId: 'repo-local' }],
+        'repo-remote': [{ id: remoteWorktreeId, repoId: 'repo-remote' }]
+      },
+      tabsByWorktree: {
+        [localWorktreeId]: [
+          { id: 'tab-local', ptyId: null, worktreeId: localWorktreeId, title: 'Local' }
+        ]
+      },
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {},
+      activeTabIdByWorktree: { [localWorktreeId]: 'tab-local' },
+      openFiles: [],
+      activeFileIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      browserTabsByWorktree: {},
+      browserPagesByWorkspace: {},
+      activeBrowserTabIdByWorktree: {},
+      browserUrlHistory: [],
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      sshConnectionStates: new Map(),
+      lastKnownRelayPtyIdByTabId: {},
+      lastVisitedAtByWorktreeId: {},
+      defaultTerminalTabsAppliedByWorktreeId: { [localWorktreeId]: true },
+      sleptWorktreeIds: { [localWorktreeId]: true },
+      hydrateWorkspaceSession,
+      hydrateTabsSession: vi.fn(),
+      hydrateEditorSession: vi.fn(),
+      hydrateBrowserSession: vi.fn(),
+      markRemoteWorkspaceHydrated: vi.fn(),
+      setRemoteWorkspaceSyncStatus,
+      reconnectPersistedTerminals: vi.fn(() => Promise.resolve())
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        remoteWorkspace: {
+          clientId: () => Promise.resolve('client-self'),
+          onChanged: (cb: typeof onChangedListenerRef.current) => {
+            onChangedListenerRef.current = cb
+            return () => {}
+          }
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    onChangedListenerRef.current?.({
+      targetId: 'conn-1',
+      sourceClientId: 'client-other',
+      snapshot: {
+        revision: 7,
+        updatedAt: Date.now(),
+        session: {
+          activeWorktreePath: '/repo',
+          activeTabId: 'tab-remote',
+          tabsByWorktreePath: {
+            '/repo': [
+              {
+                id: 'tab-remote',
+                ptyId: null,
+                worktreePath: '/repo',
+                title: 'Remote',
+                customTitle: null,
+                color: null,
+                sortOrder: 1,
+                createdAt: 1
+              }
+            ]
+          },
+          terminalLayoutsByTabId: {},
+          defaultTerminalTabsAppliedByWorktreePath: { '/repo': true },
+          sleptWorktreePaths: { '/repo': true }
+        }
+      }
+    })
+    for (
+      let attempt = 0;
+      attempt < 10 && hydrateWorkspaceSession.mock.calls.length === 0;
+      attempt += 1
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+
+    expect(hydrateWorkspaceSession).toHaveBeenCalledTimes(1)
+    expect(hydrateWorkspaceSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultTerminalTabsAppliedByWorktreeId: {
+          [localWorktreeId]: true,
+          [remoteWorktreeId]: true
+        },
+        sleptWorktreeIds: {
+          [localWorktreeId]: true,
+          [remoteWorktreeId]: true
+        }
+      })
+    )
+  })
+
   it('silently discards snapshot entries whose tabs are still unknown', async () => {
     const setAgentStatus = vi.fn()
     const getSnapshot = vi.fn(() =>
@@ -3991,6 +4152,140 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('silently discards stale worktree-attributed snapshots for unknown panes', async () => {
+    const setAgentStatus = vi.fn()
+    const getSnapshot = vi.fn(() =>
+      Promise.resolve([
+        {
+          paneKey: ORPHAN_PANE_KEY,
+          state: 'done' as const,
+          prompt: 'old copilot turn',
+          agentType: 'copilot',
+          worktreeId: 'wt-1',
+          receivedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000
+        }
+      ])
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Copilot' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      workspaceSessionReady: true
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('applies worktree-attributed child snapshots when runtime identity is present', async () => {
+    const setAgentStatus = vi.fn()
+    const getSnapshot = vi.fn(() =>
+      Promise.resolve([
+        {
+          paneKey: ORPHAN_PANE_KEY,
+          state: 'working' as const,
+          prompt: 'child task',
+          agentType: 'codex',
+          worktreeId: 'wt-1',
+          terminalHandle: 'term-child',
+          orchestration: {
+            taskId: 'task-child',
+            dispatchId: 'dispatch-child',
+            parentTerminalHandle: 'term-parent'
+          },
+          receivedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000
+        }
+      ])
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      workspaceSessionReady: true
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      ORPHAN_PANE_KEY,
+      expect.objectContaining({
+        state: 'working',
+        prompt: 'child task',
+        agentType: 'codex',
+        orchestration: expect.objectContaining({ taskId: 'task-child' })
+      }),
+      undefined,
+      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
+      expect.objectContaining({ worktreeId: 'wt-1', terminalHandle: 'term-child' })
+    )
   })
 
   it('silently discards valid paneKeys whose leaf is not in the current layout', async () => {

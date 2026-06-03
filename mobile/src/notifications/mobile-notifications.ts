@@ -10,11 +10,23 @@ type NotificationEvent = {
   title: string
   body: string
   worktreeId?: string
+  notificationId?: string
+}
+
+type DismissNotificationEvent = {
+  type: 'dismiss'
+  notificationId: string
 }
 
 type SubscribeResult = {
   type: 'ready'
   subscriptionId: string
+}
+
+const scheduledNotificationIdsByHostAndNotificationId = new Map<string, string>()
+
+function getStoredNotificationKey(hostId: string, notificationId: string): string {
+  return `${encodeURIComponent(hostId)}:${encodeURIComponent(notificationId)}`
 }
 
 export type NotificationPermissionState = {
@@ -67,7 +79,18 @@ async function showLocalNotification(event: NotificationEvent, hostId: string): 
     return
   }
 
-  await Notifications.scheduleNotificationAsync({
+  const storedKey = event.notificationId
+    ? getStoredNotificationKey(hostId, event.notificationId)
+    : null
+  const previousIdentifier = storedKey
+    ? scheduledNotificationIdsByHostAndNotificationId.get(storedKey)
+    : undefined
+  if (storedKey && previousIdentifier) {
+    await Notifications.dismissNotificationAsync(previousIdentifier).catch(() => {})
+    scheduledNotificationIdsByHostAndNotificationId.delete(storedKey)
+  }
+
+  const scheduledIdentifier = await Notifications.scheduleNotificationAsync({
     content: {
       title: event.title,
       body: event.body,
@@ -76,6 +99,25 @@ async function showLocalNotification(event: NotificationEvent, hostId: string): 
     },
     trigger: null
   })
+  if (storedKey) {
+    scheduledNotificationIdsByHostAndNotificationId.set(storedKey, scheduledIdentifier)
+  }
+}
+
+async function dismissLocalNotification(
+  event: DismissNotificationEvent,
+  hostId: string
+): Promise<void> {
+  if (!event.notificationId) {
+    return
+  }
+  const storedKey = getStoredNotificationKey(hostId, event.notificationId)
+  const identifier = scheduledNotificationIdsByHostAndNotificationId.get(storedKey)
+  if (!identifier) {
+    return
+  }
+  scheduledNotificationIdsByHostAndNotificationId.delete(storedKey)
+  await Notifications.dismissNotificationAsync(identifier).catch(() => {})
 }
 
 // Why: each host connection gets its own notification subscription. When the
@@ -93,7 +135,11 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   }
 
   const unsubscribeStream = client.subscribe('notifications.subscribe', {}, (data: unknown) => {
-    const event = data as NotificationEvent | SubscribeResult | { type: 'end' }
+    const event = data as
+      | NotificationEvent
+      | DismissNotificationEvent
+      | SubscribeResult
+      | { type: 'end' }
     if (event.type === 'ready') {
       subscriptionId = (event as SubscribeResult).subscriptionId
       if (disposed) {
@@ -113,6 +159,8 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     }
     if (event.type === 'notification') {
       void showLocalNotification(event as NotificationEvent, hostId)
+    } else if (event.type === 'dismiss') {
+      void dismissLocalNotification(event as DismissNotificationEvent, hostId)
     }
   })
 

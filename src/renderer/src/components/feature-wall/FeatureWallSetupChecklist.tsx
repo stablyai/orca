@@ -224,7 +224,7 @@ export function FeatureWallSetupChecklist(
   const setupSteps = getFeatureWallSetupStepsForSection('setup')
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(200px,300px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
       <div className="scrollbar-sleek min-h-0 space-y-5 overflow-y-auto pr-1">
         <SetupSection
           title="Setup"

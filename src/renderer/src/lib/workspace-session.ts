@@ -37,6 +37,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'terminalLayoutsByTabId'
   | 'activeTabIdByWorktree'
   | 'openFiles'
+  | 'editorDrafts'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
   | 'browserTabsByWorktree'
@@ -53,7 +54,8 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
->
+> &
+  Partial<Pick<AppState, 'sleptWorktreeIds'>>
 
 // Why: the App-level Zustand subscriber that debounces session writes uses
 // this list as a shallow-equality gate so it only resets the timer when a
@@ -70,6 +72,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'terminalLayoutsByTabId',
   'activeTabIdByWorktree',
   'openFiles',
+  'editorDrafts',
   'activeFileIdByWorktree',
   'activeTabTypeByWorktree',
   'browserTabsByWorktree',
@@ -85,7 +88,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'worktreesByRepo',
   'lastKnownRelayPtyIdByTabId',
   'lastVisitedAtByWorktreeId',
-  'defaultTerminalTabsAppliedByWorktreeId'
+  'defaultTerminalTabsAppliedByWorktreeId',
+  'sleptWorktreeIds'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<
@@ -99,6 +103,7 @@ void _exhaustive
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
 export function buildEditorSessionData(
   openFiles: OpenFile[],
+  editorDrafts: Record<string, string>,
   activeFileIdByWorktree: Record<string, string | null>,
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 ): Pick<
@@ -110,13 +115,15 @@ export function buildEditorSessionData(
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
+    const dirtyDraftContent = f.isDirty ? editorDrafts[f.id] : undefined
     arr.push({
       filePath: f.filePath,
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
       language: f.language,
       isPreview: f.isPreview || undefined,
-      runtimeEnvironmentId: f.runtimeEnvironmentId
+      runtimeEnvironmentId: f.runtimeEnvironmentId,
+      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {})
     })
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
@@ -311,6 +318,14 @@ export function buildLastVisitedAtByWorktreeId(
     : undefined
 }
 
+export function buildSleptWorktreeIds(
+  snapshot: WorkspaceSessionSnapshot
+): WorkspaceSessionState['sleptWorktreeIds'] {
+  return snapshot.sleptWorktreeIds && Object.keys(snapshot.sleptWorktreeIds).length > 0
+    ? snapshot.sleptWorktreeIds
+    : undefined
+}
+
 export function buildWorkspaceSessionPayload(
   snapshot: WorkspaceSessionSnapshot
 ): WorkspaceSessionState {
@@ -329,6 +344,7 @@ export function buildWorkspaceSessionPayload(
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
     ...buildEditorSessionData(
       snapshot.openFiles,
+      snapshot.editorDrafts,
       snapshot.activeFileIdByWorktree,
       snapshot.activeTabTypeByWorktree
     ),
@@ -356,7 +372,8 @@ export function buildWorkspaceSessionPayload(
       snapshot.defaultTerminalTabsAppliedByWorktreeId &&
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
-        : undefined
+        : undefined,
+    sleptWorktreeIds: buildSleptWorktreeIds(snapshot)
   }
 
   return pruneLocalTerminalScrollbackBuffers(payload, snapshot.repos)

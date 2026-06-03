@@ -1,11 +1,6 @@
-/* eslint-disable max-lines -- Why: the mobile page keeps pairing, device
-   revoke, QR, and stage transitions together so the flow remains auditable. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import QRCodeBrowser from 'qrcode/lib/browser'
 import { toast } from 'sonner'
-import { Eye, EyeOff, X } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { PhoneCarousel } from './PhoneCarousel'
@@ -17,6 +12,7 @@ import {
   type Platform,
   type StepIndex
 } from './MobileHero'
+import { PLATFORM_COPY } from './mobile-platform-copy'
 import {
   selectRefreshedNetworkAddress,
   type MobileNetworkInterface
@@ -26,6 +22,7 @@ import {
   shouldShowPairedAfterDeviceRefresh,
   type MobilePageStage as FlowStage
 } from './mobile-page-stage'
+import { MobilePageToolbar } from './MobilePageToolbar'
 
 async function renderQrDataUrl(text: string): Promise<string> {
   return QRCodeBrowser.toDataURL(text, {
@@ -33,22 +30,6 @@ async function renderQrDataUrl(text: string): Promise<string> {
     margin: 2,
     width: 232
   })
-}
-
-export const PLATFORM_COPY: Record<
-  Platform,
-  { description: string; ctaLabel: string; url: string }
-> = {
-  ios: {
-    description: 'Scan with your iPhone camera to open the App Store.',
-    ctaLabel: 'Open App Store',
-    url: 'https://apps.apple.com/app/orca-ide/id6766130217'
-  },
-  android: {
-    description: 'Scan with your Android camera to download the latest APK from GitHub Releases.',
-    ctaLabel: 'Download APK',
-    url: 'https://github.com/stablyai/orca/releases/download/mobile-v0.0.11/app-release.apk'
-  }
 }
 
 export default function MobilePage(): React.JSX.Element {
@@ -428,33 +409,11 @@ export default function MobilePage(): React.JSX.Element {
 
   return (
     <div className="mobile-page-root">
-      <div className="mp-page-toolbar">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7 rounded-full"
-              onClick={closeMobilePage}
-              aria-label="Close Orca Mobile"
-            >
-              <X className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
-            Close · Esc
-          </TooltipContent>
-        </Tooltip>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-8 gap-2 rounded-md bg-card px-3 text-xs font-medium shadow-xs"
-          onClick={toggleMobileSidebarButton}
-        >
-          {showMobileButton ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-          {showMobileButton ? 'Hide from sidebar' : 'Show in sidebar'}
-        </Button>
-      </div>
+      <MobilePageToolbar
+        showMobileButton={showMobileButton}
+        onClose={closeMobilePage}
+        onToggleMobileSidebarButton={toggleMobileSidebarButton}
+      />
       <section className="mp-hero">
         <div className="mp-hero-copy">
           {stage === null ? null : stage === 'intro' ? (

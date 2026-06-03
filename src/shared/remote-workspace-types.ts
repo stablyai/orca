@@ -14,6 +14,7 @@ export type RemoteWorkspaceSession = {
   remoteSessionIdsByTabId?: Record<string, string>
   lastVisitedAtByWorktreePath?: Record<string, number>
   defaultTerminalTabsAppliedByWorktreePath?: Record<string, true>
+  sleptWorktreePaths?: Record<string, true>
 }
 
 export type RemoteWorkspaceSnapshot = {

@@ -227,6 +227,104 @@ describe('hydrateWorkspaceSession', () => {
     })
   })
 
+  it('hydrates only explicit slept markers that are not awaiting reconnect', () => {
+    const store = createTestStore()
+    const sleptWorktreeId = 'repo1::/slept'
+    const reconnectWorktreeId = 'repo1::/reconnect'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: sleptWorktreeId, repoId: 'repo1', path: '/slept' }),
+          makeWorktree({ id: reconnectWorktreeId, repoId: 'repo1', path: '/reconnect' })
+        ]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: sleptWorktreeId,
+      activeTabId: null,
+      activeWorktreeIdsOnShutdown: [reconnectWorktreeId],
+      terminalLayoutsByTabId: {},
+      tabsByWorktree: {
+        [reconnectWorktreeId]: [
+          makeTab({ id: 'tab-reconnect', worktreeId: reconnectWorktreeId, ptyId: 'pty-1' })
+        ]
+      },
+      sleptWorktreeIds: {
+        [sleptWorktreeId]: true,
+        [reconnectWorktreeId]: true,
+        'repo1::/missing': true
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().sleptWorktreeIds).toEqual({ [sleptWorktreeId]: true })
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([reconnectWorktreeId])
+  })
+
+  it('does not reconnect explicitly slept wake-hint tabs when shutdown list is missing', () => {
+    const store = createTestStore()
+    const sleptWorktreeId = 'repo1::/slept'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: sleptWorktreeId, repoId: 'repo1', path: '/slept' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: null,
+      activeTabId: null,
+      terminalLayoutsByTabId: {},
+      tabsByWorktree: {
+        [sleptWorktreeId]: [
+          makeTab({ id: 'tab-slept', worktreeId: sleptWorktreeId, ptyId: 'wake-hint' })
+        ]
+      },
+      sleptWorktreeIds: {
+        [sleptWorktreeId]: true
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().sleptWorktreeIds).toEqual({ [sleptWorktreeId]: true })
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([])
+  })
+
+  it('does not reconnect explicitly slept wake-hint tabs when shutdown list is empty', () => {
+    const store = createTestStore()
+    const sleptWorktreeId = 'repo1::/slept'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: sleptWorktreeId, repoId: 'repo1', path: '/slept' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: null,
+      activeTabId: null,
+      activeWorktreeIdsOnShutdown: [],
+      terminalLayoutsByTabId: {},
+      tabsByWorktree: {
+        [sleptWorktreeId]: [
+          makeTab({ id: 'tab-slept', worktreeId: sleptWorktreeId, ptyId: 'wake-hint' })
+        ]
+      },
+      sleptWorktreeIds: {
+        [sleptWorktreeId]: true
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().sleptWorktreeIds).toEqual({ [sleptWorktreeId]: true })
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([])
+  })
+
   it('seeds worktree nav history with the restored active worktree', () => {
     // Why: without seeding, the first sidebar click after startup becomes the
     // only history entry, so Back stays disabled until the user clicks a

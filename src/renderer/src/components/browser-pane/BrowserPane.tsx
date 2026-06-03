@@ -68,17 +68,9 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
-import {
-  consumeEvictedBrowserTab,
-  markEvictedBrowserTab,
-  rememberLiveBrowserUrl
-} from './browser-runtime'
+import { rememberLiveBrowserUrl } from './browser-runtime'
 import {
   destroyPersistentWebview,
-  getHiddenContainer,
-  MAX_PARKED_WEBVIEWS,
-  moveFocusToRendererBeforeWebviewDetach,
-  parkedAtByTabId,
   registerPersistentWebview,
   registeredWebContentsIds,
   webviewRegistry
@@ -698,34 +690,6 @@ function retryBrowserTabLoad(
   webview.src = retryUrl
 }
 
-function evictParkedWebviews(excludedTabId: string | null = null): void {
-  if (webviewRegistry.size <= MAX_PARKED_WEBVIEWS) {
-    return
-  }
-
-  const hidden = getHiddenContainer()
-  const parkedBrowserTabIds = [...webviewRegistry.entries()]
-    .filter(
-      ([browserTabId, webview]) =>
-        browserTabId !== excludedTabId && webview.parentElement === hidden
-    )
-    .sort((a, b) => (parkedAtByTabId.get(a[0]) ?? 0) - (parkedAtByTabId.get(b[0]) ?? 0))
-    .map(([browserTabId]) => browserTabId)
-
-  while (webviewRegistry.size > MAX_PARKED_WEBVIEWS && parkedBrowserTabIds.length > 0) {
-    const browserTabId = parkedBrowserTabIds.shift()
-    if (browserTabId) {
-      // Why: browser tabs are persistent for fast switching, but hidden guests
-      // cannot grow without bound or long Orca sessions accumulate Chromium
-      // processes and GPU surfaces. Evict only parked webviews, never the
-      // currently visible guest. Remember the eviction so the next mount can
-      // explain why an older tab had to reload instead of silently losing state.
-      markEvictedBrowserTab(browserTabId)
-      destroyPersistentWebview(browserTabId)
-    }
-  }
-}
-
 export default function BrowserPane({
   browserTab,
   isActive
@@ -750,18 +714,10 @@ export default function BrowserPane({
     (activeBrowserPage?.url === 'about:blank' || activeBrowserPage?.url === ORCA_BROWSER_BLANK_URL)
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
   const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
-  const renderedBrowserPages = useMemo(() => {
-    const pages: BrowserPageState[] = []
-    if (activeBrowserPage) {
-      pages.push(activeBrowserPage)
-    }
-    for (const page of browserPages) {
-      if (page.id !== activeBrowserPage?.id && automationVisiblePageIds.has(page.id)) {
-        pages.push(page)
-      }
-    }
-    return pages
-  }, [activeBrowserPage, automationVisiblePageIds, browserPages])
+  // Why: inactive Electron webviews must stay mounted in their original DOM
+  // parent. Parking them by unmounting/reparenting loses form text and SPA
+  // state on normal tab switches.
+  const renderedBrowserPages = browserPages
   const [activeBrowserDriver, setActiveBrowserDriver] = useState<BrowserDriverState>({
     kind: 'idle'
   })
@@ -2834,11 +2790,7 @@ function BrowserPagePane({
   }, [downloadState])
 
   useEffect(() => {
-    setResourceNotice(
-      consumeEvictedBrowserTab(browserTab.id)
-        ? 'This tab reloaded to free browser resources.'
-        : null
-    )
+    setResourceNotice(null)
     setDownloadState(null)
   }, [browserTab.id])
 
@@ -3247,10 +3199,10 @@ function BrowserPagePane({
             webview.getTitle(),
             webview.getURL() || browserTabUrlRef.current
           ),
-          // Why: webview reclaim/attach can transiently report isLoading() even
+          // Why: webview attach can transiently report isLoading() even
           // when no user-visible navigation happened. If we sync that into the
           // tab model on every activation, switching tabs flashes the blue
-          // loading dot and makes parked tabs look like they are reloading.
+          // loading dot and makes hidden tabs look like they are reloading.
           // Only explicit navigation/load events should drive Orca's loading UI.
           canGoBack: webview.canGoBack(),
           canGoForward: webview.canGoForward()
@@ -3258,7 +3210,7 @@ function BrowserPagePane({
       } catch {
         // Why: Electron only exposes these getters after the guest fully
         // attaches. Ignoring the transient failure avoids crashing Orca while
-        // the parked webview is being reclaimed into the visible tab body.
+        // the webview guest becomes ready.
       }
     },
     [browserTab.id]
@@ -3291,7 +3243,7 @@ function BrowserPagePane({
   }, [browserTab.id])
 
   // Why: this effect manages the full lifecycle of the webview DOM element —
-  // creation, parking, event wiring, and teardown. browserTab.url is
+  // creation, event wiring, and teardown. browserTab.url is
   // intentionally excluded — it changes on every navigation, and including it
   // would destroy and recreate the webview on every page load. URL-dependent
   // logic inside the effect reads from browserTabUrlRef instead.
@@ -3304,15 +3256,19 @@ function BrowserPagePane({
 
     let webview = webviewRegistry.get(browserTab.id)
     let needsInitialNavigation = false
+    if (webview && webview.parentElement !== container) {
+      // Why: moving an Electron webview between DOM parents can recreate the
+      // guest document. Treat unexpected parent drift as stale state instead.
+      destroyPersistentWebview(browserTab.id)
+      webview = undefined
+    }
     if (webview) {
-      container.appendChild(webview)
-      parkedAtByTabId.delete(browserTab.id)
       webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
       syncNavigationState(webview)
       // Why: seed the ref with the store URL so the URL sync effect does not
-      // force-navigate a reclaimed webview that is already on the right page.
-      // getURL() can throw briefly during reattach, so use the store URL which
-      // was set by the last navigation event before parking.
+      // force-navigate an already-mounted webview that is on the right page.
+      // getURL() can throw briefly during attach, so use the store URL from the
+      // last navigation event.
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserTabUrlRef.current) ?? null
     } else {
@@ -3583,9 +3539,7 @@ function BrowserPagePane({
       // Why: connection-refused localhost tabs can fail before Electron wires up
       // event delivery if src is assigned too early. Attach listeners first so
       // Orca never misses the initial did-fail-load signal for a new tab.
-      // Only non-blank initial tabs should light up Orca's loading indicator;
-      // reclaiming/activating a parked about:blank tab is not a meaningful
-      // navigation and should not flash the tab-loading dot.
+      // Only non-blank initial tabs should light up Orca's loading indicator.
       const initialUrl =
         normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
       trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
@@ -3610,10 +3564,7 @@ function BrowserPagePane({
       }
 
       if (webviewRegistry.get(browserTab.id) === webview) {
-        moveFocusToRendererBeforeWebviewDetach(webview)
-        getHiddenContainer().appendChild(webview)
-        parkedAtByTabId.set(browserTab.id, Date.now())
-        evictParkedWebviews(browserTab.id)
+        destroyPersistentWebview(browserTab.id)
       }
     }
     // Why: this effect mounts and wires up webview event listeners once per tab
@@ -3668,8 +3619,8 @@ function BrowserPagePane({
     try {
       liveUrl = webview.getURL() || null
     } catch {
-      // Why: reattached parked guests can briefly reject getURL() before the
-      // underlying guest is fully ready again. Skip entirely so we do not
+      // Why: newly attached guests can briefly reject getURL() before the
+      // underlying guest is fully ready. Skip entirely so we do not
       // misinterpret a transient error as a URL mismatch and force-navigate.
       return
     }

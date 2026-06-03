@@ -5,14 +5,16 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', '11111111-1111-4111-8111-111111111111')
-const PANE_KEY_1 = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
+const LEAF_ID_1 = '22222222-2222-4222-8222-222222222222'
+const LEAF_ID_1_SECOND = '77777777-7777-4777-8777-777777777777'
+const PANE_KEY_1 = makePaneKey('tab-1', LEAF_ID_1)
 const PANE_KEY_2 = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
 const PANE_KEY_3 = makePaneKey('tab-3', '55555555-5555-4555-8555-555555555555')
 const PANE_KEY_4 = makePaneKey('tab-4', '66666666-6666-4666-8666-666666666666')
@@ -59,6 +61,27 @@ function makeRetained(paneKey: string, worktreeId: string, startedAt: number): R
   }
 }
 
+function makeSinglePaneLayout(leafId: string): TerminalLayoutSnapshot {
+  return {
+    root: { type: 'leaf', leafId },
+    activeLeafId: leafId,
+    expandedLeafId: null
+  }
+}
+
+function makeSplitPaneLayout(firstLeafId: string, secondLeafId: string): TerminalLayoutSnapshot {
+  return {
+    root: {
+      type: 'split',
+      direction: 'horizontal',
+      first: { type: 'leaf', leafId: firstLeafId },
+      second: { type: 'leaf', leafId: secondLeafId }
+    },
+    activeLeafId: firstLeafId,
+    expandedLeafId: null
+  }
+}
+
 describe('buildWorktreeAgentRows', () => {
   it('includes retained rows even when their original tab is no longer current', () => {
     const rows = buildWorktreeAgentRows({
@@ -87,6 +110,44 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].entry).toBe(liveEntry)
     expect(rows[0].startedAt).toBe(2000)
+  })
+
+  it('dedupes retained legacy numeric rows for a single current stable pane', () => {
+    const liveEntry = makeEntry(PANE_KEY_1, 2000, {
+      state: 'working',
+      agentType: 'copilot',
+      prompt: 'current turn'
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [liveEntry],
+      retained: [makeRetained('tab-1:1', 'wt-1', 1000), makeRetained('tab-1:2', 'wt-1', 1500)],
+      terminalLayoutsByTabId: {
+        'tab-1': makeSinglePaneLayout(LEAF_ID_1)
+      },
+      now: 3000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY_1])
+  })
+
+  it('keeps a retained legacy numeric row for a different split pane', () => {
+    const liveEntry = makeEntry(PANE_KEY_1, 2000, {
+      state: 'working',
+      agentType: 'copilot',
+      prompt: 'current turn'
+    })
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [liveEntry],
+      retained: [makeRetained('tab-1:1', 'wt-1', 1000), makeRetained('tab-1:2', 'wt-1', 1500)],
+      terminalLayoutsByTabId: {
+        'tab-1': makeSplitPaneLayout(LEAF_ID_1, LEAF_ID_1_SECOND)
+      },
+      now: 3000
+    })
+
+    expect(rows.map((row) => row.paneKey)).toEqual(['tab-1:2', PANE_KEY_1])
   })
 
   it('decays a stale working entry to idle but leaves a stale done entry alone', () => {

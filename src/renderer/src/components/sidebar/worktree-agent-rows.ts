@@ -6,8 +6,17 @@ import {
   type AgentStatusEntry,
   type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import {
+  makePaneKey,
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/stable-pane-id'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode,
+  TerminalTab
+} from '../../../../shared/types'
+import { resolveRuntimePaneTitleLeafId } from './runtime-pane-title-leaf-id'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 
 function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | null {
@@ -68,6 +77,53 @@ function entryWithRuntimeOrchestration(
   // fields only for the same dispatch; a reused terminal must not inherit a
   // previous worker's stale parent.
   return { ...entry, orchestration }
+}
+
+function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
+  if (!node) {
+    return 0
+  }
+  if (node.type === 'leaf') {
+    return 1
+  }
+  return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
+}
+
+function seenStablePaneKeysForTab(seenPaneKeys: Set<string>, tabId: string): string[] {
+  const keys: string[] = []
+  for (const paneKey of seenPaneKeys) {
+    const parsed = parsePaneKey(paneKey)
+    if (parsed?.tabId === tabId) {
+      keys.push(paneKey)
+    }
+  }
+  return keys
+}
+
+function isRetainedLegacyAliasOfSeenStablePane(args: {
+  paneKey: string
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
+  seenPaneKeys: Set<string>
+}): boolean {
+  const legacy = parseLegacyNumericPaneKey(args.paneKey)
+  if (!legacy) {
+    return false
+  }
+  const stablePaneKeys = seenStablePaneKeysForTab(args.seenPaneKeys, legacy.tabId)
+  if (stablePaneKeys.length === 0) {
+    return false
+  }
+
+  const layout = args.terminalLayoutsByTabId?.[legacy.tabId]
+  const leafId = resolveRuntimePaneTitleLeafId(layout, legacy.numericPaneId)
+  if (leafId) {
+    return args.seenPaneKeys.has(makePaneKey(legacy.tabId, leafId))
+  }
+
+  // Why: old PaneManager ids can advance across remounts/updates even for a
+  // single physical pane. Once the tab has exactly one current stable pane,
+  // retained numeric rows under that tab are stale aliases of it.
+  return countTerminalLayoutLeaves(layout?.root) === 1 && stablePaneKeys.length === 1
 }
 
 export function buildWorktreeAgentRows(args: {
@@ -150,6 +206,15 @@ export function buildWorktreeAgentRows(args: {
 
   for (const ra of args.retained) {
     if (seenPaneKeys.has(ra.entry.paneKey)) {
+      continue
+    }
+    if (
+      isRetainedLegacyAliasOfSeenStablePane({
+        paneKey: ra.entry.paneKey,
+        terminalLayoutsByTabId: args.terminalLayoutsByTabId,
+        seenPaneKeys
+      })
+    ) {
       continue
     }
     const rowEntry = entryWithRuntimeOrchestration(

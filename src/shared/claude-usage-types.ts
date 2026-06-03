@@ -61,3 +61,12 @@ export type ClaudeUsageSessionRow = {
   cacheReadTokens: number
   cacheWriteTokens: number
 }
+
+export type ClaudeUsageSnapshot = {
+  scanState: ClaudeUsageScanState
+  summary: ClaudeUsageSummary
+  daily: ClaudeUsageDailyPoint[]
+  modelBreakdown: ClaudeUsageBreakdownRow[]
+  projectBreakdown: ClaudeUsageBreakdownRow[]
+  recentSessions: ClaudeUsageSessionRow[]
+}

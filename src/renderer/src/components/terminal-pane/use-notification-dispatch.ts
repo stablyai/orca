@@ -5,6 +5,7 @@ import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 
@@ -311,10 +312,19 @@ export function dispatchTerminalNotification(
         agentInterrupted: agentStatus.interrupted
       }
     : {}
+  const notificationId =
+    event.source === 'agent-task-complete'
+      ? buildAgentNotificationId({
+          worktreeId,
+          paneKey: event.paneKey,
+          stateStartedAt: freshStoredAgentStatus?.stateStartedAt
+        })
+      : null
 
   void window.api.notifications
     .dispatch({
       source: event.source,
+      ...(notificationId ? { notificationId } : {}),
       worktreeId,
       paneKey: event.paneKey,
       repoLabel: repo?.displayName,

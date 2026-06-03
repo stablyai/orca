@@ -47,15 +47,16 @@ describe('BrowserPaneOverlayLayer', () => {
     mocks.state = createState()
   })
 
-  it('mounts only the active browser pane for a visible worktree', () => {
+  it('keeps inactive browser panes mounted for a visible worktree', () => {
     const markup = renderOverlay({ isWorktreeActive: true })
 
     expect(markup).toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-active="true"')
-    expect(markup).not.toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-active="false"')
   })
 
-  it('keeps automation-visible inactive browser panes mounted and paintable', () => {
+  it('marks automation-visible inactive browser panes paintable without remounting them', () => {
     mocks.automationVisiblePageIds.add('page-b')
 
     const markup = renderOverlay({ isWorktreeActive: true })
@@ -70,7 +71,7 @@ describe('BrowserPaneOverlayLayer', () => {
 
     expect(markup).toContain('data-browser-pane-id="browser-a"')
     expect(markup).toContain('data-browser-pane-active="false"')
-    expect(markup).not.toContain('data-browser-pane-id="browser-b"')
+    expect(markup).toContain('data-browser-pane-id="browser-b"')
   })
 })
 

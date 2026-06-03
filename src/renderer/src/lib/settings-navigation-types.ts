@@ -1,5 +1,9 @@
-import type { LucideIcon } from 'lucide-react'
+import type { ComponentType } from 'react'
+import type { LucideProps } from 'lucide-react'
 import type { SettingsSearchEntry } from '@/components/settings/settings-search'
+
+export type SettingsNavIcon = ComponentType<LucideProps>
+export type SettingsNavInstallStatus = 'install' | 'installed' | 'checking'
 
 export type SettingsNavTarget =
   | 'general'
@@ -17,6 +21,7 @@ export type SettingsNavTarget =
   | 'computer-use'
   | 'developer-permissions'
   | 'privacy'
+  | 'advanced'
   | 'voice'
   | 'shortcuts'
   | 'stats'
@@ -32,10 +37,11 @@ export type SettingsNavSection = {
   id: string
   title: string
   description: string
-  icon: LucideIcon
+  icon: SettingsNavIcon
   searchEntries: SettingsSearchEntry[]
   group: string
   badge?: string
+  installStatus?: SettingsNavInstallStatus
 }
 
 export type SettingsNavGroup = {

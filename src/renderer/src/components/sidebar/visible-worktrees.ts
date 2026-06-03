@@ -1,6 +1,6 @@
-import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
+import type { Worktree, Repo, WorktreeLineage } from '../../../../shared/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
-import { isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { isSleptWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
@@ -84,9 +84,7 @@ export function computeVisibleWorktreeIds(
   opts: {
     filterRepoIds: string[]
     showSleepingWorkspaces: boolean
-    tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
-    ptyIdsByTabId: Record<string, string[]> | null
-    browserTabsByWorktree?: Record<string, { id: string }[]> | null
+    sleptWorktreeIds: Record<string, true>
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds
     // fallback, tests) reads the flag from the UI store. Making the field
     // required prevents a future caller from silently dropping the filter by
@@ -116,15 +114,7 @@ export function computeVisibleWorktreeIds(
   }
 
   if (!opts.showSleepingWorkspaces) {
-    all = all.filter(
-      (w) =>
-        !isInactiveWorkspace(
-          w.id,
-          opts.tabsByWorktree,
-          opts.ptyIdsByTabId,
-          opts.browserTabsByWorktree
-        )
-    )
+    all = all.filter((w) => !isSleptWorkspace(w.id, opts.sleptWorktreeIds))
   }
 
   // Apply cached sort order. Items not yet in the cache (e.g. brand-new
@@ -253,9 +243,7 @@ export function getVisibleWorktreeIds(): string[] {
   return computeVisibleWorktreeIds(state.worktreesByRepo, sortedIds, {
     filterRepoIds: state.filterRepoIds,
     showSleepingWorkspaces: state.showSleepingWorkspaces,
-    tabsByWorktree: state.tabsByWorktree,
-    ptyIdsByTabId: state.ptyIdsByTabId,
-    browserTabsByWorktree: state.browserTabsByWorktree,
+    sleptWorktreeIds: state.sleptWorktreeIds,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     repoMap,
     worktreeLineageById: state.worktreeLineageById

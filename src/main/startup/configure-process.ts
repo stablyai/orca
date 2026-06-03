@@ -1,10 +1,70 @@
 import { app } from 'electron'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
+const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
+const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
+const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
 let devParentShutdownRequested = false
+
+type NetworkCompatibilityOptions = {
+  env?: NodeJS.ProcessEnv
+  userDataPath?: string
+}
+
+function parseBooleanEnvFlag(value: string | undefined): boolean | null {
+  if (value === undefined) {
+    return null
+  }
+  const normalized = value.trim().toLowerCase()
+  if (TRUE_ENV_VALUES.has(normalized)) {
+    return true
+  }
+  if (FALSE_ENV_VALUES.has(normalized)) {
+    return false
+  }
+  return null
+}
+
+function readPersistedHttp1CompatibilityMode(userDataPath: string): boolean {
+  const dataFile = join(userDataPath, 'orca-data.json')
+  if (!existsSync(dataFile)) {
+    return false
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(dataFile, 'utf-8')) as {
+      settings?: { electronHttp1CompatibilityMode?: unknown }
+    }
+    return parsed.settings?.electronHttp1CompatibilityMode === true
+  } catch {
+    return false
+  }
+}
+
+export function shouldDisableHttp2ForElectronNetworking(
+  options: NetworkCompatibilityOptions = {}
+): boolean {
+  const envValue = parseBooleanEnvFlag(options.env?.[HTTP1_COMPATIBILITY_ENV_VAR])
+  if (envValue !== null) {
+    return envValue
+  }
+  return readPersistedHttp1CompatibilityMode(options.userDataPath ?? app.getPath('userData'))
+}
+
+export function configureElectronNetworkCompatibility(
+  options: NetworkCompatibilityOptions = {}
+): void {
+  if (!shouldDisableHttp2ForElectronNetworking(options)) {
+    return
+  }
+  // Why: Chromium's HTTP/2 switch is process-wide and only works before the
+  // first session exists, so read the persisted setting during early startup.
+  app.commandLine.appendSwitch('disable-http2')
+}
 
 function getProcessPathDelimiter(): string {
   return process.platform === 'win32' ? ';' : ':'

@@ -102,9 +102,10 @@ export async function getStatus(
 
       if (line.startsWith('# branch.head ')) {
         const branchHead = line.slice('# branch.head '.length).trim()
-        // Why: undefined (not '') for detached/empty so renderer's
-        // `identity.branch ?? worktree.branch` preserves the prior branch
-        // value when git can't report one, instead of overwriting it with ''.
+        // Why: undefined (not '') keeps this parser transport-compatible.
+        // Renderer refresh code turns "head without branch" into an explicit
+        // detached-HEAD clear signal while legacy missing-identity payloads
+        // still preserve the prior branch.
         branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
         continue
       }

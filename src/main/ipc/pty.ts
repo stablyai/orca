@@ -480,6 +480,33 @@ function restoreOrStripOverlayEnv(
   delete baseEnv[keys.source]
 }
 
+function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
+  const sourceDir =
+    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+  if (sourceDir) {
+    return sourceDir
+  }
+
+  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
+  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
+  // Why: nested Orca terminals inherit OPENCODE_CONFIG_DIR from the parent
+  // PTY. If there is no recorded source dir, that value is Orca-owned, not a
+  // user config. Treating it as user config makes child Orcas mirror Orca's
+  // hook dir and can create large OpenCode runtime trees per terminal.
+  if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
+    return undefined
+  }
+
+  return (
+    configDir ??
+    readShellStartupEnvVar(
+      'OPENCODE_CONFIG_DIR',
+      baseEnv.HOME ?? process.env.HOME,
+      baseEnv.SHELL ?? process.env.SHELL
+    )
+  )
+}
+
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
  *
@@ -506,16 +533,7 @@ export function buildPtyHostEnv(
   // sources when reading a potentially-user-provided value keeps the guards
   // in lock-step across spawn paths without pushing process.env onto the
   // IPC wire unnecessarily.
-  const preexistingOpenCodeConfigDir =
-    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ??
-    process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR ??
-    baseEnv.OPENCODE_CONFIG_DIR ??
-    process.env.OPENCODE_CONFIG_DIR ??
-    readShellStartupEnvVar(
-      'OPENCODE_CONFIG_DIR',
-      baseEnv.HOME ?? process.env.HOME,
-      baseEnv.SHELL ?? process.env.SHELL
-    )
+  const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
   const piAgentKind = detectPiAgentKindFromCommand(opts.launchCommand)
   const hasLaunchCommand =
     typeof opts.launchCommand === 'string' && opts.launchCommand.trim().length > 0
@@ -545,6 +563,8 @@ export function buildPtyHostEnv(
         // as OPENCODE_CONFIG_DIR; keep the original source so overlays do not
         // mirror overlays and drop the user's real config.
         baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
+      } else {
+        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
   } else {

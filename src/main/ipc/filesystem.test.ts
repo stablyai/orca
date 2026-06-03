@@ -338,6 +338,37 @@ describe('registerFilesystemHandlers', () => {
     expect(statMock).not.toHaveBeenCalledWith(modelLinkPath)
   })
 
+  it('returns false from pathExists when a local authorized path is missing', async () => {
+    const targetPath = path.join(REPO_PATH, 'untitled-7.md')
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(handlers.get('fs:pathExists')!(null, { filePath: targetPath })).resolves.toBe(
+      false
+    )
+
+    expect(statMock).toHaveBeenCalledWith(targetPath)
+  })
+
+  it('returns false from pathExists when an SSH provider reports a missing path', async () => {
+    const provider = {
+      stat: vi.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:pathExists')!(null, {
+        filePath: '/remote/repo/untitled-7.md',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toBe(false)
+
+    expect(provider.stat).toHaveBeenCalledWith('/remote/repo/untitled-7.md')
+  })
+
   it('allows deletePath when a registered worktree parent resolves to a macOS canonical alias', async () => {
     const aliasWorktreePath = path.resolve('/var/folders/orca/worktrees/feature')
     const canonicalWorktreePath = path.resolve('/private/var/folders/orca/worktrees/feature')

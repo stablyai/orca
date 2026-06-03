@@ -288,7 +288,7 @@ export class RuntimeBrowserCommands {
   private async ensureBrowserWorktreeActive(worktreeId: string | undefined): Promise<void> {
     const win = this.host.getAuthoritativeWindow()
     win.webContents.send('browser:activateView', worktreeId ? { worktreeId } : {})
-    // Why: parked/restored browser panes become operable only after the
+    // Why: hidden/restored browser panes become operable only after the
     // renderer's webview mounts and calls registerGuest. Waiting on that IPC is
     // both faster and less flaky than sleeping for an arbitrary fixed delay.
     await waitForWorktreeTabRegistration(worktreeId)

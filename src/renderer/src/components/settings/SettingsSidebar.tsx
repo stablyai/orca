@@ -1,17 +1,25 @@
 import type { RefObject } from 'react'
-import { ArrowLeft, Search, Server, type LucideIcon, type LucideProps } from 'lucide-react'
+import { ArrowLeft, Search, Server } from 'lucide-react'
+import logo from '../../../../../resources/logo.svg'
 import type { RepoIcon } from '../../../../shared/repo-icon'
+import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
+import type { GitHubRepositoryIdentity } from '../../../../shared/types'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { cn } from '@/lib/utils'
 import { RepoIconGlyph } from '../repo/repo-icon'
+import { RepoForkIndicator } from '../repo/repo-fork-indicator'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
+import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
+import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
 
 type NavSection = {
   id: string
   title: string
-  icon: LucideIcon | ((props: LucideProps) => React.JSX.Element)
+  icon: SettingsNavIcon
   badge?: string
+  installStatus?: SettingsNavInstallStatus
 }
 
 type NavGroup = {
@@ -24,6 +32,7 @@ type RepoNavSection = NavSection & {
   badgeColor?: string
   isRemote?: boolean
   repoIcon?: RepoIcon | null
+  upstream?: GitHubRepositoryIdentity | null
 }
 
 type SettingsSidebarProps = {
@@ -46,6 +55,64 @@ type SettingsSidebarProps = {
   ) => void
 }
 
+type SettingsSetupGuideRowProps = {
+  progress: SettingsSetupGuideProgress
+  setupActive: boolean
+  onSelect: (modifiers: {
+    metaKey: boolean
+    ctrlKey: boolean
+    shiftKey: boolean
+    altKey: boolean
+  }) => void
+}
+
+function SettingsSetupGuideNavRow({
+  progress,
+  setupActive,
+  onSelect
+}: SettingsSetupGuideRowProps): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      aria-current={setupActive ? 'page' : undefined}
+      aria-label={`Onboarding checklist, ${progress.doneCount} of ${progress.total} done. Show setup guide.`}
+      onClick={(event) =>
+        onSelect({
+          metaKey: event.metaKey,
+          ctrlKey: event.ctrlKey,
+          shiftKey: event.shiftKey,
+          altKey: event.altKey
+        })
+      }
+      className={cn(
+        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        setupActive
+          ? 'bg-accent font-medium text-accent-foreground'
+          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+      )}
+    >
+      <img
+        src={logo}
+        alt=""
+        aria-hidden="true"
+        className={cn(
+          'size-4 shrink-0 object-contain invert dark:invert-0',
+          setupActive ? 'opacity-75' : 'opacity-45'
+        )}
+      />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[13px] font-medium leading-4">Onboarding checklist</span>
+      </span>
+      <SetupGuideProgressRing
+        done={progress.doneCount}
+        total={progress.total}
+        className="ml-auto shrink-0"
+        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
+      />
+    </button>
+  )
+}
+
 export function SettingsSidebar({
   activeSectionId,
   generalGroups,
@@ -57,6 +124,9 @@ export function SettingsSidebar({
   onSearchChange,
   onSelectSection
 }: SettingsSidebarProps): React.JSX.Element {
+  const setupGuideProgress = useSettingsSetupGuideProgress(true)
+  const setupActive = activeSectionId === 'setup-guide'
+  const showSetupGuideTopRow = setupGuideProgress.doneCount < setupGuideProgress.total
   const searchShortcutHint = useShortcutLabel('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
@@ -64,6 +134,25 @@ export function SettingsSidebar({
       isActive
         ? 'bg-accent font-medium text-accent-foreground'
         : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+    )
+  const installStatusLabel = (status: SettingsNavInstallStatus): string => {
+    switch (status) {
+      case 'install':
+        return 'Not installed'
+      case 'installed':
+        return 'Installed'
+      case 'checking':
+        return 'Checking'
+    }
+  }
+  const installStatusClassName = (status: SettingsNavInstallStatus): string =>
+    cn(
+      'ml-auto shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none',
+      status === 'installed'
+        ? 'border-status-success-border bg-status-success-background text-status-success'
+        : status === 'install'
+          ? 'border-foreground/15 bg-foreground/10 text-foreground'
+          : 'border-border/50 bg-muted/30 text-muted-foreground'
     )
 
   return (
@@ -98,6 +187,16 @@ export function SettingsSidebar({
         </div>
       </div>
 
+      {showSetupGuideTopRow ? (
+        <div className="border-b border-border/50 px-3 py-3">
+          <SettingsSetupGuideNavRow
+            progress={setupGuideProgress}
+            setupActive={setupActive}
+            onSelect={(modifiers) => onSelectSection('setup-guide', modifiers)}
+          />
+        </div>
+      ) : null}
+
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek px-3 py-4">
         <div className="space-y-5">
           {generalGroups.map((group) => (
@@ -106,9 +205,11 @@ export function SettingsSidebar({
                 {group.title}
               </p>
               <div className="space-y-1">
-                {group.sections.map((section) => {
-                  const Icon = section.icon
-                  const isActive = activeSectionId === section.id
+                {group.sections
+                  .filter((section) => section.id !== 'setup-guide')
+                  .map((section) => {
+                    const Icon = section.icon
+                    const isActive = activeSectionId === section.id
 
                   return (
                     <button
@@ -127,7 +228,11 @@ export function SettingsSidebar({
                     >
                       <Icon className="size-4 shrink-0" />
                       <span className="truncate">{section.title}</span>
-                      {section.badge ? (
+                      {section.installStatus ? (
+                        <span className={installStatusClassName(section.installStatus)}>
+                          {installStatusLabel(section.installStatus)}
+                        </span>
+                      ) : section.badge ? (
                         <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
                           {section.badge}
                         </span>
@@ -171,6 +276,7 @@ export function SettingsSidebar({
                         iconClassName="size-3.5"
                       />
                       <span className="truncate">{section.title}</span>
+                      <RepoForkIndicator upstream={section.upstream} />
                       {section.isRemote && (
                         <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
                           <Server className="size-3" />

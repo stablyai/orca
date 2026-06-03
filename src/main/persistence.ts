@@ -599,8 +599,24 @@ function readLegacySidekickFlag(parsed: PersistedState | undefined): boolean | u
   return (parsed?.settings as { experimentalSidekick?: boolean } | undefined)?.experimentalSidekick
 }
 
+function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
+  if (value === undefined) {
+    return undefined
+  }
+  if (value === null) {
+    return null
+  }
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  const candidate = value as { owner?: unknown; repo?: unknown }
+  const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
+  const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
+  return owner && repo ? { owner, repo } : undefined
+}
+
 function sanitizeRepoUpdatesForPersistence<
-  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon' | 'worktreeBasePath'>>
+  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath'>>
 >(updates: T): T {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -617,6 +633,15 @@ function sanitizeRepoUpdatesForPersistence<
       delete sanitized.repoIcon
     } else {
       sanitized.repoIcon = repoIcon
+    }
+  }
+  // Why: `null` is a valid "not a fork" marker; only drop malformed shapes.
+  if ('upstream' in sanitized) {
+    const upstream = sanitizeRepoUpstream(sanitized.upstream)
+    if (upstream === undefined) {
+      delete sanitized.upstream
+    } else {
+      sanitized.upstream = upstream
     }
   }
   if ('worktreeBasePath' in sanitized && sanitized.worktreeBasePath !== undefined) {
@@ -2423,6 +2448,7 @@ export class Store {
         | 'displayName'
         | 'badgeColor'
         | 'repoIcon'
+        | 'upstream'
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
@@ -2504,8 +2530,9 @@ export class Store {
   }
 
   private hydrateRepo(repo: Repo): Repo {
-    const { repoIcon: rawRepoIcon, ...repoWithoutIcon } = repo
+    const { repoIcon: rawRepoIcon, upstream: rawUpstream, ...repoWithoutIcon } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
+    const upstream = sanitizeRepoUpstream(rawUpstream)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -2518,6 +2545,7 @@ export class Store {
     return {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
+      ...(upstream !== undefined ? { upstream } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {

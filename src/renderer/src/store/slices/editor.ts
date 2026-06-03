@@ -3452,6 +3452,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
 
       const openFiles: OpenFile[] = []
+      const editorDrafts: Record<string, string> = {}
       const usedOpenFileIds = new Set<string>()
       const legacyHydratedOpenFiles: LegacyHydratedEditorFile[] = []
       const editorFileIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
@@ -3485,6 +3486,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             worktreeId,
             runtimeEnvironmentId: pf.runtimeEnvironmentId
           })
+          if (pf.dirtyDraftContent !== undefined) {
+            editorDrafts[id] = pf.dirtyDraftContent
+          }
           openFiles.push({
             id,
             filePath: pf.filePath,
@@ -3494,7 +3498,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             // Re-detect on hydrate so newly-supported extensions like .ipynb
             // stop reopening as raw JSON/plain text after the upgrade.
             language: detectLanguage(pf.relativePath || pf.filePath),
-            isDirty: false,
+            isDirty: pf.dirtyDraftContent !== undefined,
             isPreview: pf.isPreview,
             runtimeEnvironmentId: pf.runtimeEnvironmentId,
             mode: 'edit'
@@ -3575,6 +3579,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
       return {
         openFiles,
+        editorDrafts,
         activeFileId: nextActiveFileId,
         activeFileIdByWorktree: filteredActiveFileIdByWorktree,
         activeTabType: nextActiveTabType,

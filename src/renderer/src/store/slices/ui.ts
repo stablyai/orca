@@ -65,6 +65,7 @@ import {
 } from '../../../../shared/workspace-statuses'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
+import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   getSetupScriptPromptDismissalKey
@@ -84,6 +85,8 @@ import {
   deriveRunningAgentSendTargets,
   resolveRunningAgentSendTarget
 } from '../../lib/running-agent-targets'
+import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -283,6 +286,41 @@ const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'all',
   'done'
 ])
+
+function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
+  const parsed = parsePaneKey(paneKey)
+  if (!parsed) {
+    return null
+  }
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree ?? {})) {
+    if (tabs.some((tab) => tab.id === parsed.tabId)) {
+      return worktreeId
+    }
+  }
+  return null
+}
+
+function collectAcknowledgedAgentNotificationId({
+  ids,
+  worktreeId,
+  paneKey,
+  stateStartedAt,
+  previousAckAt
+}: {
+  ids: Set<string>
+  worktreeId: string | null | undefined
+  paneKey: string
+  stateStartedAt: number | null | undefined
+  previousAckAt: number
+}): void {
+  if (typeof stateStartedAt !== 'number' || previousAckAt >= stateStartedAt) {
+    return
+  }
+  const id = buildAgentNotificationId({ worktreeId, paneKey, stateStartedAt })
+  if (id) {
+    ids.add(id)
+  }
+}
 
 function filterTrustedOrcaHooksToValidRepos(
   trust: PersistedTrustedOrcaHooks,
@@ -605,32 +643,7 @@ export type UISlice = {
   openSettingsPage: () => void
   closeSettingsPage: () => void
   settingsNavigationTarget: {
-    pane:
-      | 'general'
-      | 'integrations'
-      | 'accounts'
-      | 'browser'
-      | 'git'
-      | 'appearance'
-      | 'input'
-      | 'tasks'
-      | 'floating-workspace'
-      | 'terminal'
-      | 'quick-commands'
-      | 'notifications'
-      | 'computer-use'
-      | 'developer-permissions'
-      | 'privacy'
-      | 'shortcuts'
-      | 'stats'
-      | 'repo'
-      | 'agents'
-      | 'voice'
-      | 'experimental'
-      | 'orchestration'
-      | 'servers'
-      | 'mobile'
-      | 'ssh'
+    pane: SettingsNavTarget
     repoId: string | null
     sectionId?: string
     intent?: 'add-quick-command'
@@ -923,7 +936,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   },
 
   acknowledgedAgentsByPaneKey: {},
-  acknowledgeAgents: (paneKeys) =>
+  acknowledgeAgents: (paneKeys) => {
+    const notificationIdsToDismiss = new Set<string>()
     set((s) => {
       if (paneKeys.length === 0) {
         return s
@@ -939,6 +953,26 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       let next: Record<string, number> | null = null
       for (const key of paneKeys) {
         const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+        const liveEntry = s.agentStatusByPaneKey?.[key]
+        if (liveEntry) {
+          collectAcknowledgedAgentNotificationId({
+            ids: notificationIdsToDismiss,
+            worktreeId: resolvePaneKeyWorktreeIdFromTabs(s, key) ?? liveEntry.worktreeId,
+            paneKey: key,
+            stateStartedAt: liveEntry.stateStartedAt,
+            previousAckAt: prev
+          })
+        }
+        const retained = s.retainedAgentsByPaneKey?.[key]
+        if (retained) {
+          collectAcknowledgedAgentNotificationId({
+            ids: notificationIdsToDismiss,
+            worktreeId: retained.worktreeId,
+            paneKey: key,
+            stateStartedAt: retained.entry.stateStartedAt,
+            previousAckAt: prev
+          })
+        }
         if (prev < now) {
           if (next === null) {
             next = { ...s.acknowledgedAgentsByPaneKey }
@@ -947,7 +981,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         }
       }
       return next ? { acknowledgedAgentsByPaneKey: next } : s
-    }),
+    })
+    const notificationIds = [...notificationIdsToDismiss]
+    if (notificationIds.length > 0 && typeof window !== 'undefined') {
+      void window.api?.notifications?.dismiss?.(notificationIds)
+    }
+  },
   unacknowledgeAgents: (paneKeys) =>
     set((s) => {
       if (paneKeys.length === 0) {

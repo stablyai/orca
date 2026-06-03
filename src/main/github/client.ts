@@ -1413,6 +1413,48 @@ export async function getRepoSlug(
   return getOwnerRepo(repoPath, connectionId)
 }
 
+/**
+ * Resolve a fork's upstream/parent owner/repo, or null when the repo is not a
+ * fork. Why: a fork's `origin` points at the personal copy, so repo identity
+ * (notably the avatar) should prefer the upstream. Fast-paths the `upstream`
+ * remote (offline); otherwise asks the GitHub API for the fork parent. The API
+ * call targets the explicit origin slug, so it works for SSH repos too.
+ * Best-effort: any failure (offline, unauthed, non-GitHub) resolves to null.
+ */
+export async function getRepoUpstream(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<OwnerRepo | null> {
+  const origin = await getOwnerRepo(repoPath, connectionId)
+  if (!origin) {
+    return null
+  }
+  const upstreamRemote = await getOwnerRepoForRemote(repoPath, 'upstream', connectionId)
+  if (upstreamRemote && !sameOwnerRepo(upstreamRemote, origin)) {
+    return upstreamRemote
+  }
+  await acquire()
+  try {
+    const { stdout } = await ghExecFileAsync(
+      ['repo', 'view', `${origin.owner}/${origin.repo}`, '--json', 'isFork,parent'],
+      // Why: best-effort fork lookup runs at add-time; cap latency so a stalled
+      // gh process can't hold up repo creation.
+      { ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId)), timeout: 10_000 }
+    )
+    const data = JSON.parse(stdout) as {
+      isFork?: boolean
+      parent?: { name?: string; owner?: { login?: string } } | null
+    }
+    const owner = data.parent?.owner?.login
+    const repo = data.parent?.name
+    return data.isFork && owner && repo ? { owner, repo } : null
+  } catch {
+    return null
+  } finally {
+    release()
+  }
+}
+
 function classifyCreatePRError(error: unknown): CreateHostedReviewResult {
   const { stderr, stdout } = extractExecError(error)
   const message = `${stderr}\n${stdout}`.trim()

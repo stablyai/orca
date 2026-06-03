@@ -15,6 +15,10 @@ import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
+import {
+  allowsBrowserWebAuthnPermission,
+  installBrowserWebAuthnAccessHandlers
+} from '../browser/browser-webauthn-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   checkForUpdatesFromMenu,
@@ -196,8 +200,12 @@ export function attachMainWindowServices(
     if (permission === 'media') {
       return hasSystemMediaAccess(details?.mediaType)
     }
+    if (allowsBrowserWebAuthnPermission(permission, details)) {
+      return true
+    }
     return false
   })
+  installBrowserWebAuthnAccessHandlers(browserSession)
   browserSession.setDisplayMediaRequestHandler((_request, callback) => {
     // Why: arbitrary sites inside Orca should never be able to capture the
     // desktop or application windows until there is explicit product UX for
@@ -209,10 +217,9 @@ export function attachMainWindowServices(
   registerBrowserDownloadHandler(browserSession)
 
   mainWindow.on('closed', () => {
-    // Why: parked browser webviews can outlive the visible tab body until the
-    // renderer process exits. Clearing main-owned guest registrations on window
-    // close prevents stale tab→webContents ids from leaking across app relaunch
-    // or hot-reload cycles.
+    // Why: browser webviews are renderer-owned guest surfaces. Clearing
+    // main-owned guest registrations on window close prevents stale
+    // tab→webContents ids from leaking across app relaunch or hot-reload cycles.
     browserManager.unregisterAll()
   })
 }

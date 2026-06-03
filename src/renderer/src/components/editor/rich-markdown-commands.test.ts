@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import { runSlashCommand, slashCommands, type SlashCommandId } from './rich-markdown-commands'
+import { runSlashCommand, slashCommands, type SlashCommandId } from './rich-markdown-slash-commands'
 
 function createEditor(content = '/'): Editor {
   return new Editor({

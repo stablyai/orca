@@ -76,7 +76,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { AppState } from '../store/types'
 import {
   closeWebRuntimeSessionTab,
@@ -446,6 +446,14 @@ function mergeRemoteWorkspaceSession(
     lastVisitedAtByWorktreeId: {
       ...omitTargetWorktrees(current.lastVisitedAtByWorktreeId),
       ...remote.lastVisitedAtByWorktreeId
+    },
+    defaultTerminalTabsAppliedByWorktreeId: {
+      ...omitTargetWorktrees(current.defaultTerminalTabsAppliedByWorktreeId),
+      ...remote.defaultTerminalTabsAppliedByWorktreeId
+    },
+    sleptWorktreeIds: {
+      ...omitTargetWorktrees(current.sleptWorktreeIds),
+      ...remote.sleptWorktreeIds
     }
   }
 }
@@ -609,7 +617,7 @@ export function buildNewWorkspaceShortcutModalData(
 
   return {
     telemetrySource: 'shortcut',
-    prefilledName: getLinkedWorkItemSuggestedName(linearIssue),
+    prefilledName: getLinearIssueWorkspaceName(linearIssue),
     // Why: Cmd+N from a Linear issue should behave like the issue's Start
     // workspace action; otherwise the agent launches without source context.
     linkedWorkItem: buildLinearIssueLinkedWorkItem(linearIssue)
@@ -1219,16 +1227,18 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onSplitTerminal(({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
-        const detail: SplitTerminalPaneDetail = {
-          tabId,
-          paneRuntimeId,
-          direction,
-          command,
-          telemetrySource
+      window.api.ui.onSplitTerminal(
+        ({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
+          const detail: SplitTerminalPaneDetail = {
+            tabId,
+            paneRuntimeId,
+            direction,
+            command,
+            telemetrySource
+          }
+          window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
         }
-        window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
-      })
+      )
     )
 
     unsubs.push(
@@ -2255,11 +2265,11 @@ export function useIpcEvents(): void {
         repoConnectionResolved,
         owningWorktreeId
       } = resolvePaneKey(store, data.paneKey)
-      if (!exists && data.worktreeId) {
+      if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
         // Why: orchestration worker hooks can carry main-side worktree
         // attribution before this renderer has a terminal tab for the pane.
-        // Accept those only when the worktree is known, then keep the normal
-        // repo connection check below for SSH/local ownership.
+        // Require runtime identity too; durable snapshots with only worktreeId
+        // can be stale cached rows from closed/remounted panes.
         const fallbackOwnership = resolveWorktreeConnection(store, data.worktreeId)
         if (fallbackOwnership.worktreeExists) {
           owningWorktreeId = data.worktreeId
@@ -2608,6 +2618,13 @@ export function useIpcEvents(): void {
       resetAgentHookCompletionNotificationCoordinators()
     }
   }, [])
+}
+
+function hasRuntimeBackedWorktreeAttribution(data: AgentStatusIpcPayload): boolean {
+  return (
+    (typeof data.terminalHandle === 'string' && data.terminalHandle.length > 0) ||
+    data.orchestration !== undefined
+  )
 }
 
 function applyResolvedAgentTerminalTitleToTab(

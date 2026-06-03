@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/context-menu'
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
 
-export { shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
+export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
 
 export function shouldShowAgentsButton(
   settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined

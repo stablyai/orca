@@ -1,6 +1,10 @@
 import type { DirEntry, GlobalSettings } from '../../../shared/types'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import { readRuntimeDirectory, readRuntimeFileContent } from '@/runtime/runtime-file-client'
+import {
+  readRuntimeDirectory,
+  readRuntimeFileContent,
+  runtimePathExists
+} from '@/runtime/runtime-file-client'
 import { basename, joinPath, normalizeRelativePath } from './path'
 
 const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'
@@ -94,6 +98,12 @@ export async function listMarkdownDocumentTemplates(
 ): Promise<MarkdownDocumentTemplate[]> {
   const templates: MarkdownDocumentTemplate[] = []
   const rootPath = joinPath(worktreePath, MARKDOWN_TEMPLATE_ROOT)
+
+  // Why: missing template directories are the normal case. Probe quietly first
+  // so Electron does not log an IPC handler error for an optional feature.
+  if (!(await runtimePathExists(context, rootPath))) {
+    return []
+  }
 
   async function visitDirectory(
     dirPath: string,

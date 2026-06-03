@@ -115,6 +115,14 @@ describe('registerNotificationHandlers', () => {
     return call[1] as (event: unknown, args: unknown) => unknown
   }
 
+  function getDismissHandler(): (event: unknown, args: unknown) => unknown {
+    const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === 'notifications:dismiss')
+    if (!call) {
+      throw new Error('notifications:dismiss handler not registered')
+    }
+    return call[1] as (event: unknown, args: unknown) => unknown
+  }
+
   function getOpenSystemSettingsHandler(): (event: unknown) => unknown {
     const call = handleMock.mock.calls.find(
       (c: unknown[]) => c[0] === 'notifications:openSystemSettings'
@@ -748,6 +756,7 @@ describe('registerNotificationHandlers', () => {
     ).toEqual({ delivered: false, reason: 'not-supported' })
 
     expect(dispatchMobileNotification).toHaveBeenCalledWith({
+      type: 'notification',
       source: 'agent-task-complete',
       title: 'feat/notis - Hermes finished',
       body: 'The diff updates notification formatting.',
@@ -893,6 +902,85 @@ describe('registerNotificationHandlers', () => {
     expect(handler({}, { source: 'test' })).toEqual({ delivered: true })
 
     expect(dispatchMobileNotification).not.toHaveBeenCalled()
+  })
+
+  it('dismisses active native notifications and fans out mobile dismissal once per id', () => {
+    const dispatchMobileNotification = vi.fn()
+    const dismissMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dispatchMobileNotification, dismissMobileNotification } as never
+    )
+
+    const dispatchHandler = getDispatchHandler()
+    expect(
+      dispatchHandler({}, { source: 'agent-task-complete', notificationId: 'agent:one' })
+    ).toEqual({ delivered: true })
+
+    const dismissHandler = getDismissHandler()
+    expect(dismissHandler({}, ['agent:one', 'agent:one', ''])).toEqual({ dismissed: 1 })
+
+    expect(notificationCloseMock).toHaveBeenCalledTimes(1)
+    expect(notificationRemoveListenerMock).toHaveBeenCalledWith('close', expect.any(Function))
+    expect(dismissMobileNotification).toHaveBeenCalledTimes(1)
+    expect(dismissMobileNotification).toHaveBeenCalledWith('agent:one')
+  })
+
+  it('fans out mobile dismissal even when there is no active native notification', () => {
+    const dismissMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false
+          }
+        })
+      } as never,
+      { dismissMobileNotification } as never
+    )
+
+    const dismissHandler = getDismissHandler()
+    expect(dismissHandler({}, ['agent:missing'])).toEqual({ dismissed: 0 })
+
+    expect(notificationCloseMock).not.toHaveBeenCalled()
+    expect(dismissMobileNotification).toHaveBeenCalledWith('agent:missing')
+  })
+
+  it('closes the previous native notification when replacing the same id', () => {
+    registerNotificationHandlers({
+      getSettings: () => ({
+        notifications: {
+          enabled: true,
+          agentTaskComplete: true,
+          terminalBell: true,
+          suppressWhenFocused: false
+        }
+      })
+    } as never)
+
+    const dispatchHandler = getDispatchHandler()
+    expect(
+      dispatchHandler({}, { source: 'agent-task-complete', notificationId: 'agent:replace' })
+    ).toEqual({ delivered: true })
+    vi.advanceTimersByTime(5001)
+    expect(
+      dispatchHandler({}, { source: 'agent-task-complete', notificationId: 'agent:replace' })
+    ).toEqual({ delivered: true })
+
+    expect(notificationCloseMock).toHaveBeenCalledTimes(1)
+    expect(notificationShowMock).toHaveBeenCalledTimes(2)
   })
 
   it('silences the native notification when a custom sound is configured', () => {

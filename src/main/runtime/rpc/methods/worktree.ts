@@ -76,13 +76,15 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         runHooks: params.runHooks === true,
         activate: params.activate === true,
         setupDecision: params.setupDecision,
-        createdWithAgent: params.createdWithAgent,
+        createdWithAgent: params.createdWithAgent ?? params.startupAgent,
         startup: params.startupCommand
           ? {
               command: params.startupCommand,
               ...(params.startupEnv ? { env: params.startupEnv } : {})
             }
           : undefined,
+        ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
+        ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
         startupDraft: params.startupDraft,
         lineage: {
           parentWorktree: params.parentWorktree,

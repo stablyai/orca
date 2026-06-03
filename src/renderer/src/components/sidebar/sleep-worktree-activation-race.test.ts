@@ -6,12 +6,16 @@ const mocks = vi.hoisted(() => {
     setActiveWorktree: vi.fn((worktreeId: string | null) => {
       state.activeWorktreeId = worktreeId
     }),
+    markWorktreeSlept: vi.fn((worktreeId: string) => {
+      state.sleptWorktreeIds[worktreeId] = true
+    }),
     shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
     shutdownWorktreeTerminals: vi.fn(async (worktreeId: string) => {
       for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
         state.ptyIdsByTabId[tab.id] = []
       }
     }),
+    sleptWorktreeIds: {} as Record<string, true>,
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     ptyIdsByTabId: {} as Record<string, string[]>,
     browserTabsByWorktree: {} as Record<string, { id: string }[]>,
@@ -75,12 +79,14 @@ describe('sleep flow vs queued slept-workspace activation', () => {
     mocks.toastError.mockClear()
     mocks.state.activeWorktreeId = 'wt-parent'
     mocks.state.setActiveWorktree.mockClear()
+    mocks.state.markWorktreeSlept.mockClear()
     mocks.state.shutdownWorktreeBrowsers.mockClear().mockResolvedValue(undefined)
     mocks.state.shutdownWorktreeTerminals.mockClear().mockImplementation(async (worktreeId) => {
       for (const tab of mocks.state.tabsByWorktree[worktreeId] ?? []) {
         mocks.state.ptyIdsByTabId[tab.id] = []
       }
     })
+    mocks.state.sleptWorktreeIds = {}
     mocks.state.tabsByWorktree = {
       'wt-parent': [{ id: 'tab-parent' }],
       'wt-child-1': [{ id: 'tab-child-1' }],

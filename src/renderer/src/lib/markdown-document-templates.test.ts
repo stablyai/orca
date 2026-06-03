@@ -20,7 +20,10 @@ function stubReadDir(entriesByPath: Record<string, DirEntry[]>): ReturnType<type
 
   vi.stubGlobal('window', {
     api: {
-      fs: { readDir }
+      fs: {
+        pathExists: vi.fn(async ({ filePath }: { filePath: string }) => filePath in entriesByPath),
+        readDir
+      }
     }
   })
 

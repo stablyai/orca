@@ -5,14 +5,12 @@ import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { editorShortcutMatches } from './editor-shortcuts'
 import { getLinkBubblePosition, type LinkBubbleState } from './RichMarkdownLinkBubble'
+import { commitRow, type DocLinkMenuRow, type DocLinkMenuState } from './rich-markdown-commands'
 import {
-  commitRow,
   runSlashCommand,
-  type DocLinkMenuRow,
-  type DocLinkMenuState,
   type SlashCommand,
   type SlashMenuState
-} from './rich-markdown-commands'
+} from './rich-markdown-slash-commands'
 import {
   collapseEmptyListContinuationParagraph,
   commitEmptyOrderedListMarkerAsText,

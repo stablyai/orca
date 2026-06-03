@@ -29,6 +29,7 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
+    this._wc = _wc
     this.start = vi.fn(async () => 'ws://127.0.0.1:9222')
     this.stop = vi.fn(async () => {})
     this.getPort = vi.fn(() => 9222)
@@ -535,6 +536,134 @@ describe('AgentBrowserBridge', () => {
 
     await expect(snapshot).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
     expect(lifecycleEvents).toEqual(['acquire-100', 'command-snapshot', 'restore-100'])
+  })
+
+  it('re-resolves the page after automation visibility re-registers the webview', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const wc100 = mockWebContents(100)
+    const wc200 = mockWebContents(200, 'https://example.com/reloaded', 'Reloaded')
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === 100) {
+        return wc100
+      }
+      if (id === 200) {
+        return wc200
+      }
+      return null
+    })
+
+    const acquireAutomationVisibility = vi.fn(async () => {
+      tabs.set('tab-1', 200)
+      return vi.fn()
+    })
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, undefined, {
+        acquireAutomationVisibility
+      })
+    )
+    b.setActiveTab(100)
+
+    succeedWith({ snapshot: 'tree' })
+    await expect(b.snapshot()).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'tree' })
+
+    expect(acquireAutomationVisibility).toHaveBeenCalledWith(100)
+    const createdProxyIds = CdpWsProxyMock.instances.map(
+      (instance) => (instance as { _wc?: { id?: number } })._wc?.id
+    )
+    expect(createdProxyIds).toEqual([100, 200])
+  })
+
+  it('preserves intercept routes when automation visibility re-registers the webview', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const wc100 = mockWebContents(100)
+    const wc200 = mockWebContents(200, 'https://example.com/reloaded', 'Reloaded')
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === 100) {
+        return wc100
+      }
+      if (id === 200) {
+        return wc200
+      }
+      return null
+    })
+
+    let reregisterOnVisibility = false
+    const acquireAutomationVisibility = vi.fn(async () => {
+      if (reregisterOnVisibility) {
+        tabs.set('tab-1', 200)
+      }
+      return vi.fn()
+    })
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, undefined, {
+        acquireAutomationVisibility
+      })
+    )
+    b.setActiveTab(100)
+
+    const commandCalls: string[][] = []
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: Function) => {
+        commandCalls.push(args)
+        cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
+      }
+    )
+
+    await b.interceptEnable(['https://old.example/**'])
+    reregisterOnVisibility = true
+    await expect(b.snapshot()).resolves.toEqual({ browserPageId: 'tab-1', ok: true })
+
+    const routeCalls = commandCalls.filter(
+      (args) => args.includes('network') && args.includes('route')
+    )
+    expect(routeCalls).toHaveLength(2)
+    expect(routeCalls.at(-1)).toContain('https://old.example/**')
+  })
+
+  it('clears stale sessions after direct CDP visibility re-registration', async () => {
+    const tabs = new Map([['tab-1', 100]])
+    const wc100 = mockWebContents(100)
+    const wc200 = mockWebContents(200, 'https://example.com/reloaded', 'Reloaded')
+    wc200.debugger.sendCommand.mockResolvedValue({})
+    webContentsFromIdMock.mockImplementation((id: number) => {
+      if (id === 100) {
+        return wc100
+      }
+      if (id === 200) {
+        return wc200
+      }
+      return null
+    })
+
+    let reregisterOnVisibility = false
+    const acquireAutomationVisibility = vi.fn(async () => {
+      if (reregisterOnVisibility) {
+        tabs.set('tab-1', 200)
+      }
+      return vi.fn()
+    })
+    const b = new AgentBrowserBridge(
+      mockBrowserManager(tabs, undefined, {
+        acquireAutomationVisibility
+      })
+    )
+    b.setActiveTab(100)
+
+    succeedWith({ snapshot: 'before' })
+    await b.snapshot()
+
+    reregisterOnVisibility = true
+    await expect(b.mouseClick(10, 20, 'right', undefined, 'tab-1')).resolves.toEqual({
+      clicked: { x: 10, y: 20, button: 'right', adjusted: false, handled: false }
+    })
+
+    succeedWith({ snapshot: 'after' })
+    await expect(b.snapshot()).resolves.toEqual({ browserPageId: 'tab-1', snapshot: 'after' })
+
+    const createdProxyIds = CdpWsProxyMock.instances.map(
+      (instance) => (instance as { _wc?: { id?: number } })._wc?.id
+    )
+    expect(createdProxyIds).toEqual([100, 200])
   })
 
   it('clears reload fallback timer after the load event settles', async () => {

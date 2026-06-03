@@ -193,7 +193,7 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
 
 function setLineageFixtureState(
   groupBy: 'none' | 'repo' = 'none',
-  options: { projectGrouped?: boolean } = {}
+  options: { deletingWorktreeIds?: string[]; projectGrouped?: boolean } = {}
 ): void {
   const projectGroup: ProjectGroup = {
     id: 'project-group-1',
@@ -242,6 +242,12 @@ function setLineageFixtureState(
     browserTabsByWorktree: {},
     clearPendingRevealWorktreeId: vi.fn(),
     collapsedGroups: new Set<string>(),
+    deleteStateByWorktreeId: Object.fromEntries(
+      (options.deletingWorktreeIds ?? []).map((worktreeId) => [
+        worktreeId,
+        { isDeleting: true, error: null, canForceDelete: false }
+      ])
+    ),
     filterRepoIds: [],
     groupBy,
     hideDefaultBranchWorkspace: false,
@@ -313,6 +319,7 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     browserTabsByWorktree: {},
     clearPendingRevealWorktreeId: vi.fn(),
     collapsedGroups: new Set<string>(),
+    deleteStateByWorktreeId: {},
     filterRepoIds,
     groupBy: 'repo',
     hideDefaultBranchWorkspace: false,
@@ -402,6 +409,20 @@ describe('WorktreeList lineage child card renderer', () => {
     const markup = await renderWorktreeListMarkup()
 
     expect(markup).toContain('<div style="padding-left:18px"><div id="worktree-list-option-child"')
+  })
+
+  it('shows deleting feedback on nested lineage child cards', async () => {
+    setLineageFixtureState('none', { deletingWorktreeIds: ['child'] })
+    const markup = await renderWorktreeListMarkup()
+
+    const childCard =
+      markup.match(/<div id="worktree-list-option-child"[\s\S]*?lineage child with agent/)?.[0] ??
+      ''
+
+    expect(childCard).toContain('aria-busy="true"')
+    expect(childCard).toContain('cursor-not-allowed opacity-50 grayscale')
+    expect(childCard).toContain('animate-spin')
+    expect(childCard).toContain('Deleting')
   })
 
   it('opens the reconnect dialog for an active disconnected lineage child during render', async () => {

@@ -10,6 +10,7 @@ import type {
   ClaudeUsageScanState,
   ClaudeUsageScope,
   ClaudeUsageSessionRow,
+  ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
@@ -363,6 +364,21 @@ export class ClaudeUsageStore {
     }
   }
 
+  getSnapshot(
+    scope: ClaudeUsageScope,
+    range: ClaudeUsageRange,
+    recentSessionLimit = 10
+  ): ClaudeUsageSnapshot {
+    return {
+      scanState: this.getScanState(),
+      summary: this.buildSummary(scope, range),
+      daily: this.buildDaily(scope, range),
+      modelBreakdown: this.buildBreakdown(scope, range, 'model'),
+      projectBreakdown: this.buildBreakdown(scope, range, 'project'),
+      recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
+    }
+  }
+
   async refresh(force = false): Promise<ClaudeUsageScanState> {
     if (!this.state.scanState.enabled) {
       return this.getScanState()
@@ -417,6 +433,10 @@ export class ClaudeUsageStore {
 
   async getSummary(scope: ClaudeUsageScope, range: ClaudeUsageRange): Promise<ClaudeUsageSummary> {
     await this.refresh(false)
+    return this.buildSummary(scope, range)
+  }
+
+  private buildSummary(scope: ClaudeUsageScope, range: ClaudeUsageRange): ClaudeUsageSummary {
     const filteredDaily = this.getFilteredDaily(scope, range)
     const filteredSessions = this.getFilteredSessions(scope, range)
 
@@ -491,6 +511,10 @@ export class ClaudeUsageStore {
     range: ClaudeUsageRange
   ): Promise<ClaudeUsageDailyPoint[]> {
     await this.refresh(false)
+    return this.buildDaily(scope, range)
+  }
+
+  private buildDaily(scope: ClaudeUsageScope, range: ClaudeUsageRange): ClaudeUsageDailyPoint[] {
     const byDay = new Map<string, ClaudeUsageDailyPoint>()
     for (const row of this.getFilteredDaily(scope, range)) {
       const existing = byDay.get(row.day) ?? {
@@ -515,6 +539,14 @@ export class ClaudeUsageStore {
     kind: ClaudeUsageBreakdownKind
   ): Promise<ClaudeUsageBreakdownRow[]> {
     await this.refresh(false)
+    return this.buildBreakdown(scope, range, kind)
+  }
+
+  private buildBreakdown(
+    scope: ClaudeUsageScope,
+    range: ClaudeUsageRange,
+    kind: ClaudeUsageBreakdownKind
+  ): ClaudeUsageBreakdownRow[] {
     const rows = new Map<string, ClaudeUsageBreakdownRow>()
     const filteredDaily = this.getFilteredDaily(scope, range)
     const filteredSessions = this.getFilteredSessions(scope, range)
@@ -591,6 +623,14 @@ export class ClaudeUsageStore {
     limit = 12
   ): Promise<ClaudeUsageSessionRow[]> {
     await this.refresh(false)
+    return this.buildRecentSessions(scope, range, limit)
+  }
+
+  private buildRecentSessions(
+    scope: ClaudeUsageScope,
+    range: ClaudeUsageRange,
+    limit = 12
+  ): ClaudeUsageSessionRow[] {
     return this.getFilteredSessions(scope, range)
       .slice(0, limit)
       .map((session) => {

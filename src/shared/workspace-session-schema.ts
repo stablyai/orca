@@ -135,7 +135,8 @@ const persistedOpenFileSchema = z.object({
   worktreeId: z.string(),
   language: z.string(),
   isPreview: z.boolean().optional(),
-  runtimeEnvironmentId: z.string().nullable().optional()
+  runtimeEnvironmentId: z.string().nullable().optional(),
+  dirtyDraftContent: z.string().optional()
 })
 
 // ─── Browser ────────────────────────────────────────────────────────
@@ -253,7 +254,8 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
       z.record(z.string(), z.number().finite().nonnegative())
     )
     .optional(),
-  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional()
+  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
+  sleptWorktreeIds: z.record(z.string(), z.literal(true)).optional()
 })
 
 export type ParsedWorkspaceSession =

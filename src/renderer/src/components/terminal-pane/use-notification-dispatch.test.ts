@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 
 type MockState = {
   activeWorktreeId: string | null
@@ -151,6 +152,11 @@ describe('dispatchTerminalNotification', () => {
     expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({
         source: 'agent-task-complete',
+        notificationId: buildAgentNotificationId({
+          worktreeId: 'wt-primary',
+          paneKey,
+          stateStartedAt: mockState.agentStatusByPaneKey[paneKey].stateStartedAt
+        }),
         worktreeId: 'wt-primary',
         paneKey,
         repoLabel: 'orca',
@@ -342,6 +348,9 @@ describe('dispatchTerminalNotification', () => {
         agentPrompt: 'codex-hook-notify',
         agentLastAssistantMessage: 'Done.'
       })
+    )
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.not.objectContaining({ notificationId: expect.any(String) })
     )
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
     expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')

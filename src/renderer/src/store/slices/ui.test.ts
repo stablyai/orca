@@ -5,6 +5,7 @@ import { getDefaultUIState } from '../../../../shared/constants'
 import type {
   GitHubWorkItem,
   PersistedUIState,
+  TerminalTab,
   Worktree,
   WorktreeCardProperty
 } from '../../../../shared/types'
@@ -15,6 +16,8 @@ import type { AppState } from '../types'
 import type { ContextualTourId } from '../../../../shared/contextual-tours'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 
 const mocks = vi.hoisted(() => ({
   sendBracketedPasteToRunningAgent: vi.fn(),
@@ -71,6 +74,31 @@ function createUIStore(): StoreApi<AppState> {
 
 function makeWorktree(id: string): Worktree {
   return { id } as unknown as Worktree
+}
+
+function makeAgentEntry(paneKey: string, stateStartedAt: number): AgentStatusEntry {
+  return {
+    state: 'done',
+    prompt: 'Review complete',
+    updatedAt: stateStartedAt,
+    stateStartedAt,
+    agentType: 'codex',
+    paneKey,
+    stateHistory: []
+  }
+}
+
+function makeTerminalTab(id: string, worktreeId: string): TerminalTab {
+  return {
+    id,
+    worktreeId,
+    ptyId: null,
+    title: 'Terminal',
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: Date.now()
+  }
 }
 
 function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {
@@ -392,6 +420,131 @@ describe('createUISlice agent send target mode', () => {
 
     write.resolve(true)
     await expect(send).resolves.toBe(true)
+  })
+})
+
+describe('createUISlice acknowledgeAgents notification dismissal', () => {
+  const tabId = 'tab-ack'
+  const livePaneKey = makePaneKey(tabId, '11111111-1111-4111-8111-111111111111')
+  const retainedPaneKey = makePaneKey('tab-retained', '22222222-2222-4222-8222-222222222222')
+  const skippedPaneKey = makePaneKey('tab-skipped', '33333333-3333-4333-8333-333333333333')
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-02T12:00:00Z'))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('dismisses live and retained agent notifications only when the event is unvisited', () => {
+    const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
+    vi.stubGlobal('window', { api: { notifications: { dismiss } } })
+    const store = createUIStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-live': [makeTerminalTab(tabId, 'wt-live')]
+      },
+      agentStatusByPaneKey: {
+        [livePaneKey]: makeAgentEntry(livePaneKey, 1_000),
+        [skippedPaneKey]: makeAgentEntry(skippedPaneKey, 3_000)
+      },
+      retainedAgentsByPaneKey: {
+        [retainedPaneKey]: {
+          entry: makeAgentEntry(retainedPaneKey, 2_000),
+          worktreeId: 'wt-retained',
+          tab: makeTerminalTab('tab-retained', 'wt-retained'),
+          agentType: 'codex',
+          startedAt: 2_000
+        }
+      },
+      acknowledgedAgentsByPaneKey: {
+        [skippedPaneKey]: 4_000
+      }
+    } as Partial<AppState>)
+
+    store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey, skippedPaneKey])
+
+    expect(dismiss).toHaveBeenCalledWith([
+      buildAgentNotificationId({
+        worktreeId: 'wt-live',
+        paneKey: livePaneKey,
+        stateStartedAt: 1_000
+      }),
+      buildAgentNotificationId({
+        worktreeId: 'wt-retained',
+        paneKey: retainedPaneKey,
+        stateStartedAt: 2_000
+      })
+    ])
+
+    dismiss.mockClear()
+    vi.setSystemTime(new Date('2026-06-02T12:00:01Z'))
+    store.getState().acknowledgeAgents([livePaneKey, retainedPaneKey])
+
+    expect(dismiss).not.toHaveBeenCalled()
+  })
+
+  it('falls back to live entry worktree attribution and skips unresolved live entries', () => {
+    const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
+    vi.stubGlobal('window', { api: { notifications: { dismiss } } })
+    const store = createUIStore()
+    const fallbackPaneKey = makePaneKey('tab-fallback', '44444444-4444-4444-8444-444444444444')
+    store.setState({
+      tabsByWorktree: {},
+      agentStatusByPaneKey: {
+        [fallbackPaneKey]: {
+          ...makeAgentEntry(fallbackPaneKey, 1_000),
+          worktreeId: 'wt-from-entry'
+        },
+        [livePaneKey]: makeAgentEntry(livePaneKey, 2_000)
+      },
+      retainedAgentsByPaneKey: {}
+    } as Partial<AppState>)
+
+    store.getState().acknowledgeAgents([fallbackPaneKey, livePaneKey])
+
+    expect(dismiss).toHaveBeenCalledWith([
+      buildAgentNotificationId({
+        worktreeId: 'wt-from-entry',
+        paneKey: fallbackPaneKey,
+        stateStartedAt: 1_000
+      })
+    ])
+  })
+
+  it('dedupes identical live and retained notification ids for the same pane', () => {
+    const dismiss = vi.fn().mockResolvedValue({ dismissed: 0 })
+    vi.stubGlobal('window', { api: { notifications: { dismiss } } })
+    const store = createUIStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-live': [makeTerminalTab(tabId, 'wt-live')]
+      },
+      agentStatusByPaneKey: {
+        [livePaneKey]: makeAgentEntry(livePaneKey, 1_000)
+      },
+      retainedAgentsByPaneKey: {
+        [livePaneKey]: {
+          entry: makeAgentEntry(livePaneKey, 1_000),
+          worktreeId: 'wt-live',
+          tab: makeTerminalTab(tabId, 'wt-live'),
+          agentType: 'codex',
+          startedAt: 1_000
+        }
+      }
+    } as Partial<AppState>)
+
+    store.getState().acknowledgeAgents([livePaneKey])
+
+    expect(dismiss).toHaveBeenCalledWith([
+      buildAgentNotificationId({
+        worktreeId: 'wt-live',
+        paneKey: livePaneKey,
+        stateStartedAt: 1_000
+      })
+    ])
   })
 })
 

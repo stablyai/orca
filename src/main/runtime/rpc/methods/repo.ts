@@ -44,6 +44,14 @@ const RepoBadgeColor = z
     value === undefined ? undefined : (normalizeRepoBadgeColor(value) ?? undefined)
   )
 
+const RepoUpstream = z
+  .object({
+    owner: z.string().min(1),
+    repo: z.string().min(1)
+  })
+  .nullable()
+  .optional()
+
 const RepoUpdate = RepoSelector.extend({
   updates: z.object({
     displayName: OptionalString,
@@ -52,6 +60,7 @@ const RepoUpdate = RepoSelector.extend({
       .unknown()
       .transform((value) => sanitizeRepoIcon(value))
       .optional(),
+    upstream: RepoUpstream,
     hookSettings: z.unknown().optional(),
     worktreeBaseRef: OptionalString,
     worktreeBasePath: OptionalString,

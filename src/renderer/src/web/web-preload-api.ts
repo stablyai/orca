@@ -162,6 +162,7 @@ type WebGitHubApi = NonNullable<PreloadApi['gh']>
 type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
 type WebGitHubRouteKey =
   | 'repoSlug'
+  | 'repoUpstream'
   | 'prForBranch'
   | 'issue'
   | 'workItem'
@@ -209,6 +210,7 @@ type WebGitHubRouteKey =
   | 'updateIssueTypeBySlug'
 type WebGitHubRuntimeMethod =
   | 'github.repoSlug'
+  | 'github.repoUpstream'
   | 'github.prForBranch'
   | 'github.issue'
   | 'github.workItem'
@@ -309,6 +311,7 @@ type WebKeybindingDocument = {
 
 export const GITHUB_WEB_RPC_METHODS = {
   repoSlug: 'github.repoSlug',
+  repoUpstream: 'github.repoUpstream',
   prForBranch: 'github.prForBranch',
   issue: 'github.issue',
   workItem: 'github.workItem',
@@ -1153,6 +1156,21 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    pathExists: async ({ filePath }) => {
+      try {
+        const file = await resolveRuntimeFilePath(filePath)
+        await callRuntimeResult('files.stat', {
+          worktree: file.worktree.id,
+          relativePath: file.relativePath
+        })
+        return true
+      } catch (error) {
+        if (isMissingPathError(error)) {
+          return false
+        }
+        throw error
+      }
+    },
     listFiles: async ({ rootPath, excludePaths }) => {
       const file = await resolveRuntimeFilePath(rootPath)
       const result = await callRuntimeResult<{ files: { relativePath: string }[] }>(
@@ -1379,6 +1397,8 @@ function createGitHubApi(): WebGitHubApi {
   const githubApi = {
     viewer: () => Promise.resolve(null),
     repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
+    repoUpstream: (args) =>
+      route<WebGitHubResult<'repoUpstream'>>(GITHUB_WEB_RPC_METHODS.repoUpstream, args),
     prForBranch: (args) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
@@ -1968,6 +1988,7 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
 function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notifications']> {
   return {
     dispatch: () => Promise.resolve({ delivered: false, reason: 'not-supported' }),
+    dismiss: () => Promise.resolve({ dismissed: 0 }),
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
@@ -2500,6 +2521,13 @@ function toLegacyDetectedWorktreeResult(
       visible: true
     }))
   }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  return /\bENOENT\b|not found|no such file/i.test(error.message)
 }
 
 async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Worktree> {

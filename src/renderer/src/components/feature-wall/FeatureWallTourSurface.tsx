@@ -1,6 +1,5 @@
-/* eslint-disable max-lines -- Why: orchestrator for the inline tour surface; splitting it here would scatter related state across helpers without making the file easier to read. */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { JSX, KeyboardEvent, ReactNode } from 'react'
+import type { JSX, ReactNode } from 'react'
 import {
   DEFAULT_FEATURE_WALL_WORKFLOW_ID,
   FEATURE_WALL_WORKFLOWS,
@@ -21,10 +20,6 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
-import {
-  getFeatureWallRailNavigationTarget,
-  type FeatureWallRailNavigationKey
-} from './feature-wall-rail-navigation'
 import { toFeatureWallAssetUrl, useFeatureWallAssetBaseUrl } from './feature-wall-assets'
 import { useFeatureWallTaskSourcePresentation } from './use-feature-wall-task-source-presentation'
 import { useFeatureWallCompletion } from './use-feature-wall-completion'
@@ -32,9 +27,9 @@ import { useFeatureWallTourTelemetry } from './use-feature-wall-tour-telemetry'
 import { FeatureWallContinueButton } from './FeatureWallContinueButton'
 import { FeatureWallTourPanel } from './FeatureWallTourPanel'
 import { getFeatureWallActiveStepCopy } from './feature-wall-active-step-copy'
-import { getScreenSubmitModifierLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-
-const NAVIGATION_KEYS = new Set<string>(['ArrowUp', 'ArrowDown', 'Home', 'End'])
+import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
+import { useFeatureWallTourKeyboardShortcut } from './use-feature-wall-tour-keyboard-shortcut'
+import { useFeatureWallTourRailKeydown } from './use-feature-wall-tour-rail-keydown'
 
 type FeatureWallTourSurfaceProps = {
   isOpen: boolean
@@ -252,23 +247,10 @@ export function FeatureWallTourSurface({
     [markReviewStepVisited]
   )
 
-  const handleRailKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {
-    if (!NAVIGATION_KEYS.has(event.key)) {
-      return
-    }
-    event.preventDefault()
-    const nextIndex = getFeatureWallRailNavigationTarget({
-      currentIndex: index,
-      key: event.key as FeatureWallRailNavigationKey,
-      itemCount: FEATURE_WALL_WORKFLOWS.length
-    })
-    const nextWorkflow = FEATURE_WALL_WORKFLOWS[nextIndex]
-    if (!nextWorkflow) {
-      return
-    }
-    handleSelect(nextWorkflow)
-    railRefs.current[nextIndex]?.focus()
-  }
+  const handleRailKeyDown = useFeatureWallTourRailKeydown({
+    railRefs,
+    onSelectWorkflow: handleSelect
+  })
 
   const isLastWorkflow = selectedIndex >= FEATURE_WALL_WORKFLOWS.length - 1
   const agentsStepIndex =
@@ -366,20 +348,11 @@ export function FeatureWallTourSurface({
     workbenchSteps
   ])
 
-  useEffect(() => {
-    if (!isOpen || !enableKeyboardShortcut) {
-      return
-    }
-    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-      if (!isScreenSubmitShortcut(event)) {
-        return
-      }
-      event.preventDefault()
-      handleContinue()
-    }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [enableKeyboardShortcut, handleContinue, isOpen])
+  useFeatureWallTourKeyboardShortcut({
+    isOpen,
+    enabled: enableKeyboardShortcut,
+    onContinue: handleContinue
+  })
 
   if (!isOpen) {
     return null

@@ -134,10 +134,7 @@ describe('webview registry drag listeners', () => {
 
     expect(getBrowserWebviewMemoryProfile()).toEqual({
       browserWebviewCount: 2,
-      parkedBrowserWebviewCount: 0,
-      registeredBrowserGuestCount: 1,
-      hiddenBrowserWebviewCount: 0,
-      maxParkedBrowserWebviews: 6
+      registeredBrowserGuestCount: 1
     })
   })
 

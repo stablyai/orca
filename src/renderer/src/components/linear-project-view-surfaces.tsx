@@ -9,6 +9,7 @@ import {
   FileText,
   FolderKanban,
   Layers3,
+  LoaderCircle,
   RefreshCw,
   UserRound
 } from 'lucide-react'
@@ -178,9 +179,9 @@ export function LinearCollectionNotice({
   }
 
   return (
-    <div className="flex flex-none flex-col gap-2 border-t border-border/50 bg-muted/25 px-3 py-2 text-xs text-muted-foreground">
+    <div className="flex flex-none flex-col gap-2 border-t border-border/50 bg-muted/50 text-xs text-muted-foreground">
       {errors && errors.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
+        <div className={cn('flex flex-wrap gap-2 px-3', hasMore ? 'pt-2' : 'py-2')}>
           {errors.map((error) => (
             <Badge key={`${error.workspaceId}-${error.type}`} variant="outline">
               {error.workspaceName ?? error.workspaceId}: {error.message}
@@ -189,11 +190,12 @@ export function LinearCollectionNotice({
         </div>
       ) : null}
       {hasMore ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span>
-            Showing first {count} {label}.
-            {onLoadMore ? ' Fetch more in Orca.' : ' Search or open Linear for the full set.'}
-          </span>
+        <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-3">
+          {onLoadMore ? null : (
+            <span>
+              Showing first {count} {label}. Search or open Linear for the full set.
+            </span>
+          )}
           {onLoadMore ? (
             <Button
               type="button"
@@ -201,15 +203,18 @@ export function LinearCollectionNotice({
               size="xs"
               onClick={onLoadMore}
               disabled={loading}
-              className="h-7 shrink-0 gap-1 border-border/60 bg-background/70"
+              className="inline-flex h-auto w-24 shrink-0 items-center justify-center gap-0.5 rounded-md border-0 bg-transparent px-2 py-1 text-sm text-muted-foreground shadow-none transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
             >
               {loading ? (
                 <>
-                  <RefreshCw className="size-3.5 animate-spin" />
+                  <LoaderCircle className="size-3.5 animate-spin" />
                   Loading
                 </>
               ) : (
-                loadMoreLabel
+                <>
+                  {loadMoreLabel}
+                  <ArrowRight className="size-4" />
+                </>
               )}
             </Button>
           ) : null}

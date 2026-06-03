@@ -205,9 +205,9 @@ export function CompactAgentSummaryButton({
                     {iconAgents.map((agent) => (
                       <span
                         key={agent.paneKey}
-                        className="inline-flex size-3.5 items-center justify-center rounded-full border border-sidebar-border/70 bg-sidebar"
+                        className="inline-flex size-4 items-center justify-center rounded-full border border-sidebar-border/70 bg-sidebar"
                       >
-                        <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={10} />
+                        <AgentIcon agent={agentTypeToIconAgent(agent.agentType)} size={13} />
                       </span>
                     ))}
                   </span>

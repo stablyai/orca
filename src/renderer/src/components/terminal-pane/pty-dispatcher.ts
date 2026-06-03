@@ -265,6 +265,7 @@ export type PtyConnectResult = {
   snapshotCols?: number
   snapshotRows?: number
   isAlternateScreen?: boolean
+  isReattach?: boolean
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string }
   replay?: string

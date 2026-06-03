@@ -1,11 +1,12 @@
 import { readFile, stat } from 'fs/promises'
-import type { RepoKind } from '../shared/types'
+import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
 import {
   faviconUrlFromWebsite,
+  githubAvatarIcon,
   MAX_REPO_ICON_UPLOAD_BYTES,
   type RepoIcon
 } from '../shared/repo-icon'
-import { getRepoSlug } from './github/client'
+import { getRepoSlug, getRepoUpstream } from './github/client'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
@@ -257,18 +258,13 @@ async function detectRemotePackageHomepageIcon(
 
 async function detectGitHubAvatarIcon(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  upstream?: GitHubRepositoryIdentity | null
 ): Promise<RepoIcon | null> {
   try {
-    const slug = await getRepoSlug(repoPath, connectionId)
-    return slug
-      ? {
-          type: 'image',
-          src: `https://github.com/${encodeURIComponent(slug.owner)}.png?size=64`,
-          source: 'github',
-          label: `${slug.owner}/${slug.repo}`
-        }
-      : null
+    // Why: a fork's origin is the personal copy, so prefer the upstream owner.
+    const slug = upstream ?? (await getRepoSlug(repoPath, connectionId))
+    return slug ? githubAvatarIcon(slug) : null
   } catch {
     return null
   }
@@ -277,11 +273,13 @@ async function detectGitHubAvatarIcon(
 export async function detectRepoIcon({
   repoPath,
   kind,
-  connectionId
+  connectionId,
+  upstream
 }: {
   repoPath: string
   kind: RepoKind
   connectionId?: string | null
+  upstream?: GitHubRepositoryIdentity | null
 }): Promise<RepoIcon | undefined> {
   try {
     const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
@@ -300,10 +298,33 @@ export async function detectRepoIcon({
     }
 
     if (kind === 'git') {
-      return (await detectGitHubAvatarIcon(repoPath, connectionId)) ?? undefined
+      return (await detectGitHubAvatarIcon(repoPath, connectionId, upstream)) ?? undefined
     }
   } catch {
     // Repo creation must not fail because a best-effort icon probe failed.
   }
   return undefined
+}
+
+/**
+ * Detect a repo's icon and its fork upstream together. The upstream is resolved
+ * once and reused for the avatar so a fork shows the upstream owner's avatar.
+ * Returns a spread-ready slice of `Repo`. For git repos, `upstream: null`
+ * is a resolved "not a fork" marker and prevents repeated best-effort probes.
+ */
+export async function detectRepoIconAndUpstream({
+  repoPath,
+  kind,
+  connectionId
+}: {
+  repoPath: string
+  kind: RepoKind
+  connectionId?: string | null
+}): Promise<{ repoIcon?: RepoIcon; upstream?: GitHubRepositoryIdentity | null }> {
+  const upstream = kind === 'git' ? await getRepoUpstream(repoPath, connectionId) : null
+  const repoIcon = await detectRepoIcon({ repoPath, kind, connectionId, upstream })
+  return {
+    ...(repoIcon ? { repoIcon } : {}),
+    ...(kind === 'git' ? { upstream: upstream ?? null } : {})
+  }
 }

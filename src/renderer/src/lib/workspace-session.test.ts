@@ -20,6 +20,7 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
       'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
     },
     activeTabIdByWorktree: { 'wt-1': 'tab-1', 'wt-2': 'tab-2' },
+    editorDrafts: {},
     openFiles: [
       {
         filePath: '/tmp/demo.ts',

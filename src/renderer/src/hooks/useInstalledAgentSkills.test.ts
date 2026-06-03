@@ -114,6 +114,20 @@ describe('hasInstalledAgentSkill', () => {
   })
 })
 
+describe('isOrchestrationSkillName', () => {
+  it('matches only the orchestration skill name', () => {
+    expect(
+      _installedAgentSkillDiscoveryInternalsForTests.isOrchestrationSkillName('orchestration')
+    ).toBe(true)
+    expect(
+      _installedAgentSkillDiscoveryInternalsForTests.isOrchestrationSkillName(' Orchestration ')
+    ).toBe(true)
+    expect(
+      _installedAgentSkillDiscoveryInternalsForTests.isOrchestrationSkillName('computer-use')
+    ).toBe(false)
+  })
+})
+
 describe('discoverInstalledAgentSkills', () => {
   it('starts a fresh scan when a forced refresh arrives during a background scan', async () => {
     const firstScan = deferred<SkillDiscoveryResult>()
