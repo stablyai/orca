@@ -38,9 +38,14 @@ import {
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
-const MISSING_EFFECTIVE_UPSTREAM_CACHE_TTL_MS = 30_000
-const MAX_MISSING_EFFECTIVE_UPSTREAM_CACHE_ENTRIES = 512
-const missingEffectiveUpstreamProbeCache = new Map<string, number>()
+const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 30_000
+
+type EffectiveUpstreamStatusCacheEntry = {
+  expiresAt: number
+  status: GitUpstreamStatus
+}
+
+const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
 
 export type GetStatusOptions = {
   includeIgnored?: boolean
@@ -174,24 +179,39 @@ export async function getStatus(
     statusSucceeded = true
 
     if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
-      const cacheKey = getMissingEffectiveUpstreamCacheKey(worktreePath, branch, upstreamName)
-      if (isMissingEffectiveUpstreamCached(cacheKey)) {
-        effectiveUpstreamStatus = { hasUpstream: false, ahead: 0, behind: 0 }
-      } else {
-        try {
-          effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
-            gitExecFileAsync(args, { cwd: worktreePath })
-          )
-          if (effectiveUpstreamStatus.hasUpstream) {
-            missingEffectiveUpstreamProbeCache.delete(cacheKey)
-          } else {
-            rememberMissingEffectiveUpstream(cacheKey)
+      const branchName = getShortBranchName(branch)
+      const cacheKey = branchName
+        ? getEffectiveUpstreamStatusCacheKey(worktreePath, branchName, upstreamName)
+        : null
+      effectiveUpstreamStatus = cacheKey
+        ? readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
+        : undefined
+      let probedSameNameOriginRef = false
+      try {
+        if (!effectiveUpstreamStatus) {
+          effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) => {
+            if (
+              branchName &&
+              args[0] === 'rev-parse' &&
+              args.includes(`refs/remotes/origin/${branchName}`)
+            ) {
+              probedSameNameOriginRef = true
+            }
+            return gitExecFileAsync(args, { cwd: worktreePath })
+          })
+          if (cacheKey) {
+            rememberEffectiveUpstreamStatus(
+              cacheKey,
+              effectiveUpstreamStatus,
+              Date.now(),
+              probedSameNameOriginRef
+            )
           }
-        } catch {
-          // Why: git status polling should not fail just because the richer
-          // upstream probe hit a transient ref/read error; the explicit
-          // upstream-status path will surface those failures when invoked.
         }
+      } catch {
+        // Why: git status polling should not fail just because the richer
+        // upstream probe hit a transient ref/read error; the explicit
+        // upstream-status path will surface those failures when invoked.
       }
     }
   } catch {
@@ -285,6 +305,50 @@ function getShortBranchName(branch: string | undefined): string | null {
   return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
 }
 
+function getEffectiveUpstreamStatusCacheKey(
+  worktreePath: string,
+  branchName: string,
+  upstreamName: string | undefined
+): string {
+  return [worktreePath, branchName, upstreamName ?? ''].join('\0')
+}
+
+function readCachedEffectiveUpstreamStatus(
+  cacheKey: string,
+  now: number
+): GitUpstreamStatus | undefined {
+  const entry = effectiveUpstreamStatusCache.get(cacheKey)
+  if (!entry) {
+    return undefined
+  }
+  if (entry.expiresAt <= now) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return undefined
+  }
+  return entry.status
+}
+
+function rememberEffectiveUpstreamStatus(
+  cacheKey: string,
+  status: GitUpstreamStatus,
+  now: number,
+  probedSameNameOriginRef: boolean
+): void {
+  if (status.hasUpstream) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return
+  }
+  if (!probedSameNameOriginRef) {
+    return
+  }
+  // Why: a stable no-upstream branch should not spawn failed git probes every
+  // source-control poll, but remote refs can appear after push/fetch.
+  effectiveUpstreamStatusCache.set(cacheKey, {
+    status,
+    expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
+  })
+}
+
 function shouldProbeEffectiveUpstreamStatus(
   branch: string | undefined,
   upstreamName: string | undefined
@@ -298,50 +362,6 @@ function shouldProbeEffectiveUpstreamStatus(
   }
   const parsed = splitRemoteBranchName(upstreamName)
   return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
-}
-
-function getMissingEffectiveUpstreamCacheKey(
-  worktreePath: string,
-  branch: string | undefined,
-  upstreamName: string | undefined
-): string {
-  return `${worktreePath}\0${branch ?? ''}\0${upstreamName ?? ''}`
-}
-
-function isMissingEffectiveUpstreamCached(cacheKey: string): boolean {
-  const cachedAt = missingEffectiveUpstreamProbeCache.get(cacheKey)
-  if (cachedAt === undefined) {
-    return false
-  }
-  if (Date.now() - cachedAt > MISSING_EFFECTIVE_UPSTREAM_CACHE_TTL_MS) {
-    missingEffectiveUpstreamProbeCache.delete(cacheKey)
-    return false
-  }
-  return true
-}
-
-function rememberMissingEffectiveUpstream(cacheKey: string): void {
-  const now = Date.now()
-  missingEffectiveUpstreamProbeCache.set(cacheKey, now)
-  if (missingEffectiveUpstreamProbeCache.size <= MAX_MISSING_EFFECTIVE_UPSTREAM_CACHE_ENTRIES) {
-    return
-  }
-  for (const [key, cachedAt] of missingEffectiveUpstreamProbeCache) {
-    if (now - cachedAt > MISSING_EFFECTIVE_UPSTREAM_CACHE_TTL_MS) {
-      missingEffectiveUpstreamProbeCache.delete(key)
-    }
-  }
-  if (missingEffectiveUpstreamProbeCache.size <= MAX_MISSING_EFFECTIVE_UPSTREAM_CACHE_ENTRIES) {
-    return
-  }
-  const oldestKey = missingEffectiveUpstreamProbeCache.keys().next().value
-  if (oldestKey !== undefined) {
-    missingEffectiveUpstreamProbeCache.delete(oldestKey)
-  }
-}
-
-export function __resetMissingEffectiveUpstreamCacheForTests(): void {
-  missingEffectiveUpstreamProbeCache.clear()
 }
 
 function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {

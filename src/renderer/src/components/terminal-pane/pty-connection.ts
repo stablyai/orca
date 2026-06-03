@@ -93,10 +93,12 @@ const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
-const FOREGROUND_THROUGHPUT_IMMEDIATE_BURST_CHARS = 64 * 1024
-const FOREGROUND_THROUGHPUT_IMMEDIATE_BURST_WINDOW_MS = 16
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 16 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
+// Why: OpenTUI can emit many tiny redraws that each look interactive but
+// collectively starve timers unless foreground writes have a rolling budget.
+const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
+const FOREGROUND_BUDGET_WINDOW_MS = 500
 // Why: this is only shown if renderer backlog overflowed and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
@@ -1204,8 +1206,6 @@ export function connectPanePty(
   const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
-  let foregroundImmediateBurstWindowStartedAt = Number.NEGATIVE_INFINITY
-  let foregroundImmediateBurstChars = 0
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
   }
@@ -1674,6 +1674,8 @@ export function connectPanePty(
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
     let hiddenOutputRestoreGeneration = 0
+    let foregroundImmediateBudgetChars = 0
+    let foregroundImmediateBudgetWindowStart = 0
     let hiddenMode2031ScanTail = ''
     const hiddenStartupRendererQueryUntil = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
       ? Date.now() + HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS
@@ -1714,7 +1716,23 @@ export function connectPanePty(
       recordTerminalOutput(pane.terminal)
     }
 
+    function consumeForegroundImmediateBudget(dataLength: number): boolean {
+      const now = performance.now()
+      if (now - foregroundImmediateBudgetWindowStart > FOREGROUND_BUDGET_WINDOW_MS) {
+        foregroundImmediateBudgetChars = 0
+        foregroundImmediateBudgetWindowStart = now
+      }
+      if (foregroundImmediateBudgetChars + dataLength > FOREGROUND_IMMEDIATE_BUDGET_CHARS) {
+        return false
+      }
+      foregroundImmediateBudgetChars += dataLength
+      return true
+    }
+
     function isLatencySensitiveForegroundOutput(data: string): boolean {
+      if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
+        return consumeForegroundImmediateBudget(data.length)
+      }
       const recentInput =
         performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
       if (
@@ -1722,30 +1740,9 @@ export function connectPanePty(
         data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
         data.includes('\x1b[')
       ) {
-        return true
+        return consumeForegroundImmediateBudget(data.length)
       }
-      if (data.length > FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
-        return false
-      }
-      return canWriteImmediateForegroundBurst(data.length)
-    }
-
-    function canWriteImmediateForegroundBurst(chars: number): boolean {
-      const now = performance.now()
-      if (
-        now - foregroundImmediateBurstWindowStartedAt >
-        FOREGROUND_THROUGHPUT_IMMEDIATE_BURST_WINDOW_MS
-      ) {
-        foregroundImmediateBurstWindowStartedAt = now
-        foregroundImmediateBurstChars = 0
-      }
-      if (foregroundImmediateBurstChars + chars > FOREGROUND_THROUGHPUT_IMMEDIATE_BURST_CHARS) {
-        return false
-      }
-      // Why: small foreground chunks are usually interactive, but sustained
-      // redraw floods still need to yield to the scheduler.
-      foregroundImmediateBurstChars += chars
-      return true
+      return false
     }
 
     function containsNonAsciiOutput(data: string): boolean {
