@@ -1153,6 +1153,21 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    pathExists: async ({ filePath }) => {
+      try {
+        const file = await resolveRuntimeFilePath(filePath)
+        await callRuntimeResult('files.stat', {
+          worktree: file.worktree.id,
+          relativePath: file.relativePath
+        })
+        return true
+      } catch (error) {
+        if (isMissingPathError(error)) {
+          return false
+        }
+        throw error
+      }
+    },
     listFiles: async ({ rootPath, excludePaths }) => {
       const file = await resolveRuntimeFilePath(rootPath)
       const result = await callRuntimeResult<{ files: { relativePath: string }[] }>(
@@ -2501,6 +2516,13 @@ function toLegacyDetectedWorktreeResult(
       visible: true
     }))
   }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  return /\bENOENT\b|not found|no such file/i.test(error.message)
 }
 
 async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Worktree> {
