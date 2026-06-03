@@ -113,10 +113,10 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
+import { selectFloatingVisibleTabCount } from './store/selectors'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { ContextualTourOverlay } from './components/contextual-tours/ContextualTourOverlay'
 import { SetupGuideTelemetryObserver } from './components/setup-guide/SetupGuideTelemetryObserver'
 import {
@@ -327,28 +327,7 @@ function App(): React.JSX.Element {
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const floatingVisibleTabCount = useAppStore((s) => {
-    const terminalIds = new Set(
-      (s.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
-    )
-    const browserIds = new Set(
-      (s.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
-    )
-    const editorIds = new Set(
-      s.openFiles
-        .filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
-        .map((file) => file.id)
-    )
-    return (s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter((tab) => {
-      if (tab.contentType === 'terminal') {
-        return terminalIds.has(tab.entityId)
-      }
-      if (tab.contentType === 'browser') {
-        return browserIds.has(tab.entityId)
-      }
-      return editorIds.has(tab.entityId)
-    }).length
-  })
+  const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
