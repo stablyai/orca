@@ -1,5 +1,14 @@
 import type { SettingsSearchEntry } from './settings-search'
 
+export const GENERAL_ISSUE_INJECTION_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'Issue Content Injection',
+    description:
+      'Controls whether issue content is automatically pasted into the agent chat when creating a worktree from an issue.',
+    keywords: ['issue', 'content', 'injection', 'paste', 'agent', 'chat', 'worktree']
+  }
+]
+
 export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Workspace Directory',
@@ -25,7 +34,8 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Open In Menu',
     description: 'Add custom launchers to the workspace Open in menu.',
     keywords: ['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']
-  }
+  },
+  ...GENERAL_ISSUE_INJECTION_SEARCH_ENTRIES
 ]
 
 export const GENERAL_NETWORK_SEARCH_ENTRIES: SettingsSearchEntry[] = [

@@ -2,7 +2,11 @@
    splitting individual settings into separate files would scatter related controls without a
    meaningful abstraction boundary. */
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings, OpenInApplication } from '../../../../shared/types'
+import type {
+  GlobalSettings,
+  IssueContentInjectionPreference,
+  OpenInApplication
+} from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -687,6 +691,35 @@ export function GeneralPane({
           >
             Add Custom Launcher
           </Button>
+        </SearchableSetting>
+
+        <SearchableSetting
+          title="Issue Content Injection"
+          description="Controls whether issue content is automatically pasted into the agent chat when creating a worktree from an issue."
+          keywords={['issue', 'content', 'injection', 'paste', 'agent', 'chat', 'worktree']}
+        >
+          <div className="flex items-center justify-between">
+            <Label htmlFor="issue-content-injection">Issue Content Injection</Label>
+            <Select
+              value={settings.issueContentInjection ?? 'always'}
+              onValueChange={(value: IssueContentInjectionPreference) =>
+                updateSettings({ issueContentInjection: value })
+              }
+            >
+              <SelectTrigger id="issue-content-injection" className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="always">Always Inject</SelectItem>
+                <SelectItem value="never">Never Inject</SelectItem>
+                <SelectItem value="ask">Ask Every Time</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Controls whether issue content is automatically pasted into the agent chat when creating
+            a worktree from an issue.
+          </p>
         </SearchableSetting>
       </section>
     ) : null,
