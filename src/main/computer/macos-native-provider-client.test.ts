@@ -202,4 +202,50 @@ describe('MacOSNativeProviderClient', () => {
     )
     await expect(call).resolves.toMatchObject({ protocolVersion: 1 })
   })
+
+  it('does not let a superseded startup clean up the replacement helper token', async () => {
+    const pendingConnects: {
+      resolve: (socket: FakeSocket) => void
+    }[] = []
+    connectMacOSProviderSocketMock.mockImplementation(
+      async () =>
+        await new Promise<FakeSocket>((resolve) => {
+          pendingConnects.push({ resolve })
+        })
+    )
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+
+    const firstCall = client.capabilities()
+    await vi.waitFor(() => expect(pendingConnects).toHaveLength(1))
+    const firstSocketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
+
+    client.shutdown()
+
+    const secondCall = client.capabilities()
+    await vi.waitFor(() => expect(pendingConnects).toHaveLength(2))
+    const secondSocket = new FakeSocket()
+    pendingConnects[1]!.resolve(secondSocket)
+    await vi.waitFor(() => expect(secondSocket.writes).toHaveLength(1))
+    const secondRequest = JSON.parse(secondSocket.writes[0]!) as { id: number }
+
+    const firstSocket = new FakeSocket()
+    pendingConnects[0]!.resolve(firstSocket)
+
+    await expect(firstCall).rejects.toThrow('native macOS provider startup was superseded')
+    expect(firstSocket.destroyed).toBe(true)
+    expect(rmSyncMock).toHaveBeenCalledWith(join(firstSocketDirectory, 'provider.token'), {
+      force: true
+    })
+
+    secondSocket.emit(
+      'data',
+      `${JSON.stringify({
+        id: secondRequest.id,
+        ok: true,
+        result: { protocolVersion: 1, supports: {} }
+      })}\n`
+    )
+    await expect(secondCall).resolves.toMatchObject({ protocolVersion: 1 })
+  })
 })
