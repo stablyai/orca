@@ -388,12 +388,12 @@ export function useTerminalKeyboardShortcuts({
         // back to an async resolve that queries pty.getCwd.
         const cached = paneCwdRef.current.get(pane.id)
         if (cached?.confirmed && cached.cwd) {
-            const createdPane = manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
-            if (createdPane) {
-              trackTerminalPaneSplit({
-                source: telemetrySource,
-                direction: action.direction
-              })
+          const createdPane = manager.splitPane(pane.id, action.direction, { cwd: cached.cwd })
+          if (createdPane) {
+            trackTerminalPaneSplit({
+              source: telemetrySource,
+              direction: action.direction
+            })
           }
           return
         }

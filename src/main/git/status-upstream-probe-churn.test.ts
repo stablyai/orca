@@ -60,13 +60,13 @@ describe('getStatus missing-upstream polling churn', () => {
     await getStatus('/repo')
     await getStatus('/repo')
 
-    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
-      const args = call[0] as string[]
-      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
+    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) => {
+      const gitArgs = args as string[]
+      return gitArgs[0] === 'rev-parse' && gitArgs.includes('HEAD@{u}')
     })
-    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
-      const args = call[0] as string[]
-      return args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')
+    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) => {
+      const gitArgs = args as string[]
+      return gitArgs[0] === 'rev-parse' && gitArgs.includes('refs/remotes/origin/Initi-Project')
     })
 
     expect(upstreamProbeCalls).toHaveLength(1)
