@@ -6,9 +6,11 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { BrowserPage, BrowserWorkspace, Tab, TerminalTab } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
 import {
+  _getWebSessionTabsTrackingCountsForTest,
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
+  clearWebSessionTabsTrackingForEnvironment,
   resolveHostSessionTabIdForWebSessionTab,
   resetWebSessionTabsSnapshotFreshnessForTests,
   type WebSessionTabsSyncState
@@ -90,6 +92,184 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(second).toBe(afterNewer)
     expect(applyFreshWebSessionTabsSnapshot(afterNewer, newer, ENV, NOW)).toBe(afterNewer)
+  })
+
+  it('clears web session tracking maps when the host removes a worktree snapshot', () => {
+    const workspace: BrowserWorkspace = {
+      id: 'local-browser-workspace',
+      worktreeId: WT,
+      activePageId: 'local-browser-page',
+      pageIds: ['local-browser-page'],
+      url: 'https://example.com/',
+      title: 'Example Domain',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const page: BrowserPage = {
+      id: 'local-browser-page',
+      workspaceId: workspace.id,
+      worktreeId: WT,
+      url: 'https://example.com/',
+      title: 'Example Domain',
+      loading: false,
+      faviconUrl: null,
+      canGoBack: false,
+      canGoForward: false,
+      loadError: null,
+      createdAt: NOW - 10
+    }
+    const unifiedTab: Tab = {
+      id: 'local-browser-unified',
+      entityId: workspace.id,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'browser',
+      label: 'New Tab',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW - 10,
+      isPreview: false,
+      isPinned: false
+    }
+
+    const patch = applyFreshWebSessionTabsSnapshot(
+      makeState({
+        browserTabsByWorktree: { [WT]: [workspace] },
+        browserPagesByWorkspace: { [workspace.id]: [page] },
+        remoteBrowserPageHandlesByPageId: {
+          [page.id]: { environmentId: ENV, remotePageId: 'host-browser-page' }
+        },
+        unifiedTabsByWorktree: { [WT]: [unifiedTab] },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: 'host-group-1',
+              worktreeId: WT,
+              activeTabId: unifiedTab.id,
+              tabOrder: [unifiedTab.id],
+              recentTabIds: [unifiedTab.id]
+            }
+          ]
+        }
+      }),
+      makeSnapshot(
+        [
+          {
+            type: 'browser',
+            id: 'host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'host-browser-workspace',
+            browserPageId: 'host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ],
+        { activeTabId: 'host-browser-unified', activeTabType: 'browser' }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const afterHostSnapshot = {
+      ...makeState(),
+      ...patch
+    } as WebSessionTabsSyncState
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 1,
+      hostMappings: 1
+    })
+
+    applyFreshWebSessionTabsSnapshot(
+      afterHostSnapshot,
+      {
+        ...makeSnapshot([], {
+          publicationEpoch: 'removed-epoch',
+          snapshotVersion: 0,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null
+        }),
+        removed: true
+      } as RuntimeMobileSessionTabsResult,
+      ENV,
+      NOW + 1
+    )
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 0,
+      hostMappings: 0
+    })
+  })
+
+  it('clears web session tracking maps for one runtime environment on teardown', () => {
+    applyFreshWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot(
+        [
+          {
+            type: 'browser',
+            id: 'host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'host-browser-workspace',
+            browserPageId: 'host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ],
+        { activeTabId: 'host-browser-unified', activeTabType: 'browser' }
+      ),
+      ENV,
+      NOW
+    )
+    applyFreshWebSessionTabsSnapshot(
+      makeState({ activeWorktreeId: 'repo::/other-worktree' }),
+      makeSnapshot(
+        [
+          {
+            type: 'browser',
+            id: 'other-host-browser-unified',
+            title: 'Example Domain',
+            browserWorkspaceId: 'other-host-browser-workspace',
+            browserPageId: 'other-host-browser-page',
+            url: 'https://example.com/',
+            loading: false,
+            canGoBack: false,
+            canGoForward: false,
+            isActive: true
+          }
+        ],
+        {
+          worktree: 'repo::/other-worktree',
+          activeTabId: 'other-host-browser-unified',
+          activeTabType: 'browser'
+        }
+      ),
+      'web-env-2',
+      NOW
+    )
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 2,
+      hostMappings: 2
+    })
+
+    clearWebSessionTabsTrackingForEnvironment(ENV)
+
+    expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
+      freshness: 1,
+      hostMappings: 1
+    })
   })
 
   it('hydrates ready host terminal surfaces as remote runtime terminal tabs', () => {

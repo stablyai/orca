@@ -54,19 +54,21 @@ function renderLine(
 }
 
 describe('ImportedWorktreesVisibilityLine', () => {
-  it('renders the compact repo-group line with inline show and dismiss actions', () => {
+  it('renders the compact repo-group line with expand and dismiss actions', () => {
     const markup = renderLine()
 
     expect(markup).toContain('Hiding 4 discovered worktrees')
-    expect(markup).toContain('Show all')
-    expect(markup).toContain('Show all 4 discovered worktrees for orca')
+    expect(markup).toContain('Expand hidden worktrees for orca')
     expect(markup).toContain(
-      'Keep 4 discovered worktrees hidden for orca; recover from the repo menu'
+      'Keep 4 discovered worktrees hidden for orca; recover from the project menu'
     )
     expect(markup).toContain('aria-expanded="false"')
     expect(markup).not.toContain('Imported 4 existing worktrees')
     expect(markup).not.toContain('Orca found 4 worktrees')
     expect(markup).not.toContain('repo options')
+    expect(markup).not.toContain('Reveal')
+    expect(markup).not.toContain('Always show')
+    expect(markup).not.toContain('Hidden worktrees by location')
     expect(markup).not.toContain('payments-refactor')
     expect(markup).not.toContain('/worktrees/demo-project')
   })
@@ -75,11 +77,11 @@ describe('ImportedWorktreesVisibilityLine', () => {
     const markup = renderLine({ placement: 'pinned-fallback', onKeepHidden: undefined })
 
     expect(markup).toContain('Hiding 4 discovered worktrees in orca')
-    expect(markup).toContain('Show all')
-    expect(markup).not.toContain('Keep hidden - recover from the repo menu')
+    expect(markup).not.toContain('Review')
+    expect(markup).not.toContain('Keep hidden - recover from the project menu')
   })
 
-  it('preserves Windows parent path separators in preview groups', () => {
+  it('normalizes Windows parent path separators in preview groups', () => {
     const groups = groupWorktreesByParentPath([
       {
         id: 'windows-hidden',
@@ -88,8 +90,42 @@ describe('ImportedWorktreesVisibilityLine', () => {
       }
     ])
 
-    expect(groups).toMatchObject([{ path: 'C:\\Repos\\Orca' }])
-    expect(groups[0]?.path).not.toBe('C:/Repos/Orca')
+    expect(groups).toMatchObject([{ path: 'C:/Repos/Orca' }])
+    expect(groups[0]?.path).not.toBe('C:\\Repos\\Orca')
+  })
+
+  it('keeps Windows drive roots as parent path labels', () => {
+    const groups = groupWorktreesByParentPath([
+      {
+        id: 'windows-root-hidden',
+        displayName: 'FeatureX',
+        path: 'C:/'
+      }
+    ])
+
+    expect(groups).toMatchObject([{ path: 'C:/' }])
+  })
+
+  it('keeps UNC share roots as parent path labels', () => {
+    const groups = groupWorktreesByParentPath([
+      {
+        id: 'unc-root-hidden',
+        displayName: 'ShareRoot',
+        path: '\\\\server\\share'
+      },
+      {
+        id: 'unc-repo-hidden',
+        displayName: 'Repo',
+        path: '\\\\server\\share\\repo'
+      }
+    ])
+
+    expect(groups).toMatchObject([
+      {
+        path: '//server/share',
+        worktrees: [{ id: 'unc-root-hidden' }, { id: 'unc-repo-hidden' }]
+      }
+    ])
   })
 
   it('disables actions while pending and renders inline errors', () => {

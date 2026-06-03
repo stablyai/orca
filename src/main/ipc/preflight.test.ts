@@ -454,7 +454,35 @@ describe('preflight', () => {
     await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
   })
 
-  it('sends OpenClaude detection commands through the SSH remote preflight path', async () => {
+  it('detects Mistral Vibe from the installed vibe executable', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'vibe') {
+        return { stdout: '/home/test/.local/bin/vibe\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
+  })
+
+  it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'vibe' || String(args[0]) === 'mistral-vibe') {
+        return { stdout: `/home/test/.local/bin/${String(args[0])}\n` }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
+  })
+
+  it('sends aliased detection commands through the SSH remote preflight path', async () => {
     const request = vi.fn().mockResolvedValue({ agents: ['openclaude'] })
     getActiveMultiplexerMock.mockReturnValue({
       isDisposed: () => false,
@@ -467,7 +495,11 @@ describe('preflight', () => {
       handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
     ).resolves.toEqual(['openclaude'])
     expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
-      commands: expect.arrayContaining([{ id: 'openclaude', cmd: 'openclaude' }])
+      commands: expect.arrayContaining([
+        { id: 'openclaude', cmd: 'openclaude' },
+        { id: 'mistral-vibe', cmd: 'vibe' },
+        { id: 'mistral-vibe', cmd: 'mistral-vibe' }
+      ])
     })
   })
 

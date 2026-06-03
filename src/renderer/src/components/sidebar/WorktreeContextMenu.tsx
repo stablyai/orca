@@ -203,11 +203,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   worktree,
   children,
   contentClassName,
-  selectedWorktrees = [worktree],
+  selectedWorktrees,
   onContextMenuSelect,
   onOpenChange
 }: Props) {
+  const defaultSelectedWorktrees = useMemo(() => [worktree], [worktree])
+  const effectiveSelectedWorktrees = selectedWorktrees ?? defaultSelectedWorktrees
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
+  const setWorktreesPinnedAndReveal = useAppStore((s) => s.setWorktreesPinnedAndReveal)
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const openModal = useAppStore((s) => s.openModal)
   const projectGroups = useAppStore((s) => s.projectGroups)
@@ -217,7 +220,9 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
-  const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(selectedWorktrees)
+  const [contextWorktrees, setContextWorktrees] = useState<readonly Worktree[]>(
+    effectiveSelectedWorktrees
+  )
   const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
   const isDeleting = deleteState?.isDeleting ?? false
   const repoMap = useRepoMap()
@@ -230,7 +235,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
-  const activeContextWorktrees = menuOpen ? contextWorktrees : selectedWorktrees
+  const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
   const sleepableWorktrees = useMemo(
     () =>
@@ -303,8 +308,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   }, [worktree.id, worktree.isUnread, updateWorktreeMeta])
 
   const handleTogglePin = useCallback(() => {
-    updateWorktreeMeta(worktree.id, { isPinned: !worktree.isPinned })
-  }, [worktree.id, worktree.isPinned, updateWorktreeMeta])
+    setWorktreesPinnedAndReveal([worktree.id], !worktree.isPinned)
+  }, [worktree.id, worktree.isPinned, setWorktreesPinnedAndReveal])
 
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!repo) {
@@ -469,7 +474,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
         event.preventDefault()
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
-        setContextWorktrees(onContextMenuSelect?.(event) ?? selectedWorktrees)
+        setContextWorktrees(onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
         const bounds = event.currentTarget.getBoundingClientRect()
         setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
         setMenuOpenState(true)

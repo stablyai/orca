@@ -33,7 +33,7 @@ export class PreflightHandler {
       }))
     )
 
-    return { agents: results.filter((r) => r.installed).map((r) => r.id) }
+    return { agents: [...new Set(results.filter((r) => r.installed).map((r) => r.id))] }
   }
 
   // Why: SSH exec channels give the relay a minimal environment without

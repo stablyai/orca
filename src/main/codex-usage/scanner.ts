@@ -7,6 +7,7 @@ import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { getLegacyCopiedCodexSessionBridgeScanPreference } from '../codex/codex-session-bridge'
+import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   CodexUsageAttributedEvent,
   CodexUsageDailyAggregate,
@@ -429,14 +430,7 @@ function localDayFromTimestamp(timestamp: string): string | null {
 async function buildWorktreesWithCanonicalPaths(
   worktrees: CodexUsageWorktreeRef[]
 ): Promise<(CodexUsageWorktreeRef & { canonicalPath: string })[]> {
-  const canonicalized = await Promise.all(
-    worktrees.map(async (worktree) => ({
-      ...worktree,
-      canonicalPath: await canonicalizePath(worktree.path)
-    }))
-  )
-
-  return canonicalized.sort((left, right) => right.canonicalPath.length - left.canonicalPath.length)
+  return canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
 }
 
 function isContainingPath(candidatePath: string, targetPath: string): boolean {

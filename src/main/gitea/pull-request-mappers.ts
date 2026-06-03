@@ -93,10 +93,15 @@ export function mapGiteaPullRequestState(
   if (raw.merged) {
     return 'merged'
   }
+  // Closed Gitea PRs can still carry the draft flag; terminal state should
+  // win so review summaries do not show closed PRs as active drafts.
+  if (raw.state?.trim().toLowerCase() === 'closed') {
+    return 'closed'
+  }
   if (raw.draft) {
     return 'draft'
   }
-  return raw.state?.trim().toLowerCase() === 'closed' ? 'closed' : 'open'
+  return 'open'
 }
 
 export function mapGiteaMergeable(value: boolean | null | undefined): PRMergeableState {

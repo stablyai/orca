@@ -7,7 +7,14 @@ import { submitPromptToAgentTab } from '@/lib/agent-paste-draft'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
 import { useAppStore } from '@/store'
-import type { AutomationDispatchResult } from '../../../shared/automations-types'
+import type {
+  AutomationDispatchResult,
+  AutomationPrecheckResult
+} from '../../../shared/automations-types'
+import {
+  didAutomationPrecheckPass,
+  formatAutomationPrecheckFailure
+} from '../../../shared/automation-precheck'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
   createAutomationRunOutputSnapshotBuffer,
@@ -56,6 +63,7 @@ export function useAutomationDispatchEvents(): void {
       let dispatchWorkspaceId = automation.workspaceId
       let dispatchWorkspaceDisplayName =
         automationWorktree?.displayName ?? run.workspaceDisplayName ?? null
+      let precheckResult: AutomationPrecheckResult | null = null
 
       if (!repo) {
         await markDispatchResult({
@@ -99,6 +107,35 @@ export function useAutomationDispatchEvents(): void {
             })
             return
           }
+        }
+      }
+
+      if (automation.workspaceMode === 'existing' && !automationWorktree) {
+        await markDispatchResult({
+          runId: run.id,
+          status: 'skipped_unavailable',
+          workspaceId: automation.workspaceId,
+          workspaceDisplayName: dispatchWorkspaceDisplayName,
+          error: 'The target workspace is no longer available.'
+        })
+        return
+      }
+
+      if (run.trigger === 'scheduled' && automation.precheck) {
+        precheckResult = await window.api.automations.runPrecheck({
+          automationId: automation.id,
+          runId: run.id
+        })
+        if (precheckResult && !didAutomationPrecheckPass(precheckResult)) {
+          await markDispatchResult({
+            runId: run.id,
+            status: 'skipped_precheck',
+            workspaceId: dispatchWorkspaceId,
+            workspaceDisplayName: dispatchWorkspaceDisplayName,
+            precheckResult,
+            error: formatAutomationPrecheckFailure(precheckResult)
+          })
+          return
         }
       }
 
@@ -170,6 +207,7 @@ export function useAutomationDispatchEvents(): void {
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
             outputSnapshot: getOutputSnapshot(),
+            precheckResult,
             error: null
           })
         }
@@ -181,6 +219,7 @@ export function useAutomationDispatchEvents(): void {
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
             outputSnapshot: getOutputSnapshot(),
+            precheckResult,
             error: code === 0 ? null : `Automation process exited with code ${code}.`
           })
         }
@@ -291,6 +330,7 @@ export function useAutomationDispatchEvents(): void {
                     workspaceId: worktree.id,
                     workspaceDisplayName: worktree.displayName,
                     terminalSessionId: reusableSession.tabId,
+                    precheckResult,
                     error: null
                   })
                   dispatchMarked = true
@@ -346,6 +386,7 @@ export function useAutomationDispatchEvents(): void {
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
             terminalSessionId: result.tabId,
+            precheckResult,
             error: null
           })
           dispatchMarked = true
@@ -378,6 +419,7 @@ export function useAutomationDispatchEvents(): void {
           status: 'dispatch_failed',
           workspaceId: dispatchWorkspaceId,
           workspaceDisplayName: dispatchWorkspaceDisplayName,
+          precheckResult,
           error: error instanceof Error ? error.message : String(error)
         })
       }

@@ -1,8 +1,21 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import type { PRInfo } from '../../../../shared/types'
-import { MergeConflictNotice } from './checks-panel-content'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import type { PRCheckDetail, PRComment, PRInfo } from '../../../../shared/types'
+import {
+  CheckJobLogTail,
+  ChecksList,
+  ConflictTriageStrip,
+  getFailedChecksForDetails,
+  MergeConflictNotice,
+  PRCommentsList,
+  PRTriageStrip
+} from './checks-panel-content'
+
+function renderWithTooltips(element: React.ReactElement): string {
+  return renderToStaticMarkup(React.createElement(TooltipProvider, null, element))
+}
 
 function makePR(overrides: Partial<PRInfo> = {}): PRInfo {
   return {
@@ -21,9 +34,7 @@ function renderNotice(pr: PRInfo, isRefreshingConflictDetails = false): string {
   return renderToStaticMarkup(
     React.createElement(MergeConflictNotice, {
       pr,
-      isRefreshingConflictDetails,
-      isResolvingWithAI: false,
-      onResolveWithAI: () => {}
+      isRefreshingConflictDetails
     })
   )
 }
@@ -57,11 +68,172 @@ describe('MergeConflictNotice', () => {
     expect(markup).toBe('')
   })
 
-  it('renders the Sparkles icon on the idle Resolve with AI button', () => {
+  it('keeps the conflict details informational without a duplicate AI action', () => {
     const markup = renderNotice(makePR())
 
-    expect(markup).toContain('Resolve with AI')
+    expect(markup).not.toContain('Resolve with AI')
+    expect(markup).not.toContain('lucide-sparkles')
+  })
+
+  it('renders the single conflict AI action in the triage strip', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PRTriageStrip, {
+        pr: makePR(),
+        checks: [],
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {},
+        isFixingChecksWithAI: false,
+        onFixChecksWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('Resolve')
     expect(markup).toContain('lucide-sparkles')
-    expect(markup).not.toMatch(/\blucide-sparkle(?!s)\b/)
+    expect(markup).not.toContain('Resolve with AI')
+  })
+
+  it('renders a conflict resolve action for merge requests without PR data', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(ConflictTriageStrip, {
+        reviewKind: 'MR',
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('Conflicts block this MR')
+    expect(markup).toContain('Resolve')
+    expect(markup).toContain('lucide-sparkles')
+  })
+
+  it('renders the CI fix action for failing non-conflict checks', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(PRTriageStrip, {
+        review: makePR({ mergeable: 'MERGEABLE' }),
+        checks: [{ name: 'verify', status: 'completed', conclusion: 'failure', url: null }],
+        isResolvingConflictsWithAI: false,
+        onResolveConflictsWithAI: () => {},
+        isFixingChecksWithAI: false,
+        onFixChecksWithAI: () => {}
+      })
+    )
+
+    expect(markup).toContain('1 failing check')
+    expect(markup).toContain('Fix')
+    expect(markup).toContain('data-variant="outline"')
+    expect(markup).toContain('lucide-sparkles')
+    expect(markup).not.toContain('Fix with AI')
+    expect(markup).not.toContain('Resolve')
+  })
+})
+
+describe('ChecksList', () => {
+  it('puts the hosted details link in the check row as an icon affordance', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(ChecksList, {
+          checks: [
+            {
+              name: 'verify',
+              status: 'completed',
+              conclusion: 'failure',
+              url: 'https://github.com/acme/widgets/actions/runs/1'
+            }
+          ],
+          checksLoading: false,
+          checkDetailsContextKey: 'repo:42',
+          onLoadCheckDetails: async () => null
+        })
+      )
+    )
+
+    expect(markup).toContain('aria-label="Open check details"')
+    expect(markup).toContain('lucide-external-link')
+    expect(markup).toContain('Failed')
+    expect(markup.indexOf('Failed')).toBeLessThan(markup.indexOf('aria-label="Open check details"'))
+    expect(markup).toContain('text-muted-foreground')
+    expect(markup).not.toContain('opacity-0')
+    expect(markup).not.toContain('Open details')
+  })
+})
+
+describe('PRCommentsList', () => {
+  it('places the collapsed add-comment action in the comments header', () => {
+    const comments: PRComment[] = [
+      {
+        id: 1,
+        author: 'AmethystLiang',
+        authorAvatarUrl: '',
+        body: 'Existing review context',
+        createdAt: '2026-05-14T00:00:00Z',
+        url: 'https://github.com/acme/widgets/pull/42#issuecomment-1'
+      }
+    ]
+
+    const markup = renderWithTooltips(
+      React.createElement(PRCommentsList, {
+        comments,
+        commentsLoading: false,
+        onAddComment: () => Promise.resolve({ ok: true as const })
+      })
+    )
+
+    expect(markup.indexOf('aria-label="Add comment"')).toBeLessThan(
+      markup.indexOf('Existing review context')
+    )
+    expect(markup).toContain('lucide-plus')
+    expect(markup).not.toContain('Add a comment...')
+    expect(markup).not.toContain('Add a PR comment')
+  })
+
+  it('uses the header plus action as the empty comments state', () => {
+    const markup = renderWithTooltips(
+      React.createElement(PRCommentsList, {
+        comments: [],
+        commentsLoading: false,
+        onAddComment: () => Promise.resolve({ ok: true as const })
+      })
+    )
+
+    expect(markup).toContain('aria-label="Start conversation"')
+    expect(markup).toContain('lucide-plus')
+    expect(markup).not.toContain('Start conversation...')
+    expect(markup).not.toContain('No comments yet')
+    expect(markup).not.toContain('Add a comment')
+    expect((markup.match(/lucide-message-square/g) ?? []).length).toBe(1)
+  })
+})
+
+describe('getFailedChecksForDetails', () => {
+  it('selects failed, cancelled, and timed out checks for inline details', () => {
+    const checks: PRCheckDetail[] = [
+      { name: 'unit', status: 'completed', conclusion: 'success', url: null },
+      { name: 'verify', status: 'completed', conclusion: 'failure', url: null },
+      { name: 'lint', status: 'completed', conclusion: 'cancelled', url: null },
+      { name: 'e2e', status: 'completed', conclusion: 'timed_out', url: null },
+      { name: 'deploy', status: 'in_progress', conclusion: 'pending', url: null }
+    ]
+
+    expect(getFailedChecksForDetails(checks).map((check) => check.name)).toEqual([
+      'verify',
+      'lint',
+      'e2e'
+    ])
+  })
+})
+
+describe('CheckJobLogTail', () => {
+  it('renders a labeled monospace log tail with copy affordance', () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(CheckJobLogTail, {
+        logTail: 'Error: expected true to be false'
+      })
+    )
+
+    expect(markup).toContain('Log tail (last 200 lines)')
+    expect(markup).toContain('Error: expected true to be false')
+    expect(markup).toContain('Copy log tail')
   })
 })

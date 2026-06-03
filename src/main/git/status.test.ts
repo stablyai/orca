@@ -8,6 +8,7 @@ const {
   lstatMock,
   realpathMock,
   readFileMock,
+  statMock,
   rmMock,
   existsSyncMock
 } = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const {
   lstatMock: vi.fn(),
   realpathMock: vi.fn(),
   readFileMock: vi.fn(),
+  statMock: vi.fn(),
   rmMock: vi.fn(),
   existsSyncMock: vi.fn()
 }))
@@ -33,6 +35,7 @@ vi.mock('fs/promises', () => ({
   lstat: lstatMock,
   realpath: realpathMock,
   readFile: readFileMock,
+  stat: statMock,
   rm: rmMock
 }))
 
@@ -49,6 +52,7 @@ import {
   detectConflictOperation,
   discardChanges,
   getBranchCompare,
+  getCommitCompare,
   getDiff,
   getStagedCommitContext,
   getStatus,
@@ -251,7 +255,12 @@ describe('getDiff', () => {
     gitExecFileAsyncBufferMock.mockReset()
     lstatMock.mockReset()
     readFileMock.mockReset()
+    statMock.mockReset()
     existsSyncMock.mockReset()
+    statMock.mockResolvedValue({
+      isFile: () => true,
+      size: 12
+    })
   })
 
   it('uses the index as the left side for unstaged diffs when present', async () => {
@@ -315,6 +324,21 @@ describe('getDiff', () => {
     expect(result.kind).toBe('binary')
     expect(result.originalIsBinary).toBe(true)
     expect(result.modifiedIsBinary).toBe(false)
+  })
+
+  it('does not read oversized working-tree files into memory', async () => {
+    gitExecFileAsyncBufferMock.mockResolvedValueOnce({ stdout: Buffer.from('index-content\n') })
+    statMock.mockResolvedValueOnce({
+      isFile: () => true,
+      size: 10 * 1024 * 1024 + 1
+    })
+
+    const result = await getDiff('/repo', 'dist/large.log', false)
+
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(result.kind).toBe('binary')
+    expect(result.modifiedIsBinary).toBe(true)
+    expect(result.modifiedContent).toBe('')
   })
 
   it('includes preview metadata for pdf diffs', async () => {
@@ -606,6 +630,32 @@ describe('getStatus', () => {
     expect(result.entries).toEqual([
       { path: 'src/staged.ts', status: 'modified', area: 'staged', added: 10, removed: 0 },
       { path: 'src/unstaged.ts', status: 'modified', area: 'unstaged', added: 3, removed: 4 }
+    ])
+  })
+
+  it('attaches numstat counts for literal paths containing rename markers', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args.includes('status')) {
+        return Promise.resolve({
+          stdout: '1 .M N... 100644 100644 100644 aaaa aaaa docs/a => b.txt\n'
+        })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({ stdout: '1\t0\tdocs/a => b.txt\0' })
+      }
+      return Promise.resolve({ stdout: '' })
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M'],
+      { cwd: '/repo', env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }) }
+    )
+    expect(result.entries).toEqual([
+      { path: 'docs/a => b.txt', status: 'modified', area: 'unstaged', added: 1, removed: 0 }
     ])
   })
 
@@ -919,6 +969,102 @@ describe('getBranchCompare', () => {
     )
     expect(result.entries).toEqual([
       { path: 'docs/日本語/sample.md', status: 'modified', added: 2, removed: 1 }
+    ])
+  })
+
+  it('attaches counts for branch compare paths containing rename markers', async () => {
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'branch') {
+        return Promise.resolve({ stdout: 'main\n' })
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD')) {
+        return Promise.resolve({ stdout: 'head-oid\n' })
+      }
+      if (args[0] === 'rev-parse') {
+        return Promise.resolve({ stdout: 'base-oid\n' })
+      }
+      if (args[0] === 'merge-base') {
+        return Promise.resolve({ stdout: 'merge-base-oid\n' })
+      }
+      if (args.includes('--name-status')) {
+        return Promise.resolve({ stdout: 'M\tdocs/a => b.txt\n' })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({
+          stdout: args.includes('-z') ? '1\t0\tdocs/a => b.txt\0' : '1\t0\tdocs/a => b.txt\n'
+        })
+      }
+      if (args[0] === 'rev-list') {
+        return Promise.resolve({ stdout: '1\n' })
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+
+    const result = await getBranchCompare('/repo', 'origin/main')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        '-z',
+        '--numstat',
+        '-M',
+        '-C',
+        'merge-base-oid',
+        'head-oid'
+      ],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+    expect(result.entries).toEqual([
+      { path: 'docs/a => b.txt', status: 'modified', added: 1, removed: 0 }
+    ])
+  })
+})
+
+describe('getCommitCompare', () => {
+  beforeEach(() => {
+    gitExecFileAsyncMock.mockReset()
+    gitExecFileAsyncBufferMock.mockReset()
+  })
+
+  it('attaches counts for commit compare paths containing rename markers', async () => {
+    gitExecFileAsyncMock.mockImplementation((args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return Promise.resolve({ stdout: 'commit-oid\n' })
+      }
+      if (args[0] === 'rev-list') {
+        return Promise.resolve({ stdout: 'commit-oid parent-oid\n' })
+      }
+      if (args.includes('--name-status')) {
+        return Promise.resolve({ stdout: 'M\tdocs/a => b.txt\n' })
+      }
+      if (args.includes('--numstat')) {
+        return Promise.resolve({
+          stdout: args.includes('-z') ? '1\t0\tdocs/a => b.txt\0' : '1\t0\tdocs/a => b.txt\n'
+        })
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
+
+    const result = await getCommitCompare('/repo', 'commit-oid')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        '-z',
+        '--numstat',
+        '-M',
+        '-C',
+        'parent-oid',
+        'commit-oid'
+      ],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+    expect(result.entries).toEqual([
+      { path: 'docs/a => b.txt', status: 'modified', added: 1, removed: 0 }
     ])
   })
 })

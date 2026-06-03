@@ -553,4 +553,32 @@ describe('keybindings', () => {
       )
     ).toBe(true)
   })
+
+  it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
+    const macOptionLeftBracket = {
+      key: '\u201c',
+      code: 'BracketLeft',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+    const macOptionRightBracket = {
+      key: '\u2018',
+      code: 'BracketRight',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+
+    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionLeftBracket, 'darwin')).toBe(
+      true
+    )
+    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionLeftBracket, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionRightBracket, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionRightBracket, 'darwin')).toBe(
+      false
+    )
+  })
 })

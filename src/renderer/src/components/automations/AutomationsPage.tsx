@@ -47,6 +47,7 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager,
   ExternalAutomationRun,
+  AutomationPrecheck,
   AutomationRun,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
@@ -54,6 +55,7 @@ import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { Worktree } from '../../../../shared/types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree-id'
 import {
+  buildAutomationCronSchedule,
   buildAutomationRrule,
   formatAutomationSchedule,
   isValidAutomationCronSchedule,
@@ -90,6 +92,7 @@ import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-temp
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
+import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 
 const AGENTS = AGENT_CATALOG.map((agent) => agent.id)
 const DEFAULT_TIME = '09:00'
@@ -131,21 +134,29 @@ function parseDraftTime(time: string): { hour: number; minute: number } {
   }
 }
 
+function buildDraftPrecheck(draft: AutomationDraft): AutomationPrecheck | null {
+  const command = draft.precheckCommand.trim()
+  if (!command) {
+    return null
+  }
+  const rawTimeout = Number(draft.precheckTimeoutSeconds)
+  return {
+    command,
+    timeoutSeconds: Number.isFinite(rawTimeout) ? rawTimeout : 60
+  }
+}
+
 function buildHermesCronSchedule(draft: AutomationDraft): string {
   if (draft.preset === 'custom') {
     return draft.customSchedule.trim()
   }
   const { hour, minute } = parseDraftTime(draft.time)
-  if (draft.preset === 'hourly') {
-    return `${minute} * * * *`
-  }
-  if (draft.preset === 'daily') {
-    return `${minute} ${hour} * * *`
-  }
-  if (draft.preset === 'weekdays') {
-    return `${minute} ${hour} * * 1-5`
-  }
-  return `${minute} ${hour} * * ${Number(draft.dayOfWeek)}`
+  return buildAutomationCronSchedule({
+    preset: draft.preset,
+    hour,
+    minute,
+    dayOfWeek: Number(draft.dayOfWeek)
+  })
 }
 
 function getAgentLabel(agentId: string): string {
@@ -219,6 +230,14 @@ function getAutomationRunContent(run: AutomationRun): string {
   if (savedOutput) {
     return run.outputSnapshot?.content ?? savedOutput
   }
+  if (run.precheckResult) {
+    const output = [run.precheckResult.stderr.trim(), run.precheckResult.stdout.trim()]
+      .filter(Boolean)
+      .join('\n\n')
+    if (output) {
+      return output
+    }
+  }
   return run.error ?? run.usage?.unavailableMessage ?? 'No output content available.'
 }
 
@@ -286,6 +305,17 @@ export default function AutomationsPage(): React.JSX.Element {
   const [selectedExternalKey, setSelectedExternalKey] = useState<string | null>(null)
   const [selectedExternalRunPage, setSelectedExternalRunPage] =
     useState<SelectedExternalRunPage | null>(null)
+  const selectAutomationId = useCallback(
+    (automationId: string | null): void => {
+      setSelectedAutomationRunPageId(null)
+      setSelectedId(automationId)
+    },
+    [setSelectedId]
+  )
+  const selectExternalKey = useCallback((externalKey: string | null): void => {
+    setSelectedExternalRunPage(null)
+    setSelectedExternalKey(externalKey)
+  }, [])
   const [connectingExternalSourceKey, setConnectingExternalSourceKey] = useState<string | null>(
     null
   )
@@ -295,6 +325,11 @@ export default function AutomationsPage(): React.JSX.Element {
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
   } | null>(null)
+  useContextualTour(
+    'automations',
+    !createOpen && !deleteTarget && !externalDeleteTarget,
+    'automations_open'
+  )
   const [editingExternalTarget, setEditingExternalTarget] = useState<{
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
@@ -314,6 +349,8 @@ export default function AutomationsPage(): React.JSX.Element {
     workspaceId: '',
     baseBranch: '',
     reuseSession: false,
+    precheckCommand: '',
+    precheckTimeoutSeconds: '60',
     preset: 'weekdays',
     time: DEFAULT_TIME,
     dayOfWeek: '1',
@@ -470,14 +507,6 @@ export default function AutomationsPage(): React.JSX.Element {
     }
   }, [activePaneTab, selected, selectedExternal])
 
-  useEffect(() => {
-    setSelectedExternalRunPage(null)
-  }, [selectedExternalKey])
-
-  useEffect(() => {
-    setSelectedAutomationRunPageId(null)
-  }, [selected?.id])
-
   const getDefaultTarget = useCallback(() => {
     const activeWorktree = activeWorktreeId ? worktreeMap.get(activeWorktreeId) : null
     const activeRepo = activeWorktree ? (repoMap.get(activeWorktree.repoId) ?? null) : null
@@ -519,12 +548,12 @@ export default function AutomationsPage(): React.JSX.Element {
       })
       setExternalManagers(nextExternalManagers)
       if (!hasCurrentSelection) {
-        setSelectedId(nextAutomations[0]?.id ?? null)
+        selectAutomationId(nextAutomations[0]?.id ?? null)
       }
     } finally {
       setIsLoading(false)
     }
-  }, [setSelectedId])
+  }, [selectAutomationId])
 
   const hydratePersistedUIState = useCallback(async (): Promise<void> => {
     useAppStore.getState().hydratePersistedUI(await window.api.ui.get())
@@ -704,6 +733,8 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceId: target.workspaceId,
       baseBranch: '',
       reuseSession: false,
+      precheckCommand: '',
+      precheckTimeoutSeconds: '60',
       preset: 'weekdays',
       time: DEFAULT_TIME,
       dayOfWeek: '1',
@@ -756,6 +787,8 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceId: latest.workspaceId ?? '',
       baseBranch: latest.baseBranch ?? '',
       reuseSession: latest.workspaceMode === 'existing' && latest.reuseSession,
+      precheckCommand: latest.precheck?.command ?? '',
+      precheckTimeoutSeconds: String(latest.precheck?.timeoutSeconds ?? 60),
       preset: schedule?.preset ?? (hasCustomSchedule ? 'custom' : 'weekdays'),
       time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : DEFAULT_TIME,
       dayOfWeek: String(schedule?.dayOfWeek ?? 1),
@@ -801,6 +834,8 @@ export default function AutomationsPage(): React.JSX.Element {
       workspaceId,
       baseBranch: '',
       reuseSession: false,
+      precheckCommand: '',
+      precheckTimeoutSeconds: '60',
       preset: hasCustomSchedule ? 'custom' : 'weekdays',
       time: DEFAULT_TIME,
       dayOfWeek: '1',
@@ -930,7 +965,7 @@ export default function AutomationsPage(): React.JSX.Element {
         await refresh()
         setCreateOpen(false)
         setEditingExternalTarget(null)
-        setSelectedExternalKey(
+        selectExternalKey(
           editingExternalTarget
             ? getExternalAutomationKey(editingExternalTarget.manager, editingExternalTarget.job)
             : null
@@ -955,6 +990,7 @@ export default function AutomationsPage(): React.JSX.Element {
       const missedRunGraceMinutes = Number.isFinite(rawMissedRunGraceMinutes)
         ? Math.max(0, rawMissedRunGraceMinutes)
         : 720
+      const precheck = buildDraftPrecheck(draft)
       let currentAutomation = editingAutomationId
         ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
         : null
@@ -971,6 +1007,7 @@ export default function AutomationsPage(): React.JSX.Element {
       const updates: AutomationUpdateInput = {
         name: draft.name,
         prompt: draft.prompt,
+        precheck,
         agentId: draft.agentId,
         projectId: draft.projectId,
         workspaceMode: draft.workspaceMode,
@@ -993,6 +1030,7 @@ export default function AutomationsPage(): React.JSX.Element {
         : await window.api.automations.create({
             name: draft.name,
             prompt: draft.prompt,
+            precheck,
             agentId: draft.agentId,
             projectId: draft.projectId,
             workspaceMode: draft.workspaceMode,
@@ -1013,8 +1051,11 @@ export default function AutomationsPage(): React.JSX.Element {
       })
       setDraft((current) => ({ ...current, name: '', prompt: '' }))
       await refresh()
-      setSelectedId(automation.id)
+      selectAutomationId(automation.id)
       setCreateOpen(false)
+      if (!editingAutomationId) {
+        useAppStore.getState().recordFeatureInteraction('automation-created')
+      }
       toast.success(editingAutomationId ? 'Automation updated.' : 'Automation saved.')
     } catch (error) {
       if (isHermesSave) {
@@ -1037,7 +1078,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const deleteAutomation = async (automation: Automation): Promise<void> => {
     await window.api.automations.delete({ id: automation.id })
     if (useAppStore.getState().selectedAutomationId === automation.id) {
-      setSelectedId(null)
+      selectAutomationId(null)
     }
     await refresh()
   }
@@ -1085,6 +1126,7 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const runNow = async (automation: Automation): Promise<void> => {
     await window.api.automations.runNow({ id: automation.id })
+    useAppStore.getState().recordFeatureInteraction('automation-run')
     await hydratePersistedUIState()
     await refresh()
     toast.message('Automation run queued.')
@@ -1342,6 +1384,7 @@ export default function AutomationsPage(): React.JSX.Element {
                 aria-label="Add automation"
                 onClick={() => openCreateDialog()}
                 className="border border-border/50 bg-transparent hover:bg-muted/50"
+                data-contextual-tour-target="automations-create"
               >
                 <Plus className="size-4" />
               </Button>
@@ -1528,7 +1571,10 @@ export default function AutomationsPage(): React.JSX.Element {
       </Dialog>
 
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(280px,360px)_1fr] overflow-hidden border-t border-border/50">
-        <section className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20">
+        <section
+          className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20"
+          data-contextual-tour-target="automations-list"
+        >
           <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-2">
             {automations.length + externalAutomationEntries.length > 0 ? (
               <div className="grid grid-cols-[1fr_auto] gap-2 px-2 pb-2 text-[11px] font-medium uppercase text-muted-foreground">
@@ -1566,8 +1612,8 @@ export default function AutomationsPage(): React.JSX.Element {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedExternalKey(null)
-                        setSelectedId(automation.id)
+                        selectExternalKey(null)
+                        selectAutomationId(automation.id)
                       }}
                       className={cn(
                         'mb-1 grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-md border px-3 py-2 text-left text-sm transition-colors',
@@ -1657,7 +1703,7 @@ export default function AutomationsPage(): React.JSX.Element {
                     key={entry.key}
                     type="button"
                     onClick={() => {
-                      setSelectedExternalKey(entry.key)
+                      selectExternalKey(entry.key)
                       setActivePaneTab('overview')
                     }}
                     className={cn(
@@ -1699,7 +1745,7 @@ export default function AutomationsPage(): React.JSX.Element {
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedExternalKey(entry.key)
+                        selectExternalKey(entry.key)
                         setActivePaneTab('overview')
                       }}
                       className={cn(
@@ -1900,7 +1946,10 @@ export default function AutomationsPage(): React.JSX.Element {
               onValueChange={(value) => setActivePaneTab(value as AutomationPaneTab)}
               className="min-h-0 flex-1 gap-0"
             >
-              <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-5 py-2">
+              <div
+                className="flex shrink-0 items-center justify-between border-b border-border/50 px-5 py-2"
+                data-contextual-tour-target="automations-runs"
+              >
                 <TabsList variant="line" className="h-8">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="runs" disabled={!selected}>

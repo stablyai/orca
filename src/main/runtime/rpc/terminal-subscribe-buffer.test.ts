@@ -149,6 +149,61 @@ describe('terminal subscribe buffering', () => {
     await dispatchPromise
   })
 
+  it('does not register legacy JSON listeners after the stream signal aborts during snapshot', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const controller = new AbortController()
+      let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn(
+          () =>
+            new Promise<{ data: string; cols: number; rows: number }>((resolve) => {
+              resolveSnapshot = resolve
+            })
+        ),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        registerSubscriptionCleanup: vi.fn(),
+        cleanupSubscription: vi.fn(),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.subscribe', {
+          terminal: 'terminal-1',
+          client: { id: 'desktop-1', type: 'desktop' }
+        }),
+        (msg) => messages.push(msg),
+        { connectionId: 'conn-legacy-json', signal: controller.signal }
+      )
+
+      await vi.waitFor(() => expect(runtime.serializeTerminalBuffer).toHaveBeenCalled())
+      controller.abort()
+      resolveSnapshot({ data: '', cols: 80, rows: 24 })
+      const outcomePromise = Promise.race([
+        dispatchPromise.then(() => 'settled'),
+        new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 0))
+      ])
+      await vi.advanceTimersByTimeAsync(0)
+
+      expect(await outcomePromise).toBe('settled')
+      expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
+      expect(runtime.subscribeToFitOverrideChanges).not.toHaveBeenCalled()
+      expect(runtime.registerSubscriptionCleanup).not.toHaveBeenCalled()
+      expect(runtime.waitForTerminal).not.toHaveBeenCalled()
+      expect(messages).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('marks binary subscribed previews truncated when the uncursored read is limited', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []

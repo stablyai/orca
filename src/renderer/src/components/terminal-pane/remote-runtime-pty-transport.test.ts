@@ -320,7 +320,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         return Promise.resolve({
           ok: true,
           result: {
-            worktree: 'wt-1',
+            worktree: 'id:wt-1',
             publicationEpoch: 'epoch-1',
             snapshotVersion: 1,
             activeGroupId: 'group-1',
@@ -345,7 +345,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         return Promise.resolve({
           ok: true,
           result: {
-            worktree: 'wt-1',
+            worktree: 'id:wt-1',
             publicationEpoch: 'epoch-1',
             snapshotVersion: 2,
             activeGroupId: 'group-1',
@@ -400,7 +400,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     vi.useFakeTimers()
     try {
       const pendingSnapshot = {
-        worktree: 'wt-1',
+        worktree: 'id:wt-1',
         publicationEpoch: 'epoch-1',
         snapshotVersion: 1,
         activeGroupId: 'group-1',

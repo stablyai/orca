@@ -3,6 +3,12 @@ import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 
 const AUDIO_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
+const DICTATION_SAMPLE_RATE = 16_000
+const PCM_BYTES_PER_SAMPLE = 2
+const MAX_DICTATION_AUDIO_SECONDS = 5
+const MAX_DICTATION_AUDIO_CHUNK_BYTES =
+  DICTATION_SAMPLE_RATE * PCM_BYTES_PER_SAMPLE * MAX_DICTATION_AUDIO_SECONDS
+const MAX_DICTATION_AUDIO_CHUNK_BASE64_LENGTH = Math.ceil(MAX_DICTATION_AUDIO_CHUNK_BYTES / 3) * 4
 
 function isValidAudioBase64(value: string): boolean {
   return value.length % 4 !== 1 && AUDIO_BASE64_PATTERN.test(value)
@@ -16,6 +22,12 @@ const DictationStart = z.object({
 const DictationChunk = z.object({
   dictationId: requiredString('Missing dictation ID'),
   audioBase64: requiredString('Missing audio chunk')
+    // Why: feedMobileDictation decodes into Buffer + Float32Array; reject
+    // oversized chunks before allocation. This mirrors the mobile pending-audio budget.
+    .refine(
+      (value) => value.length <= MAX_DICTATION_AUDIO_CHUNK_BASE64_LENGTH,
+      'Audio chunk is too large'
+    )
     // Why: Buffer.from(..., 'base64') silently drops malformed bytes; reject
     // bad mobile audio chunks instead of feeding empty/corrupt PCM.
     .refine(isValidAudioBase64, 'Audio chunk must be base64'),

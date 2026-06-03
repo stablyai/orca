@@ -818,6 +818,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const mergeRepoPR = vi.fn().mockResolvedValue({ ok: true })
     const addGitLabRepoIssueComment = vi.fn().mockResolvedValue({ ok: true })
     const addGitLabRepoMRComment = vi.fn().mockResolvedValue({ ok: true })
+    const resolveGitLabRepoMRDiscussion = vi.fn().mockResolvedValue({ ok: true })
     const mergeGitLabRepoMR = vi.fn().mockResolvedValue({ ok: true })
     const addGitHubIssueCommentBySlug = vi.fn().mockResolvedValue({
       ok: true,
@@ -877,6 +878,7 @@ describe('OrcaRuntimeRpcServer', () => {
       mergeRepoPR,
       addGitLabRepoIssueComment,
       addGitLabRepoMRComment,
+      resolveGitLabRepoMRDiscussion,
       mergeGitLabRepoMR,
       addGitHubIssueCommentBySlug,
       updateGitHubIssueCommentBySlug,
@@ -1285,6 +1287,21 @@ describe('OrcaRuntimeRpcServer', () => {
           repo: 'id:repo-1',
           iid: 456,
           body: 'ship it'
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_gitlab_resolve_mr_discussion',
+        method: 'gitlab.resolveMRDiscussion',
+        deviceToken: mobile.token,
+        params: {
+          repo: 'id:repo-1',
+          iid: 456,
+          discussionId: 'discussion-1',
+          resolved: true
         }
       }),
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
@@ -1749,7 +1766,7 @@ describe('OrcaRuntimeRpcServer', () => {
     })
     expect(listRepoLabels).toHaveBeenCalledWith('id:repo-1')
     expect(listRepoAssignableUsers).toHaveBeenCalledWith('id:repo-1')
-    expect(addRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done')
+    expect(addRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', null)
     expect(addRepoPRReviewComment).toHaveBeenCalledWith('id:repo-1', {
       prNumber: 456,
       commitId: 'abc123',
@@ -1764,7 +1781,8 @@ describe('OrcaRuntimeRpcServer', () => {
       body: 'fixed',
       threadId: 'thread-1',
       path: 'src/app.ts',
-      line: 10
+      line: 10,
+      prRepo: null
     })
     expect(getRepoPRFileContents).toHaveBeenCalledWith('id:repo-1', {
       prNumber: 456,
@@ -1788,6 +1806,13 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(mergeRepoPR).toHaveBeenCalledWith('id:repo-1', 456, 'squash', null)
     expect(addGitLabRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', undefined)
     expect(addGitLabRepoMRComment).toHaveBeenCalledWith('id:repo-1', 456, 'ship it', undefined)
+    expect(resolveGitLabRepoMRDiscussion).toHaveBeenCalledWith(
+      'id:repo-1',
+      456,
+      'discussion-1',
+      true,
+      undefined
+    )
     expect(mergeGitLabRepoMR).toHaveBeenCalledWith('id:repo-1', 456, 'merge', undefined)
     expect(updateGitHubProjectItemField).toHaveBeenCalledWith({
       projectId: 'project-1',
@@ -2499,6 +2524,46 @@ describe('OrcaRuntimeRpcServer', () => {
 
         b.socket.destroy()
         await b.done
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
+    it('destroys active Unix socket connections when the runtime stops', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1000,
+        longPollCap: 1
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const endpoint = metadata!.transports[0]!.endpoint
+
+        const session = openFramedSession(endpoint, {
+          id: 'req_stop',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_stop', wait: true, timeoutMs: 10_000 }
+        })
+        await waitFor(() => server['activeLongPolls'] === 1)
+
+        const stopResult = await Promise.race([
+          server.stop().then(() => 'stopped'),
+          sleep(500).then(() => 'timeout')
+        ])
+
+        expect(stopResult).toBe('stopped')
+        await session.done
+        await waitFor(() => server['activeLongPolls'] === 0)
+        expect(session.socket.destroyed).toBe(true)
       } finally {
         db.close()
         await server.stop()

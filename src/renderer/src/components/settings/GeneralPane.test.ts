@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   createAutoSaveDelayDraftState,
+  createHttpProxyBypassRulesDraftState,
+  createHttpProxyUrlDraftState,
   getDesktopPlatformFromUserAgent,
+  setHttpProxyUrlDraftErrorState,
   shouldCommitOpenInApplicationsDraft,
-  updateAutoSaveDelayDraftState
+  updateAutoSaveDelayDraftState,
+  updateHttpProxyBypassRulesDraftState,
+  updateHttpProxyUrlDraftState
 } from './GeneralPane'
 
 describe('GeneralPane auto-save delay drafts', () => {
@@ -22,6 +27,62 @@ describe('GeneralPane auto-save delay drafts', () => {
     expect(updateAutoSaveDelayDraftState(stale, 1250, '1750')).toEqual({
       sourceDelayMs: 1250,
       draft: '1750'
+    })
+  })
+})
+
+describe('GeneralPane proxy drafts', () => {
+  it('keeps a committed proxy URL draft tied to the current persisted source', () => {
+    const current = createHttpProxyUrlDraftState(undefined)
+
+    expect(updateHttpProxyUrlDraftState(current, undefined, 'http://proxy.test:8080')).toEqual({
+      sourceValue: '',
+      draft: 'http://proxy.test:8080',
+      error: null
+    })
+  })
+
+  it('reconciles stale proxy URL state and clears errors before applying a new draft', () => {
+    const current = setHttpProxyUrlDraftErrorState(
+      updateHttpProxyUrlDraftState(
+        createHttpProxyUrlDraftState('http://old.test:8080'),
+        'http://old.test:8080',
+        'bad proxy'
+      ),
+      'http://old.test:8080',
+      'Invalid proxy URL'
+    )
+
+    expect(
+      updateHttpProxyUrlDraftState(current, 'http://new.test:8080', 'http://typed.test:8080')
+    ).toEqual({
+      sourceValue: 'http://new.test:8080',
+      draft: 'http://typed.test:8080',
+      error: null
+    })
+  })
+
+  it('keeps committed proxy bypass rules tied to the current persisted source', () => {
+    const current = createHttpProxyBypassRulesDraftState('localhost')
+
+    expect(
+      updateHttpProxyBypassRulesDraftState(current, 'localhost', 'localhost,127.0.0.1')
+    ).toEqual({
+      sourceValue: 'localhost',
+      draft: 'localhost,127.0.0.1'
+    })
+  })
+
+  it('reconciles stale proxy bypass rules before applying a new draft', () => {
+    const current = updateHttpProxyBypassRulesDraftState(
+      createHttpProxyBypassRulesDraftState('localhost'),
+      'localhost',
+      'localhost,127.0.0.1'
+    )
+
+    expect(updateHttpProxyBypassRulesDraftState(current, '*.internal', '*.corp')).toEqual({
+      sourceValue: '*.internal',
+      draft: '*.corp'
     })
   })
 })

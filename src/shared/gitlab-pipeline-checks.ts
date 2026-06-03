@@ -3,7 +3,14 @@ import type { PRCheckDetail } from './types'
 
 export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheckDetail['status'] {
   const s = status.toLowerCase()
-  if (s === 'created' || s === 'pending' || s === 'waiting_for_resource' || s === 'preparing') {
+  if (
+    s === 'created' ||
+    s === 'pending' ||
+    s === 'scheduled' ||
+    s === 'waiting_for_callback' ||
+    s === 'waiting_for_resource' ||
+    s === 'preparing'
+  ) {
     return 'queued'
   }
   if (s === 'running') {
@@ -37,6 +44,7 @@ export function mapGitLabPipelineJobStatusToConclusion(
     s === 'created' ||
     s === 'pending' ||
     s === 'running' ||
+    s === 'waiting_for_callback' ||
     s === 'waiting_for_resource' ||
     s === 'preparing' ||
     s === 'scheduled'

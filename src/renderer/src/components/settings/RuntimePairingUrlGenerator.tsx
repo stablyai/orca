@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: the generated URL cache, grant list, and
-   settings form stay together so revocation and cache invalidation remain
-   auditable. */
-import { Check, Copy, Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -11,6 +8,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 
 const LOOPBACK_ADDRESS = '127.0.0.1'
@@ -29,58 +27,6 @@ const runtimePairingUrlCache: {
   runtimePairingUrl: null,
   webClientUrl: null,
   runtimePairingDeviceId: null
-}
-
-function GeneratedUrlRow({
-  label,
-  description,
-  value,
-  copied,
-  onCopy
-}: {
-  label: string
-  description?: string
-  value: string
-  copied: boolean
-  onCopy: () => void
-}): React.JSX.Element {
-  return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
-      {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
-      <div className="flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-background/70 px-2 py-1.5">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
-          {value}
-        </code>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          onClick={onCopy}
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function UnavailableUrlRow({
-  label,
-  description
-}: {
-  label: string
-  description: string
-}): React.JSX.Element {
-  return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
-      <div className="rounded-md border border-border/60 px-2 py-1.5">
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  )
 }
 
 type RuntimePairingUrlGeneratorProps = {
@@ -116,20 +62,27 @@ export function RuntimePairingUrlGenerator({
   const [isGeneratingPairing, setIsGeneratingPairing] = useState(false)
   const networkInterfaceLoadIdRef = useRef(0)
   const accessGrantLoadIdRef = useRef(0)
+  const copiedTargetResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
 
-  useEffect(() => {
-    if (copiedTarget === null) {
+  const clearCopiedTargetResetTimer = useCallback((): void => {
+    if (copiedTargetResetTimerRef.current === null) {
       return
     }
-    const target = copiedTarget
-    const timeout = window.setTimeout(() => {
-      if (mountedRef.current) {
-        setCopiedTarget((current) => (current === target ? null : current))
+    window.clearTimeout(copiedTargetResetTimerRef.current)
+    copiedTargetResetTimerRef.current = null
+  }, [])
+
+  const setContainerNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: copy feedback timers are owned by this settings surface; clear
+      // them when Settings collapses or navigates away.
+      if (!node) {
+        clearCopiedTargetResetTimer()
       }
-    }, 1400)
-    return () => window.clearTimeout(timeout)
-  }, [copiedTarget, mountedRef])
+    },
+    [clearCopiedTargetResetTimer]
+  )
 
   const loadRuntimeAccessGrants = useCallback(
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
@@ -291,7 +244,14 @@ export function RuntimePairingUrlGenerator({
     try {
       await window.api.ui.writeClipboardText(value)
       if (mountedRef.current) {
+        clearCopiedTargetResetTimer()
         setCopiedTarget(target)
+        copiedTargetResetTimerRef.current = window.setTimeout(() => {
+          copiedTargetResetTimerRef.current = null
+          if (mountedRef.current) {
+            setCopiedTarget((current) => (current === target ? null : current))
+          }
+        }, 1400)
         toast.success(target === 'web' ? 'Copied web client URL.' : 'Copied pairing URL.')
       }
     } catch (error) {
@@ -317,7 +277,7 @@ export function RuntimePairingUrlGenerator({
   }
 
   return (
-    <div className={containerClassName}>
+    <div ref={setContainerNode} className={containerClassName}>
       {showHeader ? (
         <div className="space-y-1">
           <Label id="runtime-share-server-label">Share this Orca server</Label>

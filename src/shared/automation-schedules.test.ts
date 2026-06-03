@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildAutomationCronSchedule,
   buildAutomationRrule,
   classifyAutomationCronSchedule,
   formatAutomationSchedule,
@@ -29,6 +30,16 @@ describe('automation schedules', () => {
       new Date('2026-05-13T14:20:00').getTime()
     )
     expect(latest).toBe(new Date('2026-05-13T14:00:00').getTime())
+  })
+
+  it('does not return a future hourly dtstart that is off the scheduled minute', () => {
+    const rrule = buildAutomationRrule({ preset: 'hourly', hour: 9, minute: 0 })
+    const next = nextAutomationOccurrenceAfter(
+      rrule,
+      new Date('2026-05-13T10:30:00').getTime(),
+      new Date('2026-05-13T09:00:00').getTime()
+    )
+    expect(next).toBe(new Date('2026-05-13T11:00:00').getTime())
   })
 
   it('computes weekday schedules without returning weekend candidates', () => {
@@ -70,6 +81,19 @@ describe('automation schedules', () => {
     expect(tryParseAutomationRrule('FREQ=WEEKLY;BYDAY=MO,NO;BYHOUR=10;BYMINUTE=15')).toBeNull()
   })
 
+  it('rejects weekly RRULE schedules that cannot match any day', () => {
+    const rrule = 'FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0'
+
+    expect(isValidAutomationSchedule(rrule)).toBe(false)
+    expect(() =>
+      nextAutomationOccurrenceAfter(
+        rrule,
+        new Date('2026-05-01T00:00:00').getTime(),
+        new Date('2026-05-02T00:00:00').getTime()
+      )
+    ).toThrow('Invalid recurrence day.')
+  })
+
   it('formats invalid schedules with a safe fallback label', () => {
     expect(formatAutomationSchedule('FREQ=YEARLY')).toBe('Invalid schedule')
   })
@@ -92,6 +116,19 @@ describe('automation schedules', () => {
       new Date('2026-05-15T12:00:00').getTime()
     )
     expect(latest).toBe(new Date('2026-05-15T10:15:00').getTime())
+  })
+
+  it('builds cron schedules from simple automation presets', () => {
+    expect(buildAutomationCronSchedule({ preset: 'hourly', hour: 9, minute: 15 })).toBe(
+      '15 * * * *'
+    )
+    expect(buildAutomationCronSchedule({ preset: 'daily', hour: 9, minute: 15 })).toBe('15 9 * * *')
+    expect(buildAutomationCronSchedule({ preset: 'weekdays', hour: 9, minute: 15 })).toBe(
+      '15 9 * * 1-5'
+    )
+    expect(
+      buildAutomationCronSchedule({ preset: 'weekly', hour: 9, minute: 15, dayOfWeek: 0 })
+    ).toBe('15 9 * * 0')
   })
 
   it('formats simple cron schedules with friendly labels', () => {

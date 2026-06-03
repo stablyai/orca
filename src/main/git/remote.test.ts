@@ -335,6 +335,22 @@ describe('git remote operations', () => {
     ])
   })
 
+  it('fetches explicit publish target remotes whose names contain slashes', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await gitFetch('/repo', {
+      remoteName: 'foo/bar',
+      branchName: 'feature/fix'
+    })
+
+    expect(gitExecFileAsyncMock.mock.calls).toEqual([
+      [['check-ref-format', '--branch', 'feature/fix'], { cwd: '/repo' }],
+      [['fetch', '--prune', 'foo/bar'], { cwd: '/repo' }]
+    ])
+  })
+
   it('normalizes fetch authentication errors to a friendly message', async () => {
     gitExecFileAsyncMock.mockRejectedValueOnce(new Error('Authentication failed'))
 

@@ -33,7 +33,7 @@ import {
 import { useTerminalSaveDialog } from '@/components/terminal/useTerminalSaveDialog'
 import { appendUniqueOpenFileIds } from '@/components/terminal/unsaved-close-queue'
 import { getConnectionId } from '@/lib/connection-context'
-import { createUntitledMarkdownFile } from '@/lib/create-untitled-markdown'
+import { createUntitledMarkdownFileWithTemplateSelection } from '@/lib/create-untitled-markdown'
 import { detectLanguage } from '@/lib/language-detect'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
@@ -80,14 +80,18 @@ import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
+  anchorFloatingTerminalPanelBounds,
   clampFloatingTerminalBounds,
+  getDefaultFloatingTerminalCommittedBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
   persistFloatingTerminalPanelBounds,
   readPersistedFloatingTerminalPanelBounds,
+  resolveFloatingTerminalPanelCommittedBounds,
   resolveFloatingTerminalPanelBounds,
   shouldReconcileFloatingTerminalPanelBounds,
   type FloatingTerminalPanelBounds,
+  type FloatingTerminalPanelCommittedBounds,
   type FloatingTerminalPanelBoundsSource
 } from './floating-terminal-panel-bounds'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
@@ -108,7 +112,8 @@ const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
 const FLOATING_TERMINAL_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
 
 type FloatingTerminalPanelBoundsState = {
-  bounds: FloatingTerminalPanelBounds
+  committedBounds: FloatingTerminalPanelCommittedBounds
+  renderedBounds: FloatingTerminalPanelBounds
   source: FloatingTerminalPanelBoundsSource
 }
 
@@ -117,29 +122,29 @@ function isFloatingTerminalDragTarget(target: EventTarget): boolean {
 }
 
 function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
+  const defaultCommittedBounds = getDefaultFloatingTerminalCommittedBounds()
+  const defaultRenderedBounds = getDefaultFloatingTerminalBounds()
   const persistedBounds = readPersistedFloatingTerminalPanelBounds()
   return persistedBounds
     ? {
-        bounds: persistedBounds,
+        committedBounds: persistedBounds,
+        renderedBounds: shouldReconcileFloatingTerminalPanelBounds('user')
+          ? resolveFloatingTerminalPanelBounds(persistedBounds, 'user')
+          : resolveFloatingTerminalPanelCommittedBounds(persistedBounds),
         source: 'user'
       }
     : {
-        bounds: getDefaultFloatingTerminalBounds(),
+        committedBounds: defaultCommittedBounds,
+        renderedBounds: defaultRenderedBounds,
         source: 'default'
       }
 }
 
-function areFloatingTerminalPanelBoundsEqual(
-  left: FloatingTerminalPanelBounds | null,
-  right: FloatingTerminalPanelBounds
+function areFloatingTerminalPanelCommittedBoundsEqual(
+  left: FloatingTerminalPanelCommittedBounds | null,
+  right: FloatingTerminalPanelCommittedBounds
 ): boolean {
-  return (
-    left !== null &&
-    left.left === right.left &&
-    left.top === right.top &&
-    left.width === right.width &&
-    left.height === right.height
-  )
+  return left !== null && JSON.stringify(left) === JSON.stringify(right)
 }
 
 export function FloatingTerminalPanel({
@@ -183,7 +188,10 @@ export function FloatingTerminalPanel({
   const boundsSourceRef = useRef<FloatingTerminalPanelBoundsSource>(
     initialBoundsStateRef.current.source
   )
-  const [bounds, setBounds] = useState(initialBoundsStateRef.current.bounds)
+  const committedBoundsRef = useRef<FloatingTerminalPanelCommittedBounds>(
+    initialBoundsStateRef.current.committedBounds
+  )
+  const [bounds, setBounds] = useState(initialBoundsStateRef.current.renderedBounds)
   const [maximized, setMaximized] = useState(false)
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
@@ -191,8 +199,10 @@ export function FloatingTerminalPanel({
   )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBoundsState | null>(null)
   const stagedBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
-  const lastPersistedBoundsRef = useRef<FloatingTerminalPanelBounds | null>(
-    initialBoundsStateRef.current.source === 'user' ? initialBoundsStateRef.current.bounds : null
+  const lastPersistedBoundsRef = useRef<FloatingTerminalPanelCommittedBounds | null>(
+    initialBoundsStateRef.current.source === 'user'
+      ? initialBoundsStateRef.current.committedBounds
+      : null
   )
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   const saveDialogFileIdRef = useRef<string | null>(null)
@@ -414,13 +424,18 @@ export function FloatingTerminalPanel({
     handleSaveDialogCancel()
   }, [handleSaveDialogCancel])
 
-  const persistUserBounds = useCallback((nextBounds: FloatingTerminalPanelBounds): void => {
-    if (areFloatingTerminalPanelBoundsEqual(lastPersistedBoundsRef.current, nextBounds)) {
-      return
-    }
-    lastPersistedBoundsRef.current = nextBounds
-    persistFloatingTerminalPanelBounds(nextBounds)
-  }, [])
+  const persistUserBounds = useCallback(
+    (nextBounds: FloatingTerminalPanelCommittedBounds): void => {
+      if (
+        areFloatingTerminalPanelCommittedBoundsEqual(lastPersistedBoundsRef.current, nextBounds)
+      ) {
+        return
+      }
+      lastPersistedBoundsRef.current = nextBounds
+      persistFloatingTerminalPanelBounds(nextBounds)
+    },
+    []
+  )
 
   const previewUserBounds = useCallback((nextBounds: FloatingTerminalPanelBounds): void => {
     const clampedBounds = clampFloatingTerminalBounds(nextBounds)
@@ -435,9 +450,14 @@ export function FloatingTerminalPanel({
       }
       const clampedBounds = clampFloatingTerminalBounds(nextBounds)
       stagedBoundsRef.current = null
-      boundsSourceRef.current = 'user'
       setBounds(clampedBounds)
-      persistUserBounds(clampedBounds)
+      const anchoredBounds = anchorFloatingTerminalPanelBounds(clampedBounds)
+      if (!anchoredBounds) {
+        return
+      }
+      committedBoundsRef.current = anchoredBounds
+      boundsSourceRef.current = 'user'
+      persistUserBounds(anchoredBounds)
     },
     [persistUserBounds]
   )
@@ -452,13 +472,10 @@ export function FloatingTerminalPanel({
       if (!shouldReconcileFloatingTerminalPanelBounds(source)) {
         return currentBounds
       }
-      const nextBounds = resolveFloatingTerminalPanelBounds(currentBounds, source)
-      if (source === 'user') {
-        persistUserBounds(nextBounds)
-      }
+      const nextBounds = resolveFloatingTerminalPanelBounds(committedBoundsRef.current, source)
       return nextBounds
     })
-  }, [maximized, persistUserBounds])
+  }, [maximized])
 
   useLayoutEffect(() => {
     // Why: Electron can mount before final renderer dimensions are known; default
@@ -645,12 +662,15 @@ export function FloatingTerminalPanel({
     }
     void (async () => {
       try {
-        const fileInfo = await createUntitledMarkdownFile(
+        const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
           markdownCwd,
           FLOATING_TERMINAL_WORKTREE_ID,
           getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
           LOCAL_RUNTIME_SETTINGS
         )
+        if (!fileInfo) {
+          return
+        }
         openFile(fileInfo, {
           preview: false,
           targetGroupId: activeGroup?.id,
@@ -700,7 +720,7 @@ export function FloatingTerminalPanel({
         : (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
       const items = visibleIds
         .map((visibleId) => resolveGroupTabFromVisibleId(currentGroupTabs, visibleId))
-        .filter((item): item is Tab => item !== null)
+        .filter((item): item is Tab => item !== null && !item.isPinned)
       if (items.length === 0) {
         return
       }
@@ -1122,31 +1142,30 @@ export function FloatingTerminalPanel({
   const toggleMaximized = useCallback(() => {
     if (maximized) {
       const restoredState = restoreBoundsRef.current ?? {
-        bounds: getDefaultFloatingTerminalBounds(),
+        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
+        renderedBounds: getDefaultFloatingTerminalBounds(),
         source: 'default' as const
       }
       restoreBoundsRef.current = null
       boundsSourceRef.current = restoredState.source
+      committedBoundsRef.current = restoredState.committedBounds
       const restoredBounds = shouldReconcileFloatingTerminalPanelBounds(restoredState.source)
-        ? resolveFloatingTerminalPanelBounds(restoredState.bounds, restoredState.source)
-        : restoredState.bounds
-      if (restoredState.source === 'user') {
-        commitUserBounds(restoredBounds)
-      } else {
-        stagedBoundsRef.current = null
-        setBounds(restoredBounds)
-      }
+        ? resolveFloatingTerminalPanelBounds(restoredState.committedBounds, restoredState.source)
+        : restoredState.renderedBounds
+      stagedBoundsRef.current = null
+      setBounds(restoredBounds)
       setMaximized(false)
       return
     }
     restoreBoundsRef.current = {
-      bounds,
+      committedBounds: committedBoundsRef.current,
+      renderedBounds: bounds,
       source: boundsSourceRef.current
     }
     stagedBoundsRef.current = null
     setBounds(getMaximizedFloatingTerminalBounds())
     setMaximized(true)
-  }, [bounds, commitUserBounds, maximized])
+  }, [bounds, maximized])
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (maximized) {
@@ -1216,12 +1235,14 @@ export function FloatingTerminalPanel({
   }, [])
 
   return (
+    // Why: root notification cards use z-40; keep the floating workspace below
+    // them so alerts are never hidden behind an open terminal panel.
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-50 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-30 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
         left: bounds.left,
@@ -1230,16 +1251,11 @@ export function FloatingTerminalPanel({
         height: bounds.height
       }}
       onMouseUp={(event) => {
-        if (maximized) {
-          return
-        }
-        if (!stagedBoundsRef.current && boundsSourceRef.current !== 'user') {
+        if (maximized || !stagedBoundsRef.current) {
           return
         }
         const rect = event.currentTarget.getBoundingClientRect()
-        const measuredBaseBounds =
-          stagedBoundsRef.current ?? lastPersistedBoundsRef.current ?? bounds
-        commitUserBounds({ ...measuredBaseBounds, width: rect.width, height: rect.height })
+        commitUserBounds({ ...stagedBoundsRef.current, width: rect.width, height: rect.height })
       }}
       onFocusCapture={(event) => setFloatingTerminalInputFocused(event.target)}
       onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
@@ -1270,6 +1286,7 @@ export function FloatingTerminalPanel({
               onNewBrowserTab={createFloatingBrowserTab}
               onNewFileTab={createFloatingMarkdownTab}
               onOpenFileTab={openFloatingMarkdownTab}
+              newTabMenuOrder="markdown-first"
               onSetCustomTitle={setTabCustomTitle}
               onSetTabColor={setTabColor}
               onTogglePaneExpand={(tabId) =>
@@ -1364,9 +1381,12 @@ export function FloatingTerminalPanel({
                   </div>
                 }
               >
+                {/* Why: floating workspace markdown is scratch/local context,
+                    not a repo review surface that should expose agent notes. */}
                 <EditorPanel
                   activeFileId={activeEditorFile.id}
                   activeViewStateId={activeEditorUnifiedId}
+                  markdownAnnotationsEnabled={false}
                 />
               </Suspense>
             </div>
@@ -1516,50 +1536,50 @@ function FloatingTerminalEmptyState({
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewTerminal}
         >
-          <TerminalSquare className="size-3.5 opacity-80" />
+          <TerminalSquare className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">New Terminal</span>
           <FloatingEmptyStateShortcut keys={newTerminalShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
-          onClick={onNewBrowser}
-        >
-          <Globe className="size-3.5 opacity-80" />
-          <span className="truncate text-left leading-none">New Browser</span>
-          <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onNewMarkdown}
         >
-          <FileText className="size-3.5 opacity-80" />
+          <FileText className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">New Markdown Note</span>
           <FloatingEmptyStateShortcut keys={newMarkdownShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onOpenMarkdown}
         >
-          <FileText className="size-3.5 opacity-80" />
+          <FileText className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">Open Markdown Note</span>
           <FloatingEmptyStateShortcut keys={openMarkdownShortcutKeys} />
         </Button>
         <Button
           type="button"
           variant="ghost"
-          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
+          onClick={onNewBrowser}
+        >
+          <Globe className="size-3.5 opacity-90" />
+          <span className="truncate text-left leading-none">New Browser</span>
+          <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="grid h-8 w-full grid-cols-[1rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-md px-3 py-0 text-sm font-normal text-foreground hover:bg-muted/40 hover:text-foreground"
           onClick={onClose}
         >
-          <Minus className="size-3.5 opacity-80" />
+          <Minus className="size-3.5 opacity-90" />
           <span className="truncate text-left leading-none">Minimize</span>
           <FloatingEmptyStateShortcut keys={closeShortcutKeys} />
         </Button>
@@ -1575,8 +1595,8 @@ function FloatingEmptyStateShortcut({ keys }: { keys: string[] }): React.JSX.Ele
   return (
     <ShortcutKeyCombo
       keys={keys}
-      className="self-center justify-self-end opacity-75"
-      separatorClassName="mx-0 text-[9px] text-muted-foreground"
+      className="self-center justify-self-end opacity-90 [&>span]:text-foreground"
+      separatorClassName="mx-0 text-[9px] text-foreground"
     />
   )
 }

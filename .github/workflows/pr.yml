@@ -94,5 +94,11 @@ jobs:
       - name: Test
         run: pnpm test
 
-      - name: Build
-        run: pnpm build
+      - name: Build unpacked app
+        run: pnpm build:unpack
+
+      # Why: the packaged CLI runs outside Electron's asar integration, so
+      # bare runtime imports must be present in the package itself. Run from a
+      # temp copy so Node cannot mask missing package deps with repo node_modules.
+      - name: Smoke packaged CLI
+        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked

@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
-import {
-  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  type SshTarget
-} from '../../../../shared/ssh-types'
+import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, type SshTarget } from '../../../../shared/ssh-types'
 import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -15,6 +11,7 @@ import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
 import {
+  getEditingTargetForSshTarget,
   getSshTargetDraftConnectionFields,
   isRelayGracePeriodValid,
   parseRelayGracePeriodSeconds
@@ -149,22 +146,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const handleEdit = (target: SshTarget): void => {
     setEditingId(target.id)
-    setForm({
-      label: target.label,
-      configHost: target.configHost ?? target.host,
-      host: target.host,
-      port: String(target.port),
-      username: target.username,
-      identityFile: target.identityFile ?? '',
-      proxyCommand: target.proxyCommand ?? '',
-      jumpHost: target.jumpHost ?? '',
-      relayGracePeriodSeconds: String(
-        target.relayGracePeriodSeconds === 0
-          ? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
-          : (target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
-      ),
-      relayKeepAliveUntilReset: target.relayGracePeriodSeconds === 0
-    })
+    setForm(getEditingTargetForSshTarget(target))
     setShowForm(true)
   }
 

@@ -19,6 +19,10 @@ import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+import {
+  getPreflightIntegrationStatuses,
+  type PreflightRefreshProvider
+} from './integrations-pane-status'
 export { INTEGRATIONS_PANE_SEARCH_ENTRIES } from './integrations-search'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
@@ -27,55 +31,6 @@ function LinearIcon({ className }: { className?: string }): React.JSX.Element {
       <path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z" />
     </svg>
   )
-}
-
-type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
-// Why: parallel to GhStatus — GitLab uses glab and the same three failure
-// modes (probe in-flight / installed-but-unauth / missing entirely).
-type GlabStatus = GhStatus
-type BitbucketStatus = 'checking' | 'connected' | 'not-configured' | 'not-authenticated'
-type AzureDevOpsStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
-type GiteaStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
-
-type TokenApiPreflightStatus = {
-  configured: boolean
-  authenticated: boolean
-  account: string | null
-  baseUrl: string | null
-  tokenConfigured: boolean
-}
-
-type GiteaPreflightStatus = {
-  configured: boolean
-  authenticated: boolean
-  account: string | null
-  baseUrl: string | null
-  tokenConfigured: boolean
-}
-
-function tokenApiStatusFromPreflight(
-  status: TokenApiPreflightStatus | undefined
-): AzureDevOpsStatus {
-  if (!status?.configured) {
-    return 'not-configured'
-  }
-  if (status.tokenConfigured && !status.baseUrl) {
-    return 'configured'
-  }
-  if (status.tokenConfigured && !status.authenticated) {
-    return 'not-authenticated'
-  }
-  return 'configured'
-}
-
-function giteaStatusFromPreflight(status: GiteaPreflightStatus | undefined): GiteaStatus {
-  if (!status?.configured) {
-    return 'not-configured'
-  }
-  if (status.tokenConfigured && !status.authenticated) {
-    return 'not-authenticated'
-  }
-  return 'configured'
 }
 
 export function IntegrationsPane(): React.JSX.Element {
@@ -89,16 +44,9 @@ export function IntegrationsPane(): React.JSX.Element {
   const linearWorkspaces = linearStatus.workspaces ?? []
   const mountedRef = useMountedRef()
 
-  const [ghStatus, setGhStatus] = useState<GhStatus>('checking')
-  const [glabStatus, setGlabStatus] = useState<GlabStatus>('checking')
-  const [bitbucketStatus, setBitbucketStatus] = useState<BitbucketStatus>('checking')
-  const [bitbucketAccount, setBitbucketAccount] = useState<string | null>(null)
-  const [azureDevOpsStatus, setAzureDevOpsStatus] = useState<AzureDevOpsStatus>('checking')
-  const [azureDevOpsAccount, setAzureDevOpsAccount] = useState<string | null>(null)
-  const [azureDevOpsBaseUrl, setAzureDevOpsBaseUrl] = useState<string | null>(null)
-  const [giteaStatus, setGiteaStatus] = useState<GiteaStatus>('checking')
-  const [giteaAccount, setGiteaAccount] = useState<string | null>(null)
-  const [giteaBaseUrl, setGiteaBaseUrl] = useState<string | null>(null)
+  const [refreshingPreflightProviders, setRefreshingPreflightProviders] = useState<
+    Set<PreflightRefreshProvider>
+  >(new Set())
   const [linearDialogOpen, setLinearDialogOpen] = useState(false)
   const [linearTestingWorkspaceId, setLinearTestingWorkspaceId] = useState<string | null>(null)
   const [linearTestResultByWorkspace, setLinearTestResultByWorkspace] = useState<
@@ -110,43 +58,18 @@ export function IntegrationsPane(): React.JSX.Element {
     void refreshPreflightStatus()
   }, [checkLinearConnection, refreshPreflightStatus])
 
-  useEffect(() => {
-    if (!preflightStatus) {
-      return
-    }
-    if (!preflightStatus.gh.installed) {
-      setGhStatus('not-installed')
-    } else if (!preflightStatus.gh.authenticated) {
-      setGhStatus('not-authenticated')
-    } else {
-      setGhStatus('connected')
-    }
-    const glab = preflightStatus.glab
-    if (!glab || !glab.installed) {
-      setGlabStatus('not-installed')
-    } else if (!glab.authenticated) {
-      setGlabStatus('not-authenticated')
-    } else {
-      setGlabStatus('connected')
-    }
-    const bitbucket = preflightStatus.bitbucket
-    setBitbucketAccount(bitbucket?.account ?? null)
-    if (!bitbucket?.configured) {
-      setBitbucketStatus('not-configured')
-    } else if (!bitbucket.authenticated) {
-      setBitbucketStatus('not-authenticated')
-    } else {
-      setBitbucketStatus('connected')
-    }
-    const azureDevOps = preflightStatus.azureDevOps
-    setAzureDevOpsAccount(azureDevOps?.account ?? null)
-    setAzureDevOpsBaseUrl(azureDevOps?.baseUrl ?? null)
-    setAzureDevOpsStatus(tokenApiStatusFromPreflight(azureDevOps))
-    const gitea = preflightStatus.gitea
-    setGiteaAccount(gitea?.account ?? null)
-    setGiteaBaseUrl(gitea?.baseUrl ?? null)
-    setGiteaStatus(giteaStatusFromPreflight(gitea))
-  }, [preflightStatus])
+  const {
+    ghStatus,
+    glabStatus,
+    bitbucketStatus,
+    bitbucketAccount,
+    azureDevOpsStatus,
+    azureDevOpsAccount,
+    azureDevOpsBaseUrl,
+    giteaStatus,
+    giteaAccount,
+    giteaBaseUrl
+  } = getPreflightIntegrationStatuses(preflightStatus, refreshingPreflightProviders)
 
   const handleLinearDisconnect = async (workspaceId?: string): Promise<void> => {
     await (workspaceId ? disconnectLinearWorkspace(workspaceId) : disconnectLinear())
@@ -185,30 +108,32 @@ export function IntegrationsPane(): React.JSX.Element {
     setLinearTestingWorkspaceId(null)
   }
 
-  const handleRefreshGlab = (): void => {
-    setGlabStatus('checking')
-    void refreshPreflightStatus({ force: true })
+  const refreshPreflightProvider = (provider: PreflightRefreshProvider): void => {
+    setRefreshingPreflightProviders((prev) => new Set(prev).add(provider))
+    void refreshPreflightStatus({ force: true }).finally(() => {
+      if (!mountedRef.current) {
+        return
+      }
+      setRefreshingPreflightProviders((prev) => {
+        if (!prev.has(provider)) {
+          return prev
+        }
+        const next = new Set(prev)
+        next.delete(provider)
+        return next
+      })
+    })
   }
 
-  const handleRefreshGh = (): void => {
-    setGhStatus('checking')
-    void refreshPreflightStatus({ force: true })
-  }
+  const handleRefreshGlab = (): void => refreshPreflightProvider('glab')
 
-  const handleRefreshBitbucket = (): void => {
-    setBitbucketStatus('checking')
-    void refreshPreflightStatus({ force: true })
-  }
+  const handleRefreshGh = (): void => refreshPreflightProvider('gh')
 
-  const handleRefreshAzureDevOps = (): void => {
-    setAzureDevOpsStatus('checking')
-    void refreshPreflightStatus({ force: true })
-  }
+  const handleRefreshBitbucket = (): void => refreshPreflightProvider('bitbucket')
 
-  const handleRefreshGitea = (): void => {
-    setGiteaStatus('checking')
-    void refreshPreflightStatus({ force: true })
-  }
+  const handleRefreshAzureDevOps = (): void => refreshPreflightProvider('azureDevOps')
+
+  const handleRefreshGitea = (): void => refreshPreflightProvider('gitea')
 
   return (
     <div className="space-y-3">

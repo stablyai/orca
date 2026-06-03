@@ -170,6 +170,31 @@ describe('RateLimitService', () => {
     expect(secondWindow.listenerCount('closed')).toBe(0)
   })
 
+  it('sanitizes renderer-provided polling intervals before scheduling timers', () => {
+    vi.useFakeTimers()
+    const intervalSpy = vi.spyOn(globalThis, 'setInterval')
+    try {
+      vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
+      vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
+      const service = new RateLimitService()
+
+      service.setPollingInterval(Number.NaN)
+      service.start()
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 15 * 60 * 1000)
+
+      service.setPollingInterval(Number.MAX_SAFE_INTEGER)
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 2_147_483_647)
+
+      service.setPollingInterval(10)
+      expect(intervalSpy).toHaveBeenLastCalledWith(expect.any(Function), 30_000)
+
+      service.stop()
+    } finally {
+      intervalSpy.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps recent stale data across repeated failures', async () => {
     const service = new RateLimitService()
     const internal = serviceInternals(service)
@@ -273,6 +298,10 @@ describe('RateLimitService', () => {
     await service.refresh()
 
     expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchClaudeRateLimits).toHaveBeenCalledWith({
+      authPreparation: undefined,
+      allowPtyFallback: false
+    })
     expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
@@ -375,7 +404,8 @@ describe('RateLimitService', () => {
         wslDistro: 'Ubuntu',
         wslLinuxConfigDir: '/home/jin/.claude',
         stripAuthEnv: true
-      })
+      }),
+      allowPtyFallback: false
     })
     expect(service.getState().claudeTarget).toEqual({ runtime: 'wsl', wslDistro: 'Ubuntu' })
   })
@@ -434,6 +464,10 @@ describe('RateLimitService', () => {
       wslDistro: 'Ubuntu'
     })
 
+    expect(fetchClaudeRateLimits).toHaveBeenLastCalledWith(
+      expect.objectContaining({ allowPtyFallback: false })
+    )
+
     expect(service.getState().inactiveClaudeAccounts).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ accountId: 'wsl-account-1' })])
     )
@@ -457,7 +491,8 @@ describe('RateLimitService', () => {
     expect(service.getState().inactiveCodexAccounts).toEqual([
       {
         accountId: 'account-1',
-        claude: expect.objectContaining({
+        rateLimits: expect.objectContaining({
+          provider: 'codex',
           session: expect.objectContaining({ usedPercent: 33 })
         }),
         updatedAt: expect.any(Number),
@@ -484,6 +519,42 @@ describe('RateLimitService', () => {
     await firstFetch
   })
 
+  it('keeps sibling inactive Codex preview fetches alive when one account is evicted', async () => {
+    const service = new RateLimitService()
+    const accountFetch = deferred<ProviderRateLimits>()
+    let inactiveAccounts = [
+      { id: 'account-a', managedHomePath: '/tmp/account-a/home' },
+      { id: 'account-b', managedHomePath: '/tmp/account-b/home' }
+    ]
+    service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
+    vi.mocked(fetchCodexRateLimits).mockReturnValueOnce(accountFetch.promise)
+
+    const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
+    await Promise.resolve()
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      { accountId: 'account-a', rateLimits: null, updatedAt: 0, isFetching: true },
+      { accountId: 'account-b', rateLimits: null, updatedAt: 0, isFetching: true }
+    ])
+
+    inactiveAccounts = [{ id: 'account-a', managedHomePath: '/tmp/account-a/home' }]
+    service.evictInactiveCodexCache('account-b')
+    accountFetch.resolve(okProvider('codex', 64, Date.now()))
+    await fetchOnOpen
+
+    expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
+    expect(service.getState().inactiveCodexAccounts).toEqual([
+      {
+        accountId: 'account-a',
+        rateLimits: expect.objectContaining({
+          provider: 'codex',
+          session: expect.objectContaining({ usedPercent: 64 })
+        }),
+        updatedAt: expect.any(Number),
+        isFetching: false
+      }
+    ])
+  })
+
   it('does not recache an inactive Codex account that becomes active during fetch-on-open', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
@@ -497,7 +568,7 @@ describe('RateLimitService', () => {
     const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
     await Promise.resolve()
     expect(service.getState().inactiveCodexAccounts).toEqual([
-      { accountId: 'account-b', claude: null, updatedAt: 0, isFetching: true }
+      { accountId: 'account-b', rateLimits: null, updatedAt: 0, isFetching: true }
     ])
 
     inactiveAccounts = []
@@ -669,7 +740,7 @@ describe('RateLimitService', () => {
     const fetchOnOpen = service.fetchInactiveClaudeAccountsOnOpen()
     await Promise.resolve()
     expect(service.getState().inactiveClaudeAccounts).toEqual([
-      { accountId: 'account-1', claude: null, updatedAt: 0, isFetching: true }
+      { accountId: 'account-1', rateLimits: null, updatedAt: 0, isFetching: true }
     ])
 
     service.evictInactiveClaudeCache('account-1')
@@ -711,7 +782,8 @@ describe('RateLimitService', () => {
     expect(service.getState().inactiveClaudeAccounts).toEqual([
       {
         accountId: 'account-1',
-        claude: expect.objectContaining({
+        rateLimits: expect.objectContaining({
+          provider: 'claude',
           session: expect.objectContaining({ usedPercent: 7 })
         }),
         updatedAt: expect.any(Number),

@@ -1,17 +1,34 @@
 const SSH_PREFIX = 'SSH connection is not active'
+const STALE_NODE_PTY_DAEMON_MARKERS = [
+  "Daemon's node-pty install is gone",
+  'node-pty: posix_spawn failed: ENOENT'
+]
+const STALE_DAEMON_CWD_MARKERS = [
+  "Daemon's working directory is gone",
+  'node-pty: daemon_cwd failed: ENOENT'
+]
 
 function isSshError(error: string): boolean {
   return error.startsWith(SSH_PREFIX)
 }
 
+export function shouldOfferDaemonRestart(error: string): boolean {
+  return [STALE_NODE_PTY_DAEMON_MARKERS, STALE_DAEMON_CWD_MARKERS].some((markers) =>
+    markers.every((marker) => error.includes(marker))
+  )
+}
+
 export function TerminalErrorToast({
   error,
-  onDismiss
+  onDismiss,
+  onRestartDaemon
 }: {
   error: string
   onDismiss: () => void
+  onRestartDaemon?: () => void
 }): React.JSX.Element {
   const ssh = isSshError(error)
+  const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
 
   return (
     <div
@@ -33,9 +50,14 @@ export function TerminalErrorToast({
       }}
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-        <span>
+        <span style={{ minWidth: 0 }}>
           {error}
-          {!ssh && (
+          {showDaemonRestart ? (
+            <>
+              {'\n'}
+              Restart the terminal daemon from here to clear stale daemon state.
+            </>
+          ) : !ssh ? (
             <>
               {'\n'}
               If this persists, please{' '}
@@ -47,8 +69,27 @@ export function TerminalErrorToast({
               </a>
               .
             </>
-          )}
+          ) : null}
         </span>
+        {showDaemonRestart ? (
+          <button
+            onClick={onRestartDaemon}
+            style={{
+              marginLeft: 12,
+              border: '1px solid rgba(252, 165, 165, 0.45)',
+              borderRadius: 6,
+              background: 'rgba(127, 29, 29, 0.35)',
+              color: '#fecaca',
+              cursor: 'pointer',
+              fontSize: 12,
+              padding: '4px 8px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0
+            }}
+          >
+            Restart daemon
+          </button>
+        ) : null}
         <button
           onClick={onDismiss}
           style={{

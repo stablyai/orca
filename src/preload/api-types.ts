@@ -9,6 +9,7 @@ import type {
 } from '../shared/hosted-review'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { AppIdentity } from '../shared/app-identity'
+import type { TerminalPaneSplitSource } from '../shared/feature-education-telemetry'
 import type {
   BaseRefDefaultResult,
   BaseRefSearchResult,
@@ -40,6 +41,7 @@ import type {
   GitHubAssignableUser,
   GitHubPRFile,
   GitHubPRFileContents,
+  GitHubPrStartPoint,
   GitHubPRReviewCommentInput,
   GitHubCommentResult,
   GitHubOwnerRepo,
@@ -47,21 +49,46 @@ import type {
   GitHubWorkItemDetails,
   GitHubViewer,
   GitLabAssignableUser,
+  GitLabAuthDiagnostic,
   GitLabCommentResult,
+  GitLabDiscussionResolveResult,
   GitLabIssueInfo,
   GitLabIssueUpdate,
+  GitLabJobTraceResult,
+  GitLabMRInlineCommentInput,
+  GitLabMRReviewersUpdateResult,
+  GitLabMRUpdate,
   GitLabProjectRef,
+  GitLabRetryJobResult,
   GitLabTodo,
   GitLabViewer,
   GitLabWorkItem,
   GitLabWorkItemDetails,
+  GetGitLabRateLimitResult,
   ListMergeRequestsResult,
   MRInfo,
   MRListState,
   ListWorkItemsResult,
   IssueInfo,
+  JiraComment,
+  JiraConnectionStatus,
+  JiraCreateField,
+  JiraCreateIssueArgs,
+  JiraIssue,
+  JiraIssueFilter,
+  JiraIssueType,
+  JiraIssueUpdate,
+  JiraPriority,
+  JiraProject,
+  JiraSiteSelection,
+  JiraTransition,
+  JiraUser,
+  JiraViewer,
   LinearViewer,
+  LinearCollectionResult,
   LinearConnectionStatus,
+  LinearCustomViewModel,
+  LinearCustomViewSummary,
   LinearWorkspaceSelection,
   LinearIssue,
   LinearIssueUpdate,
@@ -69,6 +96,7 @@ import type {
   LinearWorkflowState,
   LinearLabel,
   LinearMember,
+  LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
   MarkdownDocument,
@@ -80,6 +108,7 @@ import type {
   GetRateLimitResult,
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationDismissResult,
   NotificationPermissionStatusResult,
   NotificationSoundResult,
   OnboardingState,
@@ -109,8 +138,10 @@ import type {
   WorktreeMeta,
   WorktreeRemoteBranchConflictEvent,
   RemoveWorktreeResult,
+  WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch,
+  WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../shared/types'
 import type { SetupScriptImportCandidate } from '../shared/setup-script-imports'
@@ -181,6 +212,7 @@ import type {
   RuntimeBrowserDriverState,
   RuntimeMobileSessionTabMove,
   RuntimeStatus,
+  RuntimeSyncWindowGraphResult,
   RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
 } from '../shared/runtime-types'
@@ -189,8 +221,9 @@ import type {
   CommitMessageModelCapability
 } from '../shared/commit-message-agent-spec'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
-import type { SkillDiscoveryResult } from '../shared/skills'
+import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
+  CrashReportBreadcrumbData,
   CrashReportRecord,
   CrashReportSubmitArgs,
   CrashReportSubmitResult,
@@ -227,6 +260,7 @@ import type {
   ClaudeUsageScanState,
   ClaudeUsageScope,
   ClaudeUsageSessionRow,
+  ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../shared/claude-usage-types'
 import type { RateLimitRuntimeTarget, RateLimitState } from '../shared/rate-limit-types'
@@ -263,6 +297,7 @@ import type {
   CodexUsageScanState,
   CodexUsageScope,
   CodexUsageSessionRow,
+  CodexUsageSnapshot,
   CodexUsageSummary
 } from '../shared/codex-usage-types'
 import type {
@@ -273,6 +308,7 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageScope,
   OpenCodeUsageSessionRow,
+  OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
 } from '../shared/opencode-usage-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
@@ -296,6 +332,7 @@ import type {
   ExternalAutomationRunsPage,
   ExternalAutomationUpdateInput,
   AutomationRun,
+  AutomationPrecheckResult,
   AutomationUpdateInput
 } from '../shared/automations-types'
 import type {
@@ -339,7 +376,9 @@ export type BrowserApi = {
   onNavigationUpdate: (
     callback: (event: { browserPageId: string; url: string; title: string }) => void
   ) => () => void
-  onActivateView: (callback: (data: { worktreeId?: string }) => void) => () => void
+  onActivateView: (
+    callback: (data: { worktreeId?: string; browserPageId?: string }) => void
+  ) => () => void
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
@@ -517,6 +556,11 @@ export type ClaudeUsageApi = {
   getScanState: () => Promise<ClaudeUsageScanState>
   setEnabled: (args: { enabled: boolean }) => Promise<ClaudeUsageScanState>
   refresh: (args?: { force?: boolean }) => Promise<ClaudeUsageScanState>
+  getSnapshot: (args: {
+    scope: ClaudeUsageScope
+    range: ClaudeUsageRange
+    limit?: number
+  }) => Promise<ClaudeUsageSnapshot>
   getSummary: (args: {
     scope: ClaudeUsageScope
     range: ClaudeUsageRange
@@ -541,6 +585,11 @@ export type CodexUsageApi = {
   getScanState: () => Promise<CodexUsageScanState>
   setEnabled: (args: { enabled: boolean }) => Promise<CodexUsageScanState>
   refresh: (args?: { force?: boolean }) => Promise<CodexUsageScanState>
+  getSnapshot: (args: {
+    scope: CodexUsageScope
+    range: CodexUsageRange
+    limit?: number
+  }) => Promise<CodexUsageSnapshot>
   getSummary: (args: {
     scope: CodexUsageScope
     range: CodexUsageRange
@@ -565,6 +614,11 @@ export type OpenCodeUsageApi = {
   getScanState: () => Promise<OpenCodeUsageScanState>
   setEnabled: (args: { enabled: boolean }) => Promise<OpenCodeUsageScanState>
   refresh: (args?: { force?: boolean }) => Promise<OpenCodeUsageScanState>
+  getSnapshot: (args: {
+    scope: OpenCodeUsageScope
+    range: OpenCodeUsageRange
+    limit?: number
+  }) => Promise<OpenCodeUsageSnapshot>
   getSummary: (args: {
     scope: OpenCodeUsageScope
     range: OpenCodeUsageRange
@@ -644,8 +698,10 @@ export type PreloadApi = {
           | 'displayName'
           | 'badgeColor'
           | 'repoIcon'
+          | 'upstream'
           | 'hookSettings'
           | 'worktreeBaseRef'
+          | 'worktreeBasePath'
           | 'kind'
           | 'issueSourcePreference'
           | 'externalWorktreeVisibility'
@@ -705,13 +761,19 @@ export type PreloadApi = {
     scanNested: (args: {
       path: string
       connectionId?: string
+      scanId?: string
       options?: Record<string, unknown>
     }) => Promise<NestedRepoScanResult>
+    cancelNestedScan: (args: { scanId: string }) => Promise<boolean>
+    onNestedScanProgress: (
+      callback: (data: { scanId: string; scan: NestedRepoScanResult }) => void
+    ) => () => void
     importNested: (args: {
       parentPath: string
       groupName: string
       projectPaths: string[]
       connectionId?: string
+      scanId?: string
       mode: ProjectGroupImportMode
     }) => Promise<ProjectGroupImportResult>
   }
@@ -731,12 +793,13 @@ export type PreloadApi = {
     listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
+    prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
     resolvePrBase: (args: {
       repoId: string
       prNumber: number
       headRefName?: string
       isCrossRepository?: boolean
-    }) => Promise<{ baseBranch: string; pushTarget?: GitPushTarget } | { error: string }>
+    }) => Promise<GitHubPrStartPoint | { error: string }>
     /** GitLab parallel of resolvePrBase. For same-project MRs returns
      *  `<remote>/<source_branch>`; for fork MRs fetches
      *  refs/merge-requests/<iid>/head and returns the SHA. */
@@ -832,7 +895,6 @@ export type PreloadApi = {
     signal: (id: string, signal: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
-    pauseOutput: (id: string, paused: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
@@ -878,6 +940,7 @@ export type PreloadApi = {
     recordRendererError: (
       args: ReactErrorBoundaryReportArgs
     ) => Promise<ReactErrorBoundaryReportResult>
+    recordBreadcrumb: (args: { name: string; data?: CrashReportBreadcrumbData }) => void
     submit: (args: CrashReportSubmitArgs) => Promise<CrashReportSubmitResult>
     copyLatestDiagnostics: (args?: {
       reportId?: string
@@ -888,6 +951,10 @@ export type PreloadApi = {
   gh: {
     viewer: () => Promise<GitHubViewer | null>
     repoSlug: (args: {
+      repoPath: string
+      repoId?: string
+    }) => Promise<{ owner: string; repo: string } | null>
+    repoUpstream: (args: {
       repoPath: string
       repoId?: string
     }) => Promise<{ owner: string; repo: string } | null>
@@ -954,6 +1021,8 @@ export type PreloadApi = {
       repoId?: string
       title: string
       body: string
+      labels?: string[]
+      assignees?: string[]
     }) => Promise<{ ok: true; number: number; url: string } | { ok: false; error: string }>
     countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
     listWorkItems: (args: {
@@ -1065,6 +1134,7 @@ export type PreloadApi = {
        *  scope the cross-window invalidation broadcast correctly and avoid
        *  evicting an unrelated PR/issue that happens to share the number. */
       type?: 'issue' | 'pr'
+      prRepo?: GitHubOwnerRepo | null
     }) => Promise<GitHubCommentResult>
     addPRReviewCommentReply: (args: {
       repoPath: string
@@ -1075,6 +1145,7 @@ export type PreloadApi = {
       threadId?: string
       path?: string
       line?: number
+      prRepo?: GitHubOwnerRepo | null
     }) => Promise<GitHubCommentResult>
     addPRReviewComment: (
       args: GitHubPRReviewCommentInput & { repoId?: string }
@@ -1158,6 +1229,11 @@ export type PreloadApi = {
   // host, paginated envelope from `glab api -i`).
   gl: {
     viewer: () => Promise<GitLabViewer | null>
+    diagnoseAuth: () => Promise<GitLabAuthDiagnostic>
+    rateLimit: (args?: {
+      force?: boolean
+      host?: string | null
+    }) => Promise<GetGitLabRateLimitResult>
     projectSlug: (args: { repoPath: string }) => Promise<GitLabProjectRef | null>
     mrForBranch: (args: {
       repoPath: string
@@ -1224,11 +1300,44 @@ export type PreloadApi = {
       iid: number
       method?: 'merge' | 'squash' | 'rebase'
     }) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateMR: (args: {
+      repoPath: string
+      iid: number
+      updates: GitLabMRUpdate
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    updateMRReviewers: (args: {
+      repoPath: string
+      iid: number
+      reviewerIds: number[]
+      projectRef?: GitLabProjectRef | null
+    }) => Promise<GitLabMRReviewersUpdateResult>
     addMRComment: (args: {
       repoPath: string
       iid: number
       body: string
     }) => Promise<GitLabCommentResult>
+    addMRInlineComment: (args: {
+      repoPath: string
+      iid: number
+      input: GitLabMRInlineCommentInput
+      projectRef?: GitLabProjectRef | null
+    }) => Promise<GitLabCommentResult>
+    resolveMRDiscussion: (args: {
+      repoPath: string
+      iid: number
+      discussionId: string
+      resolved: boolean
+    }) => Promise<GitLabDiscussionResolveResult>
+    jobTrace: (args: {
+      repoPath: string
+      jobId: number
+      projectRef?: GitLabProjectRef | null
+    }) => Promise<GitLabJobTraceResult>
+    retryJob: (args: {
+      repoPath: string
+      jobId: number
+      projectRef?: GitLabProjectRef | null
+    }) => Promise<GitLabRetryJobResult>
     workItemByPath: (args: {
       repoPath: string
       host: string
@@ -1258,7 +1367,7 @@ export type PreloadApi = {
       filter?: 'assigned' | 'created' | 'all' | 'completed'
       limit?: number
       workspaceId?: LinearWorkspaceSelection
-    }) => Promise<LinearIssue[]>
+    }) => Promise<LinearCollectionResult<LinearIssue>>
     createIssue: (args: {
       teamId: string
       title: string
@@ -1291,10 +1400,98 @@ export type PreloadApi = {
       query?: string
       limit?: number
       workspaceId?: LinearWorkspaceSelection
-    }) => Promise<LinearProjectSummary[]>
+      force?: boolean
+    }) => Promise<LinearCollectionResult<LinearProjectSummary>>
+    getProject: (args: {
+      id: string
+      workspaceId: string
+      force?: boolean
+    }) => Promise<LinearProjectDetail | null>
+    listProjectIssues: (args: {
+      projectId: string
+      limit?: number
+      workspaceId: string
+      force?: boolean
+    }) => Promise<LinearCollectionResult<LinearIssue>>
+    listCustomViews: (args: {
+      model: LinearCustomViewModel
+      limit?: number
+      workspaceId?: LinearWorkspaceSelection
+      force?: boolean
+    }) => Promise<LinearCollectionResult<LinearCustomViewSummary>>
+    getCustomView: (args: {
+      viewId: string
+      model: LinearCustomViewModel
+      workspaceId: string
+      force?: boolean
+    }) => Promise<LinearCustomViewSummary | null>
+    listCustomViewIssues: (args: {
+      viewId: string
+      limit?: number
+      workspaceId: string
+      force?: boolean
+    }) => Promise<LinearCollectionResult<LinearIssue>>
+    listCustomViewProjects: (args: {
+      viewId: string
+      limit?: number
+      workspaceId: string
+      force?: boolean
+    }) => Promise<LinearCollectionResult<LinearProjectSummary>>
     teamStates: (args: { teamId: string; workspaceId?: string }) => Promise<LinearWorkflowState[]>
     teamLabels: (args: { teamId: string; workspaceId?: string }) => Promise<LinearLabel[]>
     teamMembers: (args: { teamId: string; workspaceId?: string }) => Promise<LinearMember[]>
+  }
+  jira: {
+    connect: (args: {
+      siteUrl: string
+      email: string
+      apiToken: string
+    }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
+    disconnect: (args?: { siteId?: string }) => Promise<void>
+    selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>
+    status: () => Promise<JiraConnectionStatus>
+    testConnection: (args?: {
+      siteId?: string
+    }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
+    searchIssues: (args: {
+      jql: string
+      limit?: number
+      siteId?: JiraSiteSelection
+    }) => Promise<JiraIssue[]>
+    listIssues: (args?: {
+      filter?: JiraIssueFilter
+      limit?: number
+      siteId?: JiraSiteSelection
+    }) => Promise<JiraIssue[]>
+    getIssue: (args: { key: string; siteId?: string }) => Promise<JiraIssue | null>
+    createIssue: (
+      args: JiraCreateIssueArgs
+    ) => Promise<{ ok: true; id: string; key: string; url: string } | { ok: false; error: string }>
+    updateIssue: (args: {
+      key: string
+      updates: JiraIssueUpdate
+      siteId?: string
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addIssueComment: (args: {
+      key: string
+      body: string
+      siteId?: string
+    }) => Promise<{ ok: true; id: string } | { ok: false; error: string }>
+    issueComments: (args: { key: string; siteId?: string }) => Promise<JiraComment[]>
+    listProjects: (args?: { siteId?: JiraSiteSelection }) => Promise<JiraProject[]>
+    listIssueTypes: (args: { projectIdOrKey: string; siteId?: string }) => Promise<JiraIssueType[]>
+    listCreateFields: (args: {
+      projectIdOrKey: string
+      issueTypeId: string
+      siteId?: string
+    }) => Promise<JiraCreateField[]>
+    listPriorities: (args?: { siteId?: string }) => Promise<JiraPriority[]>
+    listAssignableUsers: (args: {
+      key: string
+      query?: string
+      siteId?: string
+    }) => Promise<JiraUser[]>
+    listTransitions: (args: { key: string; siteId?: string }) => Promise<JiraTransition[]>
   }
   starNag: {
     onShow: (callback: () => void) => () => void
@@ -1414,11 +1611,13 @@ export type PreloadApi = {
     markTrusted: (args: {
       preset: 'cursor' | 'copilot' | 'codex'
       workspacePath: string
+      connectionId?: string
     }) => Promise<void>
   }
   preflight: PreflightApi
   notifications: {
     dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
+    dismiss: (ids: string[]) => Promise<NotificationDismissResult>
     openSystemSettings: () => Promise<void>
     getPermissionStatus: () => Promise<NotificationPermissionStatusResult>
     requestPermission: () => Promise<NotificationPermissionStatusResult>
@@ -1463,7 +1662,7 @@ export type PreloadApi = {
     copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
   }
   skills: {
-    discover: () => Promise<SkillDiscoveryResult>
+    discover: (target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>
   }
   pet: {
     import: () => Promise<CustomPet | null>
@@ -1510,12 +1709,13 @@ export type PreloadApi = {
   session: {
     get: () => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState) => Promise<void>
+    patch: (args: WorkspaceSessionPatch) => Promise<void>
     setSync: (args: WorkspaceSessionState) => void
   }
   remoteWorkspace: {
     get: (args: { targetId: string }) => Promise<RemoteWorkspaceSnapshot | null>
     setForConnectedTargets: (args: {
-      session: WorkspaceSessionState
+      session?: WorkspaceSessionState
       hydratedTargetIds?: string[]
     }) => Promise<{ targetId: string; result: RemoteWorkspacePatchResult }[]>
     listEnabledConnectedTargets: () => Promise<string[]>
@@ -1577,6 +1777,7 @@ export type PreloadApi = {
       filePath: string
       connectionId?: string
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
+    pathExists: (args: { filePath: string; connectionId?: string }) => Promise<boolean>
     listFiles: (args: {
       rootPath: string
       connectionId?: string
@@ -1830,6 +2031,7 @@ export type PreloadApi = {
     set: (args: Partial<PersistedUIState>) => Promise<void>
     recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
     onOpenSettings: (callback: () => void) => () => void
+    onOpenSetupGuide: (callback: () => void) => () => void
     onOpenFeatureTour: (callback: () => void) => () => void
     onOpenCrashReport: (callback: () => void) => () => void
     onToggleLeftSidebar: (callback: () => void) => () => void
@@ -1847,6 +2049,7 @@ export type PreloadApi = {
     onJumpToTabIndex: (callback: (index: number) => void) => () => void
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
+    onNewMarkdownTab: (callback: () => void) => () => void
     onRequestTabCreate: (
       callback: (data: {
         requestId: string
@@ -1885,6 +2088,7 @@ export type PreloadApi = {
         worktreeId: string
         setup?: WorktreeSetupLaunch
         startup?: WorktreeStartupLaunch
+        defaultTabs?: WorktreeDefaultTabsLaunch
       }) => void
     ) => () => void
     onCreateTerminal: (
@@ -1899,6 +2103,7 @@ export type PreloadApi = {
         leafId?: string
         splitFromLeafId?: string
         splitDirection?: 'horizontal' | 'vertical'
+        splitTelemetrySource?: TerminalPaneSplitSource
       }) => void
     ) => () => void
     onRequestTerminalCreate: (
@@ -1924,6 +2129,7 @@ export type PreloadApi = {
         paneRuntimeId: number
         direction: 'horizontal' | 'vertical'
         command?: string
+        telemetrySource?: TerminalPaneSplitSource
       }) => void
     ) => () => void
     onRenameTerminal: (
@@ -1998,7 +2204,7 @@ export type PreloadApi = {
     confirmWindowClose: () => void
   }
   runtime: {
-    syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeStatus>
+    syncWindowGraph: (graph: RuntimeSyncWindowGraph) => Promise<RuntimeSyncWindowGraphResult>
     getStatus: () => Promise<RuntimeStatus>
     call: (args: { method: string; params?: unknown }) => Promise<RuntimeRpcResponse<unknown>>
     getTerminalFitOverrides: () => Promise<
@@ -2148,6 +2354,10 @@ export type PreloadApi = {
     update: (args: { id: string; updates: AutomationUpdateInput }) => Promise<Automation>
     delete: (args: { id: string }) => Promise<void>
     runNow: (args: { id: string }) => Promise<AutomationRun>
+    runPrecheck: (args: {
+      automationId: string
+      runId: string
+    }) => Promise<AutomationPrecheckResult | null>
     markDispatchResult: (result: AutomationDispatchResult) => Promise<AutomationRun>
     snapshotWorkspaceName: (args: { workspaceId: string; displayName: string }) => Promise<number>
     rendererReady: () => Promise<void>
@@ -2166,6 +2376,8 @@ export type PreloadApi = {
   agentStatus: {
     /** Listen for agent status updates forwarded from native hook receivers. */
     onSet: (callback: (data: AgentStatusIpcPayload) => void) => () => void
+    /** Listen for main-process pane teardown that evicted a cached hook status. */
+    onClear: (callback: (data: { paneKey: string }) => void) => () => void
     /** Return the current main-process hook cache after renderer hydration. */
     getSnapshot: () => Promise<AgentStatusIpcPayload[]>
     inferInterrupt: (request: AgentInterruptInferenceRequest) => Promise<boolean>

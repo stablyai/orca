@@ -170,7 +170,14 @@ describe('removeWorktree cascade', () => {
 
     seedStore(store, {
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/path/wt1' })]
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            displayName: 'Review cleanup'
+          })
+        ]
       }
     })
 
@@ -180,9 +187,9 @@ describe('removeWorktree cascade', () => {
       ok: true,
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
-    expect(toast.warning).toHaveBeenCalledWith('Workspace deleted, branch kept', {
+    expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
       description:
-        'Git could not safely delete "feature/test", so Orca kept it to avoid losing local commits.',
+        'Git could not safely delete branch "feature/test" after deleting worktree "Review cleanup", so Orca kept it to avoid losing local commits.',
       action: {
         label: 'Force Delete Branch',
         onClick: expect.any(Function)
@@ -238,6 +245,25 @@ describe('removeWorktree cascade', () => {
     expect(s.ptyIdsByTabId['tab1']).toEqual(['pty1'])
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
     expect(s.activeWorktreeId).toBe(worktreeId)
+  })
+
+  it('marks multiple worktrees deleting in one optimistic state update', () => {
+    const store = createTestStore()
+    const first = 'repo1::/path/wt1'
+    const second = 'repo1::/path/wt2'
+
+    seedStore(store, {
+      deleteStateByWorktreeId: {
+        [first]: { isDeleting: false, error: 'old failure', canForceDelete: true }
+      }
+    })
+
+    store.getState().markWorktreesDeleting([first, second, first])
+
+    expect(store.getState().deleteStateByWorktreeId).toMatchObject({
+      [first]: { isDeleting: true, error: null, canForceDelete: false },
+      [second]: { isDeleting: true, error: null, canForceDelete: false }
+    })
   })
 
   it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
@@ -733,6 +759,62 @@ describe('setActiveWorktree', () => {
     store.getState().setActiveWorktree(wt)
 
     expect(store.getState().rightSidebarTab).toBe('checks')
+  })
+
+  it('does not notify subscribers when reselecting the already-active reconciled worktree', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const tabId = 'terminal-1'
+    const groupId = 'group-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabId: tabId,
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: tabId, worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { [tabId]: ['pty-1'] },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: tabId,
+            entityId: tabId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'terminal'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: tabId,
+            tabOrder: [tabId]
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId },
+      everActivatedWorktreeIds: new Set([wt]),
+      refreshGitHubForWorktree: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn()
+    })
+
+    const before = store.getState()
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+
+    store.getState().setActiveWorktree(wt)
+
+    unsubscribe()
+    expect(listener).not.toHaveBeenCalled()
+    expect(store.getState()).toBe(before)
   })
 
   it('does not clobber the current right sidebar tab when clearing the active worktree', () => {

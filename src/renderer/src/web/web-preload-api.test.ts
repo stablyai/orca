@@ -636,6 +636,220 @@ describe('web UI preload API', () => {
       interactionCount: 1
     })
   })
+
+  it('union-merges local contextual tour seen ids when ui.get returns stale host state', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              ui: {
+                contextualToursSeenIds: ['browser', 'unknown']
+              }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({
+        contextualToursSeenIds: ['tasks', 'browser']
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      contextualToursSeenIds?: string[]
+    }
+
+    expect(ui.contextualToursSeenIds).toEqual(['tasks', 'browser'])
+    expect(stored.contextualToursSeenIds).toEqual(['tasks', 'browser'])
+  })
+
+  it('union-merges local contextual tour seen ids when recordFeatureInteraction returns stale host state', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              ui: {
+                contextualToursSeenIds: ['browser']
+              }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.ui.v1',
+      JSON.stringify({
+        contextualToursSeenIds: ['tasks']
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const ui = await globals.window.api.ui.recordFeatureInteraction('tasks')
+    const stored = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
+      contextualToursSeenIds?: string[]
+    }
+
+    expect(ui.contextualToursSeenIds).toEqual(['tasks', 'browser'])
+    expect(stored.contextualToursSeenIds).toEqual(['tasks', 'browser'])
+  })
+
+  it('proxies host skill discovery and computer-use permission APIs for paired web clients', async () => {
+    const calls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push({ method, params })
+          if (method === 'skills.discover') {
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: {
+                skills: [
+                  {
+                    id: 'home:computer-use',
+                    name: 'computer-use',
+                    description: null,
+                    providers: ['agent-skills'],
+                    sourceKind: 'home',
+                    sourceLabel: 'Home',
+                    rootPath: '/skills',
+                    directoryPath: '/skills/computer-use',
+                    skillFilePath: '/skills/computer-use/SKILL.md',
+                    installed: true,
+                    fileCount: 1,
+                    updatedAt: null
+                  }
+                ],
+                sources: [],
+                scannedAt: 123
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'computer.permissionsStatus') {
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: {
+                platform: 'darwin',
+                helperAppPath: '/Applications/Orca Computer Use.app',
+                helperUnavailableReason: null,
+                permissions: [
+                  { id: 'accessibility', status: 'granted' },
+                  { id: 'screenshots', status: 'granted' }
+                ]
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'computer.permissions') {
+            return Promise.resolve({
+              id: method,
+              ok: true,
+              result: {
+                platform: 'darwin',
+                helperAppPath: '/Applications/Orca Computer Use.app',
+                permissionId:
+                  params && typeof params === 'object' ? (params as { id?: string }).id : undefined,
+                openedSettings: true,
+                launchedHelper: true,
+                nextStep: null
+              },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.skills.discover()).resolves.toMatchObject({
+      skills: [{ name: 'computer-use', installed: true }],
+      scannedAt: 123
+    })
+    const permissionsStatus = await globals.window.api.computerUsePermissions.getStatus()
+    expect(permissionsStatus.helperUnavailableReason).toBeNull()
+    expect(permissionsStatus.permissions).toContainEqual({ id: 'accessibility', status: 'granted' })
+    await expect(
+      globals.window.api.computerUsePermissions.openSetup({ id: 'accessibility' })
+    ).resolves.toMatchObject({
+      openedSettings: true,
+      launchedHelper: true,
+      permissionId: 'accessibility'
+    })
+    expect(calls).toEqual(
+      expect.arrayContaining([
+        { method: 'skills.discover', params: undefined },
+        { method: 'computer.permissionsStatus', params: {} },
+        { method: 'computer.permissions', params: { id: 'accessibility' } }
+      ])
+    )
+  })
+
+  it('rejects paired web computer-use status failures instead of marking the helper unavailable', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'computer.permissionsStatus') {
+            return Promise.reject(new Error('runtime disconnected'))
+          }
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {},
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.computerUsePermissions.getStatus()).rejects.toThrow(
+      'runtime disconnected'
+    )
+  })
 })
 
 describe('web worktree preload API', () => {
@@ -719,6 +933,88 @@ describe('web worktree preload API', () => {
   })
 })
 
+describe('web file preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.doUnmock('./web-runtime-client')
+  })
+
+  it('returns false for runtime missing-path errors from fs.pathExists', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const worktree = {
+      id: 'wt-1',
+      repoId: 'repo-1',
+      path: '/workspace/repo',
+      head: 'abc123',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true,
+      displayName: 'repo',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      workspaceStatus: 'todo'
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'repo.list') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { repos: [{ id: 'repo-1' }] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'worktree.detectedList') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { repoId: 'repo-1', authoritative: true, worktrees: [worktree] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: false,
+            error: { code: 'ENOENT', message: 'ENOENT: no such file' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.fs.pathExists({ filePath: '/workspace/repo/untitled.md' })
+    ).resolves.toBe(false)
+    expect(runtimeCalls).toEqual([
+      { method: 'repo.list', params: undefined },
+      { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
+      { method: 'files.stat', params: { worktree: 'id:wt-1', relativePath: 'untitled.md' } }
+    ])
+  })
+})
+
 describe('web GitHub preload API', () => {
   beforeEach(() => {
     vi.resetModules()
@@ -769,6 +1065,7 @@ describe('web GitHub preload API', () => {
         'refreshPRNow',
         'removePRReviewers',
         'repoSlug',
+        'repoUpstream',
         'reportVisiblePRRefreshCandidates',
         'rerunPRChecks',
         'requestPRReviewers',
@@ -833,6 +1130,12 @@ describe('web GitHub preload API', () => {
         key: 'repoSlug',
         args: { repoPath },
         expectedMethod: 'github.repoSlug',
+        expectedParams: withRepo({ repoPath })
+      },
+      {
+        key: 'repoUpstream',
+        args: { repoPath },
+        expectedMethod: 'github.repoUpstream',
         expectedParams: withRepo({ repoPath })
       },
       {
@@ -1260,6 +1563,18 @@ describe('web GitLab preload API', () => {
       expectedParams: unknown
     }[] = [
       {
+        key: 'diagnoseAuth',
+        invoke: (gl) => gl.diagnoseAuth(),
+        expectedMethod: 'gitlab.diagnoseAuth',
+        expectedParams: undefined
+      },
+      {
+        key: 'rateLimit',
+        invoke: (gl) => gl.rateLimit({ force: true, host: 'gitlab.example.com' }),
+        expectedMethod: 'gitlab.rateLimit',
+        expectedParams: { force: true, host: 'gitlab.example.com' }
+      },
+      {
         key: 'listMRs',
         invoke: (gl) => gl.listMRs({ repoPath, state: 'opened', page: 1, perPage: 50 }),
         expectedMethod: 'gitlab.listMRs',
@@ -1296,6 +1611,12 @@ describe('web GitLab preload API', () => {
         expectedParams: { repoPath, repo: repoPath, number: 7, body: 'Fixed' }
       },
       {
+        key: 'listLabels',
+        invoke: (gl) => gl.listLabels({ repoPath }),
+        expectedMethod: 'gitlab.listLabels',
+        expectedParams: { repoPath, repo: repoPath }
+      },
+      {
         key: 'todos',
         invoke: (gl) => gl.todos({ repoPath }),
         expectedMethod: 'gitlab.todos',
@@ -1326,10 +1647,82 @@ describe('web GitLab preload API', () => {
         expectedParams: { repoPath, repo: repoPath, iid: 8, method: 'squash' }
       },
       {
+        key: 'updateMR',
+        invoke: (gl) => gl.updateMR({ repoPath, iid: 8, updates: { title: 'New title' } }),
+        expectedMethod: 'gitlab.updateMR',
+        expectedParams: { repoPath, repo: repoPath, iid: 8, updates: { title: 'New title' } }
+      },
+      {
+        key: 'updateMRReviewers',
+        invoke: (gl) => gl.updateMRReviewers({ repoPath, iid: 8, reviewerIds: [1, 2] }),
+        expectedMethod: 'gitlab.updateMRReviewers',
+        expectedParams: { repoPath, repo: repoPath, iid: 8, reviewerIds: [1, 2] }
+      },
+      {
         key: 'addMRComment',
         invoke: (gl) => gl.addMRComment({ repoPath, iid: 8, body: 'Ship it' }),
         expectedMethod: 'gitlab.addMRComment',
         expectedParams: { repoPath, repo: repoPath, iid: 8, body: 'Ship it' }
+      },
+      {
+        key: 'addMRInlineComment',
+        invoke: (gl) =>
+          gl.addMRInlineComment({
+            repoPath,
+            iid: 8,
+            input: {
+              body: 'Please fix',
+              path: 'src/app.ts',
+              line: 12,
+              baseSha: 'base',
+              startSha: 'start',
+              headSha: 'head'
+            }
+          }),
+        expectedMethod: 'gitlab.addMRInlineComment',
+        expectedParams: {
+          repoPath,
+          repo: repoPath,
+          iid: 8,
+          input: {
+            body: 'Please fix',
+            path: 'src/app.ts',
+            line: 12,
+            baseSha: 'base',
+            startSha: 'start',
+            headSha: 'head'
+          }
+        }
+      },
+      {
+        key: 'resolveMRDiscussion',
+        invoke: (gl) =>
+          gl.resolveMRDiscussion({
+            repoPath,
+            iid: 8,
+            discussionId: 'discussion-1',
+            resolved: true
+          }),
+        expectedMethod: 'gitlab.resolveMRDiscussion',
+        expectedParams: {
+          repoPath,
+          repo: repoPath,
+          iid: 8,
+          discussionId: 'discussion-1',
+          resolved: true
+        }
+      },
+      {
+        key: 'jobTrace',
+        invoke: (gl) => gl.jobTrace({ repoPath, jobId: 99 }),
+        expectedMethod: 'gitlab.jobTrace',
+        expectedParams: { repoPath, repo: repoPath, jobId: 99 }
+      },
+      {
+        key: 'retryJob',
+        invoke: (gl) => gl.retryJob({ repoPath, jobId: 99 }),
+        expectedMethod: 'gitlab.retryJob',
+        expectedParams: { repoPath, repo: repoPath, jobId: 99 }
       },
       {
         key: 'workItemByPath',

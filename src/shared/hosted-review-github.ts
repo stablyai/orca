@@ -36,7 +36,10 @@ function deriveChecksStatus(
     return prChecksStatus
   }
   const hasFailure = checks.some(
-    (check) => check.conclusion === 'failure' || check.conclusion === 'timed_out'
+    (check) =>
+      check.conclusion === 'failure' ||
+      check.conclusion === 'timed_out' ||
+      check.conclusion === 'cancelled'
   )
   if (hasFailure) {
     return 'failure'

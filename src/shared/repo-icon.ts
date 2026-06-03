@@ -29,6 +29,17 @@ export function faviconUrlFromWebsite(rawUrl: string): string | null {
   }
 }
 
+// Why: the GitHub owner avatar is the default repo icon, built the same way in
+// main (auto-detect) and renderer (picker); keep the URL and label in one place.
+export function githubAvatarIcon(slug: { owner: string; repo: string }): RepoIcon {
+  return {
+    type: 'image',
+    src: `https://github.com/${encodeURIComponent(slug.owner)}.png?size=64`,
+    source: 'github',
+    label: `${slug.owner}/${slug.repo}`
+  }
+}
+
 function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean {
   if (source === 'upload' || source === 'file') {
     return /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/i.test(src)

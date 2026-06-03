@@ -162,7 +162,7 @@ export type LocalPtyProviderOptions = {
   buildSpawnEnv?: (
     id: string,
     baseEnv: Record<string, string>,
-    ctx?: { command?: string; isWsl?: boolean; wslDistro?: string | null }
+    ctx?: { command?: string; shellPath?: string; isWsl?: boolean; wslDistro?: string | null }
   ) => Record<string, string>
   /** Whether worktree-scoped shell history is enabled. When true (or absent)
    *  and a worktreeId is provided, HISTFILE is scoped per-worktree. */
@@ -213,11 +213,11 @@ export class LocalPtyProvider implements IPtyProvider {
       | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
       | undefined
     if (wslInfo) {
-      const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
       shellPath = 'wsl.exe'
-      shellArgs = ['-d', wslInfo.distro, '--', 'bash', '-c', `cd '${escapedCwd}' && exec bash -l`]
-      effectiveCwd = getDefaultCwd()
-      validationCwd = cwd
+      const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
+      shellArgs = resolved.shellArgs
+      effectiveCwd = resolved.effectiveCwd
+      validationCwd = resolved.validationCwd
     } else if (process.platform === 'win32') {
       // Why: shellOverride lets a single tab open in a different shell than the
       // persisted default (e.g. "New WSL terminal" from the "+" submenu) without
@@ -332,6 +332,7 @@ export class LocalPtyProvider implements IPtyProvider {
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
+          shellPath,
           isWsl: isWslShell,
           wslDistro: launchWslDistro
         })

@@ -15,6 +15,11 @@ export function registerOpenCodeUsageHandlers(openCodeUsage: OpenCodeUsageStore)
     openCodeUsage.refresh(args?.force ?? false)
   )
   ipcMain.handle(
+    'openCodeUsage:getSnapshot',
+    (_event, args: { scope: OpenCodeUsageScope; range: OpenCodeUsageRange; limit?: number }) =>
+      openCodeUsage.getSnapshot(args.scope, args.range, args.limit)
+  )
+  ipcMain.handle(
     'openCodeUsage:getSummary',
     (_event, args: { scope: OpenCodeUsageScope; range: OpenCodeUsageRange }) =>
       openCodeUsage.getSummary(args.scope, args.range)

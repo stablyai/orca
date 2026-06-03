@@ -1,11 +1,7 @@
-/* eslint-disable max-lines -- Why: the automation editor keeps its form fields
-   colocated so create/edit draft preservation rules stay reviewable. */
 import React from 'react'
-import { Info, Plus, Sparkles } from 'lucide-react'
+import { Info, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import {
   Select,
   SelectContent,
@@ -29,6 +25,7 @@ import {
   isValidAutomationSchedule
 } from '../../../../shared/automation-schedules'
 import { Field } from './automation-page-parts'
+import { AutomationEditorDialogHeader } from './AutomationEditorDialogHeader'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { AutomationSessionField } from './AutomationSessionField'
 import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-templates'
@@ -49,6 +46,8 @@ export type AutomationDraft = {
   workspaceId: string
   baseBranch: string
   reuseSession: boolean
+  precheckCommand: string
+  precheckTimeoutSeconds: string
   preset: AutomationSchedulePreset
   time: string
   dayOfWeek: string
@@ -77,28 +76,6 @@ type AutomationEditorDialogProps = {
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
   onApplyTemplate: (template: AutomationTemplate) => void
   onSave: () => void
-}
-
-function AutomationTemplateCard({
-  template,
-  onSelect
-}: {
-  template: AutomationTemplate
-  onSelect: () => void
-}): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="rounded-md border border-border/70 bg-background px-3 py-2 text-left shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
-      <div className="text-[11px] font-medium uppercase text-muted-foreground">
-        {template.category}
-      </div>
-      <div className="mt-1 text-sm font-medium">{template.label}</div>
-      <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{template.description}</div>
-    </button>
-  )
 }
 
 export function AutomationEditorDialog({
@@ -142,78 +119,25 @@ export function AutomationEditorDialog({
           event.preventDefault()
         }}
       >
-        <DialogHeader className="border-b border-border/50 px-5 py-4 pr-12">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1 space-y-2">
-              <DialogTitle className="text-sm font-medium">
-                {isEditing
-                  ? 'Edit automation'
-                  : isEditingExternal
-                    ? 'Edit Hermes automation'
-                    : isHermesCreate
-                      ? 'Create Hermes automation'
-                      : 'Create automation'}
-              </DialogTitle>
-              <Input
-                value={draft.name}
-                placeholder="Weekday repo audit"
-                aria-label="Automation name"
-                className="h-10 max-w-md border-input bg-input/30 px-3 text-lg font-semibold text-foreground shadow-xs placeholder:text-muted-foreground dark:bg-input/30"
-                onChange={(event) =>
-                  onDraftChange((current) => ({ ...current, name: event.target.value }))
-                }
-              />
-            </div>
-            {isCreateMode ? (
-              <div className="flex shrink-0 items-center gap-2">
-                <ToggleGroup
-                  type="single"
-                  value={createTarget}
-                  onValueChange={(value) =>
-                    value && onCreateTargetChange(value as AutomationCreateTarget)
-                  }
-                  variant="outline"
-                  size="sm"
-                  className="grid grid-cols-2"
-                >
-                  <ToggleGroupItem value="orca" className={MODE_TOGGLE_ITEM_CLASS}>
-                    Orca
-                  </ToggleGroupItem>
-                  <ToggleGroupItem value="hermes" className={MODE_TOGGLE_ITEM_CLASS}>
-                    Hermes
-                  </ToggleGroupItem>
-                </ToggleGroup>
-                <Popover open={templateOpen} onOpenChange={setTemplateOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={PICKER_TRIGGER_CLASS}
-                    >
-                      <Sparkles className="size-4" />
-                      Use template
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-96 p-3">
-                    <div className="grid gap-2">
-                      {AUTOMATION_TEMPLATES.map((template) => (
-                        <AutomationTemplateCard
-                          key={template.id}
-                          template={template}
-                          onSelect={() => {
-                            onApplyTemplate(template)
-                            setTemplateOpen(false)
-                          }}
-                        />
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            ) : null}
-          </div>
-        </DialogHeader>
+        <AutomationEditorDialogHeader
+          isEditing={isEditing}
+          isEditingExternal={isEditingExternal}
+          isHermesCreate={isHermesCreate}
+          isCreateMode={isCreateMode}
+          createTarget={createTarget}
+          draftName={draft.name}
+          templateOpen={templateOpen}
+          templates={AUTOMATION_TEMPLATES}
+          modeToggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
+          pickerTriggerClassName={PICKER_TRIGGER_CLASS}
+          onCreateTargetChange={onCreateTargetChange}
+          onDraftNameChange={(name) => onDraftChange((current) => ({ ...current, name }))}
+          onTemplateOpenChange={setTemplateOpen}
+          onApplyTemplate={(template) => {
+            onApplyTemplate(template)
+            setTemplateOpen(false)
+          }}
+        />
 
         <div className="min-h-0 flex-1 overflow-auto px-5 py-4 scrollbar-sleek">
           {draft.scheduleWarning ? (
@@ -230,7 +154,47 @@ export function AutomationEditorDialog({
               }
               className="min-h-[260px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Supports skills, file paths, and built-in commands like{' '}
+              <code className="rounded bg-muted px-1 font-mono text-[11px]">/goal</code>.
+            </p>
           </Field>
+          {isHermesCreate ? null : (
+            <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
+              <Field label="Precheck">
+                <textarea
+                  value={draft.precheckCommand}
+                  placeholder="gh pr list --json number -q '.[0].number'"
+                  onChange={(event) =>
+                    onDraftChange((current) => ({
+                      ...current,
+                      precheckCommand: event.target.value
+                    }))
+                  }
+                  className="min-h-[68px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+                />
+              </Field>
+              <Field label="Timeout">
+                <Select
+                  value={draft.precheckTimeoutSeconds}
+                  onValueChange={(precheckTimeoutSeconds) =>
+                    onDraftChange((current) => ({ ...current, precheckTimeoutSeconds }))
+                  }
+                >
+                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    <SelectItem value="30">30 sec</SelectItem>
+                    <SelectItem value="60">1 min</SelectItem>
+                    <SelectItem value="120">2 min</SelectItem>
+                    <SelectItem value="300">5 min</SelectItem>
+                    <SelectItem value="600">10 min</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          )}
         </div>
 
         <div className="border-t border-border/50 px-5 py-4">
@@ -318,6 +282,9 @@ export function AutomationEditorDialog({
                     />
                   ) : (
                     <CreateFromPicker
+                      // Why: branch search state belongs to the selected project,
+                      // so repo switches should reset it before the next paint.
+                      key={draft.projectId}
                       repoId={draft.projectId}
                       repoMap={repoMap}
                       worktrees={worktrees}

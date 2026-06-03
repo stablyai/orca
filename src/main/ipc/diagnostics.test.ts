@@ -268,6 +268,23 @@ describe('diagnostics IPC handlers', () => {
     await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/expired/)
   })
 
+  it('expires retained bundle previews without another diagnostics call', async () => {
+    vi.useFakeTimers()
+    try {
+      const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
+      collectDiagnosticBundleMock.mockReturnValue(bundle)
+      const collect = handlers.get('diagnostics:collectBundle')!
+      const upload = handlers.get('diagnostics:uploadBundle')!
+
+      await collect({}, 30)
+      await vi.advanceTimersByTimeAsync(15 * 60 * 1000 + 1)
+
+      await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/expired/)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('clears retained previews when local traces are cleared', async () => {
     const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
     collectDiagnosticBundleMock.mockReturnValue(bundle)

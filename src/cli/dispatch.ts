@@ -18,6 +18,7 @@ import { ORCHESTRATION_HANDLERS } from './handlers/orchestration'
 import { COMPUTER_HANDLERS } from './handlers/computer'
 import { ENVIRONMENT_HANDLERS } from './handlers/environment'
 import { AGENT_HOOK_HANDLERS } from './handlers/agent-hooks'
+import { DIAGNOSTICS_HANDLERS } from './handlers/diagnostics'
 
 export type HandlerContext = {
   flags: Map<string, string | boolean>
@@ -48,6 +49,7 @@ function buildHandlers(): Map<string, CommandHandler> {
     ORCHESTRATION_HANDLERS,
     COMPUTER_HANDLERS,
     AGENT_HOOK_HANDLERS,
+    DIAGNOSTICS_HANDLERS,
     ENVIRONMENT_HANDLERS
   ]
   for (const group of groups) {

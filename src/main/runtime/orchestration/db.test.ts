@@ -364,6 +364,21 @@ describe('OrchestrationDb', () => {
       expect(d.getActiveDispatchForTerminal('term_b')).toBeUndefined()
     })
 
+    it('getLatestDispatchForTerminal returns the most recent completed dispatch', () => {
+      const d = createDb()
+      const firstTask = d.createTask({ spec: 'first' })
+      const first = d.createDispatchContext(firstTask.id, 'term_a')
+      d.completeDispatch(first.id)
+      const secondTask = d.createTask({ spec: 'second' })
+      const second = d.createDispatchContext(secondTask.id, 'term_a')
+      d.completeDispatch(second.id)
+
+      const latest = d.getLatestDispatchForTerminal('term_a')
+      expect(latest?.id).toBe(second.id)
+      expect(latest?.status).toBe('completed')
+      expect(d.getActiveDispatchForTerminal('term_a')).toBeUndefined()
+    })
+
     it('circuit breaker trips after 3 failures', () => {
       const d = createDb()
       const task = d.createTask({ spec: 'flaky' })

@@ -213,7 +213,7 @@ describe('MacOSNativeProviderClient', () => {
 
     await expect(call).rejects.toThrow('native macOS helper app failed to start: helper missing')
     expect(connectSignal.aborted).toBe(true)
-    expect(providers[0]!.kill).toHaveBeenCalled()
+    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
     expect(rmSyncMock).toHaveBeenCalledWith(socketDirectory, {
       recursive: true,
       force: true
@@ -234,7 +234,7 @@ describe('MacOSNativeProviderClient', () => {
 
     await expect(call).rejects.toThrow('native macOS helper app exited before connecting: code 13')
     expect(connectSignal.aborted).toBe(true)
-    expect(providers[0]!.kill).toHaveBeenCalled()
+    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
   })
 
   it('kills the helper and removes temp state when socket connection fails', async () => {
@@ -247,7 +247,7 @@ describe('MacOSNativeProviderClient', () => {
     const socketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
 
     await expect(call).rejects.toThrow('socket unavailable')
-    expect(providers[0]!.kill).toHaveBeenCalled()
+    expect(providers[0]!.kill).toHaveBeenCalledWith('SIGTERM')
     expect(rmSyncMock).toHaveBeenCalledWith(socketDirectory, {
       recursive: true,
       force: true

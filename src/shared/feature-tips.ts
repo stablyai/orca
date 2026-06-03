@@ -34,7 +34,7 @@ export const FEATURE_TIPS = [
     priority: 'new',
     eyebrow: 'Tip',
     title: 'Let agents drive Orca with the Orca CLI',
-    description: 'Enable agents to coordinate child workspaces and communicate between workspaces.',
+    description: 'Enable agents to coordinate child worktrees and communicate between worktrees.',
     action: 'setup-cli',
     ctaLabel: 'Install CLI & Skills',
     completedByFeatureInteractions: []

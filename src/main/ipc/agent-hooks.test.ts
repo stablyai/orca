@@ -15,6 +15,7 @@ const handleHandlers = new Map<string, (event: unknown, ...args: unknown[]) => u
 const removeHandler = vi.fn()
 const removeAllListeners = vi.fn()
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+const CHILD_PANE_KEY = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
 
 vi.mock('electron', () => ({
   ipcMain: {
@@ -113,6 +114,68 @@ describe('agentStatus:getSnapshot IPC', () => {
     const handler = handleHandlers.get('agentStatus:getSnapshot')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual(snapshot)
+  })
+
+  it('enriches the hook cache snapshot with runtime lineage metadata', async () => {
+    const snapshot = [
+      {
+        paneKey: PANE_KEY,
+        state: 'done',
+        prompt: 'parent',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000
+      },
+      {
+        paneKey: CHILD_PANE_KEY,
+        state: 'done',
+        prompt: 'child',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: 1_700_000_001_000,
+        stateStartedAt: 1_700_000_000_500
+      }
+    ]
+    getStatusSnapshot.mockReturnValue(snapshot)
+    const runtime = {
+      getAgentStatusTerminalHandleForPaneKey: vi.fn((paneKey: string) =>
+        paneKey === PANE_KEY ? 'term-parent' : paneKey === CHILD_PANE_KEY ? 'term-child' : undefined
+      ),
+      getAgentStatusOrchestrationContextForPaneKey: vi.fn((paneKey: string) =>
+        paneKey === CHILD_PANE_KEY
+          ? {
+              taskId: 'task-child',
+              dispatchId: 'dispatch-child',
+              parentTerminalHandle: 'term-parent',
+              parentPaneKey: PANE_KEY,
+              coordinatorHandle: 'term-parent'
+            }
+          : undefined
+      )
+    }
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers(runtime)
+
+    const handler = handleHandlers.get('agentStatus:getSnapshot')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual([
+      {
+        ...snapshot[0],
+        terminalHandle: 'term-parent'
+      },
+      {
+        ...snapshot[1],
+        terminalHandle: 'term-child',
+        orchestration: {
+          taskId: 'task-child',
+          dispatchId: 'dispatch-child',
+          parentTerminalHandle: 'term-parent',
+          parentPaneKey: PANE_KEY,
+          coordinatorHandle: 'term-parent'
+        }
+      }
+    ])
   })
 })
 

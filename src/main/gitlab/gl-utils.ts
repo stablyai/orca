@@ -103,11 +103,28 @@ export function classifyListIssuesError(stderr: string): ClassifiedError {
 // the short local name `ProjectRef`.
 export type ProjectRef = GitLabProjectRef
 
+const PROJECT_REF_CACHE_MAX_ENTRIES = 512
 const projectRefCache = new Map<string, ProjectRef | null>()
 
 /** @internal — exposed for tests only */
 export function _resetProjectRefCache(): void {
   projectRefCache.clear()
+}
+
+/** @internal — exposed for tests only */
+export function _getProjectRefCacheSize(): number {
+  return projectRefCache.size
+}
+
+function rememberProjectRefCacheEntry(cacheKey: string, value: ProjectRef | null): void {
+  projectRefCache.set(cacheKey, value)
+  while (projectRefCache.size > PROJECT_REF_CACHE_MAX_ENTRIES) {
+    const oldestKey = projectRefCache.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    projectRefCache.delete(oldestKey)
+  }
 }
 
 /**
@@ -121,7 +138,7 @@ function normalizeHost(value: string): string {
 }
 
 function stripGitSuffix(path: string): string {
-  return path.replace(/\.git$/i, '')
+  return path.replace(/\/+$/, '').replace(/\.git$/i, '')
 }
 
 function makeProjectRef(
@@ -187,7 +204,7 @@ export async function getProjectRefForRemote(
       : await gitExecFileAsync(['remote', 'get-url', remoteName], { cwd: repoPath })
     const result = parseGitLabProjectRef(stdout, knownHosts)
     if (result) {
-      projectRefCache.set(cacheKey, result)
+      rememberProjectRefCacheEntry(cacheKey, result)
       return result
     }
   } catch {
@@ -198,7 +215,7 @@ export async function getProjectRefForRemote(
     }
     // ignore — non-GitLab remote or no remote configured
   }
-  projectRefCache.set(cacheKey, null)
+  rememberProjectRefCacheEntry(cacheKey, null)
   return null
 }
 

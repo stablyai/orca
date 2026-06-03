@@ -22,6 +22,9 @@ export type DetectedSpriteCacheEntry = {
   fps: number
 }
 export const detectedSpriteCache = new Map<string, DetectedSpriteCacheEntry>()
+const customPetBlobUrlLoads = new Map<string, Promise<string | null>>()
+const customPetBlobCacheEpoch = new Map<string, number>()
+const customPetBlobActiveLoadCounts = new Map<string, number>()
 
 export async function loadCustomBlobUrl(
   id: string,
@@ -35,9 +38,56 @@ export async function loadCustomBlobUrl(
   if (cached) {
     return cached
   }
+  const pending = customPetBlobUrlLoads.get(id)
+  if (pending) {
+    return pending
+  }
+  const loadEpoch = customPetBlobCacheEpoch.get(id) ?? 0
+  incrementCustomPetBlobActiveLoadCount(id)
+  const load = loadCustomBlobUrlUncached(
+    id,
+    fileName,
+    mimeType,
+    kind,
+    spriteFps,
+    hasManifestSprite,
+    loadEpoch
+  ).finally(() => {
+    if (customPetBlobUrlLoads.get(id) === load) {
+      customPetBlobUrlLoads.delete(id)
+    }
+    decrementCustomPetBlobActiveLoadCount(id)
+  })
+  customPetBlobUrlLoads.set(id, load)
+  return load
+}
+
+function incrementCustomPetBlobActiveLoadCount(id: string): void {
+  customPetBlobActiveLoadCounts.set(id, (customPetBlobActiveLoadCounts.get(id) ?? 0) + 1)
+}
+
+function decrementCustomPetBlobActiveLoadCount(id: string): void {
+  const nextCount = (customPetBlobActiveLoadCounts.get(id) ?? 1) - 1
+  if (nextCount > 0) {
+    customPetBlobActiveLoadCounts.set(id, nextCount)
+    return
+  }
+  customPetBlobActiveLoadCounts.delete(id)
+  customPetBlobCacheEpoch.delete(id)
+}
+
+async function loadCustomBlobUrlUncached(
+  id: string,
+  fileName: string,
+  mimeType: string,
+  kind: 'image' | 'bundle' | undefined,
+  spriteFps: number | undefined,
+  hasManifestSprite: boolean | undefined,
+  loadEpoch: number
+): Promise<string | null> {
   // Why: defensively clear any stale entry so we don't leak a prior blob URL
   // or ImageBitmap[] when re-populating after a cache miss.
-  revokeCustomPetBlobUrl(id)
+  clearCustomPetBlobCacheEntry(id)
   const buffer = await window.api.pet.read(id, fileName, kind)
   if (!buffer) {
     return null
@@ -47,6 +97,7 @@ export async function loadCustomBlobUrl(
   // Content-Type.
   const blob = new Blob([buffer], { type: mimeType })
   let url = URL.createObjectURL(blob)
+  let detected: DetectedSpriteCacheEntry | null = null
   // Why: pet bundles often ship spritesheets with a magenta chroma-key as
   // the background instead of true alpha (common in pixel-art tooling).
   // Strip it once at load and replace the cached URL with a transparent PNG
@@ -61,12 +112,29 @@ export async function loadCustomBlobUrl(
       URL.revokeObjectURL(url)
       url = processed.url
       if (processed.detected) {
-        detectedSpriteCache.set(id, processed.detected)
+        detected = processed.detected
       }
     }
   }
-  blobUrlCache.set(id, url)
+  if ((customPetBlobCacheEpoch.get(id) ?? 0) !== loadEpoch) {
+    URL.revokeObjectURL(url)
+    closeDetectedSpriteCacheEntry(detected)
+    return null
+  }
+  cacheCustomPetBlobUrl(id, url, detected)
   return url
+}
+
+function cacheCustomPetBlobUrl(
+  id: string,
+  url: string,
+  detected: DetectedSpriteCacheEntry | null
+): void {
+  clearCustomPetBlobCacheEntry(id)
+  blobUrlCache.set(id, url)
+  if (detected) {
+    detectedSpriteCache.set(id, detected)
+  }
 }
 
 async function processBundleSheet(
@@ -74,6 +142,7 @@ async function processBundleSheet(
   spriteFps?: number,
   skipDetection?: boolean
 ): Promise<{ url: string; detected: DetectedSpriteCacheEntry | null } | null> {
+  let detected: DetectedSpriteCacheEntry | null = null
   try {
     const img = await loadImage(srcUrl)
     const canvas = document.createElement('canvas')
@@ -90,7 +159,6 @@ async function processBundleSheet(
     // Why: detect frames *after* keying so transparent gutters between
     // sprites are visible to the band/column scanner. Without this the whole
     // sheet collapses into one giant frame.
-    let detected: DetectedSpriteCacheEntry | null = null
     const sprite = skipDetection ? null : detectFramesFromImageData(data)
     if (sprite && sprite.frames.length >= 1) {
       // Why: allSettled so a single failed crop doesn't leak the bitmaps that
@@ -115,10 +183,17 @@ async function processBundleSheet(
     }
     const out = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
     if (!out) {
+      closeDetectedSpriteCacheEntry(detected)
       return null
     }
-    return { url: URL.createObjectURL(out), detected }
+    try {
+      return { url: URL.createObjectURL(out), detected }
+    } catch {
+      closeDetectedSpriteCacheEntry(detected)
+      return null
+    }
   } catch {
+    closeDetectedSpriteCacheEntry(detected)
     return null
   }
 }
@@ -177,6 +252,15 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 // is released; otherwise the blob: URL keeps it alive for the rest of the
 // session, wasting memory per imported image.
 export function revokeCustomPetBlobUrl(id: string): void {
+  customPetBlobCacheEpoch.set(id, (customPetBlobCacheEpoch.get(id) ?? 0) + 1)
+  customPetBlobUrlLoads.delete(id)
+  clearCustomPetBlobCacheEntry(id)
+  if (!customPetBlobActiveLoadCounts.has(id)) {
+    customPetBlobCacheEpoch.delete(id)
+  }
+}
+
+function clearCustomPetBlobCacheEntry(id: string): void {
   const url = blobUrlCache.get(id)
   if (url) {
     URL.revokeObjectURL(url)
@@ -184,9 +268,16 @@ export function revokeCustomPetBlobUrl(id: string): void {
   }
   const detected = detectedSpriteCache.get(id)
   if (detected) {
-    for (const bmp of detected.bitmaps) {
-      bmp.close()
-    }
+    closeDetectedSpriteCacheEntry(detected)
     detectedSpriteCache.delete(id)
+  }
+}
+
+function closeDetectedSpriteCacheEntry(entry: DetectedSpriteCacheEntry | null): void {
+  if (!entry) {
+    return
+  }
+  for (const bmp of entry.bitmaps) {
+    bmp.close()
   }
 }

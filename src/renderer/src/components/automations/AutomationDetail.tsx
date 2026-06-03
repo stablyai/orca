@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
+import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import {
   formatAutomationCost,
@@ -175,6 +176,14 @@ export function AutomationDetail({
           value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
         />
         <DetailMetric label="Grace" value={formatGrace(automation.missedRunGraceMinutes)} />
+        <DetailMetric
+          label="Precheck"
+          value={
+            automation.precheck
+              ? `Enabled, ${formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds)}`
+              : 'None'
+          }
+        />
         <div className="min-w-0">
           <div className="text-[11px] font-medium uppercase text-muted-foreground">Agent</div>
           <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
@@ -201,6 +210,7 @@ export function AutomationDetail({
         <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">Prompt</div>
         <div className="px-3 py-3">
           <div className="min-w-0">
+            <div className="text-[11px] font-medium uppercase text-muted-foreground">Prompt</div>
             <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">
               {automation.prompt}
             </p>

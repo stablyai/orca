@@ -5,6 +5,8 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
+export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
  * Codex so the agent's "Do you trust this folder?" menu does not fire on

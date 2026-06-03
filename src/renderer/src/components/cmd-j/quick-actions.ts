@@ -24,6 +24,8 @@ export type CmdJQuickAction = {
   run: (ctx: CmdJQuickActionContext) => Promise<CmdJQuickActionRunResult>
 }
 
+export const CREATE_WORKSPACE_QUICK_ACTION_ID = 'create-workspace'
+
 function workspaceActionAvailability(ctx: CmdJQuickActionContext): CmdJQuickActionAvailability {
   return getWorkspaceScopedActionAvailability(ctx)
 }
@@ -84,7 +86,7 @@ export const CMD_J_QUICK_ACTIONS: readonly CmdJQuickAction[] = [
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewTerminalTab)
   },
   {
-    id: 'create-workspace',
+    id: CREATE_WORKSPACE_QUICK_ACTION_ID,
     kind: 'action',
     title: 'Create Workspace',
     description: 'Start a new workspace.',

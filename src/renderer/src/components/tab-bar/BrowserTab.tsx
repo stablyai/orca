@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { Globe, X, ExternalLink, Columns2, Rows2, Copy } from 'lucide-react'
+import { Globe, X, ExternalLink, Columns2, Rows2, Copy, Pin, PinOff } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,23 +98,27 @@ function BrowserTabFavicon({
 export default function BrowserTab({
   tab,
   isActive,
+  isPinned,
   hasTabsToRight,
   onActivate,
   onClose,
   onCloseToRight,
   onSplitGroup,
   onDuplicate,
+  onTogglePin,
   dragData,
   dropIndicator
 }: {
   tab: BrowserTabState
   isActive: boolean
+  isPinned: boolean
   hasTabsToRight: boolean
   onActivate: () => void
   onClose: () => void
   onCloseToRight: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   onDuplicate: () => void
+  onTogglePin: () => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
 }): React.JSX.Element {
@@ -163,6 +167,7 @@ export default function BrowserTab({
   const tabRoot = (
     <div
       ref={setNodeRef}
+      data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
@@ -185,6 +190,9 @@ export default function BrowserTab({
         if (e.button === 1) {
           e.preventDefault()
           e.stopPropagation()
+          if (isPinned) {
+            return
+          }
           onClose()
         }
       }}
@@ -198,24 +206,27 @@ export default function BrowserTab({
           keep full color on both active and inactive tabs — dimming to
           muted-foreground made the icon read as "disabled" in practice. */}
       <BrowserTabFavicon tabId={tab.id} faviconUrl={tab.faviconUrl} />
+      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className="truncate max-w-[100px] mr-1">{tabLabel}</span>
       {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
         <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
       )}
-      <button
-        className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-          isActive
-            ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
-            : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
-        }`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation()
-          onClose()
-        }}
-      >
-        <X className="w-3 h-3" />
-      </button>
+      {!isPinned && (
+        <button
+          className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+            isActive
+              ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
+              : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
+          }`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            onClose()
+          }}
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
     </div>
   )
 
@@ -281,7 +292,18 @@ export default function BrowserTab({
             Duplicate Tab
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onClose}>Close</DropdownMenuItem>
+          <DropdownMenuItem onSelect={onTogglePin}>
+            {isPinned ? (
+              <PinOff className="mr-1.5 size-3.5" />
+            ) : (
+              <Pin className="mr-1.5 size-3.5" />
+            )}
+            {isPinned ? 'Unpin Tab' : 'Pin Tab'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
+            Close
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
             Close Tabs To The Right
           </DropdownMenuItem>

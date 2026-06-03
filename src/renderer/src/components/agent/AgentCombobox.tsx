@@ -23,6 +23,11 @@ import {
 } from '@/lib/agent-picker-search'
 import { cn } from '@/lib/utils'
 import type { TuiAgent } from '../../../../shared/types'
+import {
+  createAgentComboboxCommandState,
+  resolveAgentComboboxCommandState,
+  updateAgentComboboxCommandValue
+} from './agent-combobox-command-state'
 
 type DefaultAgentPreference = TuiAgent | 'blank' | null
 
@@ -120,7 +125,7 @@ export default function AgentCombobox({
   // Why: controlled cmdk selection so hovering the footer (which lives outside
   // the cmdk tree) can clear the list's highlighted item — otherwise cmdk keeps
   // the last-hovered agent visually selected while the mouse is on the footer.
-  const [commandValue, setCommandValue] = useState('')
+  const [commandState, setCommandState] = useState(() => createAgentComboboxCommandState(''))
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const focusFrameRef = React.useRef<number | null>(null)
@@ -138,6 +143,17 @@ export default function AgentCombobox({
     filteredAgents,
     rawQuery: query
   })
+  const resolvedCommandState = resolveAgentComboboxCommandState(
+    commandState,
+    open,
+    activeCommandValue
+  )
+  if (resolvedCommandState !== commandState) {
+    // Why: cmdk highlights should follow query/result changes before paint,
+    // while manual hover selection remains intact until the active candidate changes.
+    setCommandState(resolvedCommandState)
+  }
+  const commandValue = resolvedCommandState.commandValue
 
   const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
@@ -146,14 +162,19 @@ export default function AgentCombobox({
     }
   }, [])
 
-  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
 
-  React.useEffect(() => {
-    if (!open) {
-      return
-    }
-    setCommandValue(activeCommandValue)
-  }, [activeCommandValue, open])
+  const setCommandValue = useCallback((nextCommandValue: string): void => {
+    setCommandState((current) => updateAgentComboboxCommandValue(current, nextCommandValue))
+  }, [])
 
   const focusSearchInput = useCallback(() => {
     cancelFocusFrame()
@@ -176,7 +197,7 @@ export default function AgentCombobox({
     (nextOpen: boolean) => {
       setOpen(nextOpen)
       if (nextOpen) {
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         return
       }
       cancelFocusFrame()
@@ -219,7 +240,7 @@ export default function AgentCombobox({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         setOpen(true)
         return
       }
@@ -228,7 +249,7 @@ export default function AgentCombobox({
       }
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         setQuery(event.key)
         setOpen(true)
       }
@@ -284,7 +305,7 @@ export default function AgentCombobox({
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               placeholder="Search agents..."
               value={query}
               onValueChange={setQuery}

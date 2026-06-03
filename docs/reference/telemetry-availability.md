@@ -172,6 +172,8 @@ Dashboard caveats:
 
 Scope: low-cardinality telemetry that makes inline-tour cohort retention dashboards possible.
 
+Current status: the inline first-run onboarding tour was later removed from active onboarding after PR #2734 moved these education/setup moments to contextual feature tours and the Getting started with Orca guide. The historical schemas still accept seven-step `tour`/`agent_setup` onboarding rows for compatibility, but current active onboarding should not emit new `onboarding_step_* { value_kind: 'tour' }` rows.
+
 Added/changed signals:
 
 - `onboarding_tour_outcome` with `outcome`, intro/tour duration fields, optional tour depth fields, `advanced_via`, and injected onboarding `cohort`.
@@ -193,18 +195,18 @@ Added/changed signals:
 
 Required readiness signals:
 
-| Signal                                                                                 | `first_seen_at_utc` |
-| -------------------------------------------------------------------------------------- | ------------------- |
-| `onboarding_tour_outcome` with valid `outcome` and joinable fresh-install start        | `TBD`               |
-| `onboarding_step_viewed { value_kind: 'tour' }`                                        | `TBD`               |
-| `feature_wall_closed` with non-null `source`, `exit_action`, and expected depth fields | `TBD`               |
+| Signal                                                                                 | `first_seen_at_utc`                                                                  |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `onboarding_tour_outcome` with valid `outcome` and joinable fresh-install start        | `TBD`                                                                                |
+| `onboarding_step_viewed { value_kind: 'tour' }`                                        | Historical only; no new active-onboarding rows after the PR #2734 education handoff. |
+| `feature_wall_closed` with non-null `source`, `exit_action`, and expected depth fields | `TBD`                                                                                |
 
 QA/opportunistic signals:
 
-| Signal                                           | `first_seen_at_utc`                                             |
-| ------------------------------------------------ | --------------------------------------------------------------- |
-| `onboarding_step_skipped { value_kind: 'tour' }` | `TBD`; do not gate dashboard readiness on natural skip traffic. |
-| `feature_wall_opened { source: 'onboarding' }`   | `TBD`; surface availability only.                               |
+| Signal                                           | `first_seen_at_utc`                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------- |
+| `onboarding_step_skipped { value_kind: 'tour' }` | Historical only; do not gate dashboard readiness on natural skip traffic. |
+| `feature_wall_opened { source: 'onboarding' }`   | `TBD`; surface availability only.                                         |
 
 PostHog evidence checked at `2026-05-23T23:34:32Z`:
 
@@ -228,7 +230,7 @@ Invalid before this rollout's `dashboard_ready_at_utc`:
 
 Primary cohort interpretation:
 
-- Denominator for inline completed/partial/skipped rates: `onboarding_step_viewed { value_kind: 'tour' }` after this rollout's `dashboard_ready_at_utc`.
+- Historical denominator for inline completed/partial/skipped rates: `onboarding_step_viewed { value_kind: 'tour' }` after this rollout's `dashboard_ready_at_utc`. Do not use this as a current active-onboarding readiness signal after the PR #2734 education handoff.
 - `onboarding_tour_outcome.outcome = 'completed_inline'` means the user completed the inline tour during fresh onboarding.
 - `onboarding_tour_outcome.outcome = 'started_partial'` means the user started the inline tour but the fresh onboarding session resolved without inline completion.
 - `onboarding_tour_outcome.outcome = 'skipped_intro'` means the user reached the tour intro and skipped without starting the inline tour.
@@ -248,6 +250,30 @@ Feature-wall close interpretation:
 - `exit_action = 'dismissed'` is the default close/unmount path.
 - Depth fields are per explicit tour session. Persisted completion state can affect UI progress but must not be interpreted as current-session depth.
 - Missing/null `feature_wall_closed.source` or depth fields mean the row predates the expanded schema, came from an older app version, or failed field coverage. Do not bucket null with `source = 'unknown'`; exclude it from source/depth cohort tiles or show it as a telemetry coverage gap.
+
+### 2026-06-02 - Active Onboarding Step Removal
+
+Scope: active first-run onboarding no longer emits the `agent_setup` or `tour` semantic steps. The removed "Set up Orca for agents" and "Explore Orca" education/setup moments are covered by PR #2734 through contextual feature tours and the Getting started with Orca guide.
+
+This is a product-flow and telemetry-interpretation boundary, not a new event rollout. Historical onboarding schemas still accept seven-step `agent_setup` and `tour` rows so old data remains queryable, but dashboard authors should not expect new active-onboarding rows for those semantic steps after this rollout.
+
+| Field                    | Value                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| PR                       | `#4445`                                                                         |
+| Merge commit             | `TBD`                                                                           |
+| `code_merged_at_utc`     | `TBD`                                                                           |
+| First release            | `TBD`                                                                           |
+| First release commit     | `TBD`                                                                           |
+| `first_released_at_utc`  | `TBD`                                                                           |
+| `first_seen_at_utc`      | N/A                                                                             |
+| `dashboard_ready_at_utc` | Event-dependent; use this as a cutoff only after the PR is merged and released. |
+
+Dashboard caveats:
+
+- Treat `onboarding_step_* { value_kind: 'agent_setup' }`, `onboarding_step_* { value_kind: 'tour' }`, and `onboarding_tour_outcome` as historical first-run onboarding signals after this rollout.
+- Do not use absence of new `agent_setup` or `tour` onboarding rows as a drop-off signal; those steps no longer exist in active onboarding.
+- Segment numeric onboarding step analysis across this boundary. The active final step changed from seven-step onboarding to `ONBOARDING_FINAL_STEP = 5`.
+- Continue using `contextual_tour_shown` and `contextual_tour_outcome` from PR #2734 for current feature-education exposure and outcome analysis.
 
 ## Updating This File
 

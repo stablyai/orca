@@ -18,6 +18,7 @@ import {
   getRemoteRuntimeTerminalMultiplexer,
   type RemoteRuntimeMultiplexedTerminal
 } from '../../runtime/remote-runtime-terminal-multiplexer'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
@@ -114,7 +115,7 @@ export function createRemoteRuntimePtyTransport(
     if (!worktreeId) {
       return null
     }
-    const worktree = `id:${worktreeId}`
+    const worktree = toRuntimeWorktreeSelector(worktreeId)
     const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
       worktree,
       tabId: hostTabId
@@ -373,7 +374,7 @@ export function createRemoteRuntimePtyTransport(
         }
 
         const created = await callRuntime<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
-          worktree: worktreeId,
+          worktree: toRuntimeWorktreeSelector(worktreeId),
           command,
           env,
           tabId,

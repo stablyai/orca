@@ -15,6 +15,10 @@ import { registerSshHandlers } from '../ipc/ssh'
 import { registerRemoteWorkspaceHandlers } from '../ipc/remote-workspace'
 import { browserManager } from '../browser/browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from '../browser/browser-media-access'
+import {
+  allowsBrowserWebAuthnPermission,
+  installBrowserWebAuthnAccessHandlers
+} from '../browser/browser-webauthn-access'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   checkForUpdatesFromMenu,
@@ -37,6 +41,11 @@ import type { NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
+
+let appReloadHandlerTokenCounter = 0
+let activeAppReloadHandlerToken: number | null = null
+let runtimeNotifierTokenCounter = 0
+let activeRuntimeNotifierToken: number | null = null
 
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
@@ -191,8 +200,12 @@ export function attachMainWindowServices(
     if (permission === 'media') {
       return hasSystemMediaAccess(details?.mediaType)
     }
+    if (allowsBrowserWebAuthnPermission(permission, details)) {
+      return true
+    }
     return false
   })
+  installBrowserWebAuthnAccessHandlers(browserSession)
   browserSession.setDisplayMediaRequestHandler((_request, callback) => {
     // Why: arbitrary sites inside Orca should never be able to capture the
     // desktop or application windows until there is explicit product UX for
@@ -204,10 +217,9 @@ export function attachMainWindowServices(
   registerBrowserDownloadHandler(browserSession)
 
   mainWindow.on('closed', () => {
-    // Why: parked browser webviews can outlive the visible tab body until the
-    // renderer process exits. Clearing main-owned guest registrations on window
-    // close prevents stale tab→webContents ids from leaking across app relaunch
-    // or hot-reload cycles.
+    // Why: browser webviews are renderer-owned guest surfaces. Clearing
+    // main-owned guest registrations on window close prevents stale
+    // tab→webContents ids from leaking across app relaunch or hot-reload cycles.
     browserManager.unregisterAll()
   })
 }
@@ -236,6 +248,8 @@ function registerAppReloadHandler(
 ): void {
   // Why: the process-global IPC handler can outlive the BrowserWindow, so keep
   // the registered WebContents and guard both lifetimes before using it.
+  const handlerToken = ++appReloadHandlerTokenCounter
+  activeAppReloadHandlerToken = handlerToken
   const mainWebContents = mainWindow.webContents
   ipcMain.removeHandler('app:reload')
   ipcMain.handle('app:reload', (event) => {
@@ -249,12 +263,23 @@ function registerAppReloadHandler(
     onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
     mainWebContents.reload()
   })
+  mainWindow.on('closed', () => {
+    if (activeAppReloadHandlerToken !== handlerToken) {
+      return
+    }
+    // Why: macOS can keep the process alive with no window, and this global
+    // handler otherwise keeps the closed BrowserWindow reachable until reopen.
+    ipcMain.removeHandler('app:reload')
+    activeAppReloadHandlerToken = null
+  })
 }
 
 function registerRuntimeWindowLifecycle(
   mainWindow: BrowserWindow,
   runtime: OrcaRuntimeService
 ): void {
+  const notifierToken = ++runtimeNotifierTokenCounter
+  activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
   const send = (channel: string, ...args: unknown[]): void => {
     if (!mainWindow.isDestroyed()) {
@@ -270,13 +295,15 @@ function registerRuntimeWindowLifecycle(
       repoId,
       worktreeId,
       setup?: CreateWorktreeResult['setup'],
-      startup?: WorktreeStartupLaunch
+      startup?: WorktreeStartupLaunch,
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
     ) => {
       send('ui:activateWorktree', {
         repoId,
         worktreeId,
         ...(setup ? { setup } : {}),
-        ...(startup ? { startup } : {})
+        ...(startup ? { startup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {})
       })
     },
     createTerminal: (worktreeId, opts) =>
@@ -316,7 +343,10 @@ function registerRuntimeWindowLifecycle(
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
           ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
-          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {})
+          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
+          ...(opts.splitTelemetrySource !== undefined
+            ? { splitTelemetrySource: opts.splitTelemetrySource }
+            : {})
         })
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
@@ -324,7 +354,8 @@ function registerRuntimeWindowLifecycle(
         tabId,
         paneRuntimeId,
         direction: opts.direction,
-        command: opts.command
+        command: opts.command,
+        telemetrySource: opts.telemetrySource
       })
     },
     renameTerminal: (tabId, title) => send('ui:renameTerminal', { tabId, title }),
@@ -369,6 +400,13 @@ function registerRuntimeWindowLifecycle(
   })
   mainWindow.on('closed', () => {
     runtime.markGraphUnavailable(mainWindow.id)
+    if (activeRuntimeNotifierToken === notifierToken) {
+      // Why: the notifier closes over the BrowserWindow for mobile/CLI UI
+      // relays; clear it during the no-window gap so the runtime does not
+      // retain destroyed window graphs.
+      runtime.setNotifier(null)
+      activeRuntimeNotifierToken = null
+    }
   })
 }
 

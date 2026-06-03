@@ -119,7 +119,9 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
   const previewKeyLabel = useMemo(() => {
     const special = SPECIAL_KEY_BY_ID[shortcutKey]
-    if (special) return special.label
+    if (special) {
+      return special.label
+    }
     return shortcutKey.length === 1 ? shortcutKey.toUpperCase() : shortcutKey
   }, [shortcutKey])
 
@@ -156,14 +158,18 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
 
   const handleShortcutSave = useCallback(() => {
     const built = buildTerminalShortcutKey({ key: shortcutKey, modifiers: shortcutModifiers })
-    if (!built) return
+    if (!built) {
+      return
+    }
     void addKey({ label: built.label, bytes: built.bytes, enter: false })
   }, [addKey, shortcutKey, shortcutModifiers])
 
   const handleMacroSave = useCallback(() => {
     const label = macroLabel.trim() || macroText.trim().slice(0, 12)
     const text = macroText
-    if (!label || !text) return
+    if (!label || !text) {
+      return
+    }
     const bytes = macroEnter ? `${text}\r` : text
     void addKey({ label, bytes, enter: false })
   }, [addKey, macroLabel, macroText, macroEnter])
@@ -324,7 +330,9 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
               <View style={styles.keyGrid}>
                 {group.ids.map((id) => {
                   const key = SPECIAL_KEY_BY_ID[id]
-                  if (!key) return null
+                  if (!key) {
+                    return null
+                  }
                   const selected = shortcutKey === id
                   const flexBasis = `${100 / group.columns}%` as const
                   return (

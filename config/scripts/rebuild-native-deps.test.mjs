@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -122,6 +123,97 @@ describe('rebuild-native-deps Electron install fallback', () => {
   })
 })
 
+describe('rebuild-native-deps patched node-pty rebuild', () => {
+  it.skipIf(process.platform === 'win32')(
+    'rebuilds when Electron can load node-pty but patched build artifacts are missing',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
+        writeFakeUsableElectronPackage(projectDir)
+        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeLoadableNodePty(projectDir)
+        writeNodePtyPatchFile(projectDir)
+
+        const result = runRebuildScript(projectDir, {
+          ORCA_REBUILD_TEST_LOG: rebuildLogPath
+        })
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stdout).toContain(
+          'Patched node-pty build artifacts are missing; rebuilding from source.'
+        )
+
+        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
+        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
+        expect(rebuildCall.ignoreModules).toEqual(['cpu-features'])
+        expect(rebuildCall.force).toBe(true)
+      } finally {
+        rmSync(projectDir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the Electron load-probe fast path once patched node-pty artifacts exist',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
+        writeFakeUsableElectronPackage(projectDir)
+        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeLoadableNodePty(projectDir, { nativeDir: '../build/Release/' })
+        writeNodePtyPatchFile(projectDir)
+        writePatchedNodePtyBuildArtifacts(projectDir)
+
+        const result = runRebuildScript(projectDir, {
+          ORCA_REBUILD_TEST_LOG: rebuildLogPath
+        })
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stdout).toContain(
+          'Native modules already load in Electron; skipping rebuild.'
+        )
+        expect(existsSync(rebuildLogPath)).toBe(false)
+      } finally {
+        rmSync(projectDir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'rebuilds when patched artifacts exist but Electron falls back to node-pty prebuilds',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const rebuildLogPath = join(projectDir, 'electron-rebuild.log')
+        writeFakeUsableElectronPackage(projectDir)
+        writeFakeElectronRebuild(projectDir, { logPathEnv: 'ORCA_REBUILD_TEST_LOG' })
+        writeFakeLoadableNodePty(projectDir, { nativeDir: '../prebuilds/darwin-arm64/' })
+        writeNodePtyPatchFile(projectDir)
+        writePatchedNodePtyBuildArtifacts(projectDir)
+
+        const result = runRebuildScript(projectDir, {
+          ORCA_REBUILD_TEST_LOG: rebuildLogPath
+        })
+
+        expect(result.status, result.stderr).toBe(0)
+        expect(result.stdout).toContain('Native modules do not load in Electron; rebuilding.')
+        expect(result.stdout).toContain("expected build/Release so Orca's node-pty patch is active")
+
+        const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
+        expect(rebuildCall.onlyModules).toEqual(['node-pty'])
+        expect(rebuildCall.force).toBe(true)
+      } finally {
+        rmSync(projectDir, { recursive: true, force: true })
+      }
+    }
+  )
+})
+
 function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-rebuild-native-deps-'))
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
@@ -225,9 +317,89 @@ module.exports = async function extract(_zipPath, options) {
   chmodSync(join(extractDir, 'index.js'), 0o755)
 }
 
-function writeFakeElectronRebuild(projectDir) {
+function writeFakeElectronRebuild(projectDir, { logPathEnv = null } = {}) {
   const rebuildDir = join(projectDir, 'node_modules', '@electron', 'rebuild')
   mkdirSync(rebuildDir, { recursive: true })
   writeFileSync(join(rebuildDir, 'package.json'), JSON.stringify({ type: 'module' }))
-  writeFileSync(join(rebuildDir, 'index.js'), 'export async function rebuild() {}\n')
+  writeFileSync(
+    join(rebuildDir, 'index.js'),
+    logPathEnv
+      ? `
+import { appendFileSync } from 'node:fs'
+
+export async function rebuild(options) {
+  const logPath = process.env[${JSON.stringify(logPathEnv)}]
+  if (!logPath) {
+    return
+  }
+  appendFileSync(
+    logPath,
+    JSON.stringify({
+      arch: options.arch,
+      electronVersion: options.electronVersion,
+      force: options.force,
+      ignoreModules: options.ignoreModules,
+      onlyModules: options.onlyModules,
+      platform: options.platform
+    }) + '\\n'
+  )
+}
+`
+      : 'export async function rebuild() {}\n'
+  )
+}
+
+function writeFakeUsableElectronPackage(projectDir) {
+  writeFakeElectronPackage(projectDir)
+  const electronDir = join(projectDir, 'node_modules', 'electron')
+  const electronPath = join(electronDir, 'dist', 'electron')
+  mkdirSync(join(electronDir, 'dist'), { recursive: true })
+  writeFileSync(join(electronDir, 'path.txt'), 'electron')
+  writeFileSync(join(electronDir, 'dist', 'version'), 'v41.5.0')
+  writeFileSync(
+    electronPath,
+    `#!/usr/bin/env node
+const { spawnSync } = require('node:child_process')
+
+const result = spawnSync(process.execPath, process.argv.slice(2), {
+  cwd: process.cwd(),
+  env: process.env,
+  stdio: 'inherit'
+})
+
+if (result.error) {
+  console.error(result.error.message)
+  process.exit(1)
+}
+
+process.exit(result.status ?? 0)
+`
+  )
+  chmodSync(electronPath, 0o755)
+}
+
+function writeFakeLoadableNodePty(projectDir, { nativeDir = 'prebuilds/pty' } = {}) {
+  const nodePtyDir = join(projectDir, 'node_modules', 'node-pty')
+  mkdirSync(join(nodePtyDir, 'lib'), { recursive: true })
+  writeFileSync(join(nodePtyDir, 'index.js'), 'module.exports = {}\n')
+  writeFileSync(
+    join(nodePtyDir, 'lib', 'utils.js'),
+    `
+exports.loadNativeModule = function loadNativeModule(nativeName) {
+  return { dir: ${JSON.stringify(nativeDir)}, module: { nativeName } }
+}
+`
+  )
+}
+
+function writeNodePtyPatchFile(projectDir) {
+  mkdirSync(join(projectDir, 'config', 'patches'), { recursive: true })
+  writeFileSync(join(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch'), 'patch marker\n')
+}
+
+function writePatchedNodePtyBuildArtifacts(projectDir) {
+  const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
+  mkdirSync(buildDir, { recursive: true })
+  writeFileSync(join(buildDir, 'pty.node'), '')
+  writeFileSync(join(buildDir, 'spawn-helper'), '')
 }

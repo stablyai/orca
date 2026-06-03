@@ -19,6 +19,8 @@ const HOST_FILE_EXTENSIONS = new Set([
   'yaml',
   'yml'
 ])
+const LOCAL_ADDRESS_PATTERN =
+  /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
 
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
@@ -110,6 +112,9 @@ function findExistingFileMatches(
 function classifyExplicitUrl(
   query: string
 ): Extract<TabEntryClassification, { kind: 'blocked' | 'explicit-url' }> | null {
+  if (LOCAL_ADDRESS_PATTERN.test(query)) {
+    return null
+  }
   let url: URL
   try {
     url = new URL(query)
@@ -120,6 +125,20 @@ function classifyExplicitUrl(
     return { kind: 'blocked', message: 'Enter an http:// or https:// URL.' }
   }
   return { kind: 'explicit-url', url: url.href }
+}
+
+function classifyLocalDevUrl(
+  query: string
+): Extract<TabEntryActionClassification, { kind: 'host-url' }> | null {
+  if (!LOCAL_ADDRESS_PATTERN.test(query)) {
+    return null
+  }
+  try {
+    const url = new URL(`http://${query}`)
+    return url.hostname ? { kind: 'host-url', url: url.href } : null
+  } catch {
+    return null
+  }
 }
 
 function classifyHostLikeUrl(
@@ -242,7 +261,7 @@ export function getTabEntryOptions(
     newFile = null
   }
 
-  const hostUrl = classifyHostLikeUrl(trimmed)
+  const hostUrl = classifyLocalDevUrl(trimmed) ?? classifyHostLikeUrl(trimmed)
 
   const options: TabEntryActionClassification[] = []
   if (exactExistingFiles.length > 0) {

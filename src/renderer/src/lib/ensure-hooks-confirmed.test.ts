@@ -92,6 +92,33 @@ describe('ensureHooksConfirmed', () => {
     await expect(promise).resolves.toBe('run')
   })
 
+  it('includes default tab commands in the setup trust prompt', async () => {
+    const { state, pending } = createTestState()
+    hooksCheckMock.mockResolvedValue({
+      hasHooks: true,
+      hooks: {
+        scripts: { setup: 'pnpm install' },
+        defaultTabs: [
+          { title: 'Server', command: 'pnpm dev' },
+          { title: 'Notes' },
+          { command: 'codex' }
+        ]
+      },
+      mayNeedUpdate: false
+    })
+
+    const promise = ensureHooksConfirmed(state, 'repo-1', 'setup')
+
+    await vi.waitFor(() => expect(pending).toHaveLength(1))
+    const expectedContent =
+      'pnpm install\n\n# defaultTabs[1] Server\npnpm dev\n\n# defaultTabs[3]\ncodex'
+    expect(pending[0].data.scriptContent).toBe(expectedContent)
+    expect(pending[0].data.contentHash).toBe(await hashOrcaHookScript(expectedContent))
+
+    pending[0].resolve('skip')
+    await expect(promise).resolves.toBe('skip')
+  })
+
   it('returns run without inspecting hooks when the repo is always trusted', async () => {
     const { state, pending } = createTestState()
     state.trustedOrcaHooks['repo-1'] = {

@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: terminal pane lifecycle wiring is intentionally co-located so PTY attach, theme sync, and runtime graph publication remain consistent for live terminals. */
 import { useEffect, useRef } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
+import { trackTerminalPaneSplit } from '@/lib/feature-education-telemetry'
+import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { useAppStore } from '@/store'
@@ -72,6 +75,11 @@ import {
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
 
+function extractUncHost(value: string | undefined): string | null {
+  const match = /^(?:\\\\|\/\/)([^\\/]+)/.exec(value ?? '')
+  return match?.[1] || null
+}
+
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
@@ -140,6 +148,7 @@ type UseTerminalPaneLifecycleDeps = {
     source: 'terminal-bell' | 'agent-task-complete'
     terminalTitle?: string
     paneKey?: string
+    agentStatusSnapshot?: ParsedAgentStatusPayload
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
@@ -477,6 +486,7 @@ export function useTerminalPaneLifecycle({
 
     const fileOpenLinkHint = getTerminalFileOpenHint()
     const urlOpenLinkHint = getTerminalUrlOpenHint()
+    const osc7UncHost = extractUncHost(cwd)
 
     let releaseWebviewDragPassthrough: (() => void) | null = null
 
@@ -530,10 +540,10 @@ export function useTerminalPaneLifecycle({
         // consumer registers on code 7, registration order decides who sees
         // each sequence.
         const osc7Disposable = pane.terminal.parser.registerOscHandler(7, (data) => {
-          const cwd = parseOsc7(data)
-          if (cwd) {
+          const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
+          if (parsedCwd) {
             const confirmed = !isPaneReplaying(replayingPanesRef, pane.id)
-            paneCwdRef.current.set(pane.id, { cwd, confirmed })
+            paneCwdRef.current.set(pane.id, { cwd: parsedCwd, confirmed })
           }
           return true
         })
@@ -1111,11 +1121,26 @@ export function useTerminalPaneLifecycle({
         ...(detail.ptyId ? { ptyId: detail.ptyId } : {})
       }
       if (detail.command) {
-        splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
+        const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
           mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
+        if (createdPane) {
+          trackTerminalPaneSplit({
+            source: detail.telemetrySource ?? 'command',
+            direction: detail.direction
+          })
+        }
       } else {
-        mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
+        const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
+        if (
+          createdPane &&
+          !consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
+        ) {
+          trackTerminalPaneSplit({
+            source: detail.telemetrySource ?? 'command',
+            direction: detail.direction
+          })
+        }
       }
     }
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
@@ -1226,13 +1251,11 @@ export function useTerminalPaneLifecycle({
     isVisibleRef.current = isVisible
     for (const panePtyBinding of panePtyBindingsRef.current.values()) {
       const bindingWithVisibility = panePtyBinding as IDisposable & {
-        syncRendererOutputVisibility?: () => void
         syncProcessTracking?: () => void
       }
-      bindingWithVisibility.syncRendererOutputVisibility?.()
       bindingWithVisibility.syncProcessTracking?.()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must notify existing PTY bindings even though the ref object identity is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Why: visibility flips must refresh existing PTY process tracking even though the ref object identity is stable.
   }, [isVisible, isVisibleRef, panePtyBindingsRef])
 
   useEffect(() => {

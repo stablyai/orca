@@ -221,7 +221,9 @@ export class MacOSNativeProviderClient {
     } catch (error) {
       connectAbort.abort()
       providerFailure.cleanup()
-      provider.kill()
+      // Why: connect failures happen after spawn; terminate the detached
+      // helper so repeated startup attempts do not leave orphan providers.
+      provider.kill('SIGTERM')
       this.cleanupSocketDirectory()
       this.socketPath = null
       this.socketTokenPath = null

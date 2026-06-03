@@ -17,10 +17,24 @@ const mocks = vi.hoisted(() => {
     repos: [] as { id: string; displayName: string }[],
     worktreeLineageById: {},
     allWorktrees: () => Array.from(state.worktreeMap.values()),
-    clearWorktreeDeleteState: vi.fn(),
+    clearWorktreeDeleteState: vi.fn((worktreeId: string) => {
+      delete state.deleteStateByWorktreeId[worktreeId]
+    }),
+    markWorktreesDeleting: vi.fn((worktreeIds: readonly string[]) => {
+      for (const worktreeId of new Set(worktreeIds)) {
+        state.deleteStateByWorktreeId[worktreeId] = {
+          isDeleting: true,
+          error: null,
+          canForceDelete: false
+        }
+      }
+    }),
     openModal: vi.fn(),
     removeWorktree: vi.fn().mockResolvedValue({ ok: true }),
-    deleteStateByWorktreeId: {}
+    deleteStateByWorktreeId: {} as Record<
+      string,
+      { isDeleting?: boolean; error?: string | null; canForceDelete?: boolean }
+    >
   }
   return { state }
 })
@@ -47,22 +61,7 @@ vi.mock('sonner', () => ({
 }))
 
 import { toast } from 'sonner'
-import {
-  runWorktreeBatchDelete,
-  runWorktreeDelete,
-  runWorktreeDeletesInParallel
-} from './delete-worktree-flow'
-
-function deferredDeleteResult(): {
-  promise: Promise<{ ok: true }>
-  resolve: (value: { ok: true }) => void
-} {
-  let resolve: (value: { ok: true }) => void = () => {}
-  const promise = new Promise<{ ok: true }>((innerResolve) => {
-    resolve = innerResolve
-  })
-  return { promise, resolve }
-}
+import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 
 function setWorktrees(
   worktrees: {
@@ -93,6 +92,7 @@ describe('runWorktreeBatchDelete', () => {
   beforeEach(() => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: false }
     mocks.state.clearWorktreeDeleteState.mockClear()
+    mocks.state.markWorktreesDeleting.mockClear()
     mocks.state.openModal.mockClear()
     mocks.state.removeWorktree.mockClear().mockResolvedValue({ ok: true })
     mocks.state.deleteStateByWorktreeId = {}
@@ -163,9 +163,15 @@ describe('runWorktreeBatchDelete', () => {
 
   it('notifies onDeleted after a skip-confirm force delete succeeds', async () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: true }
-    mocks.state.deleteStateByWorktreeId = { 'wt-1': { canForceDelete: true } }
     mocks.state.removeWorktree
-      .mockResolvedValueOnce({ ok: false, error: 'changed files' })
+      .mockImplementationOnce(async (worktreeId: string) => {
+        mocks.state.deleteStateByWorktreeId[worktreeId] = {
+          isDeleting: false,
+          error: 'changed files',
+          canForceDelete: true
+        }
+        return { ok: false, error: 'changed files' }
+      })
       .mockResolvedValueOnce({ ok: true })
     setWorktrees([{ id: 'wt-1', displayName: 'one' }])
     const onDeleted = vi.fn()
@@ -288,61 +294,5 @@ describe('runWorktreeBatchDelete', () => {
     expect(toast.info).toHaveBeenCalledWith('No deletable workspaces selected', {
       description: 'Refresh Space and try again if the workspace list looks stale.'
     })
-  })
-})
-
-describe('runWorktreeDeletesInParallel', () => {
-  beforeEach(() => {
-    mocks.state.removeWorktree.mockClear().mockResolvedValue({ ok: true })
-    mocks.state.deleteStateByWorktreeId = {}
-    vi.mocked(toast.error).mockClear()
-    vi.mocked(toast.info).mockClear()
-  })
-
-  it('starts every selected delete before waiting for earlier deletes to finish', async () => {
-    const first = deferredDeleteResult()
-    const second = deferredDeleteResult()
-    mocks.state.removeWorktree
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-
-    const deleted = runWorktreeDeletesInParallel([
-      { id: 'wt-1', displayName: 'one', repoId: 'repo-a', path: '/workspaces/one' },
-      { id: 'wt-2', displayName: 'two', repoId: 'repo-b', path: '/workspaces/two' }
-    ])
-
-    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(2)
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'wt-1', false)
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'wt-2', false)
-
-    second.resolve({ ok: true })
-    await Promise.resolve()
-    first.resolve({ ok: true })
-
-    await expect(deleted).resolves.toEqual(['wt-1', 'wt-2'])
-  })
-
-  it('deletes nested workspaces before their parent within the same repo', async () => {
-    await runWorktreeDeletesInParallel([
-      { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
-      { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
-    ])
-
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'child', false)
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(2, 'parent', false)
-  })
-
-  it('does not delete an ancestor when a nested descendant delete fails', async () => {
-    mocks.state.removeWorktree.mockResolvedValueOnce({ ok: false, error: 'changed files' })
-
-    await expect(
-      runWorktreeDeletesInParallel([
-        { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
-        { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
-      ])
-    ).resolves.toEqual([])
-
-    expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1)
-    expect(mocks.state.removeWorktree).toHaveBeenNthCalledWith(1, 'child', false)
   })
 })

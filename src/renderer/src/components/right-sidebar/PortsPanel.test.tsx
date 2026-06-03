@@ -75,6 +75,7 @@ beforeEach(() => {
   activateAndRevealWorktreeMock.mockReset()
   clearRuntimeCompatibilityCacheForTests()
   vi.stubGlobal('window', {
+    setTimeout: globalThis.setTimeout,
     api: {
       workspacePorts: {
         scan: localScan,
@@ -296,6 +297,57 @@ describe('PortsPanel runtime routing', () => {
     ).resolves.toEqual({ ok: false, reason: 'scan failed' })
 
     expect(setWorkspacePortScan).not.toHaveBeenCalled()
+    expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(1, true)
+    expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(2, false)
+  })
+
+  it('ignores settled remote post-stop refresh failures after updating state', async () => {
+    const setWorkspacePortScan = vi.fn()
+    const setWorkspacePortScanRefreshing = vi.fn()
+    const firstScan = { ...emptyScan, scannedAt: 2 }
+    let scanCalls = 0
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve({
+          id: method,
+          ok: true,
+          result: compatibleStatus,
+          _meta: { runtimeId: 'runtime-1' }
+        })
+      }
+      if (method === 'workspacePorts.scan') {
+        scanCalls += 1
+        if (scanCalls === 1) {
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: firstScan,
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        return Promise.reject(new Error('transient RPC timeout'))
+      }
+      return Promise.reject(new Error(`Unexpected method ${method}`))
+    })
+
+    await expect(
+      refreshWorkspacePortScanAfterStop({
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        setWorkspacePortScan: setWorkspacePortScan as never,
+        setWorkspacePortScanRefreshing: setWorkspacePortScanRefreshing as never
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
+      'status.get',
+      'workspacePorts.scan',
+      'workspacePorts.scan'
+    ])
+    expect(setWorkspacePortScan).toHaveBeenCalledTimes(1)
+    expect(setWorkspacePortScan).toHaveBeenCalledWith({
+      key: 'environment:env-1:all',
+      result: firstScan
+    })
     expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(1, true)
     expect(setWorkspacePortScanRefreshing).toHaveBeenNthCalledWith(2, false)
   })

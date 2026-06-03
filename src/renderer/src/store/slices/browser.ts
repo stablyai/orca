@@ -27,6 +27,7 @@ import {
   getActiveRuntimeTarget,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   BrowserDetectProfilesResult,
   BrowserProfileClearDefaultCookiesResult,
@@ -231,7 +232,7 @@ function closeRemoteBrowserPageInOwningEnvironment(
   void callRuntimeRpc(
     target,
     'browser.tabClose',
-    { worktree: `id:${worktreeId}`, page: handle.remotePageId },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), page: handle.remotePageId },
     { timeoutMs: 15_000 }
   ).catch(() => {})
 }
@@ -760,13 +761,13 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       })
     }
 
-    // Activate the originally-active page if it wasn't the first one
+    // Why: duplicate URLs are valid browser pages; restoring by URL can select
+    // the wrong copy. The restore path preserves page order, so map by index.
     const activePageId = snap.activePageId
     if (activePageId) {
       const restoredPages = get().browserPagesByWorkspace[restored.id] ?? []
-      const targetPage = restoredPages.find(
-        (p) => p.url === pages.find((orig) => orig.id === activePageId)?.url
-      )
+      const activePageIndex = pages.findIndex((orig) => orig.id === activePageId)
+      const targetPage = activePageIndex >= 0 ? restoredPages[activePageIndex] : null
       if (targetPage && targetPage.id !== restoredPages[0]?.id) {
         get().setActiveBrowserPage(restored.id, targetPage.id)
       }

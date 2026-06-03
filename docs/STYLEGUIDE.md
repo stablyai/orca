@@ -42,6 +42,7 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 | `ring`                                   | Focus-visible outlines, active selection halos              | Persistent decoration                               |
 | `sidebar` (+ variants)                   | The worktree sidebar and its children                       | Other panels                                        |
 | `editor-surface`                         | Background of Monaco / markdown editor panes                | App chrome                                          |
+| `status-success` (+ background/border)    | Positive persistent state, such as installed/ready chips     | Primary actions; git status; decorative accents     |
 
 The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
 
@@ -105,6 +106,17 @@ Orca uses shadows sparingly. Three levels in practice:
 3. **Floating** — `0 10px 24px rgba(0, 0, 0, 0.18)`. Popovers, popups that escape the editor surface. Reserved.
 
 Don't add a fourth level. If something needs more emphasis than "floating," you're probably reaching for the focus `ring` instead.
+
+## Floating surfaces (overlay, dialog, sheet, popover, hover-card, select, command)
+
+Anything that escapes its container — modal scrims, dropdowns, popovers, hover cards, select menus, command palettes — must follow the same recipe, otherwise it disappears into the canvas in dark mode (`--background: #0a0a0a` swallows `bg-popover: #171717` and `border-border/50` is ~3.5% white over that canvas). The recipe has four parts:
+
+1. **Scrim** — `bg-black/55 backdrop-blur-[2px]` for full-screen modals. A flat `bg-black/50` is invisible in dark mode; the blur is what separates the dimmed canvas from the surface.
+2. **Surface** — translucent, not opaque. Large modals use `bg-background/96 dark:bg-[rgba(23,23,23,0.96)]`; small floating surfaces (popover, hover-card, select, dropdown) use the dropdown-menu pattern (`bg-[rgba(255,255,255,0.82)] dark:bg-[rgba(0,0,0,0.72)]`).
+3. **Border** — `border-black/14 dark:border-white/14`. The `--border` token alone is too faint in dark mode; a 14% white/dark line reads as a clear edge in both modes without introducing a new token.
+4. **Shadow + blur** — two-layer drop shadow with an inset highlight (`shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)]`) plus `backdrop-blur-2xl` on the content. The blur makes the translucent surface feel frosted, the drop shadow lifts it off the canvas, and the inset highlight gives it dimension.
+
+All six floating-surface primitives in `src/renderer/src/components/ui/` (`dialog`, `sheet`, `popover`, `hover-card`, `select`, `command`) already ship with this recipe. If you build a hand-rolled floating surface (a one-off command palette, a side panel, an inline picker), copy the recipe from the matching primitive — don't reinvent it.
 
 ## Components
 

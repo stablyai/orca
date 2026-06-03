@@ -1,5 +1,5 @@
 import { CornerDownLeft, Pencil, Trash, FileText } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -54,6 +54,7 @@ export function DiffCommentCard({
   const [submitting, setSubmitting] = useState(false)
   const mountedRef = useMountedRef()
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const resizeAfterCloseRef = useRef(false)
 
   // Why: stash `onContentResize` in a ref so the layout/resize effects only
   // re-run on `editing` transitions. The decorator passes a fresh arrow every
@@ -68,6 +69,10 @@ export function DiffCommentCard({
   // the next animation frame would visibly jump from 0 to N px.
   useLayoutEffect(() => {
     if (!editing) {
+      if (resizeAfterCloseRef.current) {
+        resizeAfterCloseRef.current = false
+        onContentResizeRef.current?.()
+      }
       return
     }
     const el = textareaRef.current
@@ -81,20 +86,12 @@ export function DiffCommentCard({
     onContentResizeRef.current?.()
   }, [editing])
 
-  const editingPrevRef = useRef(editing)
-  useEffect(() => {
-    if (editingPrevRef.current === editing) {
-      return
-    }
-    editingPrevRef.current = editing
-    // Why: when the editor opens or closes the card's height changes (textarea
-    // + footer vs single body block). Ping the decorator so it re-measures and
-    // resizes the Monaco view zone — otherwise the card clips the next line.
-    // Skip the initial mount: the zone's heightInPx estimate is intentionally
-    // close to actual on first paint to avoid a layout pass before the user
-    // interacts; firing here would re-layout every card on creation.
-    onContentResizeRef.current?.()
-  }, [editing])
+  const scheduleContentResizeAfterClose = (): void => {
+    // Why: closing edit mode removes the textarea/footer before Monaco can
+    // re-measure the view zone. Let the layout effect run after React commits
+    // the body-only card so async saves cannot measure the old edit height.
+    resizeAfterCloseRef.current = true
+  }
 
   const handleStartEdit = (): void => {
     setDraft(body)
@@ -102,6 +99,7 @@ export function DiffCommentCard({
   }
 
   const handleCancel = (): void => {
+    scheduleContentResizeAfterClose()
     setEditing(false)
     setDraft(body)
   }
@@ -122,6 +120,7 @@ export function DiffCommentCard({
     try {
       const ok = await onSubmitEdit(trimmedDraft)
       if (ok && mountedRef.current) {
+        scheduleContentResizeAfterClose()
         setEditing(false)
       }
     } catch (err) {

@@ -49,6 +49,10 @@ import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { filterProjectTableRowsByOpenRepos } from './project-row-filtering'
 import {
+  resolveMissingRepoProjectDialogState,
+  resolveRepoBackedProjectDialogState
+} from './project-dialog-state'
+import {
   getNextVisibleProjectTableCache,
   getVisibleProjectTable,
   type CachedVisibleProjectTable
@@ -376,26 +380,27 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
   } | null>(null)
   const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
 
-  useEffect(() => {
-    if (dialogRepoItem && !liveRepoIds.has(dialogRepoItem.repoId)) {
-      setDialogRepoItem(null)
-    }
-  }, [dialogRepoItem, liveRepoIds])
+  const resolvedDialogRepoItem = resolveRepoBackedProjectDialogState(dialogRepoItem, liveRepoIds)
+  if (resolvedDialogRepoItem !== dialogRepoItem) {
+    // Why: repo-backed Project dialogs cannot edit after their repo leaves
+    // Orca; clear them before the modal tree receives stale repo ids.
+    setDialogRepoItem(resolvedDialogRepoItem)
+  }
 
-  useEffect(() => {
-    if (!slugIndexReady) {
-      return
-    }
-    if (
-      slugDialog &&
-      lookupSlug(`${slugDialog.origin.owner}/${slugDialog.origin.repo}`).length > 0
-    ) {
-      setSlugDialog(null)
-    }
-    if (repoNotInOrca && lookupSlug(`${repoNotInOrca.owner}/${repoNotInOrca.repo}`).length > 0) {
-      setRepoNotInOrca(null)
-    }
-  }, [slugIndexReady, lookupSlug, slugDialog, repoNotInOrca])
+  const resolvedMissingRepoDialogs = resolveMissingRepoProjectDialogState({
+    slugIndexReady,
+    slugDialog,
+    repoNotInOrca,
+    lookupSlug
+  })
+  if (resolvedMissingRepoDialogs.slugDialog !== slugDialog) {
+    // Why: once a previously missing repo is registered, Project rows should
+    // use the full repo-backed dialog instead of the slug fallback.
+    setSlugDialog(resolvedMissingRepoDialogs.slugDialog)
+  }
+  if (resolvedMissingRepoDialogs.repoNotInOrca !== repoNotInOrca) {
+    setRepoNotInOrca(resolvedMissingRepoDialogs.repoNotInOrca)
+  }
 
   const buildWorkItem = useCallback(
     (row: GitHubProjectRow, repoId: string): GitHubWorkItem | null => {
@@ -762,12 +767,12 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           707) so a row from another repo cannot accidentally edit the active
           workspace. */}
       <GitHubItemDialog
-        workItem={dialogRepoItem?.workItem ?? null}
-        repoPath={dialogRepoItem?.repoPath ?? null}
-        repoId={dialogRepoItem?.repoId ?? null}
-        projectOrigin={dialogRepoItem?.origin}
+        workItem={resolvedDialogRepoItem?.workItem ?? null}
+        repoPath={resolvedDialogRepoItem?.repoPath ?? null}
+        repoId={resolvedDialogRepoItem?.repoId ?? null}
+        projectOrigin={resolvedDialogRepoItem?.origin}
         onUse={(item) => {
-          const current = dialogRepoItem
+          const current = resolvedDialogRepoItem
           setDialogRepoItem(null)
           if (!current) {
             return
@@ -793,21 +798,21 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
           having a duplicate (always-disabled or always-routing-to-fallback)
           button here would only confuse the user. */}
       <ProjectItemSlugDialog
-        projectOrigin={slugDialog?.origin ?? null}
+        projectOrigin={resolvedMissingRepoDialogs.slugDialog?.origin ?? null}
         onClose={() => setSlugDialog(null)}
       />
 
       {/* repo-not-in-orca prompt: see design doc Interaction States. */}
       <Dialog
-        open={repoNotInOrca !== null}
+        open={resolvedMissingRepoDialogs.repoNotInOrca !== null}
         onOpenChange={(open) => !open && setRepoNotInOrca(null)}
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Repository not in Orca</DialogTitle>
             <DialogDescription>
-              {repoNotInOrca
-                ? `${repoNotInOrca.owner}/${repoNotInOrca.repo} isn't added to Orca. Add it to start work, or open in GitHub.`
+              {resolvedMissingRepoDialogs.repoNotInOrca
+                ? `${resolvedMissingRepoDialogs.repoNotInOrca.owner}/${resolvedMissingRepoDialogs.repoNotInOrca.repo} isn't added to Orca. Add it to start work, or open in GitHub.`
                 : null}
             </DialogDescription>
           </DialogHeader>
@@ -815,12 +820,12 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
             <Button variant="ghost" onClick={() => setRepoNotInOrca(null)}>
               Cancel
             </Button>
-            {repoNotInOrca?.url ? (
+            {resolvedMissingRepoDialogs.repoNotInOrca?.url ? (
               <Button
                 variant="outline"
                 onClick={() => {
-                  if (repoNotInOrca.url) {
-                    void window.api.shell.openUrl(repoNotInOrca.url)
+                  if (resolvedMissingRepoDialogs.repoNotInOrca?.url) {
+                    void window.api.shell.openUrl(resolvedMissingRepoDialogs.repoNotInOrca.url)
                   }
                   setRepoNotInOrca(null)
                 }}

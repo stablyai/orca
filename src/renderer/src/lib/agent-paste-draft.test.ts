@@ -4,13 +4,16 @@ import { pasteDraftWhenAgentReady, sendBracketedPasteToRunningAgent } from './ag
 const testState = vi.hoisted(() => ({
   appState: {
     settings: {},
-    ptyIdsByTabId: { 'tab-1': ['pty-1'] }
+    ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+    runtimePaneTitlesByTabId: {},
+    tabsByWorktree: {}
   },
   ptyObserver: null as ((data: string) => void) | null,
   unsubscribe: vi.fn(),
   subscribeToPtyData: vi.fn(),
   isRemoteRuntimePtyId: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
+  inspectRuntimeTerminalProcess: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
 }))
 
@@ -26,7 +29,8 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: testState.isRemoteRuntimePtyId,
-  sendRuntimePtyInputVerified: testState.sendRuntimePtyInputVerified
+  sendRuntimePtyInputVerified: testState.sendRuntimePtyInputVerified,
+  inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
 }))
 
 vi.mock('@/runtime/runtime-terminal-stream', () => ({
@@ -47,6 +51,8 @@ describe('pasteDraftWhenAgentReady', () => {
     })
     testState.appState.settings = {}
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+    testState.appState.runtimePaneTitlesByTabId = {}
+    testState.appState.tabsByWorktree = {}
     testState.ptyObserver = null
     testState.unsubscribe.mockReset()
     testState.subscribeToPtyData.mockReset()
@@ -60,6 +66,11 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
+    testState.inspectRuntimeTerminalProcess.mockReset()
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'bash',
+      hasChildProcesses: false
+    })
     testState.subscribeToRuntimeTerminalData.mockReset()
   })
 
@@ -225,6 +236,29 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
 
     await expect(promise).resolves.toBe(false)
+  })
+
+  it('best-effort pastes when the ready escape was missed but the agent process is running', async () => {
+    testState.inspectRuntimeTerminalProcess.mockResolvedValue({
+      foregroundProcess: 'codex',
+      hasChildProcesses: false
+    })
+
+    const promise = pasteDraftWhenAgentReady({
+      tabId: 'tab-1',
+      content: ISSUE_URL,
+      agent: 'codex'
+    })
+    await flushMicrotasks()
+
+    await vi.advanceTimersByTimeAsync(8000)
+
+    await expect(promise).resolves.toBe(true)
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      PASTED_ISSUE_URL
+    )
   })
 
   it('submits to an already running agent without waiting for readiness signals', async () => {

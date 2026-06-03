@@ -1,31 +1,31 @@
 import { describe, expect, it } from 'vitest'
-import { resolveCommitFailureDialogState } from './commit-failure-dialog-state'
+import {
+  shouldShowCommitFailureDialog,
+  syncCommitFailureDialogState,
+  type CommitFailureDialogState
+} from './commit-failure-dialog-state'
 
-describe('resolveCommitFailureDialogState', () => {
-  it('keeps the dialog state when the commit failure identity still matches', () => {
-    const state = { identity: 'wt-1:error-a', open: true }
+describe('commit failure dialog state', () => {
+  it('keeps an open dialog visible when a new detailed error arrives for the same worktree', () => {
+    const state: CommitFailureDialogState = { worktreeKey: 'wt-1', open: true }
 
-    expect(resolveCommitFailureDialogState(state, 'wt-1:error-a')).toBe(state)
+    expect(syncCommitFailureDialogState(state, 'wt-1', true)).toBe(state)
+    expect(shouldShowCommitFailureDialog(state, 'wt-1', true)).toBe(true)
   })
 
-  it('closes the dialog when the active commit failure identity changes', () => {
-    expect(
-      resolveCommitFailureDialogState({ identity: 'wt-1:error-a', open: true }, 'wt-1:')
-    ).toEqual({
-      identity: 'wt-1:',
-      open: false
-    })
-  })
-
-  it('does not reopen an older failure when its identity comes back later', () => {
-    const cleared = resolveCommitFailureDialogState(
-      { identity: 'wt-1:error-a', open: true },
-      'wt-1:error-b'
+  it('closes the dialog when the failure moves to another worktree', () => {
+    expect(syncCommitFailureDialogState({ worktreeKey: 'wt-1', open: true }, 'wt-2', true)).toEqual(
+      {
+        worktreeKey: 'wt-2',
+        open: false
+      }
     )
+  })
 
-    expect(resolveCommitFailureDialogState(cleared, 'wt-1:error-a')).toEqual({
-      identity: 'wt-1:error-a',
-      open: false
-    })
+  it('closes the dialog when the latest failure no longer has expanded details', () => {
+    const next = syncCommitFailureDialogState({ worktreeKey: 'wt-1', open: true }, 'wt-1', false)
+
+    expect(next).toEqual({ worktreeKey: 'wt-1', open: false })
+    expect(shouldShowCommitFailureDialog(next, 'wt-1', false)).toBe(false)
   })
 })

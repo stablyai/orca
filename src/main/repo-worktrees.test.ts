@@ -8,7 +8,7 @@ vi.mock('./git/worktree', () => ({
   listWorktrees: listWorktreesMock
 }))
 
-import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
+import { createFolderWorktree, isRepoRoot, listRepoWorktrees } from './repo-worktrees'
 
 describe('repo-worktrees', () => {
   beforeEach(() => {
@@ -72,5 +72,20 @@ describe('repo-worktrees', () => {
 
     expect(listWorktreesMock).toHaveBeenCalledWith('/workspace/repo')
     expect(result).toHaveLength(1)
+  })
+
+  it('treats Windows repo root casing differences as the same local root', () => {
+    const repos = [
+      {
+        id: 'repo-1',
+        path: String.raw`C:\Repo`,
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'git' as const
+      }
+    ]
+
+    expect(isRepoRoot(repos, String.raw`c:\repo`)).toBe(true)
   })
 })

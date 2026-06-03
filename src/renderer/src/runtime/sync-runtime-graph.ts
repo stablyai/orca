@@ -384,6 +384,7 @@ function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles'])
       diffSource: file.diffSource,
       isDirty: file.isDirty,
       isUntitled: file.isUntitled,
+      deleteUntouchedOnClose: file.deleteUntouchedOnClose,
       markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
     }))
   )
@@ -569,7 +570,10 @@ async function syncRuntimeGraph(): Promise<void> {
   }
 
   try {
-    await window.api.runtime.syncWindowGraph(graph)
+    const result = await window.api.runtime.syncWindowGraph(graph)
+    getStoreState()?.setRuntimeAgentOrchestrationByPaneKey?.(
+      result?.agentOrchestrationByPaneKey ?? {}
+    )
   } catch (error) {
     console.error('[runtime] Failed to sync renderer graph:', error)
   }

@@ -277,7 +277,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             )
             showSavedInProjectSettingsToast({
               onOpenSettings: () => openLocalCommandSettings(importedRepoId),
-              description: 'Orca will run this command each time a new worktree is created.'
+              description: 'Runs when Orca creates a new worktree.'
             })
           }
           return
@@ -293,8 +293,8 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             onOpenSettings: () => openLocalCommandSettings(importedRepoId),
             description:
               skippedCount > 0
-                ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved locally; move it to orca.yaml later to share it.`
-                : 'Move it to orca.yaml later to share it.'
+                ? `${skippedCount} unsupported field${skippedCount === 1 ? '' : 's'} skipped. Saved the setup command.`
+                : 'Saved the setup command.'
           })
         }
       } catch (error) {
@@ -381,7 +381,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
 
   return (
     <div className="px-3 pb-2">
-      <div className="rounded-lg border border-sidebar-border bg-sidebar-accent p-3 text-sidebar-accent-foreground shadow-xs">
+      <div className="setup-script-prompt-card rounded-lg border border-sidebar-border p-3 text-sidebar-accent-foreground shadow-xs">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold leading-snug">Add a setup script</p>
           <DismissButton onDismiss={handleDismiss} />

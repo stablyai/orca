@@ -13,6 +13,7 @@ import type { WorkspaceCleanupUIState } from './workspace-cleanup'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
 import type { FeatureTipId } from './feature-tips'
+import type { ContextualTourId } from './contextual-tours'
 import type { FeatureInteractionState } from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
@@ -21,6 +22,7 @@ import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
 } from './source-control-ai-types'
+import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -82,10 +84,16 @@ export type Repo = {
   displayName: string
   badgeColor: string
   repoIcon?: RepoIcon | null
+  /** Set when the repo is a fork: the upstream/parent owner/repo. Drives the
+   *  default avatar (upstream owner, not the personal fork) and the fork
+   *  indicator. Absent = not a fork, or fork status not yet resolved. */
+  upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string
   worktreeBaseRef?: string
+  /** Optional repo-scoped workspace root override. Relative paths resolve from `path`. */
+  worktreeBasePath?: string
   hookSettings?: RepoHookSettings
   /** SSH target ID for remote repos. null/undefined = local. */
   connectionId?: string | null
@@ -131,7 +139,7 @@ export type ProjectGroup = {
 export type NestedRepoScanOptions = {
   maxDepth?: number
   maxRepos?: number
-  timeoutMs?: number
+  timeoutMs?: number | null
 }
 
 export type NestedRepoCandidate = {
@@ -146,8 +154,11 @@ export type NestedRepoScanResult = {
   repos: NestedRepoCandidate[]
   truncated: boolean
   timedOut: boolean
+  stopped: boolean
   durationMs: number
   maxDepth: number
+  maxRepos: number
+  timeoutMs: number | null
 }
 
 export type ProjectGroupImportMode = 'group' | 'separate'
@@ -254,6 +265,9 @@ export type Worktree = {
    *  seed a replacement terminal if the user later reopens the worktree after
    *  closing every visible surface. */
   createdWithAgent?: TuiAgent
+  /** True while an auto-named workspace is waiting for the first agent message
+   *  to drive the branch/title rename. */
+  pendingFirstAgentMessageRename?: boolean
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
@@ -273,6 +287,15 @@ export type GitPushTarget = {
   remoteUrl?: string
   /** True when Orca added this remote while preparing a fork-PR worktree. */
   remoteCreated?: boolean
+}
+
+export type GitHubPrStartPoint = {
+  baseBranch: string
+  pushTarget?: GitPushTarget
+  /** Verified PR head commit. Present when checkout can be tied to a stable SHA. */
+  headSha?: string
+  /** Exact local branch name to create/reuse when the PR head is a safe same-repo branch. */
+  branchNameOverride?: string
 }
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -299,6 +322,8 @@ export type WorktreeMeta = {
   createdAt?: number
   /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */
   createdWithAgent?: TuiAgent
+  /** See {@link Worktree.pendingFirstAgentMessageRename}. */
+  pendingFirstAgentMessageRename?: boolean
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
@@ -636,6 +661,8 @@ export type PersistedOpenFile = {
   language: string
   isPreview?: boolean
   runtimeEnvironmentId?: string | null
+  /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
+  dirtyDraftContent?: string
 }
 
 export type WorkspaceSessionState = {
@@ -689,7 +716,13 @@ export type WorkspaceSessionState = {
    *  older builds — hydration tolerates missing/partial maps and the
    *  active worktree is seeded on first restore. */
   lastVisitedAtByWorktreeId?: Record<string, number>
+  /** Worktrees whose repo-defined default terminal tabs have already been
+   *  considered. Persisted so closing all tabs and re-opening the workspace
+   *  does not recreate the template. */
+  defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
 }
+
+export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
 
 // ─── GitHub ──────────────────────────────────────────────────────────
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
@@ -708,6 +741,13 @@ export type PRConflictSummary = {
 
 export type GitHubRepositoryIdentity = { owner: string; repo: string }
 
+export type GitHubPRMergeMethod = 'merge' | 'squash' | 'rebase'
+
+export type GitHubPRMergeMethodSettings = {
+  defaultMethod: GitHubPRMergeMethod
+  allowedMethods: Record<GitHubPRMergeMethod, boolean>
+}
+
 export type PRInfo = {
   number: number
   title: string
@@ -719,6 +759,7 @@ export type PRInfo = {
   reviewDecision?: PRReviewDecision | null
   autoMergeEnabled?: boolean
   mergeQueueRequired?: boolean | null
+  mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
@@ -771,6 +812,8 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedHasPR?: boolean | null
   cachedPRState?: PRState | null
   cachedChecksStatus?: CheckStatus | null
+  cachedMergeable?: PRMergeableState | null
+  cachedMergeStateStatus?: string | null
 }
 
 export type GitHubPRRefreshSkippedReason =
@@ -851,12 +894,14 @@ export type PRCheckStep = {
 }
 
 export type PRCheckJob = {
+  id: number | null
   name: string
   status: string | null
   conclusion: string | null
   startedAt: string | null
   completedAt: string | null
   url: string | null
+  logTail: string | null
   steps: PRCheckStep[]
 }
 
@@ -985,6 +1030,7 @@ export type GitHubWorkItem = {
   mergeable?: PRMergeableState
   autoMergeEnabled?: boolean
   mergeQueueRequired?: boolean | null
+  mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean
   // Why: true when a PR's head lives on a fork (headRepositoryOwner !== selected repo owner).
@@ -1064,6 +1110,21 @@ export type LinearWorkspace = LinearViewer & {
 }
 
 export type LinearWorkspaceSelection = string | 'all'
+export type LinearWorkspaceSelector = LinearWorkspaceSelection | undefined
+export type LinearConcreteWorkspaceId = string
+
+export type LinearWorkspaceError = {
+  workspaceId: string
+  workspaceName?: string
+  type: 'auth' | 'rate_limited' | 'network' | 'unknown'
+  message: string
+}
+
+export type LinearCollectionResult<T> = {
+  items: T[]
+  errors?: LinearWorkspaceError[]
+  hasMore?: boolean
+}
 
 export type LinearConnectionStatus = {
   connected: boolean
@@ -1107,9 +1168,109 @@ export type LinearIssue = {
 
 export type LinearProjectSummary = {
   id: string
+  workspaceId?: string
+  workspaceName?: string
   name: string
   url?: string
   color?: string
+  icon?: string
+  description?: string
+  content?: string
+  status?: LinearProjectStatusSummary
+  health?: string | null
+  priority?: number | null
+  priorityLabel?: string | null
+  lead?: LinearProjectMemberSummary
+  members?: LinearProjectMemberSummary[]
+  teams?: {
+    id: string
+    name: string
+    key?: string
+  }[]
+  labels?: {
+    id: string
+    name: string
+    color?: string
+  }[]
+  startDate?: string | null
+  targetDate?: string | null
+  createdAt?: string
+  updatedAt?: string
+  completedAt?: string | null
+  canceledAt?: string | null
+  startedAt?: string | null
+  progress?: number | null
+  scope?: number | null
+  issueCount?: number
+  completedIssueCount?: number
+}
+
+export type LinearProjectStatusSummary = {
+  id: string
+  name: string
+  type?: string
+  color?: string
+}
+
+export type LinearProjectMemberSummary = {
+  id: string
+  displayName: string
+  avatarUrl?: string
+}
+
+export type LinearProjectMilestoneSummary = {
+  id: string
+  name: string
+  status?: string
+  targetDate?: string | null
+  progress?: number | null
+}
+
+export type LinearProjectResourceSummary = {
+  id: string
+  title: string
+  url: string
+  type?: string
+}
+
+export type LinearProjectUpdateSummary = {
+  id: string
+  body?: string
+  health?: string | null
+  url?: string
+  createdAt?: string
+  updatedAt?: string
+  user?: LinearProjectMemberSummary
+}
+
+export type LinearProjectDetail = LinearProjectSummary & {
+  milestones?: LinearProjectMilestoneSummary[]
+  resources?: LinearProjectResourceSummary[]
+  latestUpdate?: LinearProjectUpdateSummary
+}
+
+export type LinearCustomViewModel = 'issue' | 'project'
+
+export type LinearCustomViewSummary = {
+  id: string
+  workspaceId?: string
+  workspaceName?: string
+  name: string
+  description?: string
+  model: LinearCustomViewModel
+  url?: string
+  color?: string
+  icon?: string
+  shared?: boolean
+  team?: {
+    id: string
+    name?: string
+    key?: string
+  }
+  owner?: LinearProjectMemberSummary
+  creator?: LinearProjectMemberSummary
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type LinearIssueChildSummary = {
@@ -1130,6 +1291,11 @@ export type LinearComment = {
 }
 
 // ─── Issue Mutations ────────────────────────────────────────────────
+
+export type GitHubCreateIssueFields = {
+  labels?: string[]
+  assignees?: string[]
+}
 
 export type GitHubIssueUpdate = {
   state?: 'open' | 'closed'
@@ -1183,21 +1349,33 @@ export type GitHubOwnerRepo = GitHubRepositoryIdentity
 // (`from '../shared/types'`) keep working without changes.
 export type {
   GitLabAssignableUser,
+  GitLabAuthDiagnostic,
   GitLabCommentResult,
+  GitLabDiscussionResolveResult,
   GitLabIssueInfo,
   GitLabIssueState,
   GitLabIssueUpdate,
+  GitLabJobTraceResult,
+  GitLabRateLimitBucket,
+  GitLabRateLimitSnapshot,
+  GitLabMRApprovalRule,
+  GitLabMRApprovalState,
   GitLabMRFile,
+  GitLabMRInlineCommentInput,
+  GitLabMRReviewersUpdateResult,
+  GitLabMRUpdate,
   GitLabPagedResult,
   GitLabPipelineJob,
   GitLabProjectRef,
   GitLabProjectSettings,
+  GitLabRetryJobResult,
   GitLabReaction,
   GitLabTodo,
   GitLabTodoTargetType,
   GitLabViewer,
   GitLabWorkItem,
   GitLabWorkItemDetails,
+  GetGitLabRateLimitResult,
   ListMergeRequestsResult,
   MRCheckDetail,
   MRComment,
@@ -1206,6 +1384,29 @@ export type {
   MRMergeableState,
   MRState
 } from './gitlab-types'
+
+export type {
+  JiraComment,
+  JiraConnectArgs,
+  JiraConnectionStatus,
+  JiraCreateField,
+  JiraCreateFieldAllowedValue,
+  JiraCreateIssueArgs,
+  JiraCreateIssueResult,
+  JiraIssue,
+  JiraIssueFilter,
+  JiraIssueType,
+  JiraIssueUpdate,
+  JiraMutationResult,
+  JiraPriority,
+  JiraProject,
+  JiraSite,
+  JiraSiteSelection,
+  JiraStatus,
+  JiraTransition,
+  JiraUser,
+  JiraViewer
+} from './jira-types'
 
 /**
  * GitHub API rate-limit buckets surfaced in the TaskPage header so users can
@@ -1309,6 +1510,13 @@ export type OrcaHooks = {
     archive?: string // Runs before worktree is archived
   }
   issueCommand?: string // Shared default command for linked GitHub issues
+  defaultTabs?: OrcaDefaultTabTemplate[] // Terminal tabs to create once for a new worktree
+}
+
+export type OrcaDefaultTabTemplate = {
+  title?: string
+  color?: string
+  command?: string
 }
 
 export type RepoHookSettings = {
@@ -1331,6 +1539,23 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
+  telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
+}
+
+export type WorktreeDefaultTabsLaunch = {
+  tabs: OrcaDefaultTabTemplate[]
+  runCommands: boolean
+}
+
+export type WorktreeCreateTimingPhase = {
+  phase: string
+  startedAtMs: number
+  durationMs: number
+}
+
+export type WorktreeCreateTiming = {
+  totalDurationMs: number
+  phases: WorktreeCreateTimingPhase[]
 }
 
 export type CreateSparseCheckoutRequest = {
@@ -1377,6 +1602,9 @@ export type CreateWorktreeArgs = {
   manualOrder?: number
   /** Agent selected in the create surface. Omitted for blank-shell creates. */
   createdWithAgent?: TuiAgent
+  /** Set when the renderer knows this auto-generated branch should be renamed
+   *  from the first agent message. */
+  pendingFirstAgentMessageRename?: boolean
   /** Telemetry-only: which UI surface initiated this create. Threaded from
    *  the renderer entry point so main can emit `workspace_created` with the
    *  correct `source`. `unknown` is a valid wire value — an unrecognized
@@ -1386,6 +1614,9 @@ export type CreateWorktreeArgs = {
    *  pre-date this prop default to `unknown` at the IPC boundary instead
    *  of failing typecheck. */
   telemetrySource?: WorkspaceSource
+  /** Optional startup command for callers that want the backend to spawn the
+   *  first terminal as soon as the worktree is registered. */
+  startup?: WorktreeStartupLaunch
 }
 
 export type CreateWorktreeResult = {
@@ -1398,9 +1629,15 @@ export type CreateWorktreeResult = {
   lineage?: WorktreeLineage | null
   warnings?: WorktreeLineageWarning[]
   setup?: WorktreeSetupLaunch
+  defaultTabs?: WorktreeDefaultTabsLaunch
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
+  startupTerminal?: {
+    spawned: boolean
+    surface?: 'visible' | 'background'
+  }
+  timing?: WorktreeCreateTiming
 }
 
 export type PreservedWorktreeBranch = {
@@ -1814,6 +2051,14 @@ export type GlobalSettings = {
    *  usable without the setup output crowding the initial pane. */
   setupScriptLaunchMode: SetupScriptLaunchMode
   terminalScrollbackBytes: number
+  /** Optional app-level proxy for Electron networking and locally spawned PTYs.
+   *  Empty preserves system proxy settings plus inherited proxy env behavior. */
+  httpProxyUrl?: string
+  /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
+  httpProxyBypassRules?: string
+  /** Why: corporate TLS-intercepting proxies can break Electron HTTP/2 downloads;
+   *  this opt-in compatibility mode applies Chromium's process-wide HTTP/1.1 switch. */
+  electronHttp1CompatibilityMode?: boolean
   /** Why: opening arbitrary links inside Orca uses an isolated guest browser surface.
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
@@ -1917,6 +2162,9 @@ export type GlobalSettings = {
    *  list hides unused providers from Tasks chrome and sidebar shortcuts while
    *  leaving the chosen default source stable when it is still visible. */
   visibleTaskProviders: TaskProvider[]
+  /** Why: one-shot migration guard so Jira becomes visible for existing
+   *  profiles once, without re-adding it after a later deliberate opt-out. */
+  visibleTaskProvidersDefaultedForJira: boolean
   /** Why: persists the user's repo selection in the cross-repo tasks view.
    *  `null` means sticky-all — every eligible repo is selected, including
    *  repos added in future sessions, so the "All repos" label stays
@@ -2100,6 +2348,7 @@ export type CommitMessageAiSettings = {
 export type GhosttyImportPreview = {
   found: boolean
   configPath?: string
+  configPaths?: string[]
   diff: Partial<GlobalSettings>
   unsupportedKeys: string[]
   error?: string
@@ -2117,6 +2366,7 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
+  notificationId?: string
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
@@ -2146,6 +2396,10 @@ export type NotificationDispatchResult = {
     | 'cooldown'
     | 'not-supported'
     | 'not-displayed'
+}
+
+export type NotificationDismissResult = {
+  dismissed: number
 }
 
 export type NotificationSoundResult = {
@@ -2196,6 +2450,9 @@ export type OnboardingChecklistState = {
 }
 
 export type OnboardingState = {
+  // Why: numeric step meanings can change when pages are removed; persisted
+  // state needs a version marker so migration does not re-run on new progress.
+  flowVersion: number
   closedAt: number | null
   outcome: OnboardingOutcome | null
   // Sentinel `-1` = not started; `1..5` = highest wizard step the user
@@ -2248,8 +2505,17 @@ export type TaskResumeState = {
   githubItemsPreset?: TaskViewPresetId | null
   githubItemsQuery?: string
   githubProjectHiddenFieldIdsByView?: Record<string, string[]>
+  linearMode?: 'issues' | 'projects' | 'views'
   linearPreset?: 'assigned' | 'created' | 'all' | 'completed'
   linearQuery?: string
+  linearContext?: {
+    kind: 'project' | 'view'
+    id: string
+    workspaceId: LinearConcreteWorkspaceId
+    model?: LinearCustomViewModel
+  }
+  jiraPreset?: 'assigned' | 'reported' | 'all' | 'done'
+  jiraQuery?: string
 }
 
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
@@ -2276,6 +2542,8 @@ export type PersistedUIState = {
    *  the predicate in visible-worktrees.ts excludes worktrees with an empty
    *  branch. */
   hideDefaultBranchWorkspace: boolean
+  /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
+  showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
   collapsedGroups: string[]
   uiZoomLevel: number
@@ -2284,7 +2552,6 @@ export type PersistedUIState = {
   agentActivityDisplayMode?: AgentActivityDisplayMode
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
-  workspaceBoardCompact?: boolean
   workspaceBoardColumnWidth?: number
   /** One-shot migration flag for a short-lived build that persisted the
    *  default workspace statuses in reverse workflow order. Once stamped,
@@ -2320,6 +2587,9 @@ export type PersistedUIState = {
    *  stateStartedAt that beats the old ack via the existing comparison in
    *  WorktreeCardAgents. Renderer-owned, written through ui:set. */
   acknowledgedAgentsByPaneKey?: Record<string, number>
+  /** User-hidden sidebar entry for the setup guide. The Help menu remains
+   *  available so this is a reversible declutter preference, not completion. */
+  setupGuideSidebarDismissed?: boolean
   /** URL to navigate to when a new browser tab is opened. Null means blank tab.
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null
@@ -2411,6 +2681,12 @@ export type PersistedUIState = {
   /** Local product-state facts: feature ids the user has actually used.
    *  Used by education surfaces to avoid teaching already-discovered features. */
   featureInteractions?: FeatureInteractionState
+  /** Contextual tours already surfaced to the user. Unknown ids are ignored
+   *  during hydration so downgrade/upgrade cycles remain forward-compatible. */
+  contextualToursSeenIds?: ContextualTourId[]
+  /** Whether this profile may receive automatic contextual tours from this
+   *  rollout. Missing means the renderer has not classified the profile yet. */
+  contextualToursAutoEligible?: boolean
 }
 
 export const PET_SIZE_MIN = 60

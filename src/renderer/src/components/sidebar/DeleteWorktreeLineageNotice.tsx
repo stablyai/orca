@@ -1,13 +1,16 @@
 import { Workflow } from 'lucide-react'
 import type { JSX } from 'react'
 import type { Worktree } from '../../../../shared/types'
+import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
 
 type DeleteWorktreeLineageNoticeProps = {
   descendants: readonly Worktree[]
+  dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
 }
 
 export function DeleteWorktreeLineageNotice({
-  descendants
+  descendants,
+  dirtyChangeCountsByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
   const childWorkspaceCount = descendants.length
   if (childWorkspaceCount === 0) {
@@ -19,12 +22,11 @@ export function DeleteWorktreeLineageNotice({
       <div className="flex items-start gap-2">
         <Workflow className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-foreground">Child workspaces won&apos;t be deleted</div>
+          <div className="font-medium text-foreground">Child workspaces will be deleted</div>
           <div className="mt-1 text-muted-foreground">
-            Deleting this workspace only removes the parent.{' '}
             {childWorkspaceCount === 1
-              ? '1 child workspace will stay in Orca and on disk.'
-              : `${childWorkspaceCount} child workspaces will stay in Orca and on disk.`}
+              ? 'Deleting this workspace also deletes 1 child workspace.'
+              : `Deleting this workspace also deletes ${childWorkspaceCount} child workspaces.`}
           </div>
           {/* Why: long nowrap paths can otherwise give this grid child an
              intrinsic width wider than the modal. */}
@@ -33,6 +35,9 @@ export function DeleteWorktreeLineageNotice({
               <div key={child.id} className="min-w-0 overflow-hidden">
                 <div className="truncate font-medium text-foreground">{child.displayName}</div>
                 <div className="truncate text-muted-foreground">{child.path}</div>
+                <DeleteWorktreeDirtyChangeHint
+                  changeCount={dirtyChangeCountsByWorktreeId.get(child.id)}
+                />
               </div>
             ))}
             {descendants.length > 4 ? (
