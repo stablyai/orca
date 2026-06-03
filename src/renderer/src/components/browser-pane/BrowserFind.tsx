@@ -65,8 +65,6 @@ export default function BrowserFind({
       inputRef.current?.select()
     } else {
       safeStopFindInPage()
-      setActiveMatch(0)
-      setTotalMatches(0)
     }
   }, [isOpen, safeStopFindInPage])
 
@@ -78,8 +76,6 @@ export default function BrowserFind({
     }
     if (!query) {
       safeStopFindInPage()
-      setActiveMatch(0)
-      setTotalMatches(0)
       return
     }
 
@@ -119,6 +115,11 @@ export default function BrowserFind({
       }
     }
   }, [webviewRef, isOpen])
+
+  if ((!isOpen || !query) && (activeMatch !== 0 || totalMatches !== 0)) {
+    setActiveMatch(0)
+    setTotalMatches(0)
+  }
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

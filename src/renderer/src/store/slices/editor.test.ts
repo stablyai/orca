@@ -625,7 +625,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
         timeoutMs: 15_000
       })
     })
@@ -650,7 +650,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
         timeoutMs: 15_000
       })
     })
@@ -679,7 +679,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
         timeoutMs: 15_000
       })
     })
@@ -705,7 +705,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
         timeoutMs: 15_000
       })
     })
@@ -731,7 +731,7 @@ describe('createEditorSlice untitled cleanup routing', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.delete',
-        params: { worktree: 'wt-1', relativePath: 'untitled.md', recursive: undefined },
+        params: { worktree: 'id:wt-1', relativePath: 'untitled.md', recursive: undefined },
         timeoutMs: 15_000
       })
     })
@@ -2317,7 +2317,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
       selector: 'env-source',
       method: 'files.stat',
-      params: { worktree: 'wt-1', relativePath: 'docs/guide.md' },
+      params: { worktree: 'id:wt-1', relativePath: 'docs/guide.md' },
       timeoutMs: 15_000
     })
     expect(store.getState().openFiles).toEqual([

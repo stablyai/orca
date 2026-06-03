@@ -5,6 +5,8 @@ import { getRuntimeGitIgnoredPaths } from '@/runtime/runtime-git-client'
 import type { TreeNode } from './file-explorer-types'
 import { buildIgnoredSet, isPathIgnored } from './status-display'
 
+const EMPTY_IGNORED_PATHS: readonly string[] = []
+
 export function getVisibleFileExplorerRows(
   flatRows: TreeNode[],
   ignoredSet: Set<string>,
@@ -32,15 +34,14 @@ export function useFileExplorerGitIgnoredRows(
   const showGitIgnoredFiles = settings?.showGitIgnoredFiles ?? true
   const [ignoredPaths, setIgnoredPaths] = useState<string[]>([])
   const relativePaths = useMemo(() => flatRows.map((row) => row.relativePath), [flatRows])
+  const canLoadIgnoredPaths =
+    activeRepoSupportsGit &&
+    Boolean(activeWorktreeId) &&
+    Boolean(worktreePath) &&
+    relativePaths.length > 0
 
   useEffect(() => {
-    if (
-      !activeRepoSupportsGit ||
-      !activeWorktreeId ||
-      !worktreePath ||
-      relativePaths.length === 0
-    ) {
-      setIgnoredPaths([])
+    if (!canLoadIgnoredPaths || !activeWorktreeId || !worktreePath) {
       return
     }
 
@@ -69,9 +70,10 @@ export function useFileExplorerGitIgnoredRows(
     return () => {
       canceled = true
     }
-  }, [activeRepoSupportsGit, activeWorktreeId, relativePaths, worktreePath])
+  }, [activeWorktreeId, canLoadIgnoredPaths, relativePaths, worktreePath])
 
-  const ignoredSet = useMemo(() => buildIgnoredSet(ignoredPaths), [ignoredPaths])
+  const effectiveIgnoredPaths = canLoadIgnoredPaths ? ignoredPaths : EMPTY_IGNORED_PATHS
+  const ignoredSet = useMemo(() => buildIgnoredSet(effectiveIgnoredPaths), [effectiveIgnoredPaths])
   const visibleFlatRows = useMemo(
     () => getVisibleFileExplorerRows(flatRows, ignoredSet, showGitIgnoredFiles),
     [flatRows, ignoredSet, showGitIgnoredFiles]

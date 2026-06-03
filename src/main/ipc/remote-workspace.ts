@@ -104,9 +104,7 @@ function normalizeOptionalStringArray(value: unknown): string[] | undefined {
     return undefined
   }
   const normalized = value.filter((entry): entry is string => typeof entry === 'string')
-  // Why: [] means "known no live worktrees"; undefined means legacy/unknown
-  // and triggers hydration fallback from tab wake hints.
-  return normalized
+  return normalized.length > 0 ? normalized : undefined
 }
 
 function normalizeOptionalRecord<T extends Record<string, unknown>>(value: unknown): T | undefined {
@@ -148,11 +146,7 @@ function normalizeRemoteSession(raw: unknown): RemoteWorkspaceSession {
     ),
     lastVisitedAtByWorktreePath: normalizeOptionalRecord<Record<string, number>>(
       input.lastVisitedAtByWorktreePath
-    ),
-    defaultTerminalTabsAppliedByWorktreePath: normalizeOptionalRecord<Record<string, true>>(
-      input.defaultTerminalTabsAppliedByWorktreePath
-    ),
-    sleptWorktreePaths: normalizeOptionalRecord<Record<string, true>>(input.sleptWorktreePaths)
+    )
   }
 }
 

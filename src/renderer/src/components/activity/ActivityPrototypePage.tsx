@@ -391,17 +391,24 @@ function otherActivityTerminalSlot(
 
 function useActivityTerminalLoadingLabel(loading: boolean): boolean {
   const [visible, setVisible] = useState(false)
+  const [visibleLoading, setVisibleLoading] = useState(loading)
+
+  if (visibleLoading !== loading) {
+    setVisibleLoading(loading)
+    if (visible) {
+      setVisible(false)
+    }
+  }
 
   useEffect(() => {
     if (!loading) {
-      setVisible(false)
       return
     }
     const timer = setTimeout(() => setVisible(true), ACTIVITY_TERMINAL_LOADING_LABEL_DELAY_MS)
     return () => clearTimeout(timer)
   }, [loading])
 
-  return visible
+  return loading && visible
 }
 
 function agentTitle(event: ActivityEvent): string {
@@ -1487,6 +1494,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   // forces the portal through a null state on every thread switch (cleanup →
   // effect within one commit) which can flash the workspace pane behind the
   // activity slot. We only null on unmount, via a separate effect below.
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: this publishes portal descriptors to Terminal's external portal store before paint.
   useLayoutEffect(() => {
     setActivityTerminalPortals(portalDescriptors)
   }, [portalDescriptors])

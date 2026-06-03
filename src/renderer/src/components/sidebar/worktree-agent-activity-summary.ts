@@ -3,7 +3,8 @@ import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 
@@ -35,6 +36,7 @@ export type AgentActivityInput = Pick<
   | 'retainedAgentsByPaneKey'
 > & {
   tabsByWorktree: AgentActivityTabsByWorktree
+  runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
 }
 
 type AgentActivityCache = {
@@ -42,6 +44,7 @@ type AgentActivityCache = {
   agentStatusEpoch: number
   migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey']
+  runtimeAgentOrchestrationByPaneKey: AppState['runtimeAgentOrchestrationByPaneKey'] | undefined
   summaries: Map<string, WorktreeAgentActivitySummary>
 }
 
@@ -57,12 +60,14 @@ export function selectWorktreeAgentActivitySummary(
 function getWorktreeAgentActivitySummaries(
   state: AgentActivityInput
 ): Map<string, WorktreeAgentActivitySummary> {
+  const runtimeAgentOrchestrationByPaneKey = state.runtimeAgentOrchestrationByPaneKey
   if (
     agentActivityCache &&
     agentActivityCache.tabsByWorktree === state.tabsByWorktree &&
     agentActivityCache.agentStatusEpoch === state.agentStatusEpoch &&
     agentActivityCache.migrationUnsupportedByPtyId === state.migrationUnsupportedByPtyId &&
-    agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey
+    agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
+    agentActivityCache.runtimeAgentOrchestrationByPaneKey === runtimeAgentOrchestrationByPaneKey
   ) {
     return agentActivityCache.summaries
   }
@@ -93,12 +98,22 @@ function getWorktreeAgentActivitySummaries(
     if (!paneIdentity) {
       continue
     }
-    const worktreeId = tabIdToWorktreeId.get(paneIdentity.tabId) ?? null
+    const orchestration = resolveEntryOrchestration(
+      entry,
+      runtimeAgentOrchestrationByPaneKey?.[paneKey]
+    )
+    const worktreeId =
+      tabIdToWorktreeId.get(paneIdentity.tabId) ??
+      entry.worktreeId ??
+      worktreeIdForPaneKey(orchestration?.parentPaneKey, tabIdToWorktreeId)
     if (!worktreeId || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
     }
     const summary = summaryForWorktree(worktreeId)
     addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
+    if (entry.state === 'done') {
+      addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
+    }
     applyLiveAgentState(summary, entry)
   }
 
@@ -117,6 +132,11 @@ function getWorktreeAgentActivitySummaries(
     if (paneIdentity) {
       addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
     }
+    const orchestration = resolveEntryOrchestration(
+      retained.entry,
+      runtimeAgentOrchestrationByPaneKey?.[retained.entry.paneKey]
+    )
+    addParentPaneId(summary, orchestration, retained.worktreeId, tabIdToWorktreeId)
   }
 
   agentActivityCache = {
@@ -124,9 +144,29 @@ function getWorktreeAgentActivitySummaries(
     agentStatusEpoch: state.agentStatusEpoch,
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+    runtimeAgentOrchestrationByPaneKey,
     summaries
   }
   return summaries
+}
+
+function resolveEntryOrchestration(
+  entry: Pick<AgentStatusEntry, 'orchestration'>,
+  runtimeOrchestration: AgentStatusOrchestrationContext | undefined
+): AgentStatusOrchestrationContext | undefined {
+  if (!entry.orchestration) {
+    return runtimeOrchestration
+  }
+  if (!runtimeOrchestration) {
+    return entry.orchestration
+  }
+  if (
+    entry.orchestration.taskId === runtimeOrchestration.taskId &&
+    entry.orchestration.dispatchId === runtimeOrchestration.dispatchId
+  ) {
+    return { ...entry.orchestration, ...runtimeOrchestration }
+  }
+  return entry.orchestration
 }
 
 function applyLiveAgentState(
@@ -159,11 +199,30 @@ function addAgentStatusPaneId(
 }
 
 function worktreeIdForPaneKey(
-  paneKey: string,
+  paneKey: string | undefined,
   tabIdToWorktreeId: Map<string, string>
 ): string | null {
   const paneIdentity = parseAgentStatusPaneKey(paneKey)
   return paneIdentity ? (tabIdToWorktreeId.get(paneIdentity.tabId) ?? null) : null
+}
+
+function addParentPaneId(
+  summary: WorktreeAgentActivitySummary,
+  orchestration: AgentStatusOrchestrationContext | undefined,
+  worktreeId: string,
+  tabIdToWorktreeId: Map<string, string>
+): void {
+  const parentPaneIdentity = parseAgentStatusPaneKey(orchestration?.parentPaneKey)
+  if (!parentPaneIdentity) {
+    return
+  }
+  // Why: a completed worker can be the only visible row for a worktree while
+  // its parent pane still carries a stale spinner title. Let that row own the
+  // parent pane's title for this worktree without touching other worktrees.
+  if (tabIdToWorktreeId.get(parentPaneIdentity.tabId) !== worktreeId) {
+    return
+  }
+  addAgentStatusPaneId(summary, parentPaneIdentity.tabId, parentPaneIdentity.paneId)
 }
 
 function parseAgentStatusPaneKey(

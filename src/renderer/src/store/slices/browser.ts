@@ -27,6 +27,7 @@ import {
   getActiveRuntimeTarget,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   BrowserDetectProfilesResult,
   BrowserProfileClearDefaultCookiesResult,
@@ -231,7 +232,7 @@ function closeRemoteBrowserPageInOwningEnvironment(
   void callRuntimeRpc(
     target,
     'browser.tabClose',
-    { worktree: `id:${worktreeId}`, page: handle.remotePageId },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), page: handle.remotePageId },
     { timeoutMs: 15_000 }
   ).catch(() => {})
 }
@@ -438,13 +439,6 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
     set((s) => {
       const existingTabs = s.browserTabsByWorktree[worktreeId] ?? []
-      const nextSleptWorktreeIds = s.sleptWorktreeIds[worktreeId]
-        ? (() => {
-            const next = { ...s.sleptWorktreeIds }
-            delete next[worktreeId]
-            return next
-          })()
-        : s.sleptWorktreeIds
       const nextTabBarOrder = (() => {
         const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
         const terminalIds = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
@@ -509,10 +503,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               [workspaceId]: true,
               [page.id]: true
             }
-          : s.pendingAddressBarFocusByTabId,
-        ...(nextSleptWorktreeIds !== s.sleptWorktreeIds
-          ? { sleptWorktreeIds: nextSleptWorktreeIds }
-          : {})
+          : s.pendingAddressBarFocusByTabId
       }
     })
 

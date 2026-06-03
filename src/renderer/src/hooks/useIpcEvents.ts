@@ -446,14 +446,6 @@ function mergeRemoteWorkspaceSession(
     lastVisitedAtByWorktreeId: {
       ...omitTargetWorktrees(current.lastVisitedAtByWorktreeId),
       ...remote.lastVisitedAtByWorktreeId
-    },
-    defaultTerminalTabsAppliedByWorktreeId: {
-      ...omitTargetWorktrees(current.defaultTerminalTabsAppliedByWorktreeId),
-      ...remote.defaultTerminalTabsAppliedByWorktreeId
-    },
-    sleptWorktreeIds: {
-      ...omitTargetWorktrees(current.sleptWorktreeIds),
-      ...remote.sleptWorktreeIds
     }
   }
 }
@@ -2451,6 +2443,19 @@ export function useIpcEvents(): void {
         applyAgentStatus(data)
       })
     )
+    const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.((data) => {
+      if (typeof data?.paneKey !== 'string') {
+        return
+      }
+      const store = useAppStore.getState()
+      if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
+        return
+      }
+      store.removeAgentStatus(data.paneKey)
+    })
+    if (unsubscribeAgentStatusClear) {
+      unsubs.push(unsubscribeAgentStatusClear)
+    }
     const unsubscribeMigrationUnsupported = window.api.agentStatus.onMigrationUnsupported?.(
       (entry) => {
         const store = useAppStore.getState()

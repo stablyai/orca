@@ -36,6 +36,7 @@ import type { Repo, Worktree } from '../../../../shared/types'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
@@ -91,6 +92,18 @@ function shouldSuppressContextMenuFollowUpClick(contextMenuOpenedAt: number, now
   return (
     now - contextMenuOpenedAt >= 0 && now - contextMenuOpenedAt <= CONTEXT_MENU_CLICK_SUPPRESSION_MS
   )
+}
+
+function hasSleepableWorkspaceActivity(
+  worktreeId: string,
+  tabsByWorktree: Record<string, { id: string }[]>,
+  ptyIdsByTabId: Record<string, string[]>,
+  browserTabsByWorktree: Record<string, { id: string }[]>
+): boolean {
+  const tabs = tabsByWorktree[worktreeId] ?? []
+  const hasLiveTerminal = tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
+  const hasBrowser = (browserTabsByWorktree[worktreeId] ?? []).length > 0
+  return hasLiveTerminal || hasBrowser
 }
 
 function shouldRemoveProjectFromContextMenu(
@@ -216,11 +229,21 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   const worktreeMap = useWorktreeMap()
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
   const isMultiContext = activeContextWorktrees.length > 1
+  const sleepableWorktrees = useMemo(
+    () =>
+      activeContextWorktrees.filter((item) =>
+        hasSleepableWorkspaceActivity(item.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+      ),
+    [activeContextWorktrees, browserTabsByWorktree, ptyIdsByTabId, tabsByWorktree]
+  )
   const deletingContext = useMemo(
     () => activeContextWorktrees.some((item) => deleteStateByWorktreeId[item.id]?.isDeleting),
     [activeContextWorktrees, deleteStateByWorktreeId]
@@ -245,8 +268,8 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   )
   const removesProject = shouldRemoveProjectFromContextMenu(repo, worktree)
   const sleepLabel =
-    isMultiContext && activeContextWorktrees.length > 0
-      ? `Sleep ${activeContextWorktrees.length} Workspace${activeContextWorktrees.length === 1 ? '' : 's'}`
+    isMultiContext && sleepableWorktrees.length > 0
+      ? `Sleep ${sleepableWorktrees.length} Workspace${sleepableWorktrees.length === 1 ? '' : 's'}`
       : 'Sleep'
   const deleteLabel =
     isMultiContext && batchDeleteWorktrees.length > 0
@@ -358,7 +381,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   ])
 
   const handleCloseTerminals = useCallback(() => {
-    const worktreeIds = activeContextWorktrees.map((item) => item.id)
+    const worktreeIds = sleepableWorktrees.map((item) => item.id)
     setMenuOpenState(false)
     // Why: Sleep can remount the sidebar when it clears the active workspace.
     // Let Radix finish closing the menu first so its focus/portal teardown
@@ -366,7 +389,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     window.setTimeout(() => {
       void runSleepWorktrees(worktreeIds)
     }, 50)
-  }, [activeContextWorktrees, setMenuOpenState])
+  }, [setMenuOpenState, sleepableWorktrees])
 
   const handleDelete = useCallback(() => {
     // Folder mode handled inline because it routes to a different modal;
@@ -602,7 +625,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             <TooltipTrigger asChild>
               <DropdownMenuItem
                 onSelect={handleCloseTerminals}
-                disabled={deletingContext || activeContextWorktrees.length === 0}
+                disabled={deletingContext || sleepableWorktrees.length === 0}
               >
                 <Moon className="size-3.5" />
                 {sleepLabel}
@@ -661,6 +684,7 @@ export {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR,
+  hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   shouldRemoveProjectFromContextMenu,
   shouldUseNativeContextMenu,

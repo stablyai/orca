@@ -66,16 +66,13 @@ describe('setup guide step completion telemetry', () => {
       setupGuideVisible: true
     })
 
-    expect(trackMock).toHaveBeenCalledWith(
-      'setup_guide_step_completed',
-      {
-        step_id: 'notifications',
-        section_id: 'setup',
-        completed_count: 1,
-        total_steps: 8,
-        setup_guide_visible: true
-      }
-    )
+    expect(trackMock).toHaveBeenCalledWith('setup_guide_step_completed', {
+      step_id: 'notifications',
+      section_id: 'setup',
+      completed_count: 1,
+      total_steps: 8,
+      setup_guide_visible: true
+    })
   })
 })
 

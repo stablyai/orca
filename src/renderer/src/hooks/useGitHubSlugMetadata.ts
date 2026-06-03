@@ -4,6 +4,7 @@
 // not via the workspace path. These hooks live in their own module so the
 // existing repoPath-keyed hooks stay focused on the local-workspace flow
 // and so this file remains under the lint line cap.
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: slug metadata hooks clear stale rows and track loading while async provider cache requests are in flight. */
 import { useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { GitHubAssignableUser, GlobalSettings } from '../../../shared/types'

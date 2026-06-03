@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: this animation is a self-contained storyboard; splitting the phase markup from its timing constants would make the sequence harder to verify. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this visual is a timed storyboard; typed text, cursor, and phase state intentionally advance from animation effects. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'

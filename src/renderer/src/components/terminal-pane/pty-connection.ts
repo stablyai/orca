@@ -100,6 +100,53 @@ const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog exceeded 2 MB and main recovery was unavailable.]\r\n'
 
+type E2eTerminalPtyDataInjectionApi = {
+  inject: (paneKey: string, data: string) => boolean
+  keys: () => string[]
+}
+
+type E2eTerminalPtyDataInjectionWindow = Window & {
+  __terminalPtyDataInjection?: E2eTerminalPtyDataInjectionApi
+}
+
+const e2eTerminalPtyDataInjectors = new Map<string, (data: string) => void>()
+
+function exposeE2eTerminalPtyDataInjection(): void {
+  if (!e2eConfig.exposeStore || typeof window === 'undefined') {
+    return
+  }
+  // Why: a real PTY can coalesce tiny TUI redraws before E2E sees them. This
+  // e2e-only seam lets tests replay the renderer-side data callback exactly.
+  const target = window as E2eTerminalPtyDataInjectionWindow
+  target.__terminalPtyDataInjection ??= {
+    inject: (paneKey, data) => {
+      const inject = e2eTerminalPtyDataInjectors.get(paneKey)
+      if (!inject) {
+        return false
+      }
+      inject(data)
+      return true
+    },
+    keys: () => [...e2eTerminalPtyDataInjectors.keys()]
+  }
+}
+
+function registerE2eTerminalPtyDataInjection(
+  paneKey: string,
+  inject: (data: string) => void
+): () => void {
+  if (!e2eConfig.exposeStore) {
+    return () => {}
+  }
+  exposeE2eTerminalPtyDataInjection()
+  e2eTerminalPtyDataInjectors.set(paneKey, inject)
+  return () => {
+    if (e2eTerminalPtyDataInjectors.get(paneKey) === inject) {
+      e2eTerminalPtyDataInjectors.delete(paneKey)
+    }
+  }
+}
+
 function firstStartupCommandToken(command: string): string {
   const trimmed = command.trim()
   const quote = trimmed[0]
@@ -376,6 +423,7 @@ export function connectPanePty(
   let connectFrame: number | null = null
   let unregisterBacklogRecovery: (() => void) | null = null
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
+  let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationMaxTimer: ReturnType<typeof setTimeout> | null = null
@@ -2119,6 +2167,11 @@ export function connectPanePty(
         }, 50)
       }
     }
+    unregisterE2ePtyDataInjection = registerE2eTerminalPtyDataInjection(cacheKey, (data) => {
+      if (!disposed) {
+        dataCallback(data)
+      }
+    })
 
     const handleReattachResult = (
       result: PtyConnectResult | string | void,
@@ -2734,6 +2787,7 @@ export function connectPanePty(
       unregisterDocumentVisibilityRecovery = null
       clearPanePtyFitBinding()
       discardTerminalOutput(pane.terminal)
+      unregisterE2ePtyDataInjection()
       if (agentTaskCompleteSettingsUnsubscribe !== null) {
         agentTaskCompleteSettingsUnsubscribe()
         agentTaskCompleteSettingsUnsubscribe = null

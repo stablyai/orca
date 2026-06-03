@@ -37,6 +37,7 @@ import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/term
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
@@ -261,9 +262,6 @@ export type TerminalSlice = {
   workspaceSessionReady: boolean
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
-  sleptWorktreeIds: Record<string, true>
-  markWorktreeSlept: (worktreeId: string) => void
-  clearWorktreeSlept: (worktreeId: string) => void
   /** True only after hydrateWorkspaceSession ran from a real load of
    *  orca-data.json. Guards the debounced session writer so that a crash
    *  during early startup (fetchRepos / fetchAllWorktrees / session.get /
@@ -448,28 +446,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         }
       }
     }),
-  sleptWorktreeIds: {},
-  markWorktreeSlept: (worktreeId) =>
-    set((s) => {
-      if (s.sleptWorktreeIds[worktreeId]) {
-        return {}
-      }
-      return {
-        sleptWorktreeIds: {
-          ...s.sleptWorktreeIds,
-          [worktreeId]: true
-        }
-      }
-    }),
-  clearWorktreeSlept: (worktreeId) =>
-    set((s) => {
-      if (!s.sleptWorktreeIds[worktreeId]) {
-        return {}
-      }
-      const next = { ...s.sleptWorktreeIds }
-      delete next[worktreeId]
-      return { sleptWorktreeIds: next }
-    }),
   hydrationSucceeded: false,
   setHydrationSucceeded: (value) => {
     set({ hydrationSucceeded: value })
@@ -570,13 +546,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const existing = (s.tabsByWorktree[worktreeId] ?? []).filter(
         (entry) => !orphanTerminalIds.has(entry.id)
       )
-      const nextSleptWorktreeIds = s.sleptWorktreeIds[worktreeId]
-        ? (() => {
-            const next = { ...s.sleptWorktreeIds }
-            delete next[worktreeId]
-            return next
-          })()
-        : s.sleptWorktreeIds
       // Why: caller-supplied id (e.g. main pre-allocates the tabId for CLI
       // background terminals so the paneKey env baked into the PTY matches
       // the renderer's tab id). Fall back to minting if the id collides — a
@@ -723,10 +692,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         terminalLayoutsByTabId: {
           ...s.terminalLayoutsByTabId,
           [tab.id]: emptyLayoutSnapshot()
-        },
-        ...(nextSleptWorktreeIds !== s.sleptWorktreeIds
-          ? { sleptWorktreeIds: nextSleptWorktreeIds }
-          : {})
+        }
       }
     })
     const shouldRecordInteraction =
@@ -1384,14 +1350,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const isFirstPty = existingPtyIds.length === 0
       const isActiveWorktree = worktreeId != null && s.activeWorktreeId === worktreeId
       const shouldBumpSortEpoch = isFirstPty && isActiveWorktree && !wasActivationSpawn
-      const nextSleptWorktreeIds =
-        worktreeId && s.sleptWorktreeIds[worktreeId]
-          ? (() => {
-              const next = { ...s.sleptWorktreeIds }
-              delete next[worktreeId!]
-              return next
-            })()
-          : s.sleptWorktreeIds
       return {
         ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
         ptyIdsByTabId: {
@@ -1402,9 +1360,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           ...s.lastKnownRelayPtyIdByTabId,
           [tabId]: ptyId
         },
-        ...(nextSleptWorktreeIds !== s.sleptWorktreeIds
-          ? { sleptWorktreeIds: nextSleptWorktreeIds }
-          : {}),
         ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
       }
     })
@@ -1695,7 +1650,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       await callRuntimeRpc(
         target,
         'terminal.stop',
-        { worktree: worktreeId },
+        { worktree: toRuntimeWorktreeSelector(worktreeId) },
         { timeoutMs: 15_000 }
       ).catch(() => null)
     }
@@ -2018,23 +1973,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // activeWorktreeIdsOnShutdown is absent (upgrade from older build).
       // The raw tabs still carry ptyId values before clearTransientTerminalState
       // nulls them, so we can infer which worktrees had active terminals.
-      // If an explicit slept marker is present, do not let this legacy fallback
-      // reinterpret its preserved wake hint as an active reconnect target.
       const shutdownIds =
         session.activeWorktreeIdsOnShutdown ??
         Object.entries(session.tabsByWorktree)
-          .filter(
-            ([worktreeId, tabs]) =>
-              !session.sleptWorktreeIds?.[worktreeId] && tabs.some((t) => t.ptyId)
-          )
+          .filter(([, tabs]) => tabs.some((t) => t.ptyId))
           .map(([wId]) => wId)
       const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))
-      const sleptWorktreeIds = Object.fromEntries(
-        Object.entries(session.sleptWorktreeIds ?? {}).filter(
-          ([worktreeId]) =>
-            validWorktreeIds.has(worktreeId) && !pendingReconnectWorktreeIds.includes(worktreeId)
-        )
-      ) as Record<string, true>
 
       // Why: capture which specific tabs had live PTYs per worktree from the
       // raw session data BEFORE clearTransientTerminalState nulled the ptyIds.
@@ -2177,7 +2121,6 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
         defaultTerminalTabsAppliedByWorktreeId:
           session.defaultTerminalTabsAppliedByWorktreeId ?? {},
-        sleptWorktreeIds,
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,

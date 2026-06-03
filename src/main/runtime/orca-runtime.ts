@@ -683,6 +683,7 @@ type RuntimePtyController = {
     cwd?: string
     command?: string
     env?: Record<string, string>
+    telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string
     preAllocatedHandle?: string
@@ -7905,7 +7906,8 @@ export class OrcaRuntimeService {
           }
           const terminal = await this.createTerminal(`id:${worktree.id}`, {
             command: effectiveStartup.command,
-            env: effectiveStartup.env
+            env: effectiveStartup.env,
+            telemetry: effectiveStartup.telemetry
           })
           if (effectiveDraftPaste) {
             this.pasteStartupDraftWhenReady(terminal.handle, effectiveDraftPaste)
@@ -8315,7 +8317,8 @@ export class OrcaRuntimeService {
         }
         const terminal = await this.createTerminal(`id:${worktree.id}`, {
           command: effectiveStartup.command,
-          env: effectiveStartup.env
+          env: effectiveStartup.env,
+          telemetry: effectiveStartup.telemetry
         })
         if (effectiveDraftPaste) {
           this.pasteStartupDraftWhenReady(terminal.handle, effectiveDraftPaste)
@@ -8542,7 +8545,8 @@ export class OrcaRuntimeService {
         }
         const terminal = await this.createTerminal(`path:${result.worktree.path}`, {
           command: args.startup.command,
-          env: args.startup.env
+          env: args.startup.env,
+          telemetry: args.startup.telemetry
         })
         if (args.startupDraftPaste) {
           this.pasteStartupDraftWhenReady(terminal.handle, args.startupDraftPaste)
@@ -9854,6 +9858,7 @@ export class OrcaRuntimeService {
     opts: {
       command?: string
       env?: Record<string, string>
+      telemetry?: WorktreeStartupLaunch['telemetry']
       title?: string
       focus?: boolean
       rendererBacked?: boolean
@@ -9910,6 +9915,7 @@ export class OrcaRuntimeService {
         cwd: worktree.path,
         command: opts.command,
         env,
+        telemetry: opts.telemetry,
         connectionId: repo?.connectionId ?? null,
         worktreeId: worktree.id,
         preAllocatedHandle

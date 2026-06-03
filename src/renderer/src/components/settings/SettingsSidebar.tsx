@@ -211,35 +211,35 @@ export function SettingsSidebar({
                     const Icon = section.icon
                     const isActive = activeSectionId === section.id
 
-                  return (
-                    <button
-                      key={section.id}
-                      aria-current={isActive ? 'page' : undefined}
-                      data-current={isActive ? 'true' : undefined}
-                      onClick={(event) =>
-                        onSelectSection(section.id, {
-                          metaKey: event.metaKey,
-                          ctrlKey: event.ctrlKey,
-                          shiftKey: event.shiftKey,
-                          altKey: event.altKey
-                        })
-                      }
-                      className={navItemClassName(isActive)}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span className="truncate">{section.title}</span>
-                      {section.installStatus ? (
-                        <span className={installStatusClassName(section.installStatus)}>
-                          {installStatusLabel(section.installStatus)}
-                        </span>
-                      ) : section.badge ? (
-                        <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
-                          {section.badge}
-                        </span>
-                      ) : null}
-                    </button>
-                  )
-                })}
+                    return (
+                      <button
+                        key={section.id}
+                        aria-current={isActive ? 'page' : undefined}
+                        data-current={isActive ? 'true' : undefined}
+                        onClick={(event) =>
+                          onSelectSection(section.id, {
+                            metaKey: event.metaKey,
+                            ctrlKey: event.ctrlKey,
+                            shiftKey: event.shiftKey,
+                            altKey: event.altKey
+                          })
+                        }
+                        className={navItemClassName(isActive)}
+                      >
+                        <Icon className="size-4 shrink-0" />
+                        <span className="truncate">{section.title}</span>
+                        {section.installStatus ? (
+                          <span className={installStatusClassName(section.installStatus)}>
+                            {installStatusLabel(section.installStatus)}
+                          </span>
+                        ) : section.badge ? (
+                          <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground">
+                            {section.badge}
+                          </span>
+                        ) : null}
+                      </button>
+                    )
+                  })}
               </div>
             </div>
           ))}
