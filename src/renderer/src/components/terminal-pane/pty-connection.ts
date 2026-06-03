@@ -93,6 +93,8 @@ const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
+const FOREGROUND_THROUGHPUT_IMMEDIATE_WINDOW_MS = 16
+const FOREGROUND_THROUGHPUT_IMMEDIATE_WINDOW_CHARS = 64 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 16 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
 // Why: this is only shown if renderer backlog overflowed and main-owned
@@ -1710,15 +1712,36 @@ export function connectPanePty(
       recordTerminalOutput(pane.terminal)
     }
 
-    function isLatencySensitiveForegroundOutput(data: string): boolean {
-      if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
-        return true
+    let foregroundImmediateWindowStartedAt = Number.NEGATIVE_INFINITY
+    let foregroundImmediateWindowChars = 0
+
+    function hasForegroundImmediateBudget(dataLength: number): boolean {
+      const now = performance.now()
+      if (now - foregroundImmediateWindowStartedAt > FOREGROUND_THROUGHPUT_IMMEDIATE_WINDOW_MS) {
+        foregroundImmediateWindowStartedAt = now
+        foregroundImmediateWindowChars = 0
       }
+      if (
+        foregroundImmediateWindowChars + dataLength >
+        FOREGROUND_THROUGHPUT_IMMEDIATE_WINDOW_CHARS
+      ) {
+        return false
+      }
+      foregroundImmediateWindowChars += dataLength
+      return true
+    }
+
+    function isLatencySensitiveForegroundOutput(data: string): boolean {
       const recentInput =
         performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
-      return (
-        recentInput && data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS && data.includes('\x1b[')
-      )
+      const latencySensitive =
+        data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS ||
+        (recentInput &&
+          data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
+          data.includes('\x1b['))
+      // Why: some TUIs redraw as hundreds of tiny ANSI frames; after the
+      // first paint-sized burst, batch the rest so input and rendering can run.
+      return latencySensitive && hasForegroundImmediateBudget(data.length)
     }
 
     function containsNonAsciiOutput(data: string): boolean {

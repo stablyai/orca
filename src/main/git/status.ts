@@ -38,9 +38,14 @@ import {
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
+const missingEffectiveUpstreamCache = new Set<string>()
 
 export type GetStatusOptions = {
   includeIgnored?: boolean
+}
+
+export function clearMissingEffectiveUpstreamCacheForTests(): void {
+  missingEffectiveUpstreamCache.clear()
 }
 
 /**
@@ -170,11 +175,28 @@ export async function getStatus(
     }
     statusSucceeded = true
 
-    if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
+    const effectiveUpstreamCacheKey = getEffectiveUpstreamCacheKey(
+      worktreePath,
+      head,
+      branch,
+      upstreamName
+    )
+    if (
+      shouldProbeEffectiveUpstreamStatus(branch, upstreamName) &&
+      effectiveUpstreamCacheKey &&
+      !missingEffectiveUpstreamCache.has(effectiveUpstreamCacheKey)
+    ) {
       try {
         effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
           gitExecFileAsync(args, { cwd: worktreePath })
         )
+        if (effectiveUpstreamStatus.hasUpstream) {
+          missingEffectiveUpstreamCache.delete(effectiveUpstreamCacheKey)
+        } else {
+          // Why: status polling is frequent, and missing-upstream probes are
+          // stable for this branch until its upstream identity changes.
+          missingEffectiveUpstreamCache.add(effectiveUpstreamCacheKey)
+        }
       } catch {
         // Why: git status polling should not fail just because the richer
         // upstream probe hit a transient ref/read error; the explicit
@@ -270,6 +292,16 @@ async function attachLineStats(worktreePath: string, entries: GitStatusEntry[]):
 function getShortBranchName(branch: string | undefined): string | null {
   const prefix = 'refs/heads/'
   return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
+}
+
+function getEffectiveUpstreamCacheKey(
+  worktreePath: string,
+  head: string | undefined,
+  branch: string | undefined,
+  upstreamName: string | undefined
+): string | null {
+  const branchName = getShortBranchName(branch)
+  return branchName ? `${worktreePath}\0${head ?? ''}\0${branchName}\0${upstreamName ?? ''}` : null
 }
 
 function shouldProbeEffectiveUpstreamStatus(

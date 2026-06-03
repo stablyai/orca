@@ -56,7 +56,8 @@ import {
   getDiff,
   getStagedCommitContext,
   getStatus,
-  isWithinWorktree
+  isWithinWorktree,
+  clearMissingEffectiveUpstreamCacheForTests
 } from './status'
 
 describe('discardChanges', () => {
@@ -372,6 +373,7 @@ describe('getStatus', () => {
     // set only a `mockResolvedValueOnce` for the status output; this default
     // keeps those follow-up numstat calls from returning undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+    clearMissingEffectiveUpstreamCacheForTests()
   })
 
   it('parses unmerged porcelain v2 entries into unresolved conflict rows', async () => {
