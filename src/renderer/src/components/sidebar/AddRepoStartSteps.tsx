@@ -294,7 +294,7 @@ const AddRepoPrimaryStartAction = ({
     variant="outline"
     onClick={onClick}
     disabled={disabled}
-    className="h-auto min-h-24 w-full justify-start gap-4 whitespace-normal border-border/80 bg-background px-4 py-4 text-left focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+    className="h-auto min-h-24 w-full justify-start gap-4 whitespace-normal border-border/80 bg-background px-4 py-4 text-left"
   >
     <span className="grid size-11 shrink-0 place-items-center rounded-md border border-border bg-muted text-foreground">
       <Icon className="size-5" />
@@ -322,7 +322,7 @@ const AddRepoCompactStartAction = ({
     variant="outline"
     onClick={onClick}
     disabled={disabled}
-    className="h-auto min-h-14 w-full justify-start gap-3 whitespace-normal px-3 py-3 text-left focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+    className="h-auto min-h-14 w-full justify-start gap-3 whitespace-normal px-3 py-3 text-left"
   >
     <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground">
       <Icon className="size-4" />
