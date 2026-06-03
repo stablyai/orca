@@ -2081,7 +2081,7 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.rm',
-      params: { worktree: wt.id, force: undefined, runHooks: true },
+      params: { worktree: `id:${wt.id}`, force: undefined, runHooks: true },
       timeoutMs: 60_000
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
@@ -3114,6 +3114,20 @@ describe('markWorktreeVisited', () => {
     store.getState().pruneLastVisitedTimestamps()
 
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/hidden': 100 })
+  })
+})
+
+describe('setRenamingWorktreeId', () => {
+  it('sets and clears the workspace rename signal', () => {
+    const store = createTestStore()
+
+    expect(store.getState().renamingWorktreeId).toBeNull()
+
+    store.getState().setRenamingWorktreeId('repo1::/feature')
+    expect(store.getState().renamingWorktreeId).toBe('repo1::/feature')
+
+    store.getState().setRenamingWorktreeId(null)
+    expect(store.getState().renamingWorktreeId).toBeNull()
   })
 })
 

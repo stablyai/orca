@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: MonacoEditor centralizes Monaco setup,
 source-mode markdown annotations, persistence-safe content sync, reveal
 handling, and editor-local UI overlays so split-pane state remains coherent. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: selection annotations are synchronized from Monaco editor selection and layout APIs, not derived React props. */
 import React, { useRef, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'

@@ -68,6 +68,10 @@ import { STATS_PANE_SEARCH_ENTRIES } from '@/components/stats/stats-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
 import { cn } from '@/lib/utils'
+import {
+  getCachedWindowsTerminalCapabilities,
+  getWindowsTerminalCapabilityOwnerKey
+} from '@/lib/windows-terminal-capabilities'
 
 function OrcaLogoSettingsIcon({ className }: LucideProps) {
   return createElement('img', {
@@ -88,17 +92,19 @@ export function isWebClientLocation(): boolean {
 export function buildSettingsNavigationMetadata({
   isMac,
   isWindows,
+  isWindowsTerminalHost = isWindows,
   isWebClient,
   repos
 }: {
   isMac: boolean
   isWindows: boolean
+  isWindowsTerminalHost?: boolean
   isWebClient: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
-    isWindows,
+    isWindows: isWindowsTerminalHost,
     isMac
   })
   const runtimeEnvironmentsSearchEntry = isWebClient
@@ -366,15 +372,31 @@ export function buildSettingsNavigationMetadata({
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const repos = useAppStore((state) => state.repos)
+  const activeRuntimeEnvironmentId = useAppStore(
+    (state) => state.settings?.activeRuntimeEnvironmentId
+  )
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
+  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+    activeRuntimeEnvironmentId
+  )
+  const isWindowsTerminalHost =
+    isWindows ||
+    getCachedWindowsTerminalCapabilities(windowsTerminalCapabilityOwnerKey).hostPlatform === 'win32'
 
   // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
   // and search entries cannot drift. Keep this hook free of Settings pane UI
   // imports; see docs/reference/cmd-j-settings-actions-plan.md.
   return useMemo(
-    () => buildSettingsNavigationMetadata({ isMac, isWindows, isWebClient, repos }),
-    [isMac, isWindows, isWebClient, repos]
+    () =>
+      buildSettingsNavigationMetadata({
+        isMac,
+        isWindows,
+        isWindowsTerminalHost,
+        isWebClient,
+        repos
+      }),
+    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
   )
 }

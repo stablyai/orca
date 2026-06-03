@@ -691,6 +691,23 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().rightSidebarWidth).toBe(900)
   })
 
+  it('stores pending sidebar reveal rename requests', () => {
+    const store = createUIStore()
+
+    store.getState().revealWorktreeInSidebar('repo1::/feature', {
+      behavior: 'smooth',
+      highlight: true,
+      beginRename: true
+    })
+
+    expect(store.getState().pendingRevealWorktree).toEqual({
+      worktreeId: 'repo1::/feature',
+      behavior: 'smooth',
+      highlight: true,
+      beginRename: true
+    })
+  })
+
   it('falls back to existing sidebar widths when persisted values are not finite', () => {
     const store = createUIStore()
 

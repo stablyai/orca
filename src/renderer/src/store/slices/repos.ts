@@ -17,6 +17,7 @@ import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 
@@ -543,7 +544,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (target.kind === 'environment') {
         await Promise.allSettled(
           worktreeIds.map((worktreeId) =>
-            callRuntimeRpc(target, 'terminal.stop', { worktree: worktreeId }, { timeoutMs: 15_000 })
+            callRuntimeRpc(
+              target,
+              'terminal.stop',
+              { worktree: toRuntimeWorktreeSelector(worktreeId) },
+              { timeoutMs: 15_000 }
+            )
           )
         )
       }

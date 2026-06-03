@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: the GH item dialog keeps its header, conversation, files, and checks tabs co-located so the read-only PR/Issue surface stays in one place while this view evolves. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: GitHub item dialogs hydrate provider data, diff sections, snippets, and cache refetches from async provider/virtualizer lifecycles. */
 import React, {
   Suspense,
   lazy,

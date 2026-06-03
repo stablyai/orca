@@ -21,10 +21,10 @@ importers:
     dependencies:
       '@electron-toolkit/preload':
         specifier: ^3.0.2
-        version: 3.0.2(electron@42.3.2)
+        version: 3.0.2(electron@42.3.3)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@42.3.2)
+        version: 4.0.0(electron@42.3.3)
       '@linear/sdk':
         specifier: ^82.1.0
         version: 82.1.0(graphql@16.13.2)
@@ -204,8 +204,8 @@ importers:
         specifier: ^3.4.2
         version: 3.4.5
       electron:
-        specifier: ^42.3.2
-        version: 42.3.2
+        specifier: ^42.3.3
+        version: 42.3.3
       electron-builder:
         specifier: ^26.8.1
         version: 26.8.1(electron-builder-squirrel-windows@26.8.1)
@@ -3868,8 +3868,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@42.3.2:
-    resolution: {integrity: sha512-R8qL6TMQ+u5r/l1mL6zWqqK3eQo6Bqi4ScmysgODcy+SNR76HQhvbZUEL/9GqNuF0fNFJxphz/bh/TC4jW8NbA==}
+  electron@42.3.3:
+    resolution: {integrity: sha512-0MwYp9wTb7TrtTalOYqeW+suqd9T/Znstr/nDLKqFGIjHdBZX339guo3mQqTPURRZ/UQmYM4uMpzKpI5wLptfQ==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -6706,17 +6706,17 @@ snapshots:
     dependencies:
       '@noble/ciphers': 1.3.0
 
-  '@electron-toolkit/preload@3.0.2(electron@42.3.2)':
+  '@electron-toolkit/preload@3.0.2(electron@42.3.3)':
     dependencies:
-      electron: 42.3.2
+      electron: 42.3.3
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@25.6.0)':
     dependencies:
       '@types/node': 25.6.0
 
-  '@electron-toolkit/utils@4.0.0(electron@42.3.2)':
+  '@electron-toolkit/utils@4.0.0(electron@42.3.3)':
     dependencies:
-      electron: 42.3.2
+      electron: 42.3.3
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -9830,7 +9830,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@42.3.2:
+  electron@42.3.3:
     dependencies:
       '@electron/get': 5.0.0
       '@types/node': 24.12.4
@@ -10284,7 +10284,7 @@ snapshots:
       es6-error: 4.1.1
       matcher: 3.0.0
       roarr: 2.15.4
-      semver: 7.7.4
+      semver: 7.8.1
       serialize-error: 7.0.1
     optional: true
 

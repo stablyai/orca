@@ -14,6 +14,7 @@ import type { AppState } from '../store/types'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
+import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import { isWebTerminalSurfaceTabId, toHostSessionTabId } from './web-terminal-surface-id'
 
 export {
@@ -62,7 +63,7 @@ export async function createWebRuntimeSessionTerminal(args: {
       selector: environmentId,
       method: 'session.tabs.createTerminal',
       params: {
-        worktree: `id:${args.worktreeId}`,
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
@@ -108,7 +109,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       selector: environmentId,
       method: 'browser.tabCreate',
       params: {
-        worktree: `id:${args.worktreeId}`,
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
         url: args.url,
         profileId: args.profileId ?? undefined,
         // Why: paired web clients need the local tab immediately. The remote
@@ -222,7 +223,7 @@ async function refreshWebRuntimeSessionTabsSnapshot(
       selector: environmentId,
       method: 'session.tabs.list',
       params: {
-        worktree: `id:${worktreeId}`
+        worktree: toRuntimeWorktreeSelector(worktreeId)
       },
       timeoutMs: 15_000
     })
@@ -263,7 +264,7 @@ export async function activateWebRuntimeSessionWorktree(args: {
       selector: environmentId,
       method: 'worktree.activate',
       params: {
-        worktree: `id:${args.worktreeId}`
+        worktree: toRuntimeWorktreeSelector(args.worktreeId)
       },
       timeoutMs: 15_000
     })
@@ -343,7 +344,7 @@ export async function moveWebRuntimeSessionTab(
           ? args.index
           : undefined
     const base = {
-      worktree: `id:${args.worktreeId}`,
+      worktree: toRuntimeWorktreeSelector(args.worktreeId),
       tabId: movedHostTabId,
       targetGroupId: args.targetGroupId
     }
@@ -416,7 +417,7 @@ async function callWebRuntimeSessionTabMethod(
       selector: environmentId,
       method,
       params: {
-        worktree: `id:${args.worktreeId}`,
+        worktree: toRuntimeWorktreeSelector(args.worktreeId),
         tabId: hostTabId
       },
       timeoutMs: 15_000

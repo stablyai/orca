@@ -10,6 +10,9 @@ import type * as UseNotificationDispatchModule from './use-notification-dispatch
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
+// Repro command:
+//   pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts -t "OpenTUI-style small ANSI redraw"
+
 // Why: the fresh-spawn and reattach paths now chain pre-signal → spawn →
 // register/settle through multiple microtasks. Tests that previously flushed
 // once with `await Promise.resolve()` must drain a few extra ticks before
@@ -604,6 +607,44 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.(redraw)
 
     expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
+  })
+
+  it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    vi.useFakeTimers()
+
+    const frames = Array.from({ length: 270 }, (_, index) =>
+      [
+        '\x1b[?2026h',
+        '\x1b[?25l',
+        `\x1b[2;3H\x1b[38;2;255;138;0m${index % 2 === 0 ? '#' : '*'}${'*'.repeat(7)}\x1b[0m`,
+        `\x1b[2;12H\x1b[38;2;255;138;0mOpenTUI synthetic active TUI redraw ${index}\x1b[0m`,
+        `\x1b[4;6H\x1b[38;2;231;237;247m${'#'.repeat(36)} ${'opentui'.repeat(48)}\x1b[0m`
+      ].join('')
+    )
+    expect(frames.every((frame) => frame.length <= 2048 && frame.includes('\x1b['))).toBe(true)
+    expect(frames.join('').length).toBeGreaterThan(128 * 1024)
+
+    for (const frame of frames) {
+      capturedDataCallback.current?.(frame)
+    }
+
+    expect(pane.terminal.write.mock.calls.length).toBeLessThan(frames.length)
+    vi.advanceTimersByTime(0)
+    expect(pane.terminal.write.mock.calls.length).toBeGreaterThan(0)
   })
 
   it('keeps the surviving split pane mounted when an intentional pane-close PTY exit arrives', async () => {

@@ -428,6 +428,63 @@ describe('TabBar PowerShell launch wiring', () => {
     expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: WSL')).not.toBeNull()
   })
 
+  it('uses the active remote host platform to show Windows shell rows in a Mac desktop client', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    vi.stubGlobal('window', {
+      api: {
+        wsl: {
+          isAvailable: vi.fn().mockResolvedValue(true),
+          listDistros: vi.fn().mockResolvedValue(['Ubuntu'])
+        },
+        pwsh: { isAvailable: vi.fn().mockResolvedValue(false) },
+        gitBash: { isAvailable: vi.fn().mockResolvedValue(false) },
+        runtime: { getStatus: vi.fn().mockResolvedValue({ hostPlatform: 'win32' }) }
+      }
+    })
+    appStoreSnapshot.activeRuntimeEnvironmentId = 'desktop-env-1'
+    const capabilities = await import('@/lib/windows-terminal-capabilities')
+    await capabilities.loadWindowsTerminalCapabilities({
+      force: true,
+      ownerKey: 'runtime:desktop-env-1'
+    })
+
+    const tabBarModule = await import('./TabBar')
+    const candidate = tabBarModule.default ?? tabBarModule
+    const TabBar =
+      typeof candidate === 'function'
+        ? candidate
+        : typeof (candidate as { type?: unknown }).type === 'function'
+          ? (candidate as { type: (props: Record<string, unknown>) => unknown }).type
+          : null
+    expect(TabBar).not.toBeNull()
+
+    const element = TabBar!({
+      tabs: [],
+      activeTabId: null,
+      worktreeId: 'wt-1',
+      expandedPaneByTabId: {},
+      onActivate: () => {},
+      onClose: () => {},
+      onCloseOthers: () => {},
+      onCloseToRight: () => {},
+      onNewTerminalTab: () => {},
+      onNewTerminalWithShell: () => {},
+      onNewBrowserTab: () => {},
+      onSetCustomTitle: () => {},
+      onSetTabColor: () => {},
+      onTogglePaneExpand: () => {}
+    })
+
+    expect(
+      findDropdownMenuItemByText(expandNode(element), 'New Terminal: PowerShell')
+    ).not.toBeNull()
+    expect(
+      findDropdownMenuItemByText(expandNode(element), 'New Terminal: CMD Prompt')
+    ).not.toBeNull()
+    expect(findDropdownMenuItemByText(expandNode(element), 'New Terminal: WSL')).not.toBeNull()
+  })
+
   it('shows the Git Bash terminal row when shared Windows capabilities find bash.exe', async () => {
     vi.stubGlobal('window', {
       api: {

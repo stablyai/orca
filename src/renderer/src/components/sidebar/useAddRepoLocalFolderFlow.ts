@@ -9,7 +9,7 @@ import {
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
-import { createNestedRepoScanId, type AddRepoDialogStep } from './add-repo-dialog-types'
+import { createNestedRepoScanId } from './add-repo-dialog-types'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -32,9 +32,7 @@ export function useAddRepoLocalFolderFlow({
   setActiveNestedScanId,
   setNestedScanInProgress,
   showNestedRepoReview,
-  setStep,
-  setAddedRepo,
-  setExistingWorkspaceSource,
+  onGitRepoReady,
   setIsAdding,
   setAddProjectBusyLabel
 }: {
@@ -43,7 +41,7 @@ export function useAddRepoLocalFolderFlow({
   activeRuntimeEnvironmentId: string | null | undefined
   addRepoPath: (path: string, kind?: 'git' | 'folder') => Promise<Repo | null>
   closeModal: () => void
-  fetchWorktrees: (repoId: string) => Promise<unknown>
+  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   scanNestedRepos: (
     path: string,
     connectionId?: string,
@@ -52,9 +50,7 @@ export function useAddRepoLocalFolderFlow({
   setActiveNestedScanId: (scanId: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
   showNestedRepoReview: ShowNestedRepoReview
-  setStep: (step: AddRepoDialogStep) => void
-  setAddedRepo: (repo: Repo | null) => void
-  setExistingWorkspaceSource: (source: AddRepoExistingWorkspaceSource | null) => void
+  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
 }): {
@@ -137,15 +133,15 @@ export function useAddRepoLocalFolderFlow({
           return
         }
         if (repo && isGitRepoKind(repo)) {
-          setAddedRepo(repo)
-          setExistingWorkspaceSource(source)
-          await fetchWorktrees(repo.id)
+          // Why: once the repo exists, a transient non-authoritative refresh
+          // should fall through to project reveal instead of leaving the add flow open.
+          await fetchWorktrees(repo.id, { requireAuthoritative: true })
           if (gen !== localAddGenRef.current) {
             return
           }
-          setStep('setup')
+          await onGitRepoReady(repo.id, source)
         } else if (repo) {
-          // Why: folder repos skip the Git worktree setup step and activate
+          // Why: folder repos skip the Git default-checkout handoff and activate
           // their synthetic root workspace in the folder add flow.
           closeModal()
         }
@@ -163,14 +159,12 @@ export function useAddRepoLocalFolderFlow({
       addRepoPath,
       closeModal,
       fetchWorktrees,
+      onGitRepoReady,
       scanNestedRepos,
       setActiveNestedScanId,
       setAddProjectBusyLabel,
-      setAddedRepo,
-      setExistingWorkspaceSource,
       setIsAdding,
       setNestedScanInProgress,
-      setStep,
       showNestedRepoReview
     ]
   )

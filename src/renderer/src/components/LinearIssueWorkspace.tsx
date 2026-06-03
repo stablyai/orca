@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: the Linear issue page co-locates the
    full-page layout with its hydration/comment state so the selected issue
    surface stays coherent with the existing Linear drawer behavior. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Linear issue hydration and comments are loaded from provider IPC for the selected issue while preserving edit guards. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,

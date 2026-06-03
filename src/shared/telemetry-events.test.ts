@@ -207,6 +207,29 @@ describe('add_repo_setup_step_action schema', () => {
   })
 })
 
+describe('add_repo_default_checkout_handoff schema', () => {
+  it('accepts bounded handoff outcome enums', () => {
+    const parsed = eventSchemas.add_repo_default_checkout_handoff.safeParse({
+      source: 'clone_url',
+      result: 'opened_default_checkout',
+      reason: 'detected_default_checkout',
+      nth_repo_added: 1
+    })
+    expect(parsed.success).toBe(true)
+  })
+
+  it('rejects raw repo/path context via .strict()', () => {
+    const parsed = eventSchemas.add_repo_default_checkout_handoff.safeParse({
+      source: 'local_folder_picker',
+      result: 'revealed_project',
+      reason: 'no_default_checkout',
+      repo_name: 'secret-repo',
+      path: '/Users/alice/secret-repo'
+    })
+    expect(parsed.success).toBe(false)
+  })
+})
+
 describe('workspace_create_failed schema', () => {
   it('accepts a valid payload', () => {
     const parsed = eventSchemas.workspace_create_failed.safeParse({

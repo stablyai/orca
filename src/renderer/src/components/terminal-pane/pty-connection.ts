@@ -95,10 +95,61 @@ const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 16 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
+// Why: OpenTUI can emit many tiny redraws that each look interactive but
+// collectively starve timers unless foreground writes have a rolling budget.
+const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
+const FOREGROUND_BUDGET_WINDOW_MS = 500
 // Why: this is only shown if renderer backlog overflowed and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog exceeded 2 MB and main recovery was unavailable.]\r\n'
+
+type E2eTerminalPtyDataInjectionApi = {
+  inject: (paneKey: string, data: string) => boolean
+  keys: () => string[]
+}
+
+type E2eTerminalPtyDataInjectionWindow = Window & {
+  __terminalPtyDataInjection?: E2eTerminalPtyDataInjectionApi
+}
+
+const e2eTerminalPtyDataInjectors = new Map<string, (data: string) => void>()
+
+function exposeE2eTerminalPtyDataInjection(): void {
+  if (!e2eConfig.exposeStore || typeof window === 'undefined') {
+    return
+  }
+  // Why: a real PTY can coalesce tiny TUI redraws before E2E sees them. This
+  // e2e-only seam lets tests replay the renderer-side data callback exactly.
+  const target = window as E2eTerminalPtyDataInjectionWindow
+  target.__terminalPtyDataInjection ??= {
+    inject: (paneKey, data) => {
+      const inject = e2eTerminalPtyDataInjectors.get(paneKey)
+      if (!inject) {
+        return false
+      }
+      inject(data)
+      return true
+    },
+    keys: () => [...e2eTerminalPtyDataInjectors.keys()]
+  }
+}
+
+function registerE2eTerminalPtyDataInjection(
+  paneKey: string,
+  inject: (data: string) => void
+): () => void {
+  if (!e2eConfig.exposeStore) {
+    return () => {}
+  }
+  exposeE2eTerminalPtyDataInjection()
+  e2eTerminalPtyDataInjectors.set(paneKey, inject)
+  return () => {
+    if (e2eTerminalPtyDataInjectors.get(paneKey) === inject) {
+      e2eTerminalPtyDataInjectors.delete(paneKey)
+    }
+  }
+}
 
 function firstStartupCommandToken(command: string): string {
   const trimmed = command.trim()
@@ -376,6 +427,7 @@ export function connectPanePty(
   let connectFrame: number | null = null
   let unregisterBacklogRecovery: (() => void) | null = null
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
+  let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationMaxTimer: ReturnType<typeof setTimeout> | null = null
@@ -1622,6 +1674,8 @@ export function connectPanePty(
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
     let hiddenOutputRestoreGeneration = 0
+    let foregroundImmediateBudgetChars = 0
+    let foregroundImmediateBudgetWindowStart = 0
     let hiddenMode2031ScanTail = ''
     const hiddenStartupRendererQueryUntil = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
       ? Date.now() + HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS
@@ -1662,15 +1716,33 @@ export function connectPanePty(
       recordTerminalOutput(pane.terminal)
     }
 
+    function consumeForegroundImmediateBudget(dataLength: number): boolean {
+      const now = performance.now()
+      if (now - foregroundImmediateBudgetWindowStart > FOREGROUND_BUDGET_WINDOW_MS) {
+        foregroundImmediateBudgetChars = 0
+        foregroundImmediateBudgetWindowStart = now
+      }
+      if (foregroundImmediateBudgetChars + dataLength > FOREGROUND_IMMEDIATE_BUDGET_CHARS) {
+        return false
+      }
+      foregroundImmediateBudgetChars += dataLength
+      return true
+    }
+
     function isLatencySensitiveForegroundOutput(data: string): boolean {
       if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
-        return true
+        return consumeForegroundImmediateBudget(data.length)
       }
       const recentInput =
         performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
-      return (
-        recentInput && data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS && data.includes('\x1b[')
-      )
+      if (
+        recentInput &&
+        data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
+        data.includes('\x1b[')
+      ) {
+        return consumeForegroundImmediateBudget(data.length)
+      }
+      return false
     }
 
     function containsNonAsciiOutput(data: string): boolean {
@@ -2119,6 +2191,11 @@ export function connectPanePty(
         }, 50)
       }
     }
+    unregisterE2ePtyDataInjection = registerE2eTerminalPtyDataInjection(cacheKey, (data) => {
+      if (!disposed) {
+        dataCallback(data)
+      }
+    })
 
     const handleReattachResult = (
       result: PtyConnectResult | string | void,
@@ -2734,6 +2811,7 @@ export function connectPanePty(
       unregisterDocumentVisibilityRecovery = null
       clearPanePtyFitBinding()
       discardTerminalOutput(pane.terminal)
+      unregisterE2ePtyDataInjection()
       if (agentTaskCompleteSettingsUnsubscribe !== null) {
         agentTaskCompleteSettingsUnsubscribe()
         agentTaskCompleteSettingsUnsubscribe = null

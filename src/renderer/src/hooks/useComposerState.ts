@@ -2,6 +2,7 @@
 the NewWorkspaceComposerCard reads or mutates, so both the full-page composer
 and the global quick-composer modal can consume a single unified source of
 truth without duplicating effects, derivation, or the create side-effect. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: composer state synchronizes selected repo metadata, setup policy, issue-command hooks, and provider link lookups from async runtime IPC. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'

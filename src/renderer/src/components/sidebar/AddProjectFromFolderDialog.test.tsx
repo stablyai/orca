@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/types'
 
 type ButtonCapture = {
   label: string
@@ -17,20 +17,14 @@ const mocks = vi.hoisted(() => ({
     closeModal: vi.fn(),
     openModal: vi.fn(),
     addRepoPath: vi.fn(),
-    updateRepo: vi.fn(),
     fetchWorktrees: vi.fn(),
-    openSettingsPage: vi.fn(),
-    openSettingsTarget: vi.fn(),
-    worktreesByRepo: {} as Record<string, Worktree[]>,
-    detectedWorktreesByRepo: {},
-    hideDefaultBranchWorkspace: false,
     setHideDefaultBranchWorkspace: vi.fn(),
     clearOrcaHookTrustForRepo: vi.fn(),
     repos: [] as Repo[]
   },
   addRemote: vi.fn(),
   toastSuccess: vi.fn(),
-  track: vi.fn()
+  finishProjectAddWithDefaultCheckout: vi.fn()
 }))
 
 function textContent(node: ReactModule.ReactNode): string {
@@ -91,14 +85,6 @@ vi.mock('@/components/ui/button', () => ({
   }
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
-}))
-
-vi.mock('@/lib/telemetry', () => ({
-  track: mocks.track
-}))
-
 vi.mock('sonner', () => ({
   toast: {
     success: mocks.toastSuccess,
@@ -107,9 +93,8 @@ vi.mock('sonner', () => ({
   }
 }))
 
-vi.mock('./AddRepoSetupStep', () => ({
-  SetupStep: ({ repoName }: { repoName: string }) => <div>setup:{repoName}</div>,
-  getProjectAddedPrimaryBranchName: () => 'main'
+vi.mock('./project-added-default-checkout', () => ({
+  finishProjectAddWithDefaultCheckout: mocks.finishProjectAddWithDefaultCheckout
 }))
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -132,16 +117,22 @@ async function clickAddProject(): Promise<void> {
   await button.onClick()
 }
 
+function getButton(label: string): ButtonCapture {
+  const button = mocks.buttons.find((entry) => entry.label.includes(label))
+  if (!button?.onClick) {
+    throw new Error(`${label} button not found`)
+  }
+  return button
+}
+
 describe('AddProjectFromFolderDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.buttons = []
     mocks.state.activeModal = 'confirm-add-project-from-folder'
     mocks.state.modalData = { folderPath: '/projects/child' }
-    mocks.state.worktreesByRepo = {}
-    mocks.state.detectedWorktreesByRepo = {}
-    mocks.state.hideDefaultBranchWorkspace = false
     mocks.state.repos = []
+    mocks.state.fetchWorktrees.mockResolvedValue(true)
     vi.stubGlobal('window', {
       api: {
         repos: {
@@ -151,7 +142,7 @@ describe('AddProjectFromFolderDialog', () => {
     })
   })
 
-  it('adds a local Git folder and opens the reused setup step data path', async () => {
+  it('adds a local Git folder and opens the default checkout', async () => {
     const repo = makeRepo()
     mocks.state.addRepoPath.mockResolvedValue(repo)
     const { default: AddProjectFromFolderDialog } = await import('./AddProjectFromFolderDialog')
@@ -160,7 +151,15 @@ describe('AddProjectFromFolderDialog', () => {
     await clickAddProject()
 
     expect(mocks.state.addRepoPath).toHaveBeenCalledWith('/projects/child')
-    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id)
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
+      requireAuthoritative: true
+    })
+    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
+      repoId: repo.id,
+      source: 'local_folder_picker',
+      closeModal: mocks.state.closeModal,
+      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+    })
     expect(mocks.state.openModal).not.toHaveBeenCalledWith(
       'confirm-non-git-folder',
       expect.anything()
@@ -201,10 +200,62 @@ describe('AddProjectFromFolderDialog', () => {
       remotePath: '/srv/projects/child'
     })
     expect(mocks.state.repos).toEqual([repo])
-    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id)
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
+      requireAuthoritative: true
+    })
+    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
+      repoId: repo.id,
+      source: 'ssh_remote_path',
+      closeModal: mocks.state.closeModal,
+      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+    })
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Remote project added', {
       description: repo.displayName
     })
+  })
+
+  it('falls back to completion when Git worktree refresh is not authoritative', async () => {
+    const repo = makeRepo()
+    mocks.state.addRepoPath.mockResolvedValue(repo)
+    mocks.state.fetchWorktrees.mockResolvedValue(false)
+    const { default: AddProjectFromFolderDialog } = await import('./AddProjectFromFolderDialog')
+
+    renderToStaticMarkup(<AddProjectFromFolderDialog />)
+    await clickAddProject()
+
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
+      requireAuthoritative: true
+    })
+    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
+      repoId: repo.id,
+      source: 'local_folder_picker',
+      closeModal: mocks.state.closeModal,
+      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+    })
+  })
+
+  it('does not finish the handoff after the user cancels during refresh', async () => {
+    const repo = makeRepo()
+    let resolveRefresh: (value: boolean) => void = () => {}
+    mocks.state.addRepoPath.mockResolvedValue(repo)
+    mocks.state.fetchWorktrees.mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveRefresh = resolve
+      })
+    )
+    const { default: AddProjectFromFolderDialog } = await import('./AddProjectFromFolderDialog')
+
+    renderToStaticMarkup(<AddProjectFromFolderDialog />)
+    const addPromise = getButton('Add Project').onClick?.()
+    await Promise.resolve()
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
+      requireAuthoritative: true
+    })
+    getButton('Cancel').onClick?.()
+    resolveRefresh(true)
+    await addPromise
+
+    expect(mocks.finishProjectAddWithDefaultCheckout).not.toHaveBeenCalled()
   })
 
   it('sends SSH non-Git folders to the Open as Folder confirmation with the connection id', async () => {

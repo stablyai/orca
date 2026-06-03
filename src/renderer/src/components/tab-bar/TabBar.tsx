@@ -37,6 +37,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -248,13 +249,18 @@ function TabBarInner({
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
     activeRuntimeEnvironmentId
   )
+  const runtimeTarget = useMemo(
+    () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
+    [activeRuntimeEnvironmentId]
+  )
   const shouldProbeWindowsShellCapabilities =
-    (isWindows || (isWebClient && activeRuntimeEnvironmentId !== null)) &&
+    (isWindows || Boolean(activeRuntimeEnvironmentId?.trim()) || isWebClient) &&
     !worktreeHasRemoteConnection
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
-    windowsTerminalCapabilityOwnerKey
+    windowsTerminalCapabilityOwnerKey,
+    runtimeTarget
   )
   // Why: SSH-backed PTYs ignore local Windows shell overrides; showing these
   // entries there promises PowerShell/CMD/Git Bash but opens the remote shell.

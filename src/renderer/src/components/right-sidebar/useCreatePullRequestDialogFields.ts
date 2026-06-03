@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: field state, base search, AI generation,
    and cancellation share request guards that need to stay in one hook. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PR defaults, base-ref search, and generated fields are synchronized with runtime git IPC and cancellation tokens. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore, type AppState } from '@/store'

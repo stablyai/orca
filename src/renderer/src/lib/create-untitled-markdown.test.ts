@@ -249,13 +249,13 @@ describe('createUntitledMarkdownFile', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
       method: 'files.stat',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md' },
+      params: { worktree: 'id:wt-1', relativePath: 'untitled.md' },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
       method: 'files.createFile',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md' },
+      params: { worktree: 'id:wt-1', relativePath: 'untitled.md' },
       timeoutMs: 15_000
     })
     expect(stat).not.toHaveBeenCalled()
