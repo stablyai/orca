@@ -37,10 +37,12 @@ describe('getStatus missing-upstream polling churn', () => {
   })
 
   it('does not repeat failed effective-upstream probes for a branch with no upstream', async () => {
+    let statusCallCount = 0
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args.includes('status')) {
+        statusCallCount += 1
         return {
-          stdout: '# branch.oid abcdef1234567890\n# branch.head Initi-Project\n'
+          stdout: `# branch.oid ${statusCallCount < 4 ? 'abcdef1234567890' : 'fedcba0987654321'}\n# branch.head Initi-Project\n`
         }
       }
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
@@ -58,16 +60,18 @@ describe('getStatus missing-upstream polling churn', () => {
     await getStatus('/repo')
     await getStatus('/repo')
     await getStatus('/repo')
+    await getStatus('/repo')
 
-    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter(
-      ([args]: [string[]]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}')
-    )
-    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter(
-      ([args]: [string[]]) =>
-        args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')
-    )
+    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
+      const args = call[0]
+      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
+    })
+    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
+      const args = call[0]
+      return args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')
+    })
 
-    expect(upstreamProbeCalls).toHaveLength(1)
-    expect(sameNameOriginProbeCalls).toHaveLength(1)
+    expect(upstreamProbeCalls).toHaveLength(2)
+    expect(sameNameOriginProbeCalls).toHaveLength(2)
   })
 })
