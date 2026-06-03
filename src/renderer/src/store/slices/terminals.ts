@@ -233,6 +233,7 @@ export type TerminalSlice = {
     string,
     {
       command: string
+      cwd?: string
       /** Renderer-delivered startup input for callers that need xterm paste
        *  semantics before the submit Enter. */
       delivery?: 'terminal-paste'
@@ -367,15 +368,19 @@ export type TerminalSlice = {
     tabId: string,
     startup: {
       command: string
+      cwd?: string
       delivery?: 'terminal-paste'
       env?: Record<string, string>
       initialAgentStatus?: { agent: TuiAgent; prompt: string }
       telemetry?: AgentStartedTelemetry
     }
   ) => void
-  consumeTabStartupCommand: (
-    tabId: string
-  ) => { command: string; env?: Record<string, string>; telemetry?: AgentStartedTelemetry } | null
+  consumeTabStartupCommand: (tabId: string) => {
+    command: string
+    cwd?: string
+    env?: Record<string, string>
+    telemetry?: AgentStartedTelemetry
+  } | null
   queueTabSetupSplit: (
     tabId: string,
     startup: { command: string; env?: Record<string, string>; direction: SetupSplitDirection }

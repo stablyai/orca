@@ -23,6 +23,7 @@ export class AutomationService {
   private webContents: WebContents | null = null
   private rendererReady = false
   private evaluating = false
+  private appLaunchEvaluated = false
   private readonly claudeUsage: ClaudeUsageStore | null
   private readonly codexUsage: CodexUsageStore | null
 
@@ -43,6 +44,7 @@ export class AutomationService {
 
   setRendererReady(): void {
     this.rendererReady = true
+    void this.evaluateAppLaunchRuns()
     void this.evaluateDueRuns()
   }
 
@@ -84,7 +86,7 @@ export class AutomationService {
     if (!run) {
       throw new Error('Automation run not found.')
     }
-    if (run.trigger !== 'scheduled' || !automation.precheck) {
+    if ((run.trigger !== 'scheduled' && run.trigger !== 'app_launch') || !automation.precheck) {
       return null
     }
     const cwd = this.getPrecheckCwd(automation)
@@ -220,13 +222,32 @@ export class AutomationService {
     try {
       const now = Date.now()
       for (const automation of this.store.listAutomations()) {
-        if (!automation.enabled || automation.nextRunAt > now) {
+        if (
+          !automation.enabled ||
+          automation.trigger !== 'schedule' ||
+          automation.nextRunAt > now
+        ) {
           continue
         }
         await this.evaluateAutomation(automation, now)
       }
     } finally {
       this.evaluating = false
+    }
+  }
+
+  private async evaluateAppLaunchRuns(): Promise<void> {
+    if (this.appLaunchEvaluated) {
+      return
+    }
+    this.appLaunchEvaluated = true
+    const now = Date.now()
+    for (const automation of this.store.listAutomations()) {
+      if (!automation.enabled || automation.trigger !== 'app_launch') {
+        continue
+      }
+      const run = this.store.createAutomationRun(automation, now, 'app_launch')
+      await this.requestDispatch(automation, run)
     }
   }
 
@@ -294,6 +315,7 @@ function isFinalRunStatus(status: AutomationRunStatus): boolean {
     status === 'dispatch_failed' ||
     status === 'skipped_precheck' ||
     status === 'skipped_missed' ||
+    status === 'skipped_duplicate' ||
     status === 'skipped_unavailable' ||
     status === 'skipped_needs_interactive_auth'
   )

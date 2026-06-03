@@ -6,6 +6,15 @@ import { launchAgentBackgroundSession } from '@/lib/launch-agent-background-sess
 import { submitPromptToAgentTab } from '@/lib/agent-paste-draft'
 import { findReusableAutomationSession } from '@/lib/automation-session-reuse'
 import { observeExistingAutomationSession } from '@/lib/automation-session-observer'
+import {
+  getStartupCommandTitle,
+  resolveGlobalStartupCommandTarget,
+  resolveTrustedGlobalStartupCommandCwd,
+  resolveTerminalCommandLaunchTarget,
+  resolveStartupCommandTargets
+} from '@/lib/automation-startup-command-targets'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
+import { isFloatingWorkspacePanelVisible } from '@/lib/floating-workspace-terminal-actions'
 import { useAppStore } from '@/store'
 import type {
   AutomationDispatchResult,
@@ -65,7 +74,7 @@ export function useAutomationDispatchEvents(): void {
         automationWorktree?.displayName ?? run.workspaceDisplayName ?? null
       let precheckResult: AutomationPrecheckResult | null = null
 
-      if (!repo) {
+      if (!repo && automation.scope !== 'global') {
         await markDispatchResult({
           runId: run.id,
           status: 'skipped_unavailable',
@@ -76,7 +85,7 @@ export function useAutomationDispatchEvents(): void {
         return
       }
 
-      if (repo.connectionId) {
+      if (repo?.connectionId) {
         const needsPrompt = await window.api.ssh.needsPassphrasePrompt({
           targetId: repo.connectionId
         })
@@ -110,7 +119,13 @@ export function useAutomationDispatchEvents(): void {
         }
       }
 
-      if (automation.workspaceMode === 'existing' && !automationWorktree) {
+      if (
+        automation.scope !== 'global' &&
+        automation.workspaceMode === 'existing' &&
+        !automationWorktree &&
+        (automation.action !== 'terminal_command' ||
+          automation.launchTarget === 'selected_worktree')
+      ) {
         await markDispatchResult({
           runId: run.id,
           status: 'skipped_unavailable',
@@ -121,7 +136,127 @@ export function useAutomationDispatchEvents(): void {
         return
       }
 
-      if (run.trigger === 'scheduled' && automation.precheck) {
+      if (automation.action === 'terminal_command') {
+        const command = automation.command?.trim() || automation.prompt.trim()
+        if (!command) {
+          await markDispatchResult({
+            runId: run.id,
+            status: 'dispatch_failed',
+            workspaceId: dispatchWorkspaceId,
+            workspaceDisplayName: dispatchWorkspaceDisplayName,
+            error: 'Automation command is empty.'
+          })
+          return
+        }
+        const stateBeforeLaunch = useAppStore.getState()
+        const duplicateTitle =
+          run.trigger === 'app_launch' ? getStartupCommandTitle(automation.name) : null
+        const globalTarget =
+          automation.scope === 'global' &&
+          (automation.launchTarget === 'floating' || !automation.projectId)
+            ? resolveGlobalStartupCommandTarget({
+                globalCwd: automation.globalCwd,
+                tabsByWorktree: stateBeforeLaunch.tabsByWorktree,
+                duplicateTitle
+              })
+            : null
+        const targets = globalTarget
+          ? [globalTarget]
+          : resolveStartupCommandTargets({
+              projectId: automation.projectId,
+              launchTarget: resolveTerminalCommandLaunchTarget({
+                runTrigger: run.trigger,
+                automationTrigger: automation.trigger ?? 'schedule',
+                automationLaunchTarget: automation.launchTarget ?? 'selected_worktree'
+              }),
+              worktrees: stateBeforeLaunch.allWorktrees(),
+              tabsByWorktree: stateBeforeLaunch.tabsByWorktree,
+              selectedWorktreeId: automation.workspaceId,
+              duplicateTitle
+            })
+        if (targets.length === 0) {
+          await markDispatchResult({
+            runId: run.id,
+            status: duplicateTitle ? 'skipped_duplicate' : 'skipped_unavailable',
+            workspaceId: dispatchWorkspaceId,
+            workspaceDisplayName: dispatchWorkspaceDisplayName,
+            error: duplicateTitle
+              ? 'Startup command already has a terminal for each target.'
+              : 'No target workspace is available.'
+          })
+          return
+        }
+        let launched: {
+          worktree: (typeof targets)[number]
+          worktreeId: string
+          tab: { id: string }
+        }[]
+        try {
+          const preparedTargets = await Promise.all(
+            targets.map(async (worktree) => {
+              const cwd =
+                'cwd' in worktree
+                  ? resolveTrustedGlobalStartupCommandCwd({
+                      configuredCwd: worktree.cwd,
+                      resolvedCwd: await window.api.app.getFloatingTerminalCwd({
+                        path: worktree.cwd,
+                        requireTrusted: true
+                      })
+                    })
+                  : undefined
+              if ('cwd' in worktree && !cwd) {
+                throw new Error('Global startup command directory is no longer trusted.')
+              }
+              return { worktree, cwd }
+            })
+          )
+          launched = preparedTargets.map(({ worktree, cwd }) => {
+            const store = useAppStore.getState()
+            const worktreeId = 'worktreeId' in worktree ? worktree.worktreeId : worktree.id
+            const tab = store.createTab(worktreeId, undefined, undefined, {
+              activate: false,
+              recordInteraction: false
+            })
+            store.queueTabStartupCommand(tab.id, { command, ...(cwd ? { cwd } : {}) })
+            store.setTabCustomTitle(tab.id, duplicateTitle ?? automation.name, {
+              recordInteraction: false
+            })
+            return { worktree, worktreeId, tab }
+          })
+        } catch (error) {
+          await markDispatchResult({
+            runId: run.id,
+            status: 'dispatch_failed',
+            workspaceId: dispatchWorkspaceId,
+            workspaceDisplayName: dispatchWorkspaceDisplayName,
+            error: error instanceof Error ? error.message : String(error)
+          })
+          return
+        }
+        const first = launched[0]
+        // Why: a startup command can fan out to several worktrees, but the
+        // run history has one workspace slot. Use the first launched target
+        // as the representative row; duplicate protection tracks every tab.
+        await markDispatchResult({
+          runId: run.id,
+          status: 'dispatched',
+          workspaceId: first.worktreeId,
+          workspaceDisplayName: first.worktree.displayName,
+          terminalSessionId: first.tab.id,
+          error: null
+        })
+        // Why: the event toggles, so only dispatch it when the panel is hidden.
+        if (
+          automation.launchTarget === 'floating' &&
+          automation.scope === 'global' &&
+          !isFloatingWorkspacePanelVisible()
+        ) {
+          window.dispatchEvent(new Event(TOGGLE_FLOATING_TERMINAL_EVENT))
+        }
+        return
+      }
+
+      if ((run.trigger === 'scheduled' || run.trigger === 'app_launch') && automation.precheck) {
         precheckResult = await window.api.automations.runPrecheck({
           automationId: automation.id,
           runId: run.id
@@ -424,7 +559,26 @@ export function useAutomationDispatchEvents(): void {
         })
       }
     })
-    void window.api.automations.rendererReady()
-    return unsubscribe
+    let rendererReadySent = false
+    const sendRendererReady = (): void => {
+      if (rendererReadySent) {
+        return
+      }
+      rendererReadySent = true
+      void window.api.automations.rendererReady()
+    }
+    const unsubscribeWorkspaceReady = useAppStore.subscribe((state) => {
+      if (state.workspaceSessionReady) {
+        sendRendererReady()
+        unsubscribeWorkspaceReady()
+      }
+    })
+    if (useAppStore.getState().workspaceSessionReady) {
+      sendRendererReady()
+    }
+    return () => {
+      unsubscribeWorkspaceReady()
+      unsubscribe()
+    }
   }, [])
 }

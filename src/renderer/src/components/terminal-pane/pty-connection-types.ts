@@ -10,6 +10,7 @@ export type PtyConnectionDeps = {
   cwd?: string
   startup?: {
     command: string
+    cwd?: string
     /** Renderer-delivered startup input for callers that need xterm paste
      *  semantics before the submit Enter. */
     delivery?: 'terminal-paste'

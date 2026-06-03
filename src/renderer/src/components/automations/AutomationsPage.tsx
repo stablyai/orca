@@ -122,6 +122,21 @@ function getDefaultWorktree(worktrees: readonly Worktree[]): Worktree | null {
   return worktrees.find((worktree) => worktree.isMainWorktree) ?? worktrees[0] ?? null
 }
 
+function formatAutomationTriggerLabel(automation: Automation): string {
+  return automation.trigger === 'app_launch'
+    ? 'On Orca launch'
+    : formatAutomationSchedule(automation.rrule)
+}
+
+function formatAutomationNextRunLabel(automation: Automation, now: number): string {
+  if (!automation.enabled) {
+    return 'Paused'
+  }
+  return automation.trigger === 'app_launch'
+    ? 'Next Orca launch'
+    : formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
+}
+
 function formatTimeInput(hour: number, minute: number): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
@@ -343,6 +358,12 @@ export default function AutomationsPage(): React.JSX.Element {
   const [draft, setDraft] = useState<AutomationDraft>({
     name: '',
     prompt: '',
+    action: 'agent_prompt',
+    command: '',
+    trigger: 'schedule',
+    scope: 'project',
+    globalCwd: '',
+    launchTarget: 'selected_worktree',
     agentId: defaultAgent,
     projectId: '',
     workspaceMode: 'existing',
@@ -667,6 +688,9 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [agentStatusByPaneKey, retainedAgentsByPaneKey, refresh, runs])
 
   useEffect(() => {
+    if (draft.scope === 'global') {
+      return
+    }
     if (!draft.projectId) {
       const target = getDefaultTarget()
       if (!target.projectId) {
@@ -678,9 +702,12 @@ export default function AutomationsPage(): React.JSX.Element {
         workspaceId: target.workspaceId
       }))
     }
-  }, [draft.projectId, getDefaultTarget])
+  }, [draft.projectId, draft.scope, getDefaultTarget])
 
   useEffect(() => {
+    if (draft.scope === 'global') {
+      return
+    }
     if (!draft.projectId) {
       return
     }
@@ -689,7 +716,7 @@ export default function AutomationsPage(): React.JSX.Element {
     if (!draft.workspaceId && defaultWorktree) {
       setDraft((current) => ({ ...current, workspaceId: defaultWorktree.id }))
     }
-  }, [draft.projectId, draft.workspaceId, worktreesByRepo])
+  }, [draft.projectId, draft.scope, draft.workspaceId, worktreesByRepo])
 
   const applyTemplateToDraft = useCallback((template: AutomationTemplate): void => {
     setDraft((current) => ({
@@ -727,6 +754,12 @@ export default function AutomationsPage(): React.JSX.Element {
     const baseDraft: AutomationDraft = {
       name: '',
       prompt: '',
+      action: 'agent_prompt',
+      command: '',
+      trigger: 'schedule',
+      scope: 'project',
+      globalCwd: '',
+      launchTarget: 'selected_worktree',
       agentId: defaultAgent,
       projectId: target.projectId,
       workspaceMode: 'existing',
@@ -781,6 +814,13 @@ export default function AutomationsPage(): React.JSX.Element {
     const nextDraft: AutomationDraft = {
       name: latest.name,
       prompt: latest.prompt,
+      action: latest.action ?? 'agent_prompt',
+      command: latest.command ?? '',
+      trigger: latest.trigger ?? 'schedule',
+      scope: latest.scope ?? 'project',
+      globalCwd: latest.globalCwd ?? '',
+      launchTarget:
+        latest.scope === 'global' ? 'floating' : (latest.launchTarget ?? 'selected_worktree'),
       agentId: latest.agentId,
       projectId: latest.projectId,
       workspaceMode: latest.workspaceMode,
@@ -828,6 +868,12 @@ export default function AutomationsPage(): React.JSX.Element {
     const nextDraft: AutomationDraft = {
       name: job.name,
       prompt: job.prompt ?? job.promptPreview,
+      action: 'agent_prompt',
+      command: '',
+      trigger: 'schedule',
+      scope: 'project',
+      globalCwd: '',
+      launchTarget: 'selected_worktree',
       agentId: 'hermes',
       projectId,
       workspaceMode: 'existing',
@@ -882,16 +928,36 @@ export default function AutomationsPage(): React.JSX.Element {
     [fetchWorktrees, worktreesByRepo]
   )
 
+  const pickGlobalAutomationDirectory = useCallback(async (): Promise<void> => {
+    const directory = await window.api.app.pickFloatingWorkspaceDirectory()
+    if (!directory) {
+      return
+    }
+    setDraft((current) => ({ ...current, globalCwd: directory }))
+  }, [])
+
   const saveAutomation = async (): Promise<void> => {
     const { hour, minute } = parseDraftTime(draft.time)
     const isHermesSave =
       editingAutomationId === null && (createTarget === 'hermes' || editingExternalTarget !== null)
+    const isGlobalCommand =
+      !isHermesSave &&
+      draft.scope === 'global' &&
+      draft.trigger === 'app_launch' &&
+      draft.action === 'terminal_command'
+    const isFloatingCommand = isGlobalCommand
     if (
-      !draft.projectId ||
-      ((draft.workspaceMode === 'existing' || isHermesSave) && !draft.workspaceId) ||
-      !draft.prompt.trim()
+      (!isGlobalCommand && !draft.projectId) ||
+      (!isGlobalCommand &&
+        (draft.workspaceMode === 'existing' || isHermesSave) &&
+        !draft.workspaceId) ||
+      (draft.action === 'terminal_command' ? !draft.command.trim() : !draft.prompt.trim())
     ) {
-      toast.error('Choose a run location and enter a prompt before saving.')
+      toast.error('Choose a run location and enter a prompt or command before saving.')
+      return
+    }
+    if (isFloatingCommand && !draft.globalCwd.trim()) {
+      toast.error('Choose a directory for the global startup command.')
       return
     }
     if (draft.scheduleWarning) {
@@ -908,6 +974,7 @@ export default function AutomationsPage(): React.JSX.Element {
     if (
       editingAutomationId === null &&
       !isHermesSave &&
+      draft.action === 'agent_prompt' &&
       !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
     ) {
       toast.error('Choose an enabled agent before saving.')
@@ -916,6 +983,7 @@ export default function AutomationsPage(): React.JSX.Element {
     setIsSaving(true)
     try {
       const selectedWorkspaceExists =
+        isFloatingCommand ||
         draft.workspaceMode !== 'existing' ||
         worktrees.some((worktree) => worktree.id === draft.workspaceId)
       if (!selectedWorkspaceExists) {
@@ -990,7 +1058,7 @@ export default function AutomationsPage(): React.JSX.Element {
       const missedRunGraceMinutes = Number.isFinite(rawMissedRunGraceMinutes)
         ? Math.max(0, rawMissedRunGraceMinutes)
         : 720
-      const precheck = buildDraftPrecheck(draft)
+      const precheck = draft.action === 'terminal_command' ? null : buildDraftPrecheck(draft)
       let currentAutomation = editingAutomationId
         ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
         : null
@@ -1006,12 +1074,23 @@ export default function AutomationsPage(): React.JSX.Element {
       }
       const updates: AutomationUpdateInput = {
         name: draft.name,
-        prompt: draft.prompt,
+        prompt: draft.action === 'terminal_command' ? '' : draft.prompt,
+        action: draft.action,
+        command: draft.action === 'terminal_command' ? draft.command : '',
+        trigger: draft.trigger,
+        scope: isGlobalCommand ? 'global' : 'project',
+        globalCwd: isFloatingCommand ? draft.globalCwd : '',
+        launchTarget:
+          draft.trigger === 'app_launch' && draft.action === 'terminal_command'
+            ? isGlobalCommand
+              ? 'floating'
+              : (draft.launchTarget ?? 'selected_worktree')
+            : 'selected_worktree',
         precheck,
         agentId: draft.agentId,
-        projectId: draft.projectId,
+        projectId: isFloatingCommand ? '' : draft.projectId,
         workspaceMode: draft.workspaceMode,
-        workspaceId: draft.workspaceId,
+        workspaceId: isFloatingCommand ? null : draft.workspaceId,
         baseBranch: draft.baseBranch.trim() || null,
         reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
         timezone,
@@ -1029,12 +1108,23 @@ export default function AutomationsPage(): React.JSX.Element {
           })
         : await window.api.automations.create({
             name: draft.name,
-            prompt: draft.prompt,
+            prompt: draft.action === 'terminal_command' ? '' : draft.prompt,
+            action: draft.action,
+            command: draft.action === 'terminal_command' ? draft.command : '',
+            trigger: draft.trigger,
+            scope: isGlobalCommand ? 'global' : 'project',
+            globalCwd: isFloatingCommand ? draft.globalCwd : '',
+            launchTarget:
+              draft.trigger === 'app_launch' && draft.action === 'terminal_command'
+                ? isGlobalCommand
+                  ? 'floating'
+                  : (draft.launchTarget ?? 'selected_worktree')
+                : 'selected_worktree',
             precheck,
             agentId: draft.agentId,
-            projectId: draft.projectId,
+            projectId: isFloatingCommand ? '' : draft.projectId,
             workspaceMode: draft.workspaceMode,
-            workspaceId: draft.workspaceId,
+            workspaceId: isFloatingCommand ? null : draft.workspaceId,
             baseBranch: draft.baseBranch.trim() || null,
             reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession,
             timezone,
@@ -1049,7 +1139,7 @@ export default function AutomationsPage(): React.JSX.Element {
         const next = current.filter((entry) => entry.id !== automation.id)
         return [...next, automation].sort((left, right) => left.name.localeCompare(right.name))
       })
-      setDraft((current) => ({ ...current, name: '', prompt: '' }))
+      setDraft((current) => ({ ...current, name: '', prompt: '', command: '', globalCwd: '' }))
       await refresh()
       selectAutomationId(automation.id)
       setCreateOpen(false)
@@ -1432,6 +1522,7 @@ export default function AutomationsPage(): React.JSX.Element {
         onOpenChange={setCreateOpen}
         onDraftChange={setDraft}
         onApplyTemplate={applyTemplateToDraft}
+        onPickGlobalCwd={() => void pickGlobalAutomationDirectory()}
         onSave={() => void saveAutomation()}
       />
 
@@ -1588,9 +1679,11 @@ export default function AutomationsPage(): React.JSX.Element {
                 ? worktreeMap.get(automation.workspaceId)
                 : null
               const workspaceLabel =
-                automation.workspaceMode === 'new_per_run'
-                  ? `Create from ${automation.baseBranch ?? automationRepo?.worktreeBaseRef ?? 'project default'}`
-                  : (automationWorktree?.displayName ?? 'Missing workspace')
+                automation.scope === 'global'
+                  ? (automation.globalCwd ?? 'Global')
+                  : automation.workspaceMode === 'new_per_run'
+                    ? `Create from ${automation.baseBranch ?? automationRepo?.worktreeBaseRef ?? 'project default'}`
+                    : (automationWorktree?.displayName ?? 'Missing workspace')
               const usageSummary = summarizeAutomationRunUsage(
                 runs.filter((run) => run.automationId === automation.id)
               )
@@ -1602,10 +1695,8 @@ export default function AutomationsPage(): React.JSX.Element {
                   : usageSummary.unavailableRuns > 0
                     ? 'Usage unavailable'
                     : 'No run usage yet'
-              const nextRunLabel = automation.enabled
-                ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
-                : 'Paused'
-              const scheduleLabel = formatAutomationSchedule(automation.rrule)
+              const nextRunLabel = formatAutomationNextRunLabel(automation, relativeNow)
+              const scheduleLabel = formatAutomationTriggerLabel(automation)
               return (
                 <ContextMenu key={automation.id}>
                   <ContextMenuTrigger asChild>
@@ -1642,13 +1733,19 @@ export default function AutomationsPage(): React.JSX.Element {
                               color={automationRepo.badgeColor}
                               badgeClassName="size-1.5"
                             />
+                          ) : automation.scope === 'global' ? (
+                            <span>Global</span>
                           ) : (
                             <span>Unknown project</span>
                           )}
                           <span className="shrink-0">/</span>
                           <span className="truncate">{workspaceLabel}</span>
                           <span className="shrink-0">·</span>
-                          <span className="truncate">{getAgentLabel(automation.agentId)}</span>
+                          <span className="truncate">
+                            {automation.action === 'terminal_command'
+                              ? 'Terminal command'
+                              : getAgentLabel(automation.agentId)}
+                          </span>
                         </span>
                         <span className="mt-1 block truncate text-xs text-muted-foreground">
                           {usageText}
@@ -1963,12 +2060,18 @@ export default function AutomationsPage(): React.JSX.Element {
                 <AutomationDetail
                   automation={selected}
                   runs={selectedRuns}
-                  projectName={selectedRepo?.displayName ?? 'Unknown project'}
+                  projectName={
+                    selected?.scope === 'global'
+                      ? 'Global'
+                      : (selectedRepo?.displayName ?? 'Unknown project')
+                  }
                   projectDefaultBaseRef={selectedRepo?.worktreeBaseRef ?? null}
                   workspaceName={
-                    selected?.workspaceMode === 'new_per_run'
-                      ? 'New workspace each run'
-                      : (selectedWorktree?.displayName ?? 'Missing workspace')
+                    selected?.scope === 'global'
+                      ? (selected.globalCwd ?? 'Global')
+                      : selected?.workspaceMode === 'new_per_run'
+                        ? 'New workspace each run'
+                        : (selectedWorktree?.displayName ?? 'Missing workspace')
                   }
                   now={relativeNow}
                   onRunNow={(automation) => void runNow(automation)}

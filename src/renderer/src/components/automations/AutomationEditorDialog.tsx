@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: the automation editor keeps its form fields
    colocated so create/edit draft preservation rules stay reviewable. */
 import React from 'react'
-import { Info, Plus, Sparkles } from 'lucide-react'
+import { FolderOpen, Info, Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -20,7 +20,11 @@ import RepoCombobox from '@/components/repo/RepoCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
+  AutomationAction,
+  AutomationLaunchTarget,
   AutomationSchedulePreset,
+  AutomationScope,
+  AutomationTrigger,
   AutomationWorkspaceMode
 } from '../../../../shared/automations-types'
 import type { GlobalSettings, Repo, TuiAgent, Worktree } from '../../../../shared/types'
@@ -40,9 +44,21 @@ const PICKER_TRIGGER_CLASS =
 const MODE_TOGGLE_ITEM_CLASS =
   'w-full border-input bg-input/30 shadow-xs hover:bg-accent/60 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:hover:bg-primary/90 dark:bg-input/30 dark:data-[state=on]:bg-primary dark:data-[state=on]:text-primary-foreground dark:data-[state=on]:hover:bg-primary/90'
 
+function resolveProjectScopeLaunchTarget(
+  launchTarget: AutomationLaunchTarget
+): AutomationLaunchTarget {
+  return launchTarget === 'floating' ? 'selected_worktree' : launchTarget
+}
+
 export type AutomationDraft = {
   name: string
   prompt: string
+  action: AutomationAction
+  command: string
+  trigger: AutomationTrigger
+  scope: AutomationScope
+  globalCwd: string
+  launchTarget: AutomationLaunchTarget
   agentId: TuiAgent
   projectId: string
   workspaceMode: AutomationWorkspaceMode
@@ -78,6 +94,7 @@ type AutomationEditorDialogProps = {
   onOpenChange: (open: boolean) => void
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
   onApplyTemplate: (template: AutomationTemplate) => void
+  onPickGlobalCwd: () => void
   onSave: () => void
 }
 
@@ -120,6 +137,7 @@ export function AutomationEditorDialog({
   onOpenChange,
   onDraftChange,
   onApplyTemplate,
+  onPickGlobalCwd,
   onSave
 }: AutomationEditorDialogProps): React.JSX.Element {
   const [templateOpen, setTemplateOpen] = React.useState(false)
@@ -223,12 +241,20 @@ export function AutomationEditorDialog({
               {draft.scheduleWarning}
             </div>
           ) : null}
-          <Field label="Prompt">
+          <Field label={draft.action === 'terminal_command' ? 'Command' : 'Prompt'}>
             <textarea
-              value={draft.prompt}
-              placeholder="Run the weekly dependency audit and summarize risky changes."
+              value={draft.action === 'terminal_command' ? draft.command : draft.prompt}
+              placeholder={
+                draft.action === 'terminal_command'
+                  ? 'pnpm dev'
+                  : 'Run the weekly dependency audit and summarize risky changes.'
+              }
               onChange={(event) =>
-                onDraftChange((current) => ({ ...current, prompt: event.target.value }))
+                onDraftChange((current) =>
+                  current.action === 'terminal_command'
+                    ? { ...current, command: event.target.value }
+                    : { ...current, prompt: event.target.value }
+                )
               }
               className="min-h-[260px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
             />
@@ -237,7 +263,7 @@ export function AutomationEditorDialog({
               <code className="rounded bg-muted px-1 font-mono text-[11px]">/goal</code>.
             </p>
           </Field>
-          {isHermesCreate ? null : (
+          {isHermesCreate || draft.action === 'terminal_command' ? null : (
             <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
               <Field label="Precheck">
                 <textarea
@@ -283,100 +309,246 @@ export function AutomationEditorDialog({
                 : 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4'
             }
           >
-            <Field label="Project">
-              <RepoCombobox
-                repos={repos}
-                value={draft.projectId}
-                onValueChange={onProjectChange}
-                placeholder="Select project"
-                triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
-                showStandaloneAddButton={false}
-              />
-            </Field>
-            <Field
-              label={
-                <span className="inline-flex items-center gap-1">
-                  Workspace
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="Workspace mode help"
-                        className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                      >
-                        <Info className="size-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={6} className="max-w-72">
-                      Worktree runs in the selected workspace. New run creates a fresh workspace
-                      from the selected branch each time.
-                    </TooltipContent>
-                  </Tooltip>
-                </span>
-              }
-              className={isHermesTarget ? undefined : 'sm:col-span-2 lg:col-span-3'}
-            >
-              {isHermesTarget ? (
-                <WorkspaceCombobox
-                  worktrees={worktrees}
-                  value={draft.workspaceId}
-                  triggerClassName={PICKER_TRIGGER_CLASS}
-                  onValueChange={(workspaceId) =>
-                    onDraftChange((current) => ({ ...current, workspaceId }))
+            {draft.scope === 'global' &&
+            draft.trigger === 'app_launch' &&
+            draft.action === 'terminal_command' &&
+            !isHermesTarget ? null : (
+              <>
+                <Field label="Project">
+                  <RepoCombobox
+                    repos={repos}
+                    value={draft.projectId}
+                    onValueChange={onProjectChange}
+                    placeholder="Select project"
+                    triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                    showStandaloneAddButton={false}
+                  />
+                </Field>
+                <Field
+                  label={
+                    <span className="inline-flex items-center gap-1">
+                      Workspace
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="Workspace mode help"
+                            className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                          >
+                            <Info className="size-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" sideOffset={6} className="max-w-72">
+                          Worktree runs in the selected workspace. New run creates a fresh workspace
+                          from the selected branch each time.
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
                   }
-                />
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-                  <ToggleGroup
-                    type="single"
-                    value={draft.workspaceMode}
-                    onValueChange={(workspaceMode) =>
-                      workspaceMode &&
-                      onDraftChange((current) => ({
-                        ...current,
-                        workspaceMode: workspaceMode as AutomationWorkspaceMode,
-                        reuseSession: workspaceMode === 'existing' ? current.reuseSession : false
-                      }))
-                    }
-                    variant="outline"
-                    size="sm"
-                    className="grid w-full grid-cols-2"
-                  >
-                    <ToggleGroupItem value="existing" className={MODE_TOGGLE_ITEM_CLASS}>
-                      Worktree
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="new_per_run" className={MODE_TOGGLE_ITEM_CLASS}>
-                      New run
-                    </ToggleGroupItem>
-                  </ToggleGroup>
-                  {draft.workspaceMode === 'existing' ? (
+                  className={isHermesTarget ? undefined : 'sm:col-span-2 lg:col-span-3'}
+                >
+                  {isHermesTarget ? (
                     <WorkspaceCombobox
                       worktrees={worktrees}
                       value={draft.workspaceId}
-                      triggerClassName={`min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                      triggerClassName={PICKER_TRIGGER_CLASS}
                       onValueChange={(workspaceId) =>
                         onDraftChange((current) => ({ ...current, workspaceId }))
                       }
                     />
                   ) : (
-                    <CreateFromPicker
-                      // Why: branch search state belongs to the selected project,
-                      // so repo switches should reset it before the next paint.
-                      key={draft.projectId}
-                      repoId={draft.projectId}
-                      repoMap={repoMap}
-                      worktrees={worktrees}
-                      value={draft.baseBranch}
-                      triggerClassName={`min-w-0 ${PICKER_TRIGGER_CLASS}`}
-                      onValueChange={(baseBranch) =>
-                        onDraftChange((current) => ({ ...current, baseBranch }))
-                      }
-                    />
+                    <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                      <ToggleGroup
+                        type="single"
+                        value={draft.workspaceMode}
+                        onValueChange={(workspaceMode) =>
+                          workspaceMode &&
+                          onDraftChange((current) => ({
+                            ...current,
+                            workspaceMode: workspaceMode as AutomationWorkspaceMode,
+                            reuseSession:
+                              workspaceMode === 'existing' ? current.reuseSession : false
+                          }))
+                        }
+                        variant="outline"
+                        size="sm"
+                        className="grid w-full grid-cols-2"
+                      >
+                        <ToggleGroupItem value="existing" className={MODE_TOGGLE_ITEM_CLASS}>
+                          Worktree
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="new_per_run" className={MODE_TOGGLE_ITEM_CLASS}>
+                          New run
+                        </ToggleGroupItem>
+                      </ToggleGroup>
+                      {draft.workspaceMode === 'existing' ? (
+                        <WorkspaceCombobox
+                          worktrees={worktrees}
+                          value={draft.workspaceId}
+                          triggerClassName={`min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                          onValueChange={(workspaceId) =>
+                            onDraftChange((current) => ({ ...current, workspaceId }))
+                          }
+                        />
+                      ) : (
+                        <CreateFromPicker
+                          // Why: branch search state belongs to the selected project,
+                          // so repo switches should reset it before the next paint.
+                          key={draft.projectId}
+                          repoId={draft.projectId}
+                          repoMap={repoMap}
+                          worktrees={worktrees}
+                          value={draft.baseBranch}
+                          triggerClassName={`min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                          onValueChange={(baseBranch) =>
+                            onDraftChange((current) => ({ ...current, baseBranch }))
+                          }
+                        />
+                      )}
+                    </div>
                   )}
-                </div>
-              )}
-            </Field>
+                </Field>
+              </>
+            )}
             {isHermesTarget ? null : (
+              <Field label="Trigger">
+                <Select
+                  value={draft.trigger}
+                  onValueChange={(trigger) =>
+                    onDraftChange((current) => ({
+                      ...current,
+                      trigger: trigger as AutomationTrigger,
+                      scope: trigger === 'app_launch' ? current.scope : 'project',
+                      launchTarget:
+                        trigger === 'app_launch'
+                          ? current.scope === 'global'
+                            ? 'floating'
+                            : resolveProjectScopeLaunchTarget(current.launchTarget)
+                          : 'selected_worktree'
+                    }))
+                  }
+                >
+                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    <SelectItem value="schedule">Schedule</SelectItem>
+                    <SelectItem value="app_launch">On Orca launch</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+            {isHermesTarget ? null : (
+              <Field label="Action">
+                <Select
+                  value={draft.action}
+                  onValueChange={(action) =>
+                    onDraftChange((current) => ({
+                      ...current,
+                      action: action as AutomationAction,
+                      prompt:
+                        action === 'agent_prompt' && !current.prompt.trim()
+                          ? current.command
+                          : current.prompt,
+                      command:
+                        action === 'terminal_command' && !current.command.trim()
+                          ? current.prompt
+                          : current.command,
+                      launchTarget:
+                        action === 'agent_prompt' ? 'selected_worktree' : current.launchTarget,
+                      scope: action === 'agent_prompt' ? 'project' : current.scope,
+                      reuseSession: action === 'terminal_command' ? false : current.reuseSession
+                    }))
+                  }
+                >
+                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    <SelectItem value="agent_prompt">Agent prompt</SelectItem>
+                    <SelectItem value="terminal_command">Terminal command</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
+            {draft.trigger === 'app_launch' &&
+            draft.action === 'terminal_command' &&
+            !isHermesTarget ? (
+              <Field label="Scope">
+                <Select
+                  value={draft.scope}
+                  onValueChange={(scope) =>
+                    onDraftChange((current) => ({
+                      ...current,
+                      scope: scope as AutomationScope,
+                      launchTarget:
+                        scope === 'global'
+                          ? 'floating'
+                          : resolveProjectScopeLaunchTarget(current.launchTarget)
+                    }))
+                  }
+                >
+                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    <SelectItem value="global">Global</SelectItem>
+                    <SelectItem value="project">Project</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
+            {draft.trigger === 'app_launch' &&
+            draft.action === 'terminal_command' &&
+            draft.scope !== 'global' &&
+            !isHermesTarget ? (
+              <Field label="Launch in">
+                <Select
+                  value={draft.launchTarget}
+                  onValueChange={(launchTarget) =>
+                    onDraftChange((current) => ({
+                      ...current,
+                      launchTarget: launchTarget as AutomationLaunchTarget
+                    }))
+                  }
+                >
+                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+                    <SelectItem value="selected_worktree">Selected worktree</SelectItem>
+                    <SelectItem value="main">Main worktree</SelectItem>
+                    <SelectItem value="open_worktrees">Open worktrees</SelectItem>
+                    <SelectItem value="main_and_open_worktrees">Main + open worktrees</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+            ) : null}
+            {draft.scope === 'global' &&
+            draft.trigger === 'app_launch' &&
+            draft.action === 'terminal_command' &&
+            !isHermesTarget ? (
+              <Field label="Directory">
+                <div className="flex gap-2">
+                  <Input
+                    value={draft.globalCwd}
+                    readOnly
+                    placeholder="Choose a directory"
+                    className="h-9 min-w-0 flex-1 border-input bg-input/30 shadow-xs dark:bg-input/30"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Choose startup command directory"
+                    onClick={onPickGlobalCwd}
+                  >
+                    <FolderOpen className="size-4" />
+                  </Button>
+                </div>
+              </Field>
+            ) : null}
+            {isHermesTarget || draft.action === 'terminal_command' ? null : (
               <Field label="Agent">
                 <AgentCombobox
                   agents={visibleAgents}
@@ -390,23 +562,25 @@ export function AutomationEditorDialog({
                 />
               </Field>
             )}
-            {isHermesTarget ? null : (
+            {isHermesTarget || draft.action === 'terminal_command' ? null : (
               <AutomationSessionField
                 draft={draft}
                 toggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
                 onDraftChange={onDraftChange}
               />
             )}
-            <Field label="Schedule">
-              <AutomationSchedulePicker
-                draft={draft}
-                triggerClassName={PICKER_TRIGGER_CLASS}
-                validateAdvancedSchedule={
-                  isHermesTarget ? isValidAutomationCronSchedule : isValidAutomationSchedule
-                }
-                onDraftChange={onDraftChange}
-              />
-            </Field>
+            {draft.trigger === 'app_launch' && !isHermesTarget ? null : (
+              <Field label="Schedule">
+                <AutomationSchedulePicker
+                  draft={draft}
+                  triggerClassName={PICKER_TRIGGER_CLASS}
+                  validateAdvancedSchedule={
+                    isHermesTarget ? isValidAutomationCronSchedule : isValidAutomationSchedule
+                  }
+                  onDraftChange={onDraftChange}
+                />
+              </Field>
+            )}
             {isHermesTarget ? null : (
               <Field
                 label={

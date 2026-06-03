@@ -82,6 +82,8 @@ export function getAutomationRunStatusLabel(status: AutomationRun['status']): st
       return 'Precheck skipped'
     case 'skipped_missed':
       return 'Skipped'
+    case 'skipped_duplicate':
+      return 'Already running'
     case 'skipped_unavailable':
       return 'Unavailable'
     case 'skipped_needs_interactive_auth':

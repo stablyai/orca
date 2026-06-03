@@ -557,6 +557,24 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('starts a queued startup command in its explicit cwd when provided', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        cwd: '/tmp/floating-default',
+        startup: { command: 'agentmemory', cwd: '/Users/me/agentmemory' }
+      }) as never
+    )
+
+    expect(createdTransportOptions[0]?.cwd).toBe('/Users/me/agentmemory')
+    expect(createdTransportOptions[0]?.command).toBe('agentmemory')
+  })
+
   it('queues visible bulk output off the synchronous xterm write path', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const pane = createPane(1)
