@@ -1,12 +1,4 @@
-import {
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  type ComponentType,
-  type Ref,
-  type TransitionEvent
-} from 'react'
+import { useEffect, useId, useRef, useState, type ComponentType, type Ref } from 'react'
 import { ChevronDown, CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -14,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { getAddRepoLocalStartActions } from './add-repo-local-start-actions'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 
 type AddRepoNestedScanProgressNoticeProps = {
   busyLabel: string
@@ -178,7 +171,6 @@ export function AddRepoLocalStartStep({
   onStopNestedScan
 }: AddRepoLocalStartStepProps): React.JSX.Element {
   const [showMoreOptions, setShowMoreOptions] = useState(false)
-  const [moreOptionsMounted, setMoreOptionsMounted] = useState(false)
   const moreOptionsId = useId()
   const browseActionRef = useRef<HTMLButtonElement | null>(null)
   const { primaryAction, secondaryAction, moreOptions } = getAddRepoLocalStartActions({
@@ -196,22 +188,6 @@ export function AddRepoLocalStartStep({
       browseActionRef.current?.focus()
     }
   }, [isAdding])
-
-  const toggleMoreOptions = (): void => {
-    if (showMoreOptions) {
-      setShowMoreOptions(false)
-      return
-    }
-    setMoreOptionsMounted(true)
-    setShowMoreOptions(true)
-  }
-
-  const handleMoreOptionsTransitionEnd = (event: TransitionEvent<HTMLDivElement>): void => {
-    if (event.currentTarget !== event.target || showMoreOptions) {
-      return
-    }
-    setMoreOptionsMounted(false)
-  }
 
   return (
     <>
@@ -245,52 +221,42 @@ export function AddRepoLocalStartStep({
           />
         ) : null}
 
-        <div className="space-y-2">
-          <button
-            type="button"
-            aria-expanded={showMoreOptions}
-            aria-controls={moreOptionsId}
-            disabled={isAdding}
-            onClick={toggleMoreOptions}
-            className="flex h-8 w-full items-center justify-start gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-40"
-          >
-            More options
-            <ChevronDown
-              className={cn(
-                'size-3.5 transition-transform',
-                showMoreOptions ? 'rotate-180' : 'rotate-0'
-              )}
-            />
-          </button>
+        <Collapsible open={showMoreOptions} onOpenChange={setShowMoreOptions}>
+          <div className="space-y-2">
+            <CollapsibleTrigger asChild>
+              <button
+                type="button"
+                aria-controls={moreOptionsId}
+                disabled={isAdding}
+                className="flex h-8 w-full items-center justify-start gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-40"
+              >
+                More options
+                <ChevronDown
+                  className={cn(
+                    'size-3.5 transition-transform',
+                    showMoreOptions ? 'rotate-180' : 'rotate-0'
+                  )}
+                />
+              </button>
+            </CollapsibleTrigger>
 
-          {moreOptionsMounted ? (
-            <div
-              id={moreOptionsId}
-              aria-hidden={!showMoreOptions}
-              onTransitionEnd={handleMoreOptionsTransitionEnd}
-              className={cn(
-                'grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none',
-                showMoreOptions
-                  ? 'grid-rows-[1fr] opacity-100'
-                  : 'pointer-events-none grid-rows-[0fr] opacity-0'
-              )}
-            >
-              <div className="min-h-0 overflow-hidden rounded-md border border-border bg-muted/30">
+            <CollapsibleContent id={moreOptionsId} className="collapsible-height-content">
+              <div className="overflow-hidden rounded-md border border-border bg-muted/30">
                 {moreOptions.map((option, index) => (
                   <AddRepoMoreOption
                     key={option.title}
                     icon={option.icon}
                     title={option.title}
                     description={option.description}
-                    disabled={isAdding || !showMoreOptions}
+                    disabled={isAdding}
                     onClick={option.onClick}
                     className={index === 0 ? '' : 'border-t border-border/70'}
                   />
                 ))}
               </div>
-            </div>
-          ) : null}
-        </div>
+            </CollapsibleContent>
+          </div>
+        </Collapsible>
       </div>
 
       {isAdding && addProjectBusyLabel ? (

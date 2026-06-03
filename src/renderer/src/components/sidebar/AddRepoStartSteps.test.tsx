@@ -161,7 +161,7 @@ describe('AddRepoLocalStartStep', () => {
     })
   })
 
-  it('keeps More options mounted while closing so it can animate out', async () => {
+  it('uses the shared collapsible height animation for More options', async () => {
     const { container, root } = await renderLocalStartStepDom(false)
     const toggle = findButton(container, 'More options')
     const controlledId = toggle.getAttribute('aria-controls')
@@ -169,7 +169,11 @@ describe('AddRepoLocalStartStep', () => {
       throw new Error('More options control is missing aria-controls')
     }
 
-    expect(document.getElementById(controlledId)).toBeNull()
+    const closedPanel = document.getElementById(controlledId)
+    expect(closedPanel).not.toBeNull()
+    expect(closedPanel?.classList.contains('collapsible-height-content')).toBe(true)
+    expect(closedPanel?.getAttribute('data-state')).toBe('closed')
+    expect(closedPanel?.hasAttribute('hidden')).toBe(true)
 
     await act(async () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -178,22 +182,15 @@ describe('AddRepoLocalStartStep', () => {
     const openPanel = document.getElementById(controlledId)
     expect(openPanel).not.toBeNull()
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(openPanel?.classList.contains('collapsible-height-content')).toBe(true)
+    expect(openPanel?.getAttribute('data-state')).toBe('open')
     expect(findButton(container, 'Clone from URL').disabled).toBe(false)
 
     await act(async () => {
       toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    const closingPanel = document.getElementById(controlledId)
-    expect(closingPanel).not.toBeNull()
-    expect(closingPanel?.getAttribute('aria-hidden')).toBe('true')
-    expect(findButton(container, 'Clone from URL').disabled).toBe(true)
-
-    await act(async () => {
-      closingPanel?.dispatchEvent(new Event('transitionend', { bubbles: true }))
-    })
-
-    expect(document.getElementById(controlledId)).toBeNull()
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
 
     await act(async () => {
       root.unmount()
