@@ -20,10 +20,12 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   #
   # RULE: send worker_done exactly once. Failure is still a worker_done
   # with subject like "Failed: <reason>" — never silently exit.
+  # Include BOTH taskId and dispatchId in the payload so a late completion
+  # from a failed retry cannot complete the current dispatch.
   orca orchestration send --to term_COORD \\
     --type worker_done --subject "<short status>" \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --payload '{"taskId":"task_SNAP","filesModified":["path/a","path/b"],"reportPath":"<optional: path to the full artifact>"}'
+    --payload '{"taskId":"task_SNAP","dispatchId":"ctx_SNAP","filesModified":["path/a","path/b"],"reportPath":"<optional: path to the full artifact>"}'
 
   # BEHAVIOR RULE: send a heartbeat every 5 minutes
   # while actively working on the task. The coordinator uses this to

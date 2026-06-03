@@ -288,7 +288,7 @@ describe('terminal multiplex RPC', () => {
     await dispatchPromise
   })
 
-  it('drops desktop multiplex input while a mobile client owns the terminal floor', async () => {
+  it('reclaims desktop multiplex input while a mobile client owns the terminal floor', async () => {
     const messages: string[] = []
     const handlers = new Map<
       number,
@@ -312,6 +312,7 @@ describe('terminal multiplex RPC', () => {
         rows: 20
       }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'phone-1' }),
+      reclaimTerminalForDesktop: vi.fn().mockResolvedValue(true),
       registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
         cleanups.set(id, cleanup)
       }),
@@ -383,7 +384,14 @@ describe('terminal multiplex RPC', () => {
       )!
     )
 
-    expect(runtime.sendTerminal).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1'))
+    await vi.waitFor(() =>
+      expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
+        text: 'typed while locked',
+        enter: false,
+        interrupt: false
+      })
+    )
     cleanups.get('terminal-multiplex:conn-locked')?.()
     await dispatchPromise
   })
@@ -552,6 +560,83 @@ describe('terminal multiplex RPC', () => {
     )
 
     runtime.cleanupSubscription('terminal-1:desktop-1')
+    await dispatchPromise
+  })
+
+  it('settles mobile multiplex PTY waits when the stream signal aborts before PTY spawn', async () => {
+    const messages: string[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const controller = new AbortController()
+    const handlers = new Map<
+      number,
+      (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+    >()
+    const cleanups = new Map<string, () => void>()
+    const runtime = stubRuntime({
+      resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
+      waitForLeafPtyId: vi.fn(
+        (_handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
+          new Promise<string>((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
+              once: true
+            })
+          })
+      ),
+      readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+        cleanups.set(id, cleanup)
+      })
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const dispatchPromise = dispatcher.dispatchStreaming(
+      makeRequest('terminal.multiplex', {}),
+      (msg) => messages.push(msg),
+      {
+        signal: controller.signal,
+        connectionId: 'conn-phone-multiplex',
+        sendBinary: (bytes) => binaryFrames.push(bytes),
+        registerBinaryStreamHandler: (streamId, handler) => {
+          handlers.set(streamId, handler)
+          return () => handlers.delete(streamId)
+        }
+      }
+    )
+
+    await vi.waitFor(() =>
+      expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+    )
+    handlers.get(0)?.(
+      decodeTerminalStreamFrame(
+        encodeTerminalStreamFrame({
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          seq: 1,
+          payload: encodeTerminalStreamJson({
+            streamId: 7,
+            terminal: 'terminal-1',
+            client: { id: 'phone-1', type: 'mobile' }
+          })
+        })
+      )!
+    )
+
+    await vi.waitFor(() => expect(runtime.waitForLeafPtyId).toHaveBeenCalled())
+    expect(runtime.waitForLeafPtyId).toHaveBeenCalledWith('terminal-1', 10_000, controller.signal)
+
+    controller.abort()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(runtime.readTerminal).not.toHaveBeenCalled()
+    expect(
+      messages.map((msg) => JSON.parse(msg).result).filter((result) => result?.streamId === 7)
+    ).toEqual([])
+    expect(binaryFrames.map((frame) => decodeTerminalStreamFrame(frame)?.opcode)).not.toContain(
+      TerminalStreamOpcode.Error
+    )
+
+    cleanups.get('terminal-multiplex:conn-phone-multiplex')?.()
     await dispatchPromise
   })
 

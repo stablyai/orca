@@ -28,23 +28,40 @@ export function WorkspaceCombobox({
   const focusFrameRef = React.useRef<number | null>(null)
   const selected = worktrees.find((worktree) => worktree.id === value) ?? null
 
-  const focusSearchInput = React.useCallback(() => {
+  const cancelFocusFrame = React.useCallback((): void => {
     if (focusFrameRef.current !== null) {
       cancelAnimationFrame(focusFrameRef.current)
+      focusFrameRef.current = null
     }
+  }, [])
+
+  const setInputNode = React.useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
+
+  const focusSearchInput = React.useCallback(() => {
+    cancelFocusFrame()
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       inputRef.current?.focus()
     })
-  }, [])
+  }, [cancelFocusFrame])
 
-  const handleOpenChange = React.useCallback((nextOpen: boolean) => {
-    setOpen(nextOpen)
-    if (!nextOpen && focusFrameRef.current !== null) {
-      cancelAnimationFrame(focusFrameRef.current)
-      focusFrameRef.current = null
-    }
-  }, [])
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      setOpen(nextOpen)
+      if (!nextOpen) {
+        cancelFocusFrame()
+      }
+    },
+    [cancelFocusFrame]
+  )
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -71,7 +88,7 @@ export function WorkspaceCombobox({
         }}
       >
         <Command>
-          <CommandInput ref={inputRef} placeholder="Search workspaces..." />
+          <CommandInput ref={setInputNode} placeholder="Search workspaces..." />
           <CommandList className="max-h-72">
             <CommandEmpty>No workspaces found.</CommandEmpty>
             {worktrees.map((worktree) => (

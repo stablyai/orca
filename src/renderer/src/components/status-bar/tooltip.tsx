@@ -36,6 +36,11 @@ function formatDuration(ms: number): string {
   return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
 }
 
+export function formatResetCountdown(ms: number): string {
+  const duration = formatDuration(ms)
+  return duration === 'now' ? 'Resets now' : `Resets in ${duration}`
+}
+
 // ---------------------------------------------------------------------------
 // Shared icon component
 // ---------------------------------------------------------------------------
@@ -118,108 +123,6 @@ export function barColor(leftPct: number): string {
   return 'bg-red-500'
 }
 
-function TooltipWindowSection({
-  w,
-  label
-}: {
-  w: RateLimitWindow | null
-  label: string
-}): React.JSX.Element | null {
-  if (!w) {
-    return null
-  }
-  const leftPct = Math.max(0, Math.round(100 - w.usedPercent))
-  const resetIn = w.resetsAt ? formatDuration(w.resetsAt - Date.now()) : null
-
-  return (
-    <div className="space-y-1">
-      <div className="font-medium text-background">{label}</div>
-      <div className="w-full h-[6px] rounded-full bg-background/20 overflow-hidden">
-        <div
-          className={`h-full rounded-full ${barColor(leftPct)} transition-all duration-300`}
-          style={{ width: `${Math.min(100, Math.max(0, leftPct))}%` }}
-        />
-      </div>
-      <div className="flex justify-between text-background/60">
-        <span>{leftPct}% left</span>
-        {resetIn && <span>Resets in {resetIn}</span>}
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Tooltip content
-// ---------------------------------------------------------------------------
-
-export function ProviderTooltip({ p }: { p: ProviderRateLimits | null }): React.JSX.Element {
-  if (!p) {
-    return <span className="text-xs text-background/60">No data available</span>
-  }
-
-  const name =
-    p.provider === 'claude'
-      ? 'Claude'
-      : p.provider === 'codex'
-        ? 'Codex'
-        : p.provider === 'gemini'
-          ? 'Gemini'
-          : p.provider === 'opencode-go'
-            ? 'OpenCode Go'
-            : p.provider
-
-  if (p.status === 'unavailable') {
-    return (
-      <div className="text-xs w-[200px]">
-        <div className="flex items-center gap-1.5 font-medium text-background">
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className="text-background/60">{p.error ?? 'Unavailable'}</div>
-      </div>
-    )
-  }
-
-  if (p.status === 'error' && !p.session && !p.weekly && !p.monthly) {
-    return (
-      <div className="text-xs w-[200px]">
-        <div className="flex items-center gap-1.5 font-medium text-background">
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className="text-background/60">{p.error ?? 'Unable to fetch usage'}</div>
-      </div>
-    )
-  }
-
-  const updatedAgo = p.updatedAt ? `Updated ${formatTimeAgo(p.updatedAt)}` : 'Not yet updated'
-
-  return (
-    <div className="text-xs w-[200px] space-y-3">
-      {/* Header */}
-      <div>
-        <div className="flex items-center gap-1.5 font-medium text-background text-[13px]">
-          <ProviderIcon provider={p.provider} />
-          {name}
-        </div>
-        <div className="text-background/50">{updatedAgo}</div>
-      </div>
-
-      {/* Divider */}
-      <div className="border-t border-background/15" />
-
-      {getWindowSections(p).map((s) => (
-        <TooltipWindowSection key={s.label} w={s.window} label={s.label} />
-      ))}
-
-      {/* Stale data warning — softer label when prior data is still shown */}
-      {p.error ? (
-        <ErrorMessage message={p.error} stale={!!(p.session || p.weekly || p.monthly)} inverted />
-      ) : null}
-    </div>
-  )
-}
-
 export function ProviderPanel({
   p,
   inverted = false,
@@ -289,7 +192,7 @@ export function ProviderPanel({
       return null
     }
     const leftPct = Math.max(0, Math.round(100 - w.usedPercent))
-    const resetIn = w.resetsAt ? formatDuration(w.resetsAt - Date.now()) : null
+    const resetLabel = w.resetsAt ? formatResetCountdown(w.resetsAt - Date.now()) : null
 
     return (
       <div className="space-y-1">
@@ -302,7 +205,7 @@ export function ProviderPanel({
         </div>
         <div className={`flex justify-between ${mutedClass}`}>
           <span>{leftPct}% left</span>
-          {resetIn && <span>Resets in {resetIn}</span>}
+          {resetLabel && <span>{resetLabel}</span>}
         </div>
       </div>
     )

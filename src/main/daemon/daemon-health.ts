@@ -23,6 +23,7 @@ type ParsedDaemonPid = {
   pid: number
   startedAtMs: number | null
   entryPath: string | null
+  appVersion: string | null
 }
 
 function canConnectSocket(socketPath: string): Promise<boolean> {
@@ -32,19 +33,33 @@ function canConnectSocket(socketPath: string): Promise<boolean> {
       return
     }
     const sock = connect({ path: socketPath })
+    let settled = false
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      sock.off('connect', onConnect)
+      sock.off('error', onError)
+    }
+    const settle = (result: boolean): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve(result)
+    }
+    const onConnect = (): void => {
+      settle(true)
+      sock.destroy()
+    }
+    const onError = (): void => {
+      settle(false)
+    }
     const timer = setTimeout(() => {
+      settle(false)
       sock.destroy()
-      resolve(false)
     }, 500)
-    sock.on('connect', () => {
-      clearTimeout(timer)
-      sock.destroy()
-      resolve(true)
-    })
-    sock.on('error', () => {
-      clearTimeout(timer)
-      resolve(false)
-    })
+    sock.on('connect', onConnect)
+    sock.on('error', onError)
   })
 }
 
@@ -71,14 +86,17 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
       }
       settled = true
       clearTimeout(timer)
+      removeSocketListeners()
       sock?.destroy()
       resolve(result)
     }
-    const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
-
-    sock = connect({ path: socketPath })
-    sock.on('error', () => settle(false))
-    sock.on('connect', () => {
+    const removeSocketListeners = (): void => {
+      sock?.off('error', onError)
+      sock?.off('connect', onConnect)
+      sock?.off('data', onData)
+    }
+    const onError = (): void => settle(false)
+    const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
         version: PROTOCOL_VERSION,
@@ -87,10 +105,8 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
         role: 'control'
       }
       sock?.write(encodeNdjson(hello))
-    })
-
-    let buffer = ''
-    sock.on('data', (chunk: Buffer) => {
+    }
+    const onData = (chunk: Buffer): void => {
       if (settled) {
         return
       }
@@ -128,7 +144,15 @@ export function healthCheckDaemon(socketPath: string, tokenPath: string): Promis
           return
         }
       }
-    })
+    }
+    const timer = setTimeout(() => settle(false), HEALTH_CHECK_TIMEOUT_MS)
+
+    sock = connect({ path: socketPath })
+    sock.on('error', onError)
+    sock.on('connect', onConnect)
+
+    let buffer = ''
+    sock.on('data', onData)
   })
 }
 
@@ -167,14 +191,17 @@ export function getMacDaemonSystemResolverHealth(
       }
       settled = true
       clearTimeout(timer)
+      removeSocketListeners()
       sock?.destroy()
       resolve(result)
     }
-    const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
-
-    sock = connect({ path: socketPath })
-    sock.on('error', () => settle('unknown'))
-    sock.on('connect', () => {
+    const removeSocketListeners = (): void => {
+      sock?.off('error', onError)
+      sock?.off('connect', onConnect)
+      sock?.off('data', onData)
+    }
+    const onError = (): void => settle('unknown')
+    const onConnect = (): void => {
       const hello: HelloMessage = {
         type: 'hello',
         version: protocolVersion,
@@ -183,10 +210,8 @@ export function getMacDaemonSystemResolverHealth(
         role: 'control'
       }
       sock?.write(encodeNdjson(hello))
-    })
-
-    let buffer = ''
-    sock.on('data', (chunk: Buffer) => {
+    }
+    const onData = (chunk: Buffer): void => {
       if (settled) {
         return
       }
@@ -231,7 +256,15 @@ export function getMacDaemonSystemResolverHealth(
           return
         }
       }
-    })
+    }
+    const timer = setTimeout(() => settle('unknown'), RESOLVER_HEALTH_CHECK_TIMEOUT_MS)
+
+    sock = connect({ path: socketPath })
+    sock.on('error', onError)
+    sock.on('connect', onConnect)
+
+    let buffer = ''
+    sock.on('data', onData)
   })
 }
 
@@ -254,6 +287,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
       pid?: unknown
       startedAtMs?: unknown
       entryPath?: unknown
+      appVersion?: unknown
     }
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
@@ -262,7 +296,8 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
           typeof parsed.startedAtMs === 'number' && Number.isFinite(parsed.startedAtMs)
             ? parsed.startedAtMs
             : null,
-        entryPath: typeof parsed.entryPath === 'string' ? parsed.entryPath : null
+        entryPath: typeof parsed.entryPath === 'string' ? parsed.entryPath : null,
+        appVersion: typeof parsed.appVersion === 'string' ? parsed.appVersion : null
       }
     }
   } catch {
@@ -270,7 +305,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   }
 
   const pid = Number(trimmed)
-  return Number.isFinite(pid) ? { pid, startedAtMs: null, entryPath: null } : null
+  return Number.isFinite(pid) ? { pid, startedAtMs: null, entryPath: null, appVersion: null } : null
 }
 
 function getLinuxProcessStartedAtMs(pid: number): number | null {
@@ -438,16 +473,8 @@ export function getDaemonLaunchIdentity(
   expectedEntryPath: string,
   protocolVersion = PROTOCOL_VERSION
 ): DaemonLaunchIdentity {
-  let parsedPid: ParsedDaemonPid | null
-  try {
-    parsedPid = parseDaemonPidFile(
-      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
-    )
-  } catch {
-    return 'unknown'
-  }
-
-  if (!parsedPid || !isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs)) {
+  const parsedPid = readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
+  if (!parsedPid) {
     return 'unknown'
   }
 
@@ -464,6 +491,50 @@ export function getDaemonLaunchIdentity(
     return 'unknown'
   }
   return commandLine.includes(expectedEntryPath) ? 'match' : 'mismatch'
+}
+
+function readVerifiedDaemonPid(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  protocolVersion = PROTOCOL_VERSION
+): ParsedDaemonPid | null {
+  let parsedPid: ParsedDaemonPid | null
+  try {
+    parsedPid = parseDaemonPidFile(
+      readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')
+    )
+  } catch {
+    return null
+  }
+
+  if (!parsedPid || !isDaemonProcess(parsedPid.pid, socketPath, tokenPath, parsedPid.startedAtMs)) {
+    return null
+  }
+
+  return parsedPid
+}
+
+export function isDaemonStaleForCurrentBundle(
+  runtimeDir: string,
+  socketPath: string,
+  tokenPath: string,
+  currentAppVersion: string,
+  protocolVersion = PROTOCOL_VERSION
+): boolean {
+  const parsedPid = readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
+  if (!parsedPid) {
+    return false
+  }
+
+  if (parsedPid.appVersion !== null) {
+    return parsedPid.appVersion !== currentAppVersion
+  }
+
+  // Why: older packaged daemons do not carry a reliable build-generation
+  // marker. Replacing them once prevents archive-preserved mtimes from
+  // reusing stale native modules across the first metadata-aware upgrade.
+  return true
 }
 
 export async function killStaleDaemon(

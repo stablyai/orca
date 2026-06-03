@@ -93,6 +93,27 @@ function isDevCliInvocation(): boolean {
   return process.env.ORCA_USER_DATA_PATH?.includes('orca-dev') ?? false
 }
 
+function getOptionalPositiveIntegerValueFlag(
+  flags: Map<string, string | boolean>,
+  name: string
+): number | undefined {
+  if (!flags.has(name)) {
+    return undefined
+  }
+  const raw = flags.get(name)
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new RuntimeClientError('invalid_argument', `Missing value for --${name}.`)
+  }
+  const value = Number(raw)
+  if (!Number.isFinite(value) || !Number.isInteger(value) || value <= 0) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Invalid positive integer for --${name}: ${raw}`
+    )
+  }
+  return value
+}
+
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration send': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
@@ -118,9 +139,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration check': async ({ flags, client, cwd, json }) => {
-    const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
     const wait = flags.has('wait')
-    const timeoutMs = flags.has('timeout-ms') ? Number(flags.get('timeout-ms')) : undefined
+    const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
+    const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
 
     // Why: Claude Code's Bash tool auto-backgrounds subprocesses that produce
     // no output for ~2 min (shorter on the non-interactive path). Emit a
@@ -303,8 +324,9 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   },
 
   'orchestration ask': async ({ flags, client, cwd, json }) => {
+    const parsedTimeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const timeoutMs = flags.has('timeout-ms') ? Number(flags.get('timeout-ms')) : 600_000
+    const timeoutMs = parsedTimeoutMs ?? 600_000
     const result = await client.call<{
       answer: string | null
       messageId: string | null
@@ -316,7 +338,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         to: getRequiredStringFlag(flags, 'to'),
         question: getRequiredStringFlag(flags, 'question'),
         options: getOptionalStringFlag(flags, 'options'),
-        timeoutMs: flags.has('timeout-ms') ? Number(flags.get('timeout-ms')) : undefined,
+        timeoutMs: parsedTimeoutMs,
         from
       },
       // Why: the runtime's `waitForMessage` can block up to `timeoutMs`, but

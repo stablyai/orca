@@ -59,10 +59,10 @@ export function getAutomationRunViewState({
   if (run.workspaceId && workspaceExists) {
     return {
       availability: 'workspace',
-      actionLabel: 'Open workspace',
+      actionLabel: 'Resume workspace',
       statusLabel: run.terminalSessionId
-        ? 'Opened workspace; original terminal is closed.'
-        : 'Opened workspace.',
+        ? 'Workspace is available; original terminal is closed.'
+        : 'Workspace is available.',
       canOpen: true
     }
   }

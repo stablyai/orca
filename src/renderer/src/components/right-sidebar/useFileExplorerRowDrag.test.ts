@@ -64,4 +64,24 @@ describe('getWorkspaceFileDragPaths', () => {
       })
     ).toEqual(paths)
   })
+
+  it('drops selected descendants so moving a folder does not also move its children', () => {
+    const paths = ['/repo/src', '/repo/src/components/Button.tsx', '/repo/src-extra/index.ts']
+    expect(
+      getWorkspaceFileDragPaths({
+        getData: (type) =>
+          type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(paths) : ''
+      })
+    ).toEqual(['/repo/src', '/repo/src-extra/index.ts'])
+  })
+
+  it('drops selected descendants with Windows separators and case', () => {
+    const paths = ['C:\\Repo\\src', 'c:\\repo\\src\\components\\Button.tsx']
+    expect(
+      getWorkspaceFileDragPaths({
+        getData: (type) =>
+          type === WORKSPACE_FILE_PATHS_MIME ? encodeWorkspaceFilePaths(paths) : ''
+      })
+    ).toEqual(['C:\\Repo\\src'])
+  })
 })

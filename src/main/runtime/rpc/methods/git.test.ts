@@ -304,6 +304,24 @@ describe('git RPC methods', () => {
     expect(runtime.fetchRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
   })
 
+  it('forwards fast-forward push target to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      fastForwardRuntimeGit: vi.fn().mockResolvedValue({ ok: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+    const pushTarget = { remoteName: 'fork', branchName: 'feature' }
+
+    await dispatcher.dispatch(
+      makeRequest('git.fastForward', {
+        worktree: 'id:wt-1',
+        pushTarget
+      })
+    )
+
+    expect(runtime.fastForwardRuntimeGit).toHaveBeenCalledWith('id:wt-1', pushTarget)
+  })
+
   it('forwards commit-message settings to the runtime', async () => {
     const commitMessageAi = {
       enabled: true,

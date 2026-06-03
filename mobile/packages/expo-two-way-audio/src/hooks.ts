@@ -12,15 +12,21 @@ export const useMicrophonePermissions = createPermissionHook({
   requestMethod: requestMicrophonePermissionsAsync
 })
 
-export function useIsRecording() {
-  const subscribe = (cb: () => void) => {
-    const sub = addExpoTwoWayAudioEventListener('onRecordingChange', cb)
-    return () => sub.remove()
-  }
-  const getSnapshot = () => isRecording()
-  const getServerSnapshot = () => false
+// Why: useSyncExternalStore resubscribes when these identities change; keep
+// the native recording listener stable across component re-renders.
+const subscribeToRecordingChanges = (cb: () => void) => {
+  const sub = addExpoTwoWayAudioEventListener('onRecordingChange', cb)
+  return () => sub.remove()
+}
+const getRecordingSnapshot = () => isRecording()
+const getServerRecordingSnapshot = () => false
 
-  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+export function useIsRecording() {
+  return useSyncExternalStore(
+    subscribeToRecordingChanges,
+    getRecordingSnapshot,
+    getServerRecordingSnapshot
+  )
 }
 
 export function useExpoTwoWayAudioEventListener<K extends keyof ExpoTwoWayAudioEventMap>(

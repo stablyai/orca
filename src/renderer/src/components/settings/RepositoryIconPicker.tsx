@@ -1,8 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2, RotateCcw } from 'lucide-react'
-import type { Repo } from '../../../../shared/types'
-import { faviconUrlFromWebsite, type RepoIcon } from '../../../../shared/repo-icon'
+import type { GitHubRepositoryIdentity, Repo } from '../../../../shared/types'
+import {
+  faviconUrlFromWebsite,
+  githubAvatarIcon,
+  type RepoIcon
+} from '../../../../shared/repo-icon'
 import { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from '../../../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { Button } from '../ui/button'
@@ -15,6 +19,7 @@ import { RepoIconGlyph, REPO_LUCIDE_ICON_OPTIONS } from '../repo/repo-icon'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { useMountedRef } from '@/hooks/useMountedRef'
 
 const EMOJI_OPTIONS = ['🚀', '✨', '💻', '🧠', '📦', '🔧', '🎨', '🌐', '📊', '🔒', '⚡', '✅']
 
@@ -27,16 +32,21 @@ export function RepositoryIconPicker({
 }): React.JSX.Element {
   const [website, setWebsite] = useState('')
   const [loadingGitHub, setLoadingGitHub] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const mountedRef = useMountedRef()
   const activeRuntimeEnvironmentId = useAppStore(
     (state) => state.settings?.activeRuntimeEnvironmentId ?? null
   )
-  const selectedLucideName =
-    repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : repo.repoIcon == null ? 'Folder' : null
+  // Why: only highlight a lucide tile when one is explicitly chosen; a null icon
+  // means "default avatar", not the Folder fallback the glyph happens to render.
+  const selectedLucideName = repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : null
   const selectedEmoji = repo.repoIcon?.type === 'emoji' ? repo.repoIcon.emoji : ''
   const selectedBadgeColor = normalizeRepoBadgeColor(repo.badgeColor) ?? DEFAULT_REPO_BADGE_COLOR
   const isPresetBadgeColor = REPO_COLORS.some((color) => color === selectedBadgeColor)
+  // Why: the GitHub avatar is the default icon, so open on the Avatar tab unless
+  // the repo already uses an explicit emoji or lucide icon.
   const initialTab =
-    repo.repoIcon?.type === 'image' ? 'image' : repo.repoIcon?.type === 'emoji' ? 'emoji' : 'icon'
+    repo.repoIcon?.type === 'emoji' ? 'emoji' : repo.repoIcon?.type === 'lucide' ? 'icon' : 'avatar'
   const runtimeTarget = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
     [activeRuntimeEnvironmentId]
@@ -44,15 +54,21 @@ export function RepositoryIconPicker({
 
   const currentIconLabel = useMemo(() => {
     if (repo.repoIcon?.type === 'image') {
+      if (repo.repoIcon.source === 'github') {
+        return 'GitHub avatar'
+      }
       return repo.repoIcon.label ?? 'Custom image'
     }
     if (repo.repoIcon?.type === 'emoji') {
       return `${repo.repoIcon.emoji} emoji`
     }
-    const label =
-      REPO_LUCIDE_ICON_OPTIONS.find((option) => option.name === selectedLucideName)?.label ??
-      'Folder'
-    return `${label} icon with repo color`
+    if (repo.repoIcon?.type === 'lucide') {
+      const label =
+        REPO_LUCIDE_ICON_OPTIONS.find((option) => option.name === selectedLucideName)?.label ??
+        'Folder'
+      return `${label} icon with repo color`
+    }
+    return 'Default'
   }, [repo.repoIcon, selectedLucideName])
 
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
@@ -61,7 +77,7 @@ export function RepositoryIconPicker({
   const handleUploadImage = async () => {
     try {
       const result = await window.api.shell.pickRepoIconImage()
-      if (!result) {
+      if (!result || !mountedRef.current) {
         return
       }
       setIcon({
@@ -84,36 +100,114 @@ export function RepositoryIconPicker({
     setIcon({ type: 'image', src, source: 'favicon', label: 'Website favicon' })
   }
 
+  // Why: SSH runtime repos only exist remotely, so resolve their git remotes
+  // through the active runtime instead of the local Electron main process.
+  const resolveUpstreamLive = useCallback(async (): Promise<GitHubRepositoryIdentity | null> => {
+    return runtimeTarget.kind === 'environment'
+      ? await callRuntimeRpc<GitHubRepositoryIdentity | null>(
+          runtimeTarget,
+          'github.repoUpstream',
+          { repo: repo.id },
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.gh.repoUpstream({ repoPath: repo.path, repoId: repo.id })
+  }, [runtimeTarget, repo.id, repo.path])
+
+  const resolveGitHubAvatarIcon = async (): Promise<RepoIcon | null> => {
+    // Why: a fork's default avatar is the upstream owner, not the personal fork
+    // that `origin` points at. Use the stored value when known, else resolve live
+    // (covers repos added before fork detection existed).
+    const upstream =
+      repo.upstream !== undefined ? repo.upstream : await resolveUpstreamLive().catch(() => null)
+    if (upstream) {
+      return githubAvatarIcon(upstream)
+    }
+    const slug =
+      runtimeTarget.kind === 'environment'
+        ? await callRuntimeRpc<{ owner: string; repo: string } | null>(
+            runtimeTarget,
+            'github.repoSlug',
+            { repo: repo.id },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
+    return slug ? githubAvatarIcon(slug) : null
+  }
+
   const handleUseGitHubAvatar = async () => {
     setLoadingGitHub(true)
     try {
-      // Why: SSH runtime repos only exist remotely, so resolve their git remotes
-      // through the active runtime instead of the local Electron main process.
-      const slug =
-        runtimeTarget.kind === 'environment'
-          ? await callRuntimeRpc<{ owner: string; repo: string } | null>(
-              runtimeTarget,
-              'github.repoSlug',
-              { repo: repo.id },
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
-      if (!slug) {
+      const icon = await resolveGitHubAvatarIcon()
+      if (!mountedRef.current) {
+        return
+      }
+      if (!icon) {
         toast.error('No GitHub remote found for this repo.')
         return
       }
-      setIcon({
-        type: 'image',
-        src: `https://github.com/${encodeURIComponent(slug.owner)}.png?size=64`,
-        source: 'github',
-        label: `${slug.owner}/${slug.repo}`
-      })
+      setIcon(icon)
     } catch {
-      toast.error('Failed to resolve the GitHub repo.')
+      if (mountedRef.current) {
+        toast.error('Failed to resolve the GitHub repo.')
+      }
     } finally {
-      setLoadingGitHub(false)
+      if (mountedRef.current) {
+        setLoadingGitHub(false)
+      }
     }
   }
+
+  // Why: the GitHub avatar is the default repo icon, so Reset restores it when a
+  // GitHub remote exists and otherwise clears to the Folder fallback (null).
+  const handleResetToDefault = async () => {
+    setResetting(true)
+    try {
+      const icon = await resolveGitHubAvatarIcon().catch(() => null)
+      if (!mountedRef.current) {
+        return
+      }
+      setIcon(icon)
+    } finally {
+      if (mountedRef.current) {
+        setResetting(false)
+      }
+    }
+  }
+
+  // Why: repos added before fork detection existed have no stored upstream.
+  // Resolve it once when their settings open so existing forks pick up the
+  // upstream avatar and fork badge without a manual reset.
+  const upstreamBackfilledRef = useRef<string | null>(null)
+  useEffect(() => {
+    // Why: the ref blocks a re-fire during the in-flight window, before the
+    // stored upstream propagates back through props on the next render.
+    if (repo.upstream !== undefined || upstreamBackfilledRef.current === repo.id) {
+      return
+    }
+    upstreamBackfilledRef.current = repo.id
+    let cancelled = false
+    void (async () => {
+      let upstream: GitHubRepositoryIdentity | null
+      try {
+        upstream = await resolveUpstreamLive()
+      } catch {
+        return
+      }
+      if (cancelled || !mountedRef.current) {
+        return
+      }
+      const updates: Partial<Repo> = { upstream: upstream ?? null }
+      // Only migrate the auto-detected origin avatar; never override an icon the
+      // user explicitly chose.
+      if (upstream && repo.repoIcon?.type === 'image' && repo.repoIcon.source === 'github') {
+        updates.repoIcon = githubAvatarIcon(upstream)
+      }
+      updateRepo(repo.id, updates)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [repo.id, repo.upstream, repo.repoIcon, resolveUpstreamLive, updateRepo, mountedRef])
 
   return (
     <div className="space-y-3">
@@ -133,7 +227,8 @@ export function RepositoryIconPicker({
           variant="outline"
           size="sm"
           className="gap-2"
-          onClick={() => setIcon(null)}
+          disabled={resetting}
+          onClick={() => void handleResetToDefault()}
         >
           <RotateCcw className="size-3.5" />
           Reset
@@ -177,16 +272,62 @@ export function RepositoryIconPicker({
 
       <Tabs defaultValue={initialTab} className="gap-3">
         <TabsList variant="line" className="h-8">
+          <TabsTrigger value="avatar" className="h-7 text-xs">
+            Avatar
+          </TabsTrigger>
           <TabsTrigger value="icon" className="h-7 text-xs">
             Icon
           </TabsTrigger>
           <TabsTrigger value="emoji" className="h-7 text-xs">
             Emoji
           </TabsTrigger>
-          <TabsTrigger value="image" className="h-7 text-xs">
-            Image
-          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="avatar" className="space-y-3">
+          <Button
+            type="button"
+            variant="default"
+            className="w-full gap-2"
+            disabled={loadingGitHub}
+            onClick={() => void handleUseGitHubAvatar()}
+          >
+            <Github className="size-3.5" />
+            Use GitHub Avatar
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Used by default — GitHub always provides one, even when the owner hasn&apos;t set a
+            custom image.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={handleUploadImage}
+          >
+            <Image className="size-3.5" />
+            Upload PNG
+          </Button>
+          <div className="flex gap-2">
+            <Input
+              value={website}
+              onChange={(event) => setWebsite(event.target.value)}
+              placeholder="example.com"
+              className="h-9 text-sm"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 gap-2"
+              onClick={handleUseWebsiteFavicon}
+            >
+              <Link2 className="size-3.5" />
+              Favicon
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">PNG uploads must be 256KB or smaller.</p>
+        </TabsContent>
 
         <TabsContent value="icon" className="space-y-3">
           <div className="grid grid-cols-10 gap-1.5">
@@ -226,51 +367,6 @@ export function RepositoryIconPicker({
               {emoji}
             </Button>
           ))}
-        </TabsContent>
-
-        <TabsContent value="image" className="space-y-3">
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={handleUploadImage}
-            >
-              <Image className="size-3.5" />
-              Upload PNG
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              disabled={loadingGitHub}
-              onClick={() => void handleUseGitHubAvatar()}
-            >
-              <Github className="size-3.5" />
-              GitHub Avatar
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Input
-              value={website}
-              onChange={(event) => setWebsite(event.target.value)}
-              placeholder="example.com"
-              className="h-9 text-sm"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-9 gap-2"
-              onClick={handleUseWebsiteFavicon}
-            >
-              <Link2 className="size-3.5" />
-              Favicon
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">PNG uploads must be 256KB or smaller.</p>
         </TabsContent>
       </Tabs>
     </div>

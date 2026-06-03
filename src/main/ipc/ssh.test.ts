@@ -47,6 +47,7 @@ const {
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false),
     onNotification: vi.fn(),
+    onRequest: vi.fn().mockReturnValue(() => {}),
     onDispose: vi.fn().mockReturnValue(() => {}),
     request: vi.fn().mockResolvedValue({}),
     notify: vi.fn()
@@ -151,7 +152,8 @@ vi.mock('./pty', () => ({
   deletePtyOwnership: vi.fn(),
   setPtyOwnership: vi.fn(),
   getSshPtyProvider: vi.fn(),
-  getPtyIdsForConnection: vi.fn().mockReturnValue([])
+  getPtyIdsForConnection: vi.fn().mockReturnValue([]),
+  isRendererPtyOutputPaused: vi.fn().mockReturnValue(false)
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({

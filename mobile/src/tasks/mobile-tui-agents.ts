@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../../src/shared/types'
 // mirrored with src/shared/tui-agent-selection.ts and assert parity in tests.
 export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
+  'openclaude',
   'codex',
   'grok',
   'copilot',
@@ -37,6 +38,7 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
 
 export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   claude: 'Claude',
+  openclaude: 'OpenClaude',
   codex: 'Codex',
   grok: 'Grok',
   copilot: 'GitHub Copilot',
@@ -68,6 +70,7 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
 }
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
+  openclaude: 'openclaude.gitlawb.com',
   grok: 'x.ai',
   copilot: 'github.com',
   opencode: 'opencode.ai',
@@ -97,6 +100,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
 
 export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
   claude: 'claude',
+  openclaude: 'openclaude',
   codex: 'codex',
   grok: 'grok',
   copilot: 'copilot',
@@ -131,7 +135,7 @@ export function isMobileTuiAgent(value: unknown): value is TuiAgent {
   return MOBILE_TUI_AGENT_AUTO_PICK_ORDER.includes(value as TuiAgent)
 }
 
-export function normalizeDisabledMobileTuiAgents(value: unknown): TuiAgent[] {
+function normalizeDisabledMobileTuiAgents(value: unknown): TuiAgent[] {
   if (!Array.isArray(value)) {
     return []
   }

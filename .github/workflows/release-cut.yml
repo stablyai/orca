@@ -62,6 +62,7 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
+      latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
     steps:
       - name: Checkout ref
         uses: actions/checkout@v6
@@ -251,11 +252,24 @@ jobs:
           }
 
           highest_rc_for_base() {
-            local base="$1"
-            git tag --list "v${base}-rc.*" \
-                | sed -E "s/^v${base//./\\.}-rc\.//" \
-                | sort -n \
-                | tail -n 1 || true
+            node config/scripts/release-rc-history.mjs "$1"
+          }
+
+          tag_matches_current_ref() {
+            local tag="$1"
+            local tag_commit
+            local head_commit
+            if ! tag_commit="$(git rev-parse "${tag}^{}" 2>/dev/null)"; then
+              return 1
+            fi
+            head_commit="$(git rev-parse HEAD)"
+            if [[ "$tag_commit" == "$head_commit" ]]; then
+              return 0
+            fi
+
+            local tag_parent
+            tag_parent="$(git rev-parse "${tag_commit}^" 2>/dev/null)" || return 1
+            [[ "$tag_parent" == "$head_commit" ]]
           }
 
           release_draft_state() {
@@ -279,6 +293,10 @@ jobs:
             release_state="$(release_draft_state "$tag")"
             case "$release_state" in
               missing|true)
+                if ! tag_matches_current_ref "$tag"; then
+                  echo "::warning::Tag $tag already exists but was cut from a different release ref ($reason) - cutting the next version instead of reusing stale artifacts."
+                  return 1
+                fi
                 echo "::warning::Tag $tag already exists but has no published release ($reason) - recovering by re-dispatching the release build against the existing tag."
                 echo "recovered_tag=$tag" >>"$GITHUB_OUTPUT"
                 echo "recovered=true" >>"$GITHUB_OUTPUT"
@@ -316,10 +334,11 @@ jobs:
               else
                 existing_rc_tag="v${base}-rc.${highest_rc}"
                 # Why: a failed or GitHub-stuck run can leave the highest RC
-                # tag attached to a draft/missing release. Resume that tag so
-                # retries finish the intended release instead of piling up
-                # vX.Y.Z-rc.N+1 drafts.
-                recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                # tag attached to a draft/missing release. Resume only when it
+                # was cut from this ref; stale attempts advance to rc.N+1.
+                if git rev-parse "$existing_rc_tag" >/dev/null 2>&1; then
+                  recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
+                fi
                 new="${base}-rc.$((highest_rc + 1))"
               fi
               ;;
@@ -330,6 +349,33 @@ jobs:
                 echo "::error::Refusing to cut $KIND $new: not greater than latest stable $latest_stable." >&2
                 exit 1
               fi
+
+              # Why: a stale orphan stable tag can exist from an older release
+              # ref after main has moved on. If it cannot be recovered for the
+              # current ref, advance to the next stable version instead of
+              # wedging every future patch cut on the same collision.
+              for _ in {1..100}; do
+                candidate_tag="v$new"
+                if ! git rev-parse "$candidate_tag" >/dev/null 2>&1; then
+                  break
+                fi
+
+                candidate_release_state="$(release_draft_state "$candidate_tag")"
+                case "$candidate_release_state" in
+                  missing|true)
+                    recover_unpublished_tag "$candidate_tag" "tag collision" || true
+                    new="$(bump "$new" "$KIND")"
+                    ;;
+                  false)
+                    echo "::error::Tag $candidate_tag already exists with a published release. Refusing to skip over a shipped version." >&2
+                    exit 1
+                    ;;
+                  *)
+                    echo "::error::Unexpected release state for $candidate_tag: $candidate_release_state" >&2
+                    exit 1
+                    ;;
+                esac
+              done
               ;;
             *)
               echo "::error::Unknown kind: $KIND" >&2
@@ -362,7 +408,7 @@ jobs:
           # over a shipped version) and needs human attention.
           if git rev-parse "v$new" >/dev/null 2>&1; then
             recover_unpublished_tag "v$new" "tag collision" || {
-              echo "::error::Tag v$new already exists and has a published release. Refusing to re-cut over a shipped version." >&2
+              echo "::error::Tag v$new already exists and cannot be recovered for this ref. Refusing to re-cut over an existing version." >&2
               exit 1
             }
           fi
@@ -428,7 +474,7 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
-      - name: Create draft release with auto-generated notes
+      - name: Create draft release with bounded generated notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
@@ -438,15 +484,7 @@ jobs:
             exit 0
           fi
 
-          is_rc=false
-          if [[ "$TAG" == *"-rc."* ]]; then
-            is_rc=true
-          fi
-
-          gh release create "$TAG" \
-            --draft \
-            --generate-notes \
-            --prerelease="$is_rc"
+          node config/scripts/create-draft-release.mjs "$TAG"
 
   # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
   # that publish-release must not depend on it.
@@ -548,9 +586,11 @@ jobs:
       # Why: `pnpm build:release` verifies the Linux computer-use provider by
       # importing AT-SPI bindings, which are runtime package deps but are not
       # present on stock GitHub Ubuntu release runners.
+      # Why: `rpm` is needed by electron-builder's fpm backend to produce the
+      # .rpm artifact. Stock Ubuntu runners do not ship it.
       - name: Install Linux computer-use provider dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+        run: sudo apt-get update && sudo apt-get install -y python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool rpm
 
       - name: Verify macOS signing environment
         if: matrix.platform == 'mac'
@@ -764,11 +804,22 @@ jobs:
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
 
+  homebrew-bump-published-rc-draft:
+    needs:
+      - cut
+    # Why: publish-complete-draft-releases can expose a recovered RC without
+    # running the build/publish jobs; still advance the RC cask to that tag.
+    if: ${{ needs.cut.outputs.latest_published_rc_tag != '' }}
+    uses: ./.github/workflows/homebrew-bump.yml
+    with:
+      tag: ${{ needs.cut.outputs.latest_published_rc_tag }}
+    secrets: inherit
+
   homebrew-bump:
     needs:
       - cut
       - publish-release
-    if: ${{ !contains(needs.cut.outputs.tag, '-rc.') }}
+    if: ${{ needs.cut.outputs.tag != '' && startsWith(needs.cut.outputs.tag, 'v') }}
     uses: ./.github/workflows/homebrew-bump.yml
     with:
       tag: ${{ needs.cut.outputs.tag }}

@@ -12,7 +12,9 @@ const NOTIF_KEY = 'orca:pushNotificationsEnabled'
 export async function loadPushNotificationsEnabled(): Promise<boolean> {
   try {
     const raw = await AsyncStorage.getItem(NOTIF_KEY)
-    if (raw === null) return false
+    if (raw === null) {
+      return false
+    }
     return raw === 'true'
   } catch {
     return false
@@ -55,7 +57,9 @@ function allowedString(value: unknown, allowed: Set<string>, fallback: string): 
 export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
   try {
     const raw = await AsyncStorage.getItem(PINS_PREFIX + hostId)
-    if (!raw) return new Set()
+    if (!raw) {
+      return new Set()
+    }
     return new Set(stringArray(JSON.parse(raw)))
   } catch {
     return new Set()
@@ -69,7 +73,9 @@ export async function savePinnedIds(hostId: string, ids: Set<string>): Promise<v
 export async function loadPreferences(hostId: string): Promise<HostPreferences> {
   try {
     const raw = await AsyncStorage.getItem(PREFS_PREFIX + hostId)
-    if (!raw) return DEFAULT_PREFS
+    if (!raw) {
+      return DEFAULT_PREFS
+    }
     const parsed = JSON.parse(raw) as Partial<HostPreferences>
     return {
       sortMode: allowedString(parsed.sortMode, SORT_MODES, DEFAULT_PREFS.sortMode),

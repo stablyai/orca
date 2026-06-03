@@ -99,6 +99,30 @@ describe('fetchClaudeRateLimits', () => {
     }
   })
 
+  it('does not read host credentials when WSL config resolution fails', async () => {
+    await expect(
+      fetchClaudeRateLimits({
+        authPreparation: {
+          configDir: '/Users/test/.claude',
+          runtime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxConfigDir: null,
+          envPatch: {},
+          stripAuthEnv: true,
+          provenance: 'wsl:Ubuntu:system'
+        }
+      })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'WSL Claude config unavailable for Ubuntu'
+    })
+
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(readActiveClaudeKeychainCredentialsStrict).not.toHaveBeenCalled()
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
   it('reads scoped default-config Keychain credentials for OAuth usage fetches', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {
@@ -168,7 +192,10 @@ describe('fetchClaudeRateLimits', () => {
       status: 'ok'
     })
 
-    expect(readFileMock).toHaveBeenCalledWith('/Users/test/.claude/.credentials.json', 'utf-8')
+    expect(readFileMock).toHaveBeenCalledWith(
+      join('/Users/test/.claude', '.credentials.json'),
+      'utf-8'
+    )
     expect(netFetchMock).toHaveBeenCalledWith(
       'https://api.anthropic.com/api/oauth/usage',
       expect.objectContaining({
@@ -295,6 +322,102 @@ describe('fetchClaudeRateLimits', () => {
         })
       })
     )
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('does not mask OAuth auth failures with the PTY fallback', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'stale-oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            type: 'authentication_error',
+            message: 'Invalid OAuth token.'
+          }
+        }),
+        { status: 401 }
+      )
+    )
+
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Invalid OAuth token.'
+    })
+
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('does not start the PTY fallback when disabled for background fetches', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: 'oauth-token',
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() + 60_000
+        }
+      })
+    )
+    netFetchMock.mockResolvedValueOnce(new Response('temporary failure', { status: 500 }))
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'OAuth API returned 500'
+    })
+
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('does not start the PTY fallback for refresh-only credentials when disabled', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
+      JSON.stringify({
+        claudeAiOauth: {
+          refreshToken: 'refresh-token',
+          expiresAt: Date.now() - 60_000
+        }
+      })
+    )
+
+    await expect(
+      fetchClaudeRateLimits({ authPreparation, allowPtyFallback: false })
+    ).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Claude OAuth access token unavailable'
+    })
+
     expect(fetchViaPty).not.toHaveBeenCalled()
   })
 

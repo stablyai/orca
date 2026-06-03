@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 
 import { workItemsCacheKey, type CacheEntry } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearIssue } from '../../../shared/types'
+import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
 import {
   buildTaskPageRepoSourceState,
   deriveTaskPageGitHubWorkItemsFetchOptions,
@@ -140,6 +140,27 @@ describe('task page cache selectors', () => {
     expect(next).toEqual([refreshedFirst, refreshedSecond])
   })
 
+  it('merges landing refresh auto-merge state changes without reordering GitHub rows', () => {
+    const first = {
+      ...workItem('pr-1', 'repo-1'),
+      type: 'pr' as const,
+      state: 'open' as const,
+      autoMergeEnabled: false,
+      mergeQueueRequired: null,
+      updatedAt: '2026-01-01'
+    }
+    const refreshedFirst = {
+      ...first,
+      autoMergeEnabled: true,
+      mergeQueueRequired: true
+    }
+
+    const next = reconcileTaskPageItemsAfterLandingRefresh([first], [refreshedFirst])
+
+    expect(next).toEqual([refreshedFirst])
+    expect(shouldReplaceTaskPageItemsAfterRefresh([first], [refreshedFirst])).toBe(false)
+  })
+
   it('replaces GitHub landing refresh rows when membership changes', () => {
     const first = workItem('issue-1', 'repo-1')
     const second = workItem('issue-2', 'repo-1')
@@ -228,9 +249,14 @@ describe('task page cache selectors', () => {
     const searchCache = {
       assigned: entry<LinearIssue[]>([searchIssue])
     }
+    const listIssue = linearIssue('LIN-3')
+    const listCache = {
+      all: entry<LinearCollectionResult<LinearIssue>>({ items: [listIssue] })
+    }
 
-    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, null)).toBeNull()
-    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, 'LIN-1')).toBe(issue)
-    expect(findTaskPageLinearDrawerIssue({}, searchCache, 'LIN-2')).toBe(searchIssue)
+    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, null)).toBeNull()
+    expect(findTaskPageLinearDrawerIssue(issueCache, searchCache, listCache, 'LIN-1')).toBe(issue)
+    expect(findTaskPageLinearDrawerIssue({}, searchCache, listCache, 'LIN-2')).toBe(searchIssue)
+    expect(findTaskPageLinearDrawerIssue({}, {}, listCache, 'LIN-3')).toBe(listIssue)
   })
 })

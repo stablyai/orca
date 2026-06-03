@@ -46,7 +46,14 @@ export type TabsSlice = {
     init?: Partial<
       Pick<
         Tab,
-        'id' | 'entityId' | 'label' | 'customLabel' | 'color' | 'isPreview' | 'isPinned'
+        | 'id'
+        | 'entityId'
+        | 'label'
+        | 'generatedLabel'
+        | 'customLabel'
+        | 'color'
+        | 'isPreview'
+        | 'isPinned'
       > & {
         targetGroupId: string
         activate: boolean
@@ -108,7 +115,12 @@ export type TabsSlice = {
   copyUnifiedTabToGroup: (
     tabId: string,
     targetGroupId: string,
-    init?: Partial<Pick<Tab, 'id' | 'entityId' | 'label' | 'customLabel' | 'color' | 'isPinned'>>
+    init?: Partial<
+      Pick<
+        Tab,
+        'id' | 'entityId' | 'label' | 'generatedLabel' | 'customLabel' | 'color' | 'isPinned'
+      >
+    >
   ) => Tab | null
   mergeGroupIntoSibling: (worktreeId: string, groupId: string) => string | null
   setTabGroupSplitRatio: (worktreeId: string, nodePath: string, ratio: number) => void
@@ -174,6 +186,22 @@ function updateSplitRatio(
 
 function findFirstLeaf(root: TabGroupLayoutNode): string {
   return root.type === 'leaf' ? root.groupId : findFirstLeaf(root.first)
+}
+
+function partitionPinnedTabOrder(tabOrder: string[], tabs: Tab[], movingTabId: string): string[] {
+  const tabById = new Map(tabs.map((tab) => [tab.id, tab]))
+  const withoutMoving = dedupeTabOrder(tabOrder).filter((id) => id !== movingTabId)
+  const pinnedIds = withoutMoving.filter((id) => tabById.get(id)?.isPinned)
+  const unpinnedIds = withoutMoving.filter((id) => !tabById.get(id)?.isPinned)
+  return [...pinnedIds, movingTabId, ...unpinnedIds]
+}
+
+function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] {
+  const orderMap = new Map(tabOrder.map((id, index) => [id, index]))
+  return tabs.map((tab) => {
+    const sortOrder = orderMap.get(tab.id)
+    return sortOrder === undefined ? tab : { ...tab, sortOrder }
+  })
 }
 
 export function findSiblingGroupId(root: TabGroupLayoutNode, targetGroupId: string): string | null {
@@ -443,6 +471,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         contentType,
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
+        ...(init?.generatedLabel !== undefined ? { generatedLabel: init.generatedLabel } : {}),
         customLabel: init?.customLabel ?? null,
         color: init?.color ?? null,
         sortOrder: nextOrder.length,
@@ -780,10 +809,34 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   pinTab: (tabId) => {
     const exists = get().getTab(tabId) !== null
-    set(
-      (state) =>
-        patchTab(state.unifiedTabsByWorktree, tabId, { isPinned: true, isPreview: false }) ?? {}
-    )
+    set((state) => {
+      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      if (!found) {
+        return {}
+      }
+      const { tab, worktreeId } = found
+      const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId ? { ...candidate, isPinned: true, isPreview: false } : candidate
+      )
+      const groups = state.groupsByWorktree[worktreeId] ?? []
+      const group = groups.find((candidate) => candidate.id === tab.groupId)
+      if (!group) {
+        return {
+          unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
+        }
+      }
+      const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
+      return {
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
+        },
+        groupsByWorktree: {
+          ...state.groupsByWorktree,
+          [worktreeId]: updateGroup(groups, { ...group, tabOrder })
+        }
+      }
+    })
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }
@@ -791,7 +844,34 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   unpinTab: (tabId) => {
     const exists = get().getTab(tabId) !== null
-    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { isPinned: false }) ?? {})
+    set((state) => {
+      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      if (!found) {
+        return {}
+      }
+      const { tab, worktreeId } = found
+      const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId ? { ...candidate, isPinned: false } : candidate
+      )
+      const groups = state.groupsByWorktree[worktreeId] ?? []
+      const group = groups.find((candidate) => candidate.id === tab.groupId)
+      if (!group) {
+        return {
+          unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
+        }
+      }
+      const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
+      return {
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
+        },
+        groupsByWorktree: {
+          ...state.groupsByWorktree,
+          [worktreeId]: updateGroup(groups, { ...group, tabOrder })
+        }
+      }
+    })
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }
@@ -1012,6 +1092,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         activeGroupIdByWorktree: { ...state.activeGroupIdByWorktree, [worktreeId]: newGroupId }
       }
     })
+    get().recordFeatureInteraction?.('terminal-pane-split')
     get().recordFeatureInteraction?.('terminal-panes')
     return newGroupId
   },
@@ -1283,6 +1364,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     return get().createUnifiedTab(worktreeId, tab.contentType, {
       entityId: init?.entityId ?? tab.entityId,
       label: init?.label ?? tab.label,
+      generatedLabel: init?.generatedLabel ?? tab.generatedLabel,
       customLabel: init?.customLabel ?? tab.customLabel,
       color: init?.color ?? tab.color,
       isPinned: init?.isPinned ?? tab.isPinned,
@@ -1388,6 +1470,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
               worktreeId,
               contentType: 'terminal' as const,
               label: tab.title,
+              ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
               customLabel: tab.customTitle,
               color: tab.color,
               sortOrder: tab.sortOrder,

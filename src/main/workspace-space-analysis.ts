@@ -4,7 +4,6 @@ import { lstat, readdir } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { posix, win32 } from 'node:path'
 import { platform } from 'node:process'
-import { promisify } from 'node:util'
 import type { Dirent } from 'node:fs'
 import type { Store } from './persistence'
 import { isFolderRepo } from '../shared/repo-kind'
@@ -31,7 +30,6 @@ const LOCAL_FS_CONCURRENCY = 48
 const REMOTE_FS_CONCURRENCY = 10
 const DU_TIMEOUT_MS = 120_000
 const DU_MAX_BUFFER_BYTES = 16 * 1024 * 1024
-const execFileAsync = promisify(execFile)
 
 type AsyncLimiter = <T>(task: () => Promise<T>) => Promise<T>
 
@@ -191,11 +189,65 @@ async function readLocalDuDepthOne(
   rootPath: string,
   signal?: AbortSignal
 ): Promise<Map<string, number>> {
-  const { stdout } = await execFileAsync('du', ['-k', '-d', '1', rootPath], {
-    encoding: 'utf8',
-    maxBuffer: DU_MAX_BUFFER_BYTES,
-    signal,
-    timeout: DU_TIMEOUT_MS
+  const stdout = await new Promise<string>((resolve, reject) => {
+    let settled = false
+    let child: ReturnType<typeof execFile> | undefined
+    let onAbort: (() => void) | null = null
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (timer) {
+        clearTimeout(timer)
+      }
+      if (onAbort) {
+        signal?.removeEventListener('abort', onAbort)
+      }
+      callback()
+    }
+    timer = setTimeout(() => {
+      settle(() => {
+        child?.kill()
+        reject(new Error(`du timed out after ${DU_TIMEOUT_MS}ms`))
+      })
+    }, DU_TIMEOUT_MS)
+    onAbort = () => {
+      settle(() => {
+        child?.kill()
+        reject(new Error('Workspace space scan cancelled'))
+      })
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
+
+    // Why: execFile's timeout only signals `du`; a wedged child that never
+    // calls back must not block the Space scan or its portable fallback.
+    try {
+      child = execFile(
+        'du',
+        ['-k', '-d', '1', rootPath],
+        {
+          encoding: 'utf8',
+          maxBuffer: DU_MAX_BUFFER_BYTES,
+          signal,
+          timeout: DU_TIMEOUT_MS
+        },
+        (error, stdout) => {
+          if (error) {
+            settle(() => reject(error))
+            return
+          }
+          settle(() => resolve(String(stdout)))
+        }
+      )
+    } catch (error) {
+      settle(() => reject(error))
+    }
   })
   return parseDuDepthOneOutput(stdout)
 }

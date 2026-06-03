@@ -62,6 +62,10 @@ public static class OrcaDesktopWin32 {
 $MaxNodes = 1200
 $MaxDepth = 64
 $TextLimit = 500
+$MaxScreenshotPngBytes = 900000
+$MaxScreenshotEdge = 1280
+$MinScreenshotScale = 0.25
+$ScreenshotScaleStep = 0.85
 $BlockedAppFragments = @(
     "1password",
     "bitwarden",
@@ -452,23 +456,103 @@ function Render-OrcaTree($RootElement, $WindowFrame) {
     [pscustomobject]@{ elements = @($records.ToArray()); lines = @($lines.ToArray()); truncation = $truncation }
 }
 
+function ConvertTo-OrcaPngBytes([System.Drawing.Image]$Image) {
+    $stream = $null
+    try {
+        $stream = New-Object System.IO.MemoryStream
+        $Image.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+        return ,$stream.ToArray()
+    } finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+    }
+}
+
+function New-OrcaScreenshotPayload([byte[]]$Bytes, [int]$Width, [int]$Height, [double]$Scale) {
+    [pscustomobject]@{
+        base64 = [Convert]::ToBase64String($Bytes)
+        width = $Width
+        height = $Height
+        scale = $Scale
+    }
+}
+
+function Resize-OrcaBitmap([System.Drawing.Bitmap]$Source, [int]$Width, [int]$Height) {
+    $resized = $null
+    $graphics = $null
+    try {
+        $resized = New-Object System.Drawing.Bitmap $Width, $Height
+        $graphics = [System.Drawing.Graphics]::FromImage($resized)
+        $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::Bilinear
+        $graphics.DrawImage($Source, 0, 0, $Width, $Height)
+        $result = $resized
+        $resized = $null
+        return $result
+    } finally {
+        if ($null -ne $graphics) { $graphics.Dispose() }
+        if ($null -ne $resized) { $resized.Dispose() }
+    }
+}
+
+function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap) {
+    $originalWidth = [int][Math]::Max(1, $Bitmap.Width)
+    $originalHeight = [int][Math]::Max(1, $Bitmap.Height)
+    $pngBytes = ConvertTo-OrcaPngBytes $Bitmap
+    if ($pngBytes.Length -le $MaxScreenshotPngBytes) {
+        return New-OrcaScreenshotPayload $pngBytes $originalWidth $originalHeight 1.0
+    }
+
+    # Why: screenshots cross process boundaries as PNG base64 in JSON; cap noisy
+    # large-window payloads to match the macOS provider's memory bounds.
+    $bestBytes = $pngBytes
+    $bestWidth = $originalWidth
+    $bestHeight = $originalHeight
+    $scale = [Math]::Min(1.0, $MaxScreenshotEdge / [double][Math]::Max($originalWidth, $originalHeight))
+    while ($scale -ge $MinScreenshotScale) {
+        $width = [int][Math]::Max(1, [Math]::Round($originalWidth * $scale))
+        $height = [int][Math]::Max(1, [Math]::Round($originalHeight * $scale))
+        if ($width -eq $bestWidth -and $height -eq $bestHeight) {
+            $scale *= $ScreenshotScaleStep
+            continue
+        }
+
+        $resized = $null
+        try {
+            $resized = Resize-OrcaBitmap $Bitmap $width $height
+            $candidateBytes = ConvertTo-OrcaPngBytes $resized
+            if ($candidateBytes.Length -le $MaxScreenshotPngBytes) {
+                return New-OrcaScreenshotPayload $candidateBytes $width $height ($width / [double]$originalWidth)
+            }
+            if ($candidateBytes.Length -lt $bestBytes.Length) {
+                $bestBytes = $candidateBytes
+                $bestWidth = $width
+                $bestHeight = $height
+            }
+        } finally {
+            if ($null -ne $resized) { $resized.Dispose() }
+        }
+
+        $scale *= $ScreenshotScaleStep
+    }
+
+    New-OrcaScreenshotPayload $bestBytes $bestWidth $bestHeight ($bestWidth / [double]$originalWidth)
+}
+
 function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame) {
     if (-not $IncludeScreenshot -or $null -eq $WindowFrame) { return $null }
+    $bitmap = $null
+    $graphics = $null
     try {
         $width = [int][Math]::Max(1, [Math]::Round($WindowFrame.width))
         $height = [int][Math]::Max(1, [Math]::Round($WindowFrame.height))
         $bitmap = New-Object System.Drawing.Bitmap $width, $height
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
         $graphics.CopyFromScreen([int][Math]::Round($WindowFrame.x), [int][Math]::Round($WindowFrame.y), 0, 0, $bitmap.Size)
-        $stream = New-Object System.IO.MemoryStream
-        $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
-        $bytes = $stream.ToArray()
-        $graphics.Dispose()
-        $bitmap.Dispose()
-        $stream.Dispose()
-        [Convert]::ToBase64String($bytes)
+        Get-OrcaBoundedScreenshotPayload $bitmap
     } catch {
         $null
+    } finally {
+        if ($null -ne $graphics) { $graphics.Dispose() }
+        if ($null -ne $bitmap) { $bitmap.Dispose() }
     }
 }
 
@@ -479,6 +563,7 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
     $root = Get-OrcaRootElement $process
     $windowFrame = Get-OrcaWindowFrame $process $root
     $tree = Render-OrcaTree $root $windowFrame
+    $screenshot = Get-OrcaScreenshot $IncludeScreenshot $windowFrame
 
     [pscustomobject]@{
         snapshotId = [guid]::NewGuid().ToString()
@@ -486,7 +571,10 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
         windowTitle = $process.MainWindowTitle
         windowId = Get-OrcaWindowId $process
         windowBounds = $windowFrame
-        screenshotPngBase64 = Get-OrcaScreenshot $IncludeScreenshot $windowFrame
+        screenshotPngBase64 = if ($null -ne $screenshot) { $screenshot.base64 } else { $null }
+        screenshotWidth = if ($null -ne $screenshot) { $screenshot.width } else { $null }
+        screenshotHeight = if ($null -ne $screenshot) { $screenshot.height } else { $null }
+        screenshotScale = if ($null -ne $screenshot) { $screenshot.scale } else { $null }
         coordinateSpace = "window"
         truncation = $tree.truncation
         treeLines = @($tree.lines)

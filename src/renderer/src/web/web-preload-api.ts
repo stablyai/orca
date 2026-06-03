@@ -4,28 +4,39 @@
 import type { PreloadApi, PreflightStatus, RefreshAgentsResult } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
+  ComputerUsePermissionSetupResult,
+  ComputerUsePermissionStatusResult
+} from '../../../shared/computer-use-permissions-types'
+import type {
   DetectedWorktreeListResult,
   DirEntry,
+  ForceDeleteWorktreeBranchResult,
   GlobalSettings,
   MemorySnapshot,
   OnboardingState,
   PersistedUIState,
   Repo,
+  RemoveWorktreeResult,
   SearchResult,
   StatsSummary,
   Worktree,
   WorktreeLineage,
+  WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../../shared/types'
+import type { SkillDiscoveryResult } from '../../../shared/skills'
 import {
   getDefaultOnboardingState,
   getDefaultSettings,
   getDefaultUIState,
-  getDefaultWorkspaceSession
+  getDefaultWorkspaceSession,
+  normalizeAgentActivityDisplayMode,
+  ONBOARDING_FLOW_VERSION
 } from '../../../shared/constants'
 import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-result'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
+import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
@@ -60,6 +71,7 @@ import {
   type FeatureInteractionId,
   type FeatureInteractionState
 } from '../../../shared/feature-interactions'
+import { normalizeContextualTourIds, type ContextualTourId } from '../../../shared/contextual-tours'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -70,6 +82,10 @@ const KEYBINDINGS_STORAGE_KEY = 'orca.web.keybindings.v1'
 // Why: browser-paired clients need desktop parity for large dev sessions; the
 // runtime's no-limit default remains capped for lower-level RPC callers.
 const WEB_RUNTIME_WORKTREE_LIST_LIMIT = 10_000
+const MAX_CLIPBOARD_IMAGE_BASE64_CHARS = 24 * 1024 * 1024
+export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
+export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
+const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
 let activeClient: WebRuntimeClient | null = null
@@ -77,6 +93,64 @@ let activeClientEnvironmentId: string | null = null
 let cachedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 let cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null = null
 const runtimeCallQueuePool = new RuntimeRpcCallQueuePool()
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      const commaIndex = result.indexOf(',')
+      resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1))
+    }
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read clipboard image'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+async function convertImageBlobToPng(blob: Blob): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const context = canvas.getContext('2d')
+    if (!context || canvas.width <= 0 || canvas.height <= 0) {
+      throw new Error('Clipboard image could not be decoded')
+    }
+    context.drawImage(bitmap, 0, 0)
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((png) => {
+        if (!png) {
+          reject(new Error('Clipboard image could not be encoded as PNG'))
+          return
+        }
+        resolve(png)
+      }, 'image/png')
+    })
+  } finally {
+    bitmap.close()
+  }
+}
+
+async function readClipboardImagePngBase64(): Promise<string | null> {
+  const clipboard = navigator.clipboard as
+    | (Clipboard & { read?: () => Promise<ClipboardItem[]> })
+    | undefined
+  if (!clipboard?.read) {
+    return null
+  }
+  const items = await clipboard.read()
+  for (const item of items) {
+    const imageType = item.types.find((type) => type.startsWith('image/'))
+    if (!imageType) {
+      continue
+    }
+    const blob = await item.getType(imageType)
+    const pngBlob = imageType === 'image/png' ? blob : await convertImageBlobToPng(blob)
+    return blobToBase64(pngBlob)
+  }
+  return null
+}
 
 function invalidateRuntimeWorktreeCaches(): void {
   cachedWorktrees = null
@@ -89,6 +163,7 @@ type WebGitHubApi = NonNullable<PreloadApi['gh']>
 type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
 type WebGitHubRouteKey =
   | 'repoSlug'
+  | 'repoUpstream'
   | 'prForBranch'
   | 'issue'
   | 'workItem'
@@ -107,6 +182,7 @@ type WebGitHubRouteKey =
   | 'setPRFileViewed'
   | 'updatePRTitle'
   | 'mergePR'
+  | 'setPRAutoMerge'
   | 'updatePRState'
   | 'requestPRReviewers'
   | 'removePRReviewers'
@@ -135,6 +211,7 @@ type WebGitHubRouteKey =
   | 'updateIssueTypeBySlug'
 type WebGitHubRuntimeMethod =
   | 'github.repoSlug'
+  | 'github.repoUpstream'
   | 'github.prForBranch'
   | 'github.issue'
   | 'github.workItem'
@@ -153,6 +230,7 @@ type WebGitHubRuntimeMethod =
   | 'github.setPRFileViewed'
   | 'github.updatePRTitle'
   | 'github.mergePR'
+  | 'github.setPRAutoMerge'
   | 'github.updatePRState'
   | 'github.requestPRReviewers'
   | 'github.removePRReviewers'
@@ -182,31 +260,49 @@ type WebGitHubRuntimeMethod =
 type WebGitLabApi = NonNullable<PreloadApi['gl']>
 type WebGitLabResult<K extends keyof WebGitLabApi> = Awaited<ReturnType<WebGitLabApi[K]>>
 type WebGitLabRouteKey =
+  | 'diagnoseAuth'
+  | 'rateLimit'
   | 'listMRs'
   | 'listWorkItems'
   | 'listIssues'
   | 'createIssue'
   | 'updateIssue'
   | 'addIssueComment'
+  | 'listLabels'
   | 'todos'
   | 'workItemDetails'
   | 'closeMR'
   | 'reopenMR'
   | 'mergeMR'
+  | 'updateMR'
+  | 'updateMRReviewers'
   | 'addMRComment'
+  | 'addMRInlineComment'
+  | 'resolveMRDiscussion'
+  | 'jobTrace'
+  | 'retryJob'
   | 'workItemByPath'
 type WebGitLabRuntimeMethod =
+  | 'gitlab.diagnoseAuth'
+  | 'gitlab.rateLimit'
   | 'gitlab.listMRs'
   | 'gitlab.listWorkItems'
   | 'gitlab.listIssues'
   | 'gitlab.createIssue'
   | 'gitlab.updateIssue'
   | 'gitlab.addIssueComment'
+  | 'gitlab.listLabels'
   | 'gitlab.todos'
   | 'gitlab.workItemDetails'
   | 'gitlab.updateMRState'
   | 'gitlab.mergeMR'
+  | 'gitlab.updateMR'
+  | 'gitlab.updateMRReviewers'
   | 'gitlab.addMRComment'
+  | 'gitlab.addMRInlineComment'
+  | 'gitlab.resolveMRDiscussion'
+  | 'gitlab.jobTrace'
+  | 'gitlab.retryJob'
   | 'gitlab.workItemByPath'
 type WebKeybindingDocument = {
   version: 1
@@ -216,6 +312,7 @@ type WebKeybindingDocument = {
 
 export const GITHUB_WEB_RPC_METHODS = {
   repoSlug: 'github.repoSlug',
+  repoUpstream: 'github.repoUpstream',
   prForBranch: 'github.prForBranch',
   issue: 'github.issue',
   workItem: 'github.workItem',
@@ -234,6 +331,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   setPRFileViewed: 'github.setPRFileViewed',
   updatePRTitle: 'github.updatePRTitle',
   mergePR: 'github.mergePR',
+  setPRAutoMerge: 'github.setPRAutoMerge',
   updatePRState: 'github.updatePRState',
   requestPRReviewers: 'github.requestPRReviewers',
   removePRReviewers: 'github.removePRReviewers',
@@ -263,18 +361,27 @@ export const GITHUB_WEB_RPC_METHODS = {
 } as const satisfies Record<WebGitHubRouteKey, WebGitHubRuntimeMethod>
 
 export const GITLAB_WEB_RPC_METHODS = {
+  diagnoseAuth: 'gitlab.diagnoseAuth',
+  rateLimit: 'gitlab.rateLimit',
   listMRs: 'gitlab.listMRs',
   listWorkItems: 'gitlab.listWorkItems',
   listIssues: 'gitlab.listIssues',
   createIssue: 'gitlab.createIssue',
   updateIssue: 'gitlab.updateIssue',
   addIssueComment: 'gitlab.addIssueComment',
+  listLabels: 'gitlab.listLabels',
   todos: 'gitlab.todos',
   workItemDetails: 'gitlab.workItemDetails',
   closeMR: 'gitlab.updateMRState',
   reopenMR: 'gitlab.updateMRState',
   mergeMR: 'gitlab.mergeMR',
+  updateMR: 'gitlab.updateMR',
+  updateMRReviewers: 'gitlab.updateMRReviewers',
   addMRComment: 'gitlab.addMRComment',
+  addMRInlineComment: 'gitlab.addMRInlineComment',
+  resolveMRDiscussion: 'gitlab.resolveMRDiscussion',
+  jobTrace: 'gitlab.jobTrace',
+  retryJob: 'gitlab.retryJob',
   workItemByPath: 'gitlab.workItemByPath'
 } as const satisfies Record<WebGitLabRouteKey, WebGitLabRuntimeMethod>
 
@@ -335,6 +442,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       getLatestPending: () => Promise.resolve(null),
       getLatestReport: () => Promise.resolve(null),
       dismiss: () => Promise.resolve(null),
+      recordRendererError: () => Promise.resolve({ ok: true, report: null, deduped: true }),
+      recordBreadcrumb: () => {},
       submit: () =>
         Promise.resolve({
           ok: false,
@@ -367,6 +476,15 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       set: async (session) => {
         writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
       },
+      patch: async (patch: WorkspaceSessionPatch) => {
+        writeJson(
+          SESSION_STORAGE_KEY,
+          sanitizeWebRuntimeWorkspaceSession({
+            ...getStoredWorkspaceSession(),
+            ...patch
+          })
+        )
+      },
       setSync: (session) => {
         writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
       }
@@ -378,6 +496,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         const next: OnboardingState = {
           ...current,
           ...updates,
+          flowVersion: ONBOARDING_FLOW_VERSION,
           checklist: {
             ...current.checklist,
             ...updates.checklist
@@ -434,15 +553,22 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     computerUsePermissions: createComputerUsePermissionsApi(),
     updater: createUpdaterApi(),
     shell: createShellApi(),
-    skills: {
-      discover: () => Promise.resolve({ skills: [], sources: [], scannedAt: Date.now() })
-    },
+    skills: createSkillsApi(),
     pty: createPtyApi(),
     ssh: createSshApi(),
-    wsl: { isAvailable: () => Promise.resolve(false) },
-    pwsh: { isAvailable: () => Promise.resolve(false) },
+    wsl: {
+      isAvailable: () => callRuntimeResult<boolean>('host.wsl.isAvailable').catch(() => false),
+      listDistros: () => callRuntimeResult<string[]>('host.wsl.listDistros').catch(() => [])
+    },
+    pwsh: {
+      isAvailable: () => callRuntimeResult<boolean>('host.pwsh.isAvailable').catch(() => false)
+    },
+    gitBash: {
+      isAvailable: () => callRuntimeResult<boolean>('host.gitBash.isAvailable').catch(() => false)
+    },
     agentStatus: {
       onSet: () => noopUnsubscribe,
+      onClear: () => noopUnsubscribe,
       getSnapshot: () => Promise.resolve([]),
       inferInterrupt: () => Promise.resolve(false),
       onMigrationUnsupported: () => noopUnsubscribe,
@@ -888,8 +1014,15 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         pushTarget: args.pushTarget,
         setupDecision: args.setupDecision,
         createdWithAgent: args.createdWithAgent,
+        pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder
+      })
+    },
+    prefetchCreateBase: async ({ repoId, baseBranch }) => {
+      await callRuntimeResult('worktree.prefetchCreateBase', {
+        repo: repoId,
+        baseBranch
       })
     },
     resolvePrBase: async ({ repoId, prNumber, headRefName, isCrossRepository }) =>
@@ -908,12 +1041,21 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
       }),
     remove: async ({ worktreeId, force }) => {
       invalidateRuntimeWorktreeCaches()
-      await callRuntimeResult('worktree.rm', { worktree: worktreeId, force })
+      return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
+        worktree: toRuntimeWorktreeSelector(worktreeId),
+        force
+      })
     },
+    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead }) =>
+      callRuntimeResult<ForceDeleteWorktreeBranchResult>('worktree.forceDeleteBranch', {
+        worktree: toRuntimeWorktreeSelector(worktreeId),
+        branchName,
+        expectedHead
+      }),
     updateMeta: async ({ worktreeId, updates }) =>
       (
         await callRuntimeResult<{ worktree: Worktree }>('worktree.set', {
-          worktree: worktreeId,
+          worktree: toRuntimeWorktreeSelector(worktreeId),
           ...updates
         })
       ).worktree,
@@ -928,7 +1070,7 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
       const result = await callRuntimeResult<{
         worktree: Worktree & { lineage?: WorktreeLineage | null }
       }>('worktree.set', {
-        worktree: worktreeId,
+        worktree: toRuntimeWorktreeSelector(worktreeId),
         parentWorktree: parentWorktreeId,
         noParent
       })
@@ -948,25 +1090,27 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     readDir: async ({ dirPath }) => {
       const file = await resolveRuntimeFilePath(dirPath)
       return callRuntimeResult<DirEntry[]>('files.readDir', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
       })
     },
     readFile: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.readPreview', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
       })
     },
     listMarkdownDocuments: async ({ rootPath }) => {
       const file = await resolveRuntimeFilePath(rootPath)
-      return callRuntimeResult('files.listMarkdownDocuments', { worktree: file.worktree.id })
+      return callRuntimeResult('files.listMarkdownDocuments', {
+        worktree: toRuntimeWorktreeSelector(file.worktree.id)
+      })
     },
     writeFile: async ({ filePath, content }) => {
       const file = await resolveRuntimeFilePath(filePath)
       await callRuntimeResult('files.write', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath,
         content
       })
@@ -974,14 +1118,14 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     createFile: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       await callRuntimeResult('files.createFile', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
       })
     },
     createDir: async ({ dirPath }) => {
       const file = await resolveRuntimeFilePath(dirPath)
       await callRuntimeResult('files.createDir', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
       })
     },
@@ -989,7 +1133,7 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       const oldFile = await resolveRuntimeFilePath(oldPath)
       const newFile = await resolveRuntimeFilePath(newPath)
       await callRuntimeResult('files.rename', {
-        worktree: oldFile.worktree.id,
+        worktree: toRuntimeWorktreeSelector(oldFile.worktree.id),
         oldRelativePath: oldFile.relativePath,
         newRelativePath: newFile.relativePath
       })
@@ -998,7 +1142,7 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
       const source = await resolveRuntimeFilePath(sourcePath)
       const destination = await resolveRuntimeFilePath(destinationPath)
       await callRuntimeResult('files.copy', {
-        worktree: source.worktree.id,
+        worktree: toRuntimeWorktreeSelector(source.worktree.id),
         sourceRelativePath: source.relativePath,
         destinationRelativePath: destination.relativePath
       })
@@ -1006,7 +1150,7 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     deletePath: async ({ targetPath, recursive }) => {
       const file = await resolveRuntimeFilePath(targetPath)
       await callRuntimeResult('files.delete', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath,
         recursive
       })
@@ -1015,16 +1159,31 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
       return callRuntimeResult('files.stat', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
       })
+    },
+    pathExists: async ({ filePath }) => {
+      try {
+        const file = await resolveRuntimeFilePath(filePath)
+        await callRuntimeResult('files.stat', {
+          worktree: toRuntimeWorktreeSelector(file.worktree.id),
+          relativePath: file.relativePath
+        })
+        return true
+      } catch (error) {
+        if (isMissingPathError(error)) {
+          return false
+        }
+        throw error
+      }
     },
     listFiles: async ({ rootPath, excludePaths }) => {
       const file = await resolveRuntimeFilePath(rootPath)
       const result = await callRuntimeResult<{ files: { relativePath: string }[] }>(
         'files.listAll',
         {
-          worktree: file.worktree.id,
+          worktree: toRuntimeWorktreeSelector(file.worktree.id),
           excludePaths
         }
       )
@@ -1033,7 +1192,7 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     search: async (args) => {
       const file = await resolveRuntimeFilePath(args.rootPath)
       return callRuntimeResult<SearchResult>('files.search', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         query: args.query,
         caseSensitive: args.caseSensitive,
         wholeWord: args.wholeWord,
@@ -1056,32 +1215,48 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
   return {
     status: async ({ worktreePath, includeIgnored }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.status', { worktree: worktree.id, includeIgnored })
+      return callRuntimeResult('git.status', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        includeIgnored
+      })
     },
     checkIgnored: async ({ worktreePath, paths }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.checkIgnored', { worktree: worktree.id, paths })
+      return callRuntimeResult('git.checkIgnored', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        paths
+      })
     },
     history: async ({ worktreePath, limit, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.history', { worktree: worktree.id, limit, baseRef })
+      return callRuntimeResult('git.history', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        limit,
+        baseRef
+      })
     },
     conflictOperation: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.conflictOperation', { worktree: worktree.id })
+      return callRuntimeResult('git.conflictOperation', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
     },
     abortMerge: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.abortMerge', { worktree: worktree.id })
+      await callRuntimeResult('git.abortMerge', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
     },
     abortRebase: async ({ worktreePath }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.abortRebase', { worktree: worktree.id })
+      await callRuntimeResult('git.abortRebase', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
     },
     diff: async ({ worktreePath, filePath, staged, compareAgainstHead }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.diff', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
         staged,
         compareAgainstHead
@@ -1089,36 +1264,65 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     branchCompare: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.branchCompare', { worktree: worktree.id, baseRef })
+      return callRuntimeResult('git.branchCompare', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        baseRef
+      })
     },
     commitCompare: async ({ worktreePath, commitId }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.commitCompare', { worktree: worktree.id, commitId })
+      return callRuntimeResult('git.commitCompare', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        commitId
+      })
     },
     upstreamStatus: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.upstreamStatus', { worktree: worktree.id, pushTarget })
+      return callRuntimeResult('git.upstreamStatus', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        pushTarget
+      })
     },
     fetch: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.fetch', { worktree: worktree.id, pushTarget })
+      await callRuntimeResult('git.fetch', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        pushTarget
+      })
     },
     push: async ({ worktreePath, publish, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.push', { worktree: worktree.id, publish, pushTarget })
+      await callRuntimeResult('git.push', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        publish,
+        pushTarget
+      })
     },
     pull: async ({ worktreePath, pushTarget }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.pull', { worktree: worktree.id, pushTarget })
+      await callRuntimeResult('git.pull', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        pushTarget
+      })
+    },
+    fastForward: async ({ worktreePath, pushTarget }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.fastForward', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        pushTarget
+      })
     },
     rebaseFromBase: async ({ worktreePath, baseRef }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      await callRuntimeResult('git.rebaseFromBase', { worktree: worktree.id, baseRef })
+      await callRuntimeResult('git.rebaseFromBase', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        baseRef
+      })
     },
     branchDiff: async ({ worktreePath, filePath, compare, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.branchDiff', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
         compare,
         oldPath
@@ -1127,7 +1331,7 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     commitDiff: async ({ worktreePath, filePath, commitOid, parentOid, oldPath }) => {
       const file = await resolveRuntimeFilePath(filePath, worktreePath)
       return callRuntimeResult('git.commitDiff', {
-        worktree: file.worktree.id,
+        worktree: toRuntimeWorktreeSelector(file.worktree.id),
         filePath: file.relativePath,
         commitOid,
         parentOid,
@@ -1136,7 +1340,10 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     },
     commit: async ({ worktreePath, message }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-      return callRuntimeResult('git.commit', { worktree: worktree.id, message })
+      return callRuntimeResult('git.commit', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        message
+      })
     },
     generateCommitMessage: async () => ({
       success: false,
@@ -1169,7 +1376,7 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
     remoteFileUrl: async ({ worktreePath, relativePath, line }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
       return callRuntimeResult('git.remoteFileUrl', {
-        worktree: worktree.id,
+        worktree: toRuntimeWorktreeSelector(worktree.id),
         relativePath,
         line
       })
@@ -1241,6 +1448,8 @@ function createGitHubApi(): WebGitHubApi {
   const githubApi = {
     viewer: () => Promise.resolve(null),
     repoSlug: (args) => route<WebGitHubResult<'repoSlug'>>(GITHUB_WEB_RPC_METHODS.repoSlug, args),
+    repoUpstream: (args) =>
+      route<WebGitHubResult<'repoUpstream'>>(GITHUB_WEB_RPC_METHODS.repoUpstream, args),
     prForBranch: (args) =>
       route<WebGitHubResult<'prForBranch'>>(GITHUB_WEB_RPC_METHODS.prForBranch, args),
     refreshPRNow: async ({ candidate }) => {
@@ -1294,6 +1503,8 @@ function createGitHubApi(): WebGitHubApi {
     updatePRTitle: (args) =>
       route<WebGitHubResult<'updatePRTitle'>>(GITHUB_WEB_RPC_METHODS.updatePRTitle, args),
     mergePR: (args) => route<WebGitHubResult<'mergePR'>>(GITHUB_WEB_RPC_METHODS.mergePR, args),
+    setPRAutoMerge: (args) =>
+      route<WebGitHubResult<'setPRAutoMerge'>>(GITHUB_WEB_RPC_METHODS.setPRAutoMerge, args),
     updatePRState: (args) =>
       route<WebGitHubResult<'updatePRState'>>(GITHUB_WEB_RPC_METHODS.updatePRState, args),
     requestPRReviewers: (args) =>
@@ -1403,6 +1614,9 @@ function createGitLabApi(): WebGitLabApi {
 
   const gitLabApi = {
     viewer: () => Promise.resolve(null),
+    diagnoseAuth: () => route<WebGitLabResult<'diagnoseAuth'>>(GITLAB_WEB_RPC_METHODS.diagnoseAuth),
+    rateLimit: (args) =>
+      route<WebGitLabResult<'rateLimit'>>(GITLAB_WEB_RPC_METHODS.rateLimit, args),
     projectSlug: () => Promise.resolve(null),
     mrForBranch: () => Promise.resolve(null),
     mr: () => Promise.resolve(null),
@@ -1418,7 +1632,8 @@ function createGitLabApi(): WebGitLabApi {
       route<WebGitLabResult<'updateIssue'>>(GITLAB_WEB_RPC_METHODS.updateIssue, args),
     addIssueComment: (args) =>
       route<WebGitLabResult<'addIssueComment'>>(GITLAB_WEB_RPC_METHODS.addIssueComment, args),
-    listLabels: () => Promise.resolve([]),
+    listLabels: (args) =>
+      route<WebGitLabResult<'listLabels'>>(GITLAB_WEB_RPC_METHODS.listLabels, args),
     listAssignableUsers: () => Promise.resolve([]),
     todos: (args) => route<WebGitLabResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
     workItemDetails: (args) =>
@@ -1434,8 +1649,20 @@ function createGitLabApi(): WebGitLabApi {
         state: 'opened'
       }),
     mergeMR: (args) => route<WebGitLabResult<'mergeMR'>>(GITLAB_WEB_RPC_METHODS.mergeMR, args),
+    updateMR: (args) => route<WebGitLabResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args),
+    updateMRReviewers: (args) =>
+      route<WebGitLabResult<'updateMRReviewers'>>(GITLAB_WEB_RPC_METHODS.updateMRReviewers, args),
     addMRComment: (args) =>
       route<WebGitLabResult<'addMRComment'>>(GITLAB_WEB_RPC_METHODS.addMRComment, args),
+    addMRInlineComment: (args) =>
+      route<WebGitLabResult<'addMRInlineComment'>>(GITLAB_WEB_RPC_METHODS.addMRInlineComment, args),
+    resolveMRDiscussion: (args) =>
+      route<WebGitLabResult<'resolveMRDiscussion'>>(
+        GITLAB_WEB_RPC_METHODS.resolveMRDiscussion,
+        args
+      ),
+    jobTrace: (args) => route<WebGitLabResult<'jobTrace'>>(GITLAB_WEB_RPC_METHODS.jobTrace, args),
+    retryJob: (args) => route<WebGitLabResult<'retryJob'>>(GITLAB_WEB_RPC_METHODS.retryJob, args),
     workItemByPath: (args) =>
       route<WebGitLabResult<'workItemByPath'>>(GITLAB_WEB_RPC_METHODS.workItemByPath, args)
   } satisfies WebGitLabApi
@@ -1480,6 +1707,10 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
             result.ui.featureInteractions
+          ),
+          contextualToursSeenIds: mergeContextualTourSeenIds(
+            local.contextualToursSeenIds,
+            result.ui.contextualToursSeenIds
           )
         }
         writeJson(UI_STORAGE_KEY, next)
@@ -1525,6 +1756,10 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
             result.ui.featureInteractions
+          ),
+          contextualToursSeenIds: mergeContextualTourSeenIds(
+            local.contextualToursSeenIds,
+            result.ui.contextualToursSeenIds
           )
         }
         writeJson(UI_STORAGE_KEY, next)
@@ -1537,8 +1772,16 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     readClipboardText: () => navigator.clipboard?.readText?.() ?? Promise.resolve(''),
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
-    saveClipboardImageAsTempFile: (_args?: { connectionId?: string | null }) =>
-      Promise.resolve(null),
+    saveClipboardImageAsTempFile: async (args?: { connectionId?: string | null }) => {
+      if (!requireActiveEnvironmentOrNull()) {
+        return null
+      }
+      const contentBase64 = await readClipboardImagePngBase64()
+      if (!contentBase64) {
+        return null
+      }
+      return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
+    },
     writeClipboardText: (text) => navigator.clipboard?.writeText?.(text) ?? Promise.resolve(),
     writeSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
@@ -1549,6 +1792,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     },
     isMaximized: () => Promise.resolve(false),
     onOpenSettings: () => noopUnsubscribe,
+    onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
     onToggleLeftSidebar: () => noopUnsubscribe,
@@ -1559,9 +1803,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenQuickOpen: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
+    onDeleteCurrentWorkspace: () => noopUnsubscribe,
     onJumpToWorktreeIndex: () => noopUnsubscribe,
+    onJumpToTabIndex: () => noopUnsubscribe,
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onNewBrowserTab: () => noopUnsubscribe,
+    onNewMarkdownTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
@@ -1675,7 +1922,7 @@ function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight']> {
 function createCliApi(): NonNullable<Partial<PreloadApi>['cli']> {
   const status = {
     platform: getBrowserPlatform(),
-    commandName: 'orca',
+    commandName: getBrowserPlatform() === 'linux' ? 'orca-ide' : 'orca',
     commandPath: null,
     pathDirectory: null,
     pathConfigured: false,
@@ -1701,9 +1948,11 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
   const status = (
     agent:
       | 'claude'
+      | 'openclaude'
       | 'codex'
       | 'gemini'
       | 'antigravity'
+      | 'amp'
       | 'cursor'
       | 'droid'
       | 'command-code'
@@ -1720,9 +1969,11 @@ function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHooks']> {
     } as const)
   return {
     claudeStatus: () => status('claude'),
+    openClaudeStatus: () => status('openclaude'),
     codexStatus: () => status('codex'),
     geminiStatus: () => status('gemini'),
     antigravityStatus: () => status('antigravity'),
+    ampStatus: () => status('amp'),
     cursorStatus: () => status('cursor'),
     droidStatus: () => status('droid'),
     commandCodeStatus: () => status('command-code'),
@@ -1746,20 +1997,23 @@ function createComputerUsePermissionsApi(): NonNullable<
 > {
   return {
     getStatus: () =>
-      Promise.resolve({
-        platform: getBrowserPlatform(),
-        helperAppPath: null,
-        helperUnavailableReason: 'web_client',
-        permissions: []
-      }),
-    openSetup: () =>
-      Promise.resolve({
+      callRuntimeResult<ComputerUsePermissionStatusResult>(
+        'computer.permissionsStatus',
+        {},
+        15_000
+      ),
+    openSetup: (args) =>
+      callRuntimeResult<ComputerUsePermissionSetupResult>(
+        'computer.permissions',
+        args ?? {},
+        15_000
+      ).catch(() => ({
         platform: getBrowserPlatform(),
         helperAppPath: null,
         openedSettings: false,
         launchedHelper: false,
         nextStep: 'Computer-use permissions are managed on the Orca server.'
-      }),
+      })),
     reset: () =>
       Promise.resolve({
         platform: getBrowserPlatform(),
@@ -1771,9 +2025,21 @@ function createComputerUsePermissionsApi(): NonNullable<
   }
 }
 
+function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
+  return {
+    discover: () =>
+      callRuntimeResult<SkillDiscoveryResult>('skills.discover', undefined, 15_000).catch(() => ({
+        skills: [],
+        sources: [],
+        scannedAt: Date.now()
+      }))
+  }
+}
+
 function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notifications']> {
   return {
     dispatch: () => Promise.resolve({ delivered: false, reason: 'not-supported' }),
+    dismiss: () => Promise.resolve({ dismissed: 0 }),
     openSystemSettings: () => Promise.resolve(),
     getPermissionStatus: () =>
       Promise.resolve({ supported: false, platform: getBrowserPlatform(), requested: false }),
@@ -1789,12 +2055,16 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     codex: null,
     gemini: null,
     opencodeGo: null,
+    claudeTarget: { runtime: 'host', wslDistro: null },
+    codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
     inactiveCodexAccounts: []
   }
   return {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),
+    refreshCodexForTarget: () => Promise.resolve(empty),
+    refreshClaudeForTarget: () => Promise.resolve(empty),
     setPollingInterval: () => Promise.resolve(),
     fetchInactiveClaudeAccounts: () => Promise.resolve(),
     fetchInactiveCodexAccounts: () => Promise.resolve(),
@@ -1803,7 +2073,11 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
 }
 
 function createAccountsApi(): never {
-  const empty = { accounts: [], activeAccountId: null }
+  const empty = {
+    accounts: [],
+    activeAccountId: null,
+    activeAccountIdsByRuntime: { host: null, wsl: {} }
+  }
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
@@ -1834,7 +2108,7 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     openInFileManager: () => Promise.resolve(openResult),
     openInExternalEditor: () => Promise.resolve(openResult),
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
-    openFilePath: () => Promise.resolve(),
+    openFilePath: () => Promise.resolve(false),
     openFileUri: (uri) =>
       Promise.resolve(window.open(uri, '_blank', 'noopener,noreferrer') as never),
     pathExists: async (path) => {
@@ -1960,6 +2234,70 @@ async function callRuntimeResult<TResult>(
   return response.result as TResult
 }
 
+async function saveClipboardImageAsTempFileInRuntime(
+  contentBase64: string,
+  args?: { connectionId?: string | null }
+): Promise<string> {
+  if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
+    throw new Error('Clipboard image is too large')
+  }
+  const connectionId = args?.connectionId ?? null
+  const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
+    'clipboard.startImageUpload',
+    { expectedBase64Length: contentBase64.length, connectionId },
+    CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+  )
+  if (!startResponse.ok) {
+    if (
+      startResponse.error.code === 'method_not_found' &&
+      contentBase64.length <= CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
+    ) {
+      return callRuntimeResult<string>(
+        'clipboard.saveImageAsTempFile',
+        { contentBase64, connectionId },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    }
+    throw new Error(startResponse.error.message)
+  }
+
+  const { uploadId } = startResponse.result
+  try {
+    for (
+      let offset = 0;
+      offset < contentBase64.length;
+      offset += CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+    ) {
+      await callRuntimeResult(
+        'clipboard.appendImageUploadChunk',
+        {
+          uploadId,
+          offset,
+          contentBase64: contentBase64.slice(
+            offset,
+            offset + CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
+          )
+        },
+        CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+      )
+    }
+    return await callRuntimeResult<string>(
+      'clipboard.commitImageUpload',
+      { uploadId },
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    )
+  } catch (error) {
+    // Why: once chunked paste has created server-side state, failed append or
+    // commit must not wait for TTL cleanup before releasing the bounded slot.
+    await callRuntimeResult(
+      'clipboard.abortImageUpload',
+      { uploadId },
+      CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
+    ).catch(() => {})
+    throw error
+  }
+}
+
 async function getRemoteRuntimeStatus(): Promise<RuntimeStatus> {
   return callRuntimeResult<RuntimeStatus>('status.get', undefined, 15_000)
 }
@@ -2074,6 +2412,7 @@ function getStoredWorkspaceSession(): WorkspaceSessionState {
 function closeWebOnboarding(base: OnboardingState): OnboardingState {
   return {
     ...base,
+    flowVersion: ONBOARDING_FLOW_VERSION,
     closedAt: Date.now(),
     outcome: 'dismissed',
     checklist: {
@@ -2104,7 +2443,10 @@ function mergeWebUIState(
 ): PersistedUIState {
   return {
     ...base,
-    ...updates
+    ...updates,
+    agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
+      updates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
+    )
   }
 }
 
@@ -2132,6 +2474,17 @@ function mergeFeatureInteractionState(
       : incomingRecord
   }
   return merged
+}
+
+function mergeContextualTourSeenIds(
+  current: PersistedUIState['contextualToursSeenIds'],
+  incoming: PersistedUIState['contextualToursSeenIds']
+): ContextualTourId[] {
+  const merged = new Set<ContextualTourId>(normalizeContextualTourIds(current))
+  for (const id of normalizeContextualTourIds(incoming)) {
+    merged.add(id)
+  }
+  return [...merged]
 }
 
 function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): GlobalSettings {
@@ -2221,6 +2574,13 @@ function toLegacyDetectedWorktreeResult(
   }
 }
 
+function isMissingPathError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+  return /\bENOENT\b|not found|no such file/i.test(error.message)
+}
+
 async function resolveRuntimeWorktreeByPath(worktreePath: string): Promise<Worktree> {
   // Why: hidden-but-open worktrees must still resolve for git/file operations.
   // `worktree.list` is sidebar-visible only, so path resolution uses detected rows.
@@ -2258,7 +2618,10 @@ async function mutateGitPath(
   filePath: string
 ): Promise<void> {
   const file = await resolveRuntimeFilePath(filePath, worktreePath)
-  await callRuntimeResult(method, { worktree: file.worktree.id, filePath: file.relativePath })
+  await callRuntimeResult(method, {
+    worktree: toRuntimeWorktreeSelector(file.worktree.id),
+    filePath: file.relativePath
+  })
 }
 
 async function mutateGitPaths(
@@ -2267,7 +2630,7 @@ async function mutateGitPaths(
   filePaths: string[]
 ): Promise<void> {
   const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
-  await callRuntimeResult(method, { worktree: worktree.id, filePaths })
+  await callRuntimeResult(method, { worktree: toRuntimeWorktreeSelector(worktree.id), filePaths })
 }
 
 function mapRepoPathArg(args: unknown): unknown {

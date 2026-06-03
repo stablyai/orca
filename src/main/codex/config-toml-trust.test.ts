@@ -11,9 +11,11 @@ import {
 } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { escapeRegex } from '../../shared/string-utils'
 import {
   computeTrustKey,
   computeTrustedHash,
+  escapeTomlString,
   parseTrustKey,
   readHookTrustEntries,
   removeHookTrustEntries,
@@ -341,6 +343,49 @@ describe('upsertHookTrustEntries', () => {
     expect(occurrences).toHaveLength(1)
   })
 
+  it('collapses duplicate blocks for the same hook key while preserving unrelated hook state', () => {
+    const key =
+      'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json:session_start:0:0'
+    const unrelatedKey =
+      'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json:stop:0:0'
+    const original = [
+      `[hooks.state."${escapeTomlString(key)}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE1"',
+      '',
+      `[hooks.state."${escapeTomlString(unrelatedKey)}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:KEEP"',
+      '',
+      `[hooks.state."${escapeTomlString(key)}"]`,
+      'enabled = false',
+      'trusted_hash = "sha256:STALE2"',
+      ''
+    ].join('\r\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const entry: CodexTrustEntry = {
+      sourcePath: 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json',
+      eventLabel: 'session_start',
+      groupIndex: 0,
+      handlerIndex: 0,
+      command: 'echo session'
+    }
+    upsertHookTrustEntries(configPath, [entry])
+
+    const written = readFileSync(configPath, 'utf-8')
+    const duplicateKeyOccurrences = written.match(
+      new RegExp(`\\[hooks\\.state\\."${escapeRegex(escapeTomlString(key))}"\\]`, 'g')
+    )
+    expect(duplicateKeyOccurrences).toHaveLength(1)
+    expect(written).toContain(`[hooks.state."${escapeTomlString(unrelatedKey)}"]`)
+    expect(written).toContain('trusted_hash = "sha256:KEEP"')
+    expect(written).toContain('enabled = false')
+    expect(written).not.toContain('STALE1')
+    expect(written).not.toContain('STALE2')
+    expect(written).toContain(`trusted_hash = "${computeTrustedHash(entry)}"`)
+  })
+
   it('writes a .bak file before overwriting an existing config', () => {
     writeFileSync(configPath, 'model = "old"\n', 'utf-8')
     upsertHookTrustEntries(configPath, [
@@ -515,6 +560,96 @@ describe('upsertHookTrustEntries', () => {
         '\n'
       )
     )
+  })
+
+  it('does not treat the target hook header inside a multi-line basic string as a duplicate', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE"',
+      '',
+      '[notes]',
+      'body = """',
+      `[hooks.state."${key}"]`,
+      'is only documentation here.',
+      '"""',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain(
+      ['body = """', `[hooks.state."${key}"]`, 'is only documentation here.', '"""'].join('\n')
+    )
+    expect(written).toContain('[notes]')
+    expect(written).not.toContain('sha256:STALE')
+  })
+
+  it('does not let triple quotes in comments hide an existing trust block', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      '# user note mentions triple quote: """',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain('# user note mentions triple quote: """')
+    expect(written.match(/\[hooks\.state\."/g)).toHaveLength(1)
+    expect(written).not.toContain('sha256:STALE')
+  })
+
+  it('does not let triple quotes in single-line strings hide an existing trust block', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      'note = "\\"\\"\\""',
+      'literal_note = \'"""\'',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:STALE"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/x/hooks.json',
+        eventLabel: 'pre_tool_use',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo'
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain('note = "\\"\\"\\""')
+    expect(written).toContain('literal_note = \'"""\'')
+    expect(written.match(/\[hooks\.state\."/g)).toHaveLength(1)
+    expect(written).not.toContain('sha256:STALE')
   })
 
   it('treats `\\"""` inside a multi-line basic string as an escaped quote, not a close', () => {
@@ -783,6 +918,80 @@ describe('removeHookTrustEntries', () => {
     expect(written).toContain('[unrelated]\nvalue = 42')
   })
 
+  it('removes duplicate blocks for the requested key', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const otherKey = '/x/hooks.json:post_tool_use:0:0'
+    const original = [
+      `[hooks.state."${key}"]`,
+      'enabled = false',
+      'trusted_hash = "sha256:A"',
+      '',
+      `[hooks.state."${otherKey}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:OTHER"',
+      '',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:B"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [key])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain(`[hooks.state."${key}"]`)
+    expect(written).not.toContain('sha256:A')
+    expect(written).not.toContain('sha256:B')
+    expect(written).toContain(`[hooks.state."${otherKey}"]`)
+    expect(written).toContain('sha256:OTHER')
+  })
+
+  it('does not remove the target hook header text inside a multi-line string', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:K"',
+      '',
+      '[notes]',
+      'body = """',
+      `[hooks.state."${key}"]`,
+      'is only documentation here.',
+      '"""',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [key])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).not.toContain('sha256:K')
+    expect(written).toContain('[notes]')
+    expect(written).toContain(
+      ['body = """', `[hooks.state."${key}"]`, 'is only documentation here.', '"""'].join('\n')
+    )
+  })
+
+  it('does not let triple quotes in comments hide a block being removed', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      '# user note mentions triple quote: """',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:K"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    removeHookTrustEntries(configPath, [key])
+
+    const written = readFileSync(configPath, 'utf-8')
+    expect(written).toContain('# user note mentions triple quote: """')
+    expect(written).not.toContain(`[hooks.state."${key}"]`)
+    expect(written).not.toContain('sha256:K')
+  })
+
   it('preserves the line separator when no blank line precedes the removed block', () => {
     // Why: regression — removeTrustBlock used to cut from match.index (the
     // captured leading newline) and fused the previous content into the next
@@ -871,6 +1080,39 @@ describe('readHookTrustEntries', () => {
     expect(result.get(keyA)?.enabled).toBe(true)
     expect(result.get(keyB)?.trustedHash).toBe('sha256:BBB')
     expect(result.get(keyB)?.enabled).toBe(true)
+  })
+
+  it('does not let triple quotes in comments hide later trust entries', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      '# user note mentions triple quote: """',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:AAA"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+
+    expect(result.get(key)).toEqual({ trustedHash: 'sha256:AAA', enabled: true })
+  })
+
+  it('does not let triple quotes in single-line strings hide later trust entries', () => {
+    const key = '/x/hooks.json:pre_tool_use:0:0'
+    const original = [
+      'note = "\\"\\"\\""',
+      'literal_note = \'"""\'',
+      `[hooks.state."${key}"]`,
+      'enabled = true',
+      'trusted_hash = "sha256:AAA"',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    const result = readHookTrustEntries(configPath)
+
+    expect(result.get(key)).toEqual({ trustedHash: 'sha256:AAA', enabled: true })
   })
 
   it('unescapes `\\\\` in the block key', () => {

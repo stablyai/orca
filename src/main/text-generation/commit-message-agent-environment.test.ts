@@ -5,9 +5,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { prepareLocalCommitMessageAgentEnv } from './commit-message-agent-environment'
 
 const originalEnv = { ...process.env }
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 const tempDirs: string[] = []
 
 afterEach(() => {
+  if (originalPlatform) {
+    Object.defineProperty(process, 'platform', originalPlatform)
+  }
   for (const key of Object.keys(process.env)) {
     if (!(key in originalEnv)) {
       delete process.env[key]
@@ -20,6 +24,7 @@ afterEach(() => {
 })
 
 function makeHome(): string {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   const dir = mkdtempSync(join(tmpdir(), 'orca-commit-env-'))
   tempDirs.push(dir)
   process.env.HOME = dir
@@ -40,7 +45,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     expect(result).toEqual({
       ok: true,
       env: expect.objectContaining({
-        OPENCODE_CONFIG_DIR: join(home, 'company/opencode')
+        OPENCODE_CONFIG_DIR: `${home}/company/opencode`
       })
     })
   })
@@ -69,7 +74,7 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     expect(result).toEqual({
       ok: true,
       env: expect.objectContaining({
-        PI_CODING_AGENT_DIR: join(home, '.config/pi-agent')
+        PI_CODING_AGENT_DIR: `${home}/.config/pi-agent`
       })
     })
   })
@@ -103,5 +108,30 @@ describe('prepareLocalCommitMessageAgentEnv', () => {
     await expect(prepareLocalCommitMessageAgentEnv('claude', undefined)).resolves.toEqual({
       ok: true
     })
+  })
+
+  it('sets CODEX_HOME for host managed Codex accounts', async () => {
+    const result = await prepareLocalCommitMessageAgentEnv('codex', {
+      prepareForCodexLaunch: () =>
+        'C:\\Users\\tester\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home'
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      env: expect.objectContaining({
+        CODEX_HOME: 'C:\\Users\\tester\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home'
+      })
+    })
+  })
+
+  it('does not pass WSL managed Codex homes to host-local commit generation', async () => {
+    process.env.CODEX_HOME = 'C:\\Users\\tester\\.codex'
+
+    const result = await prepareLocalCommitMessageAgentEnv('codex', {
+      prepareForCodexLaunch: () =>
+        '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.local\\share\\orca\\codex-accounts\\a\\home'
+    })
+
+    expect(result).toEqual({ ok: true })
   })
 })

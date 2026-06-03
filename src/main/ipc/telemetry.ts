@@ -53,6 +53,8 @@ import type { OptInVia } from '../../shared/telemetry-events'
 // mirrors how other core-handlers accept the store explicitly.
 let storeRef: Store | null = null
 
+const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>(['app_starred_orca'])
+
 /**
  * Derive the `via` discriminator for a `telemetry:setOptIn` call from
  * main-owned state. Called BEFORE any state mutation so the cohort + opt-in
@@ -117,6 +119,13 @@ export function registerTelemetryHandlers(store: Store): void {
     if (props !== null && props !== undefined && typeof props !== 'object') {
       return
     }
+    const eventName = name as EventName
+    // Why: some event schemas are registered for main-owned emissions only.
+    // Letting renderer IPC emit them would let compromised content spoof
+    // product outcomes that must be tied to a successful main-side action.
+    if (MAIN_OWNED_TELEMETRY_EVENTS.has(eventName)) {
+      return
+    }
     // Inject cohort here, at the IPC entry, only for events whose schemas
     // declare `nth_repo_added` (see `COHORT_EXTENDED` in telemetry-events.ts).
     // The selectivity is load-bearing: schemas are `.strict()`, so adding
@@ -130,7 +139,6 @@ export function registerTelemetryHandlers(store: Store): void {
     // The two injection sets are disjoint by construction today — no schema
     // declares both `nth_repo_added` and `cohort` — but combining them via
     // spread keeps that an additive change rather than a structural one.
-    const eventName = name as EventName
     const baseProps = (props ?? {}) as Record<string, unknown>
     const withRepoCohort = isCohortExtendedEvent(eventName)
       ? { ...baseProps, ...getCohortAtEmit() }

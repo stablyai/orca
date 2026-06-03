@@ -31,9 +31,11 @@ const {
   listWorktreesMock,
   resolveCommitMessageSettingsMock,
   generateCommitMessageFromContextMock,
+  generatePullRequestFieldsFromContextMock,
   discoverCommitMessageModelsLocalMock,
   discoverCommitMessageModelsRemoteMock,
   cancelGenerateCommitMessageLocalMock,
+  cancelGeneratePullRequestFieldsLocalMock,
   getSshFilesystemProviderMock,
   getSshGitProviderMock
 } = vi.hoisted(() => ({
@@ -64,9 +66,11 @@ const {
   listWorktreesMock: vi.fn(),
   resolveCommitMessageSettingsMock: vi.fn(),
   generateCommitMessageFromContextMock: vi.fn(),
+  generatePullRequestFieldsFromContextMock: vi.fn(),
   discoverCommitMessageModelsLocalMock: vi.fn(),
   discoverCommitMessageModelsRemoteMock: vi.fn(),
   cancelGenerateCommitMessageLocalMock: vi.fn(),
+  cancelGeneratePullRequestFieldsLocalMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn()
 }))
@@ -139,9 +143,11 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 vi.mock('../text-generation/commit-message-text-generation', () => ({
   resolveCommitMessageSettings: resolveCommitMessageSettingsMock,
   generateCommitMessageFromContext: generateCommitMessageFromContextMock,
+  generatePullRequestFieldsFromContext: generatePullRequestFieldsFromContextMock,
   discoverCommitMessageModelsLocal: discoverCommitMessageModelsLocalMock,
   discoverCommitMessageModelsRemote: discoverCommitMessageModelsRemoteMock,
-  cancelGenerateCommitMessageLocal: cancelGenerateCommitMessageLocalMock
+  cancelGenerateCommitMessageLocal: cancelGenerateCommitMessageLocalMock,
+  cancelGeneratePullRequestFieldsLocal: cancelGeneratePullRequestFieldsLocalMock
 }))
 
 import { registerFilesystemHandlers } from './filesystem'
@@ -219,9 +225,11 @@ describe('registerFilesystemHandlers', () => {
       listWorktreesMock,
       resolveCommitMessageSettingsMock,
       generateCommitMessageFromContextMock,
+      generatePullRequestFieldsFromContextMock,
       discoverCommitMessageModelsLocalMock,
       discoverCommitMessageModelsRemoteMock,
       cancelGenerateCommitMessageLocalMock,
+      cancelGeneratePullRequestFieldsLocalMock,
       getSshFilesystemProviderMock,
       getSshGitProviderMock
     ]) {
@@ -328,6 +336,37 @@ describe('registerFilesystemHandlers', () => {
       { name: 'README.md', isDirectory: false, isSymlink: false }
     ])
     expect(statMock).not.toHaveBeenCalledWith(modelLinkPath)
+  })
+
+  it('returns false from pathExists when a local authorized path is missing', async () => {
+    const targetPath = path.join(REPO_PATH, 'untitled-7.md')
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(handlers.get('fs:pathExists')!(null, { filePath: targetPath })).resolves.toBe(
+      false
+    )
+
+    expect(statMock).toHaveBeenCalledWith(targetPath)
+  })
+
+  it('returns false from pathExists when an SSH provider reports a missing path', async () => {
+    const provider = {
+      stat: vi.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:pathExists')!(null, {
+        filePath: '/remote/repo/untitled-7.md',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toBe(false)
+
+    expect(provider.stat).toHaveBeenCalledWith('/remote/repo/untitled-7.md')
   })
 
   it('allows deletePath when a registered worktree parent resolves to a macOS canonical alias', async () => {
@@ -1192,15 +1231,42 @@ describe('registerFilesystemHandlers', () => {
     await target.execute(
       { binary: 'agent', args: [], stdinPayload: null, label: 'agent' },
       '/cwd',
-      1
+      1,
+      'commit-message'
     )
     expect(executeCommitMessagePlan).toHaveBeenCalledWith(
       { binary: 'agent', args: [], stdinPayload: null, label: 'agent' },
       '/cwd',
-      1
+      1,
+      'commit-message'
     )
     expect(prepareForCodexLaunch).not.toHaveBeenCalled()
     expect(prepareForClaudeLaunch).not.toHaveBeenCalled()
+  })
+
+  it('routes SSH generation cancellations to separate provider operations', async () => {
+    const cancelGenerateCommitMessage = vi.fn().mockResolvedValue(undefined)
+    getSshGitProviderMock.mockReturnValue({ cancelGenerateCommitMessage })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:cancelGenerateCommitMessage')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'conn-1'
+    })
+    await handlers.get('git:cancelGeneratePullRequestFields')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'conn-1'
+    })
+
+    expect(cancelGenerateCommitMessage).toHaveBeenNthCalledWith(1, '/remote/repo', 'commit-message')
+    expect(cancelGenerateCommitMessage).toHaveBeenNthCalledWith(
+      2,
+      '/remote/repo',
+      'pull-request-fields'
+    )
+    expect(cancelGenerateCommitMessageLocalMock).not.toHaveBeenCalled()
+    expect(cancelGeneratePullRequestFieldsLocalMock).not.toHaveBeenCalled()
   })
 
   it('does not call the generator when no staged changes exist', async () => {
@@ -1292,6 +1358,22 @@ describe('registerFilesystemHandlers', () => {
 
     expect(sshBulkDiscardMock).toHaveBeenCalledWith('/remote/repo', ['a.ts', 'b.ts'])
     expect(bulkDiscardChangesMock).not.toHaveBeenCalled()
+  })
+
+  it('routes ssh git:fastForward through the SSH provider', async () => {
+    const sshFastForwardMock = vi.fn().mockResolvedValue(undefined)
+    const pushTarget = { remoteName: 'fork', branchName: 'feature/fix' }
+    getSshGitProviderMock.mockReturnValue({ fastForwardBranch: sshFastForwardMock })
+
+    registerFilesystemHandlers(store as never)
+
+    await handlers.get('git:fastForward')!(null, {
+      worktreePath: '/remote/repo',
+      connectionId: 'conn-1',
+      pushTarget
+    })
+
+    expect(sshFastForwardMock).toHaveBeenCalledWith('/remote/repo', pushTarget)
   })
 
   it('rejects git:commit with empty message and does not call commitChanges', async () => {

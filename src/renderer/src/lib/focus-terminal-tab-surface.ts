@@ -9,9 +9,23 @@ function cssAttributeString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
+let pendingFocusFrameIds: number[] = []
+
+function cancelPendingFocusFrames(): void {
+  if (typeof cancelAnimationFrame === 'function') {
+    for (const frameId of pendingFocusFrameIds) {
+      cancelAnimationFrame(frameId)
+    }
+  }
+  pendingFocusFrameIds = []
+}
+
 export function focusTerminalTabSurface(tabId: string, leafId?: string | null): void {
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
+  cancelPendingFocusFrames()
+  const firstFrameId = requestAnimationFrame(() => {
+    pendingFocusFrameIds = pendingFocusFrameIds.filter((frameId) => frameId !== firstFrameId)
+    const secondFrameId = requestAnimationFrame(() => {
+      pendingFocusFrameIds = pendingFocusFrameIds.filter((frameId) => frameId !== secondFrameId)
       // Why: this can be queued before inline tab rename mounts. If it runs
       // afterward, focusing xterm blurs the rename input and commits it closed.
       if (document.querySelector('[data-tab-rename-input="true"]')) {
@@ -34,5 +48,7 @@ export function focusTerminalTabSurface(tabId: string, leafId?: string | null): 
       const fallback = document.querySelector('.xterm-helper-textarea') as HTMLElement | null
       fallback?.focus()
     })
+    pendingFocusFrameIds.push(secondFrameId)
   })
+  pendingFocusFrameIds.push(firstFrameId)
 }

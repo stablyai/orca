@@ -43,10 +43,18 @@ function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
   }
 }
 
+export function cancelPendingWebglRefresh(pane: ManagedPaneInternal): void {
+  if (pane.pendingWebglRefreshRafId != null) {
+    cancelAnimationFrame(pane.pendingWebglRefreshRafId)
+    pane.pendingWebglRefreshRafId = null
+  }
+}
+
 export function disposeWebgl(
   pane: ManagedPaneInternal,
   options?: { refreshDimensions?: boolean }
 ): void {
+  cancelPendingWebglRefresh(pane)
   if (!pane.webglAddon) {
     return
   }
@@ -60,7 +68,8 @@ export function disposeWebgl(
     // Why: VS Code refreshes terminal dimensions after WebGL teardown because
     // DOM and WebGL renderer cell metrics differ. Without this, Linux DOM
     // scrollbars can desync and trigger visible reflow jitter.
-    requestAnimationFrame(() => {
+    pane.pendingWebglRefreshRafId = requestAnimationFrame(() => {
+      pane.pendingWebglRefreshRafId = null
       try {
         pane.fitAddon.fit()
         pane.terminal.refresh(0, pane.terminal.rows - 1)

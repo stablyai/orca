@@ -17,7 +17,7 @@ import {
 import { applyDividerStyles, applyPaneOpacity } from './pane-divider'
 import { disposePane, openTerminal } from './pane-lifecycle'
 import { disposeWebgl } from './pane-webgl-renderer'
-import { scheduleSplitScrollRestore } from './pane-split-scroll'
+import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
 
@@ -91,6 +91,7 @@ function prepareMovedPanesForSplit(
   }
 
   return movedPanes.map((pane) => {
+    clearPendingSplitScrollRestore(pane)
     // Why: wrapInSplit reparents moved containers, resetting browser scrollTop.
     const scrollState = captureScrollState(pane.terminal)
     // Why: lock prevents safeFit/fitAllPanes from restoring scroll during the

@@ -1,5 +1,7 @@
 import { wslAwareSpawn } from '../git/runner'
 
+const RG_AVAILABILITY_TIMEOUT_MS = 5000
+
 // Why the `settled` flag: when rg is not installed, spawn emits both 'error'
 // and 'close' with non-deterministic ordering across Node versions/platforms.
 // Without guarding, a late 'error' after 'close' would double-resolve (or a
@@ -22,19 +24,34 @@ export function checkRgAvailable(searchPath?: string): Promise<boolean> {
       ...(searchPath ? { cwd: searchPath } : {}),
       stdio: 'ignore'
     })
-    child.once('error', () => {
+    let timeout: ReturnType<typeof setTimeout>
+
+    const cleanup = (): void => {
+      clearTimeout(timeout)
+      child.off('error', onError)
+      child.off('close', onClose)
+    }
+
+    const settle = (available: boolean, options?: { kill?: boolean }): void => {
       if (settled) {
         return
       }
       settled = true
-      resolve(false)
-    })
-    child.once('close', (code) => {
-      if (settled) {
-        return
+      cleanup()
+      if (options?.kill) {
+        child.kill()
       }
-      settled = true
-      resolve(code === 0)
-    })
+      resolve(available)
+    }
+
+    const onError = (): void => settle(false)
+    const onClose = (code: number | null): void => settle(code === 0)
+
+    child.once('error', onError)
+    child.once('close', onClose)
+    timeout = setTimeout(() => settle(false, { kill: true }), RG_AVAILABILITY_TIMEOUT_MS)
+    if (typeof timeout.unref === 'function') {
+      timeout.unref()
+    }
   })
 }

@@ -85,7 +85,8 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       terminal: await getTerminalHandle(flags, cwd, client),
       text: getOptionalStringFlag(flags, 'text'),
       enter: flags.get('enter') === true,
-      interrupt: flags.get('interrupt') === true
+      interrupt: flags.get('interrupt') === true,
+      client: { id: 'orca-cli', type: 'desktop' }
     })
     printResult(result, json, formatTerminalSend)
   },

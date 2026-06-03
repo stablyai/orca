@@ -8,6 +8,7 @@ import type { ReviewStep, ReviewStepId } from '../../../../shared/review-steps'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { WorkbenchStep, WorkbenchStepId } from '../../../../shared/workbench-steps'
+import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { cn } from '@/lib/utils'
 import type { FeatureWallCompletionState } from './use-feature-wall-completion'
 import { FeatureWallBody } from './FeatureWallBody'
@@ -47,14 +48,18 @@ export function FeatureWallTourPanel(props: {
   showGif: boolean
   prefersReducedMotion: boolean
   source: FeatureWallOpenSourceTelemetry
-  onOrchestrationSkillInstalledChange: (installed: boolean) => void
-  onBrowserUseSkillInstalledChange: (installed: boolean) => void
+  orchestrationSkill: InstalledAgentSkillState
+  browserUseSkill: InstalledAgentSkillState
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => void
   footerText: string | null
   continueButton: ReactNode
   leadingFooterContent?: ReactNode
 }): JSX.Element {
+  // Why: the tour should not slide horizontally between pages; individual
+  // visuals can adapt inside the stage, but the page anchor must stay fixed.
+  const contentStageClassName = 'mx-auto w-full max-w-[940px]'
+  const previewTitle = props.activeStepCopy?.title ?? props.selected.title
   const panel = (
     <div
       className={cn(
@@ -100,57 +105,51 @@ export function FeatureWallTourPanel(props: {
           className="scrollbar-sleek grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-y-auto"
           aria-labelledby={props.previewTitleId}
         >
-          <div className="px-9 pb-4 pt-7">
-            <h3
-              id={props.previewTitleId}
-              className="text-3xl font-semibold leading-tight tracking-tight"
-            >
-              {props.selected.title}
-            </h3>
-            {props.activeStepCopy ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <div className="text-xl font-semibold leading-snug tracking-tight text-foreground">
-                  {props.activeStepCopy.title}
-                </div>
-                {props.activeStepCopy.optional ? (
-                  <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                    Optional
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-            <p
-              className={cn(
-                props.activeStepCopy ? 'mt-1.5' : 'mt-3',
-                'text-[15px] leading-snug text-muted-foreground'
-              )}
-            >
+          <div className={cn(contentStageClassName, 'px-8 pb-3 pt-6 text-center')}>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <h3
+                id={props.previewTitleId}
+                className="text-2xl font-semibold leading-tight tracking-tight"
+              >
+                {previewTitle}
+              </h3>
+              {props.activeStepCopy?.optional ? (
+                <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  Optional
+                </span>
+              ) : null}
+            </div>
+            <p className="mx-auto mt-3 max-w-[56ch] text-sm leading-relaxed text-muted-foreground">
               {props.description}
             </p>
           </div>
 
-          <FeatureWallBody
-            selected={props.selected}
-            posterUrl={props.posterUrl}
-            gifUrl={props.gifUrl}
-            showGif={props.showGif}
-            prefersReducedMotion={props.prefersReducedMotion}
-            source={props.source}
-            agentsActiveStep={props.agentsActiveStep}
-            workbenchActiveStep={props.workbenchActiveStep}
-            reviewActiveStep={props.reviewActiveStep}
-            onOrchestrationSkillInstalledChange={props.onOrchestrationSkillInstalledChange}
-            onBrowserUseSkillInstalledChange={props.onBrowserUseSkillInstalledChange}
-            onUsageAccountStateChange={props.completion.refreshUsageAccountState}
-            settings={props.settings}
-            updateSettings={props.updateSettings}
-          />
+          <div className={contentStageClassName}>
+            <FeatureWallBody
+              selected={props.selected}
+              posterUrl={props.posterUrl}
+              gifUrl={props.gifUrl}
+              showGif={props.showGif}
+              prefersReducedMotion={props.prefersReducedMotion}
+              source={props.source}
+              agentsActiveStep={props.agentsActiveStep}
+              workbenchActiveStep={props.workbenchActiveStep}
+              reviewActiveStep={props.reviewActiveStep}
+              orchestrationSkill={props.orchestrationSkill}
+              browserUseSkill={props.browserUseSkill}
+              onUsageAccountStateChange={props.completion.refreshUsageAccountState}
+              settings={props.settings}
+              updateSettings={props.updateSettings}
+            />
+          </div>
         </section>
       </div>
 
       {!props.detachedFooter ? (
         <footer className="flex items-center justify-between border-t border-border bg-card/50 px-4 py-3 sm:px-7">
-          {props.footerText ? (
+          {props.leadingFooterContent ? (
+            props.leadingFooterContent
+          ) : props.footerText ? (
             <span className="text-xs text-muted-foreground">{props.footerText}</span>
           ) : (
             <span />

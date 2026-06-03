@@ -18,6 +18,12 @@ export function getWorktreeTitleRenameCommit(
   return { kind: 'save', displayName: trimmed }
 }
 
+export function isWorktreeTitleTruncated(
+  element: Pick<HTMLElement, 'clientWidth' | 'scrollWidth'>
+): boolean {
+  return element.scrollWidth > element.clientWidth
+}
+
 type WorktreeTitleInlineRenameProps = {
   displayName: string
   disabled?: boolean
@@ -25,6 +31,7 @@ type WorktreeTitleInlineRenameProps = {
   className?: string
   editingClassName?: string
   inputClassName?: string
+  titleWrapper?: (title: React.ReactElement) => React.ReactElement
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
   // Why: lets a parent (e.g. the workspace.rename shortcut via WorktreeCard)
@@ -41,35 +48,88 @@ export function WorktreeTitleInlineRename({
   className,
   editingClassName,
   inputClassName,
+  titleWrapper,
   onEditingChange,
   onRename,
   beginEditing = false,
   onBeginEditingConsumed
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const editingRef = useRef(false)
   const savingRef = useRef(false)
+  const mountedRef = useRef(true)
+  const titleElementRef = useRef<HTMLSpanElement | null>(null)
+  const titleResizeObserverRef = useRef<ResizeObserver | null>(null)
+  const removeTitleResizeListenerRef = useRef<(() => void) | null>(null)
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
+  const [titleTruncated, setTitleTruncated] = useState(false)
 
-  useEffect(() => {
-    onEditingChange?.(editing)
-    return () => {
-      if (editing) {
-        onEditingChange?.(false)
+  const measureTitleTruncated = useCallback((element: HTMLSpanElement | null) => {
+    const nextTruncated = element ? isWorktreeTitleTruncated(element) : false
+    setTitleTruncated((current) => (current === nextTruncated ? current : nextTruncated))
+  }, [])
+
+  const handleRootRef = useCallback(
+    (node: HTMLSpanElement | null): void => {
+      titleResizeObserverRef.current?.disconnect()
+      titleResizeObserverRef.current = null
+      removeTitleResizeListenerRef.current?.()
+      removeTitleResizeListenerRef.current = null
+
+      // Why: rename can resolve after this inline title unmounts; the rendered
+      // root owns that stale-write guard without a mount-only Effect.
+      mountedRef.current = node !== null
+      titleElementRef.current = node
+      if (!node || editingRef.current) {
+        measureTitleTruncated(null)
+        return
       }
-    }
-  }, [editing, onEditingChange])
 
-  useEffect(() => {
-    if (!editing) {
+      measureTitleTruncated(node)
+      const updateTitleTruncated = () => measureTitleTruncated(node)
+      if (typeof ResizeObserver === 'undefined') {
+        window.addEventListener('resize', updateTitleTruncated)
+        removeTitleResizeListenerRef.current = () =>
+          window.removeEventListener('resize', updateTitleTruncated)
+        return
+      }
+
+      // Why: compact sidebar width changes can make a readable title become
+      // clipped; the tooltip should track the rendered geometry, not just text.
+      const observer = new ResizeObserver(updateTitleTruncated)
+      observer.observe(node)
+      titleResizeObserverRef.current = observer
+    },
+    [measureTitleTruncated]
+  )
+
+  const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
+
+  const setEditingMode = useCallback(
+    (nextEditing: boolean) => {
+      if (editingRef.current === nextEditing) {
+        return
+      }
+      editingRef.current = nextEditing
+      if (nextEditing) {
+        measureTitleTruncated(null)
+      }
+      setEditing(nextEditing)
+      // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
+      onEditingChange?.(nextEditing)
+    },
+    [measureTitleTruncated, onEditingChange]
+  )
+
+  const handleInputRef = useCallback((input: HTMLInputElement | null) => {
+    if (!input) {
       return
     }
-    const input = inputRef.current
-    input?.focus()
+    input.focus()
     // Why: double-click rename should make replacing the workspace title a one-keystroke action.
-    input?.select()
-  }, [editing])
+    input.select()
+  }, [])
 
   // Why: open the editor when a parent requests it (the workspace.rename
   // shortcut). Always consume the request so the parent's trigger can't linger;
@@ -98,15 +158,15 @@ export function WorktreeTitleInlineRename({
       event.preventDefault()
       event.stopPropagation()
       setValue(displayName)
-      setEditing(true)
+      setEditingMode(true)
     },
-    [disabled, displayName]
+    [disabled, displayName, setEditingMode]
   )
 
   const cancelRename = useCallback(() => {
     setValue(displayName)
-    setEditing(false)
-  }, [displayName])
+    setEditingMode(false)
+  }, [displayName, setEditingMode])
 
   const commitRename = useCallback(async () => {
     if (savingRef.current) {
@@ -123,14 +183,20 @@ export function WorktreeTitleInlineRename({
     setSaving(true)
     try {
       await onRename(commit.displayName)
-      setEditing(false)
+      if (mountedRef.current) {
+        setEditingMode(false)
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+      }
     } finally {
       savingRef.current = false
-      setSaving(false)
+      if (mountedRef.current) {
+        setSaving(false)
+      }
     }
-  }, [cancelRename, displayName, onRename, value])
+  }, [cancelRename, displayName, onRename, setEditingMode, value])
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
@@ -149,6 +215,8 @@ export function WorktreeTitleInlineRename({
   if (editing) {
     return (
       <span
+        key={`editing:${titleElementKey}`}
+        ref={handleRootRef}
         className={cn(
           'relative grid min-w-0 truncate leading-tight text-foreground',
           showUnreadEmphasis ? 'font-semibold' : 'font-normal',
@@ -164,7 +232,7 @@ export function WorktreeTitleInlineRename({
           {displayName}
         </span>
         <Input
-          ref={inputRef}
+          ref={handleInputRef}
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
@@ -192,6 +260,8 @@ export function WorktreeTitleInlineRename({
 
   const title = (
     <span
+      key={`title:${titleElementKey}`}
+      ref={handleRootRef}
       className={cn(
         'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
         showUnreadEmphasis ? 'font-semibold' : 'font-normal',
@@ -206,6 +276,14 @@ export function WorktreeTitleInlineRename({
       {displayName}
     </span>
   )
+
+  if (titleWrapper) {
+    return titleWrapper(title)
+  }
+
+  if (!titleTruncated) {
+    return title
+  }
 
   return (
     <Tooltip>

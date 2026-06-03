@@ -32,6 +32,7 @@ export type KeybindingActionId =
   | 'file.exportPdf'
   | 'workspace.create'
   | 'workspace.rename'
+  | 'workspace.delete'
   | 'voice.dictation'
   | 'view.tasks'
   | 'sidebar.left.toggle'
@@ -246,6 +247,26 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       linux: [],
       win32: []
     }
+  },
+  {
+    id: 'workspace.delete',
+    title: 'Delete Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'workspace',
+      'current workspace',
+      'worktree',
+      'delete',
+      'remove',
+      'trash'
+    ],
+    // Why: ship the command now without claiming a default chord; user
+    // overrides still win automatically when a future default is assigned.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
   },
   {
     id: 'voice.dictation',
@@ -1025,12 +1046,6 @@ function normalizeKeybindingArrayWithOptions(
   return normalized
 }
 
-export function normalizeKeybindingArray(
-  input: readonly string[]
-): KeybindingValidationResult | string[] {
-  return normalizeKeybindingArrayWithOptions(input)
-}
-
 function normalizeOptionsForAction(actionId: KeybindingActionId): NormalizeKeybindingOptions {
   return {
     allowBareKeybindings: DEFINITIONS_BY_ID.get(actionId)?.allowBareKeybindings === true
@@ -1301,6 +1316,21 @@ function shouldUseMacOptionLetterPhysicalFallback(
   )
 }
 
+function shouldUseMacOptionPunctuationPhysicalFallback(
+  parsed: ParsedKeybinding,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: macOS Option+punctuation can report composed quote/dead-key values,
+  // leaving no logical bracket token for app shortcuts that intentionally use Alt.
+  return (
+    getKeybindingPlatform(platform) === 'darwin' &&
+    parsed.alt &&
+    hasModifier(input, 'alt') &&
+    logicalKeyTokenFromInput(input) === null
+  )
+}
+
 function letterKeyMatches(
   input: KeybindingInput,
   letter: string,
@@ -1391,7 +1421,11 @@ function keyMatches(
       }
       return semanticKey === parsedKey
     }
-    return canUsePhysicalCodeFallback(input) && physicalPunctuationKey(input) === parsedKey
+    return (
+      (canUsePhysicalCodeFallback(input) ||
+        shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
+      physicalPunctuationKey(input) === parsedKey
+    )
   }
 
   const logicalKey = logicalKeyTokenFromInput(input)
@@ -1472,31 +1506,6 @@ export function formatKeybindingList(
     .join(', ')
 }
 
-export function formatElectronAccelerator(binding: string): string | null {
-  const parsed = parseKeybinding(binding)
-  if (!parsed) {
-    return null
-  }
-  const parts: string[] = []
-  if (parsed.mod) {
-    parts.push('CmdOrCtrl')
-  }
-  if (parsed.meta) {
-    parts.push('Command')
-  }
-  if (parsed.control) {
-    parts.push('Control')
-  }
-  if (parsed.alt) {
-    parts.push('Alt')
-  }
-  if (parsed.shift) {
-    parts.push('Shift')
-  }
-  parts.push(formatElectronKeyToken(parsed.key))
-  return parts.join('+')
-}
-
 function formatKeyToken(token: string): string {
   const labels: Record<string, string> = {
     BracketLeft: '[',
@@ -1525,35 +1534,6 @@ function formatKeyToken(token: string): string {
     Delete: 'Delete',
     Insert: 'Insert',
     Tab: 'Tab',
-    Escape: 'Esc',
-    Space: 'Space'
-  }
-  return labels[token] ?? token
-}
-
-function formatElectronKeyToken(token: string): string {
-  const labels: Record<string, string> = {
-    BracketLeft: '[',
-    BracketRight: ']',
-    Minus: '-',
-    Underscore: '_',
-    Equal: '=',
-    Plus: 'Plus',
-    Comma: ',',
-    Period: '.',
-    Slash: '/',
-    Backslash: '\\',
-    Semicolon: ';',
-    Quote: "'",
-    Backquote: '`',
-    ArrowLeft: 'Left',
-    ArrowRight: 'Right',
-    ArrowUp: 'Up',
-    ArrowDown: 'Down',
-    PageUp: 'PageUp',
-    PageDown: 'PageDown',
-    NumpadAdd: 'numadd',
-    NumpadSubtract: 'numsub',
     Escape: 'Esc',
     Space: 'Space'
   }
@@ -1596,8 +1576,4 @@ export function findKeybindingConflicts(
       binding: conflictKey.slice(conflictKey.indexOf('\u0000') + 1),
       actionIds
     }))
-}
-
-export function getDefaultKeybindingOverrides(): KeybindingOverrides {
-  return {}
 }

@@ -112,6 +112,24 @@ describe('terminal clipboard paste', () => {
     })
   })
 
+  it('still tries image paste when browser text clipboard reads fail', async () => {
+    const pasteText = vi.fn()
+    const saveClipboardImageAsTempFile = vi
+      .fn()
+      .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png')
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockRejectedValue(new Error('No text clipboard permission')),
+      saveClipboardImageAsTempFile,
+      pasteText
+    })
+
+    expect(saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: undefined })
+    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
+      forceBracketedPaste: true
+    })
+  })
+
   it('preserves the text fast path without probing for images', async () => {
     const saveClipboardImageAsTempFile = vi.fn()
     const pasteText = vi.fn()

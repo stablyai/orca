@@ -80,6 +80,18 @@ describe('getRegisteredDeletableWorktree', () => {
       ])
     ).toMatchObject({ path: '/workspaces/parent' })
   })
+
+  it('rejects deleting a worktree that contains another registered worktree in a dotdot-prefixed child', () => {
+    expect(() =>
+      getRegisteredDeletableWorktree('/repo', '/workspaces/parent', [
+        makeGitWorktree('/repo', true),
+        makeGitWorktree('/workspaces/parent'),
+        makeGitWorktree('/workspaces/parent/..child')
+      ])
+    ).toThrow(
+      'Refusing to delete worktree because it contains another registered worktree: /workspaces/parent/..child'
+    )
+  })
 })
 
 describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
@@ -92,6 +104,20 @@ describe('canSafelyRemoveOrphanedWorktreeDirectory', () => {
         makeReadPath([
           ['/workspaces/orphan/.git', 'gitdir: /repo/.git/worktrees/orphan\n'],
           ['/repo/.git/worktrees/orphan/gitdir', '/workspaces/orphan/.git\n']
+        ])
+      )
+    ).resolves.toBe(true)
+  })
+
+  it('accepts repo worktree admin entries with dotdot-prefixed directory names', async () => {
+    await expect(
+      canSafelyRemoveOrphanedWorktreeDirectory(
+        '/workspaces/orphan',
+        '/repo',
+        makeStatPath(['/workspaces/orphan/.git'], ['/repo/.git']),
+        makeReadPath([
+          ['/workspaces/orphan/.git', 'gitdir: /repo/.git/worktrees/..orphan\n'],
+          ['/repo/.git/worktrees/..orphan/gitdir', '/workspaces/orphan/.git\n']
         ])
       )
     ).resolves.toBe(true)

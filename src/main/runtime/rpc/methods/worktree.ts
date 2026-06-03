@@ -2,7 +2,9 @@ import { defineMethod, type RpcMethod } from '../core'
 import {
   WorktreeCreate,
   WorktreeDetectedListParams,
+  WorktreeForceDeleteBranch,
   WorktreeListParams,
+  WorktreePrefetchCreateBase,
   WorktreePsParams,
   WorktreeRemove,
   WorktreeResolveMrBase,
@@ -66,6 +68,7 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         linkedGitLabIssue: params.linkedGitLabIssue,
         comment: params.comment,
         displayName: params.displayName,
+        telemetrySource: params.telemetrySource,
         workspaceStatus: params.workspaceStatus,
         manualOrder: params.manualOrder,
         sparseCheckout: params.sparseCheckout,
@@ -73,8 +76,15 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         runHooks: params.runHooks === true,
         activate: params.activate === true,
         setupDecision: params.setupDecision,
-        createdWithAgent: params.createdWithAgent,
-        startup: params.startupCommand ? { command: params.startupCommand } : undefined,
+        createdWithAgent: params.createdWithAgent ?? params.startupAgent,
+        startup: params.startupCommand
+          ? {
+              command: params.startupCommand,
+              ...(params.startupEnv ? { env: params.startupEnv } : {})
+            }
+          : undefined,
+        ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
+        ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
         startupDraft: params.startupDraft,
         lineage: {
           parentWorktree: params.parentWorktree,
@@ -84,6 +94,17 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           orchestrationContext: params.orchestrationContext
         }
       })
+  }),
+  defineMethod({
+    name: 'worktree.prefetchCreateBase',
+    params: WorktreePrefetchCreateBase,
+    handler: async (params, { runtime }) => {
+      await runtime.prefetchManagedWorktreeCreateBase({
+        repoSelector: params.repo,
+        baseBranch: params.baseBranch
+      })
+      return null
+    }
   }),
   defineMethod({
     name: 'worktree.set',
@@ -160,5 +181,11 @@ export const WORKTREE_METHODS: RpcMethod[] = [
       )
       return { removed: true, ...result }
     }
+  }),
+  defineMethod({
+    name: 'worktree.forceDeleteBranch',
+    params: WorktreeForceDeleteBranch,
+    handler: async (params, { runtime }) =>
+      runtime.forceDeletePreservedBranch(params.worktree, params.branchName, params.expectedHead)
   })
 ]

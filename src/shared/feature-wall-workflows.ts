@@ -82,8 +82,4 @@ export function getFeatureWallMediaTile(id: FeatureWallMediaTileId): FeatureWall
   return TILE_BY_ID.get(id) ?? null
 }
 
-export function getFeatureWallWorkflow(id: FeatureWallWorkflowId): FeatureWallWorkflow | null {
-  return FEATURE_WALL_WORKFLOWS.find((w) => w.id === id) ?? null
-}
-
 export const DEFAULT_FEATURE_WALL_WORKFLOW_ID: FeatureWallWorkflowId = 'workspaces'

@@ -45,6 +45,7 @@ test.describe('Diff note edit', () => {
         return store.getState().addDiffComment({
           worktreeId: wId,
           filePath: rel,
+          source: 'diff',
           lineNumber: 1,
           body,
           side: 'modified'
@@ -78,7 +79,7 @@ test.describe('Diff note edit', () => {
     await expect(card, 'seeded inline note did not render').toBeVisible({ timeout: 15_000 })
     await expect(card.locator('.orca-diff-comment-body')).toHaveText(seededBody)
 
-    await card.locator('.orca-diff-comment-edit').click()
+    await card.getByTitle('Edit note').click()
 
     const textarea = card.locator('.orca-diff-comment-popover-textarea')
     await expect(textarea).toBeVisible()
@@ -125,6 +126,6 @@ test.describe('Diff note edit', () => {
     await expect(updatedCard, 'inline card did not update in the open diff').toBeVisible()
     await expect(updatedCard.locator('.orca-diff-comment-body')).toHaveText(editedBody)
     await expect(updatedCard.locator('.orca-diff-comment-body')).not.toHaveText(seededBody)
-    await expect(updatedCard.locator('.orca-diff-comment-edit')).toBeVisible()
+    await expect(updatedCard.getByTitle('Edit note')).toBeVisible()
   })
 })

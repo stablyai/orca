@@ -33,6 +33,21 @@ describe('Electron runtime package contract', () => {
     }
   })
 
+  it('keeps Windows and Linux package builds off the macOS native helper build', () => {
+    const scripts = packageJson.scripts
+
+    expect(scripts['build:desktop']).not.toContain('build:computer-macos')
+    expect(scripts['build:win']).toContain('pnpm run build:desktop')
+    expect(scripts['build:win']).not.toContain('pnpm run build ')
+    expect(scripts['build:win']).not.toContain('build:computer-macos')
+    expect(scripts['build:linux']).toContain('pnpm run build:desktop')
+    expect(scripts['build:linux']).not.toContain('pnpm run build ')
+    expect(scripts['build:linux']).not.toContain('build:computer-macos')
+    expect(scripts['build:mac']).toContain('pnpm run build:computer-macos')
+    expect(scripts['build:release']).toContain('pnpm run build:native')
+    expect(scripts['build:release']).not.toContain('build:computer-macos')
+  })
+
   it('guards release publishing before electron-builder runs', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
@@ -75,6 +90,55 @@ describe('Electron runtime package contract', () => {
     expect(bumpStep.run).toContain('git commit --allow-empty -m "$commit_message"')
   })
 
+  it('keeps release-cut RC retries monotonic across stale attempts', () => {
+    const releaseWorkflow = readFileSync(
+      join(projectDir, '.github/workflows/release-cut.yml'),
+      'utf8'
+    )
+    const parsedWorkflow = parse(releaseWorkflow)
+    const versionStep = parsedWorkflow.jobs.cut.steps.find(
+      (step) => step.name === 'Compute next version'
+    )
+
+    expect(versionStep.run).toContain('node config/scripts/release-rc-history.mjs "$1"')
+    expect(versionStep.run).toContain('tag_matches_current_ref')
+    expect(versionStep.run).toContain('cutting the next version instead of reusing stale artifacts')
+    expect(versionStep.run).toContain('git rev-parse "$existing_rc_tag"')
+  })
+
+  it('bumps separate Homebrew casks for stable and RC desktop tags', () => {
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const homebrewWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/homebrew-bump.yml'), 'utf8')
+    )
+
+    expect(releaseWorkflow.jobs['homebrew-bump'].if).toContain(
+      "startsWith(needs.cut.outputs.tag, 'v')"
+    )
+    expect(releaseWorkflow.jobs['homebrew-bump'].if).not.toContain('-rc.')
+    expect(releaseWorkflow.jobs['homebrew-bump-published-rc-draft'].with.tag).toBe(
+      '${{ needs.cut.outputs.latest_published_rc_tag }}'
+    )
+
+    const resolveCaskStep = homebrewWorkflow.jobs['bump-cask'].steps.find(
+      (step) => step.name === 'Resolve cask target'
+    )
+    const renderStep = homebrewWorkflow.jobs['bump-cask'].steps.find(
+      (step) => step.name === 'Render updated cask file'
+    )
+    const copyStep = homebrewWorkflow.jobs['bump-cask'].steps.find(
+      (step) => step.name === 'Copy cask into tap and open PR'
+    )
+
+    expect(resolveCaskStep.run).toContain('token="orca@rc"')
+    expect(resolveCaskStep.run).toContain('token="orca"')
+    expect(renderStep.env.CASK_PATH).toBe('${{ steps.cask.outputs.path }}')
+    expect(copyStep.run).toContain('cp "$CASK_PATH" "tap/$CASK_PATH"')
+    expect(copyStep.run).toContain('git add "$CASK_PATH"')
+  })
+
   it('installs the Electron package binary in PR checks without changing native module ABI', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)
@@ -83,5 +147,17 @@ describe('Electron runtime package contract', () => {
     )
 
     expect(installStep.run).toBe('node config/scripts/install-electron-package-binary.mjs')
+  })
+
+  it('smokes the packaged CLI from outside the checkout in PR checks', () => {
+    const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
+    const parsedWorkflow = parse(prWorkflow)
+    const smokeStep = parsedWorkflow.jobs.verify.steps.find(
+      (step) => step.name === 'Smoke packaged CLI'
+    )
+
+    expect(smokeStep.run).toBe(
+      'node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked'
+    )
   })
 })

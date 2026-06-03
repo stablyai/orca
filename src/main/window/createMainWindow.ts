@@ -275,11 +275,11 @@ export function createMainWindow(
   const rendererWebContentsId = mainWindow.webContents.id
 
   if (process.platform === 'darwin') {
-    // Why: persistent parked webviews use separate compositor layers, and on
+    // Why: persistent browser webviews use separate compositor layers, and on
     // recent macOS releases those layers can fail to repaint after occlusion or
     // restore. Disabling main-window throttling and forcing a repaint on
-    // visibility transitions hardens Orca against the same black-surface
-    // failure mode seen during browser-tab restore and tab switching.
+    // visibility transitions hardens Orca against black-surface failures during
+    // browser-tab restore and tab switching.
     mainWindow.webContents.setBackgroundThrottling(false)
     mainWindow.on('restore', () => {
       forceRepaint(mainWindow)
@@ -839,6 +839,11 @@ export function createMainWindow(
       return
     }
 
+    if (action.type === 'deleteCurrentWorkspace') {
+      mainWindow.webContents.send('ui:deleteCurrentWorkspace')
+      return
+    }
+
     if (action.type === 'openTasks') {
       mainWindow.webContents.send('ui:openTasks')
       return
@@ -851,6 +856,11 @@ export function createMainWindow(
 
     if (action.type === 'jumpToWorktreeIndex') {
       mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
+      return
+    }
+
+    if (action.type === 'jumpToTabIndex') {
+      mainWindow.webContents.send('ui:jumpToTabIndex', action.index)
       return
     }
 

@@ -227,6 +227,25 @@ describe('keybindings', () => {
     ).toBe(true)
   })
 
+  it('keeps workspace delete unassigned until users customize it', () => {
+    const binding = {
+      key: 'Backspace',
+      code: 'Backspace',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'linux')).toEqual([])
+    expect(keybindingMatchesAction('workspace.delete', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.delete', binding, 'linux', {
+        'workspace.delete': ['Mod+Shift+Backspace']
+      })
+    ).toBe(true)
+  })
+
   it('reports customized renderer conflicts with native menu accelerators', () => {
     expect(findKeybindingConflicts('darwin')).toEqual([])
 
@@ -279,6 +298,15 @@ describe('keybindings', () => {
   })
 
   it('keeps terminal-allowed app shortcuts active in terminal-first mode', () => {
+    const deleteBinding = {
+      key: 'Backspace',
+      code: 'Backspace',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
     expect(
       keybindingMatchesAction(
         'floatingTerminal.toggle',
@@ -294,6 +322,15 @@ describe('keybindings', () => {
         { key: 'Tab', code: 'Tab', control: true, meta: false, alt: false, shift: false },
         'linux',
         undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'workspace.delete',
+        deleteBinding,
+        'linux',
+        { 'workspace.delete': ['Mod+Shift+Backspace'] },
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toBe(true)
@@ -571,5 +608,33 @@ describe('keybindings', () => {
         'linux'
       )
     ).toBe(true)
+  })
+
+  it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
+    const macOptionLeftBracket = {
+      key: '\u201c',
+      code: 'BracketLeft',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+    const macOptionRightBracket = {
+      key: '\u2018',
+      code: 'BracketRight',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+
+    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionLeftBracket, 'darwin')).toBe(
+      true
+    )
+    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionLeftBracket, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionRightBracket, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionRightBracket, 'darwin')).toBe(
+      false
+    )
   })
 })

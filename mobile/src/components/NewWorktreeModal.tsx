@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import { BottomDrawer } from './BottomDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 import { deriveWorkspaceSshGate, workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
-import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import { WORKTREE_CREATE_TIMEOUT_MS } from '../tasks/workspace-create-timeout'
 import {
   isSetupHookTrusted,
@@ -27,13 +26,19 @@ import {
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
 import {
-  filterEnabledMobileTuiAgents,
   isMobileTuiAgent,
   isMobileTuiAgentEnabled,
   MOBILE_TUI_AGENT_LAUNCH_COMMANDS
 } from '../tasks/mobile-tui-agents'
 import type { PersistedTrustedOrcaHooks, TuiAgent } from '../../../src/shared/types'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
+import {
+  NEW_WORKTREE_AGENT_OPTIONS as AGENT_OPTIONS,
+  NEW_WORKTREE_BLANK_AGENT as BLANK_TERMINAL,
+  pickPreferredNewWorktreeAgent,
+  resolveNewWorktreeAgentSelection,
+  type NewWorktreeAgentOption as AgentOption
+} from './new-worktree-agent-selection'
 
 type Repo = {
   id: string
@@ -58,6 +63,19 @@ type RepoHooksResponse = {
   setupTrust?: SetupHookTrust
 }
 
+type SetupHookDetails = {
+  repoId: string
+  command: string | null
+  source: string | null
+  trust: SetupHookTrust | null
+  runPolicy: SetupRunPolicy
+}
+
+type DetectedAgentIdsState = {
+  connectionId: string | null
+  ids: Set<string>
+}
+
 type CreateOptions = {
   setupOverride?: Exclude<SetupDecision, 'inherit'>
   approvedSetupContentHash?: string
@@ -71,55 +89,12 @@ type SetupTrustPrompt = {
   previouslyApproved: boolean
 }
 
-type AgentOption = {
-  id: TuiAgent | '__blank__'
-  label: string
-  faviconDomain?: string
-}
-
-const AGENT_OPTIONS: AgentOption[] = MOBILE_AGENT_CATALOG
-
-const BLANK_TERMINAL: AgentOption = { id: '__blank__', label: 'Blank Terminal' }
-
-function agentOptionFor(id: string | null | undefined): AgentOption | null {
-  if (!id) return null
-  if (id === 'blank' || id === '__blank__') return BLANK_TERMINAL
-  return AGENT_OPTIONS.find((agent) => agent.id === id) ?? null
-}
-
-function pickPreferredAgent(
-  settings: RuntimeSettings | null,
-  detectedAgentIds: Set<string> | null
-): AgentOption {
-  const preferred = agentOptionFor(settings?.defaultTuiAgent)
-  if (preferred?.id === '__blank__') {
-    return preferred
-  }
-  if (
-    preferred &&
-    isMobileTuiAgent(preferred.id) &&
-    isMobileTuiAgentEnabled(preferred.id, settings?.disabledTuiAgents) &&
-    (detectedAgentIds === null || detectedAgentIds.has(preferred.id))
-  ) {
-    return preferred
-  }
-  const enabledAgents = filterEnabledMobileTuiAgents(
-    MOBILE_AGENT_CATALOG.map((agent) => agent.id),
-    settings?.disabledTuiAgents
-  )
-  const detectedOption = AGENT_OPTIONS.find(
-    (agent) =>
-      agent.id !== '__blank__' &&
-      enabledAgents.includes(agent.id) &&
-      (detectedAgentIds === null || detectedAgentIds.has(agent.id))
-  )
-  return detectedOption ?? BLANK_TERMINAL
-}
-
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
   let hash = 0
-  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0
+  }
   return palette[Math.abs(hash) % palette.length]!
 }
 
@@ -206,25 +181,57 @@ export function NewWorktreeModal({
   onCreated,
   onClose
 }: Props) {
+  const openEpochRef = useRef(0)
+  const wasVisibleRef = useRef(false)
+  const clientEpochRef = useRef({ client, epoch: 0 })
+
+  // Why: each drawer opening is a fresh form session; remounting resets local
+  // form state before paint instead of clearing it in a visible-prop Effect.
+  if (visible && !wasVisibleRef.current) {
+    openEpochRef.current += 1
+  }
+  wasVisibleRef.current = visible
+  if (clientEpochRef.current.client !== client) {
+    clientEpochRef.current = { client, epoch: clientEpochRef.current.epoch + 1 }
+  }
+
+  return (
+    <NewWorktreeModalContent
+      key={`${openEpochRef.current}:${clientEpochRef.current.epoch}`}
+      visible={visible}
+      client={client}
+      existingWorktreePaths={existingWorktreePaths}
+      onCreated={onCreated}
+      onClose={onClose}
+    />
+  )
+}
+
+function NewWorktreeModalContent({
+  visible,
+  client,
+  existingWorktreePaths,
+  onCreated,
+  onClose
+}: Props) {
   const [repos, setRepos] = useState<Repo[]>([])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
-  const [selectedAgent, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
+  const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings | null>(null)
-  const [detectedAgentIds, setDetectedAgentIds] = useState<Set<string> | null>(null)
-  const [agentOverridden, setAgentOverridden] = useState(false)
+  const [detectedAgentIdsState, setDetectedAgentIdsState] = useState<DetectedAgentIdsState | null>(
+    null
+  )
+  const [agentOverriddenState, setAgentOverridden] = useState(false)
   const [showAgentPicker, setShowAgentPicker] = useState(false)
   const [sshState, setSshState] = useState<SshConnectionState | null>(null)
-  const [sshConnecting, setSshConnecting] = useState(false)
+  const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [note, setNote] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
-  const [setupCommand, setSetupCommand] = useState<string | null>(null)
-  const [setupSource, setSetupSource] = useState<string | null>(null)
-  const [setupTrust, setSetupTrust] = useState<SetupHookTrust | null>(null)
+  const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
   const [setupTrustPrompt, setSetupTrustPrompt] = useState<SetupTrustPrompt | null>(null)
-  const [setupRunPolicy, setSetupRunPolicy] = useState<SetupRunPolicy>('run-by-default')
   const [setupDecisionChoice, setSetupDecisionChoice] = useState<Exclude<
     SetupDecision,
     'inherit'
@@ -244,39 +251,42 @@ export function NewWorktreeModal({
   const sshGate = deriveWorkspaceSshGate({
     connectionId: selectedRepoConnectionId,
     state: sshState,
-    connecting: sshConnecting
+    connecting: sshConnectingTargetId === selectedRepoConnectionId
   })
+  const detectedAgentIds =
+    detectedAgentIdsState?.connectionId === selectedRepoConnectionId &&
+    (selectedRepoConnectionId === null || sshGate.status === 'connected')
+      ? detectedAgentIdsState.ids
+      : null
+  const activeSetupHookDetails =
+    selectedRepo && setupHookDetails?.repoId === selectedRepo.id ? setupHookDetails : null
+  const setupCommand = activeSetupHookDetails?.command ?? null
+  const setupSource = activeSetupHookDetails?.source ?? null
+  const setupTrust = activeSetupHookDetails?.trust ?? null
+  const setupRunPolicy = activeSetupHookDetails?.runPolicy ?? 'run-by-default'
+  const selectedAgentResolution = resolveNewWorktreeAgentSelection({
+    visible,
+    selectedAgent: selectedAgentState,
+    agentOverridden: agentOverriddenState,
+    runtimeSettings,
+    detectedAgentIds
+  })
+  // Why: agent preference repair is pure render dataflow; doing it here
+  // avoids a stale selected-agent commit while preserving user overrides.
+  if (
+    selectedAgentState.id !== selectedAgentResolution.selectedAgent.id ||
+    agentOverriddenState !== selectedAgentResolution.agentOverridden
+  ) {
+    setSelectedAgent(selectedAgentResolution.selectedAgent)
+    setAgentOverridden(selectedAgentResolution.agentOverridden)
+  }
+  const selectedAgent = selectedAgentResolution.selectedAgent
 
   useEffect(() => {
-    if (!visible) {
-      setShowRepoPicker(false)
-      setShowAgentPicker(false)
+    if (!visible || !client) {
       return
     }
-    if (!client) return
     let stale = false
-    setName('')
-    setNote('')
-    setShowAdvanced(false)
-    setSetupCommand(null)
-    setSetupSource(null)
-    setSetupTrust(null)
-    setTrustedOrcaHooks({})
-    setSetupTrustPrompt(null)
-    setSetupRunPolicy('run-by-default')
-    setSetupDecisionChoice(null)
-    setRunSetup(true)
-    setError('')
-    setCreating(false)
-    setShowRepoPicker(false)
-    setShowAgentPicker(false)
-    setRuntimeSettings(null)
-    setDetectedAgentIds(null)
-    setAgentOverridden(false)
-    setSshState(null)
-    setSshConnecting(false)
-    setSelectedAgent(AGENT_OPTIONS[0]!)
-    setLoading(true)
 
     void (async () => {
       try {
@@ -285,7 +295,9 @@ export function NewWorktreeModal({
           client.sendRequest('settings.get'),
           client.sendRequest('ui.get')
         ])
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (settingsResponse.ok) {
           const result = (settingsResponse as RpcSuccess).result as { settings: RuntimeSettings }
           setRuntimeSettings(result.settings)
@@ -306,9 +318,13 @@ export function NewWorktreeModal({
           }
         }
       } catch {
-        if (!stale) setRepos([])
+        if (!stale) {
+          setRepos([])
+        }
       } finally {
-        if (!stale) setLoading(false)
+        if (!stale) {
+          setLoading(false)
+        }
       }
     })()
     return () => {
@@ -318,15 +334,15 @@ export function NewWorktreeModal({
 
   useEffect(() => {
     if (!visible || !client || !selectedRepoConnectionId) {
-      setSshState(null)
-      setSshConnecting(false)
       return
     }
     let stale = false
     void client
       .sendRequest('ssh.getState', { targetId: selectedRepoConnectionId })
       .then((response) => {
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (!response.ok) {
           throw new Error(response.error.message)
         }
@@ -356,13 +372,13 @@ export function NewWorktreeModal({
   }, [client, selectedRepoConnectionId, visible])
 
   useEffect(() => {
-    if (!visible || !client) return
+    if (!visible || !client) {
+      return
+    }
     if (selectedRepoConnectionId && sshGate.status !== 'connected') {
-      setDetectedAgentIds(null)
       return
     }
     let stale = false
-    setDetectedAgentIds(null)
     void (async () => {
       try {
         const response = selectedRepoConnectionId
@@ -370,12 +386,17 @@ export function NewWorktreeModal({
               connectionId: selectedRepoConnectionId
             })
           : await client.sendRequest('preflight.detectAgents')
-        if (stale) return
-        setDetectedAgentIds(
-          response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
-        )
+        if (stale) {
+          return
+        }
+        setDetectedAgentIdsState({
+          connectionId: selectedRepoConnectionId,
+          ids: response.ok ? new Set((response as RpcSuccess).result as string[]) : new Set()
+        })
       } catch {
-        if (!stale) setDetectedAgentIds(new Set())
+        if (!stale) {
+          setDetectedAgentIdsState({ connectionId: selectedRepoConnectionId, ids: new Set() })
+        }
       }
     })()
     return () => {
@@ -384,27 +405,7 @@ export function NewWorktreeModal({
   }, [client, selectedRepoConnectionId, sshGate.status, visible])
 
   useEffect(() => {
-    if (!visible || agentOverridden) return
-    setSelectedAgent(pickPreferredAgent(runtimeSettings, detectedAgentIds))
-  }, [agentOverridden, detectedAgentIds, runtimeSettings, visible])
-
-  useEffect(() => {
-    if (!visible || detectedAgentIds === null || selectedAgent.id === '__blank__') return
-    if (
-      detectedAgentIds.has(selectedAgent.id) &&
-      isMobileTuiAgentEnabled(selectedAgent.id, runtimeSettings?.disabledTuiAgents)
-    ) {
-      return
-    }
-    setSelectedAgent(pickPreferredAgent(runtimeSettings, detectedAgentIds))
-    setAgentOverridden(false)
-  }, [detectedAgentIds, runtimeSettings, selectedAgent.id, visible])
-
-  useEffect(() => {
     if (!client || !selectedRepo) {
-      setSetupCommand(null)
-      setSetupSource(null)
-      setSetupTrust(null)
       return
     }
     let stale = false
@@ -413,15 +414,20 @@ export function NewWorktreeModal({
         const response = await client.sendRequest('repo.hooks', {
           repo: `id:${selectedRepo.id}`
         })
-        if (stale) return
+        if (stale) {
+          return
+        }
         if (response.ok) {
           const result = (response as RpcSuccess).result as RepoHooksResponse
           const cmd = result.hooks?.scripts?.setup?.trim() || null
           const policy = result.setupRunPolicy ?? 'run-by-default'
-          setSetupCommand(cmd)
-          setSetupSource(result.source)
-          setSetupTrust(normalizeSetupHookTrust(result.setupTrust))
-          setSetupRunPolicy(policy)
+          setSetupHookDetails({
+            repoId: selectedRepo.id,
+            command: cmd,
+            source: result.source,
+            trust: normalizeSetupHookTrust(result.setupTrust),
+            runPolicy: policy
+          })
           setSetupDecisionChoice(null)
           setRunSetup(policy !== 'skip-by-default')
           if (cmd && policy === 'ask') {
@@ -430,10 +436,13 @@ export function NewWorktreeModal({
         }
       } catch {
         if (!stale) {
-          setSetupCommand(null)
-          setSetupSource(null)
-          setSetupTrust(null)
-          setSetupRunPolicy('run-by-default')
+          setSetupHookDetails({
+            repoId: selectedRepo.id,
+            command: null,
+            source: null,
+            trust: null,
+            runPolicy: 'run-by-default'
+          })
           setSetupDecisionChoice(null)
         }
       }
@@ -444,8 +453,10 @@ export function NewWorktreeModal({
   }, [client, selectedRepo])
 
   async function connectSelectedSshRepo(): Promise<void> {
-    if (!client || !selectedRepoConnectionId) return
-    setSshConnecting(true)
+    if (!client || !selectedRepoConnectionId) {
+      return
+    }
+    setSshConnectingTargetId(selectedRepoConnectionId)
     setSshState({
       targetId: selectedRepoConnectionId,
       status: 'connecting',
@@ -478,7 +489,7 @@ export function NewWorktreeModal({
         reconnectAttempt: 0
       })
     } finally {
-      setSshConnecting(false)
+      setSshConnectingTargetId((current) => (current === selectedRepoConnectionId ? null : current))
     }
   }
 
@@ -487,7 +498,9 @@ export function NewWorktreeModal({
     contentHash: string,
     alwaysTrust: boolean
   ): Promise<void> {
-    if (!client) return
+    if (!client) {
+      return
+    }
     const next = trustedOrcaHooksWithSetupApproval({
       trust: trustedOrcaHooks,
       repoId,
@@ -502,7 +515,9 @@ export function NewWorktreeModal({
   }
 
   async function handleCreate(options: CreateOptions = {}) {
-    if (!client || !selectedRepo) return
+    if (!client || !selectedRepo) {
+      return
+    }
     setCreating(true)
     setError('')
 
@@ -526,7 +541,7 @@ export function NewWorktreeModal({
         selectedAgent.id !== '__blank__' &&
         !isMobileTuiAgentEnabled(selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
       ) {
-        setSelectedAgent(pickPreferredAgent(latestRuntimeSettings, detectedAgentIds))
+        setSelectedAgent(pickPreferredNewWorktreeAgent(latestRuntimeSettings, detectedAgentIds))
         setAgentOverridden(false)
         setError('Selected agent is disabled. Choose an enabled agent before creating.')
         return
@@ -606,8 +621,12 @@ export function NewWorktreeModal({
           setupDecision,
           name: candidateName
         }
-        if (selectedAgent.id !== '__blank__') params.createdWithAgent = selectedAgent.id
-        if (note.trim()) params.comment = note.trim()
+        if (selectedAgent.id !== '__blank__') {
+          params.createdWithAgent = selectedAgent.id
+        }
+        if (note.trim()) {
+          params.comment = note.trim()
+        }
 
         const response = await client.sendRequest('worktree.create', params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
@@ -755,7 +774,9 @@ export function NewWorktreeModal({
                 autoFocus={repos.length <= 1}
                 returnKeyType="done"
                 onSubmitEditing={() => {
-                  if (canCreate) void handleCreate()
+                  if (canCreate) {
+                    void handleCreate()
+                  }
                 }}
               />
             </View>

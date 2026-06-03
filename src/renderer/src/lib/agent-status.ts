@@ -111,9 +111,11 @@ export function getWorkingAgentsPerWorktree({
 
 const WELL_KNOWN_LABELS: Record<string, string> = {
   claude: 'Claude',
+  openclaude: 'OpenClaude',
   codex: 'Codex',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
+  amp: 'Amp',
   copilot: 'GitHub Copilot',
   opencode: 'OpenCode',
   cursor: 'Cursor',
@@ -149,6 +151,7 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
 // would silently accept a subset of the union.
 const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   claude: true,
+  openclaude: true,
   codex: true,
   autohand: true,
   opencode: true,

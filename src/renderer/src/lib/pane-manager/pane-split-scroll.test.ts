@@ -3,12 +3,14 @@ import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 const restoreScrollState = vi.hoisted(() => vi.fn())
+const releaseScrollStateMarker = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-scroll', () => ({
+  releaseScrollStateMarker,
   restoreScrollState
 }))
 
-import { scheduleSplitScrollRestore } from './pane-split-scroll'
+import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 
 const scrollState = {
   bufferType: 'normal',
@@ -26,11 +28,11 @@ const TEST_LEAF_ID = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
 
 function createPane(bufferType: 'normal' | 'alternate'): {
   pane: ManagedPaneInternal
-  bufferChangeDisposable: { dispose: ReturnType<typeof vi.fn> }
-  triggerBufferChange: (bufferType: 'normal' | 'alternate') => void
+  bufferChangeDisposables: { dispose: ReturnType<typeof vi.fn> }[]
+  triggerBufferChange: (bufferType: 'normal' | 'alternate', index?: number) => void
 } {
-  let bufferChangeHandler: ((buffer: { type: 'normal' | 'alternate' }) => void) | null = null
-  const bufferChangeDisposable = { dispose: vi.fn() }
+  const bufferChangeHandlers: ((buffer: { type: 'normal' | 'alternate' }) => void)[] = []
+  const bufferChangeDisposables: { dispose: ReturnType<typeof vi.fn> }[] = []
   const pane: ManagedPaneInternal = {
     id: 1,
     leafId: TEST_LEAF_ID,
@@ -44,8 +46,10 @@ function createPane(bufferType: 'normal' | 'alternate'): {
           length: 24
         },
         onBufferChange: vi.fn((handler: (buffer: { type: 'normal' | 'alternate' }) => void) => {
-          bufferChangeHandler = handler
-          return bufferChangeDisposable
+          const disposable = { dispose: vi.fn() }
+          bufferChangeHandlers.push(handler)
+          bufferChangeDisposables.push(disposable)
+          return disposable
         })
       }
     } as never,
@@ -72,12 +76,14 @@ function createPane(bufferType: 'normal' | 'alternate'): {
     webLinksAddon: {} as never,
     compositionHandler: null,
     pendingSplitScrollState: scrollState,
+    pendingSplitScrollBufferDisposable: null,
     debugLabel: null
   }
   return {
     pane,
-    bufferChangeDisposable,
-    triggerBufferChange: (bufferType) => bufferChangeHandler?.({ type: bufferType })
+    bufferChangeDisposables,
+    triggerBufferChange: (bufferType, index = bufferChangeHandlers.length - 1) =>
+      bufferChangeHandlers[index]?.({ type: bufferType })
   }
 }
 
@@ -89,6 +95,7 @@ describe('scheduleSplitScrollRestore', () => {
       return 1
     })
     restoreScrollState.mockClear()
+    releaseScrollStateMarker.mockClear()
   })
 
   afterEach(() => {
@@ -121,7 +128,7 @@ describe('scheduleSplitScrollRestore', () => {
   })
 
   it('defers WebGL reattach and skips scroll restore for alternate-screen panes', () => {
-    const { pane, bufferChangeDisposable, triggerBufferChange } = createPane('alternate')
+    const { pane, bufferChangeDisposables, triggerBufferChange } = createPane('alternate')
     const reattachWebgl = vi.fn()
 
     scheduleSplitScrollRestore(
@@ -139,6 +146,7 @@ describe('scheduleSplitScrollRestore', () => {
     vi.advanceTimersByTime(200)
 
     expect(pane.pendingSplitScrollState).toBeNull()
+    expect(pane.pendingSplitScrollBufferDisposable).toBe(bufferChangeDisposables[0])
     expect(reattachWebgl).not.toHaveBeenCalled()
     expect(restoreScrollState).not.toHaveBeenCalled()
     expect(pane.terminal.refresh).not.toHaveBeenCalled()
@@ -146,11 +154,12 @@ describe('scheduleSplitScrollRestore', () => {
     triggerBufferChange('alternate')
 
     expect(reattachWebgl).not.toHaveBeenCalled()
-    expect(bufferChangeDisposable.dispose).not.toHaveBeenCalled()
+    expect(bufferChangeDisposables[0].dispose).not.toHaveBeenCalled()
 
     triggerBufferChange('normal')
 
-    expect(bufferChangeDisposable.dispose).toHaveBeenCalledTimes(1)
+    expect(bufferChangeDisposables[0].dispose).toHaveBeenCalledTimes(1)
+    expect(pane.pendingSplitScrollBufferDisposable).toBeNull()
     expect(reattachWebgl).toHaveBeenCalledWith(pane)
     expect(restoreScrollState).not.toHaveBeenCalled()
     expect(pane.terminal.refresh).not.toHaveBeenCalled()
@@ -180,5 +189,72 @@ describe('scheduleSplitScrollRestore', () => {
     expect(reattachWebgl).toHaveBeenCalledWith(pane)
     expect(restoreScrollState).toHaveBeenCalledWith(pane.terminal, scrollState)
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('replaces stale deferred buffer listeners when split restore is rescheduled', () => {
+    const { pane, bufferChangeDisposables, triggerBufferChange } = createPane('alternate')
+    const reattachWebgl = vi.fn()
+
+    scheduleSplitScrollRestore(
+      () => pane,
+      pane.id,
+      scrollState,
+      () => false,
+      reattachWebgl
+    )
+    vi.advanceTimersByTime(200)
+
+    expect(bufferChangeDisposables).toHaveLength(1)
+    expect(pane.pendingSplitScrollBufferDisposable).toBe(bufferChangeDisposables[0])
+
+    scheduleSplitScrollRestore(
+      () => pane,
+      pane.id,
+      scrollState,
+      () => false,
+      reattachWebgl
+    )
+    vi.advanceTimersByTime(200)
+
+    expect(bufferChangeDisposables).toHaveLength(2)
+    expect(bufferChangeDisposables[0].dispose).toHaveBeenCalledTimes(1)
+    expect(pane.pendingSplitScrollBufferDisposable).toBe(bufferChangeDisposables[1])
+
+    triggerBufferChange('normal')
+
+    expect(bufferChangeDisposables[1].dispose).toHaveBeenCalledTimes(1)
+    expect(pane.pendingSplitScrollBufferDisposable).toBeNull()
+    expect(reattachWebgl).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels pending split restore handles and releases captured state', () => {
+    let nextFrameId = 10
+    const cancelAnimationFrame = vi.fn()
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => nextFrameId++)
+    )
+    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+    const { pane } = createPane('normal')
+
+    scheduleSplitScrollRestore(
+      () => pane,
+      pane.id,
+      scrollState,
+      () => false
+    )
+
+    expect(pane.pendingSplitScrollRafIds).toEqual([10])
+    expect(pane.pendingSplitScrollTimerId).not.toBeNull()
+    expect(vi.getTimerCount()).toBe(1)
+
+    clearPendingSplitScrollRestore(pane)
+
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(10)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(pane.pendingSplitScrollRafIds).toEqual([])
+    expect(pane.pendingSplitScrollTimerId).toBeNull()
+    expect(pane.pendingSplitScrollState).toBeNull()
+    expect(releaseScrollStateMarker).toHaveBeenCalledWith(scrollState)
   })
 })

@@ -90,7 +90,12 @@ export class HistoryReader {
       if (!entry.isDirectory()) {
         continue
       }
-      const sessionId = decodeURIComponent(entry.name)
+      let sessionId: string
+      try {
+        sessionId = decodeURIComponent(entry.name)
+      } catch {
+        continue
+      }
       const meta = this.readMeta(sessionId)
       if (meta && meta.endedAt === null) {
         restorable.push(sessionId)

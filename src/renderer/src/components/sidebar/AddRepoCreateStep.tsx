@@ -1,14 +1,9 @@
-/**
- * Step for AddRepoDialog (orca#763).
- *
- * Split from AddRepoDialog and AddRepoSteps to keep both under the 400-line
- * oxlint limit, following the same pattern as useRemoteRepo.
- */
-
+// Step for AddRepoDialog (orca#763), split out so create-project state stays scoped.
 import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Folder, GitBranch, Home, Pencil } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,7 +17,7 @@ type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'
 type RepoKind = 'git' | 'folder'
 
 export function useCreateRepo(
-  fetchWorktrees: (repoId: string) => Promise<void>,
+  fetchWorktrees: (repoId: string) => Promise<unknown>,
   setStep: (step: DialogStep) => void,
   setAddedRepo: (repo: Repo | null) => void,
   closeModal: () => void,
@@ -33,6 +28,7 @@ export function useCreateRepo(
   const [createKind, setCreateKind] = useState<RepoKind>('git')
   const [createError, setCreateError] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
+  const mountedRef = useMountedRef()
 
   // Why: monotonic ID so stale create callbacks can detect they were superseded
   // when the user clicks Back or closes the dialog mid-create. Mirrors the
@@ -55,12 +51,13 @@ export function useCreateRepo(
       toast.error('Enter a server parent path.')
       return
     }
+    const gen = createGenRef.current
     const dir = await window.api.repos.pickDirectory()
-    if (dir) {
+    if (dir && gen === createGenRef.current && mountedRef.current) {
       setCreateParent(dir)
       setCreateError(null)
     }
-  }, [])
+  }, [mountedRef])
 
   const handleCreate = useCallback(async () => {
     const name = createName.trim()
@@ -72,8 +69,7 @@ export function useCreateRepo(
     setIsCreating(true)
     setCreateError(null)
     try {
-      const settings = useAppStore.getState().settings
-      const target = getActiveRuntimeTarget(settings)
+      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
       const result =
         target.kind === 'environment'
           ? await callRuntimeRpc<{ repo: Repo } | { error: string }>(
@@ -93,7 +89,7 @@ export function useCreateRepo(
             })
       // Why: if the user closed the dialog or clicked Back mid-create,
       // createGenRef was bumped by resetCreateState. Ignore stale results.
-      if (gen !== createGenRef.current) {
+      if (gen !== createGenRef.current || !mountedRef.current) {
         return
       }
       if ('error' in result) {
@@ -132,7 +128,7 @@ export function useCreateRepo(
         setAddedRepo(repo)
         setExistingWorkspaceSource?.('create_project')
         await fetchWorktrees(repo.id)
-        if (gen !== createGenRef.current) {
+        if (gen !== createGenRef.current || !mountedRef.current) {
           return
         }
         setStep('setup')
@@ -140,7 +136,7 @@ export function useCreateRepo(
         // Why: folder repos skip the Git setup step, so activate the synthetic
         // root workspace before closing. Matches addNonGitFolder's behavior.
         await fetchWorktrees(repo.id)
-        if (gen !== createGenRef.current) {
+        if (gen !== createGenRef.current || !mountedRef.current) {
           return
         }
         const folderWorktree = useAppStore.getState().worktreesByRepo[repo.id]?.[0]
@@ -150,15 +146,14 @@ export function useCreateRepo(
         closeModal()
       }
     } catch (err) {
-      if (gen !== createGenRef.current) {
+      if (gen !== createGenRef.current || !mountedRef.current) {
         return
       }
-      const message = err instanceof Error ? err.message : String(err)
-      setCreateError(message)
+      setCreateError(err instanceof Error ? err.message : String(err))
     } finally {
       // Why: only clear the loading state if this invocation is still current;
       // a superseded create must not flip the flag back off for a new flow.
-      if (gen === createGenRef.current) {
+      if (gen === createGenRef.current && mountedRef.current) {
         setIsCreating(false)
       }
     }
@@ -167,6 +162,7 @@ export function useCreateRepo(
     createParent,
     createKind,
     fetchWorktrees,
+    mountedRef,
     setStep,
     setAddedRepo,
     closeModal,
@@ -291,21 +287,42 @@ export function CreateStep({
   onCreate
 }: CreateStepProps): React.JSX.Element {
   const radioGroupRef = useRef<HTMLDivElement>(null)
+  const radioFocusFrameRef = useRef<number | null>(null)
+
+  const cancelRadioFocusFrame = useCallback((): void => {
+    if (radioFocusFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(radioFocusFrameRef.current)
+    radioFocusFrameRef.current = null
+  }, [])
+
+  const setRadioGroupNode = useCallback(
+    (node: HTMLDivElement | null): void => {
+      // Why: the queued arrow-key focus is only valid while this radiogroup is mounted.
+      if (!node) {
+        cancelRadioFocusFrame()
+      }
+      radioGroupRef.current = node
+    },
+    [cancelRadioFocusFrame]
+  )
 
   // Arrow keys cycle selection within the radiogroup (WAI-ARIA radio pattern).
   const cycleKind = useCallback(() => {
     const next = createKind === 'git' ? 'folder' : 'git'
     onKindChange(next)
-    requestAnimationFrame(() => {
+    cancelRadioFocusFrame()
+    radioFocusFrameRef.current = requestAnimationFrame(() => {
+      radioFocusFrameRef.current = null
       const nextEl = radioGroupRef.current?.querySelector<HTMLButtonElement>(
         `[data-kind="${next}"]`
       )
       nextEl?.focus()
     })
-  }, [createKind, onKindChange])
+  }, [cancelRadioFocusFrame, createKind, onKindChange])
 
-  const trimmedName = createName.trim()
-  const canSubmit = trimmedName.length > 0 && createParent.trim().length > 0 && !isCreating
+  const canSubmit = createName.trim().length > 0 && createParent.trim().length > 0 && !isCreating
 
   return (
     <>
@@ -323,7 +340,7 @@ export function CreateStep({
       <div className="space-y-3.5 pt-1 min-w-0">
         {/* Kind toggle. Real radiogroup so screen readers announce it as a choice. */}
         <div
-          ref={radioGroupRef}
+          ref={setRadioGroupNode}
           role="radiogroup"
           aria-label="Project kind"
           className="grid grid-cols-2 gap-2"

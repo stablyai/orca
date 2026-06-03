@@ -5,7 +5,9 @@ import type {
   MigrationUnsupportedPtyEntry
 } from '../../shared/agent-status-types'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-interrupt-intent'
+import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { agentHookServer, isValidPaneKey } from '../agent-hooks/server'
+import { ampHookService } from '../amp/hook-service'
 import {
   clearMigrationUnsupportedPtysForPaneKey,
   getMigrationUnsupportedPtySnapshot
@@ -20,12 +22,34 @@ import { commandCodeHookService } from '../command-code/hook-service'
 import { grokHookService } from '../grok/hook-service'
 import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
+import { openClaudeHookService } from '../openclaude/hook-service'
+
+type AgentStatusRuntimeEnrichment = Pick<
+  OrcaRuntimeService,
+  'getAgentStatusTerminalHandleForPaneKey' | 'getAgentStatusOrchestrationContextForPaneKey'
+>
+
+function enrichAgentStatusIpcPayload(
+  data: AgentStatusIpcPayload,
+  runtime: AgentStatusRuntimeEnrichment | undefined
+): AgentStatusIpcPayload {
+  if (!runtime) {
+    return data
+  }
+  const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(data.paneKey)
+  const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(data.paneKey)
+  return {
+    ...data,
+    ...(terminalHandle ? { terminalHandle } : {}),
+    ...(orchestration ? { orchestration } : {})
+  }
+}
 
 // Why: install/remove are intentionally not exposed to the renderer. Orca
 // auto-installs managed hooks at app startup (see src/main/index.ts), so a
 // renderer-triggered remove would be silently reverted on the next launch
 // and mislead the user.
-export function registerAgentHookHandlers(): void {
+export function registerAgentHookHandlers(runtime?: AgentStatusRuntimeEnrichment): void {
   // Why: matches the defensive pattern in src/main/ipc/pty.ts so re-registration
   // never throws "Attempted to register a second handler..." if this function is
   // ever invoked more than once (e.g. the macOS app re-activation path that
@@ -33,9 +57,11 @@ export function registerAgentHookHandlers(): void {
   // register-core-handlers.ts prevents re-entry, but decoupling from that guard
   // future-proofs this file.
   ipcMain.removeHandler('agentHooks:claudeStatus')
+  ipcMain.removeHandler('agentHooks:openClaudeStatus')
   ipcMain.removeHandler('agentHooks:codexStatus')
   ipcMain.removeHandler('agentHooks:geminiStatus')
   ipcMain.removeHandler('agentHooks:antigravityStatus')
+  ipcMain.removeHandler('agentHooks:ampStatus')
   ipcMain.removeHandler('agentHooks:cursorStatus')
   ipcMain.removeHandler('agentHooks:droidStatus')
   ipcMain.removeHandler('agentHooks:commandCodeStatus')
@@ -67,8 +93,11 @@ export function registerAgentHookHandlers(): void {
   })
   ipcMain.handle('agentStatus:getSnapshot', (): AgentStatusIpcPayload[] => {
     // Why: the renderer pulls this after workspace hydration, so startup cannot
-    // lose replayed statuses while its local store is still empty.
-    return agentHookServer.getStatusSnapshot()
+    // lose replayed statuses while its local store is still empty. Match the
+    // live push enrichment in main/index.ts so parent/child rows survive replay.
+    return agentHookServer
+      .getStatusSnapshot()
+      .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
   })
   ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {
     if (typeof request !== 'object' || request === null) {
@@ -92,6 +121,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'claude',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:openClaudeStatus', (): AgentHookInstallStatus => {
+    try {
+      return openClaudeHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'openclaude',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,
@@ -131,6 +173,19 @@ export function registerAgentHookHandlers(): void {
     } catch (err) {
       return {
         agent: 'antigravity',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:ampStatus', (): AgentHookInstallStatus => {
+    try {
+      return ampHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'amp',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

@@ -44,6 +44,7 @@ export type SmartGitHubSubmitLookup = {
 }
 
 const SMART_GITHUB_SUBMIT_LOOKUP_TTL_MS = 60_000
+const SMART_GITHUB_SUBMIT_LOOKUP_CACHE_MAX_ENTRIES = 128
 
 type SmartGitHubSubmitLookupCacheEntry = {
   expiresAt: number
@@ -51,6 +52,21 @@ type SmartGitHubSubmitLookupCacheEntry = {
 }
 
 const smartGitHubSubmitLookupCache = new Map<string, SmartGitHubSubmitLookupCacheEntry>()
+
+function pruneSmartGitHubSubmitLookupCache(now: number): void {
+  for (const [key, entry] of smartGitHubSubmitLookupCache) {
+    if (entry.expiresAt <= now) {
+      smartGitHubSubmitLookupCache.delete(key)
+    }
+  }
+  while (smartGitHubSubmitLookupCache.size > SMART_GITHUB_SUBMIT_LOOKUP_CACHE_MAX_ENTRIES) {
+    const oldestKey = smartGitHubSubmitLookupCache.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    smartGitHubSubmitLookupCache.delete(oldestKey)
+  }
+}
 
 export function getSmartGitHubSubmitIntent(input: string): SmartGitHubSubmitIntent | null {
   const trimmed = input.trim()
@@ -106,6 +122,7 @@ export function lookupSmartGitHubSubmitItem({
 }: SmartGitHubSubmitLookup): Promise<GitHubWorkItem | null> {
   const key = getSmartGitHubSubmitLookupCacheKey({ repoId, repoPath, intent })
   const now = Date.now()
+  pruneSmartGitHubSubmitLookupCache(now)
   const cached = smartGitHubSubmitLookupCache.get(key)
   if (cached && cached.expiresAt > now) {
     return cached.promise
@@ -131,6 +148,7 @@ export function lookupSmartGitHubSubmitItem({
     promise: stampedPromise,
     expiresAt: now + SMART_GITHUB_SUBMIT_LOOKUP_TTL_MS
   })
+  pruneSmartGitHubSubmitLookupCache(now)
   // Why: transient GitHub/IPC failures should dedupe while in flight, but
   // must not poison immediate create retries for the full cache TTL.
   void stampedPromise.catch(() => {
@@ -143,6 +161,10 @@ export function lookupSmartGitHubSubmitItem({
 
 export function clearSmartGitHubSubmitLookupCacheForTests(): void {
   smartGitHubSubmitLookupCache.clear()
+}
+
+export function getSmartGitHubSubmitLookupCacheSizeForTests(): number {
+  return smartGitHubSubmitLookupCache.size
 }
 
 export function getSmartGitHubSubmitResolution(

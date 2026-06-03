@@ -20,6 +20,7 @@ import { createHash } from 'crypto'
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   realpathSync,
   statSync,
@@ -29,6 +30,7 @@ import {
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
+import { mergePiOverlayUiSettings } from '../shared/pi-overlay-ui-settings'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
 const RELAY_HOOKS_DIR = '.orca-relay'
@@ -40,6 +42,7 @@ const PI_OVERLAY_SUBDIR_BY_KIND: Record<PiAgentKind, string> = {
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
+const PI_AGENT_SETTINGS_FILE = 'settings.json'
 // Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
 // Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
 // paths on the remote disk. The renderer-chosen launch command flows in via
@@ -223,6 +226,10 @@ export class PluginOverlayManager {
     for (const entry of readdirSync(sourceAgentDir, { withFileTypes: true })) {
       const sourcePath = join(sourceAgentDir, entry.name)
 
+      if (entry.name === PI_AGENT_SETTINGS_FILE) {
+        continue
+      }
+
       if (entry.name === 'extensions') {
         const isSymlink = entry.isSymbolicLink()
         let isLinkPointingToDir = false
@@ -255,6 +262,29 @@ export class PluginOverlayManager {
     }
   }
 
+  private readPiSettings(sourceAgentDir: string): unknown {
+    const settingsPath = join(sourceAgentDir, PI_AGENT_SETTINGS_FILE)
+    if (!existsSync(settingsPath)) {
+      return {}
+    }
+
+    try {
+      return JSON.parse(readFileSync(settingsPath, 'utf8'))
+    } catch {
+      return {}
+    }
+  }
+
+  private writePiOverlaySettings(sourceAgentDir: string, overlayDir: string): void {
+    // Why: relay overlays run on the remote disk, but the same Pi UI guardrails
+    // need to stay overlay-local so SSH sessions do not mutate user config.
+    const settings = mergePiOverlayUiSettings(this.readPiSettings(sourceAgentDir))
+    writeFileSync(
+      join(overlayDir, PI_AGENT_SETTINGS_FILE),
+      `${JSON.stringify(settings, null, 2)}\n`
+    )
+  }
+
   /** Materialize the Pi extension overlay for `id` and return the directory
    *  path that should be assigned to PI_CODING_AGENT_DIR. `kind` selects which
    *  Pi-compatible agent's source dir to mirror when `existingAgentDir` is
@@ -281,6 +311,7 @@ export class PluginOverlayManager {
         return null
       }
       this.mirrorPiAgentDir(sourceAgentDir, dir)
+      this.writePiOverlaySettings(sourceAgentDir, dir)
       const extensionsDir = join(dir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
       writeFileSync(join(extensionsDir, PI_EXTENSION_FILE), extensionSource)

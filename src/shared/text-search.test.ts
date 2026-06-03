@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { execFileSync } from 'child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { tmpdir } from 'os'
+import { join } from 'path'
 import {
   buildGitGrepArgs,
   buildRgArgs,
@@ -110,6 +114,22 @@ describe('ingestRgJsonLine', () => {
     const verdict = ingestRgJsonLine('not json', '/root', acc, 100)
     expect(verdict).toBe('continue')
     expect(acc.totalMatches).toBe(0)
+  })
+
+  it('creates a navigable fallback match when rg omits submatch ranges', () => {
+    const acc = createAccumulator()
+    const verdict = ingestRgJsonLine(makeMatch('/root/a.ts', 4, [], 'foobar'), '/root', acc, 100)
+    expect(verdict).toBe('continue')
+    expect(acc.totalMatches).toBe(1)
+    const file = Array.from(acc.fileMap.values())[0]
+    expect(file.matches).toEqual([{ line: 4, column: 1, matchLength: 1, lineContent: 'foobar' }])
+  })
+
+  it('keeps empty-line rg matches navigable when rg omits submatch ranges', () => {
+    const acc = createAccumulator()
+    ingestRgJsonLine(makeMatch('/root/a.ts', 5, [], ''), '/root', acc, 100)
+    const file = Array.from(acc.fileMap.values())[0]
+    expect(file.matches).toEqual([{ line: 5, column: 1, matchLength: 0, lineContent: '' }])
   })
 
   it('stops at maxResults and sets truncated synchronously', () => {
@@ -241,10 +261,49 @@ describe('buildSubmatchRegex', () => {
 })
 
 describe('ingestGitGrepLine', () => {
-  it('parses null-byte delimited line, finds all submatch positions', () => {
+  it('parses actual git grep null-delimited output from the current git binary', () => {
+    const rootPath = mkdtempSync(join(tmpdir(), 'orca-search-git-'))
+    try {
+      execFileSync('git', ['init'], { cwd: rootPath, stdio: 'ignore' })
+      mkdirSync(join(rootPath, 'src'))
+      writeFileSync(
+        join(rootPath, 'src', 'a.ts'),
+        [
+          "reportError(err, { action: 'save' })",
+          'reportError(err); reportError(next)',
+          'unrelated'
+        ].join('\n')
+      )
+
+      const stdout = execFileSync(
+        'git',
+        buildGitGrepArgs('reportError(', { caseSensitive: false, useRegex: false }),
+        { cwd: rootPath, encoding: 'utf8' }
+      )
+      const acc = createAccumulator()
+      const re = buildSubmatchRegex('reportError(', {})
+      for (const line of stdout.split('\n')) {
+        ingestGitGrepLine(line, rootPath, re, acc, 100)
+      }
+
+      const result = finalize(acc)
+      expect(result.totalMatches).toBe(3)
+      expect(result.files).toHaveLength(1)
+      expect(result.files[0].relativePath).toBe('src/a.ts')
+      expect(result.files[0].matches.map((match) => [match.line, match.column])).toEqual([
+        [1, 1],
+        [2, 1],
+        [2, 19]
+      ])
+    } finally {
+      rmSync(rootPath, { recursive: true, force: true })
+    }
+  })
+
+  it('parses git grep null-delimited line, finds all submatch positions', () => {
     const acc = createAccumulator()
     const re = buildSubmatchRegex('foo', {})
-    const verdict = ingestGitGrepLine('src/a.ts\x005:foo and foo again\n', '/root', re, acc, 100)
+    const verdict = ingestGitGrepLine('src/a.ts\x005\x00foo and foo again\n', '/root', re, acc, 100)
     expect(verdict).toBe('continue')
     const f = Array.from(acc.fileMap.values())[0]
     expect(f.matches).toHaveLength(2)
@@ -252,10 +311,33 @@ describe('ingestGitGrepLine', () => {
     expect(f.matches[1]).toMatchObject({ line: 5, column: 9 })
   })
 
+  it('keeps compatibility with colon-delimited git grep lines', () => {
+    const acc = createAccumulator()
+    const re = buildSubmatchRegex('foo', {})
+    ingestGitGrepLine('src/a.ts\x005:foo', '/root', re, acc, 100)
+    const f = Array.from(acc.fileMap.values())[0]
+    expect(f.matches[0]).toMatchObject({ line: 5, column: 1 })
+  })
+
+  it('does not treat colons in matched content as the line-number delimiter', () => {
+    const acc = createAccumulator()
+    const re = buildSubmatchRegex('reportError(', {})
+    ingestGitGrepLine(
+      "src/a.ts\x0010\x00reportError(err, { action: 'save' })\n",
+      '/root',
+      re,
+      acc,
+      100
+    )
+    const f = Array.from(acc.fileMap.values())[0]
+    expect(f.matches).toHaveLength(1)
+    expect(f.matches[0]).toMatchObject({ line: 10, column: 1, matchLength: 12 })
+  })
+
   it('handles colons in filenames via null delimiter', () => {
     const acc = createAccumulator()
     const re = buildSubmatchRegex('x', {})
-    ingestGitGrepLine('weird:name.ts\x001:x', '/root', re, acc, 100)
+    ingestGitGrepLine('weird:name.ts\x001\x00x', '/root', re, acc, 100)
     const f = Array.from(acc.fileMap.values())[0]
     expect(f.relativePath).toBe('weird:name.ts')
   })
@@ -273,7 +355,7 @@ describe('ingestGitGrepLine', () => {
     const acc = createAccumulator()
     // A pattern that matches zero-length at every position.
     const re = new RegExp('', 'g')
-    ingestGitGrepLine('a.ts\x001:abc', '/r', re, acc, 5)
+    ingestGitGrepLine('a.ts\x001\x00abc', '/r', re, acc, 5)
     expect(acc.totalMatches).toBeGreaterThan(0)
     expect(acc.totalMatches).toBeLessThanOrEqual(5)
   })
@@ -281,7 +363,7 @@ describe('ingestGitGrepLine', () => {
   it('stops at maxResults boundary and sets truncated synchronously', () => {
     const acc = createAccumulator()
     const re = buildSubmatchRegex('a', {})
-    const verdict = ingestGitGrepLine('f\x001:aaaa', '/r', re, acc, 2)
+    const verdict = ingestGitGrepLine('f\x001\x00aaaa', '/r', re, acc, 2)
     expect(verdict).toBe('stop')
     expect(acc.truncated).toBe(true)
     expect(acc.totalMatches).toBe(2)
@@ -289,7 +371,7 @@ describe('ingestGitGrepLine', () => {
 
   it('falls back to whole-line highlight when submatchRegex is null', () => {
     const acc = createAccumulator()
-    const verdict = ingestGitGrepLine('a.ts\x003:hello world', '/r', null, acc, 100)
+    const verdict = ingestGitGrepLine('a.ts\x003\x00hello world', '/r', null, acc, 100)
     expect(verdict).toBe('continue')
     const f = Array.from(acc.fileMap.values())[0]
     expect(f.matches).toHaveLength(1)
@@ -305,13 +387,35 @@ describe('ingestGitGrepLine', () => {
 describe('finalize', () => {
   it('returns the expected SearchResult shape', () => {
     const acc = createAccumulator()
-    acc.fileMap.set('/r/a.ts', { filePath: '/r/a.ts', relativePath: 'a.ts', matches: [] })
-    acc.totalMatches = 3
+    acc.fileMap.set('/r/a.ts', {
+      filePath: '/r/a.ts',
+      relativePath: 'a.ts',
+      matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
+    })
+    acc.totalMatches = 1
     acc.truncated = true
     expect(finalize(acc)).toEqual({
-      files: [{ filePath: '/r/a.ts', relativePath: 'a.ts', matches: [] }],
-      totalMatches: 3,
+      files: [
+        {
+          filePath: '/r/a.ts',
+          relativePath: 'a.ts',
+          matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
+        }
+      ],
+      totalMatches: 1,
       truncated: true
     })
+  })
+
+  it('filters impossible empty file rows before returning results', () => {
+    const acc = createAccumulator()
+    acc.fileMap.set('/r/a.ts', { filePath: '/r/a.ts', relativePath: 'a.ts', matches: [] })
+    acc.fileMap.set('/r/b.ts', {
+      filePath: '/r/b.ts',
+      relativePath: 'b.ts',
+      matches: [{ line: 1, column: 1, matchLength: 3, lineContent: 'foo' }]
+    })
+    acc.totalMatches = 1
+    expect(finalize(acc).files.map((file) => file.relativePath)).toEqual(['b.ts'])
   })
 })

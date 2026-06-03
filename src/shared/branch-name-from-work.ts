@@ -71,10 +71,7 @@ export type BranchNameWorkContext = {
  * the work into a branch name. Kept in shared so the prompt is identical across
  * local and SSH generation targets.
  */
-export function buildBranchNamePrompt(
-  context: BranchNameWorkContext,
-  customInstructions = ''
-): string {
+export function buildBranchNamePrompt(context: BranchNameWorkContext, customPrompt = ''): string {
   const sections = [
     'Generate a git branch name that summarizes the coding task described below.',
     'Rules:',
@@ -91,9 +88,9 @@ export function buildBranchNamePrompt(
   if (assistant) {
     sections.push('', "Agent's initial response:", assistant)
   }
-  const instructions = customInstructions.trim()
-  if (instructions) {
-    sections.push('', 'Additional user instructions:', instructions)
+  const prompt = customPrompt.trim()
+  if (prompt) {
+    sections.push('', 'Additional user prompt:', prompt)
   }
   return sections.join('\n')
 }

@@ -122,6 +122,71 @@ describe('detectInstalledBrowsers — Comet', () => {
     expect(names).toEqual(['Personal', 'Research', 'Work'])
   })
 
+  it('ignores Comet profile directories that escape the browser root', async () => {
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof fsModule>('node:fs')
+      return {
+        ...actual,
+        existsSync: (p: string) => {
+          if (p.includes('Comet/Local State')) {
+            return true
+          }
+          if (p.includes('Application Support/Outside/Network/Cookies')) {
+            return true
+          }
+          return false
+        },
+        readFileSync: (p: string, enc?: string) => {
+          if (typeof p === 'string' && p.includes('Comet/Local State')) {
+            return JSON.stringify({
+              profile: {
+                info_cache: {
+                  '../Outside': { name: 'Outside' }
+                }
+              }
+            })
+          }
+          return actual.readFileSync(p as never, enc as never)
+        }
+      }
+    })
+
+    const { detectInstalledBrowsers } = await import('./browser-cookie-import')
+    const detected = detectInstalledBrowsers()
+    expect(detected.find((b) => b.family === 'comet')).toBeUndefined()
+  })
+
+  it('rejects explicit Comet profile selections that escape the browser root', async () => {
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof fsModule>('node:fs')
+      return {
+        ...actual,
+        existsSync: (p: string) => {
+          if (p.includes('Application Support/Outside/Network/Cookies')) {
+            return true
+          }
+          return false
+        }
+      }
+    })
+
+    const { selectBrowserProfile } = await import('./browser-cookie-import')
+    const selected = selectBrowserProfile(
+      {
+        family: 'comet',
+        label: 'Comet',
+        cookiesPath: '/Users/test/Library/Application Support/Comet/Default/Network/Cookies',
+        keychainService: 'Comet Safe Storage',
+        keychainAccount: 'Comet',
+        profiles: [{ name: 'Outside', directory: '../Outside' }],
+        selectedProfile: 'Default'
+      },
+      '../Outside'
+    )
+
+    expect(selected).toBeNull()
+  })
+
   it('skips Comet when the data directory exists but no Cookies DB is present', async () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof fsModule>('node:fs')

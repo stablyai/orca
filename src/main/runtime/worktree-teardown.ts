@@ -5,6 +5,7 @@ import { listRegisteredPtys } from '../memory/pty-registry'
 export type WorktreeTeardownDeps = {
   runtime?: OrcaRuntimeService
   localProvider: IPtyProvider
+  onPtyStopped?: (ptyId: string) => void
 }
 
 export type WorktreeTeardownResult = {
@@ -50,13 +51,25 @@ export async function killAllProcessesForWorktree(
     result.runtimeStopped = r.stopped
   }
 
-  result.providerStopped = await sweepProviderByPrefix(worktreeId, deps.localProvider)
-  result.registryStopped = await sweepRegistryForWorktree(worktreeId, deps.localProvider)
+  result.providerStopped = await sweepProviderByPrefix(
+    worktreeId,
+    deps.localProvider,
+    deps.onPtyStopped
+  )
+  result.registryStopped = await sweepRegistryForWorktree(
+    worktreeId,
+    deps.localProvider,
+    deps.onPtyStopped
+  )
 
   return result
 }
 
-async function sweepProviderByPrefix(worktreeId: string, provider: IPtyProvider): Promise<number> {
+async function sweepProviderByPrefix(
+  worktreeId: string,
+  provider: IPtyProvider,
+  onPtyStopped?: (ptyId: string) => void
+): Promise<number> {
   const prefix = `${worktreeId}@@`
   const sessions = await provider.listProcesses().catch(() => [])
   let killed = 0
@@ -66,6 +79,7 @@ async function sweepProviderByPrefix(worktreeId: string, provider: IPtyProvider)
     }
     try {
       await provider.shutdown(s.id, { immediate: true })
+      clearStoppedPtyState(s.id, onPtyStopped)
       killed += 1
     } catch {
       // Already dead, or the backend dropped the session — treat as success.
@@ -77,17 +91,32 @@ async function sweepProviderByPrefix(worktreeId: string, provider: IPtyProvider)
 
 async function sweepRegistryForWorktree(
   worktreeId: string,
-  localProvider: IPtyProvider
+  localProvider: IPtyProvider,
+  onPtyStopped?: (ptyId: string) => void
 ): Promise<number> {
   const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
   let killed = 0
   for (const entry of entries) {
     try {
       await localProvider.shutdown(entry.ptyId, { immediate: true })
+      clearStoppedPtyState(entry.ptyId, onPtyStopped)
       killed += 1
     } catch {
       /* ignore — best-effort */
     }
   }
   return killed
+}
+
+function clearStoppedPtyState(ptyId: string, onPtyStopped?: (ptyId: string) => void): void {
+  if (!onPtyStopped) {
+    return
+  }
+  try {
+    // Why: daemon shutdown does not always fan a local pty:exit event back
+    // through pty.ts, but removed worktrees must immediately drop memory rows.
+    onPtyStopped(ptyId)
+  } catch {
+    /* cleanup is best-effort and must not block git-level removal */
+  }
 }

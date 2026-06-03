@@ -140,7 +140,9 @@ async function listHandles(
 async function ensureSecondHandle(ws: WebSocket, handleA: string): Promise<string> {
   const terminals = await listHandles(ws)
   const existing = terminals.find((terminal) => terminal.handle !== handleA)
-  if (existing) return existing.handle
+  if (existing) {
+    return existing.handle
+  }
 
   const created = await send(ws, 'terminal.create', {
     worktree: worktreeSelector,
@@ -174,7 +176,9 @@ async function captureSnapshot(ws: WebSocket, label: string, handle: string): Pr
       }
     })
     streamListeners.set(id, (result) => {
-      if (result.type !== 'scrollback') return
+      if (result.type !== 'scrollback') {
+        return
+      }
       clearTimeout(timeout)
       pending.delete(id)
       streamListeners.delete(id)
@@ -333,7 +337,9 @@ ws.on('message', (data) => {
     return
   }
   const plaintext = decrypt(raw)
-  if (!plaintext) return
+  if (!plaintext) {
+    return
+  }
 
   const response = JSON.parse(plaintext) as RpcResponse
   const result = response.result
@@ -344,7 +350,9 @@ ws.on('message', (data) => {
   }
 
   const request = pending.get(response.id)
-  if (!request || request.method === 'terminal.subscribe') return
+  if (!request || request.method === 'terminal.subscribe') {
+    return
+  }
   pending.delete(response.id)
   request.resolve(response)
 })

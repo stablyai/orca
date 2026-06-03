@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import { useWindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -26,25 +27,33 @@ export function WslCliRegistration({
   const [loading, setLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
+  const mountedRef = useMountedRef()
   const { wslAvailable } = useWindowsTerminalCapabilities(currentPlatform === 'win32')
   const showWslCli = currentPlatform === 'win32' && wslAvailable
 
-  const refreshStatus = async (): Promise<void> => {
+  const refreshStatus = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      setStatus(await window.api.cli.getWslInstallStatus())
+      const next = await window.api.cli.getWslInstallStatus()
+      if (mountedRef.current) {
+        setStatus(next)
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load WSL CLI status.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to load WSL CLI status.')
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
-  }
+  }, [mountedRef])
 
   useEffect(() => {
     if (showWslCli) {
       void refreshStatus()
     }
-  }, [showWslCli])
+  }, [refreshStatus, showWslCli])
 
   if (!showWslCli) {
     return null
@@ -52,18 +61,28 @@ export function WslCliRegistration({
 
   const isEnabled = status?.state === 'installed'
   const isSupported = status?.supported ?? false
+  const commandName = status?.commandName ?? 'orca-ide'
 
   const handleInstall = async (): Promise<void> => {
     setBusyAction('install')
     try {
       const next = await window.api.cli.installWsl()
+      if (!mountedRef.current) {
+        return
+      }
       setStatus(next)
       setDialogOpen(false)
-      toast.success('Registered `orca` in WSL.')
+      toast.success(`Registered \`${next.commandName}\` in WSL.`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to register `orca` in WSL.')
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : `Failed to register \`${commandName}\` in WSL.`
+        )
+      }
     } finally {
-      setBusyAction(null)
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
     }
   }
 
@@ -71,13 +90,22 @@ export function WslCliRegistration({
     setBusyAction('remove')
     try {
       const next = await window.api.cli.removeWsl()
+      if (!mountedRef.current) {
+        return
+      }
       setStatus(next)
       setDialogOpen(false)
-      toast.success('Removed `orca` from WSL.')
+      toast.success(`Removed \`${next.commandName}\` from WSL.`)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to remove `orca` from WSL.')
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from WSL.`
+        )
+      }
     } finally {
-      setBusyAction(null)
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
     }
   }
 
@@ -90,7 +118,7 @@ export function WslCliRegistration({
             <p className="text-xs text-muted-foreground">
               {loading
                 ? 'Checking WSL CLI registration...'
-                : (status?.detail ?? 'Register `orca` in ~/.local/bin inside WSL.')}
+                : (status?.detail ?? 'Register `orca-ide` in ~/.local/bin inside WSL.')}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -148,12 +176,14 @@ export function WslCliRegistration({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {isEnabled ? 'Remove `orca` from WSL?' : 'Register `orca` in WSL?'}
+              {isEnabled
+                ? `Remove \`${commandName}\` from WSL?`
+                : `Register \`${commandName}\` in WSL?`}
             </DialogTitle>
             <DialogDescription>
               {isEnabled
                 ? 'This removes the WSL shell command. Orca itself remains installed on Windows.'
-                : `Orca will register ${status?.commandPath ?? '`orca`'} so the command works from WSL terminals.`}
+                : `Orca will register ${status?.commandPath ?? commandName} so the command works from WSL terminals.`}
             </DialogDescription>
           </DialogHeader>
           {status?.commandPath ? (

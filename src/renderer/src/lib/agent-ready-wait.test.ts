@@ -13,7 +13,7 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   inspectRuntimeTerminalProcess: vi.fn()
 }))
 
-vi.mock('@/lib/tui-agent-startup', () => ({
+vi.mock('./tui-agent-startup', () => ({
   isShellProcess: vi.fn(() => false)
 }))
 

@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { basename, join } from 'path'
 import { app } from 'electron'
+import { createHash } from 'crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
   getPiAgentStatusExtensionSource
@@ -11,6 +12,7 @@ import {
   mirrorEntry,
   safeRemoveOverlay
 } from '../pty/overlay-mirror'
+import { mergePiOverlayUiSettings } from '../../shared/pi-overlay-ui-settings'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 // Why: the Pi test suite imports `isSafeDescendCandidate` from this module's
@@ -22,6 +24,7 @@ export const isSafeDescendCandidate = sharedIsSafeDescendCandidate
 const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
 const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 const PI_AGENT_SUBDIR = 'agent'
+const PI_AGENT_SETTINGS_FILE = 'settings.json'
 
 // Why: each agent owns its own overlay tree so OMP launches never touch
 // Pi's overlay dir (and vice versa). Shadowing one inside the other would
@@ -151,12 +154,22 @@ function getDefaultPiAgentDir(kind: PiAgentKind): string {
   return join(homedir(), AGENT_HOME_DIR_NAME[kind], PI_AGENT_SUBDIR)
 }
 
+function toSafeOverlayDirName(ptyId: string): string {
+  return createHash('sha256').update(ptyId).digest('hex').slice(0, 32)
+}
+
 export class PiTitlebarExtensionService {
   private getOverlayRoot(kind: PiAgentKind): string {
     return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
   }
 
   private getOverlayDir(ptyId: string, kind: PiAgentKind): string {
+    // Why: daemon PTY session ids include worktree paths. Hashing keeps the
+    // overlay stable across daemon cold restore without path-shaped dirs.
+    return join(this.getOverlayRoot(kind), toSafeOverlayDirName(ptyId))
+  }
+
+  private getLegacyOverlayDir(ptyId: string, kind: PiAgentKind): string {
     return join(this.getOverlayRoot(kind), ptyId)
   }
 
@@ -174,6 +187,10 @@ export class PiTitlebarExtensionService {
 
     for (const entry of readdirSync(sourceAgentDir, { withFileTypes: true })) {
       const sourcePath = join(sourceAgentDir, entry.name)
+
+      if (entry.name === PI_AGENT_SETTINGS_FILE) {
+        continue
+      }
 
       if (entry.name === 'extensions' && entry.isDirectory()) {
         const overlayExtensionsDir = join(overlayDir, 'extensions')
@@ -195,6 +212,29 @@ export class PiTitlebarExtensionService {
     }
   }
 
+  private readPiSettings(sourceAgentDir: string): unknown {
+    const settingsPath = join(sourceAgentDir, PI_AGENT_SETTINGS_FILE)
+    if (!existsSync(settingsPath)) {
+      return {}
+    }
+
+    try {
+      return JSON.parse(readFileSync(settingsPath, 'utf8'))
+    } catch {
+      return {}
+    }
+  }
+
+  private writeOverlaySettings(sourceAgentDir: string, overlayDir: string): void {
+    // Why: settings.json is a real overlay file, not a mirror, so Orca can
+    // apply UI-only safeguards without modifying the user's Pi / OMP config.
+    const settings = mergePiOverlayUiSettings(this.readPiSettings(sourceAgentDir))
+    writeFileSync(
+      join(overlayDir, PI_AGENT_SETTINGS_FILE),
+      `${JSON.stringify(settings, null, 2)}\n`
+    )
+  }
+
   buildPtyEnv(
     ptyId: string,
     existingAgentDir: string | undefined,
@@ -205,6 +245,7 @@ export class PiTitlebarExtensionService {
 
     try {
       this.safeRemoveOverlay(overlayDir, kind)
+      this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
     } catch {
       // Why: on Windows the overlay directory can be locked by another process
       // (e.g. antivirus, indexer, or a previous Orca session that didn't clean up).
@@ -218,6 +259,7 @@ export class PiTitlebarExtensionService {
     try {
       mkdirSync(overlayDir, { recursive: true })
       this.mirrorAgentDir(sourceAgentDir, overlayDir)
+      this.writeOverlaySettings(sourceAgentDir, overlayDir)
 
       const extensionsDir = join(overlayDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
@@ -263,6 +305,7 @@ export class PiTitlebarExtensionService {
     for (const kind of Object.keys(OVERLAY_ROOT_DIR_NAME) as PiAgentKind[]) {
       try {
         this.safeRemoveOverlay(this.getOverlayDir(ptyId, kind), kind)
+        this.safeRemoveOverlay(this.getLegacyOverlayDir(ptyId, kind), kind)
       } catch {
         // Why: on Windows the overlay dir can be locked (EPERM/EBUSY) by
         // antivirus or indexers. Overlay cleanup is best-effort - a stale

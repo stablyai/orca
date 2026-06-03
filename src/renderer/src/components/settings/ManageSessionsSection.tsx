@@ -1,20 +1,8 @@
-/* eslint-disable max-lines -- Why: this pane owns all admin controls for the
-   pty daemon (list, kill-all, kill-one, restart) plus the confirmation
-   dialog and table. Splitting would scatter the shared action state and
-   toast copy across files without a cleaner ownership seam. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LoaderCircle, RefreshCw, RotateCw, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import type { PtyManagementSession } from '../../../../preload/api-types'
 import { Button } from '../ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '../ui/dialog'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
 import { MANAGE_SESSIONS_SEARCH_ENTRIES } from './terminal-search'
@@ -23,10 +11,9 @@ import { useAppStore } from '../../store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
+import { ManageSessionKillDialog } from './ManageSessionKillDialog'
 
 type ConfirmKind = 'killOne'
-
-type PendingConfirm = { kind: 'killOne'; session: PtyManagementSession } | null
 
 // Why: mirror the status-bar SessionsStatusSegment label style — last two
 // path segments joined by the platform separator, no ellipsis prefix. This
@@ -73,28 +60,6 @@ function formatState(session: PtyManagementSession): string {
   return session.state
 }
 
-function getConfirmCopy(confirm: PendingConfirm): {
-  title: string
-  description: React.ReactNode
-  confirmLabel: string
-  busyLabel: string
-} | null {
-  if (!confirm) {
-    return null
-  }
-  return {
-    title: 'Kill this session?',
-    description: (
-      <>
-        Force-quits <span className="font-medium text-foreground">{confirm.session.sessionId}</span>
-        . Any unsaved work in that pane is lost. This can&apos;t be undone.
-      </>
-    ),
-    confirmLabel: 'Kill session',
-    busyLabel: 'Killing…'
-  }
-}
-
 export function ManageSessionsSection(): React.JSX.Element {
   const activeRuntimeEnvironmentId = useAppStore(
     (s) => s.settings?.activeRuntimeEnvironmentId ?? null
@@ -102,7 +67,7 @@ export function ManageSessionsSection(): React.JSX.Element {
   const [sessions, setSessions] = useState<PtyManagementSession[]>([])
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
-  const [confirm, setConfirm] = useState<PendingConfirm>(null)
+  const [pendingKillSession, setPendingKillSession] = useState<PtyManagementSession | null>(null)
   const [busyKind, setBusyKind] = useState<ConfirmKind | null>(null)
   // Why: optimistic UI snapshot for Kill-all rollback. The design doc calls
   // for emptying the list immediately and restoring it on error so users see
@@ -265,25 +230,24 @@ export function ManageSessionsSection(): React.JSX.Element {
         mutationInFlight.current = false
         if (isMounted.current) {
           setBusyKind(null)
-          setConfirm(null)
+          setPendingKillSession(null)
         }
       }
     },
     [refresh]
   )
 
-  // Why: do NOT clear `confirm` here — the dialog must stay open for the
+  // Why: do NOT clear `pendingKillSession` here — the dialog must stay open for the
   // duration of the mutation so the spinner + busyLabel render and the
   // anti-dismiss guard can actually hold. handleKillOne's `finally` clears
-  // `confirm` when the op resolves.
+  // `pendingKillSession` when the op resolves.
   const runConfirmed = useCallback(() => {
-    if (!confirm) {
+    if (!pendingKillSession) {
       return
     }
-    void handleKillOne(confirm.session)
-  }, [confirm, handleKillOne])
+    void handleKillOne(pendingKillSession)
+  }, [pendingKillSession, handleKillOne])
 
-  const copy = useMemo(() => getConfirmCopy(confirm), [confirm])
   const isBusy = busyKind !== null || daemonActions.isBusy
 
   if (activeRuntimeEnvironmentId?.trim()) {
@@ -465,7 +429,7 @@ export function ManageSessionsSection(): React.JSX.Element {
                               // without stopPropagation the kill click would
                               // also fire handleNavigate and dismiss Settings.
                               e.stopPropagation()
-                              setConfirm({ kind: 'killOne', session })
+                              setPendingKillSession(session)
                             }}
                             disabled={isBusy}
                             aria-label={`Kill session ${session.sessionId}`}
@@ -484,55 +448,12 @@ export function ManageSessionsSection(): React.JSX.Element {
         </div>
       </SearchableSetting>
 
-      <Dialog
-        open={confirm !== null}
-        onOpenChange={(open) => {
-          if (open) {
-            return
-          }
-          // Why: don't let overlay click / Escape / close-button close the
-          // dialog mid-mutation — the confirm button is the canonical exit.
-          // Matches the "can't cancel a destructive op in flight" convention
-          // in other confirm dialogs across the app.
-          if (isBusy) {
-            return
-          }
-          setConfirm(null)
-        }}
-      >
-        <DialogContent
-          className="max-w-md"
-          showCloseButton={!isBusy}
-          onPointerDownOutside={(e) => {
-            if (isBusy) {
-              e.preventDefault()
-            }
-          }}
-          onEscapeKeyDown={(e) => {
-            if (isBusy) {
-              e.preventDefault()
-            }
-          }}
-        >
-          {copy ? (
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-sm">{copy.title}</DialogTitle>
-                <DialogDescription className="text-xs">{copy.description}</DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setConfirm(null)} disabled={isBusy}>
-                  Cancel
-                </Button>
-                <Button variant="destructive" onClick={runConfirmed} disabled={isBusy}>
-                  {isBusy ? <LoaderCircle className="size-4 animate-spin" /> : null}
-                  {isBusy ? copy.busyLabel : copy.confirmLabel}
-                </Button>
-              </DialogFooter>
-            </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+      <ManageSessionKillDialog
+        session={pendingKillSession}
+        isBusy={isBusy}
+        onCancel={() => setPendingKillSession(null)}
+        onConfirm={runConfirmed}
+      />
       <DaemonActionDialog api={daemonActions} />
     </section>
   )

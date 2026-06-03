@@ -1,10 +1,9 @@
 import { existsSync, readFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
 import { utils, type BaseAgent, type ParsedKey } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
 import { createIdentityFilteredAgent } from './ssh-agent-identity-filter'
+import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 
 // Why: ssh2 only tries keys that are explicitly provided. Users with keys in
 // standard locations (e.g. ~/.ssh/id_ed25519) but no SSH agent running would
@@ -14,15 +13,15 @@ const DEFAULT_KEY_NAMES = ['id_ed25519', 'id_rsa', 'id_ecdsa', 'id_dsa', 'id_xms
 const DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => `~/.ssh/${name}`)
 const WINDOWS_OPENSSH_AGENT_PIPE = '\\\\.\\pipe\\openssh-ssh-agent'
 
-// Why: parseSshGOutput expands ~ to homedir(), so resolved identityFile
-// paths won't match the ~/... form in DEFAULT_KEY_PATHS.
-const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_KEY_NAMES.map((name) => join(homedir(), '.ssh', name))
+// Why: resolved IdentityFile paths are expanded before auth resolution, so they
+// won't match the ~/... form in DEFAULT_KEY_PATHS.
+const EXPANDED_DEFAULT_KEY_PATHS = DEFAULT_KEY_PATHS.map(resolveSshConfigHomePath)
 
 export type PrivateKeyFile = { path: string; contents: Buffer }
 
 export function findDefaultKeyFile(): PrivateKeyFile | undefined {
   for (const keyPath of DEFAULT_KEY_PATHS) {
-    const resolved = keyPath.replace(/^~/, homedir())
+    const resolved = resolveSshConfigHomePath(keyPath)
     try {
       if (!existsSync(resolved)) {
         continue
@@ -34,13 +33,6 @@ export function findDefaultKeyFile(): PrivateKeyFile | undefined {
     }
   }
   return undefined
-}
-
-function resolveHomePath(filepath: string): string {
-  if (filepath.startsWith('~/') || filepath === '~') {
-    return join(homedir(), filepath.slice(1))
-  }
-  return filepath
 }
 
 function expandIdentityAgentEnv(value: string): string | undefined {
@@ -83,7 +75,7 @@ export function resolveAgentSocket(
     if (!trimmed || trimmed.toLowerCase() === 'none') {
       return undefined
     }
-    return expandIdentityAgentEnv(resolveHomePath(trimmed))
+    return expandIdentityAgentEnv(resolveSshConfigHomePath(trimmed))
   }
   return resolveDefaultAgentSocket()
 }
@@ -103,7 +95,7 @@ function resolveExplicitPrivateKeyPath(
 
 function readPrivateKey(keyPath: string): PrivateKeyFile | undefined {
   try {
-    const resolvedPath = resolveHomePath(keyPath)
+    const resolvedPath = resolveSshConfigHomePath(keyPath)
     return { path: keyPath, contents: readFileSync(resolvedPath) }
   } catch {
     return undefined

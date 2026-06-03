@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { Check, FolderPlus, GitBranch, ListFilter, Moon, Server } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
@@ -57,12 +57,6 @@ const SidebarFilter = React.memo(function SidebarFilter({
     },
     [onMenuOpenChange]
   )
-
-  useEffect(() => {
-    return () => {
-      onMenuOpenChange?.(false)
-    }
-  }, [onMenuOpenChange])
 
   const handleToggleRepo = useCallback(
     (repoId: string) => {

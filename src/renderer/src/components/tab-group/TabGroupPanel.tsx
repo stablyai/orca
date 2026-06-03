@@ -113,6 +113,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
       onSetTabColor={commands.setTabColor}
@@ -337,6 +338,14 @@ export default function TabGroupPanel({
         className="relative flex-1 min-h-0 overflow-hidden"
         style={bodyAnchorStyle}
       >
+        {/* Why: this empty anchor lets the agent-sessions tour read as a
+            terminal-area tip instead of attaching to toolbar chrome. */}
+        {isFocused ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 top-1/4 h-px"
+            data-contextual-tour-target="workspace-agent-terminal-tip"
+          />
+        ) : null}
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
         {activeTab &&
           activeTab.contentType !== 'terminal' &&

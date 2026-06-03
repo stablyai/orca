@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react'
 import { track } from '@/lib/telemetry'
+import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 import {
   onboardingFeatureSetupTelemetrySelection,
@@ -63,6 +64,7 @@ export function FeatureSetupInlineTerminal({
       autoScrollIntoView={false}
       onOpened={trackTerminalOpened}
       onInteracted={trackTerminalInteraction}
+      onTerminalExit={notifyInstalledAgentSkillsChanged}
     />
   )
 }

@@ -14,7 +14,7 @@
 
 <p align="center">
   <strong>100x 빌더를 위한 AI 오케스트레이터.</strong><br/>
-  Claude Code, Codex, Grok, Antigravity, OpenCode를 여러 리포지토리에서 나란히 실행하세요. 각 에이전트는 자체 worktree에서 실행되고 한곳에서 추적됩니다.<br/>
+  Claude Code, OpenClaude, Codex, Grok, Antigravity, OpenCode를 여러 리포지토리에서 나란히 실행하세요. 각 에이전트는 자체 worktree에서 실행되고 한곳에서 추적됩니다.<br/>
   <strong>macOS, Windows, Linux</strong>에서 사용할 수 있습니다.
 </p>
 
@@ -32,6 +32,7 @@ Orca는 모든 CLI 에이전트를 지원합니다(_아래 목록에만 한정�
 
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="../assets/claude-logo.svg" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
+  <a href="https://openclaude.gitlawb.com/"><kbd><img src="../../resources/openclaude-logo.png" width="16" valign="middle" /> OpenClaude</kbd></a> &nbsp;
   <a href="https://github.com/openai/codex"><kbd><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=64" width="16" valign="middle" /> Codex</kbd></a> &nbsp;
   <a href="https://x.ai/cli"><kbd><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=64" width="16" valign="middle" /> Grok</kbd></a> &nbsp;
   <a href="https://github.com/google-gemini/gemini-cli"><kbd><img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=64" width="16" valign="middle" /> Gemini</kbd></a> &nbsp;
@@ -64,7 +65,7 @@ Orca는 모든 CLI 에이전트를 지원합니다(_아래 목록에만 한정�
 
 ## 기능
 
-- **로그인 불필요** — 보유한 Claude Code, Codex, Grok 또는 Antigravity 구독을 그대로 사용하세요.
+- **로그인 불필요** — 보유한 Claude Code, OpenClaude, Codex, Grok 또는 Antigravity 구독을 그대로 사용하세요.
 - **Worktree 네이티브** — 모든 기능은 자체 worktree를 가집니다. stash나 브랜치 전환에 얽매이지 않고 즉시 만들고 전환할 수 있습니다.
 - **멀티 에이전트 터미널** — 여러 AI 에이전트를 탭과 패널에서 나란히 실행하세요. 어떤 에이전트가 활성 상태인지 한눈에 볼 수 있습니다.
 - **내장 소스 관리** — AI가 생성한 diff를 검토하고, 빠르게 수정하고, Orca를 떠나지 않고 커밋할 수 있습니다.
@@ -110,7 +111,7 @@ yay -S stably-orca-git
 </p>
 
 - **iOS:** [App Store에서 다운로드](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [GH release에서 다운로드(최신 mobile 릴리스를 찾으세요)](https://github.com/stablyai/orca/releases)
+- **Android:** [GitHub Releases에서 APK 다운로드](https://github.com/stablyai/orca/releases/download/mobile-v0.0.11/app-release.apk)
 
 ---
 

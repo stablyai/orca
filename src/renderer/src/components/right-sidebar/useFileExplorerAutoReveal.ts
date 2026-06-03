@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
@@ -36,6 +36,17 @@ export function useFileExplorerAutoReveal({
   virtualizer
 }: UseFileExplorerAutoRevealParams): void {
   const prevActiveFileIdRef = useRef<string | null>(null)
+  const scrollFrameRef = useRef<number | null>(null)
+
+  const cancelScrollFrame = useCallback((): void => {
+    if (scrollFrameRef.current === null) {
+      return
+    }
+    cancelAnimationFrame(scrollFrameRef.current)
+    scrollFrameRef.current = null
+  }, [])
+
+  useEffect(() => cancelScrollFrame, [cancelScrollFrame])
 
   useEffect(() => {
     if (activeFileId === prevActiveFileIdRef.current) {
@@ -71,7 +82,9 @@ export function useFileExplorerAutoReveal({
       setSelectedPath(filePath)
       const targetIndex = flatRows.findIndex((row) => row.path === filePath)
       if (targetIndex !== -1) {
-        requestAnimationFrame(() => {
+        cancelScrollFrame()
+        scrollFrameRef.current = requestAnimationFrame(() => {
+          scrollFrameRef.current = null
           virtualizer.scrollToIndex(targetIndex, { align: 'auto' })
         })
       }
@@ -90,6 +103,7 @@ export function useFileExplorerAutoReveal({
   }, [
     activeFileId,
     activeWorktreeId,
+    cancelScrollFrame,
     worktreePath,
     pendingExplorerReveal,
     openFiles,

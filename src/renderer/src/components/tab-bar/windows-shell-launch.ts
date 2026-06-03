@@ -1,5 +1,7 @@
+import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
+
 export function resolveWindowsShellLaunchTarget(
-  shell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe',
+  shell: BuiltInWindowsTerminalShell,
   powerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe',
   pwshAvailable: boolean
 ): string {

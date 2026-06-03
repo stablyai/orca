@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: hydration regressions share store setup and session invariants that are easier to audit together. */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -199,6 +200,31 @@ describe('hydrateWorkspaceSession', () => {
         ptyId: null
       })
     ])
+  })
+
+  it('hydrates the default-tab idempotency marker', () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/wt-1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+      }
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo1',
+      activeWorktreeId: worktreeId,
+      activeTabId: null,
+      terminalLayoutsByTabId: {},
+      tabsByWorktree: {},
+      defaultTerminalTabsAppliedByWorktreeId: { [worktreeId]: true }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+
+    expect(store.getState().defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      [worktreeId]: true
+    })
   })
 
   it('seeds worktree nav history with the restored active worktree', () => {

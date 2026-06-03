@@ -12,6 +12,7 @@ import {
 
 type ProjectAddedModalData = {
   repoId?: string
+  projectId?: string
   defaultWorktreeName?: string
   telemetrySource?: WorkspaceCreateTelemetrySource
 }
@@ -30,7 +31,14 @@ export default function ProjectAddedDialog(): React.JSX.Element | null {
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
 
-  const repoId = typeof modalData?.repoId === 'string' ? modalData.repoId : ''
+  // Why: older onboarding builds wrote `projectId`; accepting both prevents an
+  // invisible project-added modal from blocking follow-up contextual tours.
+  const repoId =
+    typeof modalData?.repoId === 'string'
+      ? modalData.repoId
+      : typeof modalData?.projectId === 'string'
+        ? modalData.projectId
+        : ''
   const repo = repos.find((candidate) => candidate.id === repoId) ?? null
   const isFolder = repo ? isFolderRepo(repo) : false
   const detected = repoId ? detectedWorktreesByRepo[repoId] : undefined

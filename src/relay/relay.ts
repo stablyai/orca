@@ -23,7 +23,15 @@ import { createServer, createConnection, type Socket, type Server } from 'net'
 import { homedir } from 'os'
 import { resolve, join } from 'path'
 import { unlinkSync, existsSync, statSync } from 'fs'
-import { RELAY_SENTINEL } from './protocol'
+import {
+  RELAY_SENTINEL,
+  FrameDecoder,
+  MessageType,
+  encodeJsonRpcFrame,
+  parseJsonRpcMessage,
+  type DecodedFrame,
+  type JsonRpcResponse
+} from './protocol'
 import { readLaunchVersion, runConnectHandshake, setupDaemonHandshake } from './relay-handshake'
 import { RelayDispatcher } from './dispatcher'
 import { RelayContext } from './context'
@@ -91,11 +99,13 @@ function parseArgs(argv: string[]): {
   graceTimeMs: number
   connectMode: boolean
   detached: boolean
+  cliMode: boolean
   sockPath: string
 } {
   let graceTimeMs = DEFAULT_GRACE_MS
   let connectMode = false
   let detached = false
+  let cliMode = false
   let sockPath = ''
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--grace-time' && argv[i + 1]) {
@@ -109,6 +119,8 @@ function parseArgs(argv: string[]): {
       i++
     } else if (argv[i] === '--connect') {
       connectMode = true
+    } else if (argv[i] === '--orca-cli') {
+      cliMode = true
     } else if (argv[i] === '--detached') {
       detached = true
     } else if (argv[i] === '--sock-path' && argv[i + 1]) {
@@ -119,7 +131,7 @@ function parseArgs(argv: string[]): {
   if (!sockPath) {
     sockPath = join(process.cwd(), SOCK_NAME)
   }
-  return { graceTimeMs, connectMode, detached, sockPath }
+  return { graceTimeMs, connectMode, detached, cliMode, sockPath }
 }
 
 // ── Connect mode ─────────────────────────────────────────────────────
@@ -187,13 +199,115 @@ function runConnectMode(sockPath: string): void {
   })
 }
 
+function runOrcaCliMode(sockPath: string, argv: string[]): void {
+  const myVersion = readLaunchVersion()
+  const sock = createConnection({ path: sockPath })
+  let nextSeq = 1
+  let highestReceivedSeq = 0
+  const requestId = 1
+
+  const sendRequest = (): void => {
+    const env = pickRemoteCliEnv(process.env)
+    const frame = encodeJsonRpcFrame(
+      {
+        jsonrpc: '2.0',
+        id: requestId,
+        method: 'orca.cli',
+        params: {
+          argv,
+          cwd: process.cwd(),
+          env
+        }
+      },
+      nextSeq++,
+      highestReceivedSeq
+    )
+    sock.write(frame)
+  }
+
+  const decoder = new FrameDecoder((frame: DecodedFrame) => {
+    if (frame.id > highestReceivedSeq) {
+      highestReceivedSeq = frame.id
+    }
+    if (frame.type !== MessageType.Regular) {
+      return
+    }
+    const msg = parseJsonRpcMessage(frame.payload)
+    if (!('id' in msg) || msg.id !== requestId || !('result' in msg || 'error' in msg)) {
+      return
+    }
+    const response = msg as JsonRpcResponse
+    if (response.error) {
+      process.stderr.write(`${response.error.message}\n`)
+      sock.destroy()
+      process.exit(1)
+    }
+    const result = (response.result ?? {}) as {
+      stdout?: unknown
+      stderr?: unknown
+      exitCode?: unknown
+    }
+    if (typeof result.stdout === 'string' && result.stdout.length > 0) {
+      process.stdout.write(result.stdout)
+    }
+    if (typeof result.stderr === 'string' && result.stderr.length > 0) {
+      process.stderr.write(result.stderr)
+    }
+    sock.destroy()
+    process.exit(typeof result.exitCode === 'number' ? result.exitCode : 0)
+  })
+
+  const connectTimeout = setTimeout(() => {
+    process.stderr.write(`[orca-cli] Relay connection timed out after ${CONNECT_TIMEOUT_MS}ms\n`)
+    sock.destroy()
+    process.exit(1)
+  }, CONNECT_TIMEOUT_MS)
+
+  sock.on('connect', () => {
+    clearTimeout(connectTimeout)
+    runConnectHandshake(sock, myVersion, {
+      onAccepted: (leftover) => {
+        if (leftover.length > 0) {
+          decoder.feed(leftover)
+        }
+        sock.on('data', (chunk) =>
+          decoder.feed(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+        )
+        sendRequest()
+      }
+    })
+  })
+
+  sock.on('error', (err) => {
+    clearTimeout(connectTimeout)
+    process.stderr.write(`[orca-cli] Relay socket error: ${err.message}\n`)
+    process.exit(1)
+  })
+}
+
+function pickRemoteCliEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+  const picked: Record<string, string> = {}
+  for (const key of ['ORCA_TERMINAL_HANDLE', 'ORCA_USER_DATA_PATH', 'PATH', 'Path']) {
+    const value = env[key]
+    if (typeof value === 'string') {
+      picked[key] = value
+    }
+  }
+  return picked
+}
+
 // ── Normal mode ──────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  const { graceTimeMs, connectMode, detached, sockPath } = parseArgs(process.argv)
+  const { graceTimeMs, connectMode, detached, cliMode, sockPath } = parseArgs(process.argv)
 
   if (connectMode) {
     runConnectMode(sockPath)
+    return
+  }
+  if (cliMode) {
+    const marker = process.argv.indexOf('--orca-cli')
+    runOrcaCliMode(sockPath, marker >= 0 ? process.argv.slice(marker + 1) : [])
     return
   }
 
@@ -305,6 +419,12 @@ async function main(): Promise<void> {
 
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
+
+  dispatcher.onRequest('orca.cli', async (params, context) => {
+    return await dispatcher.requestAnyClient('orca.cli', params, {
+      excludeClientId: context.clientId
+    })
+  })
 
   function configureRelayGraceTime(params: Record<string, unknown>): { graceTimeMs: number } {
     const seconds = Number(params.graceTimeSeconds)

@@ -3,23 +3,33 @@ import type {
   CreateSparseCheckoutRequest,
   DetectedWorktree,
   DetectedWorktreeListResult,
+  ForceDeleteWorktreeBranchResult,
   GitPushTarget,
+  RemoveWorktreeResult,
   SetupDecision,
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
+  WorktreeStartupLaunch,
   Worktree,
   WorktreeBaseStatusEvent,
   WorktreeLineage,
   WorktreeRemoteBranchConflictEvent,
   WorktreeMeta
 } from '../../../../shared/types'
+import type { TerminalGitHubPRLink } from '@/lib/terminal-github-pr-link-detector'
 export { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 
 export type WorktreeDeleteState = {
   isDeleting: boolean
   error: string | null
   canForceDelete: boolean
+}
+
+export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
+
+export type WorktreeMetaUpdateOptions = {
+  shouldApply?: WorktreeMetaUpdateGuard
 }
 
 export type WorktreeSlice = {
@@ -71,7 +81,7 @@ export type WorktreeSlice = {
    */
   hasHydratedWorktreePurge: boolean
   fetchDetectedWorktrees: (repoId: string) => Promise<DetectedWorktreeListResult | null>
-  fetchWorktrees: (repoId: string) => Promise<void>
+  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<boolean>
   fetchAllWorktrees: () => Promise<void>
   fetchWorktreeLineage: () => Promise<void>
   updateWorktreeLineage: (
@@ -97,18 +107,38 @@ export type WorktreeSlice = {
     branchNameOverride?: string,
     workspaceStatus?: WorkspaceStatus,
     linkedGitLabMR?: number,
-    linkedGitLabIssue?: number
+    linkedGitLabIssue?: number,
+    startup?: WorktreeStartupLaunch,
+    pendingFirstAgentMessageRename?: boolean
   ) => Promise<CreateWorktreeResult>
+  prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
     force?: boolean
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
+  markWorktreesDeleting: (worktreeIds: readonly string[]) => void
+  forceDeletePreservedBranch: (
+    worktreeId: string,
+    branchName: string,
+    expectedHead: string
+  ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
-  updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
+  updateWorktreeMeta: (
+    worktreeId: string,
+    updates: Partial<WorktreeMeta>,
+    options?: WorktreeMetaUpdateOptions
+  ) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>
+  /**
+   * Pin/unpin worktrees, then reveal the first changed one. The reveal is the
+   * point: pinning moves the row to the Pinned section (unpinning moves it
+   * back), so without it the viewport stays put and the user loses the row.
+   */
+  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
   markWorktreeUnread: (worktreeId: string) => void
+  observeTerminalGitHubPullRequestLink: (worktreeId: string, link: TerminalGitHubPRLink) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
    *  terminal pane inside the worktree (keystroke, click) — matches
    *  ghostty's "show until interact" model. Persists isUnread=false. */
@@ -148,7 +178,7 @@ export type WorktreeSlice = {
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string }
+    identity: { head?: string; branch?: string | null }
   ) => void
   updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
   updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void

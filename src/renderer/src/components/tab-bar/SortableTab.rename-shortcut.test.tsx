@@ -6,10 +6,16 @@ const reactHookRuntime = vi.hoisted(() => ({
 }))
 
 const storeState = vi.hoisted(() => ({
+  agentStatusByPaneKey: {},
+  clearTabLaunchAgent: vi.fn(),
+  ptyIdsByTabId: {} as Record<string, string[]>,
   renamingTabId: null as string | null,
+  repos: [],
   setRenamingTabId: vi.fn((tabId: string | null) => {
     storeState.renamingTabId = tabId
   }),
+  terminalLayoutsByTabId: {},
+  worktreesByRepo: {},
   unreadTerminalTabs: {} as Record<string, boolean>
 }))
 
@@ -57,6 +63,12 @@ vi.mock('lucide-react', () => ({
   },
   Minimize2: function Minimize2(props: Record<string, unknown>) {
     return { type: 'Minimize2', props }
+  },
+  Pin: function Pin(props: Record<string, unknown>) {
+    return { type: 'Pin', props }
+  },
+  PinOff: function PinOff(props: Record<string, unknown>) {
+    return { type: 'PinOff', props }
   },
   Rows2: function Rows2(props: Record<string, unknown>) {
     return { type: 'Rows2', props }
@@ -151,6 +163,7 @@ async function renderSortableTab(): Promise<unknown> {
     tabCount: 1,
     hasTabsToRight: false,
     isActive: true,
+    isPinned: false,
     isExpanded: false,
     onActivate: vi.fn(),
     onClose: vi.fn(),
@@ -158,6 +171,7 @@ async function renderSortableTab(): Promise<unknown> {
     onCloseToRight: vi.fn(),
     onSetCustomTitle: vi.fn(),
     onSetTabColor: vi.fn(),
+    onTogglePin: vi.fn(),
     onToggleExpand: vi.fn(),
     onSplitGroup: vi.fn(),
     dragData: {
@@ -220,6 +234,7 @@ describe('SortableTab rename shortcut signal', () => {
     reactHookRuntime.index = 0
     storeState.renamingTabId = 'terminal-tab-1'
     storeState.unreadTerminalTabs = {}
+    storeState.clearTabLaunchAgent.mockClear()
     storeState.setRenamingTabId.mockClear()
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),

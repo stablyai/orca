@@ -11,6 +11,10 @@ import {
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
+import {
+  resolveAgentStatusIdentity,
+  shouldSuppressInheritedTerminalStatus
+} from '../../../../shared/agent-status-identity'
 import type { TerminalTab } from '../../../../shared/types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
@@ -35,6 +39,9 @@ export type AgentStatusSlice = {
   /** Explicit agent status entries keyed by `${tabId}:${leafId}` composite.
    *  Real-time only — lives in renderer memory, not persisted to disk. */
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  /** Main-synced dispatch metadata for live terminal panes that may only have
+   *  title-derived status in the renderer. */
+  runtimeAgentOrchestrationByPaneKey: Record<string, AgentStatusOrchestrationContext>
   /** PTYs that still report legacy numeric pane keys but have registry-backed
    *  UUID pane proof. Stored separately from normal hook-reported status. */
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
@@ -57,7 +64,12 @@ export type AgentStatusSlice = {
     paneKey: string,
     payload: ParsedAgentStatusPayload & { orchestration?: AgentStatusOrchestrationContext },
     terminalTitle?: string,
-    timing?: { updatedAt?: number; stateStartedAt?: number }
+    timing?: { updatedAt?: number; stateStartedAt?: number },
+    routing?: { tabId?: string; worktreeId?: string; terminalHandle?: string }
+  ) => void
+
+  setRuntimeAgentOrchestrationByPaneKey: (
+    entries: Record<string, AgentStatusOrchestrationContext>
   ) => void
 
   setMigrationUnsupportedPty: (entry: MigrationUnsupportedPtyEntry) => void
@@ -84,15 +96,9 @@ export type AgentStatusSlice = {
    *  Used on worktree sleep/remove — the whole worktree surface is folding, so
    *  retained rows must drop even if their original tab is no longer present.
    *
-   *  Note on orphan-live asymmetry: liveKeys are matched against tab prefixes
-   *  derived from `tabsByWorktree[worktreeId]`. Live entries belonging to the
-   *  same worktree but whose tab has already been pruned from `tabsByWorktree`
-   *  (an orphan-live race) are not swept here. The retained side has a
-   *  fallback (`retained.worktreeId === worktreeId`); the live side does not,
-   *  because live entries do not carry a worktreeId. In practice the gap is
-   *  bounded — `removeAgentStatus` is called on PTY exit — and dropping an
-   *  orphan-live entry on shutdown is best-effort, so accepting the asymmetry
-   *  is the simpler tradeoff. */
+   *  Live entries are swept by tab prefix and by main-stamped worktree
+   *  attribution so worker rows that arrive before their tab exists do not
+   *  survive sleep/remove. */
   dropAgentStatusByWorktree: (worktreeId: string) => void
 
   /** Retain agent snapshots (called by the top-level retention sync effect).
@@ -124,6 +130,31 @@ function paneKeyMatchesAnyTabPrefix(paneKey: string, tabPrefixes: string[]): boo
   return false
 }
 
+function isAgentCompletionState(state: ParsedAgentStatusPayload['state']): boolean {
+  return state === 'done' || state === 'waiting' || state === 'blocked'
+}
+
+function getTabIdFromPaneKey(paneKey: string): string | null {
+  const separator = paneKey.indexOf(':')
+  if (separator <= 0 || separator !== paneKey.lastIndexOf(':')) {
+    return null
+  }
+  return paneKey.slice(0, separator)
+}
+
+function findAgentPaneWorktreeId(state: AppState, paneKey: string): string | null {
+  const tabId = getTabIdFromPaneKey(paneKey)
+  if (!tabId) {
+    return null
+  }
+  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    if (tabs.some((tab) => tab.id === tabId)) {
+      return worktreeId
+    }
+  }
+  return null
+}
+
 function pruneMigrationUnsupportedEntries(
   entries: Record<string, MigrationUnsupportedPtyEntry>,
   predicate: (entry: MigrationUnsupportedPtyEntry) => boolean
@@ -138,6 +169,48 @@ function pruneMigrationUnsupportedEntries(
     next[ptyId] = entry
   }
   return { next: changed ? next : entries, changed }
+}
+
+function orchestrationContextsEqual(
+  a: AgentStatusOrchestrationContext,
+  b: AgentStatusOrchestrationContext
+): boolean {
+  return (
+    a.taskId === b.taskId &&
+    a.dispatchId === b.dispatchId &&
+    a.parentTerminalHandle === b.parentTerminalHandle &&
+    a.parentPaneKey === b.parentPaneKey &&
+    a.coordinatorHandle === b.coordinatorHandle &&
+    a.orchestrationRunId === b.orchestrationRunId
+  )
+}
+
+function orchestrationMapsEqual(
+  a: Record<string, AgentStatusOrchestrationContext>,
+  b: Record<string, AgentStatusOrchestrationContext>
+): boolean {
+  const aKeys = Object.keys(a)
+  const bKeys = Object.keys(b)
+  if (aKeys.length !== bKeys.length) {
+    return false
+  }
+  return aKeys.every((key) => b[key] !== undefined && orchestrationContextsEqual(a[key]!, b[key]!))
+}
+
+function mergeCurrentOrchestrationContext(
+  existing: AgentStatusOrchestrationContext | undefined,
+  current: AgentStatusOrchestrationContext
+): AgentStatusOrchestrationContext {
+  if (!existing) {
+    return current
+  }
+  const sameDispatch =
+    existing.taskId === current.taskId && existing.dispatchId === current.dispatchId
+  if (!sameDispatch) {
+    return current
+  }
+  const merged = { ...existing, ...current }
+  return orchestrationContextsEqual(existing, merged) ? existing : merged
 }
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
@@ -166,13 +239,75 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
 
   return {
     agentStatusByPaneKey: {},
+    runtimeAgentOrchestrationByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     agentStatusEpoch: 0,
     retainedAgentsByPaneKey: {},
     retentionSuppressedPaneKeys: {},
 
-    setAgentStatus: (paneKey, payload, terminalTitle, timing) => {
+    setRuntimeAgentOrchestrationByPaneKey: (entries) => {
+      set((s) => {
+        const runtimeMapChanged = !orchestrationMapsEqual(
+          s.runtimeAgentOrchestrationByPaneKey,
+          entries
+        )
+        let nextLive = s.agentStatusByPaneKey
+        let liveChanged = false
+        let nextRetained = s.retainedAgentsByPaneKey
+        let retainedChanged = false
+
+        for (const [paneKey, runtimeOrchestration] of Object.entries(entries)) {
+          const liveEntry = nextLive[paneKey]
+          if (liveEntry) {
+            const merged = mergeCurrentOrchestrationContext(
+              liveEntry.orchestration,
+              runtimeOrchestration
+            )
+            if (merged !== liveEntry.orchestration) {
+              if (!liveChanged) {
+                nextLive = { ...nextLive }
+                liveChanged = true
+              }
+              nextLive[paneKey] = { ...liveEntry, orchestration: merged }
+            }
+          }
+
+          const retainedEntry = nextRetained[paneKey]
+          if (retainedEntry) {
+            const merged = mergeCurrentOrchestrationContext(
+              retainedEntry.entry.orchestration,
+              runtimeOrchestration
+            )
+            if (merged !== retainedEntry.entry.orchestration) {
+              if (!retainedChanged) {
+                nextRetained = { ...nextRetained }
+                retainedChanged = true
+              }
+              nextRetained[paneKey] = {
+                ...retainedEntry,
+                entry: { ...retainedEntry.entry, orchestration: merged }
+              }
+            }
+          }
+        }
+
+        if (!runtimeMapChanged && !liveChanged && !retainedChanged) {
+          return s
+        }
+
+        return {
+          ...(runtimeMapChanged ? { runtimeAgentOrchestrationByPaneKey: entries } : {}),
+          ...(liveChanged ? { agentStatusByPaneKey: nextLive } : {}),
+          ...(retainedChanged ? { retainedAgentsByPaneKey: nextRetained } : {}),
+          ...(liveChanged ? { agentStatusEpoch: s.agentStatusEpoch + 1 } : {})
+        }
+      })
+    },
+
+    setAgentStatus: (paneKey, payload, terminalTitle, timing, routing) => {
       const updatedAt = timing?.updatedAt ?? Date.now()
+      let completionRefreshWorktreeId: string | null = null
+      let suppressedInheritedTerminalStatus = false
       set((s) => {
         const existing = s.agentStatusByPaneKey[paneKey]
         // Why: snapshots and live pushes share receivedAt from the same main-side
@@ -223,45 +358,82 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const stateStartedAt =
           timing?.stateStartedAt ??
           (existing && existing.state === payload.state ? existing.stateStartedAt : updatedAt)
+        const identity = resolveAgentStatusIdentity({
+          existing: existing
+            ? {
+                agentType: existing.agentType,
+                state: existing.state,
+                updatedAt: existing.updatedAt
+              }
+            : undefined,
+          incoming: payload.agentType,
+          now: updatedAt
+        })
+        if (
+          existing &&
+          shouldSuppressInheritedTerminalStatus({
+            inheritedFromActivePane: identity.inheritedFromActivePane,
+            incomingState: payload.state
+          })
+        ) {
+          suppressedInheritedTerminalStatus = true
+          return s
+        }
 
         // Why: tool/assistant fields come pre-merged from the main-process
         // cache (see `resolveToolState` in server.ts), so the payload always
         // carries the authoritative current snapshot — including clears on a
         // fresh turn. Writing through directly (no existing fallback) is what
         // lets a `UserPromptSubmit` reset clear stale tool lines in the UI.
+        const runtimeOrchestration = s.runtimeAgentOrchestrationByPaneKey[paneKey]
+        const runtimeMergedOrchestration = runtimeOrchestration
+          ? mergeCurrentOrchestrationContext(existing?.orchestration, runtimeOrchestration)
+          : undefined
+        const payloadMergedOrchestration = payload.orchestration
+          ? mergeCurrentOrchestrationContext(
+              runtimeMergedOrchestration ?? existing?.orchestration,
+              payload.orchestration
+            )
+          : undefined
+        const completedFallbackOrchestration =
+          payload.state === 'done' ? existing?.orchestration : undefined
+        const orchestration =
+          payloadMergedOrchestration ?? runtimeMergedOrchestration ?? completedFallbackOrchestration
         const entry: AgentStatusEntry = {
           state: payload.state,
           prompt: payload.prompt,
           updatedAt,
           stateStartedAt,
-          // Why: unlike tool/prompt/assistant fields (which legitimately clear on a
-          // fresh turn), agentType is the agent's identity for the pane — it does
-          // not change between updates. Preserve the prior value when a payload
-          // omits it so the icon/label does not flicker out between hook pings.
-          // 'unknown' is the sentinel for "agent didn't identify itself" in
-          // WellKnownAgentType. Treat it like absence so a well-known prior
-          // identity (e.g. 'claude' learned from an earlier hook ping) isn't
-          // stomped by a later ping that lost the identity (e.g. legacy/partial
-          // integrations).
-          agentType:
-            (payload.agentType && payload.agentType !== 'unknown'
-              ? payload.agentType
-              : existing?.agentType) ?? 'unknown',
+          agentType: identity.agentType,
           paneKey,
+          terminalHandle: routing?.terminalHandle ?? existing?.terminalHandle,
+          worktreeId:
+            routing?.worktreeId ??
+            existing?.worktreeId ??
+            findAgentPaneWorktreeId(s, paneKey) ??
+            undefined,
+          tabId: routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined,
           terminalTitle: effectiveTitle,
           stateHistory: history,
           toolName: payload.toolName,
           toolInput: payload.toolInput,
           lastAssistantMessage: payload.lastAssistantMessage,
-          // Why: orchestration dispatch metadata may disappear after the
-          // worker completes and the active dispatch closes. Preserve the last
-          // known parent-child link so done/retained rows stay grouped.
-          orchestration: payload.orchestration ?? existing?.orchestration,
+          // Why: reused panes may start non-orchestrated work after runtime
+          // metadata expires. Only final done rows keep the previous lineage
+          // fallback so completed children stay grouped.
+          orchestration,
           // Why: interrupted lives on `done` only. parseAgentStatusPayload
           // already clamps it to `undefined` for non-done states, so writing
           // the field through directly preserves truth for done and resets
           // it when a new turn starts (working → Stop reprices it).
           interrupted: payload.interrupted
+        }
+        if (
+          isAgentCompletionState(entry.state) &&
+          existing !== undefined &&
+          !isAgentCompletionState(existing.state)
+        ) {
+          completionRefreshWorktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, paneKey)
         }
         // Why: broad freshness-aware subscribers only need a global tick when
         // an entry appears, changes state, crosses stale->fresh, or receives
@@ -326,9 +498,19 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             sortRelevantChange || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
+      if (suppressedInheritedTerminalStatus) {
+        return
+      }
+      get().setGeneratedTabTitleFromAgentPrompt(paneKey, payload.prompt)
       // Why: schedule after set completes so the timer reads the updated map.
       // queueMicrotask avoids re-entry into the zustand store during set.
       queueMicrotask(() => freshness.schedule())
+      if (completionRefreshWorktreeId) {
+        const worktreeId = completionRefreshWorktreeId
+        // Why: agents can create a PR via `gh pr create`, bypassing Orca's
+        // create-PR flow and leaving a fresh "no PR" cache entry in place.
+        queueMicrotask(() => get().refreshGitHubForWorktreeIfStale(worktreeId))
+      }
     },
 
     setMigrationUnsupportedPty: (entry) => {
@@ -664,9 +846,13 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       let hadLive = false
       set((s) => {
         const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
-        const liveKeys = Object.keys(s.agentStatusByPaneKey).filter((k) =>
-          paneKeyMatchesAnyTabPrefix(k, tabPrefixes)
-        )
+        const liveKeys = Object.entries(s.agentStatusByPaneKey)
+          .filter(
+            ([paneKey, entry]) =>
+              entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+          )
+          .map(([paneKey]) => paneKey)
+        const liveKeySet = new Set(liveKeys)
         const retainedKeys = Object.entries(s.retainedAgentsByPaneKey)
           .filter(
             ([paneKey, retained]) =>
@@ -681,10 +867,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             (entry.paneKey ? paneKeyMatchesAnyTabPrefix(entry.paneKey, tabPrefixes) : false)
         )
         // See removeAgentStatus for rationale on ack cleanup. Current tabs are
-        // swept by prefix; orphan retained rows are swept by their retained key.
+        // swept by prefix; attributed live rows and orphan retained rows are
+        // swept by their retained/lifecycle key.
         let nextAck = s.acknowledgedAgentsByPaneKey
         const ackKeys = Object.keys(nextAck).filter(
-          (k) => paneKeyMatchesAnyTabPrefix(k, tabPrefixes) || retainedKeySet.has(k)
+          (k) =>
+            paneKeyMatchesAnyTabPrefix(k, tabPrefixes) || liveKeySet.has(k) || retainedKeySet.has(k)
         )
         if (ackKeys.length > 0) {
           nextAck = { ...nextAck }
@@ -773,6 +961,14 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         }
         const next = { ...s.retainedAgentsByPaneKey }
         for (const retained of entries) {
+          const runtimeOrchestration = s.runtimeAgentOrchestrationByPaneKey[retained.entry.paneKey]
+          const mergedOrchestration = runtimeOrchestration
+            ? mergeCurrentOrchestrationContext(retained.entry.orchestration, runtimeOrchestration)
+            : retained.entry.orchestration
+          const entry =
+            mergedOrchestration !== retained.entry.orchestration
+              ? { ...retained.entry, orchestration: mergedOrchestration }
+              : retained.entry
           // Why: INVARIANT — the map key equals retained.entry.paneKey. This
           // lets callers look up a retained row by the same paneKey they use
           // for agentStatusByPaneKey and keeps dismissal (dismissRetainedAgent)
@@ -780,7 +976,8 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // relies on this invariant too: it checks
           // `retainedAgentsByPaneKey[paneKey]` to decide whether a vanished
           // agent is already retained.
-          next[retained.entry.paneKey] = retained
+          next[retained.entry.paneKey] =
+            entry === retained.entry ? retained : { ...retained, entry }
         }
         return { retainedAgentsByPaneKey: next }
       })

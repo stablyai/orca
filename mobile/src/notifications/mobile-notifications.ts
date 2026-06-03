@@ -10,11 +10,23 @@ type NotificationEvent = {
   title: string
   body: string
   worktreeId?: string
+  notificationId?: string
+}
+
+type DismissNotificationEvent = {
+  type: 'dismiss'
+  notificationId: string
 }
 
 type SubscribeResult = {
   type: 'ready'
   subscriptionId: string
+}
+
+const scheduledNotificationIdsByHostAndNotificationId = new Map<string, string>()
+
+function getStoredNotificationKey(hostId: string, notificationId: string): string {
+  return `${encodeURIComponent(hostId)}:${encodeURIComponent(notificationId)}`
 }
 
 export type NotificationPermissionState = {
@@ -58,12 +70,27 @@ function configureNotificationChannel(): void {
 
 async function showLocalNotification(event: NotificationEvent, hostId: string): Promise<void> {
   const enabled = await loadPushNotificationsEnabled()
-  if (!enabled) return
+  if (!enabled) {
+    return
+  }
 
   const granted = await ensureNotificationPermissions()
-  if (!granted) return
+  if (!granted) {
+    return
+  }
 
-  await Notifications.scheduleNotificationAsync({
+  const storedKey = event.notificationId
+    ? getStoredNotificationKey(hostId, event.notificationId)
+    : null
+  const previousIdentifier = storedKey
+    ? scheduledNotificationIdsByHostAndNotificationId.get(storedKey)
+    : undefined
+  if (storedKey && previousIdentifier) {
+    await Notifications.dismissNotificationAsync(previousIdentifier).catch(() => {})
+    scheduledNotificationIdsByHostAndNotificationId.delete(storedKey)
+  }
+
+  const scheduledIdentifier = await Notifications.scheduleNotificationAsync({
     content: {
       title: event.title,
       body: event.body,
@@ -72,6 +99,25 @@ async function showLocalNotification(event: NotificationEvent, hostId: string): 
     },
     trigger: null
   })
+  if (storedKey) {
+    scheduledNotificationIdsByHostAndNotificationId.set(storedKey, scheduledIdentifier)
+  }
+}
+
+async function dismissLocalNotification(
+  event: DismissNotificationEvent,
+  hostId: string
+): Promise<void> {
+  if (!event.notificationId) {
+    return
+  }
+  const storedKey = getStoredNotificationKey(hostId, event.notificationId)
+  const identifier = scheduledNotificationIdsByHostAndNotificationId.get(storedKey)
+  if (!identifier) {
+    return
+  }
+  scheduledNotificationIdsByHostAndNotificationId.delete(storedKey)
+  await Notifications.dismissNotificationAsync(identifier).catch(() => {})
 }
 
 // Why: each host connection gets its own notification subscription. When the
@@ -89,7 +135,11 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   }
 
   const unsubscribeStream = client.subscribe('notifications.subscribe', {}, (data: unknown) => {
-    const event = data as NotificationEvent | SubscribeResult | { type: 'end' }
+    const event = data as
+      | NotificationEvent
+      | DismissNotificationEvent
+      | SubscribeResult
+      | { type: 'end' }
     if (event.type === 'ready') {
       subscriptionId = (event as SubscribeResult).subscriptionId
       if (disposed) {
@@ -99,12 +149,18 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       return
     }
     if (event.type === 'end') {
-      if (disposed) unsubscribeStream()
+      if (disposed) {
+        unsubscribeStream()
+      }
       return
     }
-    if (disposed) return
+    if (disposed) {
+      return
+    }
     if (event.type === 'notification') {
       void showLocalNotification(event as NotificationEvent, hostId)
+    } else if (event.type === 'dismiss') {
+      void dismissLocalNotification(event as DismissNotificationEvent, hostId)
     }
   })
 
@@ -114,8 +170,10 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // unmount races with disconnect). sendRequest rejects immediately on a
     // closed client — swallow it since server-side cleanup happens via
     // connection-close anyway.
+    // Always drop the local stream first; readiness can race unmount and we
+    // must not retain the callback while waiting for a subscription id.
+    unsubscribeStream()
     if (subscriptionId) {
-      unsubscribeStream()
       unsubscribeServer(subscriptionId)
     }
   }

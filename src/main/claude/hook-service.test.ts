@@ -3,7 +3,7 @@
 // or the script body that lands on the remote box. Local install behavior
 // is exercised through `installer-utils.test.ts` and the per-CLI status
 // audit; this file covers ONLY the SFTP-backed path added in commit #8.
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { vi, describe, expect, it } from 'vitest'
@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 
 import type { SFTPWrapper } from 'ssh2'
 import { ClaudeHookService } from './hook-service'
+import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
 type FakeFs = {
   files: Map<string, string>
@@ -162,6 +163,7 @@ describe('ClaudeHookService.install', () => {
           command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
         )
       ).toBe(false)
+      expect(legacy.hooks.StopFailure[0].hooks[0].command).toContain('claude-hook.sh')
     } finally {
       vi.unstubAllEnvs()
       rmSync(tmpHome, { recursive: true, force: true })
@@ -187,6 +189,7 @@ describe('ClaudeHookService.installRemote', () => {
     for (const event of [
       'UserPromptSubmit',
       'Stop',
+      'StopFailure',
       'PreToolUse',
       'PostToolUse',
       'PostToolUseFailure',
@@ -244,5 +247,60 @@ describe('ClaudeHookService.installRemote', () => {
     const userCmds = stopDefs.flatMap((d) => d.hooks.map((h) => h.command))
     expect(userCmds).toContain('/usr/local/bin/my-user-hook')
     expect(userCmds.filter((c) => c.includes('claude-hook.sh'))).toHaveLength(1)
+  })
+})
+
+describe('OpenClaudeHookService-compatible install', () => {
+  const makeOpenClaudeService = (): ClaudeHookService =>
+    new ClaudeHookService({
+      agent: 'openclaude',
+      displayName: 'OpenClaude',
+      settings: OPENCLAUDE_HOOK_SETTINGS
+    })
+
+  it('installs managed hooks into OpenClaude settings without touching Claude settings', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-openclaude-hooks-'))
+    vi.stubEnv('HOME', tmpHome)
+    try {
+      const openClaudeSettings = join(tmpHome, '.openclaude', 'settings.json')
+      mkdirSync(join(tmpHome, '.openclaude'), { recursive: true })
+      writeFileSync(openClaudeSettings, JSON.stringify({ hooks: {} }))
+
+      const status = makeOpenClaudeService().install()
+
+      expect(status).toMatchObject({
+        agent: 'openclaude',
+        state: 'installed',
+        configPath: openClaudeSettings
+      })
+      const parsed = JSON.parse(readFileSync(openClaudeSettings, 'utf-8'))
+      for (const event of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
+        const command = parsed.hooks[event][0].hooks[0].command as string
+        expect(command).toContain('openclaude-hook.sh')
+      }
+      expect(
+        readFileSync(join(tmpHome, '.orca', 'agent-hooks', 'openclaude-hook.sh'), 'utf-8')
+      ).toContain('/hook/claude')
+      expect(existsSync(join(tmpHome, '.claude', 'settings.json'))).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
+
+  it('writes remote OpenClaude settings under .openclaude', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const status = await makeOpenClaudeService().installRemote(sftp, '/home/dev')
+
+    expect(status).toMatchObject({
+      agent: 'openclaude',
+      state: 'installed',
+      configPath: '/home/dev/.openclaude/settings.json'
+    })
+    const parsed = JSON.parse(fs.files.get('/home/dev/.openclaude/settings.json')!)
+    const command = parsed.hooks.StopFailure[0].hooks[0].command as string
+    expect(command).toContain('/home/dev/.orca/agent-hooks/openclaude-hook.sh')
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/openclaude-hook.sh')).toContain('/hook/claude')
   })
 })

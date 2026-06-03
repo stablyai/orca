@@ -175,7 +175,9 @@ export default function MobileFileExplorerScreen() {
 
   const openFile = useCallback(
     async (relativePath: string, kind: 'text' | 'binary') => {
-      if (!client || kind === 'binary') return
+      if (!client || kind === 'binary') {
+        return
+      }
       setOpeningPath(relativePath)
       try {
         const response = await client.sendRequest('files.open', {

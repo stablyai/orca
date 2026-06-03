@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { eventSchemas } from './telemetry-events'
 
 describe('onboarding tour telemetry schemas', () => {
-  it('accepts semantic value_kind on viewed and skipped steps', () => {
+  it('keeps accepting historical onboarding tour step telemetry', () => {
     expect(
       eventSchemas.onboarding_step_viewed.safeParse({
         step: 6,

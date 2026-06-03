@@ -50,6 +50,7 @@ export function mapBitbucketPullRequestState(
     case 'SUPERSEDED':
       return 'closed'
     case 'OPEN':
+    case undefined:
     default:
       return 'open'
   }

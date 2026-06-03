@@ -1,14 +1,7 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { create } from 'zustand'
-import type { AppState } from '../types'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type {
-  BrowserTab,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { BrowserTab, DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
@@ -107,109 +100,26 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createRepoSlice } from './repos'
-import { createSparsePresetsSlice } from './sparse-presets'
-import { createWorktreeSlice } from './worktrees'
-import { createTerminalSlice } from './terminals'
-import { createTabsSlice } from './tabs'
-import { createUISlice } from './ui'
-import { createSettingsSlice } from './settings'
-import { createKeybindingsSlice } from './keybindings'
-import { createGitHubSlice } from './github'
-import { createHostedReviewSlice } from './hosted-review'
-import { createLinearSlice } from './linear'
-import { createPreflightSlice } from './preflight'
-import { createEditorSlice } from './editor'
-import { createStatsSlice } from './stats'
-import { createMemorySlice } from './memory'
-import { createWorkspaceSpaceSlice } from './workspace-space'
-import { createClaudeUsageSlice } from './claude-usage'
-import { createCodexUsageSlice } from './codex-usage'
-import { createOpenCodeUsageSlice } from './opencode-usage'
-import { createBrowserSlice } from './browser'
-import { createRateLimitSlice } from './rate-limits'
-import { createSshSlice } from './ssh'
-import { createAgentStatusSlice } from './agent-status'
-import { createDiffCommentsSlice } from './diffComments'
-import { createDetectedAgentsSlice } from './detected-agents'
-import { createWorktreeNavHistorySlice } from './worktree-nav-history'
-import { createDictationSlice } from './dictation'
-import { createWorkspaceCleanupSlice } from './workspace-cleanup'
-
-function createTestStore() {
-  return create<AppState>()((...a) => ({
-    ...createRepoSlice(...a),
-    ...createSparsePresetsSlice(...a),
-    ...createWorktreeSlice(...a),
-    ...createTerminalSlice(...a),
-    ...createTabsSlice(...a),
-    ...createUISlice(...a),
-    ...createSettingsSlice(...a),
-    ...createKeybindingsSlice(...a),
-    ...createGitHubSlice(...a),
-    ...createHostedReviewSlice(...a),
-    ...createLinearSlice(...a),
-    ...createPreflightSlice(...a),
-    ...createEditorSlice(...a),
-    ...createStatsSlice(...a),
-    ...createMemorySlice(...a),
-    ...createWorkspaceSpaceSlice(...a),
-    ...createClaudeUsageSlice(...a),
-    ...createCodexUsageSlice(...a),
-    ...createOpenCodeUsageSlice(...a),
-    ...createBrowserSlice(...a),
-    ...createRateLimitSlice(...a),
-    ...createSshSlice(...a),
-    ...createAgentStatusSlice(...a),
-    ...createDiffCommentsSlice(...a),
-    ...createDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
-  }))
-}
+import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
 
 // ─── Helpers ──────────────────────────────────────────────────────────
 
-function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: string }): Worktree {
+function makeDetectedWorktreeResult(
+  repoId: string,
+  worktrees: Worktree[],
+  authoritative = true
+): DetectedWorktreeListResult {
   return {
-    path: '/tmp/wt',
-    head: 'abc123',
-    branch: 'refs/heads/feature',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    ...overrides
+    repoId,
+    authoritative,
+    source: authoritative ? 'git' : 'metadata-fallback',
+    worktrees: worktrees.map((worktree) => ({
+      ...worktree,
+      ownership: 'orca-managed',
+      selectedCheckout: false,
+      visible: true
+    }))
   }
-}
-
-function makeTab(
-  overrides: Partial<TerminalTab> & { id: string; worktreeId: string }
-): TerminalTab {
-  return {
-    ptyId: null,
-    title: 'Terminal 1',
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: Date.now(),
-    ...overrides
-  }
-}
-
-function makeLayout(): TerminalLayoutSnapshot {
-  return { root: null, activeLeafId: null, expandedLeafId: null }
 }
 
 function makeBrowserTab(
@@ -393,6 +303,141 @@ describe('hydrateWorkspaceSession', () => {
     // hydrateWorkspaceSession. It flips to true in reconnectPersistedTerminals()
     // after all eager PTY spawns complete.
     expect(s.workspaceSessionReady).toBe(false)
+  })
+
+  it('preserves tabs for a known repo whose worktrees have not loaded yet', () => {
+    // Why (#1158): empty per-repo worktrees can mean a degraded local fetch or
+    // SSH reconnect race, not that every persisted tab for the repo is stale.
+    const store = createTestStore()
+    const stalledWt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: stalledWt,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [stalledWt]: [makeTab({ id: 'tab1', worktreeId: stalledWt })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: makeLayout()
+      }
+    })
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[stalledWt]).toHaveLength(1)
+    expect(s.tabsByWorktree[stalledWt][0].id).toBe('tab1')
+    expect(s.terminalLayoutsByTabId['tab1']).toBeDefined()
+    expect(s.activeWorktreeId).toBe(stalledWt)
+    expect(s.activeTabId).toBe('tab1')
+  })
+
+  it('preserves tabs for a known repo after a non-authoritative worktree fetch', () => {
+    // Why (#1158): metadata fallback means the runtime did not prove deletion.
+    const store = createTestStore()
+    const stalledWt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] },
+      detectedWorktreesByRepo: {
+        repo1: makeDetectedWorktreeResult('repo1', [], false)
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: stalledWt,
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        [stalledWt]: [makeTab({ id: 'tab1', worktreeId: stalledWt })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: makeLayout()
+      }
+    })
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[stalledWt]).toHaveLength(1)
+    expect(s.terminalLayoutsByTabId['tab1']).toBeDefined()
+    expect(s.activeWorktreeId).toBe(stalledWt)
+    expect(s.activeTabId).toBe('tab1')
+  })
+
+  it('drops tabs when an authoritative scan reports no matching worktrees', () => {
+    // Why: once git has answered authoritatively, an empty repo list means
+    // deleted local worktrees, not a startup race.
+    const store = createTestStore()
+    const staleWt = 'repo1::/path/deleted'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] },
+      detectedWorktreesByRepo: {
+        repo1: makeDetectedWorktreeResult('repo1', [])
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: staleWt,
+      activeTabId: 'tab-stale',
+      tabsByWorktree: {
+        [staleWt]: [makeTab({ id: 'tab-stale', worktreeId: staleWt })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-stale': makeLayout()
+      }
+    })
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[staleWt]).toBeUndefined()
+    expect(s.terminalLayoutsByTabId['tab-stale']).toBeUndefined()
+    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeTabId).toBeNull()
+  })
+
+  it('drops tabs for an unknown repo', () => {
+    // Why: the carve-out only forgives missing worktrees for repos that still
+    // exist in the repos list. If the user removed the whole repo, its tabs
+    // are genuinely stale and must be dropped.
+    const store = createTestStore()
+    const orphanWt = 'repoGone::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [] }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: orphanWt,
+      activeTabId: 'tab-orphan',
+      tabsByWorktree: {
+        [orphanWt]: [makeTab({ id: 'tab-orphan', worktreeId: orphanWt })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-orphan': makeLayout()
+      }
+    })
+
+    const s = store.getState()
+    expect(s.tabsByWorktree[orphanWt]).toBeUndefined()
+    expect(s.terminalLayoutsByTabId['tab-orphan']).toBeUndefined()
+    expect(s.activeWorktreeId).toBeNull()
+    expect(s.activeTabId).toBeNull()
   })
 
   it('restores valid activeWorktreeId and activeTabId', () => {
@@ -1784,7 +1829,8 @@ describe('hydrateEditorSession', () => {
             relativePath: 'note.md',
             worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
             language: 'markdown',
-            runtimeEnvironmentId: null
+            runtimeEnvironmentId: null,
+            dirtyDraftContent: ''
           }
         ]
       },
@@ -1800,9 +1846,11 @@ describe('hydrateEditorSession', () => {
         id: fileId,
         filePath,
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        runtimeEnvironmentId: null
+        runtimeEnvironmentId: null,
+        isDirty: true
       })
     ])
+    expect(s.editorDrafts).toEqual({ [fileId]: '' })
     expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
   })
 
