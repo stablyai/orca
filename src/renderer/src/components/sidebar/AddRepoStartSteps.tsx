@@ -228,7 +228,7 @@ export function AddRepoLocalStartStep({
                 type="button"
                 aria-controls={moreOptionsId}
                 disabled={isAdding}
-                className="flex h-8 w-full items-center justify-start gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-40"
+                className="inline-flex h-8 w-fit items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-40"
               >
                 More options
                 <ChevronDown
