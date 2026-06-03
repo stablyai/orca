@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this store is the single main-process owner for Claude usage persistence, scan gating, and query semantics. Keeping those policy decisions together avoids split-brain range/scope logic across multiple files. */
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import type {
   ClaudeUsageBreakdownKind,
@@ -15,7 +15,6 @@ import type {
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import { writeUtf8FileInChunksSync } from '../../shared/utf8-file-writer'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { ClaudeUsagePersistedState } from './types'
 import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
@@ -347,7 +346,7 @@ export class ClaudeUsageStore {
     // atomic temp-file pattern as the main store so a crash or concurrent write
     // cannot leave a truncated analytics file as the common failure mode.
     const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeUtf8FileInChunksSync(tmpFile, JSON.stringify(this.state, null, 2))
+    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
     renameSync(tmpFile, usageFile)
   }
 

@@ -25,7 +25,7 @@ import type {
 } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
-import { ONBOARDING_FLOW_VERSION } from '../shared/constants'
+import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../shared/constants'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -286,6 +286,173 @@ describe('Store', () => {
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
     expect(ui.lastUpdateCheckAt).toBeNull()
+    expect(ui.setupGuideSidebarDismissed).toBe(false)
+  })
+
+  it('hides the setup guide sidebar entry for existing users backfilled as completed', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: {}
+    })
+
+    const store = await createStore()
+    const onboarding = store.getOnboarding()
+
+    expect(onboarding.closedAt).not.toBeNull()
+    expect(onboarding.outcome).toBe('completed')
+    expect(onboarding.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('persists the existing-user onboarding backfill back to disk', async () => {
+    // Why: the upgrade-cohort backfill is derived at load; this asserts the
+    // backfilled onboarding+gate state round-trips through a write intact (the
+    // load-time scheduleSave that triggers it without a manual flush is wired
+    // via loadNeedsSave at the no-onboarding-block branch).
+    writeDataFile({
+      schemaVersion: 1,
+      ui: {}
+    })
+
+    const store = await createStore()
+    store.flush()
+    const persisted = readDataFile() as {
+      onboarding?: { closedAt: number | null; outcome: string | null; lastCompletedStep: number }
+      ui?: { setupGuideSidebarDismissed?: boolean }
+    }
+
+    expect(persisted.onboarding?.closedAt).not.toBeNull()
+    expect(persisted.onboarding?.outcome).toBe('completed')
+    expect(persisted.onboarding?.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(persisted.ui?.setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('keeps the setup guide sidebar entry available while onboarding is open', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(false)
+  })
+
+  it('treats persisted false setup guide sidebar dismissal as stale once onboarding is closed', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 123,
+        outcome: 'dismissed',
+        lastCompletedStep: 2,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: false
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('keeps malformed completed onboarding closed for the setup guide sidebar gate', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 'yesterday',
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: false
+      }
+    })
+
+    const store = await createStore()
+    const onboarding = store.getOnboarding()
+
+    expect(onboarding.closedAt).not.toBeNull()
+    expect(onboarding.outcome).toBe('completed')
+    expect(onboarding.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('does not reopen the setup guide sidebar when closed onboarding has a null timestamp', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: 'dismissed',
+        lastCompletedStep: 1,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).not.toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('recovers a close timestamp when closed onboarding omits the closedAt key', async () => {
+    // Why: a persisted block missing `closedAt` entirely (vs an explicit null)
+    // must still stay closed via outcome recovery, guarding the
+    // `'closedAt' in raw` sanitizer branch separately from the null case.
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).not.toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('does not mutate gate fields for a consistent closed-onboarding existing user', async () => {
+    // Why: the gate must be idempotent. A user already persisted as
+    // closed+completed must round-trip unchanged — the backfill path must not
+    // fire and stomp the real closedAt with a fresh Date.now() each launch.
+    const consistent = {
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 123,
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: true
+      }
+    }
+    writeDataFile(consistent)
+
+    const store = await createStore()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+
+    store.flush()
+    const persisted = readDataFile() as typeof consistent
+
+    // Flushing the loaded state preserves the persisted gate fields verbatim.
+    expect(persisted.onboarding.closedAt).toBe(123)
+    expect(persisted.onboarding.outcome).toBe('completed')
+    expect(persisted.ui.setupGuideSidebarDismissed).toBe(true)
   })
 
   it.each([

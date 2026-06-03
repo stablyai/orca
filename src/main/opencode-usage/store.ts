@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this store owns OpenCode analytics persistence, scan policy, and renderer query semantics. Keeping range/scope queries next to scan persistence prevents UI totals from drifting from the SQLite projection. */
 import { app } from 'electron'
 import { dirname, join } from 'path'
-import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import type {
   OpenCodeUsageBreakdownKind,
   OpenCodeUsageBreakdownRow,
@@ -14,7 +14,6 @@ import type {
   OpenCodeUsageSummary
 } from '../../shared/opencode-usage-types'
 import type { Store } from '../persistence'
-import { writeUtf8FileInChunksSync } from '../../shared/utf8-file-writer'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsagePersistedState } from './types'
 import { createWorktreeRefs, scanOpenCodeUsageDatabases } from './scanner'
@@ -185,7 +184,7 @@ export class OpenCodeUsageStore {
       mkdirSync(dir, { recursive: true })
     }
     const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeUtf8FileInChunksSync(tmpFile, JSON.stringify(this.state, null, 2))
+    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
     renameSync(tmpFile, usageFile)
   }
 

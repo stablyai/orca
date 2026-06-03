@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import {
@@ -12,16 +12,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { track } from '@/lib/telemetry'
 import type { Repo } from '../../../../shared/types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { getProjectAddedPrimaryBranchName, SetupStep } from './AddRepoSetupStep'
-import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
-import {
-  effectiveExternalWorktreeVisibility,
-  isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../shared/worktree-ownership'
+import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 
 const NON_GIT_REPO_ERROR = 'Not a valid git repository'
 
@@ -31,61 +24,25 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
-  const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
 
-  const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const mountedRef = useMountedRef()
+  const addGenRef = useRef(0)
 
   const isOpen = activeModal === 'confirm-add-project-from-folder'
   const [previousOpen, setPreviousOpen] = useState(isOpen)
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
   const connectionId = typeof modalData.connectionId === 'string' ? modalData.connectionId : ''
-  const repoId = addedRepo?.id ?? ''
-
-  const worktrees = useMemo(() => {
-    return worktreesByRepo[repoId] ?? []
-  }, [repoId, worktreesByRepo])
-  const detectedResult = repoId ? detectedWorktreesByRepo[repoId] : undefined
-  const hiddenWorktreeCount =
-    detectedResult?.authoritative === true
-      ? detectedResult.worktrees.filter(
-          (worktree) => !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
-        ).length
-      : 0
-  const otherWorktreesVisible = addedRepo
-    ? effectiveExternalWorktreeVisibility(
-        addedRepo,
-        isLegacyRepoForExternalWorktreeVisibility(addedRepo)
-      ) === 'show'
-    : false
-  const sortedWorktrees = useMemo(() => {
-    return [...worktrees].sort((a, b) => {
-      if (a.lastActivityAt !== b.lastActivityAt) {
-        return b.lastActivityAt - a.lastActivityAt
-      }
-      return a.displayName.localeCompare(b.displayName)
-    })
-  }, [worktrees])
-  const primaryWorktree = useMemo(
-    () => sortedWorktrees.find((worktree) => worktree.isMainWorktree) ?? null,
-    [sortedWorktrees]
-  )
-  const primaryBranchName = getProjectAddedPrimaryBranchName(primaryWorktree)
 
   if (isOpen !== previousOpen) {
     setPreviousOpen(isOpen)
     if (!isOpen) {
       // Why: closed modal state is fully local; clear it before commit so the
       // next open never paints stale progress or errors.
-      setAddedRepo(null)
+      addGenRef.current++
       setIsAdding(false)
       setError(null)
     }
@@ -103,6 +60,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     if (!folderPath || isAdding) {
       return
     }
+    const gen = ++addGenRef.current
     setIsAdding(true)
     setError(null)
     try {
@@ -126,7 +84,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         } else {
           useAppStore.setState({ repos: [...state.repos, repo] })
         }
-        if (!mountedRef.current) {
+        if (!mountedRef.current || gen !== addGenRef.current) {
           return
         }
         toast.success('Remote project added', { description: repo.displayName })
@@ -134,7 +92,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         repo = await addRepoPath(folderPath)
       }
 
-      if (!mountedRef.current) {
+      if (!mountedRef.current || gen !== addGenRef.current) {
         return
       }
       if (!repo) {
@@ -144,157 +102,85 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         openNonGitConfirmation()
         return
       }
-      setAddedRepo(repo)
-      await fetchWorktrees(repo.id)
+      // Why: after the repo is already added, a non-authoritative refresh
+      // should still close onto the project row instead of trapping the user.
+      await fetchWorktrees(repo.id, { requireAuthoritative: true })
+      if (!mountedRef.current || gen !== addGenRef.current) {
+        return
+      }
+      await finishProjectAddWithDefaultCheckout({
+        repoId: repo.id,
+        source: connectionId ? 'ssh_remote_path' : 'local_folder_picker',
+        closeModal,
+        setHideDefaultBranchWorkspace
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes(NON_GIT_REPO_ERROR)) {
-        if (mountedRef.current) {
+        if (mountedRef.current && gen === addGenRef.current) {
           openNonGitConfirmation()
         }
         return
       }
-      if (mountedRef.current) {
+      if (mountedRef.current && gen === addGenRef.current) {
         setError(message)
       }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && gen === addGenRef.current) {
         setIsAdding(false)
       }
     }
   }, [
     addRepoPath,
+    closeModal,
     connectionId,
     fetchWorktrees,
     folderPath,
     isAdding,
     mountedRef,
-    openNonGitConfirmation
+    openNonGitConfirmation,
+    setHideDefaultBranchWorkspace
   ])
-
-  const handleStartPrimaryWorktree = useCallback(() => {
-    if (!primaryWorktree) {
-      return
-    }
-    track('add_repo_setup_step_action', { action: 'open_primary' })
-    closeModal()
-    if (useAppStore.getState().hideDefaultBranchWorkspace) {
-      setHideDefaultBranchWorkspace(false)
-    }
-    activateAndRevealWorktree(primaryWorktree.id)
-  }, [closeModal, primaryWorktree, setHideDefaultBranchWorkspace])
-
-  const handleUseExistingWorktrees = useCallback(async () => {
-    if (!repoId) {
-      return
-    }
-    track('add_repo_setup_step_action', { action: 'open_existing' })
-    if (!otherWorktreesVisible) {
-      const updated = await updateRepo(repoId, { externalWorktreeVisibility: 'show' })
-      if (updated && addedRepo && mountedRef.current) {
-        setAddedRepo({ ...addedRepo, externalWorktreeVisibility: 'show' })
-      }
-    }
-    closeModal()
-    await fetchWorktrees(repoId)
-    finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
-  }, [addedRepo, closeModal, fetchWorktrees, mountedRef, otherWorktreesVisible, repoId, updateRepo])
-
-  const handleCreateWorktree = useCallback(
-    (name?: string) => {
-      if (!repoId) {
-        return
-      }
-      track('add_repo_setup_step_action', { action: 'create_worktree' })
-      closeModal()
-      setTimeout(() => {
-        openModal('new-workspace-composer', {
-          initialRepoId: repoId,
-          ...(name ? { prefilledName: name } : {}),
-          telemetrySource: 'sidebar'
-        })
-      }, 150)
-    },
-    [closeModal, openModal, repoId]
-  )
-
-  const handleConfigureRepo = useCallback(() => {
-    if (!repoId) {
-      return
-    }
-    track('add_repo_setup_step_action', { action: 'configure' })
-    closeModal()
-    openSettingsTarget({ pane: 'repo', repoId })
-    openSettingsPage()
-  }, [closeModal, openSettingsPage, openSettingsTarget, repoId])
-
-  const handleSkip = useCallback(async () => {
-    if (!repoId) {
-      closeModal()
-      return
-    }
-    track('add_repo_setup_step_action', { action: 'skip' })
-    closeModal()
-    await fetchWorktrees(repoId)
-    finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
-  }, [closeModal, fetchWorktrees, repoId])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
-        if (addedRepo) {
-          void handleSkip()
-          return
-        }
+        addGenRef.current++
         closeModal()
       }
     },
-    [addedRepo, closeModal, handleSkip]
+    [closeModal]
   )
 
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        {addedRepo ? (
-          <SetupStep
-            repoName={addedRepo.displayName}
-            hiddenWorktreeCount={hiddenWorktreeCount}
-            primaryBranchName={primaryBranchName}
-            onStartPrimaryWorktree={handleStartPrimaryWorktree}
-            onUseExistingWorktrees={() => void handleUseExistingWorktrees()}
-            onCreateWorktree={handleCreateWorktree}
-            onConfigureRepo={handleConfigureRepo}
-          />
-        ) : (
-          <>
-            <DialogHeader>
-              <DialogTitle>Add Project</DialogTitle>
-              <DialogDescription>Add this folder as a separate Orca project.</DialogDescription>
-            </DialogHeader>
+        <DialogHeader>
+          <DialogTitle>Add Project</DialogTitle>
+          <DialogDescription>Add this folder as a separate Orca project.</DialogDescription>
+        </DialogHeader>
 
-            {folderPath && (
-              <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
-                <div className="break-all font-mono text-muted-foreground">{folderPath}</div>
-              </div>
-            )}
-
-            {error && <p className="text-xs text-destructive">{error}</p>}
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>
-                Cancel
-              </Button>
-              <Button onClick={handleConfirm} disabled={!folderPath || isAdding}>
-                {isAdding ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <FolderPlus className="size-4" />
-                )}
-                Add Project
-              </Button>
-            </DialogFooter>
-          </>
+        {folderPath && (
+          <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2 text-xs">
+            <div className="break-all font-mono text-muted-foreground">{folderPath}</div>
+          </div>
         )}
+
+        {error && <p className="text-xs text-destructive">{error}</p>}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isAdding}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirm} disabled={!folderPath || isAdding}>
+            {isAdding ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <FolderPlus className="size-4" />
+            )}
+            Add Project
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

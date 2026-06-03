@@ -3117,6 +3117,20 @@ describe('markWorktreeVisited', () => {
   })
 })
 
+describe('setRenamingWorktreeId', () => {
+  it('sets and clears the workspace rename signal', () => {
+    const store = createTestStore()
+
+    expect(store.getState().renamingWorktreeId).toBeNull()
+
+    store.getState().setRenamingWorktreeId('repo1::/feature')
+    expect(store.getState().renamingWorktreeId).toBe('repo1::/feature')
+
+    store.getState().setRenamingWorktreeId(null)
+    expect(store.getState().renamingWorktreeId).toBeNull()
+  })
+})
+
 describe('setWorktreesPinnedAndReveal', () => {
   beforeEach(() => {
     vi.clearAllMocks()

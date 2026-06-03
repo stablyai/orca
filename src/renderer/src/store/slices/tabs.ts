@@ -34,6 +34,9 @@ export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
 export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
+  // Why: signals the matching tab's inline title editor to open. A global
+  // keyboard shortcut (tab.rename) sets this; the tab clears it on consume.
+  renamingTabId: string | null
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
@@ -83,6 +86,7 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setUnifiedTabColor: (tabId: string, color: string | null) => void
+  setRenamingTabId: (tabId: string | null) => void
   pinTab: (tabId: string) => void
   unpinTab: (tabId: string) => void
   closeOtherTabs: (tabId: string) => string[]
@@ -430,6 +434,7 @@ function buildActiveSurfacePatch(
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
   unifiedTabsByWorktree: {},
+  renamingTabId: null,
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},
@@ -780,6 +785,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   setTabLabel: (tabId, label) => {
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
+  },
+
+  setRenamingTabId: (tabId) => {
+    set({ renamingTabId: tabId })
   },
 
   setTabCustomLabel: (tabId, label, opts) => {

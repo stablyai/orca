@@ -114,6 +114,10 @@ import {
   shouldRecoverRendererAfterProcessGone,
   type ExpectedTeardownScope
 } from './crash-reporting/process-gone-classification'
+import {
+  buildProcessGoneCrashDetails,
+  buildSuppressedProcessGoneBreadcrumbData
+} from './crash-reporting/process-gone-diagnostics'
 import { getProcessGoneDedupeKey, processGoneDedupe } from './crash-reporting/process-gone-dedupe'
 import {
   advanceSyntheticTitleSpinnerEntries,
@@ -691,18 +695,23 @@ function recordProcessGoneCrash(
       expectedTeardown: getExpectedTeardownScope(webContentsId)
     })
   ) {
-    recordCrashBreadcrumb('process_gone_suppressed', {
-      source,
-      processType,
-      reason,
-      exitCode
-    })
+    recordCrashBreadcrumb(
+      'process_gone_suppressed',
+      buildSuppressedProcessGoneBreadcrumbData({
+        source,
+        processType,
+        reason,
+        exitCode,
+        details
+      })
+    )
     return
   }
   const key = getProcessGoneDedupeKey(processType, reason, exitCode)
   if (!processGoneDedupe.shouldRecord(key)) {
     return
   }
+  const crashDetails = buildProcessGoneCrashDetails(details)
   const span = startSpan('electron.process_gone', {
     attributes: {
       'crash.source': source,
@@ -715,7 +724,7 @@ function recordProcessGoneCrash(
       arch: process.arch,
       electronVersion: process.versions.electron,
       chromeVersion: process.versions.chrome,
-      details,
+      details: crashDetails,
       breadcrumbs: getCrashBreadcrumbSnapshot()
     }
   })
@@ -734,7 +743,7 @@ function recordProcessGoneCrash(
       arch: process.arch,
       electronVersion: process.versions.electron,
       chromeVersion: process.versions.chrome,
-      details,
+      details: crashDetails,
       // Why: breadcrumbs stay memory-only during normal operation. Persist a
       // snapshot only after Electron reports a crash-like process exit.
       breadcrumbs: getCrashBreadcrumbSnapshot()

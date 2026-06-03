@@ -1,7 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { dirname, join } from 'path'
-import { writeUtf8FileInChunksSync } from '../shared/utf8-file-writer'
 import type { RelayDispatcher } from './dispatcher'
 
 type RemoteWorkspaceSnapshot = {
@@ -117,7 +116,7 @@ export class WorkspaceSessionHandler {
     const path = this.snapshotPath(snapshot.namespace)
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     const tmpPath = `${path}.tmp`
-    writeUtf8FileInChunksSync(tmpPath, JSON.stringify(snapshot, null, 2), { mode: 0o600 })
+    writeFileSync(tmpPath, JSON.stringify(snapshot, null, 2), { mode: 0o600 })
     renameSync(tmpPath, path)
   }
 

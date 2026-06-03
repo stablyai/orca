@@ -92,6 +92,7 @@ export type PendingSidebarWorktreeReveal = {
   worktreeId: string
   behavior: 'auto' | 'smooth'
   highlight?: boolean
+  beginRename?: boolean
 }
 
 export type AgentSendPopoverTargetMode = {
@@ -777,6 +778,7 @@ export type UISlice = {
     options?: {
       behavior?: PendingSidebarWorktreeReveal['behavior']
       highlight?: boolean
+      beginRename?: boolean
     }
   ) => void
   clearPendingRevealWorktreeId: () => void
@@ -1813,7 +1815,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       pendingRevealWorktree: {
         worktreeId,
         behavior: options?.behavior ?? 'smooth',
-        ...(options?.highlight ? { highlight: true } : {})
+        ...(options?.highlight ? { highlight: true } : {}),
+        ...(options?.beginRename ? { beginRename: true } : {})
       }
     }),
   clearPendingRevealWorktreeId: () => set({ pendingRevealWorktree: null }),

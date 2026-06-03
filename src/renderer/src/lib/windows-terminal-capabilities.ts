@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
 
 export type WindowsTerminalCapabilities = {
   wslAvailable: boolean
@@ -37,16 +39,15 @@ type WindowsTerminalCapabilityHookState = {
   capabilities: WindowsTerminalCapabilities
 }
 
+type WindowsTerminalCapabilityLoadTarget = RuntimeClientTarget
+
 export function getWindowsTerminalCapabilityOwnerKey(
   activeRuntimeEnvironmentId?: string | null
 ): string {
-  const isWebClient = (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
-  if (!isWebClient) {
-    return 'local'
-  }
-  // Why: paired web clients can switch hosts; Git Bash/WSL availability is
+  // Why: remote desktop and paired web clients can switch hosts; Git Bash/WSL availability is
   // host-owned, so a previous runtime's answer must not bleed into the next.
-  return `runtime:${activeRuntimeEnvironmentId?.trim() || 'none'}`
+  const environmentId = activeRuntimeEnvironmentId?.trim()
+  return environmentId ? `runtime:${environmentId}` : 'local'
 }
 
 function publish(
@@ -99,10 +100,12 @@ export function loadWindowsTerminalCapabilities(
     force?: boolean
     now?: number
     ownerKey?: string
+    target?: WindowsTerminalCapabilityLoadTarget
   } = {}
 ): Promise<WindowsTerminalCapabilities> {
   const now = options.now ?? Date.now()
   const ownerKey = options.ownerKey ?? 'local'
+  const target = options.target ?? { kind: 'local' }
   pruneExpiredCapabilityOwners(now)
   const cached = cachedCapabilitiesByOwnerKey.get(ownerKey)
   if (cached && !options.force && now - cached.loadedAt < CAPABILITY_CACHE_TTL_MS) {
@@ -117,16 +120,7 @@ export function loadWindowsTerminalCapabilities(
   // Separate probes can leave one surface showing stale Windows shell choices.
   const requestId = ++nextCapabilityRequestId
   latestCapabilityRequestIdByOwnerKey.set(ownerKey, requestId)
-  const nextPendingCapabilities = Promise.all([
-    window.api.wsl.isAvailable().catch(() => false),
-    window.api.wsl.listDistros().catch(() => []),
-    window.api.pwsh.isAvailable().catch(() => false),
-    window.api.gitBash.isAvailable().catch(() => false),
-    window.api.runtime
-      .getStatus()
-      .then((status) => status.hostPlatform ?? null)
-      .catch(() => null)
-  ])
+  const nextPendingCapabilities = Promise.all(readWindowsTerminalCapabilityPromises(target))
     .then(([wslAvailable, wslDistros, pwshAvailable, gitBashAvailable, hostPlatform]) => {
       const capabilities = {
         wslAvailable,
@@ -157,9 +151,10 @@ export function loadWindowsTerminalCapabilities(
 }
 
 export function refreshWindowsTerminalCapabilities(
-  ownerKey = 'local'
+  ownerKey = 'local',
+  target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' }
 ): Promise<WindowsTerminalCapabilities> {
-  return loadWindowsTerminalCapabilities({ force: true, ownerKey })
+  return loadWindowsTerminalCapabilities({ force: true, ownerKey, target })
 }
 
 export function selectWindowsTerminalCapabilitiesForOwner(
@@ -178,8 +173,11 @@ export function selectWindowsTerminalCapabilitiesForOwner(
 export function useWindowsTerminalCapabilities(
   enabled: boolean,
   forceRefreshOnMount = false,
-  ownerKey = 'local'
+  ownerKey = 'local',
+  target: WindowsTerminalCapabilityLoadTarget = { kind: 'local' }
 ): WindowsTerminalCapabilities {
+  const targetKind = target.kind
+  const targetEnvironmentId = target.kind === 'environment' ? target.environmentId : null
   const [state, setState] = useState(() => ({
     ownerKey,
     capabilities: getCachedWindowsTerminalCapabilities(ownerKey)
@@ -190,6 +188,10 @@ export function useWindowsTerminalCapabilities(
       setState({ ownerKey, capabilities: UNAVAILABLE_CAPABILITIES })
       return
     }
+    const loadTarget: WindowsTerminalCapabilityLoadTarget =
+      targetKind === 'environment' && targetEnvironmentId
+        ? { kind: 'environment', environmentId: targetEnvironmentId }
+        : { kind: 'local' }
 
     let cancelled = false
     const cached = getCachedWindowsTerminalCapabilities(ownerKey)
@@ -204,13 +206,15 @@ export function useWindowsTerminalCapabilities(
     const subscribers = subscribersByOwnerKey.get(ownerKey) ?? new Set()
     subscribers.add(setCapabilities)
     subscribersByOwnerKey.set(ownerKey, subscribers)
-    void loadWindowsTerminalCapabilities({ force: forceRefreshOnMount, ownerKey }).then(
-      (nextCapabilities) => {
-        if (!cancelled) {
-          setState({ ownerKey, capabilities: nextCapabilities })
-        }
+    void loadWindowsTerminalCapabilities({
+      force: forceRefreshOnMount,
+      ownerKey,
+      target: loadTarget
+    }).then((nextCapabilities) => {
+      if (!cancelled) {
+        setState({ ownerKey, capabilities: nextCapabilities })
       }
-    )
+    })
 
     return () => {
       cancelled = true
@@ -220,9 +224,50 @@ export function useWindowsTerminalCapabilities(
         subscribersByOwnerKey.delete(ownerKey)
       }
     }
-  }, [enabled, forceRefreshOnMount, ownerKey])
+  }, [enabled, forceRefreshOnMount, ownerKey, targetKind, targetEnvironmentId])
 
   return selectWindowsTerminalCapabilitiesForOwner(state, enabled, ownerKey)
+}
+
+function readWindowsTerminalCapabilityPromises(
+  target: WindowsTerminalCapabilityLoadTarget
+): [
+  Promise<boolean>,
+  Promise<string[]>,
+  Promise<boolean>,
+  Promise<boolean>,
+  Promise<NodeJS.Platform | null>
+] {
+  if (target.kind === 'local') {
+    return [
+      window.api.wsl.isAvailable().catch(() => false),
+      window.api.wsl.listDistros().catch(() => []),
+      window.api.pwsh.isAvailable().catch(() => false),
+      window.api.gitBash.isAvailable().catch(() => false),
+      window.api.runtime
+        .getStatus()
+        .then((status) => status.hostPlatform ?? null)
+        .catch(() => null)
+    ]
+  }
+
+  return [
+    callRuntimeRpc<boolean>(target, 'host.wsl.isAvailable', undefined, { timeoutMs: 15_000 }).catch(
+      () => false
+    ),
+    callRuntimeRpc<string[]>(target, 'host.wsl.listDistros', undefined, {
+      timeoutMs: 15_000
+    }).catch(() => []),
+    callRuntimeRpc<boolean>(target, 'host.pwsh.isAvailable', undefined, {
+      timeoutMs: 15_000
+    }).catch(() => false),
+    callRuntimeRpc<boolean>(target, 'host.gitBash.isAvailable', undefined, {
+      timeoutMs: 15_000
+    }).catch(() => false),
+    callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, { timeoutMs: 15_000 })
+      .then((status) => status.hostPlatform ?? null)
+      .catch(() => null)
+  ]
 }
 
 export function resetWindowsTerminalCapabilitiesForTests(): void {

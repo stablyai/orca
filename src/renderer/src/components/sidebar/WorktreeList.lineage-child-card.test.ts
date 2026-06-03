@@ -1,12 +1,19 @@
 /* eslint-disable max-lines -- Why: WorktreeList render tests share expensive mocks so focused sidebar regressions can exercise the real component boundary. */
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { ProjectGroup, Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
 
 const mockStore = vi.hoisted(() => ({
   state: {} as Record<string, unknown>
 }))
+
+type WorktreeListComponent = React.ComponentType<{
+  scrollOffsetRef: React.RefObject<number>
+  scrollAnchorRef: React.RefObject<unknown>
+}>
+
+let WorktreeList: WorktreeListComponent
 
 vi.mock('@/store', () => {
   const useAppStore = ((selector: (state: Record<string, unknown>) => unknown) =>
@@ -80,6 +87,15 @@ vi.mock('./WorktreeCardAgents', () => ({
       { role: 'group', 'aria-label': 'Agents', 'data-agent-worktree-id': worktreeId },
       'Review fixture prompt'
     )
+}))
+
+vi.mock('./WorktreeTitleInlineRename', () => ({
+  WorktreeTitleInlineRename: ({ displayName }: { displayName: string }) =>
+    React.createElement('span', { 'data-worktree-title-inline-rename': '' }, displayName)
+}))
+
+vi.mock('./WorktreeActivityStatusIndicator', () => ({
+  WorktreeActivityStatusIndicator: () => React.createElement('span', { 'data-status-dot': true })
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
@@ -270,9 +286,11 @@ function setLineageFixtureState(
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
     setHideDefaultBranchWorkspace: vi.fn(),
+    setRenamingWorktreeId: vi.fn(),
     setShowSleepingWorkspaces: vi.fn(),
     setSortBy: vi.fn(),
     settings: null,
+    renamingWorktreeId: null,
     showSleepingWorkspaces: true,
     sortBy: 'manual',
     sortEpoch: 0,
@@ -342,9 +360,11 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
     runtimePaneTitlesByTabId: {},
     setFilterRepoIds: vi.fn(),
     setHideDefaultBranchWorkspace: vi.fn(),
+    setRenamingWorktreeId: vi.fn(),
     setShowSleepingWorkspaces: vi.fn(),
     setSortBy: vi.fn(),
     settings: null,
+    renamingWorktreeId: null,
     showSleepingWorkspaces: true,
     sortBy: 'recent',
     sortEpoch: 0,
@@ -366,8 +386,6 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
 }
 
 async function renderWorktreeListMarkup(): Promise<string> {
-  const { default: WorktreeList } = await import('./WorktreeList')
-
   return renderToStaticMarkup(
     React.createElement(WorktreeList, {
       scrollOffsetRef: { current: 0 },
@@ -377,6 +395,10 @@ async function renderWorktreeListMarkup(): Promise<string> {
 }
 
 describe('WorktreeList lineage child card renderer', () => {
+  beforeAll(async () => {
+    WorktreeList = (await import('./WorktreeList')).default as WorktreeListComponent
+  }, 20_000)
+
   it('renders project group headers when repos import before worktree rows load', async () => {
     setProjectGroupWithoutWorktreeRowsState()
     const markup = await renderWorktreeListMarkup()
@@ -406,6 +428,14 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(agentRowIndex).toBeGreaterThan(childStart)
     expect(childToggleIndex).toBeGreaterThan(childStart)
     expect(agentRowIndex).toBeLessThan(childToggleIndex)
+  })
+
+  it('renders nested child titles through the inline rename surface', async () => {
+    setLineageFixtureState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('data-worktree-title-inline-rename=""')
+    expect(markup).toContain('lineage child with agent')
   })
 
   it('nests the first-level child workspace card surface under its parent', async () => {
