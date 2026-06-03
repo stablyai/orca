@@ -127,7 +127,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "dompurify": "^3.4.2",
-    "electron": "^42.3.0",
+    "electron": "^42.3.2",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "emoji-picker-react": "^4.19.1",
