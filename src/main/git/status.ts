@@ -38,14 +38,21 @@ import {
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
-const missingEffectiveUpstreamCache = new Set<string>()
+const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 30_000
+
+type EffectiveUpstreamStatusCacheEntry = {
+  expiresAt: number
+  status: GitUpstreamStatus
+}
+
+const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
+
+export function clearEffectiveUpstreamStatusCacheForTests(): void {
+  effectiveUpstreamStatusCache.clear()
+}
 
 export type GetStatusOptions = {
   includeIgnored?: boolean
-}
-
-export function clearMissingEffectiveUpstreamCacheForTests(): void {
-  missingEffectiveUpstreamCache.clear()
 }
 
 /**
@@ -175,27 +182,35 @@ export async function getStatus(
     }
     statusSucceeded = true
 
-    const effectiveUpstreamCacheKey = getEffectiveUpstreamCacheKey(
-      worktreePath,
-      head,
-      branch,
-      upstreamName
-    )
-    if (
-      shouldProbeEffectiveUpstreamStatus(branch, upstreamName) &&
-      effectiveUpstreamCacheKey &&
-      !missingEffectiveUpstreamCache.has(effectiveUpstreamCacheKey)
-    ) {
+    if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
+      const branchName = getShortBranchName(branch)
+      const cacheKey = branchName
+        ? getEffectiveUpstreamStatusCacheKey(worktreePath, branchName, upstreamName)
+        : null
+      effectiveUpstreamStatus = cacheKey
+        ? readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
+        : undefined
+      let probedSameNameOriginRef = false
       try {
-        effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
-          gitExecFileAsync(args, { cwd: worktreePath })
-        )
-        if (effectiveUpstreamStatus.hasUpstream) {
-          missingEffectiveUpstreamCache.delete(effectiveUpstreamCacheKey)
-        } else {
-          // Why: status polling is frequent, and missing-upstream probes are
-          // stable for this branch until its upstream identity changes.
-          missingEffectiveUpstreamCache.add(effectiveUpstreamCacheKey)
+        if (!effectiveUpstreamStatus) {
+          effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) => {
+            if (
+              branchName &&
+              args[0] === 'rev-parse' &&
+              args.includes(`refs/remotes/origin/${branchName}`)
+            ) {
+              probedSameNameOriginRef = true
+            }
+            return gitExecFileAsync(args, { cwd: worktreePath })
+          })
+          if (cacheKey) {
+            rememberEffectiveUpstreamStatus(
+              cacheKey,
+              effectiveUpstreamStatus,
+              Date.now(),
+              probedSameNameOriginRef
+            )
+          }
         }
       } catch {
         // Why: git status polling should not fail just because the richer
@@ -294,14 +309,48 @@ function getShortBranchName(branch: string | undefined): string | null {
   return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
 }
 
-function getEffectiveUpstreamCacheKey(
+function getEffectiveUpstreamStatusCacheKey(
   worktreePath: string,
-  head: string | undefined,
-  branch: string | undefined,
+  branchName: string,
   upstreamName: string | undefined
-): string | null {
-  const branchName = getShortBranchName(branch)
-  return branchName ? `${worktreePath}\0${head ?? ''}\0${branchName}\0${upstreamName ?? ''}` : null
+): string {
+  return [worktreePath, branchName, upstreamName ?? ''].join('\0')
+}
+
+function readCachedEffectiveUpstreamStatus(
+  cacheKey: string,
+  now: number
+): GitUpstreamStatus | undefined {
+  const entry = effectiveUpstreamStatusCache.get(cacheKey)
+  if (!entry) {
+    return undefined
+  }
+  if (entry.expiresAt <= now) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return undefined
+  }
+  return entry.status
+}
+
+function rememberEffectiveUpstreamStatus(
+  cacheKey: string,
+  status: GitUpstreamStatus,
+  now: number,
+  probedSameNameOriginRef: boolean
+): void {
+  if (status.hasUpstream) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return
+  }
+  if (!probedSameNameOriginRef) {
+    return
+  }
+  // Why: a stable no-upstream branch should not spawn failed git probes every
+  // source-control poll, but remote refs can appear after push/fetch.
+  effectiveUpstreamStatusCache.set(cacheKey, {
+    status,
+    expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
+  })
 }
 
 function shouldProbeEffectiveUpstreamStatus(

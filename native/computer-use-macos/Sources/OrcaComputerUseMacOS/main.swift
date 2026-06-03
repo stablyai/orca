@@ -273,11 +273,9 @@ final class Provider {
     }
 
     private func currentKeyboardSnapshot(params: [String: JSONValue]) throws -> Snapshot {
-        let snapshot = try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
-        if params["restoreWindow"]?.bool != true && !isTargetWindowFocused(snapshot) {
-            throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; retry with --restore-window or use set-value for editable elements")
-        }
-        return snapshot
+        // Why: AX text replacement/select-all do not post global input, so only
+        // synthetic fallback paths require the target window to be focused.
+        try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
     }
 
     private func cachedSnapshot(params: [String: JSONValue]) throws -> Snapshot? {
@@ -671,12 +669,14 @@ final class Provider {
 
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.typeText(try requiredString(params, "text"), pid: snapshot.app.pid)
         return actionMetadata(path: "synthetic")
     }
 
     private func pressKey(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pressKey(try requiredString(params, "key"), pid: snapshot.app.pid)
         return actionMetadata(path: "synthetic")
     }
@@ -691,6 +691,7 @@ final class Provider {
                 verification: TextInput.selectionVerification(focused.element)
             )
         }
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pressKey(key, pid: snapshot.app.pid)
         return actionMetadata(
             path: "synthetic",
@@ -705,6 +706,7 @@ final class Provider {
         if let focused = focusedRecord(snapshot), let verification = TextInput.replaceSelection(focused.element, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pasteText(text, pid: snapshot.app.pid)
         return actionMetadata(
             path: "clipboard",
@@ -934,6 +936,21 @@ private func isTargetWindowFocused(_ snapshot: Snapshot) -> Bool {
     }
     let intersection = frame.intersection(snapshot.windowBounds)
     return !intersection.isNull && intersection.area >= min(frame.area, snapshot.windowBounds.area) * 0.75
+}
+
+private func requireTargetWindowFocused(_ snapshot: Snapshot, restoreWindowRequested: Bool) throws {
+    guard let failure = KeyboardInputSafety.syntheticInputFocusFailure(
+        targetWindowFocused: isTargetWindowFocused(snapshot),
+        restoreWindowRequested: restoreWindowRequested
+    ) else {
+        return
+    }
+    switch failure {
+    case .targetNotFocused:
+        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; retry with --restore-window or use set-value for editable elements")
+    case .targetNotFocusedAfterRestore:
+        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; --restore-window was requested but the target is still not focused; bring it forward manually or check Accessibility permissions")
+    }
 }
 
 private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, focused: AXUIElement, explicitTarget: Bool) -> AXUIElement? {
@@ -3168,7 +3185,11 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     else {
         return false
     }
-    return bundleId == "com.stablyai.orca" || bundleId == "com.github.Electron"
+    // Why: dev validation runs from per-worktree wrapper apps with stable
+    // Orca-owned bundle ids; the sidecar peer check must still authorize them.
+    return bundleId == "com.stablyai.orca" ||
+        bundleId.hasPrefix("com.stablyai.orca.dev.") ||
+        bundleId == "com.github.Electron"
 }
 
 private func parentProcessId(_ pid: pid_t) -> pid_t? {

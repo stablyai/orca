@@ -214,13 +214,6 @@ function countReposNeedingNotificationDisambiguation(state: StoreSnapshot): numb
   return Math.max(activeRepoIds.size, countReposWithWorktrees(state))
 }
 
-function isOrcaWindowForegroundFocused(): boolean {
-  if (typeof document === 'undefined') {
-    return true
-  }
-  return document.visibilityState === 'visible' && document.hasFocus()
-}
-
 /**
  * Returns a stable dispatch function for terminal notifications.
  * Reads repo/worktree labels from the store at dispatch time rather
@@ -279,14 +272,13 @@ export function dispatchTerminalNotification(
       }
     }
 
+    // Why: a native agent-complete notification needs a matching workspace
+    // card affordance even when the workspace is selected; terminal-specific
+    // tab/pane attention remains gated by the experimental terminal setting.
+    state.markWorktreeUnread(worktreeId)
     if (terminalAttentionEnabled && tabId && event.paneKey) {
-      state.markWorktreeUnread(worktreeId)
       state.markTerminalTabUnread(tabId)
       state.markTerminalPaneUnread(event.paneKey)
-    } else if (state.activeWorktreeId !== worktreeId || !isOrcaWindowForegroundFocused()) {
-      // Why: activeWorktreeId is only in-app selection. If Orca is backgrounded,
-      // a selected chat finishing still needs unread/Dock attention.
-      state.markWorktreeUnread(worktreeId)
     }
   }
 

@@ -49,6 +49,7 @@ import {
   bulkStageFiles,
   bulkDiscardChanges,
   bulkUnstageFiles,
+  clearEffectiveUpstreamStatusCacheForTests,
   detectConflictOperation,
   discardChanges,
   getBranchCompare,
@@ -56,8 +57,7 @@ import {
   getDiff,
   getStagedCommitContext,
   getStatus,
-  isWithinWorktree,
-  clearMissingEffectiveUpstreamCacheForTests
+  isWithinWorktree
 } from './status'
 
 describe('discardChanges', () => {
@@ -363,6 +363,7 @@ describe('getDiff', () => {
 
 describe('getStatus', () => {
   beforeEach(() => {
+    clearEffectiveUpstreamStatusCacheForTests()
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
     lstatMock.mockReset()
@@ -373,7 +374,6 @@ describe('getStatus', () => {
     // set only a `mockResolvedValueOnce` for the status output; this default
     // keeps those follow-up numstat calls from returning undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
-    clearMissingEffectiveUpstreamCacheForTests()
   })
 
   it('parses unmerged porcelain v2 entries into unresolved conflict rows', async () => {

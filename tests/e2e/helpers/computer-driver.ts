@@ -62,6 +62,11 @@ export async function killTextEdit(): Promise<void> {
   }
 }
 
+export async function activateFinder(): Promise<void> {
+  await execFileAsync('open', ['-a', 'Finder'])
+  await delay(1000)
+}
+
 export async function ensureGeditLaunched(): Promise<void> {
   await killGedit()
   linuxTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-linux-e2e-'))
