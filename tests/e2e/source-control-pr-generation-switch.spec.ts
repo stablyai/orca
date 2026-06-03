@@ -265,8 +265,8 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       .poll(
         async () => {
           // Why: this full-suite spec shares the physical E2E repo with other
-          // workers. Keep this assertion scoped to the seeded Source Control
-          // state instead of racing unrelated real git-status refreshes.
+          // workers. Keep DOM assertions inside the reseeded poll instead of
+          // racing unrelated real git-status refreshes after the poll settles.
           await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
           return orcaPage.evaluate(() => {
             const emptyStateVisible =
@@ -292,13 +292,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         hasCommitMessageInput: false,
         hasCommitAiButton: false
       })
-    await expect(orcaPage.getByRole('textbox', { name: 'Commit message' })).toHaveCount(0)
-    await expect(
-      orcaPage.getByRole('button', { name: 'Generate commit message with AI' })
-    ).toHaveCount(0)
-    await expect(
-      orcaPage.getByRole('button', { name: /Commit|Push|Pull|Sync|Publish Branch/ }).first()
-    ).toBeVisible()
+    await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
     await orcaPage.screenshot({
       path: path.join(screenshotDir, '01-clean-branch-no-commit-ai-composer.png')
     })

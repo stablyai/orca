@@ -141,9 +141,10 @@ test.describe('Worktree switch responsiveness', () => {
     expect(result.afterSecondClick.clickDurationMs).toBeLessThanOrEqual(MAX_CLICK_TASK_DURATION_MS)
     expect(result.afterSecondClick).toMatchObject({
       firstCurrent: 'page',
-      secondCurrent: null,
-      renderedWorktreeId: firstWorktreeId
+      secondCurrent: null
     })
+    // Why: sidebar selection commits synchronously; the terminal surface may
+    // still finish the prior switch until the quiet-window check below.
     expect(result.afterQuietWindow).toMatchObject({
       firstCurrent: 'page',
       secondCurrent: null,
