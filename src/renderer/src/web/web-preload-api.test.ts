@@ -1065,6 +1065,7 @@ describe('web GitHub preload API', () => {
         'refreshPRNow',
         'removePRReviewers',
         'repoSlug',
+        'repoUpstream',
         'reportVisiblePRRefreshCandidates',
         'rerunPRChecks',
         'requestPRReviewers',
@@ -1129,6 +1130,12 @@ describe('web GitHub preload API', () => {
         key: 'repoSlug',
         args: { repoPath },
         expectedMethod: 'github.repoSlug',
+        expectedParams: withRepo({ repoPath })
+      },
+      {
+        key: 'repoUpstream',
+        args: { repoPath },
+        expectedMethod: 'github.repoUpstream',
         expectedParams: withRepo({ repoPath })
       },
       {
