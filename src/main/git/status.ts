@@ -38,6 +38,18 @@ import {
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
+const EFFECTIVE_UPSTREAM_STATUS_CACHE_TTL_MS = 30_000
+
+type CachedEffectiveUpstreamStatus = {
+  expiresAt: number
+  status: GitUpstreamStatus
+}
+
+const effectiveUpstreamStatusCache = new Map<string, CachedEffectiveUpstreamStatus>()
+
+export function clearEffectiveUpstreamStatusCacheForTests(): void {
+  effectiveUpstreamStatusCache.clear()
+}
 
 export type GetStatusOptions = {
   includeIgnored?: boolean
@@ -171,15 +183,11 @@ export async function getStatus(
     statusSucceeded = true
 
     if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
-      try {
-        effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
-          gitExecFileAsync(args, { cwd: worktreePath })
-        )
-      } catch {
-        // Why: git status polling should not fail just because the richer
-        // upstream probe hit a transient ref/read error; the explicit
-        // upstream-status path will surface those failures when invoked.
-      }
+      effectiveUpstreamStatus = await getCachedEffectiveUpstreamStatus(
+        worktreePath,
+        branch,
+        upstreamName
+      )
     }
   } catch {
     // Not a git repo or git not available
@@ -212,6 +220,46 @@ export async function getStatus(
               : { hasUpstream: false, ahead: 0, behind: 0 })
         }
       : {})
+  }
+}
+
+function getEffectiveUpstreamStatusCacheKey(
+  worktreePath: string,
+  branch: string | undefined,
+  upstreamName: string | undefined
+): string {
+  return `${worktreePath}\0${branch ?? ''}\0${upstreamName ?? ''}`
+}
+
+async function getCachedEffectiveUpstreamStatus(
+  worktreePath: string,
+  branch: string | undefined,
+  upstreamName: string | undefined
+): Promise<GitUpstreamStatus | undefined> {
+  const cacheKey = getEffectiveUpstreamStatusCacheKey(worktreePath, branch, upstreamName)
+  const cached = effectiveUpstreamStatusCache.get(cacheKey)
+  const now = Date.now()
+  if (cached && cached.expiresAt > now) {
+    return cached.status
+  }
+
+  try {
+    const status = await getEffectiveGitUpstreamStatus((args) =>
+      gitExecFileAsync(args, { cwd: worktreePath })
+    )
+    // Why: status polling can run many times per minute; cache even a clear
+    // "no upstream" result briefly so unpublished branches do not churn git.
+    effectiveUpstreamStatusCache.set(cacheKey, {
+      status,
+      expiresAt: now + EFFECTIVE_UPSTREAM_STATUS_CACHE_TTL_MS
+    })
+    return status
+  } catch {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    // Why: git status polling should not fail just because the richer
+    // upstream probe hit a transient ref/read error; the explicit
+    // upstream-status path will surface those failures when invoked.
+    return undefined
   }
 }
 

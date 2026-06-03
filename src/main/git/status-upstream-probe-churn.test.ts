@@ -25,10 +25,11 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
-import { getStatus } from './status'
+import { clearEffectiveUpstreamStatusCacheForTests, getStatus } from './status'
 
 describe('getStatus missing-upstream polling churn', () => {
   beforeEach(() => {
+    clearEffectiveUpstreamStatusCacheForTests()
     existsSyncMock.mockReset()
     gitExecFileAsyncMock.mockReset()
     readFileMock.mockReset()
@@ -59,13 +60,14 @@ describe('getStatus missing-upstream polling churn', () => {
     await getStatus('/repo')
     await getStatus('/repo')
 
-    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter(
-      ([args]: [string[]]) => args[0] === 'rev-parse' && args.includes('HEAD@{u}')
-    )
-    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter(
-      ([args]: [string[]]) =>
-        args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')
-    )
+    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
+      const args = call[0] as string[]
+      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
+    })
+    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
+      const args = call[0] as string[]
+      return args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')
+    })
 
     expect(upstreamProbeCalls).toHaveLength(1)
     expect(sameNameOriginProbeCalls).toHaveLength(1)
