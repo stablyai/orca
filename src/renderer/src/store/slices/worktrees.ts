@@ -1064,8 +1064,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
-            ...(startup ? { startup } : {})
+            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =

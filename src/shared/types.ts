@@ -22,7 +22,6 @@ import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
 } from './source-control-ai-types'
-import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -1542,23 +1541,11 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
-  telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }
 
 export type WorktreeDefaultTabsLaunch = {
   tabs: OrcaDefaultTabTemplate[]
   runCommands: boolean
-}
-
-export type WorktreeCreateTimingPhase = {
-  phase: string
-  startedAtMs: number
-  durationMs: number
-}
-
-export type WorktreeCreateTiming = {
-  totalDurationMs: number
-  phases: WorktreeCreateTimingPhase[]
 }
 
 export type CreateSparseCheckoutRequest = {
@@ -1617,9 +1604,6 @@ export type CreateWorktreeArgs = {
    *  pre-date this prop default to `unknown` at the IPC boundary instead
    *  of failing typecheck. */
   telemetrySource?: WorkspaceSource
-  /** Optional startup command for callers that want the backend to spawn the
-   *  first terminal as soon as the worktree is registered. */
-  startup?: WorktreeStartupLaunch
 }
 
 export type CreateWorktreeResult = {
@@ -1636,11 +1620,6 @@ export type CreateWorktreeResult = {
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
-  startupTerminal?: {
-    spawned: boolean
-    surface?: 'visible' | 'background'
-  }
-  timing?: WorktreeCreateTiming
 }
 
 export type PreservedWorktreeBranch = {

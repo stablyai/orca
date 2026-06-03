@@ -1442,19 +1442,6 @@ export function registerPtyHandlers(
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
       }
-      if (args.telemetry) {
-        const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-        const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-        const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
-        if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
-          track('agent_started', {
-            agent_kind: agentKindParse.data,
-            launch_source: launchSourceParse.data,
-            request_kind: requestKindParse.data,
-            ...getCohortAtEmit()
-          })
-        }
-      }
       // Why: runtime-owned CLI PTYs bypass the renderer `pty:spawn` handler,
       // so record their spawn-time paneKey here too. Synthetic hook titles and
       // paneKey-scoped cache cleanup both depend on this reverse lookup.

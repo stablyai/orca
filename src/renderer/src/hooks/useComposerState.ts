@@ -1935,29 +1935,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         Boolean(tuiAgent) &&
         !effectiveBranchNameOverride &&
         !createDisplayName
-      const startupPlan = buildAgentStartupPlan({
-        agent: tuiAgent,
-        prompt: submitStartupPrompt,
-        cmdOverrides: settings?.agentCmdOverrides ?? {},
-        platform: CLIENT_PLATFORM
-      })
-
-      // Why: backend startup is safe only when the launch command is
-      // self-contained. Agents that need post-ready paste/follow-up stay on
-      // the renderer path so prompt delivery is not skipped.
-      const composerTelemetry: AgentStartedTelemetry = {
-        agent_kind: tuiAgentToAgentKind(tuiAgent),
-        launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
-        request_kind: 'new'
-      }
-      const backendStartup =
-        startupPlan && !startupPlan.draftPrompt && !startupPlan.followupPrompt
-          ? {
-              command: startupPlan.launchCommand,
-              ...(startupPlan.env ? { env: startupPlan.env } : {}),
-              telemetry: composerTelemetry
-            }
-          : undefined
       const result = await createWorktree(
         repoId,
         workspaceName,
@@ -1980,7 +1957,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         resolvedInitialWorkspaceStatus,
         linkedGitLabMR ?? undefined,
         linkedGitLabIssue ?? undefined,
-        backendStartup,
+        undefined,
         pendingFirstAgentMessageRename
       )
       const worktree = result.worktree
@@ -1999,13 +1976,32 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               })
             }
           : undefined
-      const backendSpawnedStartup = result.startupTerminal?.spawned === true
+      const startupPlan = buildAgentStartupPlan({
+        agent: tuiAgent,
+        prompt: submitStartupPrompt,
+        cmdOverrides: settings?.agentCmdOverrides ?? {},
+        platform: CLIENT_PLATFORM
+      })
+
+      // Why: thread agent_started telemetry through the queued startup so
+      // main fires the event after the spawn succeeds. The composer
+      // "create" path is the new-workspace surface; request_kind is
+      // `'new'` because this is always a fresh session (issue/PR-driven
+      // follow-ups go through launch-work-item-direct.ts).
+      // Why: when the composer is opened from onboarding, the first
+      // `agent_started` must attribute to `onboarding` so D1 activation
+      // can be measured against the funnel.
+      const composerTelemetry: AgentStartedTelemetry = {
+        agent_kind: tuiAgentToAgentKind(tuiAgent),
+        launch_source: telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
+        request_kind: 'new'
+      }
       const activation = activateAndRevealWorktree(worktree.id, {
         sidebarRevealBehavior: 'auto',
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         issueCommand,
-        ...(startupPlan && !backendSpawnedStartup
+        ...(startupPlan
           ? {
               startup: {
                 command: startupPlan.launchCommand,
@@ -2023,7 +2019,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             }
           : {})
       })
-      if (startupPlan && !backendSpawnedStartup) {
+      if (startupPlan) {
         void ensureAgentStartupInTerminal({
           worktreeId: worktree.id,
           primaryTabId: activation === false ? null : activation.primaryTabId,
@@ -2180,12 +2176,66 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           Boolean(agent) &&
           !effectiveBranchNameOverride &&
           !createDisplayName
+        const result = await createWorktree(
+          repoId,
+          workspaceName,
+          selectedRepoIsGit ? baseBranch : undefined,
+          effectiveSetupDecision,
+          selectedRepoIsGit && sparseEnabled
+            ? {
+                directories: normalizedSparseDirectories,
+                ...(effectivePresetId ? { presetId: effectivePresetId } : {})
+              }
+            : undefined,
+          telemetrySource,
+          createDisplayName,
+          submitLinkedIssueNumber ?? undefined,
+          submitLinkedPR ?? undefined,
+          pushTarget,
+          agent ?? undefined,
+          linkedLinearIssue,
+          effectiveBranchNameOverride,
+          resolvedInitialWorkspaceStatus,
+          linkedGitLabMR ?? undefined,
+          linkedGitLabIssue ?? undefined,
+          undefined,
+          pendingFirstAgentMessageRename
+        )
+        const worktree = result.worktree
+
         const trimmedNote = note.trim()
-        // Why: backend startup is safe only when the launch command is
-        // self-contained. Agents that need post-ready paste/follow-up stay on
-        // the renderer path so prompt delivery is not skipped.
+        await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
+
+        // Why: quick create should draft linked source data for review instead
+        // of auto-executing it. Rich linked context wins over URL fallback;
+        // typed-only Linear entries still use the note as the startup prompt.
         const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
           resolveQuickCreateLinkedWorkItemPrompt(submitLinkedWorkItem, trimmedNote)
+
+        // Why: agents that gate first-launch behind a "Do you trust this
+        // folder?" menu (cursor-agent, copilot) consume the bracketed paste
+        // as menu input. Pre-write the trust artifact so the menu is
+        // skipped — best-effort, errors swallowed by main. Guard the IPC
+        // presence so a stale preload bundle doesn't crash the launch with
+        // "Cannot read properties of undefined".
+        if (agent && worktree.path && window.api.agentTrust?.markTrusted) {
+          const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
+          if (preflight) {
+            try {
+              await window.api.agentTrust.markTrusted({
+                preset: preflight,
+                workspacePath: worktree.path
+              })
+            } catch {
+              // Best-effort: continue with launch.
+            }
+          }
+        }
+
+        // Why: prefer the agent's native prefill flag (currently Claude's
+        // `--prefill`) when it has one — sidesteps the readiness/paste race
+        // entirely. Falls through to the type-after-ready path for every
+        // other agent.
         const draftLaunchPlan =
           agent === null || !quickDraftPrompt
             ? null
@@ -2218,6 +2268,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           }
         }
 
+        // Why: only attach telemetry when an agent was selected — the
+        // quick path also handles "blank shell" (agent === null) where no
+        // agent_started event should fire. When telemetry is present main
+        // emits the event after pty:spawn succeeds.
         const quickTelemetry: AgentStartedTelemetry | null =
           agent === null
             ? null
@@ -2227,69 +2281,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                   telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
                 request_kind: 'new'
               }
-        const backendStartup =
-          startupPlan && !startupPlan.draftPrompt && !startupPlan.followupPrompt
-            ? {
-                command: startupPlan.launchCommand,
-                ...(startupPlan.env ? { env: startupPlan.env } : {}),
-                ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
-              }
-            : undefined
-        const result = await createWorktree(
-          repoId,
-          workspaceName,
-          selectedRepoIsGit ? baseBranch : undefined,
-          effectiveSetupDecision,
-          selectedRepoIsGit && sparseEnabled
-            ? {
-                directories: normalizedSparseDirectories,
-                ...(effectivePresetId ? { presetId: effectivePresetId } : {})
-              }
-            : undefined,
-          telemetrySource,
-          createDisplayName,
-          submitLinkedIssueNumber ?? undefined,
-          submitLinkedPR ?? undefined,
-          pushTarget,
-          agent ?? undefined,
-          linkedLinearIssue,
-          effectiveBranchNameOverride,
-          resolvedInitialWorkspaceStatus,
-          linkedGitLabMR ?? undefined,
-          linkedGitLabIssue ?? undefined,
-          backendStartup,
-          pendingFirstAgentMessageRename
-        )
-        const worktree = result.worktree
-
-        await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
-
-        // Why: agents that gate first-launch behind a "Do you trust this
-        // folder?" menu (cursor-agent, copilot) consume the bracketed paste
-        // as menu input. Pre-write the trust artifact so the menu is
-        // skipped — best-effort, errors swallowed by main. Guard the IPC
-        // presence so a stale preload bundle doesn't crash the launch with
-        // "Cannot read properties of undefined".
-        if (agent && worktree.path && window.api.agentTrust?.markTrusted) {
-          const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-          if (preflight) {
-            try {
-              await window.api.agentTrust.markTrusted({
-                preset: preflight,
-                workspacePath: worktree.path
-              })
-            } catch {
-              // Best-effort: continue with launch.
-            }
-          }
-        }
-
-        const backendSpawnedStartup = result.startupTerminal?.spawned === true
         const activation = activateAndRevealWorktree(worktree.id, {
           sidebarRevealBehavior: 'auto',
           setup: result.setup,
           defaultTabs: result.defaultTabs,
-          ...(startupPlan && !backendSpawnedStartup
+          ...(startupPlan
             ? {
                 startup: {
                   command: startupPlan.launchCommand,
@@ -2307,7 +2303,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
               }
             : {})
         })
-        if (startupPlan && !backendSpawnedStartup) {
+        if (startupPlan) {
           void ensureAgentStartupInTerminal({
             worktreeId: worktree.id,
             primaryTabId: activation === false ? null : activation.primaryTabId,

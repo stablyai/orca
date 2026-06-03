@@ -16,10 +16,8 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeResult,
   GitPushTarget,
-  GlobalSettings,
   LocalBaseRefRefreshResult,
   Repo,
-  Worktree,
   WorktreeMeta
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
@@ -48,7 +46,7 @@ import { requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { getActiveMultiplexer } from './ssh'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
-import { TUI_AGENT_CONFIG, isTuiAgent } from '../../shared/tui-agent-config'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { getSshGitUsername } from '../git/git-username'
 import {
@@ -72,13 +70,6 @@ import { createWorktreeSymlinks } from './worktree-symlinks'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
 import type { IFilesystemProvider } from '../providers/types'
-import { buildSetupRunnerCommand } from '../../shared/setup-runner-command'
-import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
-import {
-  markCodexProjectTrusted,
-  markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
-} from '../agent-trust-presets'
 
 const SSH_WORKTREE_CREATE_FETCH_FRESHNESS_MS = 30_000
 const SSH_WORKTREE_CREATE_FETCH_CACHE_MAX = 512
@@ -93,114 +84,6 @@ const sshWorktreeCreateBasePlanInflight = new Map<
 type RemoteWorktreeCreateBasePlan = {
   baseBranch: string
   remoteTrackingBase: RemoteTrackingBase | null
-}
-
-type StagedStartupResult = {
-  startupTerminal?: CreateWorktreeResult['startupTerminal']
-  didSpawnSetup: boolean
-  warning?: string
-}
-
-function appendWorktreeCreateWarning(current: string | undefined, next: string): string {
-  return current ? `${current} Also ${next[0]?.toLowerCase() ?? ''}${next.slice(1)}` : next
-}
-
-async function spawnLocalStartupAndSetupTerminals(args: {
-  runtime: OrcaRuntimeService | undefined
-  worktree: Pick<Worktree, 'id' | 'path'>
-  startup: CreateWorktreeArgs['startup']
-  setup: CreateWorktreeResult['setup']
-  defaultTabs: CreateWorktreeResult['defaultTabs']
-  settings: GlobalSettings
-  createdWithAgent: CreateWorktreeArgs['createdWithAgent']
-}): Promise<StagedStartupResult> {
-  const { runtime, worktree, startup, setup, defaultTabs, settings, createdWithAgent } = args
-  if (!runtime || !startup || defaultTabs?.tabs.length) {
-    return { didSpawnSetup: false }
-  }
-
-  let warning: string | undefined
-  let startupTerminalHandle: string | null = null
-  let startupTerminal: CreateWorktreeResult['startupTerminal']
-
-  try {
-    // Why: after `git worktree add` and metadata registration, a runtime-owned
-    // PTY can begin booting the selected agent while setup runs in a sibling
-    // terminal. Earlier than this, the worktree path is not yet safe for agents.
-    if (isTuiAgent(createdWithAgent)) {
-      const preset = TUI_AGENT_CONFIG[createdWithAgent].preflightTrust
-      try {
-        if (preset === 'cursor') {
-          markCursorWorkspaceTrusted(worktree.path)
-        } else if (preset === 'copilot') {
-          markCopilotFolderTrusted(worktree.path)
-        } else if (preset === 'codex') {
-          markCodexProjectTrusted(worktree.path)
-        }
-      } catch {
-        // Best-effort: launch still proceeds and the agent can ask interactively.
-      }
-    }
-    const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
-      command: startup.command,
-      env: startup.env,
-      telemetry: startup.telemetry,
-      activate: true
-    })
-    startupTerminalHandle = terminal.handle
-    startupTerminal = {
-      spawned: true,
-      surface: terminal.surface
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
-    console.warn(`[worktree-create] ${warning}`)
-    return { didSpawnSetup: false, warning }
-  }
-
-  let didSpawnSetup = false
-  if (setup) {
-    try {
-      const setupCommand = buildSetupRunnerCommand(
-        setup.runnerScriptPath,
-        process.platform === 'win32' ? 'windows' : 'posix'
-      )
-      const setupLaunchMode =
-        (settings as Partial<Pick<GlobalSettings, 'setupScriptLaunchMode'>>)
-          .setupScriptLaunchMode ?? 'new-tab'
-      if (setupLaunchMode === 'split-vertical' || setupLaunchMode === 'split-horizontal') {
-        if (!startupTerminalHandle) {
-          throw new Error('startup_terminal_missing')
-        }
-        await runtime.splitTerminal(startupTerminalHandle, {
-          direction: setupLaunchMode === 'split-horizontal' ? 'horizontal' : 'vertical',
-          command: setupCommand,
-          env: setup.envVars,
-          activate: false
-        })
-      } else {
-        await runtime.createTerminal(`id:${worktree.id}`, {
-          title: 'Setup',
-          command: setupCommand,
-          env: setup.envVars,
-          activate: false
-        })
-      }
-      didSpawnSetup = true
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      const nextWarning = `failed to create the setup terminal for ${worktree.path}: ${message}`
-      warning = appendWorktreeCreateWarning(warning, nextWarning)
-      console.warn(`[worktree-create] ${warning}`)
-    }
-  }
-
-  return {
-    ...(startupTerminal ? { startupTerminal } : {}),
-    didSpawnSetup,
-    ...(warning ? { warning } : {})
-  }
 }
 
 function setBoundedSshWorktreeCreateFetchEntry(
@@ -1216,7 +1099,6 @@ export async function createRemoteWorktree(
   store: Store,
   mainWindow: BrowserWindow
 ): Promise<CreateWorktreeResult> {
-  const timing = createWorktreeCreateTimingRecorder()
   const provider = requireSshGitProvider(repo.connectionId!)
   const fsProvider = getSshFilesystemProvider(repo.connectionId!)
 
@@ -1398,15 +1280,13 @@ export async function createRemoteWorktree(
 
   // Create worktree via relay
   try {
-    await timing.time('git_worktree_add', async () =>
-      provider.addWorktree(
-        repo.path,
-        branchName,
-        remotePath,
-        checkoutExistingBranch
-          ? { checkoutExistingBranch }
-          : { base: baseBranch, ...(sparseDirectories.length > 0 ? { noCheckout: true } : {}) }
-      )
+    await provider.addWorktree(
+      repo.path,
+      branchName,
+      remotePath,
+      checkoutExistingBranch
+        ? { checkoutExistingBranch }
+        : { base: baseBranch, ...(sparseDirectories.length > 0 ? { noCheckout: true } : {}) }
     )
   } catch (err) {
     if (
@@ -1450,9 +1330,7 @@ export async function createRemoteWorktree(
   }
 
   // Re-list to get the created worktree info
-  const gitWorktrees = await timing.time('list_created_worktree', async () =>
-    provider.listWorktrees(repo.path)
-  )
+  const gitWorktrees = await provider.listWorktrees(repo.path)
   const created = gitWorktrees.find(
     (gw) => gw.branch?.endsWith(branchName) || gw.path.endsWith(effectiveSanitizedName)
   )
@@ -1514,10 +1392,8 @@ export async function createRemoteWorktree(
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
-  const { worktree } = timing.timeSync('persist_metadata', () => {
-    const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
-    return { worktree: mergeWorktree(repo.id, created, meta) }
-  })
+  const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
+  const worktree = mergeWorktree(repo.id, created, meta)
 
   // Why: `experimentalWorktreeSymlinks` is intentionally not wired up for
   // remote (SSH) worktrees. Creating symlinks on the remote host would
@@ -1528,45 +1404,43 @@ export async function createRemoteWorktree(
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   if (fsProvider) {
-    await timing.time('prepare_setup', async () => {
-      const yamlHooks = await readRemoteOrcaYaml(fsProvider, created.path)
-      const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
+    const yamlHooks = await readRemoteOrcaYaml(fsProvider, created.path)
+    const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
+    try {
+      defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, args.setupDecision)
+    } catch (error) {
+      // Why: default tab commands share setup's run policy. If the target branch
+      // adds commands without a renderer decision, create the tabs but don't run them.
+      console.warn(`[hooks] default tab commands skipped for ${created.path}:`, error)
+      defaultTabs = yamlHooks?.defaultTabs
+        ? { tabs: yamlHooks.defaultTabs, runCommands: false }
+        : undefined
+    }
+    const setupScript = hooks?.scripts.setup
+    let shouldLaunchSetup = false
+    if (setupScript) {
       try {
-        defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, args.setupDecision)
+        shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
       } catch (error) {
-        // Why: default tab commands share setup's run policy. If the target branch
-        // adds commands without a renderer decision, create the tabs but don't run them.
-        console.warn(`[hooks] default tab commands skipped for ${created.path}:`, error)
-        defaultTabs = yamlHooks?.defaultTabs
-          ? { tabs: yamlHooks.defaultTabs, runCommands: false }
-          : undefined
+        // Why: the remote worktree already exists. If the created branch adds
+        // a setup hook without a renderer decision, skip setup instead of
+        // reporting successful git creation as failed.
+        console.warn(`[hooks] setup hook skipped for ${created.path}:`, error)
       }
-      const setupScript = hooks?.scripts.setup
-      let shouldLaunchSetup = false
-      if (setupScript) {
-        try {
-          shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
-        } catch (error) {
-          // Why: the remote worktree already exists. If the created branch adds
-          // a setup hook without a renderer decision, skip setup instead of
-          // reporting successful git creation as failed.
-          console.warn(`[hooks] setup hook skipped for ${created.path}:`, error)
-        }
+    }
+    if (setupScript && shouldLaunchSetup) {
+      try {
+        setup = await createRemoteSetupRunnerScript(
+          repo,
+          created.path,
+          setupScript,
+          provider,
+          fsProvider
+        )
+      } catch (error) {
+        console.error(`[hooks] Failed to prepare setup runner for ${created.path}:`, error)
       }
-      if (setupScript && shouldLaunchSetup) {
-        try {
-          setup = await createRemoteSetupRunnerScript(
-            repo,
-            created.path,
-            setupScript,
-            provider,
-            fsProvider
-          )
-        } catch (error) {
-          console.error(`[hooks] Failed to prepare setup runner for ${created.path}:`, error)
-        }
-      }
-    })
+    }
   }
 
   notifyWorktreesChanged(mainWindow, repo.id)
@@ -1574,8 +1448,7 @@ export async function createRemoteWorktree(
     worktree,
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
-    ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
-    timing: timing.finish()
+    ...(localBaseRefRefresh ? { localBaseRefRefresh } : {})
   }
 }
 
@@ -1586,7 +1459,6 @@ export async function createLocalWorktree(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
-  const timing = createWorktreeCreateTimingRecorder()
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(repo, settings)
 
@@ -1813,26 +1685,22 @@ export async function createLocalWorktree(
   }
 
   if (remoteTrackingRefresh) {
-    await timing.time('refresh_base_ref', async () => {
-      const result = await remoteTrackingRefresh.promise
-      if (!result.ok) {
-        throw new Error(
-          `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}". Check your network and try again.`
-        )
-      }
-      if (
-        !remoteTrackingRefresh.hadLocalBaseRef &&
-        !(await runtime?.hasRemoteTrackingRef(repo.path, remoteTrackingRefresh.base))
-      ) {
-        throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
-      }
-    })
+    const result = await remoteTrackingRefresh.promise
+    if (!result.ok) {
+      throw new Error(
+        `Could not refresh base ref "${baseBranch}" from "${remoteTrackingRefresh.base.remote}". Check your network and try again.`
+      )
+    }
+    if (
+      !remoteTrackingRefresh.hadLocalBaseRef &&
+      !(await runtime?.hasRemoteTrackingRef(repo.path, remoteTrackingRefresh.base))
+    ) {
+      throw new Error(`Base ref "${baseBranch}" was not found after fetching.`)
+    }
   }
 
   if (legacyFetchPromise) {
-    await timing.time('refresh_base_ref', async () => {
-      await legacyFetchPromise
-    })
+    await legacyFetchPromise
   }
   emitCreateWorktreeProgress(mainWindow, 'creating')
 
@@ -1846,44 +1714,42 @@ export async function createLocalWorktree(
 
   const existingBranchOption = { checkoutExistingBranch }
   const addResult: AddWorktreeResult =
-    (await timing.time('git_worktree_add', async () =>
-      sparseDirectories.length > 0
-        ? checkoutExistingBranch
-          ? addSparseWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              sparseDirectories,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              existingBranchOption
-            )
-          : addSparseWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              sparseDirectories,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate
-            )
-        : checkoutExistingBranch
-          ? addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              false,
-              existingBranchOption
-            )
-          : addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate
-            )
-    )) ?? {}
+    (await (sparseDirectories.length > 0
+      ? checkoutExistingBranch
+        ? addSparseWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            sparseDirectories,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate,
+            existingBranchOption
+          )
+        : addSparseWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            sparseDirectories,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate
+          )
+      : checkoutExistingBranch
+        ? addWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate,
+            false,
+            existingBranchOption
+          )
+        : addWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate
+          ))) ?? {}
 
   let configuredPushTarget: GitPushTarget | undefined
   if (preparedPushTarget) {
@@ -1899,9 +1765,7 @@ export async function createLocalWorktree(
   }
 
   // Re-list to get the freshly created worktree info
-  const gitWorktrees = await timing.time('list_created_worktree', async () =>
-    listWorktrees(repo.path)
-  )
+  const gitWorktrees = await listWorktrees(repo.path)
   const created = gitWorktrees.find((gw) => areWorktreePathsEqual(gw.path, worktreePath))
   if (!created) {
     throw new Error('Worktree created but not found in listing')
@@ -1951,10 +1815,8 @@ export async function createLocalWorktree(
     ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
     ...(args.workspaceStatus !== undefined ? { workspaceStatus: args.workspaceStatus } : {})
   }
-  const { worktree } = timing.timeSync('persist_metadata', () => {
-    const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
-    return { worktree: mergeWorktree(repo.id, created, meta) }
-  })
+  const meta = store.setWorktreeMeta(worktreeId, metaUpdates)
+  const worktree = mergeWorktree(repo.id, created, meta)
   // Why: the authorized-roots cache is consulted lazily on the next filesystem
   // access (`ensureAuthorizedRootsCache` rebuilds on demand when dirty). We
   // just invalidate the cache marker instead of blocking worktree creation on
@@ -1967,11 +1829,8 @@ export async function createLocalWorktree(
   // state (e.g. `node_modules`, `.env`) see the links already in place.
   // Gated on the experimental flag so disabling the feature globally skips
   // the work even when a repo still has paths configured.
-  const symlinkPaths = repo.symlinkPaths ?? []
-  if (settings.experimentalWorktreeSymlinks && symlinkPaths.length > 0) {
-    await timing.time('create_symlinks', async () => {
-      await createWorktreeSymlinks(repo.path, created.path, symlinkPaths)
-    })
+  if (settings.experimentalWorktreeSymlinks && repo.symlinkPaths && repo.symlinkPaths.length > 0) {
+    await createWorktreeSymlinks(repo.path, created.path, repo.symlinkPaths)
   }
 
   // Why: the worktree's own `orca.yaml` (at the tip of the base branch) is
@@ -1985,72 +1844,53 @@ export async function createLocalWorktree(
   // the regression this replaced.
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
-  await timing.time('prepare_setup', async () => {
-    const createdYamlHooks = loadHooks(worktreePath)
-    const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
+  const createdYamlHooks = loadHooks(worktreePath)
+  const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
+  try {
+    defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, args.setupDecision)
+  } catch (error) {
+    // Why: default tab commands share setup's run policy. If the target branch
+    // adds commands without a renderer decision, create the tabs but don't run them.
+    console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
+    defaultTabs = createdYamlHooks?.defaultTabs
+      ? { tabs: createdYamlHooks.defaultTabs, runCommands: false }
+      : undefined
+  }
+  const setupScript = createdEffectiveHooks?.scripts.setup
+  let shouldLaunchSetup = false
+  if (setupScript) {
     try {
-      defaultTabs = getDefaultTabsLaunch(createdYamlHooks, repo, args.setupDecision)
+      shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
     } catch (error) {
-      // Why: default tab commands share setup's run policy. If the target branch
-      // adds commands without a renderer decision, create the tabs but don't run them.
-      console.warn(`[hooks] default tab commands skipped for ${worktreePath}:`, error)
-      defaultTabs = createdYamlHooks?.defaultTabs
-        ? { tabs: createdYamlHooks.defaultTabs, runCommands: false }
-        : undefined
+      // Why: if the target branch introduces setup hooks that the primary
+      // checkout did not expose, the renderer may not have collected an ask
+      // decision. The worktree already exists, so skip setup instead of
+      // turning successful git creation into an IPC failure.
+      console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
     }
-    const setupScript = createdEffectiveHooks?.scripts.setup
-    let shouldLaunchSetup = false
-    if (setupScript) {
-      try {
-        shouldLaunchSetup = shouldRunSetupForCreate(repo, args.setupDecision)
-      } catch (error) {
-        // Why: if the target branch introduces setup hooks that the primary
-        // checkout did not expose, the renderer may not have collected an ask
-        // decision. The worktree already exists, so skip setup instead of
-        // turning successful git creation into an IPC failure.
-        console.warn(`[hooks] setup hook skipped for ${worktreePath}:`, error)
-      }
+  }
+  if (setupScript && shouldLaunchSetup) {
+    try {
+      // Why: setup now runs in a visible terminal owned by the renderer so users
+      // can inspect failures, answer prompts, and rerun it. The main process only
+      // resolves policy and writes the runner script; it must not execute setup
+      // itself anymore or we would reintroduce the hidden background-hook behavior.
+      //
+      // Why: the git worktree already exists at this point. If runner generation
+      // fails, surfacing the error as a hard create failure would lie to the UI
+      // about the underlying git state and strand a real worktree on disk.
+      // Degrade to "created without setup launch" instead.
+      setup = createSetupRunnerScript(repo, worktreePath, setupScript)
+    } catch (error) {
+      console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
     }
-    if (setupScript && shouldLaunchSetup) {
-      try {
-        // Why: setup now runs in a visible terminal owned by the renderer so users
-        // can inspect failures, answer prompts, and rerun it. The main process only
-        // resolves policy and writes the runner script; it must not execute setup
-        // itself anymore or we would reintroduce the hidden background-hook behavior.
-        //
-        // Why: the git worktree already exists at this point. If runner generation
-        // fails, surfacing the error as a hard create failure would lie to the UI
-        // about the underlying git state and strand a real worktree on disk.
-        // Degrade to "created without setup launch" instead.
-        setup = createSetupRunnerScript(repo, worktreePath, setupScript)
-      } catch (error) {
-        console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
-      }
-    }
-  })
-
-  const stagedStartup = await timing.time('spawn_startup_terminal', () =>
-    spawnLocalStartupAndSetupTerminals({
-      runtime,
-      worktree,
-      startup: args.startup,
-      setup,
-      defaultTabs,
-      settings,
-      createdWithAgent: args.createdWithAgent
-    })
-  )
+  }
 
   notifyWorktreesChanged(mainWindow, repo.id)
   return {
     worktree,
-    ...(setup && !stagedStartup.didSpawnSetup ? { setup } : {}),
+    ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
-    ...(addResult.localBaseRefRefresh
-      ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
-      : {}),
-    ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
-    ...(stagedStartup.warning ? { warning: stagedStartup.warning } : {}),
-    timing: timing.finish()
+    ...(addResult.localBaseRefRefresh ? { localBaseRefRefresh: addResult.localBaseRefRefresh } : {})
   }
 }
