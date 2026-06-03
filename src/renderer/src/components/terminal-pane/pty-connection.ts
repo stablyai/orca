@@ -93,6 +93,8 @@ const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
+const FOREGROUND_THROUGHPUT_IMMEDIATE_BURST_CHARS = 64 * 1024
+const FOREGROUND_THROUGHPUT_IMMEDIATE_BURST_WINDOW_MS = 16
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 16 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
 // Why: this is only shown if renderer backlog overflowed and main-owned
@@ -1202,6 +1204,8 @@ export function connectPanePty(
   const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
+  let foregroundImmediateBurstWindowStartedAt = Number.NEGATIVE_INFINITY
+  let foregroundImmediateBurstChars = 0
   const markTerminalInputSent = (): void => {
     lastTerminalInputAt = performance.now()
   }
@@ -1711,14 +1715,37 @@ export function connectPanePty(
     }
 
     function isLatencySensitiveForegroundOutput(data: string): boolean {
-      if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
-        return true
-      }
       const recentInput =
         performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
-      return (
-        recentInput && data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS && data.includes('\x1b[')
-      )
+      if (
+        recentInput &&
+        data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
+        data.includes('\x1b[')
+      ) {
+        return true
+      }
+      if (data.length > FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
+        return false
+      }
+      return canWriteImmediateForegroundBurst(data.length)
+    }
+
+    function canWriteImmediateForegroundBurst(chars: number): boolean {
+      const now = performance.now()
+      if (
+        now - foregroundImmediateBurstWindowStartedAt >
+        FOREGROUND_THROUGHPUT_IMMEDIATE_BURST_WINDOW_MS
+      ) {
+        foregroundImmediateBurstWindowStartedAt = now
+        foregroundImmediateBurstChars = 0
+      }
+      if (foregroundImmediateBurstChars + chars > FOREGROUND_THROUGHPUT_IMMEDIATE_BURST_CHARS) {
+        return false
+      }
+      // Why: small foreground chunks are usually interactive, but sustained
+      // redraw floods still need to yield to the scheduler.
+      foregroundImmediateBurstChars += chars
+      return true
     }
 
     function containsNonAsciiOutput(data: string): boolean {

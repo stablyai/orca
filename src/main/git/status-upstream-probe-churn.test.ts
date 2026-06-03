@@ -25,13 +25,14 @@ vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
 
-import { getStatus } from './status'
+import { getStatus, __resetMissingEffectiveUpstreamCacheForTests } from './status'
 
 describe('getStatus missing-upstream polling churn', () => {
   beforeEach(() => {
     existsSyncMock.mockReset()
     gitExecFileAsyncMock.mockReset()
     readFileMock.mockReset()
+    __resetMissingEffectiveUpstreamCacheForTests()
     existsSyncMock.mockReturnValue(false)
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/Initi-Project\n')
   })

@@ -56,7 +56,8 @@ import {
   getDiff,
   getStagedCommitContext,
   getStatus,
-  isWithinWorktree
+  isWithinWorktree,
+  __resetMissingEffectiveUpstreamCacheForTests
 } from './status'
 
 describe('discardChanges', () => {
@@ -367,6 +368,7 @@ describe('getStatus', () => {
     lstatMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
+    __resetMissingEffectiveUpstreamCacheForTests()
     // Why: after the status call, getStatus may issue `git diff --numstat`
     // calls to attach per-entry line counts. Tests that don't care about counts
     // set only a `mockResolvedValueOnce` for the status output; this default
