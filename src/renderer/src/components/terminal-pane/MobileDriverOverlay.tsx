@@ -37,6 +37,11 @@ export function MobileDriverOverlay({
 
   const setOverlayRootRef = useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null
+    if (node) {
+      // Why: take-back can resolve after the overlay renders null; a later
+      // mobile session must not inherit the stale disabled state.
+      setActionPending(false)
+    }
   }, [])
 
   const currentCollapseState = getMobileDriverOverlayCollapseState(collapseState, driverClientId)

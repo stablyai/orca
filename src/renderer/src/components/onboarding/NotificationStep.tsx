@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: this onboarding step owns the full notification setup surface, including macOS guidance, sound choices, and upload controls. */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BellRing, FileAudio, Settings, Upload, X } from 'lucide-react'
+import { BellRing, FileAudio, Settings, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings, NotificationPermissionStatusResult } from '../../../../shared/types'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,6 @@ import {
 import { sendNotificationSettingsTestNotification } from '@/components/settings/NotificationsPane'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import logo from '../../../../../resources/logo.svg'
 
 export type NotificationDraft = {
   agentTaskComplete: boolean
@@ -49,7 +48,6 @@ export function NotificationStep({
   const [permissionStatus, setPermissionStatus] =
     useState<NotificationPermissionStatusResult | null>(null)
   const [isPickingSound, setIsPickingSound] = useState(false)
-  const [showMacSettingsPreview, setShowMacSettingsPreview] = useState(false)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
   const syncedNotificationSettingsRef = useRef(notificationSettings)
   const mountedRef = useMountedRef()
@@ -100,7 +98,6 @@ export function NotificationStep({
     notificationSettingsRef.current?.customSoundVolume ?? 100
 
   const handleMacPermission = async (): Promise<void> => {
-    setShowMacSettingsPreview(true)
     const status = await window.api.notifications.requestPermission()
     if (mountedRef.current) {
       setPermissionStatus(status)
@@ -194,52 +191,6 @@ export function NotificationStep({
               Open Mac Settings
             </Button>
           </div>
-          {showMacSettingsPreview ? (
-            <div className="mt-4 rounded-xl border border-border bg-[#1f1d24] p-3 text-white shadow-sm">
-              <div className="flex items-center justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex size-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-white/15">
-                    <img src={logo} alt="" aria-hidden className="size-5 rounded-md" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium leading-tight">Allow notifications</div>
-                    <div className="text-xs leading-tight text-white/55">Orca</div>
-                  </div>
-                </div>
-                <div
-                  aria-hidden
-                  className="relative h-6 w-11 rounded-full bg-[#0a84ff] shadow-inner"
-                >
-                  <div className="absolute right-0.5 top-0.5 size-5 rounded-full bg-white shadow-sm" />
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-4 rounded-lg bg-white/[0.03] px-8 py-5">
-                <div className="h-14 rounded-sm bg-gradient-to-b from-sky-300 to-violet-400">
-                  <div className="ml-auto mr-2 mt-1 h-1.5 w-5 rounded-full bg-white/80" />
-                </div>
-                <div className="h-14 rounded-sm bg-gradient-to-b from-sky-300 to-violet-400">
-                  <div className="ml-auto mr-2 mt-1 h-1.5 w-5 rounded-full bg-white/80" />
-                  <div className="ml-auto mr-2 mt-2 h-1.5 w-6 rounded-full bg-white/80" />
-                  <div className="ml-auto mr-2 mt-1 h-1.5 w-6 rounded-full bg-white/80" />
-                </div>
-                <div className="h-14 rounded-sm bg-gradient-to-b from-sky-300 to-violet-400">
-                  <div className="mr-2 mt-1 text-right text-[10px] font-medium text-white/90">
-                    9:41
-                  </div>
-                </div>
-              </div>
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-white/60 hover:text-white"
-                  onClick={() => setShowMacSettingsPreview(false)}
-                >
-                  <X className="size-3.5" />
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          ) : null}
         </section>
       ) : null}
 

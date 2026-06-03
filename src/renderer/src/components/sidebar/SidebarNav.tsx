@@ -7,6 +7,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -21,6 +22,9 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
+
+export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
 
 export function shouldShowAgentsButton(
   settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
@@ -140,7 +144,11 @@ const SidebarNav = React.memo(function SidebarNav() {
   }, [updateSettings])
 
   return (
-    <div className="flex flex-col gap-0.5 px-2 pt-2 pb-1">
+    <div
+      className="flex flex-col gap-0.5 px-2 pt-2 pb-1"
+      data-contextual-tour-target="sidebar-navigation"
+    >
+      <SetupGuideSidebarEntry />
       {showTasksButton ? (
         <button
           type="button"
@@ -154,6 +162,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           onFocus={handlePrefetch}
           disabled={!canBrowseTasks}
           aria-current={tasksActive ? 'page' : undefined}
+          data-contextual-tour-target="sidebar-tasks"
           className={cn(
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             tasksActive
@@ -217,6 +226,23 @@ const SidebarNav = React.memo(function SidebarNav() {
                 aria-label="Open Linear tasks"
               >
                 <LinearIcon className="size-3.5" />
+              </span>
+            ) : null}
+            {visibleTaskProviders.includes('jira') ? (
+              <span
+                role="button"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!canBrowseTasks) {
+                    return
+                  }
+                  openTaskPage({ taskSource: 'jira' })
+                }}
+                className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
+                aria-label="Open Jira tasks"
+              >
+                <JiraIcon className="size-3.5" />
               </span>
             ) : null}
           </span>

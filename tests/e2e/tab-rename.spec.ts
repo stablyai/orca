@@ -118,6 +118,35 @@ test.describe('Tab Rename (Inline)', () => {
     await expect(tabLocatorByTitle(orcaPage, 'My Custom Title')).toBeVisible()
   })
 
+  test('context-menu Change Title opens a focused select-all rename input', async ({
+    orcaPage
+  }) => {
+    const worktreeId = (await getActiveWorktreeId(orcaPage))!
+    const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+    expect(originalTitle.length).toBeGreaterThan(0)
+
+    await tabLocatorByTitle(orcaPage, originalTitle).click({ button: 'right' })
+    await orcaPage.getByRole('menuitem', { name: 'Change Title', exact: true }).click()
+
+    const renameInput = orcaPage.getByRole('textbox', {
+      name: `Rename tab ${originalTitle}`,
+      exact: true
+    })
+    await expect(renameInput).toBeVisible()
+    await expect(renameInput).toBeFocused()
+
+    // Why: plain keyboard typing exercises the real focused selection. If the
+    // context menu steals focus back or the title is not selected, this will not
+    // replace the original text with the intended custom title.
+    await orcaPage.keyboard.type('Context Menu Title')
+    await renameInput.press('Enter')
+
+    await expect
+      .poll(async () => getActiveCustomTitle(orcaPage, worktreeId), { timeout: 3_000 })
+      .toBe('Context Menu Title')
+    await expect(tabLocatorByTitle(orcaPage, 'Context Menu Title')).toBeVisible()
+  })
+
   test('Escape during inline rename discards the edit', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)

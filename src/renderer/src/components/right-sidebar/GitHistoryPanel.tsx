@@ -295,7 +295,7 @@ export function GitHistoryPanel({
       {!collapsed && (
         <div
           role="separator"
-          aria-label="Resize graph"
+          aria-label="Resize commits"
           aria-orientation="horizontal"
           aria-valuemin={MIN_GIT_HISTORY_PANEL_HEIGHT}
           aria-valuemax={MAX_GIT_HISTORY_PANEL_HEIGHT}
@@ -316,7 +316,7 @@ export function GitHistoryPanel({
             <ChevronDown
               className={cn('size-3 shrink-0 transition-transform', collapsed && '-rotate-90')}
             />
-            <span>Graph</span>
+            <span>Commits</span>
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
@@ -327,7 +327,7 @@ export function GitHistoryPanel({
                 variant="ghost"
                 size="icon-xs"
                 className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
-                aria-label="What are graph refs?"
+                aria-label="What are refs?"
                 onClick={(event) => {
                   event.stopPropagation()
                 }}
@@ -355,13 +355,13 @@ export function GitHistoryPanel({
                   }
                   onRefresh()
                 }}
-                aria-label="Refresh graph"
+                aria-label="Refresh commits"
               >
                 <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              Refresh graph
+              Refresh commits
             </TooltipContent>
           </Tooltip>
         </div>

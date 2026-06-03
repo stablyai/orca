@@ -30,9 +30,12 @@ import {
 
 export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
@@ -357,8 +360,9 @@ function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps):
 export function AgentsPane({
   settings,
   updateSettings,
+  wslSupportedPlatform = false,
   wslAvailable = false,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false
 }: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
@@ -428,6 +432,7 @@ export function AgentsPane({
         settings={settings}
         updateSettings={updateSettings}
         refresh={refresh}
+        wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslDistros={wslDistros}
         wslCapabilitiesLoading={wslCapabilitiesLoading}

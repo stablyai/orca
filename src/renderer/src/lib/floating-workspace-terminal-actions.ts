@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { BrowserTab, TabGroup, TerminalTab } from '../../../shared/types'
+import type { BrowserTab, TabGroup } from '../../../shared/types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
@@ -11,20 +11,19 @@ import type { AppState } from '@/store/types'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import {
   activateWebRuntimeSessionTab,
-  createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
 export {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
+  createFloatingWorkspaceTerminalTab
+} from './floating-workspace-tab-creation'
+export {
   isFloatingWorkspacePanelShortcut,
   isFloatingWorkspacePanelShortcutTarget
 } from './floating-workspace-shortcut-policy'
-
-type FloatingWorkspaceTerminalStore = Pick<
-  AppState,
-  'activeGroupIdByWorktree' | 'createTab' | 'activateTab' | 'settings'
->
 
 type FloatingWorkspaceTabSwitchMode = 'same-type' | 'all-types' | 'terminal'
 
@@ -293,31 +292,4 @@ export function switchFloatingWorkspaceTab(
 
   activateFloatingWorkspaceCyclableTab(store, next)
   return true
-}
-
-export async function createFloatingWorkspaceTerminalTab(
-  store: FloatingWorkspaceTerminalStore,
-  shellOverride?: string
-): Promise<TerminalTab | null> {
-  const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
-  const runtimeEnvironmentId = store.settings?.activeRuntimeEnvironmentId?.trim()
-  if (
-    await createWebRuntimeSessionTerminal({
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-      environmentId: runtimeEnvironmentId,
-      targetGroupId,
-      command: shellOverride,
-      activate: true,
-      selectWorktree: false
-    })
-  ) {
-    return null
-  }
-
-  const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride, {
-    activate: false
-  })
-  store.activateTab(tab.id)
-  focusTerminalTabSurface(tab.id)
-  return tab
 }

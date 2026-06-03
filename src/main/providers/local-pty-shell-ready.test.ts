@@ -574,6 +574,9 @@ path=(/custom/bin $path)
       }
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      // Why: attribution shims are intentionally restored after user rcfiles;
+      // this test isolates zsh top-level path scoping, not attribution ordering.
+      delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
 
       const result = spawnSync(

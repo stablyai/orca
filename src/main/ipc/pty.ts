@@ -5,7 +5,7 @@ boundary. Splitting it by line count would scatter tightly coupled terminal
 process behavior across files without a cleaner ownership seam. */
 import { join, delimiter } from 'path'
 import { randomUUID } from 'crypto'
-import { type BrowserWindow, ipcMain, app, nativeTheme } from 'electron'
+import { type BrowserWindow, type WebContents, ipcMain, app } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
@@ -31,7 +31,10 @@ import {
   markClaudePtyExited,
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
-import { applyTerminalAttributionEnv } from '../attribution/terminal-attribution'
+import {
+  applyTerminalAttributionEnv,
+  resolveAttributionShellFamily
+} from '../attribution/terminal-attribution'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { track } from '../telemetry/client'
@@ -44,11 +47,6 @@ import {
 } from '../../shared/telemetry-events'
 import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
 import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
-import {
-  mode2031SequenceFor,
-  resolveTerminalColorSchemeMode,
-  scanMode2031Sequences
-} from '../../shared/terminal-color-scheme-protocol'
 import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import {
   isTerminalLeafId,
@@ -62,8 +60,10 @@ import {
 } from '../agent-hooks/migration-unsupported-pty-state'
 import { parseWslPath } from '../wsl'
 import { mergePersistedWindowsPath } from '../pty/windows-environment-path'
+import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
+import { buildConfiguredProxyEnv, type NetworkProxySettings } from '../../shared/network-proxy'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId. null = local provider.
@@ -83,10 +83,7 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 // is PTY-scoped and must be cleared by every teardown path, including SSH and
 // daemon shutdowns that do not flow through the local provider exit listener.
 const lastInputAtByPty = new Map<string, number>()
-// Why: hidden renderer panes restore from main-owned snapshots, so ordinary
-// PTY bytes do not need to wake the renderer while a pane is hidden.
-const rendererPausedOutputPtys = new Set<string>()
-const rendererPausedMode2031ScanTailByPty = new Map<string, string>()
+const interactiveOutputCharsByPty = new Map<string, number>()
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -114,10 +111,6 @@ export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
 }
 
-export function isRendererPtyOutputPaused(ptyId: string): boolean {
-  return rendererPausedOutputPtys.has(ptyId)
-}
-
 // Why: consumers (currently the cursor-agent synthesized-spinner loop in
 // main/index.ts) need to tear down paneKey-scoped state when a PTY exits so
 // intervals / timers cannot leak for the process lifetime. A callback
@@ -140,7 +133,8 @@ export function registerPaneKeyTeardownListener(listener: PaneKeyTeardownListene
 // still matches, so a remount that pre-signals before the old PTY's teardown
 // runs is preserved. See docs/mobile-prefer-renderer-scrollback.md.
 let pendingSerializerGenSeq = 0
-const pendingByPaneKey = new Map<string, number>()
+const pendingByPaneKey = new Map<string, { gen: number; ownerWebContentsId: number | null }>()
+const pendingPaneSerializerCleanupRegistered = new Set<number>()
 // Why: at PTY spawn time we capture the gen that was pending for the spawn's
 // paneKey, so teardown can settle ONLY that gen. Without this, a paneKey
 // remount that replaces the pending entry with a new gen would still get
@@ -172,14 +166,32 @@ function rememberPaneKeyForPty(ptyId: string, paneKey: unknown): string | null {
   return normalizedPaneKey
 }
 
-function declarePendingPaneSerializer(paneKey: string): number {
+function cleanupPendingPaneSerializersForSender(ownerWebContentsId: number): void {
+  pendingPaneSerializerCleanupRegistered.delete(ownerWebContentsId)
+  for (const [paneKey, pending] of pendingByPaneKey) {
+    if (pending.ownerWebContentsId === ownerWebContentsId) {
+      pendingByPaneKey.delete(paneKey)
+    }
+  }
+}
+
+function registerPendingPaneSerializerCleanup(sender: WebContents | undefined): void {
+  if (!sender || pendingPaneSerializerCleanupRegistered.has(sender.id)) {
+    return
+  }
+  pendingPaneSerializerCleanupRegistered.add(sender.id)
+  sender.once('destroyed', () => cleanupPendingPaneSerializersForSender(sender.id))
+}
+
+function declarePendingPaneSerializer(paneKey: string, sender: WebContents | undefined): number {
   const gen = ++pendingSerializerGenSeq
-  pendingByPaneKey.set(paneKey, gen)
+  registerPendingPaneSerializerCleanup(sender)
+  pendingByPaneKey.set(paneKey, { gen, ownerWebContentsId: sender?.id ?? null })
   return gen
 }
 
 function settlePendingPaneSerializer(paneKey: string, gen: number): void {
-  if (pendingByPaneKey.get(paneKey) === gen) {
+  if (pendingByPaneKey.get(paneKey)?.gen === gen) {
     pendingByPaneKey.delete(paneKey)
   }
 }
@@ -282,7 +294,10 @@ export type BuildPtyHostEnvOptions = {
    *  resolve to Pi for back-compat. NEVER infer from disk presence; that's
    *  the bug this option fixes (cross-agent shadowing when both dirs exist). */
   launchCommand?: string
+  shellPath?: string
+  isWsl?: boolean
   agentStatusHooksEnabled: boolean
+  networkProxySettings?: NetworkProxySettings
 }
 
 function readInheritedPath(baseEnv: Record<string, string>): string {
@@ -465,6 +480,33 @@ function restoreOrStripOverlayEnv(
   delete baseEnv[keys.source]
 }
 
+function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
+  const sourceDir =
+    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+  if (sourceDir) {
+    return sourceDir
+  }
+
+  const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
+  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
+  // Why: nested Orca terminals inherit OPENCODE_CONFIG_DIR from the parent
+  // PTY. If there is no recorded source dir, that value is Orca-owned, not a
+  // user config. Treating it as user config makes child Orcas mirror Orca's
+  // hook dir and can create large OpenCode runtime trees per terminal.
+  if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
+    return undefined
+  }
+
+  return (
+    configDir ??
+    readShellStartupEnvVar(
+      'OPENCODE_CONFIG_DIR',
+      baseEnv.HOME ?? process.env.HOME,
+      baseEnv.SHELL ?? process.env.SHELL
+    )
+  )
+}
+
 /**
  * Mutates `baseEnv` in place with all host-local PTY env vars and returns it.
  *
@@ -482,6 +524,7 @@ export function buildPtyHostEnv(
   opts: BuildPtyHostEnvOptions
 ): Record<string, string> {
   mergePersistedWindowsPath(baseEnv)
+  Object.assign(baseEnv, buildConfiguredProxyEnv(opts.networkProxySettings))
 
   // Why: the Local path passes a baseEnv that already includes process.env
   // (LocalPtyProvider.spawn merges it before calling buildSpawnEnv). The
@@ -490,16 +533,7 @@ export function buildPtyHostEnv(
   // sources when reading a potentially-user-provided value keeps the guards
   // in lock-step across spawn paths without pushing process.env onto the
   // IPC wire unnecessarily.
-  const preexistingOpenCodeConfigDir =
-    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ??
-    process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR ??
-    baseEnv.OPENCODE_CONFIG_DIR ??
-    process.env.OPENCODE_CONFIG_DIR ??
-    readShellStartupEnvVar(
-      'OPENCODE_CONFIG_DIR',
-      baseEnv.HOME ?? process.env.HOME,
-      baseEnv.SHELL ?? process.env.SHELL
-    )
+  const preexistingOpenCodeConfigDir = resolveOpenCodeSourceConfigDir(baseEnv)
   const piAgentKind = detectPiAgentKindFromCommand(opts.launchCommand)
   const hasLaunchCommand =
     typeof opts.launchCommand === 'string' && opts.launchCommand.trim().length > 0
@@ -529,6 +563,8 @@ export function buildPtyHostEnv(
         // as OPENCODE_CONFIG_DIR; keep the original source so overlays do not
         // mirror overlays and drop the user's real config.
         baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
+      } else {
+        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
   } else {
@@ -649,7 +685,11 @@ export function buildPtyHostEnv(
   }
   applyTerminalAttributionEnv(baseEnv, {
     enabled: opts.githubAttributionEnabled,
-    userDataPath: opts.userDataPath
+    userDataPath: opts.userDataPath,
+    shellFamily: resolveAttributionShellFamily({
+      shellPath: opts.shellPath,
+      isWsl: opts.isWsl
+    })
   })
 
   return baseEnv
@@ -735,10 +775,12 @@ export function clearProviderPtyState(id: string): void {
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
+  // Why: SSH exit and connection-teardown paths bypass pty.ts's local onExit
+  // callback but still need to release Claude account-switch guards.
+  markClaudePtyExited(id)
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
-  rendererPausedOutputPtys.delete(id)
-  rendererPausedMode2031ScanTailByPty.delete(id)
+  interactiveOutputCharsByPty.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -815,6 +857,7 @@ export function setPtyOwnership(id: string, connectionId: string | null): void {
 let localDataUnsub: (() => void) | null = null
 let localExitUnsub: (() => void) | null = null
 let didFinishLoadHandler: (() => void) | null = null
+let didFinishLoadWebContents: WebContents | null = null
 
 // Why: the "Restart daemon" path needs to re-bind provider→renderer listeners
 // against the freshly-created adapter after replaceDaemonProvider swaps the
@@ -826,6 +869,14 @@ let rebindProviderListeners: (() => void) | null = null
 
 export function rebindLocalProviderListeners(): void {
   rebindProviderListeners?.()
+}
+
+function clearDidFinishLoadHandler(): void {
+  if (didFinishLoadHandler && didFinishLoadWebContents) {
+    didFinishLoadWebContents.removeListener('did-finish-load', didFinishLoadHandler)
+  }
+  didFinishLoadHandler = null
+  didFinishLoadWebContents = null
 }
 
 // Why: the "Restart daemon" flow needs to detach listeners from the current
@@ -864,7 +915,6 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:getMainBufferSnapshot')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
-  ipcMain.removeAllListeners('pty:pauseOutput')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:serializeBuffer:response')
 
@@ -898,7 +948,10 @@ export function registerPtyHandlers(
           skipCodexHomeEnv: ctx?.isWsl === true && !selectedCodexHomePath,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: ctx?.command,
-          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+          shellPath: ctx?.shellPath,
+          isWsl: ctx?.isWsl,
+          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+          networkProxySettings: getSettings?.()
         })
         // Why: agents need their own terminal handle at process start so they
         // can self-identify in orchestration messages without an extra RPC.
@@ -912,6 +965,9 @@ export function registerPtyHandlers(
         }
         if (preAllocatedHandle) {
           env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
+        }
+        if (ctx?.isWsl === true) {
+          addOrcaWslInteropEnv(env)
         }
         return env
       },
@@ -946,11 +1002,37 @@ export function registerPtyHandlers(
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
-  const BACKGROUND_OUTPUT_INPUT_QUIET_MS = 50
-  const BACKGROUND_OUTPUT_MAX_INPUT_HOLD_MS = 250
-  let lastRendererInputAt = Number.NEGATIVE_INFINITY
-  let lastRendererInputPtyId: string | null = null
-  let backgroundFlushHeldSince: number | null = null
+  const INTERACTIVE_REDRAW_MAX_CHARS = PTY_BATCH_FLUSH_CHUNK_CHARS
+  const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
+
+  function isLikelyInteractiveRedraw(data: string): boolean {
+    if (data.length <= INTERACTIVE_OUTPUT_MAX_CHARS) {
+      return true
+    }
+    // Why: Codex-style TUIs can repaint more than 1 KB per keypress. ANSI
+    // control redraws are still latency-sensitive, while plain command output
+    // should stay on the throughput batch path.
+    return data.length <= INTERACTIVE_REDRAW_MAX_CHARS && data.includes('\x1b[')
+  }
+
+  function shouldSendInteractiveOutputNow(id: string, data: string, now: number): boolean {
+    const lastInputAt = lastInputAtByPty.get(id)
+    if (lastInputAt === undefined || now - lastInputAt > INTERACTIVE_OUTPUT_WINDOW_MS) {
+      interactiveOutputCharsByPty.delete(id)
+      return false
+    }
+    if (!isLikelyInteractiveRedraw(data)) {
+      interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
+      return false
+    }
+    const usedChars = interactiveOutputCharsByPty.get(id) ?? 0
+    if (usedChars + data.length > INTERACTIVE_OUTPUT_BUDGET_CHARS) {
+      interactiveOutputCharsByPty.set(id, INTERACTIVE_OUTPUT_BUDGET_CHARS)
+      return false
+    }
+    interactiveOutputCharsByPty.set(id, usedChars + data.length)
+    return true
+  }
 
   function getChunkStartSeq(endSeq: number | undefined, data: string): number | undefined {
     return typeof endSeq === 'number' ? Math.max(0, endSeq - data.length) : undefined
@@ -993,32 +1075,15 @@ export function registerPtyHandlers(
     flushTimer = setTimeout(flushPendingData, delayMs)
   }
 
-  function hasRecentRendererInput(now: number): boolean {
-    return now - lastRendererInputAt < BACKGROUND_OUTPUT_INPUT_QUIET_MS
-  }
-
-  function hasPendingDataOutsideRecentInputPty(): boolean {
-    for (const id of pendingData.keys()) {
-      if (id !== lastRendererInputPtyId) {
-        return true
-      }
+  function flushPendingData(): void {
+    flushTimer = null
+    if (mainWindow.isDestroyed()) {
+      pendingData.clear()
+      return
     }
-    return false
-  }
-
-  function drainPendingDataEntries(
-    maxWrites: number,
-    shouldDrain: (id: string) => boolean = () => true
-  ): number {
     let writes = 0
-    while (writes < maxWrites) {
-      let next: [string, PendingPtyData] | undefined
-      for (const entry of pendingData.entries()) {
-        if (shouldDrain(entry[0])) {
-          next = entry
-          break
-        }
-      }
+    while (pendingData.size > 0 && writes < PTY_BATCH_FLUSH_MAX_WRITES) {
+      const next = pendingData.entries().next().value
       if (!next) {
         break
       }
@@ -1037,51 +1102,6 @@ export function registerPtyHandlers(
       mainWindow.webContents.send('pty:data', makePtyDataPayload(id, chunk, pending.startSeq))
       writes++
     }
-    return writes
-  }
-
-  function shouldHoldBackgroundFlushForInput(now: number): boolean {
-    if (
-      pendingData.size === 0 ||
-      !hasRecentRendererInput(now) ||
-      !hasPendingDataOutsideRecentInputPty()
-    ) {
-      backgroundFlushHeldSince = null
-      return false
-    }
-    backgroundFlushHeldSince ??= now
-    if (now - backgroundFlushHeldSince >= BACKGROUND_OUTPUT_MAX_INPUT_HOLD_MS) {
-      backgroundFlushHeldSince = null
-      return false
-    }
-    return true
-  }
-
-  function flushPendingData(): void {
-    flushTimer = null
-    if (mainWindow.isDestroyed()) {
-      pendingData.clear()
-      return
-    }
-    const now = performance.now()
-    let writes = 0
-    if (hasRecentRendererInput(now) && lastRendererInputPtyId !== null) {
-      writes += drainPendingDataEntries(
-        PTY_BATCH_FLUSH_MAX_WRITES,
-        (id) => id === lastRendererInputPtyId
-      )
-    }
-    if (shouldHoldBackgroundFlushForInput(now)) {
-      // Why: hidden PTYs can keep producing output while the user types in a
-      // foreground TUI. Holding background IPC briefly lets those bytes
-      // coalesce instead of flooding the renderer ahead of key echo frames.
-      const quietDelay = Math.max(1, BACKGROUND_OUTPUT_INPUT_QUIET_MS - (now - lastRendererInputAt))
-      schedulePendingDataFlush(quietDelay)
-      return
-    }
-    if (writes < PTY_BATCH_FLUSH_MAX_WRITES) {
-      writes += drainPendingDataEntries(PTY_BATCH_FLUSH_MAX_WRITES - writes)
-    }
     if (pendingData.size > 0) {
       // Why: a background terminal can dump megabytes at once. Yield between
       // small IPC slices so keystroke writes are not stuck behind one flush.
@@ -1095,42 +1115,6 @@ export function registerPtyHandlers(
     }
     clearTimeout(flushTimer)
     flushTimer = null
-  }
-
-  function setRendererPtyOutputPaused(id: string, paused: boolean): void {
-    if (paused) {
-      rendererPausedOutputPtys.add(id)
-      pendingData.delete(id)
-      clearFlushTimerIfIdle()
-      return
-    }
-    rendererPausedOutputPtys.delete(id)
-    rendererPausedMode2031ScanTailByPty.delete(id)
-  }
-
-  function respondToPausedRendererMode2031Subscribe(id: string, data: string): void {
-    const scan = scanMode2031Sequences(rendererPausedMode2031ScanTailByPty.get(id) ?? '', data)
-    if (scan.tail) {
-      rendererPausedMode2031ScanTailByPty.set(id, scan.tail)
-    } else {
-      rendererPausedMode2031ScanTailByPty.delete(id)
-    }
-    if (!scan.subscribe) {
-      return
-    }
-    const provider = tryGetProviderForPty(id)
-    if (!provider) {
-      return
-    }
-    const mode = resolveTerminalColorSchemeMode(getSettings?.(), nativeTheme.shouldUseDarkColors)
-    try {
-      // Why: paused renderer panes still need protocol replies that affect how
-      // TUIs draw into the main-owned snapshot. Without this, Codex starts in a
-      // fallback prompt style and the restored composer loses its background.
-      provider.write(id, mode2031SequenceFor(mode))
-    } catch {
-      // Best effort; renderer restore will continue from whatever the TUI emits.
-    }
   }
 
   // Why: extracted so the "Restart daemon" flow can rebind against the fresh
@@ -1165,20 +1149,14 @@ export function registerPtyHandlers(
         pendingData.clear()
         return
       }
-      if (rendererPausedOutputPtys.has(payload.id)) {
-        respondToPausedRendererMode2031Subscribe(payload.id, payload.data)
-        pendingData.delete(payload.id)
-        clearFlushTimerIfIdle()
-        return
-      }
       const existing = pendingData.get(payload.id)
       const pending = appendPendingPtyData(existing, payload.data, startSeq)
       const nextData = pending.data
-      const lastInputAt = lastInputAtByPty.get(payload.id)
-      const isInteractiveOutput =
-        nextData.length <= INTERACTIVE_OUTPUT_MAX_CHARS &&
-        lastInputAt !== undefined &&
-        performance.now() - lastInputAt <= INTERACTIVE_OUTPUT_WINDOW_MS
+      const isInteractiveOutput = shouldSendInteractiveOutputNow(
+        payload.id,
+        nextData,
+        performance.now()
+      )
       if (isInteractiveOutput) {
         pendingData.delete(payload.id)
         clearFlushTimerIfIdle()
@@ -1218,10 +1196,7 @@ export function registerPtyHandlers(
           pendingData.delete(payload.id)
         }
         lastInputAtByPty.delete(payload.id)
-        if (lastRendererInputPtyId === payload.id) {
-          lastRendererInputPtyId = null
-        }
-        rendererPausedOutputPtys.delete(payload.id)
+        interactiveOutputCharsByPty.delete(payload.id)
         mainWindow.webContents.send('pty:exit', payload)
       }
     })
@@ -1320,11 +1295,9 @@ export function registerPtyHandlers(
   // Why: only applies to LocalPtyProvider where PTYs live in the Electron main
   // process and can become orphaned on page reload. Daemon-backed sessions
   // survive renderer restarts by design — orphan cleanup would kill them.
+  clearDidFinishLoadHandler()
   if (localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
-    if (didFinishLoadHandler) {
-      mainWindow.webContents.removeListener('did-finish-load', didFinishLoadHandler)
-    }
     didFinishLoadHandler = () => {
       const killed = lp.killOrphanedPtys(lp.advanceGeneration() - 1)
       for (const { id } of killed) {
@@ -1334,6 +1307,7 @@ export function registerPtyHandlers(
         runtime?.onPtyExit(id, -1)
       }
     }
+    didFinishLoadWebContents = mainWindow.webContents
     mainWindow.webContents.on('did-finish-load', didFinishLoadHandler)
   }
 
@@ -1396,7 +1370,10 @@ export function registerPtyHandlers(
           skipCodexHomeEnv,
           githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: args.command,
-          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+          shellPath: daemonShellOverride ?? process.env.COMSPEC,
+          isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, args.cwd),
+          agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+          networkProxySettings: getSettings?.()
         })
       }
 
@@ -1464,6 +1441,19 @@ export function registerPtyHandlers(
       }
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
+      }
+      if (args.telemetry) {
+        const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
+        const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
+        const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
+        if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
+          track('agent_started', {
+            agent_kind: agentKindParse.data,
+            launch_source: launchSourceParse.data,
+            request_kind: requestKindParse.data,
+            ...getCohortAtEmit()
+          })
+        }
       }
       // Why: runtime-owned CLI PTYs bypass the renderer `pty:spawn` handler,
       // so record their spawn-time paneKey here too. Synthetic hook titles and
@@ -1840,7 +1830,10 @@ export function registerPtyHandlers(
             skipCodexHomeEnv,
             githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
             launchCommand: args.command,
-            agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.())
+            shellPath: effectiveShellOverride ?? process.env.COMSPEC,
+            isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, args.cwd),
+            agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
+            networkProxySettings: getSettings?.()
           })
         } catch (err) {
           // Why: buildPtyHostEnv has filesystem side-effects (Pi overlay
@@ -2050,9 +2043,9 @@ export function registerPtyHandlers(
       // only settles its own generation. A remount that replaces the entry
       // with a new gen must not be stomped by the old PTY's teardown.
       if (validatedPaneKey && rendererPreSignaled) {
-        const gen = pendingByPaneKey.get(validatedPaneKey)
-        if (gen !== undefined) {
-          ptyPendingGenByPtyId.set(result.id, gen)
+        const pending = pendingByPaneKey.get(validatedPaneKey)
+        if (pending) {
+          ptyPendingGenByPtyId.set(result.id, pending.gen)
         }
       }
 
@@ -2195,9 +2188,8 @@ export function registerPtyHandlers(
     }
     try {
       const now = performance.now()
-      lastRendererInputAt = now
-      lastRendererInputPtyId = args.id
       lastInputAtByPty.set(args.id, now)
+      interactiveOutputCharsByPty.set(args.id, 0)
       provider.write(args.id, args.data)
       return true
     } catch {
@@ -2222,9 +2214,8 @@ export function registerPtyHandlers(
     }
     try {
       const now = performance.now()
-      lastRendererInputAt = now
-      lastRendererInputPtyId = args.id
       lastInputAtByPty.set(args.id, now)
+      interactiveOutputCharsByPty.set(args.id, 0)
       provider.write(args.id, args.data)
       return true
     } catch {
@@ -2235,14 +2226,6 @@ export function registerPtyHandlers(
   ipcMain.on('pty:write', (_event, args: { id: string; data: string }) => {
     writePtyInput(args)
   })
-
-  ipcMain.on('pty:pauseOutput', (_event, args: { id?: string; paused?: boolean }) => {
-    if (typeof args?.id !== 'string') {
-      return
-    }
-    setRendererPtyOutputPaused(args.id, args.paused === true)
-  })
-
   ipcMain.handle('pty:writeAccepted', (_event, args: { id: string; data: string }): boolean => {
     return writePtyInputAccepted(args)
   })
@@ -2401,11 +2384,11 @@ export function registerPtyHandlers(
   // or pane unmount before settle, renderer calls clear with the same gen.
   ipcMain.handle(
     'pty:declarePendingPaneSerializer',
-    async (_event, args: { paneKey?: unknown }): Promise<number> => {
+    async (event, args: { paneKey?: unknown }): Promise<number> => {
       if (!isValidPaneKey(args.paneKey)) {
         throw new Error('Invalid paneKey')
       }
-      return declarePendingPaneSerializer(args.paneKey)
+      return declarePendingPaneSerializer(args.paneKey, event?.sender)
     }
   )
 

@@ -1,6 +1,11 @@
 /* eslint-disable max-lines -- Why: this file keeps git worktree create/remove behavior together so local cleanup and creation invariants stay in one place. */
 import { stat } from 'fs/promises'
 import { join, posix, win32 } from 'path'
+import {
+  branchHasNoUnmergedChangesOnAnyTarget,
+  getBranchCleanupTargetRefs,
+  refreshBranchCleanupTargetRefs
+} from '../../shared/git-branch-cleanup'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import type {
   GitWorktreeInfo,
@@ -18,6 +23,8 @@ export type AddWorktreeResult = {
 type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
 }
+
+const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
 function getErrorCode(error: unknown): string | undefined {
   return typeof error === 'object' && error !== null && 'code' in error
@@ -41,6 +48,12 @@ function getErrorText(error: unknown): string {
 
 function isNotGitRepositoryError(error: unknown): boolean {
   return /not a git repository/i.test(getErrorText(error))
+}
+
+function isUnsupportedWorktreeListZError(error: unknown): boolean {
+  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+    getErrorText(error)
+  )
 }
 
 function normalizeLocalBranchRef(branch: string): string {
@@ -106,12 +119,12 @@ function looksLikeWindowsPath(pathValue: string): boolean {
 /**
  * Parse the porcelain output of `git worktree list --porcelain`.
  */
-export function parseWorktreeList(output: string): GitWorktreeInfo[] {
+export function parseWorktreeList(
+  output: string,
+  options: { nulDelimited?: boolean } = {}
+): GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = []
-  const blocks = output
-    .trim()
-    .split(/\r?\n\r?\n/)
-    .map((block) => block.trim().split(/\r?\n/))
+  const blocks = options.nulDelimited ? splitNulWorktreeList(output) : splitLineWorktreeList(output)
 
   for (const lines of blocks) {
     if (lines.length === 0) {
@@ -154,30 +167,69 @@ export function parseWorktreeList(output: string): GitWorktreeInfo[] {
   return worktrees
 }
 
+function splitLineWorktreeList(output: string): string[][] {
+  return output
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim().split(/\r?\n/))
+}
+
+function splitNulWorktreeList(output: string): string[][] {
+  if (!output.includes('\0')) {
+    return splitLineWorktreeList(output)
+  }
+
+  const blocks: string[][] = []
+  let currentBlock: string[] = []
+
+  for (const field of output.split('\0')) {
+    if (field) {
+      currentBlock.push(field)
+      continue
+    }
+    if (currentBlock.length > 0) {
+      blocks.push(currentBlock)
+      currentBlock = []
+    }
+  }
+
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock)
+  }
+
+  return blocks
+}
+
+async function readWorktreeList(repoPath: string): Promise<GitWorktreeInfo[]> {
+  try {
+    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
+      cwd: repoPath
+    })
+    return parseWorktreeList(stdout, { nulDelimited: true })
+  } catch (error) {
+    if (!isUnsupportedWorktreeListZError(error)) {
+      throw error
+    }
+  }
+
+  // Why: `-z` is required to preserve worktree paths containing newlines, but
+  // Git <2.36 rejects it. Keep the old parser as a compatibility fallback.
+  const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
+    cwd: repoPath
+  })
+  return parseWorktreeList(stdout)
+}
+
 /**
  * List all worktrees for a git repo at the given path.
  */
 export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]> {
   try {
-    // Why: do not pass `-z` here. `-z` requires Git ≥ 2.36; older Git rejects
-    // it, listWorktrees returns [], and every create flow throws "Worktree
-    // created but not found in listing" (issue #1453).
-    const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], {
-      cwd: repoPath
-    })
-    const worktrees = parseWorktreeList(stdout).map((worktree) => {
+    const worktrees = (await readWorktreeList(repoPath)).map((worktree) => {
       const translatedPath = translateWorktreePath(worktree.path, repoPath)
       return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
     })
-    return Promise.all(
-      worktrees.map(async (worktree) => {
-        if (worktree.isBare || worktree.isSparse) {
-          return worktree
-        }
-        const isSparse = await detectSparseCheckout(worktree.path)
-        return isSparse ? { ...worktree, isSparse } : worktree
-      })
-    )
+    return annotateSparseCheckoutStatus(worktrees)
   } catch (err) {
     if (getErrorCode(err) === 'ENOENT') {
       try {
@@ -192,12 +244,40 @@ export async function listWorktrees(repoPath: string): Promise<GitWorktreeInfo[]
     if (isNotGitRepositoryError(err)) {
       return []
     }
-    // Why: a silent catch turned issue #1453's underlying
-    // "git: unknown switch -z" into the opaque "not found in listing" toast.
+    // Why: a silent catch turns git compatibility or repo-state failures into
+    // opaque downstream errors like "Worktree created but not found in listing".
     // Surface the cause so future regressions show up immediately.
     console.warn(`[git/worktree] listWorktrees failed for ${repoPath}:`, err)
     return []
   }
+}
+
+async function annotateSparseCheckoutStatus(
+  worktrees: GitWorktreeInfo[]
+): Promise<GitWorktreeInfo[]> {
+  const annotated = [...worktrees]
+  let nextIndex = 0
+
+  async function detectNext(): Promise<void> {
+    while (nextIndex < worktrees.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const worktree = worktrees[index]
+      if (!worktree || worktree.isBare || worktree.isSparse) {
+        continue
+      }
+      const isSparse = await detectSparseCheckout(worktree.path)
+      if (isSparse) {
+        annotated[index] = { ...worktree, isSparse }
+      }
+    }
+  }
+
+  // Why: worktree refreshes run on git-status polling paths. Many worktrees can
+  // otherwise fan out `.git`/sparse-checkout filesystem probes all at once.
+  const workerCount = Math.min(SPARSE_CHECKOUT_DETECTION_CONCURRENCY, worktrees.length)
+  await Promise.all(Array.from({ length: workerCount }, () => detectNext()))
+  return annotated
 }
 
 async function refreshLocalBaseRefForWorktreeCreate(
@@ -510,6 +590,22 @@ export async function removeWorktree(
     await gitExecFileAsync(['branch', deleteFlag, '--', branchName], { cwd: repoPath })
     return {}
   } catch (error) {
+    if (!options.forceBranchDelete && branchHead) {
+      try {
+        if (
+          await deleteAlreadyMergedBranchAfterSafeDeleteFailure(repoPath, branchName, branchHead)
+        ) {
+          return {}
+        }
+      } catch (alreadyMergedDeleteError) {
+        // Why: the worktree is already gone; a raced branch cleanup should
+        // degrade to the preserved-branch recovery path instead of failing delete.
+        console.warn(
+          `[git] Failed to delete already-merged local branch "${branchName}" after removing worktree`,
+          alreadyMergedDeleteError
+        )
+      }
+    }
     // Expected when the branch still has unmerged/unpublished commits: keep it.
     // Deleting a worktree must never silently discard commits.
     console.warn(
@@ -518,6 +614,24 @@ export async function removeWorktree(
     )
     return { preservedBranch: { branchName, ...(branchHead ? { head: branchHead } : {}) } }
   }
+}
+
+async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
+  repoPath: string,
+  branchName: string,
+  branchHead: string
+): Promise<boolean> {
+  const runGit = (args: string[]) => gitExecFileAsync(args, { cwd: repoPath })
+  const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
+  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
+  // Why: squash merges rewrite commit IDs, so `branch -d` can reject a branch
+  // whose changes are already on the base ref. Delete only when Git can prove
+  // the branch contributes no tree changes to that base.
+  if (!(await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, targetRefs))) {
+    return false
+  }
+  await forceDeleteLocalBranch(repoPath, branchName, branchHead)
+  return true
 }
 
 export async function forceDeleteLocalBranch(

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { GitBranch, GitBranchPlus, Settings } from 'lucide-react'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -20,7 +20,8 @@ type ProjectAddedContentProps = {
 
 type SetupStepProps = ProjectAddedContentProps
 
-const DEFAULT_PROJECT_ADDED_WORKTREE_NAME = 'new-workspace-1'
+const DEFAULT_PROJECT_ADDED_WORKTREE_NAME = 'new-worktree-1'
+const EXISTING_WORKTREE_DEFAULT_LIMIT = 10
 
 export function getInitialProjectAddedWorktreeName(
   defaultWorktreeName: string | undefined
@@ -50,10 +51,27 @@ export function getProjectAddedChoiceOrder(
 }
 
 export function getInitialProjectAddedChoice(
-  _hiddenWorktreeCount: number,
+  hiddenWorktreeCount: number,
   _primaryBranchName?: string
 ): ProjectAddedChoice {
+  // Why: a small discovered set is usually worth importing directly; larger
+  // repos are noisy enough that starting fresh should remain the default.
+  if (hiddenWorktreeCount > 0 && hiddenWorktreeCount < EXISTING_WORKTREE_DEFAULT_LIMIT) {
+    return 'existing'
+  }
   return 'create'
+}
+
+export function getSyncedProjectAddedChoice(
+  currentChoice: ProjectAddedChoice,
+  choiceManuallySelected: boolean,
+  hiddenWorktreeCount: number,
+  primaryBranchName?: string
+): ProjectAddedChoice {
+  if (choiceManuallySelected) {
+    return currentChoice
+  }
+  return getInitialProjectAddedChoice(hiddenWorktreeCount, primaryBranchName)
 }
 
 function formatWorktreeCount(count: number): string {
@@ -142,6 +160,7 @@ export function ProjectAddedContent({
   const [choice, setChoice] = useState<ProjectAddedChoice>(() =>
     getInitialProjectAddedChoice(hiddenWorktreeCount, primaryBranchName)
   )
+  const [choiceManuallySelected, setChoiceManuallySelected] = useState(false)
   const radioGroupRef = useRef<HTMLDivElement>(null)
   const radioFocusFrameRef = useRef<number | null>(null)
   const trimmedName = worktreeName.trim()
@@ -149,6 +168,19 @@ export function ProjectAddedContent({
   const normalizedPrimaryBranchName = primaryBranchName.trim()
   const choices = getProjectAddedChoiceOrder(hiddenWorktreeCount, normalizedPrimaryBranchName)
   const selectedChoice = choices.includes(choice) ? choice : (choices[0] ?? 'create')
+
+  useEffect(() => {
+    // Why: hidden worktree detection can finish after this step mounts, but
+    // should not override an explicit user choice.
+    setChoice((currentChoice) =>
+      getSyncedProjectAddedChoice(
+        currentChoice,
+        choiceManuallySelected,
+        hiddenWorktreeCount,
+        primaryBranchName
+      )
+    )
+  }, [choiceManuallySelected, hiddenWorktreeCount, primaryBranchName])
 
   const cancelRadioFocusFrame = useCallback((): void => {
     if (radioFocusFrameRef.current === null) {
@@ -172,6 +204,7 @@ export function ProjectAddedContent({
   const cycleChoice = useCallback(() => {
     const index = choices.indexOf(selectedChoice)
     const nextChoice = choices[(index + 1) % choices.length] ?? 'create'
+    setChoiceManuallySelected(true)
     setChoice(nextChoice)
     cancelRadioFocusFrame()
     radioFocusFrameRef.current = requestAnimationFrame(() => {
@@ -181,6 +214,13 @@ export function ProjectAddedContent({
         ?.focus()
     })
   }, [cancelRadioFocusFrame, choices, selectedChoice])
+
+  const markCreateChoiceSelected = useCallback(() => {
+    // Why: editing the name means the user has committed to the create flow,
+    // even if hidden worktree detection finishes afterward.
+    setChoiceManuallySelected(true)
+    setChoice('create')
+  }, [])
 
   const handlePrimaryAction = (): void => {
     if (selectedChoice === 'primary') {
@@ -216,7 +256,10 @@ export function ProjectAddedContent({
               <StartChoiceCard
                 value="primary"
                 selected={selectedChoice === 'primary'}
-                onSelect={() => setChoice('primary')}
+                onSelect={() => {
+                  setChoiceManuallySelected(true)
+                  setChoice('primary')
+                }}
                 onArrowNav={cycleChoice}
                 icon={<GitBranch className="size-4" />}
                 title={`Start from ${normalizedPrimaryBranchName}`}
@@ -227,7 +270,10 @@ export function ProjectAddedContent({
               <StartChoiceCard
                 value="existing"
                 selected={selectedChoice === 'existing'}
-                onSelect={() => setChoice('existing')}
+                onSelect={() => {
+                  setChoiceManuallySelected(true)
+                  setChoice('existing')
+                }}
                 onArrowNav={cycleChoice}
                 icon={<GitBranch className="size-4" />}
                 title="Use existing worktrees"
@@ -237,11 +283,14 @@ export function ProjectAddedContent({
             <StartChoiceCard
               value="create"
               selected={selectedChoice === 'create'}
-              onSelect={() => setChoice('create')}
+              onSelect={() => {
+                setChoiceManuallySelected(true)
+                setChoice('create')
+              }}
               onArrowNav={cycleChoice}
               icon={<GitBranchPlus className="size-4" />}
               title="Create a new worktree"
-              caption="Start a fresh workspace from this project."
+              caption="Start a fresh worktree from this project."
             />
           </div>
         ) : null}
@@ -252,13 +301,17 @@ export function ProjectAddedContent({
               htmlFor="project-added-worktree-name"
               className="block text-[11px] font-medium text-muted-foreground"
             >
-              Workspace name
+              Worktree name
             </label>
             <Input
               id="project-added-worktree-name"
               value={worktreeName}
-              onChange={(event) => setWorktreeName(event.target.value)}
-              placeholder="new-workspace"
+              onFocus={markCreateChoiceSelected}
+              onChange={(event) => {
+                markCreateChoiceSelected()
+                setWorktreeName(event.target.value)
+              }}
+              placeholder="new-worktree"
               className="h-9"
             />
           </div>

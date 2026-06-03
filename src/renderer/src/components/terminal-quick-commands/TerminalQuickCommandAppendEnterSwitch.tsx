@@ -8,7 +8,7 @@ export function TerminalQuickCommandAppendEnterSwitch({
   onToggle
 }: TerminalQuickCommandAppendEnterSwitchProps): React.JSX.Element {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-md border border-border/50 px-3 py-2">
+    <div className="flex items-start justify-between gap-4">
       <div className="space-y-0.5">
         <div className="text-sm font-medium">Append Enter</div>
         <div className="text-xs text-muted-foreground">

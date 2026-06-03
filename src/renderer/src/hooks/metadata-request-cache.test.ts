@@ -82,4 +82,36 @@ describe('metadata-request-cache', () => {
     await expect(pending).resolves.toEqual(['old-user'])
     expect(getFreshMetadata(store, 'team:members', 1_100)).toBeNull()
   })
+
+  it('prunes stale cache entries when they age past the metadata ttl', async () => {
+    const store = createMetadataRequestStore<string[]>()
+
+    await loadMetadata(
+      store,
+      'repo:labels',
+      () => Promise.resolve(['bug']),
+      () => 1_000
+    )
+
+    expect(store.cache.has('repo:labels')).toBe(true)
+    expect(getFreshMetadata(store, 'repo:labels', 301_000)).toBeNull()
+    expect(store.cache.has('repo:labels')).toBe(false)
+  })
+
+  it('bounds retained cache entries by newest fetch time', async () => {
+    const store = createMetadataRequestStore<string[]>()
+
+    for (let i = 0; i <= 500; i++) {
+      await loadMetadata(
+        store,
+        `repo-${i}:labels`,
+        () => Promise.resolve([`label-${i}`]),
+        () => i
+      )
+    }
+
+    expect(store.cache.size).toBe(500)
+    expect(store.cache.has('repo-0:labels')).toBe(false)
+    expect(store.cache.get('repo-500:labels')?.data).toEqual(['label-500'])
+  })
 })

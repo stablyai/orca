@@ -52,7 +52,8 @@ export function RepositoryPane({
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const symlinksEnabled = useAppStore((state) => state.settings?.experimentalWorktreeSymlinks)
+  const settings = useAppStore((state) => state.settings)
+  const symlinksEnabled = settings?.experimentalWorktreeSymlinks
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
@@ -117,9 +118,13 @@ export function RepositoryPane({
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
   const identityEntries = allEntries.filter((entry) =>
-    ['Display Name', 'Project Icon', 'Default Worktree Base', 'Remove Project'].includes(
-      entry.title
-    )
+    [
+      'Display Name',
+      'Project Icon',
+      'Default Worktree Base',
+      'Worktree Location',
+      'Remove Project'
+    ].includes(entry.title)
   )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
@@ -243,21 +248,65 @@ export function RepositoryPane({
         </SearchableSetting>
 
         {!isFolder ? (
-          <SearchableSetting
-            title="Default Worktree Base"
-            description="Default base branch or ref when creating worktrees."
-            keywords={[repo.displayName, 'base ref', 'branch']}
-            className="space-y-3"
-            forceVisible={forceFullPaneForRepoMatch}
-          >
-            <Label className="text-sm font-semibold">Default Worktree Base</Label>
-            <BaseRefPicker
-              repoId={repo.id}
-              currentBaseRef={repo.worktreeBaseRef}
-              onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
-              onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}
-            />
-          </SearchableSetting>
+          <>
+            <SearchableSetting
+              title="Default Worktree Base"
+              description="Default base branch or ref when creating worktrees."
+              keywords={[repo.displayName, 'base ref', 'branch']}
+              className="space-y-3"
+              forceVisible={forceFullPaneForRepoMatch}
+            >
+              <Label className="text-sm font-semibold">Default Worktree Base</Label>
+              <BaseRefPicker
+                repoId={repo.id}
+                currentBaseRef={repo.worktreeBaseRef}
+                onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
+                onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}
+              />
+            </SearchableSetting>
+
+            <SearchableSetting
+              title="Worktree Location"
+              description="Project-specific directory for new worktrees."
+              keywords={[
+                repo.displayName,
+                'worktree path',
+                'workspace path',
+                'directory',
+                'relative',
+                '../worktrees'
+              ]}
+              className="space-y-2"
+              forceVisible={forceFullPaneForRepoMatch}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-sm font-semibold">Worktree Location</Label>
+                {repo.worktreeBasePath ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateRepo(repo.id, { worktreeBasePath: undefined })}
+                  >
+                    Use Global
+                  </Button>
+                ) : null}
+              </div>
+              <Input
+                value={repo.worktreeBasePath ?? ''}
+                placeholder={settings?.workspaceDir ?? ''}
+                onChange={(e) =>
+                  updateRepo(repo.id, {
+                    worktreeBasePath: e.target.value.trim() ? e.target.value : undefined
+                  })
+                }
+                className="h-9 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Relative paths resolve from this project root.
+              </p>
+            </SearchableSetting>
+          </>
         ) : null}
       </section>
     ) : null,

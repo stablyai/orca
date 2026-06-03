@@ -42,7 +42,7 @@ export function useFileExplorerReveal({
   setFlashingPath,
   flashTimeoutRef,
   virtualizer
-}: UseFileExplorerRevealParams): void {
+}: UseFileExplorerRevealParams): () => void {
   const revealScrollFrameRef = useRef<number | null>(null)
   const revealScrollTimeoutRef = useRef<number | null>(null)
 
@@ -57,18 +57,13 @@ export function useFileExplorerReveal({
     }
   }, [])
 
-  // Why: reveal owns the flash and scroll timers it schedules; keep cleanup on
-  // hook unmount so no-worktree renders preserve the existing timeout behavior.
-  useEffect(
-    () => () => {
-      cancelRevealScroll()
-      if (flashTimeoutRef.current !== null) {
-        window.clearTimeout(flashTimeoutRef.current)
-        flashTimeoutRef.current = null
-      }
-    },
-    [cancelRevealScroll, flashTimeoutRef]
-  )
+  const cancelRevealTimers = useCallback((): void => {
+    cancelRevealScroll()
+    if (flashTimeoutRef.current !== null) {
+      window.clearTimeout(flashTimeoutRef.current)
+      flashTimeoutRef.current = null
+    }
+  }, [cancelRevealScroll, flashTimeoutRef])
 
   const pendingRevealAncestorDirs = useMemo(() => {
     if (
@@ -225,4 +220,6 @@ export function useFileExplorerReveal({
     virtualizer,
     worktreePath
   ])
+
+  return cancelRevealTimers
 }

@@ -12,6 +12,7 @@ import {
   encodeTerminalStreamText,
   type TerminalStreamFrame
 } from '../../../../shared/terminal-stream-protocol'
+import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../shared/feature-education-telemetry'
 
 // Why: when a mobile client subscribes the server resizes the PTY to phone
 // dims and serializes the buffer. Sending only the visible screen meant
@@ -126,21 +127,27 @@ function createTerminalOutputBatcher(onFlush: (data: string) => void): {
   }
 }
 
-function isTerminalInputLockedForClient(
+async function reclaimTerminalInputForClient(
   runtime: OrcaRuntimeService,
   ptyId: string,
   client: TerminalViewportClient | undefined
-): boolean {
+): Promise<boolean> {
   if (client?.type === 'mobile') {
-    return false
+    return true
   }
   // Why: pre-refactor mobile builds did not send client metadata. Desktop
   // callers we control now identify as desktop, so keep legacy mobile input
   // working without opening the new desktop path.
   if (!client) {
-    return false
+    return true
   }
-  return runtime.getDriver(ptyId).kind === 'mobile'
+  if (runtime.getDriver(ptyId).kind !== 'mobile') {
+    return true
+  }
+  // Why: a live desktop typing into a remotely driven terminal is an explicit
+  // take-back. Otherwise a stale mobile socket can black-hole input until
+  // heartbeat cleanup, or forever behind a proxy that keeps it warm.
+  return runtime.reclaimTerminalForDesktop(ptyId)
 }
 
 function resolveMobileFloorClientId(
@@ -352,7 +359,8 @@ const TerminalSplit = TerminalHandle.extend({
     .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
     .optional(),
   command: OptionalString,
-  env: z.record(z.string(), z.string()).optional()
+  env: z.record(z.string(), z.string()).optional(),
+  telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional()
 })
 
 const TerminalStop = z.object({
@@ -507,6 +515,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    name: 'terminal.isRunningAgent',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      isRunningAgent: await runtime.isTerminalRunningAgent(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.rename',
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
@@ -526,7 +541,10 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => {
       const leaf = runtime.resolveLeafForHandle(params.terminal)
       const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null
-      if (leaf?.ptyId && isTerminalInputLockedForClient(runtime, leaf.ptyId, params.client)) {
+      if (
+        leaf?.ptyId &&
+        !(await reclaimTerminalInputForClient(runtime, leaf.ptyId, params.client))
+      ) {
         return {
           send: {
             handle: params.terminal,
@@ -586,7 +604,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       split: await runtime.splitTerminal(params.terminal, {
         direction: params.direction,
         command: params.command,
-        env: params.env
+        env: params.env,
+        telemetrySource: params.telemetrySource
       })
     })
   }),
@@ -780,12 +799,17 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (!text) {
             return
           }
-          if (isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
-            return
-          }
-          void runtime
-            .sendTerminal(stream.terminal, { text, enter: false, interrupt: false })
-            .then(async () => {
+          void reclaimTerminalInputForClient(runtime, stream.ptyId, stream.client)
+            .then((canSend) => {
+              if (!canSend) {
+                return null
+              }
+              return runtime.sendTerminal(stream.terminal, { text, enter: false, interrupt: false })
+            })
+            .then(async (result) => {
+              if (!result) {
+                return
+              }
               if (stream.isMobile && stream.client?.id) {
                 await runtime.mobileTookFloor(stream.ptyId, stream.client.id)
               }
@@ -1057,6 +1081,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!useBinaryStream) {
         const read = await runtime.readTerminal(params.terminal)
         const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
+        // Why: legacy JSON streams register cleanup after snapshot awaits; if
+        // the socket closed meanwhile, registering now would orphan listeners.
+        if (signal?.aborted) {
+          return
+        }
         const size = runtime.getTerminalSize(ptyId)
         const displayMode = runtime.getMobileDisplayMode(ptyId)
         const seq = runtime.getLayout(ptyId)?.seq
@@ -1174,12 +1203,21 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             if (!text) {
               return
             }
-            if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
-              return
-            }
-            void runtime
-              .sendTerminal(params.terminal, { text, enter: false, interrupt: false })
-              .then(async () => {
+            void reclaimTerminalInputForClient(runtime, ptyId, params.client)
+              .then((canSend) => {
+                if (!canSend) {
+                  return null
+                }
+                return runtime.sendTerminal(params.terminal, {
+                  text,
+                  enter: false,
+                  interrupt: false
+                })
+              })
+              .then(async (result) => {
+                if (!result) {
+                  return
+                }
                 if (isMobile && clientId) {
                   await runtime.mobileTookFloor(ptyId, clientId)
                 }

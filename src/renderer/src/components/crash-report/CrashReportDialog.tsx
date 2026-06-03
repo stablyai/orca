@@ -59,6 +59,9 @@ export function CrashReportDialog(): React.JSX.Element {
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
+  // Why: account lookup can resolve after the dialog closes or reopens.
+  // Sequence the request so a stale viewer is never used for submission.
+  const viewerRequestIdRef = useRef(0)
   const deferredNotes = useDeferredValue(notes)
   const diagnosticText = useMemo(
     // Why: formatting applies redaction and truncation over the full crash
@@ -67,10 +70,46 @@ export function CrashReportDialog(): React.JSX.Element {
     [deferredNotes, report]
   )
 
-  const openCrashReport = useCallback((nextReport: CrashReportRecord): void => {
-    setReport(nextReport)
-    setOpen(true)
+  const clearViewer = useCallback((): void => {
+    viewerRequestIdRef.current += 1
+    setViewer(null)
   }, [])
+
+  const loadViewerForOpenDialog = useCallback((): void => {
+    const requestId = ++viewerRequestIdRef.current
+    setViewer(null)
+    void window.api.gh
+      .viewer()
+      .then((nextViewer) => {
+        if (mountedRef.current && requestId === viewerRequestIdRef.current) {
+          setViewer(nextViewer)
+        }
+      })
+      .catch((error) => {
+        if (mountedRef.current && requestId === viewerRequestIdRef.current) {
+          setViewer(null)
+          console.error('Failed to load GitHub viewer for crash report:', error)
+        }
+      })
+  }, [mountedRef])
+
+  const openDialog = useCallback((): void => {
+    setOpen(true)
+    loadViewerForOpenDialog()
+  }, [loadViewerForOpenDialog])
+
+  const closeDialog = useCallback((): void => {
+    clearViewer()
+    setOpen(false)
+  }, [clearViewer])
+
+  const openCrashReport = useCallback(
+    (nextReport: CrashReportRecord): void => {
+      setReport(nextReport)
+      openDialog()
+    },
+    [openDialog]
+  )
 
   const loadCrashReport = useCallback(
     async (promptIfPresent: boolean): Promise<void> => {
@@ -95,8 +134,8 @@ export function CrashReportDialog(): React.JSX.Element {
           return
         }
         setReport(displayedReport)
-        if (nextReport && promptIfPresent && mountedRef.current) {
-          setOpen(true)
+        if (nextReport && promptIfPresent) {
+          openDialog()
         }
       } catch (error) {
         console.error('Failed to load crash report:', error)
@@ -106,7 +145,7 @@ export function CrashReportDialog(): React.JSX.Element {
         }
       }
     },
-    [mountedRef]
+    [mountedRef, openDialog]
   )
 
   useEffect(() => {
@@ -121,11 +160,11 @@ export function CrashReportDialog(): React.JSX.Element {
     return window.api.ui.onOpenCrashReport(() => {
       void loadCrashReport(false).then(() => {
         if (mountedRef.current) {
-          setOpen(true)
+          openDialog()
         }
       })
     })
-  }, [loadCrashReport, mountedRef])
+  }, [loadCrashReport, mountedRef, openDialog])
 
   useEffect(() => {
     const pendingReport = takePendingReactErrorBoundaryReport()
@@ -148,32 +187,6 @@ export function CrashReportDialog(): React.JSX.Element {
       )
     }
   }, [openCrashReport])
-
-  useEffect(() => {
-    if (!open) {
-      setViewer(null)
-      return
-    }
-
-    let cancelled = false
-    void window.api.gh
-      .viewer()
-      .then((nextViewer) => {
-        if (!cancelled) {
-          setViewer(nextViewer)
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setViewer(null)
-          console.error('Failed to load GitHub viewer for crash report:', error)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [open])
 
   const handleCopy = async (): Promise<void> => {
     const result = await window.api.crashReports.copyLatestDiagnostics(
@@ -198,7 +211,7 @@ export function CrashReportDialog(): React.JSX.Element {
   const handleDismiss = async (): Promise<void> => {
     await dismissReportIfNeeded()
     if (mountedRef.current) {
-      setOpen(false)
+      closeDialog()
     }
   }
 
@@ -226,7 +239,7 @@ export function CrashReportDialog(): React.JSX.Element {
       setReport(result.report)
       setNotes('')
       toast.success('Crash report sent.')
-      setOpen(false)
+      closeDialog()
     } catch (error) {
       toast.error('Failed to send crash report.')
       console.error('Failed to submit crash report:', error)
@@ -245,6 +258,7 @@ export function CrashReportDialog(): React.JSX.Element {
           return
         }
         if (!nextOpen) {
+          clearViewer()
           void dismissReportIfNeeded().finally(() => {
             if (mountedRef.current) {
               setOpen(false)
@@ -252,7 +266,7 @@ export function CrashReportDialog(): React.JSX.Element {
           })
           return
         }
-        setOpen(true)
+        openDialog()
       }}
     >
       <DialogContent className="sm:max-w-xl">

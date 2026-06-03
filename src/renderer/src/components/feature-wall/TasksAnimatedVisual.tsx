@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this visual is a timed storyboard; phase and cursor state intentionally advance from animation effects and reduced-motion gates. */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ArrowRight, CircleDot } from 'lucide-react'
@@ -10,11 +11,7 @@ type Issue = {
   title: string
 }
 
-const ISSUES: readonly Issue[] = [
-  { number: 1842, title: 'Worktree picker truncates names' },
-  { number: 1799, title: 'Sleep workspace keeps scrollback' },
-  { number: 1721, title: 'Bulk archive in source control' }
-]
+const ISSUES: readonly Issue[] = [{ number: 1842, title: 'Worktree picker truncates names' }]
 
 type Phase =
   | { kind: 'idle' }
@@ -141,7 +138,8 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
       timeouts.push(id)
     }
 
-    function runCycle(issueIdx: number): void {
+    function runCycle(): void {
+      const issueIdx = 0
       // 1. Cursor enters and travels toward the row.
       setPhase({ kind: 'idle' })
       setCursorTarget({ kind: 'row', issueIdx, settle: false })
@@ -186,10 +184,10 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
         setPhase({ kind: 'idle' })
       }, teardown)
       schedule(() => {
-        runCycle((issueIdx + 1) % ISSUES.length)
+        runCycle()
       }, teardown + RESET_MS)
     }
-    runCycle(0)
+    runCycle()
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))

@@ -71,6 +71,9 @@ type BridgeSnapshot = {
   windowId?: number | null
   windowBounds?: BridgeFrame | null
   screenshotPngBase64?: string | null
+  screenshotWidth?: number | null
+  screenshotHeight?: number | null
+  screenshotScale?: number | null
   coordinateSpace?: 'window'
   truncation?: {
     truncated?: boolean
@@ -154,6 +157,12 @@ type BridgeRequest = {
 }
 
 const REQUEST_TIMEOUT_MS = 30_000
+const MAX_CACHED_DESKTOP_SNAPSHOTS = 32
+
+type CachedSnapshotEntry = {
+  snapshot: BridgeSnapshot
+  keys: string[]
+}
 
 export function shouldUseDesktopScriptProvider(): boolean {
   return desktopScriptPlatform() !== null && resolveDesktopScriptProviderPath() !== null
@@ -161,6 +170,7 @@ export function shouldUseDesktopScriptProvider(): boolean {
 
 export class DesktopScriptProviderClient {
   private readonly snapshots = new Map<string, BridgeSnapshot>()
+  private readonly snapshotEntries: CachedSnapshotEntry[] = []
   private providerCapabilities: ComputerProviderCapabilities | null = null
 
   constructor(
@@ -347,31 +357,31 @@ export class DesktopScriptProviderClient {
     snapshot: BridgeSnapshot,
     params: Record<string, unknown>
   ): void {
-    const namespace = snapshotNamespace(params)
-    for (const key of [
-      query,
-      snapshot.app.name,
-      snapshot.app.bundleId,
-      snapshot.app.bundleIdentifier,
-      String(snapshot.app.pid),
-      ...snapshotKeysForWindow(query, snapshot),
-      ...snapshotKeysForWindow(snapshot.app.name, snapshot),
-      ...(snapshot.app.bundleId ? snapshotKeysForWindow(snapshot.app.bundleId, snapshot) : []),
-      ...(snapshot.app.bundleIdentifier
-        ? snapshotKeysForWindow(snapshot.app.bundleIdentifier, snapshot)
-        : []),
-      ...snapshotKeysForWindowIndex(query, params),
-      ...snapshotKeysForWindowIndex(snapshot.app.name, params),
-      ...(snapshot.app.bundleId ? snapshotKeysForWindowIndex(snapshot.app.bundleId, params) : []),
-      ...(snapshot.app.bundleIdentifier
-        ? snapshotKeysForWindowIndex(snapshot.app.bundleIdentifier, params)
-        : [])
-    ]) {
-      if (key) {
-        if (!isExplicitSnapshotNamespace(namespace)) {
-          this.snapshots.set(key.toLowerCase(), snapshot)
+    const keys = snapshotCacheKeys(query, snapshot, params)
+    if (keys.length === 0) {
+      return
+    }
+
+    const entry = { snapshot, keys }
+    this.snapshotEntries.push(entry)
+    for (const key of keys) {
+      this.snapshots.set(key, snapshot)
+    }
+    this.pruneSnapshotCache()
+  }
+
+  private pruneSnapshotCache(): void {
+    while (this.snapshotEntries.length > MAX_CACHED_DESKTOP_SNAPSHOTS) {
+      const expired = this.snapshotEntries.shift()
+      if (!expired) {
+        return
+      }
+      for (const key of expired.keys) {
+        // Why: newer snapshots can reuse the same alias; only remove aliases
+        // that still point at the large snapshot payload being evicted.
+        if (this.snapshots.get(key) === expired.snapshot) {
+          this.snapshots.delete(key)
         }
-        this.snapshots.set(namespacedSnapshotKey(namespace, key), snapshot)
       }
     }
   }
@@ -488,13 +498,20 @@ function execBridge(
 function renderSnapshot(snapshot: BridgeSnapshot, noScreenshot: boolean): ComputerSnapshotResult {
   const bounds = snapshot.windowBounds
   const treeText = renderTreeText(snapshot)
+  // Why: Linux/Windows providers may downscale screenshots to cap IPC payloads,
+  // while window bounds remain the unscaled coordinate space for actions.
+  const screenshotWidth =
+    positiveRoundedNumber(snapshot.screenshotWidth) ?? Math.max(1, Math.round(bounds?.width ?? 1))
+  const screenshotHeight =
+    positiveRoundedNumber(snapshot.screenshotHeight) ?? Math.max(1, Math.round(bounds?.height ?? 1))
+  const screenshotScale = positiveNumber(snapshot.screenshotScale) ?? 1
   const screenshot = snapshot.screenshotPngBase64
     ? {
         data: snapshot.screenshotPngBase64,
         format: 'png' as const,
-        width: Math.max(1, Math.round(bounds?.width ?? 1)),
-        height: Math.max(1, Math.round(bounds?.height ?? 1)),
-        scale: 1
+        width: screenshotWidth,
+        height: screenshotHeight,
+        scale: screenshotScale
       }
     : null
   return {
@@ -544,6 +561,15 @@ function renderSnapshot(snapshot: BridgeSnapshot, noScreenshot: boolean): Comput
               'desktop provider returned no image; grant screen capture permission or pass --no-screenshot to inspect accessibility state only.'
           }
   }
+}
+
+function positiveNumber(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+function positiveRoundedNumber(value: number | null | undefined): number | null {
+  const numberValue = positiveNumber(value)
+  return numberValue === null ? null : Math.max(1, Math.round(numberValue))
 }
 
 function fallbackSnapshotId(snapshot: BridgeSnapshot): string {
@@ -656,6 +682,43 @@ function elementParam(
     )
   }
   return element
+}
+
+function snapshotCacheKeys(
+  query: string,
+  snapshot: BridgeSnapshot,
+  params: Record<string, unknown>
+): string[] {
+  const namespace = snapshotNamespace(params)
+  const keys = new Set<string>()
+  for (const key of [
+    query,
+    snapshot.app.name,
+    snapshot.app.bundleId,
+    snapshot.app.bundleIdentifier,
+    String(snapshot.app.pid),
+    ...snapshotKeysForWindow(query, snapshot),
+    ...snapshotKeysForWindow(snapshot.app.name, snapshot),
+    ...(snapshot.app.bundleId ? snapshotKeysForWindow(snapshot.app.bundleId, snapshot) : []),
+    ...(snapshot.app.bundleIdentifier
+      ? snapshotKeysForWindow(snapshot.app.bundleIdentifier, snapshot)
+      : []),
+    ...snapshotKeysForWindowIndex(query, params),
+    ...snapshotKeysForWindowIndex(snapshot.app.name, params),
+    ...(snapshot.app.bundleId ? snapshotKeysForWindowIndex(snapshot.app.bundleId, params) : []),
+    ...(snapshot.app.bundleIdentifier
+      ? snapshotKeysForWindowIndex(snapshot.app.bundleIdentifier, params)
+      : [])
+  ]) {
+    if (!key) {
+      continue
+    }
+    if (!isExplicitSnapshotNamespace(namespace)) {
+      keys.add(key.toLowerCase())
+    }
+    keys.add(namespacedSnapshotKey(namespace, key))
+  }
+  return [...keys]
 }
 
 function snapshotKeysForWindow(query: string, snapshot: BridgeSnapshot): string[] {

@@ -11,6 +11,9 @@ Startup:
   serve                     Start a headless Orca runtime server
   status                    Show app/runtime/graph readiness
 
+Diagnostics:
+  diagnostics memory        Collect a memory snapshot for Orca and managed terminals
+
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
   environment list          List saved remote Orca runtimes
@@ -161,15 +164,16 @@ Common Commands:
   orca open [--json]
   orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--json]
   orca status [--json]
+  orca diagnostics memory [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
   orca environment rm --environment <selector> [--json]
   orca worktree list [--repo <selector>] [--limit <n>] [--json]
-  orca worktree create --repo <selector> --name <name> [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
+  orca worktree create --name <name> [--repo <selector>] [--agent <id>] [--prompt <text>] [--setup run|skip|inherit] [--base-branch <ref>] [--issue <number>] [--comment <text>] [--parent-worktree <selector>] [--no-parent] [--run-hooks] [--activate] [--json]
   orca worktree show --worktree <selector> [--json]
   orca worktree current [--json]
-  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--parent-worktree <selector>|--no-parent] [--json]
+  orca worktree set --worktree <selector> [--display-name <name>] [--issue <number|null>] [--comment <text>] [--workspace-status <id>] [--parent-worktree <selector>|--no-parent] [--json]
   orca worktree rm --worktree <selector> [--force] [--run-hooks] [--json]
   orca worktree ps [--limit <n>] [--json]
   orca file open <path> [--worktree <selector>] [--json]
@@ -254,7 +258,9 @@ Browser Options:
 Examples:
   $ orca open
   $ orca status --json
+  $ orca diagnostics memory --json
   $ orca repo list
+  $ orca worktree create --name agent-task --agent codex --prompt "hi"
   $ orca worktree create --repo name:orca --name cli-test-1 --issue 273
   $ orca worktree show --worktree branch:Jinwoo-H/cli
   $ orca worktree current
@@ -338,6 +344,7 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
 
 export function formatFlagHelp(flag: string): string {
   const helpByFlag: Record<string, string> = {
+    agent: '--agent <id>          Launch a known TUI agent in the first terminal',
     'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
     command: '--command <text>       Command to run in the terminal on startup',
     comment: '--comment <text>       Comment stored in Orca metadata',
@@ -372,12 +379,14 @@ export function formatFlagHelp(flag: string): string {
     'parent-worktree':
       '--parent-worktree <selector> Parent selector; create infers the caller/current worktree by default',
     path: '--path <path>          Path argument for the command',
+    prompt: '--prompt <text>        Prompt text for agent-backed commands',
     query: '--query <text>        Search text for matching refs',
     ref: '--ref <ref>            Base ref to persist for the repo',
     repo: '--repo <selector>      Repo selector such as id:<id>, name:<name>, or path:<path>',
     'restore-window':
       '--restore-window     Bring the target app/window forward before the operation',
     session: '--session <id>        Snapshot namespace for a related computer-use workflow',
+    setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
     terminal: '--terminal <handle>  Runtime-issued terminal handle',
     text: '--text <text>          Text payload to send or type',
     'text-stdin': '--text-stdin          Read text payload from stdin',
@@ -388,7 +397,8 @@ export function formatFlagHelp(flag: string): string {
     worktree:
       '--worktree <selector>  Worktree selector such as id:<id>, branch:<branch>, issue:<number>, path:<path>, or active/current',
     workspace: '--workspace <selector> Existing worktree selector for automation runs',
-    prompt: '--prompt <text>        Automation prompt to pass to the agent',
+    'workspace-status':
+      '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
     staged: '--staged               Open staged source-control changes',
     provider: '--provider <agent>     Agent id such as codex, claude, or gemini',
     trigger: '--trigger <schedule>   Automation schedule preset, cron, or RRULE',

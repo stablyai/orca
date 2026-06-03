@@ -55,6 +55,8 @@ type FileContent = {
   loadError?: string
 }
 
+const noopCloseMarkdownTableOfContents = (): void => {}
+
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
   file: Pick<OpenFile, 'id' | 'filePath'>
@@ -106,7 +108,8 @@ export function EditorContent({
   isChangesMode,
   sideBySide,
   showMarkdownTableOfContents = false,
-  onCloseMarkdownTableOfContents = () => {},
+  onCloseMarkdownTableOfContents = noopCloseMarkdownTableOfContents,
+  markdownAnnotationsEnabled = true,
   pendingEditorReveal,
   handleContentChange,
   handleContentChangeForFile,
@@ -132,6 +135,7 @@ export function EditorContent({
   sideBySide: boolean
   showMarkdownTableOfContents?: boolean
   onCloseMarkdownTableOfContents?: () => void
+  markdownAnnotationsEnabled?: boolean
   pendingEditorReveal: PendingEditorReveal | null
   handleContentChange: (content: string) => void
   handleContentChangeForFile: (file: OpenFile, content: string) => void
@@ -287,7 +291,7 @@ export function EditorContent({
       onContentChange={handleContentChange}
       onSave={isMarkdown ? md.mdSave : handleSave}
       worktreeId={activeFile.worktreeId}
-      markdownAnnotationsEnabled={isMarkdown}
+      markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
       conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
       revealLine={
         matchesPendingEditorReveal(pendingEditorReveal, activeFile)
@@ -385,7 +389,7 @@ export function EditorContent({
                 markdownDocuments={md.markdownDocuments}
                 showTableOfContents={showMarkdownTableOfContents}
                 onCloseTableOfContents={onCloseMarkdownTableOfContents}
-                markdownAnnotationsEnabled={true}
+                markdownAnnotationsEnabled={markdownAnnotationsEnabled}
                 markdownAnnotationFilePath={activeFile.relativePath}
                 markdownSourceLineOffset={fm ? getMarkdownSourceLineOffset(fm.raw) : 0}
                 markdownReviewContent={currentContent}
@@ -425,7 +429,7 @@ export function EditorContent({
               scrollCacheKey={`${editorViewStateKey}:preview`}
               showTableOfContents={showMarkdownTableOfContents}
               onCloseTableOfContents={onCloseMarkdownTableOfContents}
-              markdownAnnotationsEnabled={true}
+              markdownAnnotationsEnabled={markdownAnnotationsEnabled}
               {...md.previewProps}
             />
           </div>
@@ -674,7 +678,7 @@ export function EditorContent({
           initialAnchor={activeFile.markdownPreviewAnchor ?? null}
           showTableOfContents={showMarkdownTableOfContents}
           onCloseTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={true}
+          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
           {...md.previewProps}
         />
       </div>
@@ -830,7 +834,7 @@ export function EditorContent({
             scrollCacheKey={`${diffViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
             onCloseTableOfContents={onCloseMarkdownTableOfContents}
-            markdownAnnotationsEnabled={true}
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
             {...md.previewProps}
           />
         </div>

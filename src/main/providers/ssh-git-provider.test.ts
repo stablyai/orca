@@ -709,6 +709,43 @@ describe('SshGitProvider', () => {
     })
   })
 
+  it('worktreeIsClean sends git.worktreeIsClean request', async () => {
+    const cleanResult = { clean: false, stdout: '?? scratch.txt\n' }
+    mux.request.mockResolvedValue(cleanResult)
+
+    const result = await provider.worktreeIsClean('/home/user/feat')
+
+    expect(mux.request).toHaveBeenCalledWith('git.worktreeIsClean', {
+      worktreePath: '/home/user/feat'
+    })
+    expect(result).toEqual(cleanResult)
+  })
+
+  it('worktreeIsClean falls back to git.status for old relays', async () => {
+    const methodNotFound = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
+      code: -32601
+    })
+    mux.request.mockRejectedValueOnce(methodNotFound).mockResolvedValueOnce({
+      entries: [{ path: 'scratch.txt', status: 'untracked', area: 'untracked' }],
+      conflictOperation: 'unknown'
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const result = await provider.worktreeIsClean('/home/user/feat')
+
+      expect(mux.request).toHaveBeenNthCalledWith(1, 'git.worktreeIsClean', {
+        worktreePath: '/home/user/feat'
+      })
+      expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
+        worktreePath: '/home/user/feat'
+      })
+      expect(result).toEqual({ clean: false, stdout: 'untracked untracked: scratch.txt' })
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
   it('renameCurrentBranch sends the narrow branch-rename request', async () => {
     await provider.renameCurrentBranch('/home/user/feat', 'you/fix-auth')
     expect(mux.request).toHaveBeenCalledWith('git.renameCurrentBranch', {

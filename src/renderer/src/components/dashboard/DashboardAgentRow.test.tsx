@@ -349,4 +349,25 @@ describe('DashboardAgentRow', () => {
     expect(classTokens(markup)).toContain('left-[13px]')
     expect(markup).toContain('aria-level="1"')
   })
+
+  it('marks child-disclosure rows as lineage manager rows', () => {
+    const markup = renderToStaticMarkup(
+      <TooltipProvider>
+        <DashboardAgentRow
+          agent={makeAgent()}
+          onDismiss={vi.fn()}
+          onActivate={vi.fn()}
+          now={NOW}
+          hideIdentityIcon
+          hideExpand
+          childAgentCount={2}
+          childAgentsExpanded={false}
+          onToggleChildAgents={vi.fn()}
+        />
+      </TooltipProvider>
+    )
+
+    expect(classTokens(markup)).toContain('worktree-agent-lineage-parent-row')
+    expect(markup).toContain('aria-label="Show 2 child agents"')
+  })
 })

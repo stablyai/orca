@@ -2,7 +2,7 @@
 import type { Repo } from '../shared/types'
 
 import { describe, expect, it, vi } from 'vitest'
-import { parseOrcaYaml } from './hooks'
+import { getDefaultTabsLaunch, parseOrcaYaml } from './hooks'
 
 // Mock fs and path used by loadHooks
 vi.mock('fs', () => ({
@@ -142,6 +142,44 @@ describe('parseOrcaYaml', () => {
       issueCommand: 'claude -p "Read issue #{{issue}}"'
     })
   })
+
+  it('parses default terminal tabs from orca.yaml', () => {
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Claude',
+      '    color: "#f97316"',
+      '    command: claude',
+      '  - title: LocalHost',
+      '    color: "#9ca3af"',
+      '    command: pnpm dev',
+      '  - title: Notes'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      defaultTabs: [
+        { title: 'Claude', color: '#f97316', command: 'claude' },
+        { title: 'LocalHost', color: '#9ca3af', command: 'pnpm dev' },
+        { title: 'Notes' }
+      ]
+    })
+  })
+
+  it('drops invalid default tab entries and unsafe color values', () => {
+    const yaml = [
+      'defaultTabs:',
+      '  - title: Server',
+      '    color: "red"',
+      '    command: pnpm dev',
+      '  - 42',
+      '  - title: ""'
+    ].join('\n')
+
+    expect(parseOrcaYaml(yaml)).toEqual({
+      scripts: {},
+      defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
+    })
+  })
 })
 
 describe('hasUnrecognizedOrcaYamlKeys', () => {
@@ -174,7 +212,15 @@ describe('hasUnrecognizedOrcaYamlKeys', () => {
   it('returns false when the file contains only recognised keys', async () => {
     const fs = await import('fs')
     vi.mocked(fs.readFileSync).mockReturnValue(
-      'scripts:\n  setup: |\n    pnpm install\nissueCommand: |\n  claude -p "test"\n'
+      [
+        'scripts:',
+        '  setup: |',
+        '    pnpm install',
+        'issueCommand: |',
+        '  claude -p "test"',
+        'defaultTabs:',
+        '  - title: Claude'
+      ].join('\n')
     )
 
     const { hasUnrecognizedOrcaYamlKeys } = await import('./hooks')
@@ -832,5 +878,65 @@ describe('shouldRunSetupForCreate', () => {
 
     expect(shouldRunSetupForCreate(makeRepo('skip-by-default'), 'run')).toBe(true)
     expect(shouldRunSetupForCreate(makeRepo('run-by-default'), 'skip')).toBe(false)
+  })
+})
+
+describe('getDefaultTabsLaunch', () => {
+  const makeRepo = (
+    setupRunPolicy?: 'ask' | 'run-by-default' | 'skip-by-default',
+    commandSourcePolicy?: 'local-only' | 'run-both' | 'shared-only'
+  ) =>
+    ({
+      id: 'test-id',
+      path: '/test/repo',
+      displayName: 'Test Repo',
+      badgeColor: '#000',
+      addedAt: Date.now(),
+      hookSettings: {
+        mode: 'auto',
+        setupRunPolicy,
+        commandSourcePolicy,
+        scripts: { setup: '', archive: '' }
+      }
+    }) as unknown as Repo
+
+  it('opts into default tab command execution through the setup decision', () => {
+    const hooks = {
+      scripts: {},
+      defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
+    }
+
+    expect(getDefaultTabsLaunch(hooks, makeRepo('skip-by-default'), 'run')).toEqual({
+      tabs: hooks.defaultTabs,
+      runCommands: true
+    })
+    expect(getDefaultTabsLaunch(hooks, makeRepo('run-by-default'), 'skip')).toEqual({
+      tabs: hooks.defaultTabs,
+      runCommands: false
+    })
+  })
+
+  it('creates commandless default tabs without requiring setup approval', () => {
+    const hooks = {
+      scripts: {},
+      defaultTabs: [{ title: 'Notes' }]
+    }
+
+    expect(getDefaultTabsLaunch(hooks, makeRepo('ask'))).toEqual({
+      tabs: hooks.defaultTabs,
+      runCommands: false
+    })
+  })
+
+  it('does not run shared default tab commands when command source is local-only', () => {
+    const hooks = {
+      scripts: {},
+      defaultTabs: [{ title: 'Server', command: 'pnpm dev' }]
+    }
+
+    expect(getDefaultTabsLaunch(hooks, makeRepo('run-by-default', 'local-only'))).toEqual({
+      tabs: hooks.defaultTabs,
+      runCommands: false
+    })
   })
 })

@@ -30,21 +30,37 @@ export function handleOscLink(
   // without holding a button) extends a selection until the next click/Esc.
   event?.preventDefault?.()
 
-  let parsed: URL
-  try {
-    parsed = new URL(rawText)
-  } catch {
+  const openDetectedPathLink = (): boolean => {
     const resolved = resolveTerminalFileLinkText(
       rawText,
       deps.startupCwd || deps.worktreePath,
       deps.terminalHomePath
     )
-    if (resolved) {
-      openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
-        ...deps,
-        openWithSystemDefault: Boolean(event?.shiftKey)
-      })
+    if (!resolved) {
+      return false
     }
+    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
+      ...deps,
+      openWithSystemDefault: Boolean(event?.shiftKey)
+    })
+    return true
+  }
+
+  if (
+    isWindowsAbsolutePathLike(rawText) &&
+    isWindowsAbsolutePathLike(deps.startupCwd || deps.worktreePath) &&
+    openDetectedPathLink()
+  ) {
+    // Why: `new URL("C:\\path\\file.ts")` succeeds with protocol `c:`;
+    // Windows OSC links need file-path routing before generic URL parsing.
+    return
+  }
+
+  let parsed: URL
+  try {
+    parsed = new URL(rawText)
+  } catch {
+    openDetectedPathLink()
     return
   }
 

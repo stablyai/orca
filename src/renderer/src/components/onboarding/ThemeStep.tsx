@@ -78,6 +78,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       return
     }
     let cancelled = false
+    // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: non-Mac intentionally remains idle; only Mac enters detecting before IPC.
     setDiscovery({ status: 'detecting' })
     void window.api.settings
       .previewGhosttyImport()

@@ -46,4 +46,16 @@ describe('agent process recognition', () => {
     expect(isRecognizedAgentType('cmd.exe')).toBe(false)
     expect(recognizeAgentProcess('cmd.exe')).toBeNull()
   })
+
+  it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
+    expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
+      agent: 'mistral-vibe',
+      processName: 'vibe'
+    })
+    expect(recognizeAgentProcess('mistral-vibe')).toEqual({
+      agent: 'mistral-vibe',
+      processName: 'mistral-vibe'
+    })
+    expect(isRecognizedAgentType('vibe')).toBe(true)
+  })
 })

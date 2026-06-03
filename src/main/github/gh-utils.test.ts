@@ -15,6 +15,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 import {
+  _getOwnerRepoCacheSize,
   _resetOwnerRepoCache,
   classifyGhError,
   classifyListIssuesError,
@@ -36,6 +37,14 @@ describe('github owner/repo resolution', () => {
 
   it('parses GitHub HTTPS and SSH remotes', () => {
     expect(parseGitHubOwnerRepo('https://github.com/acme/widgets.git')).toEqual({
+      owner: 'acme',
+      repo: 'widgets'
+    })
+    expect(parseGitHubOwnerRepo('https://alice@github.com/acme/widgets.git')).toEqual({
+      owner: 'acme',
+      repo: 'widgets'
+    })
+    expect(parseGitHubOwnerRepo('https://github.com:443/acme/widgets.git')).toEqual({
       owner: 'acme',
       repo: 'widgets'
     })
@@ -78,6 +87,17 @@ describe('github owner/repo resolution', () => {
     })
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'fork', repo: 'orca' })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
+      cwd: '/repo'
+    })
+  })
+
+  it('resolves GitHub HTTPS origin remotes with user info and a default port', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'https://alice@github.com:443/acme/widgets.git\n'
+    })
+
+    await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'acme', repo: 'widgets' })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
       cwd: '/repo'
     })
@@ -145,6 +165,29 @@ describe('github owner/repo resolution', () => {
 
     await expect(getOwnerRepo('/repo')).resolves.toEqual({ owner: 'local', repo: 'orca' })
     await expect(getOwnerRepo('/repo', 'ssh-1')).resolves.toEqual({ owner: 'remote', repo: 'orca' })
+  })
+
+  it('prunes expired distinct owner/repo cache entries on later lookups', async () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    try {
+      nowSpy.mockReturnValue(1_000)
+      gitExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: 'git@github.com:stablyai/orca.git\n'
+      })
+      await expect(getOwnerRepo('/repo-a')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
+      expect(_getOwnerRepoCacheSize()).toBe(1)
+
+      nowSpy.mockReturnValue(32_000)
+      gitExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: 'git@github.com:acme/widgets.git\n'
+      })
+      await expect(getOwnerRepo('/repo-b')).resolves.toEqual({ owner: 'acme', repo: 'widgets' })
+
+      expect(_getOwnerRepoCacheSize()).toBe(1)
+      expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      nowSpy.mockRestore()
+    }
   })
 
   it('resolves PR candidates as upstream then origin and de-dupes matching slugs', async () => {

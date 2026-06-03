@@ -34,7 +34,125 @@ function makeWorktree(): Worktree {
   }
 }
 
+function seedAlreadyActiveWorktree(
+  worktree: Worktree,
+  overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}
+): {
+  markWorktreeVisited: ReturnType<typeof vi.fn>
+  recordWorktreeVisit: ReturnType<typeof vi.fn>
+  revealWorktreeInSidebar: ReturnType<typeof vi.fn>
+} {
+  const markWorktreeVisited = vi.fn()
+  const recordWorktreeVisit = vi.fn()
+  const revealWorktreeInSidebar = vi.fn()
+
+  useAppStore.setState({
+    repos: [
+      {
+        id: worktree.repoId,
+        path: '/workspace/repo',
+        displayName: 'repo',
+        badgeColor: '#000000',
+        addedAt: 0
+      }
+    ],
+    worktreesByRepo: { [worktree.repoId]: [worktree] },
+    activeRepoId: worktree.repoId,
+    activeView: 'terminal',
+    activeWorktreeId: worktree.id,
+    activeTabId: 'tab-1',
+    activeTabType: 'terminal',
+    tabsByWorktree: {
+      [worktree.id]: [
+        {
+          id: 'tab-1',
+          ptyId: 'pty-1',
+          worktreeId: worktree.id,
+          title: 'Terminal 1',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    },
+    ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+    unifiedTabsByWorktree: {
+      [worktree.id]: [
+        {
+          id: 'tab-1',
+          entityId: 'tab-1',
+          groupId: 'group-1',
+          worktreeId: worktree.id,
+          contentType: 'terminal',
+          label: 'Terminal 1',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1
+        }
+      ]
+    },
+    groupsByWorktree: {
+      [worktree.id]: [
+        {
+          id: 'group-1',
+          worktreeId: worktree.id,
+          activeTabId: 'tab-1',
+          tabOrder: ['tab-1']
+        }
+      ]
+    },
+    activeGroupIdByWorktree: { [worktree.id]: 'group-1' },
+    activeTabTypeByWorktree: { [worktree.id]: 'terminal' },
+    everActivatedWorktreeIds: new Set([worktree.id]),
+    openFiles: [],
+    browserTabsByWorktree: {},
+    activeFileIdByWorktree: {},
+    activeBrowserTabIdByWorktree: {},
+    activeTabIdByWorktree: { [worktree.id]: 'tab-1' },
+    tabBarOrderByWorktree: {},
+    settings: {
+      agentCmdOverrides: {},
+      setupScriptLaunchMode: 'new-tab'
+    } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+    markWorktreeVisited,
+    recordWorktreeVisit,
+    refreshGitHubForWorktreeIfStale: vi.fn(),
+    revealWorktreeInSidebar,
+    ...overrides
+  })
+
+  return { markWorktreeVisited, recordWorktreeVisit, revealWorktreeInSidebar }
+}
+
 describe('activateAndRevealWorktree created agent reopen', () => {
+  it('does not restamp focus recency when reselecting the already-active terminal worktree', () => {
+    const worktree = makeWorktree()
+    const { markWorktreeVisited, recordWorktreeVisit, revealWorktreeInSidebar } =
+      seedAlreadyActiveWorktree(worktree)
+
+    const result = activateAndRevealWorktree(worktree.id)
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(markWorktreeVisited).not.toHaveBeenCalled()
+    expect(recordWorktreeVisit).not.toHaveBeenCalled()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
+  })
+
+  it('records a visit when activating the same worktree changes the current view', () => {
+    const worktree = makeWorktree()
+    const { markWorktreeVisited, recordWorktreeVisit } = seedAlreadyActiveWorktree(worktree, {
+      activeView: 'tasks'
+    })
+
+    const result = activateAndRevealWorktree(worktree.id)
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(markWorktreeVisited).toHaveBeenCalledWith(worktree.id)
+    expect(recordWorktreeVisit).toHaveBeenCalledWith(worktree.id)
+  })
+
   it('reopens an empty worktree with the agent selected at creation time', () => {
     const worktree = makeWorktree()
     const revealWorktreeInSidebar = vi.fn()

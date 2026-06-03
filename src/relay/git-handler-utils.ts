@@ -133,15 +133,37 @@ export function parseBranchDiff(
 
 // ─── Worktree parsing ────────────────────────────────────────────────
 
-export function parseWorktreeList(output: string): Record<string, unknown>[] {
-  const worktrees: Record<string, unknown>[] = []
-  const blocks = output.trim().split(/\r?\n\r?\n/)
+function getErrorText(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const parts: string[] = []
+    if ('message' in error && typeof error.message === 'string') {
+      parts.push(error.message)
+    }
+    if ('stderr' in error && typeof error.stderr === 'string') {
+      parts.push(error.stderr)
+    }
+    return parts.join('\n')
+  }
+  return String(error)
+}
 
-  for (const block of blocks) {
-    if (!block.trim()) {
+export function isUnsupportedWorktreeListZError(error: unknown): boolean {
+  return /(?:unknown|invalid) (?:switch|option).*`?-z'?|(?:unknown|invalid) (?:switch|option).*`?z'?/i.test(
+    getErrorText(error)
+  )
+}
+
+export function parseWorktreeList(
+  output: string,
+  options: { nulDelimited?: boolean } = {}
+): Record<string, unknown>[] {
+  const worktrees: Record<string, unknown>[] = []
+  const blocks = options.nulDelimited ? splitNulWorktreeList(output) : splitLineWorktreeList(output)
+
+  for (const lines of blocks) {
+    if (lines.length === 0) {
       continue
     }
-    const lines = block.trim().split(/\r?\n/)
     let wtPath = ''
     let head = ''
     let branch = ''
@@ -170,6 +192,39 @@ export function parseWorktreeList(output: string): Record<string, unknown>[] {
     }
   }
   return worktrees
+}
+
+function splitLineWorktreeList(output: string): string[][] {
+  return output
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .map((block) => block.trim().split(/\r?\n/))
+}
+
+function splitNulWorktreeList(output: string): string[][] {
+  if (!output.includes('\0')) {
+    return splitLineWorktreeList(output)
+  }
+
+  const blocks: string[][] = []
+  let currentBlock: string[] = []
+
+  for (const field of output.split('\0')) {
+    if (field) {
+      currentBlock.push(field)
+      continue
+    }
+    if (currentBlock.length > 0) {
+      blocks.push(currentBlock)
+      currentBlock = []
+    }
+  }
+
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock)
+  }
+
+  return blocks
 }
 
 // ─── Binary / blob helpers ───────────────────────────────────────────

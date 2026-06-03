@@ -1,6 +1,9 @@
+/* oxlint-disable max-lines -- Why: crash-reporting IPC handlers share one
+   dedupe/submission state machine and one crash-store contract. */
 import os from 'node:os'
 import { app, clipboard, ipcMain } from 'electron'
 import {
+  type CrashReportBreadcrumbData,
   formatCrashReportText,
   type ReactErrorBoundaryReportArgs,
   type ReactErrorBoundaryReportResult,
@@ -9,7 +12,10 @@ import {
 } from '../../shared/crash-reporting'
 import { submitFeedback } from './feedback'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
-import { getCrashBreadcrumbSnapshot } from '../crash-reporting/crash-breadcrumb-store'
+import {
+  getCrashBreadcrumbSnapshot,
+  recordCrashBreadcrumb
+} from '../crash-reporting/crash-breadcrumb-store'
 
 const inFlightSubmissions = new Set<string>()
 const submittedReportIds = new Set<string>()
@@ -17,6 +23,8 @@ const recentRendererErrorReportKeys = new Map<string, number>()
 
 const RENDERER_ERROR_DEDUPE_MS = 10 * 60 * 1000
 const MAX_RENDERER_ERROR_KEY_AGE_MS = RENDERER_ERROR_DEDUPE_MS * 2
+const MAX_RECENT_RENDERER_ERROR_REPORT_KEYS = 256
+const MAX_SUBMITTED_REPORT_IDS = 256
 
 const REACT_ERROR_BOUNDARY_SURFACES = new Set<ReactErrorBoundaryReportArgs['surface']>([
   'app-root',
@@ -101,6 +109,13 @@ function pruneRendererErrorReportKeys(now: number): void {
       recentRendererErrorReportKeys.delete(key)
     }
   }
+  while (recentRendererErrorReportKeys.size > MAX_RECENT_RENDERER_ERROR_REPORT_KEYS) {
+    const oldestKey = recentRendererErrorReportKeys.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    recentRendererErrorReportKeys.delete(oldestKey)
+  }
 }
 
 function getRendererErrorReportKey(args: ReactErrorBoundaryReportArgs): string {
@@ -111,6 +126,20 @@ function getRendererErrorReportKey(args: ReactErrorBoundaryReportArgs): string {
     errorMessage: args.errorMessage,
     componentStack: args.componentStack
   }).slice(0, 12_000)
+}
+
+function rememberSubmittedReportId(reportId: string): void {
+  // Why: report ids are IPC input. Keep duplicate-send suppression useful for
+  // recent reports without retaining every id a broken renderer can vary.
+  submittedReportIds.delete(reportId)
+  submittedReportIds.add(reportId)
+  while (submittedReportIds.size > MAX_SUBMITTED_REPORT_IDS) {
+    const oldestId = submittedReportIds.keys().next().value
+    if (oldestId === undefined) {
+      break
+    }
+    submittedReportIds.delete(oldestId)
+  }
 }
 
 async function recordRendererErrorReport(
@@ -129,6 +158,10 @@ async function recordRendererErrorReport(
     return { ok: true, report: null, deduped: true }
   }
   recentRendererErrorReportKeys.set(key, now)
+  // Why: renderer error reports are IPC input. A broken renderer can vary the
+  // component stack/message inside the age window, so bound the main-side
+  // dedupe map by count as well as time.
+  pruneRendererErrorReportKeys(now)
 
   const report = await store.record({
     source: 'renderer',
@@ -166,6 +199,24 @@ async function recordRendererErrorReport(
   return { ok: true, report, deduped: false }
 }
 
+export function _resetRendererErrorReportDedupeForTests(): void {
+  recentRendererErrorReportKeys.clear()
+  submittedReportIds.clear()
+  inFlightSubmissions.clear()
+}
+
+export function _getCrashReportingStateSizesForTests(): {
+  submittedReportIds: number
+  inFlightSubmissions: number
+  recentRendererErrorReportKeys: number
+} {
+  return {
+    submittedReportIds: submittedReportIds.size,
+    inFlightSubmissions: inFlightSubmissions.size,
+    recentRendererErrorReportKeys: recentRendererErrorReportKeys.size
+  }
+}
+
 async function getLatestPendingReport(
   store: CrashReportStore
 ): Promise<Awaited<ReturnType<CrashReportStore['getLatestPending']>>> {
@@ -189,6 +240,21 @@ async function getLatestSendableReport(
   )
 }
 
+function sanitizeRendererBreadcrumbData(value: unknown): CrashReportBreadcrumbData | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+  const sanitized: CrashReportBreadcrumbData = {}
+  for (const [key, entry] of Object.entries(value)) {
+    if (typeof entry === 'string' || typeof entry === 'boolean' || entry === null) {
+      sanitized[key] = entry
+    } else if (typeof entry === 'number' && Number.isFinite(entry)) {
+      sanitized[key] = entry
+    }
+  }
+  return Object.keys(sanitized).length > 0 ? sanitized : undefined
+}
+
 export function registerCrashReportingHandlers(store: CrashReportStore): void {
   ipcMain.removeHandler('crashReports:getLatestPending')
   ipcMain.handle('crashReports:getLatestPending', () => getLatestPendingReport(store))
@@ -207,6 +273,17 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     }
     return store.dismiss(args.reportId)
   })
+
+  ipcMain.removeAllListeners('crashReports:recordBreadcrumb')
+  ipcMain.on(
+    'crashReports:recordBreadcrumb',
+    (_event, args?: { name?: unknown; data?: unknown }) => {
+      if (!args || typeof args.name !== 'string') {
+        return
+      }
+      recordCrashBreadcrumb(args.name, sanitizeRendererBreadcrumbData(args.data))
+    }
+  )
 
   ipcMain.removeHandler('crashReports:copyLatestDiagnostics')
   ipcMain.handle(
@@ -274,7 +351,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         if (!result.ok) {
           return { ...result, report }
         }
-        submittedReportIds.add(report.id)
+        rememberSubmittedReportId(report.id)
         if (report.status === 'dismissed') {
           try {
             // Why: startup prompts are dismissed before the user can send from

@@ -32,6 +32,19 @@ Use `orca-cli` instead for ordinary terminal control, shell commands, browser au
 - The orchestration experimental feature must be enabled in Settings > Experimental.
 - All `orca orchestration` commands are RPC calls to the running Orca runtime — they require an active Orca session.
 
+## Ownership And Handoff Boundaries
+
+Orchestration messages and tasks are runtime-global. The authority for a worker completion is the active dispatch context (`taskId` + `dispatchId` + assignee handle), not the filesystem worktree by itself. Cross-worktree coordination is valid when a live coordinator intentionally owns the task graph.
+
+Do not treat a copied or injected preamble as automatic parentage for new work. First classify the situation:
+
+- **Coordinated subtask**: a live coordinator owns the DAG and is waiting on this dispatch. Use the exact `worker_done`, heartbeat, `ask`, and escalation flow from the preamble, even if the coordinator terminal is in another worktree.
+- **Full handoff**: the original actor intentionally delegated ownership and does not want to monitor the work. Finish the current assignment in the current session. Create a new coordinator only when the user asks for orchestration or you deliberately decompose fresh subtasks in the current worktree; if you spawn workers, pass your current-worktree coordinator handle and use a current-worktree selector such as `--worktree active`.
+
+When the handoff type is unclear, inspect `orca orchestration task-list --json`, `orca orchestration dispatch-show`, and `orca terminal list --json` for the task, dispatch, and handle ownership before sending lifecycle messages. If you still cannot tell whether the remote handle owns an active dispatch, ask the current owner instead of silently completing a task into an unrelated workstream.
+
+Why: a stale or copied cross-worktree `worker_done` can make an unrelated feature coordinator responsible for work it intentionally delegated away. Conversely, refusing every cross-worktree completion would break legitimate orchestrated DAGs, so the decision must follow dispatch ownership, not location alone.
+
 ## Command Surface
 
 ### Messaging
@@ -165,8 +178,9 @@ Why: the 120-line terminal output buffer (`terminal read`) is for status monitor
 
 ## Agent Guidance
 
-- When dispatched with a preamble, **always run the `worker_done` command when done**. This is the primary feedback mechanism — it keeps the coordinator's context window clean.
-- If blocked or unable to complete a task, send an `escalation` message to the coordinator instead of silently stalling.
+- When dispatched with a valid live preamble, **send `worker_done` exactly once to the owning coordinator**. The `dispatchId` in the payload is the completion authority.
+- Treat a preamble inherited through terminal history or a full handoff as stale unless the current prompt explicitly keeps that coordinator in the loop.
+- If blocked or unable to complete a task, send an `escalation` message to the owning coordinator only when ownership is valid; otherwise report the blocker in the current session.
 - Use `orca orchestration check` to read incoming messages from the coordinator or other agents. Messages are delivered automatically when you go idle, but you can also poll explicitly.
 - Treat `orca orchestration` commands the same way you treat `git` or `npm` — they are CLI tools available in your shell.
 - The coordinator uses `orca orchestration task-list --ready` as its external memory. Prefer querying orchestration state over tracking it in your context window.

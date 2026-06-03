@@ -16,11 +16,36 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('terminal send RPC', () => {
-  it('drops desktop input while a mobile client owns the terminal floor', async () => {
+  it('reports whether a terminal handle is running a recognized agent', async () => {
+    const runtime = stubRuntime({
+      isTerminalRunningAgent: vi.fn().mockResolvedValue(true)
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.isRunningAgent', {
+        terminal: 'terminal-1'
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(response.result).toEqual({ isRunningAgent: true })
+    expect(runtime.isTerminalRunningAgent).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('reclaims the terminal for desktop input while a mobile client owns the floor', async () => {
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'mobile', clientId: 'mobile-1' }),
-      sendTerminal: vi.fn(),
+      reclaimTerminalForDesktop: vi.fn().mockResolvedValue(true),
+      sendTerminal: vi.fn().mockResolvedValue({
+        handle: 'terminal-1',
+        accepted: true,
+        bytesWritten: 1
+      }),
       mobileTookFloor: vi.fn()
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -37,14 +62,13 @@ describe('terminal send RPC', () => {
     if (!response.ok) {
       throw new Error(response.error.message)
     }
-    expect(response.result).toEqual({
-      send: {
-        handle: 'terminal-1',
-        accepted: false,
-        bytesWritten: 0
-      }
+    expect(response.result).toMatchObject({ send: { accepted: true, bytesWritten: 1 } })
+    expect(runtime.reclaimTerminalForDesktop).toHaveBeenCalledWith('pty-1')
+    expect(runtime.sendTerminal).toHaveBeenCalledWith('terminal-1', {
+      text: 'x',
+      enter: false,
+      interrupt: false
     })
-    expect(runtime.sendTerminal).not.toHaveBeenCalled()
     expect(runtime.mobileTookFloor).not.toHaveBeenCalled()
   })
 

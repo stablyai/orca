@@ -28,17 +28,23 @@ type MockTerm = {
 
 function makeMockTerm(): MockTerm & {
   emitData: (data: string) => void
+  emitExit: () => void
 } {
   let dataHandler: ((data: string) => void) | null = null
+  let exitHandler: (() => void) | null = null
   return {
     onData: vi.fn((handler: (data: string) => void) => {
       dataHandler = handler
       return makeDisposable()
     }),
-    onExit: vi.fn(() => makeDisposable()),
+    onExit: vi.fn((handler: () => void) => {
+      exitHandler = handler
+      return makeDisposable()
+    }),
     write: vi.fn(),
     kill: vi.fn(),
-    emitData: (data: string) => dataHandler?.(data)
+    emitData: (data: string) => dataHandler?.(data),
+    emitExit: () => exitHandler?.()
   }
 }
 
@@ -71,6 +77,45 @@ describe('fetchViaPty', () => {
     expect(onExitDisposable.dispose.mock.invocationCallOrder[0]).toBeLessThan(
       killMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('clears the startup delay timer when the hidden PTY exits early', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(spawnMock).toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+    term.emitExit()
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error'
+    })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears pending settle timers when the hidden PTY exits after usage output starts', async () => {
+    const term = makeMockTerm()
+    spawnMock.mockReturnValue(term)
+
+    const resultPromise = fetchViaPty()
+    await vi.advanceTimersByTimeAsync(2_000)
+    term.emitData('Current session\r12% used\r')
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+    term.emitExit()
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'ok',
+      session: {
+        usedPercent: 12
+      }
+    })
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('treats Claude 2.1 tabbed /usage session stats as rendered but unavailable', async () => {

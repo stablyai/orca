@@ -986,6 +986,10 @@ describe('project groups', () => {
     expect(rows.filter((row) => row.type === 'header').map((row) => row.projectGroupDepth)).toEqual(
       [0, 1, 2]
     )
+    expect(rows.find((row) => row.type === 'item')).toMatchObject({
+      type: 'item',
+      groupDepth: 2
+    })
     expect(rows[0]).toMatchObject({ count: 1 })
   })
 

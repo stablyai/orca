@@ -1282,6 +1282,21 @@ function shouldUseMacOptionLetterPhysicalFallback(
   )
 }
 
+function shouldUseMacOptionPunctuationPhysicalFallback(
+  parsed: ParsedKeybinding,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: macOS Option+punctuation can report composed quote/dead-key values,
+  // leaving no logical bracket token for app shortcuts that intentionally use Alt.
+  return (
+    getKeybindingPlatform(platform) === 'darwin' &&
+    parsed.alt &&
+    hasModifier(input, 'alt') &&
+    logicalKeyTokenFromInput(input) === null
+  )
+}
+
 function letterKeyMatches(
   input: KeybindingInput,
   letter: string,
@@ -1372,7 +1387,11 @@ function keyMatches(
       }
       return semanticKey === parsedKey
     }
-    return canUsePhysicalCodeFallback(input) && physicalPunctuationKey(input) === parsedKey
+    return (
+      (canUsePhysicalCodeFallback(input) ||
+        shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
+      physicalPunctuationKey(input) === parsedKey
+    )
   }
 
   const logicalKey = logicalKeyTokenFromInput(input)

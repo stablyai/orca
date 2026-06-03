@@ -1,13 +1,15 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { RefreshCw, Terminal } from 'lucide-react'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
+import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline'
+type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
 
 type AgentSkillSetupPanelProps = {
   title: string
@@ -21,12 +23,16 @@ type AgentSkillSetupPanelProps = {
   error: string | null
   installDisabled?: boolean
   terminalHeightPx?: number
+  terminalShellOverride?: string
   leading?: ReactNode
   icon?: ReactNode
   variant?: AgentSkillSetupPanelVariant
   className?: string
   preInstallNotice?: ReactNode
+  getPrerequisiteStatus?: () => Promise<SkillPrerequisiteStatus>
+  isPrerequisiteAvailable?: (status: SkillPrerequisiteStatus) => boolean
   onBeforeOpenTerminal?: () => void | Promise<void>
+  showInstallWhenInstalled?: boolean
   showRecheckWhenInstalled?: boolean
   onRecheck: () => void | Promise<void>
 }
@@ -43,18 +49,26 @@ export function AgentSkillSetupPanel({
   error,
   installDisabled = false,
   terminalHeightPx,
+  terminalShellOverride,
   leading,
   icon,
   variant = 'card',
   className,
   preInstallNotice,
+  getPrerequisiteStatus,
+  isPrerequisiteAvailable = isOrcaCliAvailableOnPath,
   onBeforeOpenTerminal,
+  showInstallWhenInstalled = true,
   showRecheckWhenInstalled = true,
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [preInstallNoticeVisible, setPreInstallNoticeVisible] = useState(Boolean(preInstallNotice))
   const mountedRef = useMountedRef()
+  const readPrerequisiteStatus = useCallback(
+    () => (getPrerequisiteStatus ?? window.api.cli.getInstallStatus)(),
+    [getPrerequisiteStatus]
+  )
 
   useEffect(() => {
     if (!preInstallNotice) {
@@ -65,9 +79,9 @@ export function AgentSkillSetupPanel({
     let canceled = false
     const refreshCliNotice = async (): Promise<void> => {
       try {
-        const status = await window.api.cli.getInstallStatus()
+        const status = await readPrerequisiteStatus()
         if (!canceled) {
-          setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+          setPreInstallNoticeVisible(!isPrerequisiteAvailable(status))
         }
       } catch {
         if (!canceled) {
@@ -82,16 +96,16 @@ export function AgentSkillSetupPanel({
       canceled = true
       window.removeEventListener('focus', refreshCliNotice)
     }
-  }, [preInstallNotice])
+  }, [isPrerequisiteAvailable, preInstallNotice, readPrerequisiteStatus])
 
   const refreshPreInstallNotice = async (): Promise<void> => {
     if (!preInstallNotice) {
       return
     }
     try {
-      const status = await window.api.cli.getInstallStatus()
+      const status = await readPrerequisiteStatus()
       if (mountedRef.current) {
-        setPreInstallNoticeVisible(!isOrcaCliAvailableOnPath(status))
+        setPreInstallNoticeVisible(!isPrerequisiteAvailable(status))
       }
     } catch {
       if (mountedRef.current) {
@@ -101,27 +115,29 @@ export function AgentSkillSetupPanel({
   }
   const actionRow = (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => {
-          void (async () => {
-            try {
-              await onBeforeOpenTerminal?.()
-              await refreshPreInstallNotice()
-            } finally {
-              if (mountedRef.current) {
-                setTerminalOpen(true)
+      {!installed || showInstallWhenInstalled ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            void (async () => {
+              try {
+                await onBeforeOpenTerminal?.()
+                await refreshPreInstallNotice()
+              } finally {
+                if (mountedRef.current) {
+                  setTerminalOpen(true)
+                }
               }
-            }
-          })()
-        }}
-        disabled={terminalOpen || installDisabled}
-      >
-        <Terminal className="size-3.5" />
-        Install
-      </Button>
+            })()
+          }}
+          disabled={terminalOpen || installDisabled}
+        >
+          <Terminal className="size-3.5" />
+          Install
+        </Button>
+      ) : null}
       {!installed || showRecheckWhenInstalled ? (
         <Button
           type="button"
@@ -187,8 +203,10 @@ export function AgentSkillSetupPanel({
             title={terminalTitle}
             ariaLabel={terminalAriaLabel}
             terminalHeightPx={terminalHeightPx}
+            shellOverride={terminalShellOverride}
             terminalTopMarginPx={0}
             autoScrollIntoView={false}
+            onTerminalExit={notifyInstalledAgentSkillsChanged}
           />
         </div>
       ) : null}

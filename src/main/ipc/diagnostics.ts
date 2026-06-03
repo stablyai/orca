@@ -46,6 +46,7 @@ type PendingBundle = {
   bundle: CollectedBundle
   readonly createdAtMs: number
   readonly previewFilePath: string
+  ttlTimer: ReturnType<typeof setTimeout>
   previewOpened: boolean
 }
 
@@ -104,8 +105,7 @@ function resolveOrcaChannel(): 'stable' | 'rc' | 'dev' {
 function prunePendingBundles(now = Date.now()): void {
   for (const [id, pending] of pendingBundles) {
     if (now - pending.createdAtMs > PENDING_BUNDLE_TTL_MS) {
-      deletePreviewFile(pending.previewFilePath)
-      pendingBundles.delete(id)
+      deletePendingBundle(id)
     }
   }
   while (pendingBundles.size > MAX_PENDING_BUNDLES) {
@@ -113,23 +113,33 @@ function prunePendingBundles(now = Date.now()): void {
     if (!oldest) {
       break
     }
-    const pending = pendingBundles.get(oldest)
-    if (pending) {
-      deletePreviewFile(pending.previewFilePath)
-      pendingBundles.delete(oldest)
-    }
+    deletePendingBundle(oldest)
   }
 }
 
 function rememberBundle(bundle: CollectedBundle): void {
+  deletePendingBundle(bundle.bundleSubmissionId)
   const previewFilePath = writeBundlePreviewFile(bundle)
   pendingBundles.set(bundle.bundleSubmissionId, {
     bundle,
     createdAtMs: Date.now(),
     previewFilePath,
+    // Why: diagnostics previews retain redacted payload bytes in main; the
+    // documented TTL must expire even if the renderer never makes another call.
+    ttlTimer: schedulePendingBundleExpiry(bundle.bundleSubmissionId),
     previewOpened: false
   })
   prunePendingBundles()
+}
+
+function schedulePendingBundleExpiry(bundleSubmissionId: string): ReturnType<typeof setTimeout> {
+  const timer = setTimeout(() => {
+    deletePendingBundle(bundleSubmissionId)
+  }, PENDING_BUNDLE_TTL_MS)
+  if (typeof timer === 'object' && 'unref' in timer) {
+    timer.unref()
+  }
+  return timer
 }
 
 function toBundlePreview(bundle: CollectedBundle): DiagnosticsBundlePreview {
@@ -185,8 +195,13 @@ function discardPendingBundle(bundleSubmissionId: unknown): void {
   ) {
     throw new Error('bundleSubmissionId has invalid format')
   }
+  deletePendingBundle(bundleSubmissionId)
+}
+
+function deletePendingBundle(bundleSubmissionId: string): void {
   const pending = pendingBundles.get(bundleSubmissionId)
   if (pending) {
+    clearTimeout(pending.ttlTimer)
     deletePreviewFile(pending.previewFilePath)
     pendingBundles.delete(bundleSubmissionId)
   }
@@ -221,10 +236,9 @@ function deletePreviewFile(filePath: string): void {
 }
 
 function discardAllPendingBundles(): void {
-  for (const pending of pendingBundles.values()) {
-    deletePreviewFile(pending.previewFilePath)
+  for (const bundleSubmissionId of Array.from(pendingBundles.keys())) {
+    deletePendingBundle(bundleSubmissionId)
   }
-  pendingBundles.clear()
 }
 
 function isTicketId(value: unknown): value is string {
@@ -331,9 +345,8 @@ export function registerDiagnosticsHandlers(): void {
       })
       const uploadedPending = pendingBundles.get(bundle.bundleSubmissionId)
       if (uploadedPending) {
-        deletePreviewFile(uploadedPending.previewFilePath)
+        deletePendingBundle(bundle.bundleSubmissionId)
       }
-      pendingBundles.delete(bundle.bundleSubmissionId)
       return result
     }
   )

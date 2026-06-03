@@ -249,7 +249,7 @@ describe('repo slice runtime routing', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'terminal.stop',
-      params: { worktree: worktreeId },
+      params: { worktree: `id:${worktreeId}` },
       timeoutMs: 15_000
     })
     expect(ptyKill).toHaveBeenCalledWith('pty-local-stale')

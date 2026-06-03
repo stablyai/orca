@@ -6,11 +6,28 @@ export type BitbucketRepoRef = {
   repoSlug: string
 }
 
+const REPO_REF_CACHE_MAX_ENTRIES = 512
 const repoRefCache = new Map<string, BitbucketRepoRef | null>()
 
 /** @internal - exposed for tests only */
 export function _resetBitbucketRepoRefCache(): void {
   repoRefCache.clear()
+}
+
+/** @internal - exposed for tests only */
+export function _getBitbucketRepoRefCacheSize(): number {
+  return repoRefCache.size
+}
+
+function rememberRepoRefCacheEntry(cacheKey: string, value: BitbucketRepoRef | null): void {
+  repoRefCache.set(cacheKey, value)
+  while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
+    const oldestKey = repoRefCache.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    repoRefCache.delete(oldestKey)
+  }
 }
 
 function decodeSegment(value: string): string {
@@ -22,7 +39,7 @@ function decodeSegment(value: string): string {
 }
 
 function parseBitbucketPath(pathname: string): BitbucketRepoRef | null {
-  const withoutSuffix = pathname.replace(/\.git$/i, '')
+  const withoutSuffix = pathname.replace(/\/+$/, '').replace(/\.git$/i, '')
   const parts = withoutSuffix
     .split('/')
     .map((part) => part.trim())
@@ -79,7 +96,7 @@ export async function getBitbucketRepoRefForRemote(
           cwd: repoPath
         })
     const result = parseBitbucketRepoRef(stdout)
-    repoRefCache.set(cacheKey, result)
+    rememberRepoRefCacheEntry(cacheKey, result)
     return result
   } catch {
     if (connectionId) {
@@ -87,7 +104,7 @@ export async function getBitbucketRepoRefForRemote(
       // caching them as "not Bitbucket" would poison the repo for the session.
       return null
     }
-    repoRefCache.set(cacheKey, null)
+    rememberRepoRefCacheEntry(cacheKey, null)
     return null
   }
 }

@@ -226,6 +226,33 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('persists resolved GitHub upstream metadata updates', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { upstream: { owner: 'stablyai', repo: 'orca' } }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      upstream: { owner: 'stablyai', repo: 'orca' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', upstream: { owner: 'stablyai', repo: 'orca' } } }
+    })
+  })
+
   it('routes project group mutations to the runtime server', async () => {
     const group = {
       id: 'group-1',

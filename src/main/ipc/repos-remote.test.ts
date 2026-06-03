@@ -11,6 +11,7 @@ import { tmpdir } from 'os'
 import { join } from 'path'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
+import { isGitRepo } from '../git/repo'
 
 const {
   handleMock,
@@ -40,7 +41,9 @@ const {
     exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
   },
   mockFilesystemProvider: {
-    readDir: vi.fn().mockResolvedValue([])
+    readDir: vi.fn().mockResolvedValue([]),
+    readFile: vi.fn().mockRejectedValue(new Error('not found')),
+    stat: vi.fn().mockRejectedValue(new Error('not found'))
   },
   mockMultiplexer: {
     request: vi.fn(),
@@ -135,8 +138,14 @@ describe('projectGroups IPC validation', () => {
     mockStore.getRepos.mockReturnValue([])
     mockFilesystemProvider.readDir.mockReset()
     mockFilesystemProvider.readDir.mockResolvedValue([])
+    mockFilesystemProvider.readFile.mockReset()
+    mockFilesystemProvider.readFile.mockRejectedValue(new Error('not found'))
+    mockFilesystemProvider.stat.mockReset()
+    mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
     mockGitProvider.isGitRepoAsync.mockReset()
     mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    vi.mocked(isGitRepo).mockReset()
+    vi.mocked(isGitRepo).mockReturnValue(true)
     mockMultiplexer.notify.mockReset()
     mockMultiplexer.request.mockReset()
 
@@ -167,6 +176,12 @@ describe('projectGroups IPC validation', () => {
       isRepo: path === '/srv/platform/api',
       rootPath: null
     }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
       dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
     )
@@ -181,6 +196,365 @@ describe('projectGroups IPC validation', () => {
       selectedPathKind: 'non_git_folder',
       repos: [{ path: '/srv/platform/api', displayName: 'api' }]
     })
+  })
+
+  it('detects nested bare repositories over a connected SSH filesystem', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/mirror.git/HEAD') {
+        return { type: 'file', size: 0, mtime: 0 }
+      }
+      if (path === '/srv/platform/mirror.git/objects' || path === '/srv/platform/mirror.git/refs') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? [{ name: 'mirror.git', isDirectory: true, isSymlink: false }]
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:scanNested')!(null, {
+      path: '/srv/platform',
+      connectionId: 'conn-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/platform',
+      selectedPathKind: 'non_git_folder',
+      repos: [{ path: '/srv/platform/mirror.git', displayName: 'mirror.git' }]
+    })
+  })
+
+  it('skips symlinked directories during SSH nested repository scans', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git' || path === '/srv/platform/linked-outside/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? [
+            { name: 'linked-outside', isDirectory: true, isSymlink: true },
+            { name: 'api', isDirectory: true, isSymlink: false }
+          ]
+        : []
+    )
+
+    const result = await handlers.get('projectGroups:scanNested')!(null, {
+      path: '/srv/platform',
+      connectionId: 'conn-1'
+    })
+
+    expect((result as { repos: { path: string }[] }).repos.map((repo) => repo.path)).toEqual([
+      '/srv/platform/api'
+    ])
+  })
+
+  it('uses completed scan ids as an allowlist for nested imports', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api' || path === '/srv/platform/node_modules/hidden',
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      if (path === '/srv/platform/node_modules/hidden/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
+      if (dirPath === '/srv/platform') {
+        return [
+          { name: 'api', isDirectory: true, isSymlink: false },
+          { name: 'node_modules', isDirectory: true, isSymlink: false }
+        ]
+      }
+      return []
+    })
+
+    await handlers.get('projectGroups:scanNested')!(
+      { sender: { send: vi.fn() } },
+      {
+        path: '/srv/platform',
+        connectionId: 'conn-1',
+        scanId: 'scan-import-allowlist'
+      }
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: ['/srv/platform/api', '/srv/platform/node_modules/hidden'],
+      connectionId: 'conn-1',
+      scanId: 'scan-import-allowlist',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({ importedCount: 1, failedCount: 1 })
+    expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: '/srv/platform/api' })
+    )
+  })
+
+  it('does not reuse a completed nested scan id for a different SSH parent path', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Other',
+      parentPath: '/srv/other',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api' || path === '/srv/other/api',
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git' || path === '/srv/other/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
+      if (dirPath === '/srv/platform' || dirPath === '/srv/other') {
+        return [{ name: 'api', isDirectory: true, isSymlink: false }]
+      }
+      return []
+    })
+
+    await handlers.get('projectGroups:scanNested')!(
+      { sender: { send: vi.fn() } },
+      {
+        path: '/srv/platform',
+        connectionId: 'conn-1',
+        scanId: 'scan-parent-context'
+      }
+    )
+    mockStore.addRepo.mockClear()
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/other',
+      groupName: 'Other',
+      projectPaths: ['/srv/platform/api'],
+      connectionId: 'conn-1',
+      scanId: 'scan-parent-context',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({ importedCount: 0, failedCount: 1 })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    expect(mockFilesystemProvider.readDir).toHaveBeenCalledWith('/srv/other')
+  })
+
+  it('does not reuse a completed nested scan id for a different SSH connection', async () => {
+    const group = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api',
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
+    )
+
+    await handlers.get('projectGroups:scanNested')!(
+      { sender: { send: vi.fn() } },
+      {
+        path: '/srv/platform',
+        connectionId: 'conn-1',
+        scanId: 'scan-connection-context'
+      }
+    )
+    mockStore.addRepo.mockClear()
+
+    await expect(
+      handlers.get('projectGroups:importNested')!(null, {
+        parentPath: '/srv/platform',
+        groupName: 'Platform',
+        projectPaths: ['/srv/platform/api'],
+        connectionId: 'missing-conn',
+        scanId: 'scan-connection-context',
+        mode: 'group'
+      })
+    ).rejects.toThrow('ssh_connection_unavailable')
+
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('prioritizes shallow sibling repositories before truncated SSH archive scans', async () => {
+    const archivedRepoNames = Array.from(
+      { length: 101 },
+      (_, index) => `archived-service-${String(index + 1).padStart(3, '0')}`
+    )
+    const archivedRepoPaths = archivedRepoNames.map((name) => `/srv/platform/archive/${name}`)
+    const gitRepos = new Set(['/srv/platform/z-web-client', ...archivedRepoPaths])
+
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: gitRepos.has(path),
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      const repoPath = path.replace(/\/\.git$/, '')
+      if (path.endsWith('/.git') && gitRepos.has(repoPath)) {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) => {
+      if (dirPath === '/srv/platform') {
+        return [
+          { name: 'archive', isDirectory: true, isSymlink: false },
+          { name: 'z-web-client', isDirectory: true, isSymlink: false }
+        ]
+      }
+      if (dirPath === '/srv/platform/archive') {
+        return archivedRepoNames.map((name) => ({
+          name,
+          isDirectory: true,
+          isSymlink: false
+        }))
+      }
+      return []
+    })
+
+    const result = await handlers.get('projectGroups:scanNested')!(null, {
+      path: '/srv/platform',
+      connectionId: 'conn-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/platform',
+      selectedPathKind: 'non_git_folder',
+      truncated: true
+    })
+    expect((result as { repos: { path: string }[] }).repos).toHaveLength(100)
+    expect((result as { repos: { path: string }[] }).repos[0].path).toBe(
+      '/srv/platform/z-web-client'
+    )
+    expect((result as { repos: { path: string }[] }).repos.map((repo) => repo.path)).toContain(
+      '/srv/platform/z-web-client'
+    )
+  })
+
+  it('returns partial SSH scan results after cancellation', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git' || path === '/srv/platform/web/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform'
+        ? [
+            { name: 'api', isDirectory: true, isSymlink: false },
+            { name: 'web', isDirectory: true, isSymlink: false }
+          ]
+        : []
+    )
+    const event = {
+      sender: {
+        send: vi.fn((_channel: string, data: { scanId: string; scan: { repos: unknown[] } }) => {
+          if (data.scan.repos.length === 1) {
+            handlers.get('projectGroups:cancelNestedScan')!(null, { scanId: data.scanId })
+          }
+        })
+      }
+    }
+
+    const result = await handlers.get('projectGroups:scanNested')!(event, {
+      path: '/srv/platform',
+      connectionId: 'conn-1',
+      scanId: 'scan-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/platform',
+      stopped: true,
+      repos: [{ path: '/srv/platform/api' }]
+    })
+    expect(event.sender.send).toHaveBeenCalledWith(
+      'projectGroups:scanNestedProgress',
+      expect.objectContaining({ scanId: 'scan-1' })
+    )
+  })
+
+  it('returns partial local scan results after cancellation', async () => {
+    vi.mocked(isGitRepo).mockReturnValue(false)
+    const root = await mkdtemp(join(tmpdir(), 'orca-nested-local-cancel-'))
+    try {
+      await mkdir(join(root, 'api', '.git'), { recursive: true })
+      await mkdir(join(root, 'web', '.git'), { recursive: true })
+      const event = {
+        sender: {
+          send: vi.fn((_channel: string, data: { scanId: string; scan: { repos: unknown[] } }) => {
+            if (data.scan.repos.length === 1) {
+              handlers.get('projectGroups:cancelNestedScan')!(null, { scanId: data.scanId })
+            }
+          })
+        }
+      }
+
+      const result = await handlers.get('projectGroups:scanNested')!(event, {
+        path: root,
+        scanId: 'local-scan-1'
+      })
+
+      expect(result).toMatchObject({
+        selectedPath: root,
+        selectedPathKind: 'non_git_folder',
+        stopped: true,
+        repos: [{ path: join(root, 'api') }]
+      })
+      expect(event.sender.send).toHaveBeenCalledWith(
+        'projectGroups:scanNestedProgress',
+        expect.objectContaining({ scanId: 'local-scan-1' })
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('rejects local nested scans with relative paths', async () => {
@@ -209,6 +583,12 @@ describe('projectGroups IPC validation', () => {
       isRepo: path === '/srv/platform/api',
       rootPath: null
     }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
       dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
     )
@@ -258,6 +638,13 @@ describe('projectGroups IPC validation', () => {
       isRepo: repoPaths.includes(path),
       rootPath: null
     }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      const repoPath = path.replace(/\/\.git$/, '')
+      if (path.endsWith('/.git') && repoPaths.includes(repoPath)) {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
       dirPath === '/srv/platform'
         ? repoPaths.map((repoPath) => ({
@@ -311,6 +698,12 @@ describe('projectGroups IPC validation', () => {
       isRepo: path === '/srv/platform/api',
       rootPath: null
     }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
     mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
       dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
     )

@@ -4,7 +4,7 @@ import type { Row } from './worktree-list-groups'
 import { PINNED_GROUP_KEY } from './worktree-list-groups'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
-const SECONDARY_GROUP_HEADER_TOP_MARGIN = 8
+const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
 
 type WorktreeItemRow = Extract<Row, { type: 'item' }>
@@ -56,7 +56,9 @@ export function getVirtualRowTransform(start: number): string {
 export function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
   const indexes: number[] = []
   rows.forEach((row, index) => {
-    if (row.type === 'header') {
+    // Why: project groups are the top-level repo sidebar context; nested repo
+    // headers should not replace their containing group as the pinned header.
+    if (row.type === 'header' && (row.projectGroupDepth ?? 0) === 0) {
       indexes.push(index)
     }
   })

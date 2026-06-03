@@ -58,6 +58,7 @@ export type WorktreeRow = {
   worktree: Worktree
   repo: Repo | undefined
   depth: number
+  groupDepth: number
   lineageTrail: boolean[]
   isLastLineageChild: boolean
   lineageChildCount: number
@@ -246,7 +247,7 @@ function emitPinnedGroup(
     const lastPinnedIndexByRepoId = new Map<string, number>()
     pinned.forEach((worktree, index) => lastPinnedIndexByRepoId.set(worktree.repoId, index))
     for (const [index, worktree] of pinned.entries()) {
-      result.push(buildWorktreeRow(worktree, repoMap, 0, [], false, 0, false))
+      result.push(buildWorktreeRow(worktree, repoMap, 0, 0, [], false, 0, false))
       const candidate = importedWorktreesByRepo.get(worktree.repoId)
       if (
         candidate &&
@@ -277,6 +278,7 @@ function buildWorktreeRow(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
   depth: number,
+  groupDepth: number,
   lineageTrail: boolean[],
   isLastLineageChild: boolean,
   lineageChildCount: number,
@@ -287,6 +289,7 @@ function buildWorktreeRow(
     worktree,
     repo: repoMap.get(worktree.repoId),
     depth,
+    groupDepth,
     lineageTrail,
     isLastLineageChild,
     lineageChildCount,
@@ -304,12 +307,13 @@ function appendWorktreeRows(
   options: {
     nestLineage: boolean
     collapsedGroups: Set<string>
+    groupDepth: number
   }
 ): void {
-  const { nestLineage, collapsedGroups } = options
+  const { nestLineage, collapsedGroups, groupDepth } = options
   if (!nestLineage) {
     for (const worktree of worktrees) {
-      result.push(buildWorktreeRow(worktree, repoMap, 0, [], false, 0, false))
+      result.push(buildWorktreeRow(worktree, repoMap, 0, groupDepth, [], false, 0, false))
     }
     return
   }
@@ -347,6 +351,7 @@ function appendWorktreeRows(
         worktree,
         repoMap,
         depth,
+        groupDepth,
         lineageTrail,
         isLastChild,
         children.length,
@@ -445,7 +450,8 @@ export function buildRows(
       if (!collapsedGroups.has(ALL_GROUP_KEY)) {
         appendWorktreeRows(result, unpinned, repoMap, lineageById, worktreeMap, {
           nestLineage,
-          collapsedGroups
+          collapsedGroups,
+          groupDepth: 0
         })
       }
     }
@@ -606,7 +612,8 @@ export function buildRows(
         const items = groupBy === 'repo' ? orderMainWorktreeFirst(group.items) : group.items
         appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
           nestLineage,
-          collapsedGroups
+          collapsedGroups,
+          groupDepth: projectGroupDepth
         })
       }
     }

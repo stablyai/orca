@@ -199,17 +199,19 @@ function sortPullRequestsForBranch(
   left: RawAzureDevOpsPullRequest,
   right: RawAzureDevOpsPullRequest
 ): number {
+  const leftStatus = left.status?.trim().toLowerCase()
+  const rightStatus = right.status?.trim().toLowerCase()
+  const abandonedOrder = Number(leftStatus === 'abandoned') - Number(rightStatus === 'abandoned')
+  // Why: abandoned PRs can have newer close dates, but should not hide a usable branch PR.
+  if (abandonedOrder !== 0) {
+    return abandonedOrder
+  }
   const leftTime = Date.parse(left.closedDate ?? left.creationDate ?? '') || 0
   const rightTime = Date.parse(right.closedDate ?? right.creationDate ?? '') || 0
   if (leftTime !== rightTime) {
     return rightTime - leftTime
   }
-  const leftActive = left.status?.trim().toLowerCase() === 'active'
-  const rightActive = right.status?.trim().toLowerCase() === 'active'
-  if (leftActive !== rightActive) {
-    return leftActive ? -1 : 1
-  }
-  return 0
+  return Number(rightStatus === 'active') - Number(leftStatus === 'active')
 }
 
 export async function getAzureDevOpsAuthStatus(): Promise<AzureDevOpsAuthStatus> {

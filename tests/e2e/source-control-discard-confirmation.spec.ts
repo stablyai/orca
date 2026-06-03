@@ -1,9 +1,8 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 type SeededUntrackedFile = {
-  relativePath: string
   fileName: string
 }
 
@@ -48,7 +47,6 @@ async function seedUntrackedFile(page: Page): Promise<SeededUntrackedFile> {
     }
 
     return {
-      relativePath: statusEntry.path,
       fileName
     }
   })
@@ -72,13 +70,22 @@ async function refreshGitStatus(page: Page): Promise<void> {
   })
 }
 
+async function deleteUntrackedFileFromRow(row: Locator): Promise<void> {
+  const deleteButton = row.getByRole('button', { name: 'Delete untracked file' })
+  // Why: row actions are hover/focus revealed; keyboard activation avoids
+  // CI hover hit-test drift while exercising the same accessible control.
+  await deleteButton.focus()
+  await expect(deleteButton).toBeFocused()
+  await deleteButton.press('Enter')
+}
+
 test.describe('Source Control discard confirmation', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
   })
 
-  test('cancel keeps an untracked file and confirm deletes it', async ({ orcaPage }) => {
+  test('deletes an untracked file without confirmation', async ({ orcaPage }) => {
     const seededFile = await seedUntrackedFile(orcaPage)
     await openSourceControl(orcaPage)
 
@@ -87,26 +94,11 @@ test.describe('Source Control discard confirmation', () => {
       .filter({ hasText: seededFile.fileName })
     await expect(row).toBeVisible()
 
-    await row.hover()
-    await row.getByRole('button', { name: 'Delete untracked file' }).click()
+    await deleteUntrackedFileFromRow(row)
 
-    const dialog = orcaPage.getByRole('dialog', {
-      name: `Delete "${seededFile.fileName}"?`
-    })
-    await expect(dialog).toBeVisible()
-    await expect(dialog).toContainText(seededFile.relativePath)
-
-    await dialog.getByRole('button', { name: 'Cancel' }).click()
-    await expect(dialog).toBeHidden()
-    await expect(row).toBeVisible()
-
-    await row.hover()
-    await row.getByRole('button', { name: 'Delete untracked file' }).click()
-    await orcaPage
-      .getByRole('dialog', { name: `Delete "${seededFile.fileName}"?` })
-      .getByRole('button', { name: 'Delete' })
-      .click()
-
+    await expect(
+      orcaPage.getByRole('dialog', { name: `Delete "${seededFile.fileName}"?` })
+    ).toHaveCount(0)
     await expect(row).toHaveCount(0, { timeout: 10_000 })
 
     await refreshGitStatus(orcaPage)

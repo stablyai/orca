@@ -216,6 +216,16 @@ describe('searchBaseRefs (widened glob)', () => {
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
     createRemoteRef(tmpDir, 'upstream/feature/something', sha)
 
+    expect(
+      await getBranchConflictKind(tmpDir, 'feature/something', 'origin/feature/something')
+    ).toBe('remote')
+  })
+
+  it('reports remote conflicts when the remote name contains a slash', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'foo/bar', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'foo/bar/feature/something', sha)
+
     const result = await getBranchConflictKind(
       tmpDir,
       'feature/something',

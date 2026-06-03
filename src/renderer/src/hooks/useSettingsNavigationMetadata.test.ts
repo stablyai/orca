@@ -24,12 +24,13 @@ function ids(args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean
 
 describe('settings navigation metadata', () => {
   it('puts AI capability panes at the top on desktop', () => {
-    expect(ids().slice(0, 8)).toEqual([
+    expect(ids().slice(0, 9)).toEqual([
       'agents',
       'accounts',
       'orchestration',
       'computer-use',
       'voice',
+      'setup-guide',
       'general',
       'integrations',
       'git'
@@ -37,10 +38,11 @@ describe('settings navigation metadata', () => {
   })
 
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
-    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
+    expect(ids({ isWebClient: true }).slice(0, 7)).toEqual([
       'agents',
       'accounts',
       'orchestration',
+      'setup-guide',
       'general',
       'integrations',
       'git'
@@ -55,8 +57,29 @@ describe('settings navigation metadata', () => {
     expect(webIds).not.toContain('mobile')
     expect(webIds).not.toContain('computer-use')
     expect(webIds).not.toContain('voice')
+    expect(webIds).not.toContain('advanced')
     expect(webIds).toContain('servers')
     expect(webIds).toContain('repo-repo-1')
+  })
+
+  it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: true,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    expect(sections.find((section) => section.id === 'computer-use')?.badge).toBeUndefined()
+    expect(sections.find((section) => section.id === 'voice')?.badge).toBeUndefined()
+  })
+
+  it('places Advanced near the bottom on desktop without putting it under Experimental', () => {
+    const desktopIds = ids()
+
+    expect(desktopIds).toContain('advanced')
+    expect(desktopIds.indexOf('advanced')).toBeLessThan(desktopIds.indexOf('experimental'))
+    expect(desktopIds.indexOf('privacy')).toBeLessThan(desktopIds.indexOf('advanced'))
   })
 
   it('keeps macOS permissions mac-only', () => {

@@ -198,14 +198,12 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     rmSync(join(userDataDir, 'opencode-config-overlays'), { recursive: true, force: true })
   })
 
-  it('writes OPENCODE_CONFIG_DIR for a daemon-shaped sessionId and installs the plugin file', () => {
+  it('writes a shared OPENCODE_CONFIG_DIR and installs the plugin file', () => {
     const service = new OpenCodeHookService()
     const env = service.buildPtyEnv(daemonSessionId)
 
     expect(env.OPENCODE_CONFIG_DIR).toBeTruthy()
-    expect(env.OPENCODE_CONFIG_DIR).toBe(
-      join(userDataDir, 'opencode-hooks', toSafeDirName(daemonSessionId))
-    )
+    expect(env.OPENCODE_CONFIG_DIR).toBe(join(userDataDir, 'opencode-hooks', 'shared'))
 
     const pluginPath = join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js')
     expect(existsSync(pluginPath)).toBe(true)
@@ -215,14 +213,17 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(pluginSource).toContain('messageID: part.messageID')
   })
 
-  it('clearPty removes the same directory buildPtyEnv created', () => {
+  it('clearPty leaves the shared OpenCode config dir off the teardown hot path', () => {
     const service = new OpenCodeHookService()
     const env = service.buildPtyEnv(daemonSessionId)
     const configDir = env.OPENCODE_CONFIG_DIR!
     expect(existsSync(configDir)).toBe(true)
+    mkdirSync(join(configDir, 'node_modules', 'opencode-runtime'), { recursive: true })
+    writeFileSync(join(configDir, 'node_modules', 'opencode-runtime', 'index.js'), '')
 
     service.clearPty(daemonSessionId)
-    expect(existsSync(configDir)).toBe(false)
+    expect(existsSync(configDir)).toBe(true)
+    expect(existsSync(join(configDir, 'node_modules', 'opencode-runtime', 'index.js'))).toBe(true)
   })
 
   it('buildPtyEnv returns {} for an unusable id and creates nothing on disk', () => {
@@ -252,25 +253,22 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     const service = new OpenCodeHookService()
     const env = service.buildPtyEnv(plainUuidId)
 
-    expect(env.OPENCODE_CONFIG_DIR).toBe(
-      join(userDataDir, 'opencode-hooks', toSafeDirName(plainUuidId))
-    )
+    expect(env.OPENCODE_CONFIG_DIR).toBe(join(userDataDir, 'opencode-hooks', 'shared'))
     expect(existsSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'))).toBe(
       true
     )
 
     service.clearPty(plainUuidId)
-    expect(existsSync(env.OPENCODE_CONFIG_DIR!)).toBe(false)
+    expect(existsSync(env.OPENCODE_CONFIG_DIR!)).toBe(true)
   })
 })
 
 describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () => {
   // Why: locks in docs/opencode-config-dir-collision.md — when the user has
   // their own OPENCODE_CONFIG_DIR (e.g. a company-wide opencode config repo),
-  // Orca must mirror it into a per-PTY overlay rather than `delete` its own
-  // injection (the prior bug) or overwrite the user's value (Superset's
-  // failure mode). The user's auth/models/keymap and Orca's status plugin
-  // both load via a single OPENCODE_CONFIG_DIR.
+  // Orca must mirror it into a source-scoped overlay rather than `delete` its
+  // own injection or overwrite the user's value. The user's auth/models/keymap
+  // and Orca's status plugin both load via a single OPENCODE_CONFIG_DIR.
   const ptyId = 'overlay-pty-1'
   let userDataDir: string
   let userConfigDir: string
@@ -319,7 +317,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
     const env = service.buildPtyEnv(ptyId, userConfigDir)
 
     expect(env.OPENCODE_CONFIG_DIR).toBe(
-      join(userDataDir, 'opencode-config-overlays', toSafeDirName(ptyId))
+      join(userDataDir, 'opencode-config-overlays', toSafeDirName(`source:${userConfigDir}`))
     )
     expect(env.OPENCODE_CONFIG_DIR).not.toBe(userConfigDir)
 
@@ -443,9 +441,11 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
     // No overlay was created at the typo path.
     expect(existsSync(missingPath)).toBe(false)
     // No overlay dir under userData either.
-    expect(existsSync(join(userDataDir, 'opencode-config-overlays', toSafeDirName(ptyId)))).toBe(
-      false
-    )
+    expect(
+      existsSync(
+        join(userDataDir, 'opencode-config-overlays', toSafeDirName(`source:${missingPath}`))
+      )
+    ).toBe(false)
   })
 
   it("preserves the user's OPENCODE_CONFIG_DIR when the mirror step fails", async () => {
@@ -462,9 +462,14 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
       const service = new OpenCodeHookService()
       const env = service.buildPtyEnv(ptyId, userConfigDir)
       expect(env).toEqual({ OPENCODE_CONFIG_DIR: userConfigDir })
-      // Overlay dir was rolled back so a half-built tree does not leak.
-      const overlayDir = join(userDataDir, 'opencode-config-overlays', toSafeDirName(ptyId))
-      expect(existsSync(overlayDir)).toBe(false)
+      // Overlay cleanup is deliberately not on the fallback path; it may hold
+      // OpenCode-created runtime files on Windows.
+      const overlayDir = join(
+        userDataDir,
+        'opencode-config-overlays',
+        toSafeDirName(`source:${userConfigDir}`)
+      )
+      expect(existsSync(overlayDir)).toBe(true)
       expectUserConfigIntact()
     } finally {
       mirrorSpy.mockRestore()
@@ -472,20 +477,23 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   })
 
   it.skipIf(process.platform === 'win32')(
-    'clearPty removes the overlay without following symlinks into the user dir',
+    'clearPty leaves the source overlay off the teardown hot path',
     () => {
-      // Critical regression guard from issue #1083: the overlay's mirrored
-      // entries are symlinks pointing at the user's real config. Recursive
-      // teardown must NEVER walk through them.
+      // Why: OpenCode may populate OPENCODE_CONFIG_DIR with runtime files.
+      // PTY teardown must not recursively delete that tree on Electron main.
       const service = new OpenCodeHookService()
       service.buildPtyEnv(ptyId, userConfigDir)
 
-      const overlayDir = join(userDataDir, 'opencode-config-overlays', toSafeDirName(ptyId))
+      const overlayDir = join(
+        userDataDir,
+        'opencode-config-overlays',
+        toSafeDirName(`source:${userConfigDir}`)
+      )
       expect(existsSync(overlayDir)).toBe(true)
 
       service.clearPty(ptyId)
 
-      expect(existsSync(overlayDir)).toBe(false)
+      expect(existsSync(overlayDir)).toBe(true)
       // User config must still exist with all original contents.
       expectUserConfigIntact()
       // The plugins/ dir under the user config is also intact.
@@ -495,9 +503,9 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
 
   it('rebuilding the overlay for the same ptyId does not corrupt the user dir', () => {
     // Mirrors the daemon cold-restore code path that calls buildPtyEnv with
-    // the same sessionId across restarts. Each rebuild must clear the prior
-    // overlay safely (no symlink-walk into user data) and produce a fresh
-    // overlay with both user files and Orca's plugin.
+    // the same sessionId across restarts. Each rebuild must refresh the prior
+    // overlay safely (no symlink-walk into user data) and keep both user files
+    // and Orca's plugin reachable.
     const service = new OpenCodeHookService()
     service.buildPtyEnv(ptyId, userConfigDir)
     service.buildPtyEnv(ptyId, userConfigDir)
@@ -507,5 +515,29 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
       readFileSync(join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'), 'utf8')
     ).toContain('OrcaOpenCodeStatusPlugin')
     expectUserConfigIntact()
+  })
+
+  it('reconciles stale mirrored entries while preserving OpenCode runtime files', () => {
+    const service = new OpenCodeHookService()
+    const firstEnv = service.buildPtyEnv(ptyId, userConfigDir)
+    const overlayDir = firstEnv.OPENCODE_CONFIG_DIR!
+
+    mkdirSync(join(overlayDir, 'node_modules', 'opencode-runtime'), { recursive: true })
+    writeFileSync(join(overlayDir, 'node_modules', 'opencode-runtime', 'index.js'), '')
+
+    rmSync(join(userConfigDir, 'auth.json'), { force: true })
+    writeFileSync(join(userConfigDir, 'auth.json'), 'rotated-user-auth-token')
+    rmSync(join(userConfigDir, 'plugins', 'user-plugin.js'), { force: true })
+    writeFileSync(join(userConfigDir, 'plugins', 'new-plugin.js'), 'export default "new"')
+
+    const secondEnv = service.buildPtyEnv(ptyId, userConfigDir)
+
+    expect(secondEnv.OPENCODE_CONFIG_DIR).toBe(overlayDir)
+    expect(readFileSync(join(overlayDir, 'auth.json'), 'utf8')).toBe('rotated-user-auth-token')
+    expect(existsSync(join(overlayDir, 'plugins', 'user-plugin.js'))).toBe(false)
+    expect(readFileSync(join(overlayDir, 'plugins', 'new-plugin.js'), 'utf8')).toBe(
+      'export default "new"'
+    )
+    expect(existsSync(join(overlayDir, 'node_modules', 'opencode-runtime', 'index.js'))).toBe(true)
   })
 })

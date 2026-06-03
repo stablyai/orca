@@ -39,37 +39,24 @@ export function getTaskPresetQuery(presetId: TaskViewPresetId | null): string {
   }
 }
 
-export const IS_MAC = navigator.userAgent.includes('Mac')
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'
-  : IS_MAC
+  : navigator.userAgent.includes('Mac')
     ? 'darwin'
     : 'linux'
 
 export type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
+export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-provider'
 
 export type LinkedWorkItemSummary = {
-  /** 'mr' is the GitLab analogue of 'pr'. The shape is otherwise
-   *  identical so the linked-work-item badge in the composer renders
-   *  uniformly across providers. */
   type: 'issue' | 'pr' | 'mr'
+  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
   number: number
   title: string
   url: string
-  /** Linear identifier (for example ENG-123) when this linked item came from
-   *  Linear rather than GitHub. */
   linearIdentifier?: string
+  jiraIdentifier?: string
   linkedContext?: LinkedWorkItemContext
-}
-
-export function isGitLabIssueUrl(url: string): boolean {
-  // Why: self-hosted GitLab issue URLs may not contain "gitlab"; the
-  // provider-stable signal is the `/-/issues/` path segment.
-  try {
-    return new URL(url).pathname.includes('/-/issues/')
-  } catch {
-    return /\/-\/issues\//i.test(url)
-  }
 }
 
 // Why: when a repo has no `orca.yaml` issueCommand and no per-user override,
@@ -78,7 +65,38 @@ export function isGitLabIssueUrl(url: string): boolean {
 // is the minimum viable instruction that always produces a coherent agent task.
 export const DEFAULT_ISSUE_COMMAND_TEMPLATE = 'Complete {{artifact_url}}'
 
-export type SetupConfig = { source: 'yaml' | 'local' | 'both'; command: string }
+export type SetupConfig = {
+  source: 'yaml' | 'local' | 'both'
+  command: string
+  kind: 'setup' | 'default-tabs' | 'setup-and-default-tabs'
+}
+
+function getDefaultTabCommandPreview(yamlHooks: OrcaHooks | null): string {
+  return (yamlHooks?.defaultTabs ?? [])
+    .map((tab, index) => {
+      const command = tab.command?.trim()
+      if (!command) {
+        return null
+      }
+      const label = tab.title ? ` ${tab.title}` : ''
+      return `# defaultTabs[${index + 1}]${label}\n${command}`
+    })
+    .filter((entry): entry is string => entry !== null)
+    .join('\n\n')
+}
+
+function getSetupConfigKind(
+  hasSetup: boolean,
+  hasDefaultTabCommands: boolean
+): SetupConfig['kind'] {
+  if (hasSetup && hasDefaultTabCommands) {
+    return 'setup-and-default-tabs'
+  }
+  if (hasDefaultTabCommands) {
+    return 'default-tabs'
+  }
+  return 'setup'
+}
 
 /**
  * Substitute the issue-command template variables. Prefers `{{artifact_url}}`
@@ -149,21 +167,31 @@ export function getSetupConfig(
   yamlHooks: OrcaHooks | null
 ): SetupConfig | null {
   const yamlSetup = yamlHooks?.scripts?.setup?.trim()
+  const yamlDefaultTabCommands = getDefaultTabCommandPreview(yamlHooks)
   const localSetup = repo?.hookSettings?.scripts?.setup?.trim()
   const sourcePolicy = resolveHookCommandSourcePolicy(repo?.hookSettings?.commandSourcePolicy, {
     hasLocalScript: Boolean(localSetup)
   })
 
   if (sourcePolicy === 'local-only') {
-    return localSetup ? { source: 'local', command: localSetup } : null
+    return localSetup ? { source: 'local', command: localSetup, kind: 'setup' } : null
   }
 
-  if (sourcePolicy === 'run-both' && yamlSetup && localSetup) {
-    return { source: 'both', command: `${yamlSetup}\n${localSetup}` }
+  const yamlCommand = [yamlSetup, yamlDefaultTabCommands].filter(Boolean).join('\n\n')
+  if (sourcePolicy === 'run-both' && yamlCommand && localSetup) {
+    return {
+      source: 'both',
+      command: `${yamlCommand}\n\n${localSetup}`,
+      kind: getSetupConfigKind(true, Boolean(yamlDefaultTabCommands))
+    }
   }
 
-  if (yamlSetup) {
-    return { source: 'yaml', command: yamlSetup }
+  if (yamlCommand) {
+    return {
+      source: 'yaml',
+      command: yamlCommand,
+      kind: getSetupConfigKind(Boolean(yamlSetup), Boolean(yamlDefaultTabCommands))
+    }
   }
   return null
 }
@@ -211,9 +239,10 @@ export function getWorkspaceSeedName(args: {
 
 export async function ensureAgentStartupInTerminal(args: {
   worktreeId: string
+  primaryTabId?: string | null
   startup: AgentStartupPlan
 }): Promise<void> {
-  const { worktreeId, startup } = args
+  const { worktreeId, primaryTabId, startup } = args
   const draftPrompt = startup.draftPrompt ?? null
   if (startup.followupPrompt === null && draftPrompt === null) {
     return
@@ -229,8 +258,14 @@ export async function ensureAgentStartupInTerminal(args: {
       await new Promise((resolve) => window.setTimeout(resolve, 150))
     }
     const state = useAppStore.getState()
+    // Why: workspace activation tells us the exact tab that received the agent
+    // startup command. Use it for draft paste instead of re-deriving from
+    // active tab state, which can move while setup/background panes mount.
     tabId =
-      state.activeTabIdByWorktree[worktreeId] ?? state.tabsByWorktree[worktreeId]?.[0]?.id ?? null
+      primaryTabId ??
+      state.activeTabIdByWorktree[worktreeId] ??
+      state.tabsByWorktree[worktreeId]?.[0]?.id ??
+      null
     if (!tabId) {
       continue
     }

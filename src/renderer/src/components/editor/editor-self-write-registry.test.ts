@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   __clearSelfWriteRegistryForTests,
+  __getSelfWriteRegistrySizeForTests,
   clearSelfWrite,
   hasRecentSelfWrite,
   recordSelfWrite
@@ -35,5 +36,26 @@ describe('editor self-write registry', () => {
     recordSelfWrite('/Repo/a.md')
 
     expect(hasRecentSelfWrite('/repo/a.md')).toBe(false)
+  })
+
+  it('prunes expired stamps when recording later writes', () => {
+    recordSelfWrite('/repo/old.md')
+
+    vi.advanceTimersByTime(751)
+    recordSelfWrite('/repo/new.md')
+
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(1)
+    expect(hasRecentSelfWrite('/repo/old.md')).toBe(false)
+    expect(hasRecentSelfWrite('/repo/new.md')).toBe(true)
+  })
+
+  it('caps retained stamps', () => {
+    for (let i = 0; i < 260; i++) {
+      recordSelfWrite(`/repo/${i}.md`)
+    }
+
+    expect(__getSelfWriteRegistrySizeForTests()).toBe(256)
+    expect(hasRecentSelfWrite('/repo/0.md')).toBe(false)
+    expect(hasRecentSelfWrite('/repo/259.md')).toBe(true)
   })
 })

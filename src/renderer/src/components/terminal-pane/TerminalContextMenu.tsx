@@ -3,6 +3,7 @@ import {
   Clipboard,
   Copy,
   Eraser,
+  GitFork,
   Maximize2,
   Minimize2,
   PanelBottomClose,
@@ -49,6 +50,7 @@ type TerminalContextMenuProps = {
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
+  onForkAgentSession: () => void
   repoQuickCommands: TerminalQuickCommand[]
   globalQuickCommands: TerminalQuickCommand[]
   quickCommandRepoLabel: string | null
@@ -76,6 +78,7 @@ export default function TerminalContextMenu({
   onEqualizePaneSizes,
   onClosePane,
   onClearScreen,
+  onForkAgentSession,
   repoQuickCommands,
   globalQuickCommands,
   quickCommandRepoLabel,
@@ -218,6 +221,10 @@ export default function TerminalContextMenu({
             </DropdownMenuItem>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
+        <DropdownMenuItem onSelect={onForkAgentSession}>
+          <GitFork />
+          Fork Agent Session…
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onSplitRight}>
           <PanelRightClose />

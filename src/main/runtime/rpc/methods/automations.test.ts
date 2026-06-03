@@ -28,6 +28,7 @@ describe('automation RPC methods', () => {
       makeRequest('automation.create', {
         name: 'New review',
         prompt: 'Review changes',
+        precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
         repo: 'repo-1',
         reuseSession: true,
@@ -56,6 +57,7 @@ describe('automation RPC methods', () => {
       expect.objectContaining({
         name: 'New review',
         prompt: 'Review changes',
+        precheck: { command: 'test -f ready', timeoutSeconds: 30 },
         agentId: 'codex',
         repo: 'repo-1',
         reuseSession: true

@@ -1050,7 +1050,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       selector: 'env-1',
       method: 'terminal.create',
       params: {
-        worktree: 'repo1::/remote/wt',
+        worktree: 'id:repo1::/remote/wt',
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',

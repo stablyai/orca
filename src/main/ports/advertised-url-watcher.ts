@@ -318,6 +318,34 @@ export class AdvertisedUrlWatcher {
     }
   }
 
+  forgetWorktree(worktreeId: string): void {
+    // Why: worktree IDs are reused for the same repo/path, so removed
+    // worktrees must not leave scan baselines for a future workspace.
+    for (const [ptyId, boundWorktreeId] of this.ptyToWorktree) {
+      if (boundWorktreeId !== worktreeId) {
+        continue
+      }
+      this.ptyToWorktree.delete(ptyId)
+      this.buffers.delete(ptyId)
+    }
+
+    this.scanSnapshots.delete(worktreeId)
+    const removedEvents: AdvertisedUrlChangeEvent[] = []
+    for (const [key, entry] of this.cache) {
+      const entryWorktreeId = worktreeIdFromCacheKey(key, entry.port)
+      if (entryWorktreeId !== worktreeId) {
+        continue
+      }
+      this.cache.delete(key)
+      this.validationBaselines.delete(key)
+      this.startupAbsentAllowances.delete(key)
+      removedEvents.push({ worktreeId, port: entry.port })
+    }
+    for (const event of dedupeChangeEvents(removedEvents)) {
+      this.emitChange(event)
+    }
+  }
+
   ingest(ptyId: string, chunk: string, now?: number): void {
     if (!chunk) {
       return

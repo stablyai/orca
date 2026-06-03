@@ -81,7 +81,13 @@ class RemoteRuntimeTerminalMultiplexer {
   private ready = false
   private nextStreamId = 1
 
-  constructor(private readonly environmentId: string) {}
+  constructor(
+    private readonly environmentId: string,
+    private readonly releaseIfCurrent: (
+      environmentId: string,
+      multiplexer: RemoteRuntimeTerminalMultiplexer
+    ) => void
+  ) {}
 
   async subscribeTerminal(args: {
     terminal: string
@@ -168,7 +174,7 @@ class RemoteRuntimeTerminalMultiplexer {
     if (this.connectPromise) {
       return this.connectPromise
     }
-    this.connectPromise = new Promise<void>((resolve, reject) => {
+    const connectPromise = new Promise<void>((resolve, reject) => {
       this.readyResolver = resolve
       this.readyRejecter = reject
       void window.api.runtimeEnvironments
@@ -187,16 +193,26 @@ class RemoteRuntimeTerminalMultiplexer {
           }
         )
         .then((subscription) => {
+          if (this.connectPromise !== connectPromise || (!this.ready && !this.readyRejecter)) {
+            // Why: close/error can arrive before subscribe() resolves because
+            // preload listens before ipcMain.handle() returns. The multiplexer
+            // may already be released; do not retain the late handle.
+            subscription.unsubscribe()
+            return
+          }
           this.subscription = subscription
           this.resolveReadyIfConnected()
         })
         .catch((error) => {
-          this.connectPromise = null
-          this.readyResolver = null
-          this.readyRejecter = null
+          if (this.connectPromise === connectPromise) {
+            this.connectPromise = null
+            this.readyResolver = null
+            this.readyRejecter = null
+          }
           reject(error instanceof Error ? error : new Error(String(error)))
         })
     })
+    this.connectPromise = connectPromise
     return this.connectPromise
   }
 
@@ -347,6 +363,10 @@ class RemoteRuntimeTerminalMultiplexer {
         stream.callbacks.onError?.(message)
       }
     }
+    // Why: a closed transport has no live streams or subscription; keeping it
+    // in the module map only retains callbacks for an environment that must
+    // reconnect through a fresh subscription anyway.
+    this.releaseIfCurrent(this.environmentId, this)
   }
 
   private closeIfIdle(): void {
@@ -357,20 +377,37 @@ class RemoteRuntimeTerminalMultiplexer {
     this.subscription = null
     this.connectPromise = null
     this.ready = false
+    this.releaseIfCurrent(this.environmentId, this)
   }
 }
 
 const multiplexers = new Map<string, RemoteRuntimeTerminalMultiplexer>()
+
+function releaseRemoteRuntimeTerminalMultiplexer(
+  environmentId: string,
+  multiplexer: RemoteRuntimeTerminalMultiplexer
+): void {
+  if (multiplexers.get(environmentId) === multiplexer) {
+    multiplexers.delete(environmentId)
+  }
+}
 
 export function getRemoteRuntimeTerminalMultiplexer(
   environmentId: string
 ): RemoteRuntimeTerminalMultiplexer {
   let multiplexer = multiplexers.get(environmentId)
   if (!multiplexer) {
-    multiplexer = new RemoteRuntimeTerminalMultiplexer(environmentId)
+    multiplexer = new RemoteRuntimeTerminalMultiplexer(
+      environmentId,
+      releaseRemoteRuntimeTerminalMultiplexer
+    )
     multiplexers.set(environmentId, multiplexer)
   }
   return multiplexer
+}
+
+export function _getRemoteRuntimeTerminalMultiplexerCountForTest(): number {
+  return multiplexers.size
 }
 
 export function resetRemoteRuntimeTerminalMultiplexersForTests(): void {

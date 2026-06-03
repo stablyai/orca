@@ -65,7 +65,15 @@ export default function RepoCombobox({
     }
   }, [])
 
-  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
 
   const focusSearchInput = useCallback(() => {
     cancelFocusFrame()
@@ -215,7 +223,7 @@ export default function RepoCombobox({
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               placeholder="Search projects/folders..."
               value={query}
               onValueChange={setQuery}

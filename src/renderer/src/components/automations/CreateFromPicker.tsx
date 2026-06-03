@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: picker base-ref defaults and search results come from debounced runtime IPC, so loading/result state is intentionally synchronized from effects. */
 import React from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -77,7 +78,15 @@ export function CreateFromPicker({
     }
   }, [])
 
-  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+  const setInputNode = React.useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
 
   const focusSearchInput = React.useCallback(() => {
     cancelFocusFrame()
@@ -118,12 +127,6 @@ export function CreateFromPicker({
       stale = true
     }
   }, [activeRuntimeEnvironmentId, repoId])
-
-  React.useEffect(() => {
-    setQuery('')
-    setSearchResults([])
-    setIsSearching(false)
-  }, [repoId])
 
   React.useEffect(() => {
     const trimmedQuery = query.trim()
@@ -188,7 +191,7 @@ export function CreateFromPicker({
         >
           <Command>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               value={query}
               onValueChange={setQuery}
               placeholder="Search repo branches..."
