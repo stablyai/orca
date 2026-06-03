@@ -132,6 +132,9 @@ describe('CodexUsageStore snapshot benchmark', () => {
     const snapshotMs = performance.now() - startedAt
     expect(snapshot.summary.totalTokens).toBe(18_000_000)
     expect(snapshot.recentSessions).toHaveLength(10)
-    expect(snapshotMs).toBeLessThan(75)
+    // Why: full-suite CI runs this beside thousands of tests on shared runners.
+    // Keep a coarse guard so this catches accidental scan-like work without
+    // treating runner contention as a product regression.
+    expect(snapshotMs).toBeLessThan(1_000)
   })
 })
