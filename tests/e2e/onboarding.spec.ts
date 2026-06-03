@@ -120,6 +120,24 @@ async function continueFromPostNotificationsToRepo(page: Page): Promise<void> {
   await expectAddProjectDialog(page)
 }
 
+async function continueThroughOptionalTaskSourcesToNotifications(page: Page): Promise<void> {
+  const taskSourcesVisible = await page
+    .getByRole('heading', { name: TASK_SOURCES_HEADING })
+    .waitFor({ state: 'visible', timeout: 1_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (taskSourcesVisible) {
+    await expectOnboardingProgress(page, /^3 of 4$/)
+    await continueOnboarding(page)
+  }
+  await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
+}
+
+async function continueFromThemeToNotifications(page: Page): Promise<void> {
+  await continueOnboarding(page)
+  await continueThroughOptionalTaskSourcesToNotifications(page)
+}
+
 test.describe('Onboarding flow', () => {
   // Why: the shared fixture pre-seeds onboarding as closed so non-onboarding
   // tests don't get blocked by the fullscreen overlay. Opt out here so this
@@ -219,8 +237,6 @@ test.describe('Onboarding flow', () => {
       .toBe(oppositeTheme)
 
     await continueOnboarding(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
-    await expectOnboardingProgress(orcaPage, /^3 of [34]$/)
     await expect
       .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
         timeout: 5_000,
@@ -230,6 +246,8 @@ test.describe('Onboarding flow', () => {
     await expect
       .poll(async () => (await getSettings(orcaPage)).theme, { timeout: 5_000 })
       .toBe(oppositeTheme)
+    await continueThroughOptionalTaskSourcesToNotifications(orcaPage)
+    await expectOnboardingProgress(orcaPage, /^[34] of [34]$/)
 
     // --- Step 3: notifications ---
     await expectOnboardingNotificationSound(orcaPage, /System Default/i)
@@ -412,8 +430,7 @@ test.describe('Onboarding flow', () => {
     })
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
-    await continueOnboarding(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
+    await continueFromThemeToNotifications(orcaPage)
 
     await orcaPage.evaluate(() => {
       localStorage.removeItem('orca.e2e.notificationPermissionRequested')
@@ -479,8 +496,7 @@ test.describe('Onboarding flow', () => {
     })
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
-    await continueOnboarding(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
+    await continueFromThemeToNotifications(orcaPage)
 
     await chooseOnboardingNotificationSound(orcaPage, /^Ding$/i)
 
@@ -517,12 +533,13 @@ test.describe('Onboarding flow', () => {
     // should remain visible and the empty clone form must not submit.
     const isMac = await orcaPage.evaluate(() => navigator.userAgent.includes('Mac'))
     const accelerator = isMac ? 'Meta+Enter' : 'Control+Enter'
-    const input = orcaPage.getByPlaceholder('git@github.com:org/repo.git')
+    const input = orcaPage.getByPlaceholder('https://github.com/user/repo.git')
     await input.click()
     await input.press(accelerator)
     // Brief wait so any (incorrect) handler firing would have already happened.
     await orcaPage.waitForTimeout(250)
-    await expectAddProjectDialog(orcaPage)
+    await expect(orcaPage.getByRole('heading', { name: /Clone from URL/i })).toBeVisible()
+    await expect(input).toBeVisible()
     expect((await getOnboardingState(orcaPage)).closedAt).not.toBeNull()
   })
 
@@ -560,16 +577,23 @@ test.describe('Onboarding flow', () => {
       timeout: 15_000
     })
 
-    // Advance through the optional preference and task-source steps. The final
-    // notification step finishes onboarding, so the footer must not offer skip.
+    // Advance through the optional preference step. The final notification step
+    // finishes onboarding, so no skip/dismiss path should be available there.
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
-    await continueOnboarding(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
-    await continueFromPostNotificationsToRepo(orcaPage)
+    await continueFromThemeToNotifications(orcaPage)
 
     await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
     await expect(onboardingFooterButton(orcaPage, /Skip all onboarding/i)).toHaveCount(0)
+    await orcaPage.keyboard.press('Escape')
+    await expectOnboardingSkipConfirmationClosed(orcaPage)
+    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
+    await orcaPage.locator('[data-onboarding-overlay]').click({ position: { x: 8, y: 40 } })
+    await expectOnboardingSkipConfirmationClosed(orcaPage)
+    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
+
+    await continueOnboarding(orcaPage)
+    await expectAddProjectDialog(orcaPage)
     const final = await getOnboardingState(orcaPage)
     expect(final.closedAt).not.toBeNull()
     expect(final.outcome).toBe('completed')

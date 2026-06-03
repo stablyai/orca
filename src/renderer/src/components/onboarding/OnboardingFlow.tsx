@@ -60,19 +60,22 @@ export default function OnboardingFlow({
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
     busyLabel ?? (currentStep.id === 'notifications' ? 'Add your first project' : 'Continue')
+  const canDismissCurrentStep = currentStep.id !== 'notifications'
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      if (busyLabel || skipConfirmOpen) {
+      // Why: the final notifications step hands off to Add Project, so all
+      // dismiss paths are disabled there, not just the visible Skip button.
+      if (!canDismissCurrentStep || busyLabel || skipConfirmOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen]
+    [busyLabel, canDismissCurrentStep, skipConfirmOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
