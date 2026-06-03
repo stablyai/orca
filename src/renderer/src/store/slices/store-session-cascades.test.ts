@@ -1775,7 +1775,7 @@ describe('reconnectPersistedTerminals', () => {
     expect((mockApi.pty as Record<string, unknown>).spawn).not.toHaveBeenCalled()
   })
 
-  it('falls back to tab ptyIds when activeWorktreeIdsOnShutdown is absent (upgrade)', async () => {
+  it('falls back to the active worktree when activeWorktreeIdsOnShutdown is absent (upgrade)', async () => {
     const store = createDaemonEnabledStore()
     const wt1 = 'repo1::/path/wt1'
 
@@ -1805,6 +1805,45 @@ describe('reconnectPersistedTerminals', () => {
     await store.getState().reconnectPersistedTerminals()
     // Why: deferred reattach records the old daemon session ID on the tab
     expect(store.getState().tabsByWorktree[wt1][0].ptyId).toBe('old-pty')
+  })
+
+  it('does not wake every preserved ptyId during legacy session upgrade', () => {
+    const store = createDaemonEnabledStore()
+    const active = 'repo1::/path/active'
+    const slept = 'repo1::/path/slept'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: active, repoId: 'repo1', path: '/path/active' }),
+          makeWorktree({ id: slept, repoId: 'repo1', path: '/path/slept' })
+        ]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: active,
+      activeTabId: 'active-tab',
+      tabsByWorktree: {
+        [active]: [makeTab({ id: 'active-tab', worktreeId: active, ptyId: 'active-pty' })],
+        [slept]: [makeTab({ id: 'slept-tab', worktreeId: slept, ptyId: 'wake-hint-pty' })]
+      },
+      terminalLayoutsByTabId: {
+        'active-tab': makeLayout(),
+        'slept-tab': makeLayout()
+      }
+      // No activeWorktreeIdsOnShutdown field: preserved ptyIds are ambiguous
+      // across update, because slept tabs also keep wake-hint ids.
+    })
+
+    expect(store.getState().pendingReconnectWorktreeIds).toEqual([active])
+    expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
+      'active-tab': 'active-pty'
+    })
   })
 
   it('reconnects the correct tab per worktree (not always tabs[0])', async () => {

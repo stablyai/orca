@@ -3921,16 +3921,23 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
       // Why: reconnect enables the session after eager spawns to prevent duplicate PTYs.
       // Why: activeWorktreeIdsOnShutdown is authoritative when present; persisted tab/layout PTY IDs are only wake hints, not a full active-workspace list.
+      const remoteSessionIds = session.remoteSessionIdsByTabId ?? {}
+      const legacyActiveTabs = activeWorktreeId
+        ? (session.tabsByWorktree[activeWorktreeId] ?? [])
+        : []
+      // Why: old sessions lack activeWorktreeIdsOnShutdown, and preserved
+      // tab.ptyId is ambiguous because sleep keeps it as a wake hint. Only
+      // reconnect the restored active workspace in that legacy case.
       const shutdownIds =
         session.activeWorktreeIdsOnShutdown ??
-        Object.entries(session.tabsByWorktree)
-          .filter(([, tabs]) => tabs.some((t) => t.ptyId))
-          .map(([wId]) => wId)
+        (activeWorktreeId &&
+        legacyActiveTabs.some((tab) => tab.ptyId || remoteSessionIds[tab.id])
+          ? [activeWorktreeId]
+          : [])
       const pendingReconnectWorktreeIds = shutdownIds.filter((id) => validWorktreeIds.has(id))
 
       // Why: capture live PTY tabs before transient state clears their IDs.
       // Also include tabs whose relay session id survived in remoteSessionIdsByTabId (ptyId was null but the relay PTY is alive).
-      const remoteSessionIds = session.remoteSessionIdsByTabId ?? {}
       const pendingReconnectTabByWorktree: Record<string, string[]> = {}
       for (const worktreeId of pendingReconnectWorktreeIds) {
         const rawTabs = session.tabsByWorktree[worktreeId] ?? []

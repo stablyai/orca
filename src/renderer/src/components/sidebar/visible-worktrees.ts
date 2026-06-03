@@ -246,20 +246,35 @@ export function computeVisibleWorktreeIds(
   const visibleIds = all.map((w) => w.id)
   return opts.injectLineageAncestors === false
     ? visibleIds
-    : addVisibleLineageAncestors(visibleIds, lineageAncestorById, opts.worktreeLineageById)
+    : addVisibleLineageAncestors(visibleIds, lineageAncestorById, opts.worktreeLineageById, {
+        canRestoreAncestor: (worktree) =>
+          opts.showSleepingWorkspaces ||
+          !isInactiveWorkspace(
+            worktree.id,
+            opts.tabsByWorktree,
+            opts.ptyIdsByTabId,
+            opts.browserTabsByWorktree,
+            opts.worktreeIdsWithLiveAgent
+          ),
+        forceRestoreAncestorForIds: new Set(opts.forcedVisibleWorktreeIds ?? [])
+      })
 }
 
 function addVisibleLineageAncestors(
   ids: string[],
   worktreeById: Map<string, Worktree>,
-  lineageById: Record<string, WorktreeLineage>
+  lineageById: Record<string, WorktreeLineage>,
+  opts: {
+    canRestoreAncestor: (worktree: Worktree) => boolean
+    forceRestoreAncestorForIds: ReadonlySet<string>
+  }
 ): string[] {
   const result: string[] = []
   const included = new Set<string>()
   const visiting = new Set<string>()
   const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeById)
 
-  const addWithAncestors = (id: string): void => {
+  const addWithAncestors = (id: string, forceRestoreAncestors = false): void => {
     if (included.has(id) || visiting.has(id)) {
       return
     }
@@ -269,10 +284,12 @@ function addVisibleLineageAncestors(
     }
     visiting.add(id)
     const lineage = getLineageRenderInfo(worktree, lineageById, worktreeById, cyclicLineageIds)
-    if (lineage.state === 'valid') {
-      // Why: sidebar lineage is structural. If a filtered child is visible,
-      // its valid parent must be rendered too so the hierarchy remains legible.
-      addWithAncestors(lineage.parent.id)
+    if (
+      lineage.state === 'valid' &&
+      (forceRestoreAncestors || opts.canRestoreAncestor(lineage.parent))
+    ) {
+      // Why: ordinary lineage must respect Hide sleeping; forced send targets keep their tree.
+      addWithAncestors(lineage.parent.id, forceRestoreAncestors)
     }
     visiting.delete(id)
     if (!included.has(id)) {
@@ -282,7 +299,7 @@ function addVisibleLineageAncestors(
   }
 
   for (const id of ids) {
-    addWithAncestors(id)
+    addWithAncestors(id, opts.forceRestoreAncestorForIds.has(id))
   }
   return result
 }
