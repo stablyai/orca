@@ -1940,6 +1940,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           if (!injectResult.success) {
             toast.warning('Failed to inject issue content')
           }
+        } else {
+          toast.error('Failed to fetch issue content for injection')
         }
       } else if (decision === 'ask') {
         setPendingInjection({
