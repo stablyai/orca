@@ -7,14 +7,6 @@ type BrowserLikeTab = { id: string }
 type TabsByWorktree = Record<string, readonly TerminalLikeTab[]>
 type PtyIdsByTabId = Record<string, string[]>
 type BrowserTabsByWorktree = Record<string, readonly BrowserLikeTab[]>
-type SleptWorktreeIds = Record<string, true>
-
-export function isSleptWorkspace(
-  worktreeId: string,
-  sleptWorktreeIds: SleptWorktreeIds | null | undefined
-): boolean {
-  return Boolean(sleptWorktreeIds?.[worktreeId])
-}
 
 export function hasActiveWorkspaceActivity(
   worktreeId: string,

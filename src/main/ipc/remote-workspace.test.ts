@@ -99,7 +99,7 @@ describe('remoteWorkspaceSessionMatchesSnapshot', () => {
     ).toBe(true)
   })
 
-  it('treats empty optional projection records as equivalent to absent fields', () => {
+  it('treats empty optional projection fields as equivalent to absent fields', () => {
     expect(
       remoteWorkspaceSessionMatchesSnapshot(
         snapshot({
@@ -107,11 +107,10 @@ describe('remoteWorkspaceSessionMatchesSnapshot', () => {
           activeTabId: null,
           tabsByWorktreePath: {},
           terminalLayoutsByTabId: {},
+          activeWorktreePathsOnShutdown: [],
           activeTabIdByWorktreePath: {},
           remoteSessionIdsByTabId: {},
-          lastVisitedAtByWorktreePath: {},
-          defaultTerminalTabsAppliedByWorktreePath: {},
-          sleptWorktreePaths: {}
+          lastVisitedAtByWorktreePath: {}
         }),
         {
           activeWorktreePath: null,
@@ -121,26 +120,6 @@ describe('remoteWorkspaceSessionMatchesSnapshot', () => {
         }
       )
     ).toBe(true)
-  })
-
-  it('preserves an explicit empty shutdown list as session state', () => {
-    expect(
-      remoteWorkspaceSessionMatchesSnapshot(
-        snapshot({
-          activeWorktreePath: null,
-          activeTabId: null,
-          tabsByWorktreePath: {},
-          terminalLayoutsByTabId: {},
-          activeWorktreePathsOnShutdown: []
-        }),
-        {
-          activeWorktreePath: null,
-          activeTabId: null,
-          tabsByWorktreePath: {},
-          terminalLayoutsByTabId: {}
-        }
-      )
-    ).toBe(false)
   })
 
   it('detects actual target session changes', () => {

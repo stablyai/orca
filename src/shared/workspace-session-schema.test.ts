@@ -242,26 +242,6 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
-  it('accepts explicit slept worktree markers', () => {
-    const result = parseWorkspaceSession({
-      activeRepoId: null,
-      activeWorktreeId: null,
-      activeTabId: null,
-      tabsByWorktree: {},
-      terminalLayoutsByTabId: {},
-      sleptWorktreeIds: {
-        'repo1::/path/wt1': true
-      }
-    })
-
-    expect(result.ok).toBe(true)
-    if (result.ok) {
-      expect(result.value.sleptWorktreeIds).toEqual({
-        'repo1::/path/wt1': true
-      })
-    }
-  })
-
   it('caps oversized browser history while parsing legacy workspace sessions', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

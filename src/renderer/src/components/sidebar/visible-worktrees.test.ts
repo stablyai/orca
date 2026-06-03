@@ -6,7 +6,20 @@ import {
   isDefaultBranchWorkspace,
   sidebarHasActiveFilters
 } from './visible-worktrees'
-import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
+
+function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
+  return {
+    id,
+    ptyId,
+    worktreeId,
+    title: id,
+    customTitle: null,
+    color: null,
+    sortOrder: 0,
+    createdAt: 0
+  }
+}
 
 function makeWorktree(id: string, repoId = 'repo1'): Worktree & { instanceId: string } {
   return {
@@ -63,7 +76,9 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
   return {
     filterRepoIds: [],
     showSleepingWorkspaces: true,
-    sleptWorktreeIds: {},
+    tabsByWorktree: {},
+    ptyIdsByTabId: {},
+    browserTabsByWorktree: {},
     hideDefaultBranchWorkspace: false,
     repoMap,
     worktreeLineageById: {},
@@ -83,14 +98,15 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
 }
 
 describe('computeVisibleWorktreeIds', () => {
-  it('keeps unslept worktrees visible when sleeping workspaces are hidden', () => {
-    const wt = makeWorktree('wt-unslept')
+  it('keeps browser-tab worktrees visible when sleeping workspaces are hidden', () => {
+    const wt = makeWorktree('wt-browser')
 
     const result = computeVisibleWorktreeIds(
       { repo1: [wt] },
       [wt.id],
       visibleOptions({
-        showSleepingWorkspaces: false
+        showSleepingWorkspaces: false,
+        browserTabsByWorktree: { [wt.id]: [{ id: 'browser-1' }] }
       })
     )
 
@@ -104,29 +120,14 @@ describe('computeVisibleWorktreeIds', () => {
       { repo1: [wt] },
       [wt.id],
       visibleOptions({
-        showSleepingWorkspaces: false,
-        sleptWorktreeIds: { [wt.id]: true }
+        showSleepingWorkspaces: false
       })
     )
 
     expect(result).toEqual([])
   })
 
-  it('does not hide unslept inactive worktrees when sleeping workspaces are hidden', () => {
-    const wt = makeWorktree('wt-unslept')
-
-    const result = computeVisibleWorktreeIds(
-      { repo1: [wt] },
-      [wt.id],
-      visibleOptions({
-        showSleepingWorkspaces: false
-      })
-    )
-
-    expect(result).toEqual([wt.id])
-  })
-
-  it('hides explicitly slept inactive worktrees when sleeping workspaces are hidden', () => {
+  it('does not treat slept wake-hint tabs as live surfaces', () => {
     const wt = makeWorktree('wt-slept')
 
     const result = computeVisibleWorktreeIds(
@@ -134,11 +135,45 @@ describe('computeVisibleWorktreeIds', () => {
       [wt.id],
       visibleOptions({
         showSleepingWorkspaces: false,
-        sleptWorktreeIds: { [wt.id]: true }
+        tabsByWorktree: { [wt.id]: [makeTab('tab-slept', wt.id, 'wake-hint-session')] },
+        // Sleep preserves tab.ptyId as the wake hint but clears live PTY ids.
+        ptyIdsByTabId: { 'tab-slept': [] }
       })
     )
 
     expect(result).toEqual([])
+  })
+
+  it('hides paired web host terminal mirrors while their stream handle is pending', () => {
+    const wt = makeWorktree('wt-web-pending')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        tabsByWorktree: { [wt.id]: [makeTab('web-terminal-host-tab-1', wt.id, null)] },
+        ptyIdsByTabId: {}
+      })
+    )
+
+    expect(result).toEqual([])
+  })
+
+  it('keeps paired web host terminal mirrors visible after their stream handle is ready', () => {
+    const wt = makeWorktree('wt-web-ready')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        tabsByWorktree: { [wt.id]: [makeTab('web-terminal-host-tab-1', wt.id, null)] },
+        ptyIdsByTabId: { 'web-terminal-host-tab-1': ['pty-web-ready'] }
+      })
+    )
+
+    expect(result).toEqual([wt.id])
   })
 
   it('hides branch-backed main worktrees when default branch workspaces are hidden', () => {
@@ -188,19 +223,21 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([feature1.id, feature2.id])
   })
 
-  it('composes with sleeping visibility: hidden mains stay hidden while unslept features remain', () => {
+  it('composes with sleeping visibility: hidden mains stay hidden while live features remain', () => {
     const main = makeWorktree('main')
     main.isMainWorktree = true
     const feature = makeWorktree('feature')
 
     // Why: verifies filter ordering — the default-branch hide runs before
     // sleeping visibility, so the hidden main does not slip back in while the
-    // feature survives because it was not explicitly slept.
+    // feature survives because it has a live PTY.
     const result = computeVisibleWorktreeIds(
       { repo1: [main, feature] },
       [main.id, feature.id],
       visibleOptions({
         showSleepingWorkspaces: false,
+        tabsByWorktree: { [feature.id]: [makeTab('t1', feature.id, 'p1')] },
+        ptyIdsByTabId: { t1: ['p1'] },
         hideDefaultBranchWorkspace: true
       })
     )
@@ -243,7 +280,8 @@ describe('computeVisibleWorktreeIds', () => {
       [child.id, parent.id],
       visibleOptions({
         showSleepingWorkspaces: false,
-        sleptWorktreeIds: { [parent.id]: true },
+        tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
+        ptyIdsByTabId: { 't-child': ['p-child'] },
         worktreeLineageById: { [child.id]: lineage }
       })
     )
@@ -263,7 +301,8 @@ describe('computeVisibleWorktreeIds', () => {
       [child.id, parent.id],
       visibleOptions({
         showSleepingWorkspaces: false,
-        sleptWorktreeIds: { [parent.id]: true },
+        tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
+        ptyIdsByTabId: { 't-child': ['p-child'] },
         worktreeLineageById: { [child.id]: lineage }
       })
     )
@@ -282,7 +321,8 @@ describe('computeVisibleWorktreeIds', () => {
       [child.id, parent.id],
       visibleOptions({
         showSleepingWorkspaces: false,
-        sleptWorktreeIds: { [parent.id]: true },
+        tabsByWorktree: { [child.id]: [makeTab('t-child', child.id, 'p-child')] },
+        ptyIdsByTabId: { 't-child': ['p-child'] },
         worktreeLineageById: { [child.id]: lineage }
       })
     )

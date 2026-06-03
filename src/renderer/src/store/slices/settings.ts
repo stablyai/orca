@@ -3,11 +3,18 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/types'
 import { toast } from 'sonner'
-import { callRuntimeRpc, clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
+import {
+  callRuntimeRpc,
+  clearRuntimeCompatibilityCache,
+  markRuntimeEnvironmentCompatible,
+  unwrapRuntimeRpcResult
+} from '@/runtime/runtime-rpc-client'
+import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
 import {
   getRemoteRuntimePtyEnvironmentId,
   getRemoteRuntimeTerminalHandle
 } from '@/runtime/runtime-terminal-stream'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
@@ -52,7 +59,6 @@ function runtimeScopedStateReset(): Partial<AppState> {
     sortEpoch: 0,
     everActivatedWorktreeIds: new Set<string>(),
     lastVisitedAtByWorktreeId: {},
-    sleptWorktreeIds: {},
     hasHydratedWorktreePurge: false,
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
@@ -237,9 +243,15 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
   if (!environmentId) {
     return
   }
-  await callRuntimeRpc({ kind: 'environment', environmentId }, 'repo.list', undefined, {
+  const response = await window.api.runtimeEnvironments.getStatus({
+    selector: environmentId,
     timeoutMs: 15_000
   })
+  const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+  assertRuntimeStatusCompatible(status)
+  // Why: the switch probe already proved compatibility; avoid immediately
+  // re-probing through the heavier generic runtime RPC path during hydration.
+  markRuntimeEnvironmentCompatible(environmentId)
 }
 
 export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => ({

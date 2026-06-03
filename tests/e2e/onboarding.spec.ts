@@ -20,8 +20,6 @@ type OnboardingState = {
   checklist: Record<string, boolean>
 }
 
-const ORCHESTRATION_ENABLED_STORAGE_KEY = 'orca.orchestration.enabled'
-const BROWSER_USE_ENABLED_STORAGE_KEY = 'orca.browserUse.enabled'
 const SKIP_TO_PROJECT_SETUP_BUTTON = /^Skip to project setup$/i
 const TASK_SOURCES_HEADING = /Connect your task sources/i
 const ADD_PROJECT_DIALOG_HEADING = /Add (?:a server project|a project|another project)/i
@@ -422,9 +420,7 @@ test.describe('Onboarding flow', () => {
     expect((await getOnboardingState(orcaPage)).closedAt).not.toBeNull()
   })
 
-  test('Skip from notifications does not request permission or run feature setup', async ({
-    orcaPage
-  }) => {
+  test('Skip from notifications does not request permission', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
@@ -445,22 +441,6 @@ test.describe('Onboarding flow', () => {
     await continueOnboarding(orcaPage)
 
     await expectAddProjectDialog(orcaPage)
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(
-            ({ orchestrationKey, browserUseKey }) => ({
-              orchestration: localStorage.getItem(orchestrationKey),
-              browserUse: localStorage.getItem(browserUseKey)
-            }),
-            {
-              orchestrationKey: ORCHESTRATION_ENABLED_STORAGE_KEY,
-              browserUseKey: BROWSER_USE_ENABLED_STORAGE_KEY
-            }
-          ),
-        { timeout: 5_000 }
-      )
-      .toEqual({ orchestration: null, browserUse: null })
     await expect
       .poll(
         async () =>

@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
@@ -9,11 +9,6 @@ import {
   type ActivityTerminalPortalTarget
 } from '../activity/activity-terminal-portal'
 import TerminalPane from './TerminalPane'
-import {
-  getTerminalTabColdParkRecheckDelayMs,
-  selectColdParkedTerminalTabs,
-  type TerminalTabColdParkCandidate
-} from '../terminal/terminal-worktree-parking'
 
 type TerminalOverlayAssignment = {
   groupId: string
@@ -38,18 +33,6 @@ type TerminalOverlaySlotProps = {
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   closeTab: (tabId: string) => void
   leaveWorktreeIfEmpty: () => void
-}
-
-function haveSameTerminalTabIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-  if (left.size !== right.size) {
-    return false
-  }
-  for (const id of left) {
-    if (!right.has(id)) {
-      return false
-    }
-  }
-  return true
 }
 
 const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
@@ -151,13 +134,11 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   worktreeId,
   worktreePath,
   isWorktreeActive,
-  coldParkTerminalPanes = false,
   activityTerminalPortals = EMPTY_ACTIVITY_PORTALS
 }: {
   worktreeId: string
   worktreePath: string
   isWorktreeActive: boolean
-  coldParkTerminalPanes?: boolean
   activityTerminalPortals?: ActivityTerminalPortalTarget[]
 }): React.JSX.Element | null {
   const { terminalTabs, unifiedTabs, groups, activeGroupId } = useAppStore(
@@ -173,13 +154,6 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
   const closeTab = useAppStore((state) => state.closeTab)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
   const reconcileWorktreeTabModel = useAppStore((state) => state.reconcileWorktreeTabModel)
-  const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
-  const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
-  const terminalTabParkingTimersRef = useRef(new Map<string, number>())
-  const [terminalTabParkingRevision, setTerminalTabParkingRevision] = useState(0)
-  const [coldParkedTerminalTabIds, setColdParkedTerminalTabIds] = useState<ReadonlySet<string>>(
-    () => new Set()
-  )
 
   // Why: legacy TabGroupPanel routed terminal closes through
   // commands.closeItem → leaveWorktreeIfEmpty, which deselected the worktree
@@ -225,98 +199,6 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     return entries
   }, [groupActiveTabById, unifiedTabs])
 
-  useEffect(() => {
-    const timers = terminalTabParkingTimersRef.current
-    return () => {
-      for (const timer of timers.values()) {
-        window.clearTimeout(timer)
-      }
-      timers.clear()
-    }
-  }, [])
-
-  useEffect(() => {
-    const timers = terminalTabParkingTimersRef.current
-    for (const timer of timers.values()) {
-      window.clearTimeout(timer)
-    }
-    timers.clear()
-
-    const nowMs = Date.now()
-    const currentTerminalTabIds = new Set(terminalTabs.map((tab) => tab.id))
-    const portalTabIds = new Set(
-      activityTerminalPortals
-        .filter((portal) => portal.worktreeId === worktreeId)
-        .map((portal) => portal.tabId)
-    )
-    for (const tabId of Array.from(terminalTabHiddenSinceRef.current.keys())) {
-      if (!currentTerminalTabIds.has(tabId)) {
-        terminalTabHiddenSinceRef.current.delete(tabId)
-      }
-    }
-
-    const candidates: TerminalTabColdParkCandidate[] = terminalTabs.map((terminalTab) => {
-      const assignment = assignments.get(terminalTab.id)
-      const isVisible = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
-      const hasActivityTerminalPortal = portalTabIds.has(terminalTab.id)
-      if (isVisible || hasActivityTerminalPortal) {
-        terminalTabHiddenSinceRef.current.delete(terminalTab.id)
-      } else if (!terminalTabHiddenSinceRef.current.has(terminalTab.id)) {
-        terminalTabHiddenSinceRef.current.set(terminalTab.id, nowMs)
-      }
-      return {
-        id: terminalTab.id,
-        ptyId: terminalTab.ptyId,
-        pendingActivationSpawn: terminalTab.pendingActivationSpawn,
-        isVisible,
-        hasActivityTerminalPortal,
-        hiddenSinceMs: terminalTabHiddenSinceRef.current.get(terminalTab.id) ?? null
-      }
-    })
-
-    const nextColdParkedTerminalTabIds = selectColdParkedTerminalTabs({
-      worktreeId,
-      terminalTabs: candidates,
-      pendingStartupByTabId,
-      nowMs
-    })
-    setColdParkedTerminalTabIds((current) =>
-      haveSameTerminalTabIds(current, nextColdParkedTerminalTabIds)
-        ? current
-        : nextColdParkedTerminalTabIds
-    )
-
-    for (const candidate of candidates) {
-      if (
-        candidate.isVisible ||
-        candidate.hasActivityTerminalPortal ||
-        nextColdParkedTerminalTabIds.has(candidate.id)
-      ) {
-        continue
-      }
-      const delayMs = getTerminalTabColdParkRecheckDelayMs({
-        hiddenSinceMs: candidate.hiddenSinceMs,
-        nowMs
-      })
-      if (delayMs !== null && delayMs > 0) {
-        const tabId = candidate.id
-        const timer = window.setTimeout(() => {
-          timers.delete(tabId)
-          setTerminalTabParkingRevision((revision) => revision + 1)
-        }, delayMs)
-        timers.set(tabId, timer)
-      }
-    }
-  }, [
-    activityTerminalPortals,
-    assignments,
-    isWorktreeActive,
-    pendingStartupByTabId,
-    terminalTabParkingRevision,
-    terminalTabs,
-    worktreeId
-  ])
-
   if (!worktreePath) {
     return null
   }
@@ -331,12 +213,6 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
           worktreeId,
           tabId: terminalTab.id
         })
-        if (
-          (coldParkTerminalPanes || (!isVisible && coldParkedTerminalTabIds.has(terminalTab.id))) &&
-          !activityTerminalPortal
-        ) {
-          return null
-        }
         return (
           <TerminalOverlaySlot
             key={terminalTab.id}

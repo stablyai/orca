@@ -601,21 +601,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         // Drop this repo's timestamps explicitly so they cannot survive prune
         // forever after the repo is removed.
         let nextLastVisitedAtByWorktreeId = s.lastVisitedAtByWorktreeId
-        let nextSleptWorktreeIds = s.sleptWorktreeIds
         for (const id of Object.keys(s.lastVisitedAtByWorktreeId)) {
           if (getRepoIdFromWorktreeId(id) === projectId) {
             if (nextLastVisitedAtByWorktreeId === s.lastVisitedAtByWorktreeId) {
               nextLastVisitedAtByWorktreeId = { ...s.lastVisitedAtByWorktreeId }
             }
             delete nextLastVisitedAtByWorktreeId[id]
-          }
-        }
-        for (const id of Object.keys(s.sleptWorktreeIds)) {
-          if (getRepoIdFromWorktreeId(id) === projectId) {
-            if (nextSleptWorktreeIds === s.sleptWorktreeIds) {
-              nextSleptWorktreeIds = { ...s.sleptWorktreeIds }
-            }
-            delete nextSleptWorktreeIds[id]
           }
         }
         const nextRepos = s.repos.filter((r) => r.id !== projectId)
@@ -637,7 +628,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           activeFileId: activeFileCleared ? null : s.activeFileId,
           activeTabType: activeFileCleared ? 'terminal' : s.activeTabType,
           lastVisitedAtByWorktreeId: nextLastVisitedAtByWorktreeId,
-          sleptWorktreeIds: nextSleptWorktreeIds,
           sortEpoch: s.sortEpoch + 1,
           // Why: removing the last repo while in settings leaves activeView as
           // 'settings', which renders an empty settings pane instead of Landing.

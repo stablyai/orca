@@ -77,6 +77,7 @@ export type AgentHookStatusChangeEntry = {
 }
 
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+type PaneStatusClearListener = (paneKey: string) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
   stablePaneKey: string
@@ -384,6 +385,7 @@ export class AgentHookServer {
   // caller's knowledge of whether this is a packaged build.
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
+  private onPaneStatusCleared: PaneStatusClearListener | null = null
   private statusChangeListeners = new Set<StatusChangeListener>()
   // Why: directory that holds the on-disk endpoint file. Set via start()'s
   // `userDataPath` option so the class has no direct Electron dependency
@@ -442,6 +444,10 @@ export class AgentHookServer {
     return () => {
       this.statusChangeListeners.delete(listener)
     }
+  }
+
+  setPaneStatusClearListener(listener: PaneStatusClearListener | null): void {
+    this.onPaneStatusCleared = listener
   }
 
   /** Snapshot of the current cached statuses, in the IPC-shaped form the
@@ -832,6 +838,7 @@ export class AgentHookServer {
   ): void {
     let aliasChanged = false
     let statusChanged = false
+    const clearedStatusPaneKeys = new Set<string>()
     for (const [legacyPaneKey, entry] of this.legacyPaneKeyAliases) {
       if (entry.ptyId === ptyId) {
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
@@ -841,6 +848,7 @@ export class AgentHookServer {
           options?.shouldClearStablePaneKey?.(entry.stablePaneKey) ?? true
         if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
           statusChanged = true
+          clearedStatusPaneKeys.add(entry.stablePaneKey)
         }
         if (shouldClearStablePaneKey) {
           // Why: after hydrate, legacy rows are stored under the stable key. If
@@ -859,6 +867,9 @@ export class AgentHookServer {
     if (statusChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+      for (const paneKey of clearedStatusPaneKeys) {
+        this.onPaneStatusCleared?.(paneKey)
+      }
     }
   }
 
@@ -1131,6 +1142,7 @@ export class AgentHookServer {
     this.token = ''
     this.env = 'production'
     this.onAgentStatus = null
+    this.onPaneStatusCleared = null
     for (const timer of this.assistantMessageRetryTimers.values()) {
       clearTimeout(timer)
     }
@@ -1199,6 +1211,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
+      this.onPaneStatusCleared?.(resolvedPaneKey)
     }
   }
 

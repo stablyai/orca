@@ -107,6 +107,7 @@ import {
 } from './visible-worktrees'
 import {
   getVisibleWorktreeBrowserActivityTabs,
+  getVisibleWorktreeTerminalActivityTabs,
   getWorktreeSectionTerminalActivityTabs
 } from './visible-worktree-activity-inputs'
 import { selectTerminalLayoutRootsForWorktrees } from './worktree-card-status-inputs'
@@ -3483,7 +3484,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
-  const sleptWorktreeIds = useAppStore((s) => s.sleptWorktreeIds)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
@@ -3539,6 +3539,16 @@ const WorktreeList = React.memo(function WorktreeList({
     agentTargetTabsByWorktree,
     agentTargetTerminalLayoutsByTabId
   ])
+
+  // Read tabsByWorktree when needed for filtering or sorting
+  const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
+  const tabsByWorktree = useAppStore((s) =>
+    needsActivityMaps ? getVisibleWorktreeTerminalActivityTabs(s.tabsByWorktree) : null
+  )
+  const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
+  const browserTabsByWorktree = useAppStore((s) =>
+    !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
+  )
 
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
 
@@ -3807,7 +3817,9 @@ const WorktreeList = React.memo(function WorktreeList({
     const ids = computeVisibleWorktreeIds(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
-      sleptWorktreeIds,
+      tabsByWorktree,
+      ptyIdsByTabId,
+      browserTabsByWorktree,
       hideDefaultBranchWorkspace,
       repoMap,
       worktreeLineageById
@@ -3829,7 +3841,9 @@ const WorktreeList = React.memo(function WorktreeList({
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     repoMap,
-    sleptWorktreeIds,
+    tabsByWorktree,
+    ptyIdsByTabId,
+    browserTabsByWorktree,
     sortedIds,
     worktreeMap,
     worktreeLineageById,

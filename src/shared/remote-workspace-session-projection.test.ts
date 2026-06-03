@@ -49,10 +49,6 @@ describe('remote workspace session projection', () => {
       defaultTerminalTabsAppliedByWorktreeId: {
         'repo-a::/srv/app': true as const,
         'repo-local::/tmp/local': true as const
-      },
-      sleptWorktreeIds: {
-        'repo-a::/srv/app': true as const,
-        'repo-local::/tmp/local': true as const
       }
     }
 
@@ -70,7 +66,6 @@ describe('remote workspace session projection', () => {
     })
     expect(projected.remoteSessionIdsByTabId).toEqual({ 'tab-1': 'pty-1' })
     expect(projected.defaultTerminalTabsAppliedByWorktreePath).toEqual({ '/srv/app': true })
-    expect(projected.sleptWorktreePaths).toEqual({ '/srv/app': true })
   })
 
   it('imports projected terminal state into this client repo id', () => {
@@ -96,8 +91,7 @@ describe('remote workspace session projection', () => {
           'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
         },
         remoteSessionIdsByTabId: { 'tab-1': 'pty-1' },
-        defaultTerminalTabsAppliedByWorktreePath: { '/srv/app': true },
-        sleptWorktreePaths: { '/srv/app': true }
+        defaultTerminalTabsAppliedByWorktreePath: { '/srv/app': true }
       },
       { resolveWorktreeId: (path) => (path === '/srv/app' ? 'repo-b::/srv/app' : null) }
     )
@@ -110,9 +104,6 @@ describe('remote workspace session projection', () => {
     })
     expect(session.remoteSessionIdsByTabId).toEqual({ 'tab-1': 'pty-1' })
     expect(session.defaultTerminalTabsAppliedByWorktreeId).toEqual({
-      'repo-b::/srv/app': true
-    })
-    expect(session.sleptWorktreeIds).toEqual({
       'repo-b::/srv/app': true
     })
   })

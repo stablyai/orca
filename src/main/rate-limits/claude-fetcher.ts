@@ -279,9 +279,14 @@ async function fetchViaOAuth(token: string): Promise<ProviderRateLimits> {
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function fetchClaudeRateLimits(options?: {
+export type FetchClaudeRateLimitsOptions = {
   authPreparation?: ClaudeRuntimeAuthPreparation
-}): Promise<ProviderRateLimits> {
+  allowPtyFallback?: boolean
+}
+
+export async function fetchClaudeRateLimits(
+  options?: FetchClaudeRateLimitsOptions
+): Promise<ProviderRateLimits> {
   if (options?.authPreparation?.runtime === 'wsl' && !options.authPreparation.wslLinuxConfigDir) {
     return {
       provider: 'claude',
@@ -299,13 +304,17 @@ export async function fetchClaudeRateLimits(options?: {
     try {
       return await fetchViaOAuth(oauthCredentials.token)
     } catch (err) {
-      if (err instanceof OAuthUsageError && err.skipPtyFallback) {
+      if (
+        options?.allowPtyFallback === false ||
+        (err instanceof OAuthUsageError && err.skipPtyFallback)
+      ) {
+        const message = err instanceof Error ? err.message : 'Unknown error'
         return {
           provider: 'claude',
           session: null,
           weekly: null,
           updatedAt: Date.now(),
-          error: withMacTailscaleDnsHint(err.message),
+          error: withMacTailscaleDnsHint(message),
           status: 'error'
         }
       }
@@ -318,6 +327,16 @@ export async function fetchClaudeRateLimits(options?: {
   // whose OAuth credentials exist. This remains a fallback for older Claude
   // auth shapes and transient OAuth failures.
   if (oauthCredentials.token || oauthCredentials.hasRefreshableCredentials) {
+    if (options?.allowPtyFallback === false) {
+      return {
+        provider: 'claude',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: 'Claude OAuth access token unavailable',
+        status: 'error'
+      }
+    }
     try {
       return await fetchViaPty({ authPreparation: options?.authPreparation })
     } catch (err) {

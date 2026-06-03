@@ -41,7 +41,6 @@ function createTestStore() {
         unifiedTabsByWorktree: {},
         tabBarOrderByWorktree: {},
         tabsByWorktree: {},
-        sleptWorktreeIds: {},
         openFiles: [],
         activeTabType: 'terminal',
         activeTabTypeByWorktree: {},
@@ -172,15 +171,6 @@ describe('createBrowserSlice annotations', () => {
     )
     expect(store.getState().activeTabType).toBe('terminal')
     expect(store.getState().activeBrowserTabIdByWorktree['wt-1']).toBeNull()
-  })
-
-  it('clears an explicit slept marker when opening a browser tab', () => {
-    const store = createTestStore()
-    store.setState({ sleptWorktreeIds: { 'wt-1': true } })
-
-    store.getState().createBrowserTab('wt-1', 'https://example.com')
-
-    expect(store.getState().sleptWorktreeIds['wt-1']).toBeUndefined()
   })
 
   it('preserves browser map references when a page-state update is unchanged', () => {

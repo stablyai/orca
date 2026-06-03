@@ -205,23 +205,6 @@ describe('TabsSlice', () => {
         }
       })
     })
-
-    it('clears an explicit slept marker when opening a terminal tab', () => {
-      store.getState().markWorktreeSlept(WT)
-
-      store.getState().createTab(WT)
-
-      expect(store.getState().sleptWorktreeIds[WT]).toBeUndefined()
-    })
-
-    it('clears an explicit slept marker when a terminal PTY becomes live', () => {
-      const tab = store.getState().createTab(WT)
-      store.getState().markWorktreeSlept(WT)
-
-      store.getState().updateTabPtyId(tab.id, 'pty-live')
-
-      expect(store.getState().sleptWorktreeIds[WT]).toBeUndefined()
-    })
   })
 
   // ─── closeUnifiedTab ────────────────────────────────────────────────

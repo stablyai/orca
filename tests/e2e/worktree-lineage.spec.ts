@@ -158,21 +158,9 @@ test.describe('Worktree Lineage', () => {
 
     const childTabId = await seedWorkspaceLiveTerminal(orcaPage, childId)
     await expect(childRow).toContainText('Active')
-    await childRow.click({ button: 'right' })
-    await expect(orcaPage.getByRole('menuitem', { name: 'Sleep' })).not.toHaveAttribute(
-      'data-disabled',
-      ''
-    )
-    await orcaPage.keyboard.press('Escape')
 
     await markWorkspaceTerminalSlept(orcaPage, { worktreeId: childId, tabId: childTabId })
     await expect(childRow).toContainText('Inactive')
-    await childRow.click({ button: 'right' })
-    await expect(orcaPage.getByRole('menuitem', { name: 'Sleep' })).toHaveAttribute(
-      'data-disabled',
-      ''
-    )
-    await orcaPage.keyboard.press('Escape')
   })
 
   test('shows parent and child agent rows while the parent workspace is active', async ({

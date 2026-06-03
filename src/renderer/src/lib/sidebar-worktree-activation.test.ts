@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const state = {
-    sleptWorktreeIds: {} as Record<string, true>,
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     ptyIdsByTabId: {} as Record<string, string[]>,
     browserTabsByWorktree: {} as Record<string, { id: string }[]>,
@@ -63,7 +62,6 @@ describe('sidebar worktree activation', () => {
     mocks.scheduleAfterInputQuiet.mockClear()
     mocks.pendingCallbacks.length = 0
     mocks.pendingCancels.length = 0
-    mocks.state.sleptWorktreeIds = {}
     mocks.state.tabsByWorktree = {}
     mocks.state.ptyIdsByTabId = {}
     mocks.state.browserTabsByWorktree = {}
@@ -71,7 +69,8 @@ describe('sidebar worktree activation', () => {
   })
 
   it('cancels a queued slept-workspace activation', () => {
-    mocks.state.sleptWorktreeIds = { 'wt-parent': true }
+    mocks.state.tabsByWorktree = { 'wt-parent': [{ id: 'tab-1' }] }
+    mocks.state.ptyIdsByTabId = { 'tab-1': [] }
 
     activateWorktreeFromSidebar('wt-parent')
     cancelPendingSidebarWorktreeActivation()
@@ -81,13 +80,13 @@ describe('sidebar worktree activation', () => {
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
-  it('does not defer an unslept workspace even when it has no live PTY', () => {
-    mocks.state.tabsByWorktree = { 'wt-unslept': [{ id: 'tab-1' }] }
-    mocks.state.ptyIdsByTabId = { 'tab-1': [] }
+  it('does not defer a workspace with a live PTY', () => {
+    mocks.state.tabsByWorktree = { 'wt-live': [{ id: 'tab-1' }] }
+    mocks.state.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
 
-    activateWorktreeFromSidebar('wt-unslept')
+    activateWorktreeFromSidebar('wt-live')
 
     expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-unslept')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live')
   })
 })
