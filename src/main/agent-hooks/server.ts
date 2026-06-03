@@ -12,7 +12,7 @@
 //     Orca restart so retained dashboard rows reappear on relaunch
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { createHash, randomBytes, randomUUID } from 'crypto'
-import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'fs'
+import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync } from 'fs'
 import { join } from 'path'
 
 import { track } from '../telemetry/client'
@@ -53,6 +53,7 @@ import {
   type AgentInterruptInferenceRequest
 } from '../../shared/agent-interrupt-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
+import { writeUtf8FileInChunksSync } from '../../shared/utf8-file-writer'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
 
 export type { AgentHookSource }
@@ -1411,7 +1412,7 @@ export class AgentHookServer {
           // best-effort
         }
       }
-      writeFileSync(tmpPath, json, { mode: 0o600 })
+      writeUtf8FileInChunksSync(tmpPath, json, { mode: 0o600 })
       tmpWritten = true
       renameSync(tmpPath, this.lastStatusFilePath)
       this.lastWrittenJson = json
