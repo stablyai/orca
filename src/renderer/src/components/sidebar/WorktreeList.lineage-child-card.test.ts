@@ -82,10 +82,6 @@ vi.mock('./WorktreeCardAgents', () => ({
     )
 }))
 
-vi.mock('./WorktreeActivityStatusIndicator', () => ({
-  WorktreeActivityStatusIndicator: () => React.createElement('span', { 'data-status-dot': true })
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
@@ -193,7 +189,11 @@ function makeLineage(worktree: Worktree, parent: Worktree): WorktreeLineage {
 
 function setLineageFixtureState(
   groupBy: 'none' | 'repo' = 'none',
-  options: { deletingWorktreeIds?: string[]; projectGrouped?: boolean } = {}
+  options: {
+    deletingWorktreeIds?: string[]
+    projectGrouped?: boolean
+    unreadWorktreeIds?: string[]
+  } = {}
 ): void {
   const projectGroup: ProjectGroup = {
     id: 'project-group-1',
@@ -232,6 +232,10 @@ function setLineageFixtureState(
     branch: 'grandchild-branch',
     sortOrder: 10
   })
+  const unreadWorktreeIds = new Set(options.unreadWorktreeIds ?? [])
+  parent.isUnread = unreadWorktreeIds.has(parent.id)
+  child.isUnread = unreadWorktreeIds.has(child.id)
+  grandchild.isUnread = unreadWorktreeIds.has(grandchild.id)
 
   mockStore.state = {
     activeModal: '',
@@ -423,6 +427,19 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(childCard).toContain('cursor-not-allowed opacity-50 grayscale')
     expect(childCard).toContain('animate-spin')
     expect(childCard).toContain('Deleting')
+  })
+
+  it('shows the unread bell action on unread nested lineage child cards', async () => {
+    setLineageFixtureState('none', { unreadWorktreeIds: ['child'] })
+    mockStore.state.worktreeCardProperties = ['status', 'unread', 'inline-agents']
+    const markup = await renderWorktreeListMarkup()
+
+    const childCard =
+      markup.match(/<div id="worktree-list-option-child"[\s\S]*?lineage child with agent/)?.[0] ??
+      ''
+
+    expect(childCard).toContain('aria-label="Mark as read"')
+    expect(childCard).not.toContain('aria-label="Mark as unread"')
   })
 
   it('opens the reconnect dialog for an active disconnected lineage child during render', async () => {
