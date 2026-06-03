@@ -27,6 +27,10 @@ vi.mock('fs', () => ({
 
 import { getStatus } from './status'
 
+function getGitArgs(call: unknown[]): string[] {
+  return call[0] as string[]
+}
+
 describe('getStatus missing-upstream polling churn', () => {
   beforeEach(() => {
     existsSyncMock.mockReset()
@@ -59,16 +63,53 @@ describe('getStatus missing-upstream polling churn', () => {
     await getStatus('/repo')
     await getStatus('/repo')
 
-    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) => {
-      const gitArgs = args as string[]
-      return gitArgs[0] === 'rev-parse' && gitArgs.includes('HEAD@{u}')
+    const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
+      const args = getGitArgs(call)
+      return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
     })
-    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter(([args]) => {
-      const gitArgs = args as string[]
-      return gitArgs[0] === 'rev-parse' && gitArgs.includes('refs/remotes/origin/Initi-Project')
+    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
+      const args = getGitArgs(call)
+      return args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')
     })
 
     expect(upstreamProbeCalls).toHaveLength(1)
     expect(sameNameOriginProbeCalls).toHaveLength(1)
+  })
+
+  it('rechecks failed effective-upstream probes after the branch identity changes', async () => {
+    let nextBranch = 'Second-Project'
+    let currentStatusBranch = nextBranch
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.includes('status')) {
+        currentStatusBranch = nextBranch
+        nextBranch = 'Other-Project'
+        return {
+          stdout: `# branch.oid abcdef1234567890\n# branch.head ${currentStatusBranch}\n`
+        }
+      }
+      if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
+        return { stdout: `${currentStatusBranch}\n` }
+      }
+      if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
+        throw new Error('fatal: no upstream configured')
+      }
+      if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
+        throw new Error('missing remote branch')
+      }
+      throw new Error(`unexpected git command: ${args.join(' ')}`)
+    })
+
+    await getStatus('/repo')
+    await getStatus('/repo')
+
+    const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
+      const args = getGitArgs(call)
+      return args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))
+    })
+
+    expect(sameNameOriginProbeCalls.map((call) => getGitArgs(call).at(-1))).toEqual([
+      'refs/remotes/origin/Second-Project',
+      'refs/remotes/origin/Other-Project'
+    ])
   })
 })
