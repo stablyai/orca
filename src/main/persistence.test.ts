@@ -25,7 +25,7 @@ import type {
 } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
-import { ONBOARDING_FLOW_VERSION } from '../shared/constants'
+import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../shared/constants'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -286,6 +286,59 @@ describe('Store', () => {
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
     expect(ui.lastUpdateCheckAt).toBeNull()
+    expect(ui.setupGuideSidebarDismissed).toBe(false)
+  })
+
+  it('hides the setup guide sidebar entry for existing users backfilled as completed', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: {}
+    })
+
+    const store = await createStore()
+    const onboarding = store.getOnboarding()
+
+    expect(onboarding.closedAt).not.toBeNull()
+    expect(onboarding.outcome).toBe('completed')
+    expect(onboarding.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('keeps the setup guide sidebar entry available while onboarding is open', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(false)
+  })
+
+  it('treats persisted false setup guide sidebar dismissal as stale once onboarding is closed', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 123,
+        outcome: 'dismissed',
+        lastCompletedStep: 2,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: false
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
   })
 
   it.each([
