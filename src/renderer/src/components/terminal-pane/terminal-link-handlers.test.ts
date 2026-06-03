@@ -607,7 +607,7 @@ describe('handleOscLink', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.stat',
-        params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
+        params: { worktree: 'id:wt-1', relativePath: 'src/main.ts' },
         timeoutMs: 15_000
       })
     })
@@ -639,7 +639,7 @@ describe('handleOscLink', () => {
       expect(runtimeEnvironmentCallMock).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.stat',
-        params: { worktree: 'wt-1', relativePath: 'src/main.ts' },
+        params: { worktree: 'id:wt-1', relativePath: 'src/main.ts' },
         timeoutMs: 15_000
       })
     })

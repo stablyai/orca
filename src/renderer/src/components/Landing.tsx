@@ -214,6 +214,7 @@ export default function Landing(): React.JSX.Element {
       })
     }
 
+    // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: preflight status is read from an external IPC probe on mount and focus.
     refreshPreflight()
 
     // Why: users often install/authenticate gh outside Orca. Re-check when the

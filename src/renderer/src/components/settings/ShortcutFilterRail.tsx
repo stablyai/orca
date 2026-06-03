@@ -23,12 +23,6 @@ export type ShortcutRowsByGroup = {
   rows: ShortcutRowModel[]
 }
 
-export type ShortcutGroupSummary = {
-  id: string
-  label: string
-  count: number
-}
-
 const SHORTCUT_FILTER_LABELS: Record<ShortcutFilter, string> = {
   all: 'All',
   modified: 'Modified',
@@ -80,10 +74,7 @@ export function ShortcutFilterRail({
   onQueryChange,
   filter,
   onFilterChange,
-  activeGroup,
-  onActiveGroupChange,
   filterCounts,
-  groupSummaries,
   visibleCount,
   totalCount
 }: {
@@ -91,10 +82,7 @@ export function ShortcutFilterRail({
   onQueryChange: (value: string) => void
   filter: ShortcutFilter
   onFilterChange: (value: ShortcutFilter) => void
-  activeGroup: string
-  onActiveGroupChange: (value: string) => void
   filterCounts: Record<ShortcutFilter, number>
-  groupSummaries: ShortcutGroupSummary[]
   visibleCount: number
   totalCount: number
 }): React.JSX.Element {
@@ -158,34 +146,6 @@ export function ShortcutFilterRail({
             >
               <span className="truncate">{option.label}</span>
               <span className="text-[11px] tabular-nums opacity-80">{option.count}</span>
-            </button>
-          ))}
-        </div>
-      </nav>
-
-      <nav
-        aria-label="Shortcut groups"
-        className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1 scrollbar-sleek"
-      >
-        <p className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-          Groups
-        </p>
-        <div className="grid gap-1">
-          {groupSummaries.map((group) => (
-            <button
-              key={group.id}
-              type="button"
-              onClick={() => onActiveGroupChange(group.id)}
-              className={cn(
-                'flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                activeGroup === group.id
-                  ? 'bg-accent font-medium text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-                group.count === 0 && activeGroup !== group.id ? 'opacity-55' : ''
-              )}
-            >
-              <span className="truncate">{group.label}</span>
-              <span className="text-[11px] tabular-nums opacity-80">{group.count}</span>
             </button>
           ))}
         </div>

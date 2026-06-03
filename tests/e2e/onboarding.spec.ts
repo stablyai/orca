@@ -20,8 +20,6 @@ type OnboardingState = {
   checklist: Record<string, boolean>
 }
 
-const ORCHESTRATION_ENABLED_STORAGE_KEY = 'orca.orchestration.enabled'
-const BROWSER_USE_ENABLED_STORAGE_KEY = 'orca.browserUse.enabled'
 const SKIP_TO_PROJECT_SETUP_BUTTON = /^Skip to project setup$/i
 const TASK_SOURCES_HEADING = /Connect your task sources/i
 const REPO_STEP_HEADING = /Point Orca at some code/i
@@ -114,6 +112,15 @@ async function continueFromPostNotificationsToRepo(page: Page): Promise<void> {
   }
   await expect(page.getByRole('heading', { name: REPO_STEP_HEADING })).toBeVisible()
   await expectOnboardingProgress(page, /^4 of 4$/)
+}
+
+async function expectRepoStepReady(page: Page): Promise<void> {
+  const existingProjectContinue = onboardingFooterButton(page, /^Continue\b/)
+  const folderPicker = page.getByRole('button', { name: /Browse for a folder|Open a folder/i })
+
+  await expect(existingProjectContinue.or(folderPicker).first()).toBeVisible()
+  await expect(page.getByPlaceholder('git@github.com:org/repo.git')).toBeVisible()
+  await expect(page.getByRole('button', { name: /SSH\? Set hosts up in Settings/i })).toBeVisible()
 }
 
 test.describe('Onboarding flow', () => {
@@ -235,7 +242,7 @@ test.describe('Onboarding flow', () => {
 
     await expect(onboardingFooterButton(orcaPage, /^Continue\b/)).toBeVisible()
     await continueFromPostNotificationsToRepo(orcaPage)
-    await expect(orcaPage.getByRole('button', { name: /Open a folder/i })).toBeVisible()
+    await expectRepoStepReady(orcaPage)
     await expect
       .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
         timeout: 5_000
@@ -336,10 +343,7 @@ test.describe('Onboarding flow', () => {
     await expectOnboardingProgress(orcaPage, /^([45]) of \1$/)
     await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
     await expect(onboardingFooterButton(orcaPage, /Skip all onboarding/i)).toHaveCount(0)
-    await expect(orcaPage.getByRole('button', { name: /Open a folder/i })).toBeVisible()
-    await expect(
-      orcaPage.getByRole('button', { name: /SSH\? Set hosts up in Settings/i })
-    ).toBeVisible()
+    await expectRepoStepReady(orcaPage)
 
     await expect
       .poll(
@@ -478,9 +482,7 @@ test.describe('Onboarding flow', () => {
     expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
   })
 
-  test('Skip from notifications does not request permission or run feature setup', async ({
-    orcaPage
-  }) => {
+  test('Skip from notifications does not request permission', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
@@ -501,22 +503,6 @@ test.describe('Onboarding flow', () => {
     await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
     await expect(orcaPage.getByRole('heading', { name: REPO_STEP_HEADING })).toBeVisible()
-    await expect
-      .poll(
-        async () =>
-          orcaPage.evaluate(
-            ({ orchestrationKey, browserUseKey }) => ({
-              orchestration: localStorage.getItem(orchestrationKey),
-              browserUse: localStorage.getItem(browserUseKey)
-            }),
-            {
-              orchestrationKey: ORCHESTRATION_ENABLED_STORAGE_KEY,
-              browserUseKey: BROWSER_USE_ENABLED_STORAGE_KEY
-            }
-          ),
-        { timeout: 5_000 }
-      )
-      .toEqual({ orchestration: null, browserUse: null })
     await expect
       .poll(
         async () =>

@@ -17,10 +17,9 @@ import {
   ChevronRight,
   Sparkles,
   RefreshCw,
-  AlertTriangle,
-  ExternalLink,
-  Maximize2
+  AlertTriangle
 } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -585,28 +584,20 @@ function CheckRunDetails({
             </div>
           )}
 
-          <div className="flex justify-center pt-1">
+          <div className="flex justify-end pt-1">
             {!state?.loading && (
               <Dialog>
-                <Tooltip>
-                  <DialogTrigger asChild>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-xs"
-                        className="size-7 text-muted-foreground hover:text-foreground focus-visible:text-foreground"
-                        aria-label="View full details"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <Maximize2 className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                  </DialogTrigger>
-                  <TooltipContent side="top" sideOffset={4}>
+                <DialogTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="xs"
+                    className="h-7 gap-1 px-2 text-[11px]"
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     View full details
-                  </TooltipContent>
-                </Tooltip>
+                  </Button>
+                </DialogTrigger>
                 <CheckRunDetailsDialog
                   check={check}
                   state={state}

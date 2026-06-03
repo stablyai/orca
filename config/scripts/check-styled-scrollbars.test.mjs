@@ -175,7 +175,7 @@ describe('check-styled-scrollbars', () => {
   it('uses later spread className props over earlier explicit className props', () => {
     const reports = reportUnstyledScrollbars(
       'Example.tsx',
-      "export function Example() { return <div className=\"scrollbar-sleek\" {...{ className: 'overflow-y-auto' }} /> }"
+      'export function Example() { return <div className="scrollbar-sleek" {...{ className: \'overflow-y-auto\' }} /> }'
     )
 
     expect(reports).toHaveLength(1)

@@ -651,7 +651,6 @@ describe('createIpcPtyTransport', () => {
       snapshotCols: 132,
       snapshotRows: 43,
       isAlternateScreen: undefined,
-      isReattach: true,
       coldRestore: undefined,
       replay: undefined,
       sessionExpired: undefined
@@ -1051,7 +1050,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       selector: 'env-1',
       method: 'terminal.create',
       params: {
-        worktree: 'repo1::/remote/wt',
+        worktree: 'id:repo1::/remote/wt',
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',

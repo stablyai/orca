@@ -2,6 +2,7 @@
 controls share one parsed document/update path for this first notebook editor
 slice; splitting before the model stabilizes would make save/run mutations
 harder to audit. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: source drafts are reconciled against parsed notebook cells after editor flushes so stale drafts do not overwrite external notebook updates. */
 import React, {
   useCallback,
   useEffect,

@@ -43,7 +43,7 @@ export function ShortcutRowsList({
   }
 
   return (
-    <div className={cn('grid gap-8', className)}>
+    <div className={cn('flex flex-col gap-8', className)}>
       {groups.map((group) => (
         <div key={group.title} className="space-y-3">
           <h3 className="border-b border-border/50 pb-2 text-sm font-medium text-muted-foreground">

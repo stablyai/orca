@@ -1010,7 +1010,7 @@ describe('web file preload API', () => {
     expect(runtimeCalls).toEqual([
       { method: 'repo.list', params: undefined },
       { method: 'worktree.detectedList', params: { repo: 'repo-1' } },
-      { method: 'files.stat', params: { worktree: 'wt-1', relativePath: 'untitled.md' } }
+      { method: 'files.stat', params: { worktree: 'id:wt-1', relativePath: 'untitled.md' } }
     ])
   })
 })

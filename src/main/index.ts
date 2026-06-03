@@ -580,6 +580,7 @@ function openMainWindow(): BrowserWindow {
     // replay-loop through lastStatusByPaneKey runs only on deliberate
     // window recreations instead of stacking on top of stale listeners.
     agentHookServer.setListener(null)
+    agentHookServer.setPaneStatusClearListener(null)
     setMigrationUnsupportedPtyListener(null)
     // Why: any running synthesized-title spinner timer would fire into a
     // destroyed webContents; stop it here instead of deferring to per-pane
@@ -629,6 +630,12 @@ function openMainWindow(): BrowserWindow {
       }
     }
   )
+  agentHookServer.setPaneStatusClearListener((paneKey) => {
+    if (mainWindow?.isDestroyed()) {
+      return
+    }
+    mainWindow?.webContents.send('agentStatus:clear', { paneKey })
+  })
   setMigrationUnsupportedPtyListener((event) => {
     if (mainWindow?.isDestroyed()) {
       return

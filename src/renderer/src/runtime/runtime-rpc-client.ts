@@ -133,6 +133,14 @@ export function clearRuntimeCompatibilityCache(environmentId?: string | null): v
   compatibleRuntimeEnvironments.clear()
 }
 
+export function markRuntimeEnvironmentCompatible(environmentId: string): void {
+  const trimmed = environmentId.trim()
+  if (!trimmed) {
+    return
+  }
+  rememberRuntimeEnvironmentCompatibility(trimmed, Promise.resolve())
+}
+
 export function clearRuntimeCompatibilityCacheForTests(): void {
   clearRuntimeCompatibilityCache()
 }
