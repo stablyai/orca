@@ -39,6 +39,26 @@ function linearReadForce(options?: LinearReadOptions): { force: true } | {} {
   return options?.force ? { force: true } : {}
 }
 
+function normalizeLinearIssueCollectionResult(
+  result: unknown
+): LinearCollectionResult<LinearIssue> {
+  if (Array.isArray(result)) {
+    return { items: result as LinearIssue[] }
+  }
+  if (!result || typeof result !== 'object') {
+    return { items: [] }
+  }
+  const collection = result as Partial<LinearCollectionResult<LinearIssue>>
+  if (!Array.isArray(collection.items)) {
+    return { items: [] }
+  }
+  return {
+    items: collection.items,
+    ...(Array.isArray(collection.errors) ? { errors: collection.errors } : {}),
+    ...(typeof collection.hasMore === 'boolean' ? { hasMore: collection.hasMore } : {})
+  }
+}
+
 export async function linearStatus(
   settings: RuntimeLinearSettings
 ): Promise<LinearConnectionStatus> {
@@ -144,14 +164,20 @@ export async function linearListIssues(
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const target = getActiveRuntimeTarget(settings)
-  return target.kind === 'environment'
-    ? callRuntimeRpc<LinearCollectionResult<LinearIssue>>(
-        target,
-        'linear.listIssues',
-        { filter, limit, workspaceId: workspaceId ?? undefined },
-        { timeoutMs: 30_000 }
-      )
-    : window.api.linear.listIssues({ filter, limit, workspaceId: workspaceId ?? undefined })
+  const result =
+    target.kind === 'environment'
+      ? await callRuntimeRpc<unknown>(
+          target,
+          'linear.listIssues',
+          { filter, limit, workspaceId: workspaceId ?? undefined },
+          { timeoutMs: 30_000 }
+        )
+      : await window.api.linear.listIssues({
+          filter,
+          limit,
+          workspaceId: workspaceId ?? undefined
+        })
+  return normalizeLinearIssueCollectionResult(result)
 }
 
 export async function linearCreateIssue(
