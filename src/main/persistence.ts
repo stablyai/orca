@@ -4,6 +4,7 @@ as a unit instead of being scattered across modules. */
 import { app, safeStorage } from 'electron'
 import {
   readFileSync,
+  writeFileSync,
   mkdirSync,
   existsSync,
   renameSync,
@@ -12,7 +13,7 @@ import {
   statSync,
   realpathSync
 } from 'fs'
-import { rename, mkdir, rm, copyFile } from 'fs/promises'
+import { writeFile, rename, mkdir, rm, copyFile } from 'fs/promises'
 import { join, dirname, isAbsolute, resolve, sep } from 'path'
 import { homedir } from 'os'
 import { randomUUID } from 'node:crypto'
@@ -69,7 +70,6 @@ import {
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
 import { parseWorkspaceSession } from '../shared/workspace-session-schema'
-import { writeUtf8FileInChunks, writeUtf8FileInChunksSync } from '../shared/utf8-file-writer'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   isTerminalLeafId,
@@ -1585,7 +1585,7 @@ export class Store {
         const raw = readFileSync(path, 'utf-8')
         JSON.parse(raw)
         mkdirSync(dirname(dataFile), { recursive: true })
-        writeUtf8FileInChunksSync(dataFile, raw)
+        writeFileSync(dataFile, raw, 'utf-8')
         console.warn(`[persistence] Recovered state from backup slot ${i}: ${path}`)
         return true
       } catch (err) {
@@ -2187,7 +2187,7 @@ export class Store {
     // multi-megabyte orphan behind. Successful rename consumes the tmp file.
     let renamed = false
     try {
-      await writeUtf8FileInChunks(tmpFile, JSON.stringify(stateToSave, null, 2))
+      await writeFile(tmpFile, JSON.stringify(stateToSave, null, 2), 'utf-8')
       // Why: if flush() ran while this async write was in-flight, it bumped
       // writeGeneration and already wrote the latest state synchronously.
       // Renaming this stale tmp file would overwrite the fresh data.
@@ -2237,12 +2237,12 @@ export class Store {
       }
     }
 
-    // Why: mirror the async path — on any failure between writing and
+    // Why: mirror the async path — on any failure between writeFileSync and
     // renameSync, remove the tmp file so crashes during shutdown don't leak
     // orphans into userData.
     let renamed = false
     try {
-      writeUtf8FileInChunksSync(tmpFile, JSON.stringify(stateToSave, null, 2))
+      writeFileSync(tmpFile, JSON.stringify(stateToSave, null, 2), 'utf-8')
       renameSync(tmpFile, dataFile)
       renamed = true
     } finally {
