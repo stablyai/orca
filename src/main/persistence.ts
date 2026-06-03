@@ -608,9 +608,19 @@ function normalizeLoadedOnboardingState(
   const sanitized = sanitizeOnboardingUpdate(input, {
     migrateLegacyProgress: true
   })
+  // Why: a persisted completed/dismissed outcome means the user left
+  // onboarding. Recover from a bad/missing/null closedAt instead of reopening
+  // the new-user sidebar checklist.
+  const recoveredClosedAt =
+    typeof sanitized.closedAt === 'number'
+      ? sanitized.closedAt
+      : sanitized.outcome !== null && sanitized.outcome !== undefined
+        ? Date.now()
+        : sanitized.closedAt
   return {
     ...defaults,
     ...sanitized,
+    closedAt: recoveredClosedAt ?? defaults.closedAt,
     checklist: {
       ...defaults.checklist,
       ...sanitized.checklist

@@ -341,6 +341,47 @@ describe('Store', () => {
     expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
   })
 
+  it('keeps malformed completed onboarding closed for the setup guide sidebar gate', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 'yesterday',
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: false
+      }
+    })
+
+    const store = await createStore()
+    const onboarding = store.getOnboarding()
+
+    expect(onboarding.closedAt).not.toBeNull()
+    expect(onboarding.outcome).toBe('completed')
+    expect(onboarding.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('does not reopen the setup guide sidebar when closed onboarding has a null timestamp', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: 'dismissed',
+        lastCompletedStep: 1,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).not.toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
   it.each([
     [4, 3],
     [5, 4],
