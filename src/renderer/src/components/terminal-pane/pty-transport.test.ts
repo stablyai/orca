@@ -651,7 +651,6 @@ describe('createIpcPtyTransport', () => {
       snapshotCols: 132,
       snapshotRows: 43,
       isAlternateScreen: undefined,
-      isReattach: true,
       coldRestore: undefined,
       replay: undefined,
       sessionExpired: undefined

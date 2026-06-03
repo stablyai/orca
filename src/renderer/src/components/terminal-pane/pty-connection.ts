@@ -354,29 +354,6 @@ function isSessionOwnedByWorktree(sessionId: string, worktreeId: string): boolea
   return sessionId.slice(0, separatorIdx) === worktreeId
 }
 
-function shouldPreferMainBufferSnapshotForReattach(args: {
-  ptyId: string
-  staleSessionId?: string | null
-  connectResult: PtyConnectResult | null
-}): boolean {
-  if (isRemoteRuntimePtyId(args.ptyId)) {
-    return false
-  }
-  if (
-    args.connectResult?.coldRestore &&
-    !args.connectResult.snapshot &&
-    !args.connectResult.replay &&
-    args.connectResult.isReattach !== true
-  ) {
-    return false
-  }
-  return (
-    args.connectResult?.isReattach === true ||
-    Boolean(args.connectResult?.snapshot) ||
-    args.ptyId === args.staleSessionId
-  )
-}
-
 function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
   if (!isPaneVisible) {
     return false
@@ -1641,7 +1618,6 @@ export function connectPanePty(
     let hiddenOutputRestorePendingChars = 0
     let hiddenOutputRestorePendingOverflow = false
     let hiddenOutputRestoreFreshSnapshotNeeded = false
-    let mainBufferSnapshotApplyCount = 0
     // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
@@ -1956,7 +1932,6 @@ export function connectPanePty(
       writeReplayData('\x1b[2J\x1b[3J\x1b[H')
       writeReplayData(snapshot.data)
       writeReplayData(POST_REPLAY_LIVE_SNAPSHOT_RESET)
-      mainBufferSnapshotApplyCount += 1
       recordTerminalOutput(pane.terminal)
       const currentPtyId = transport.getPtyId()
       if (currentPtyId && !getFitOverrideForPty(currentPtyId)) {
@@ -1970,10 +1945,7 @@ export function connectPanePty(
       restoreScrollStateAfterSnapshotReplay(scrollState)
     }
 
-    function requestHiddenOutputRestoreIfNeeded(
-      opts: { showUnavailableWarning?: boolean } = {}
-    ): boolean {
-      const showUnavailableWarning = opts.showUnavailableWarning !== false
+    function requestHiddenOutputRestoreIfNeeded(): boolean {
       resetHiddenOutputRestoreIfPtyChanged()
       const ptyId = hiddenOutputRestorePtyId ?? transport.getPtyId()
       if (!hiddenOutputRestoreNeeded && hiddenOutputRestorePendingChunks.length === 0) {
@@ -1998,9 +1970,7 @@ export function connectPanePty(
             if (hiddenOutputRestorePtyId === currentPtyId) {
               clearHiddenOutputRestoreState()
             }
-            if (showUnavailableWarning) {
-              writeRestoreUnavailableWarning()
-            }
+            writeRestoreUnavailableWarning()
             return
           }
           if (transport.getPtyId() !== currentPtyId) {
@@ -2036,9 +2006,7 @@ export function connectPanePty(
           }
           if (!snapshot) {
             clearHiddenOutputRestoreState()
-            if (showUnavailableWarning) {
-              writeRestoreUnavailableWarning()
-            }
+            writeRestoreUnavailableWarning()
             return
           }
           applyMainBufferSnapshot(snapshot)
@@ -2067,32 +2035,10 @@ export function connectPanePty(
           hiddenOutputRestoreNeeded &&
           shouldWritePtyOutputForeground(deps.isVisibleRef.current)
         ) {
-          requestHiddenOutputRestoreIfNeeded({ showUnavailableWarning })
+          requestHiddenOutputRestoreIfNeeded()
         }
       })
       return true
-    }
-
-    async function restoreMainBufferSnapshotForReattach(ptyId: string): Promise<boolean> {
-      if (!canUseMainBufferSnapshot(ptyId)) {
-        return false
-      }
-      if (hiddenOutputRestorePtyId !== null && hiddenOutputRestorePtyId !== ptyId) {
-        clearHiddenOutputRestoreState()
-      }
-      const applyCountBefore = mainBufferSnapshotApplyCount
-      hiddenOutputRestorePtyId = ptyId
-      hiddenOutputRestoreNeeded = true
-      requestHiddenOutputRestoreIfNeeded({ showUnavailableWarning: false })
-      const inFlight = hiddenOutputRestoreInFlight
-      if (inFlight) {
-        await inFlight
-      }
-      return (
-        !disposed &&
-        transport.getPtyId() === ptyId &&
-        mainBufferSnapshotApplyCount > applyCountBefore
-      )
     }
 
     unregisterBacklogRecovery = registerTerminalBacklogRecovery(
@@ -2174,10 +2120,10 @@ export function connectPanePty(
       }
     }
 
-    const handleReattachResult = async (
+    const handleReattachResult = (
       result: PtyConnectResult | string | void,
       staleSessionId?: string | null
-    ): Promise<void> => {
+    ): void => {
       if (disposed) {
         return
       }
@@ -2225,84 +2171,61 @@ export function connectPanePty(
       // main-process hydration path has full status parity.
       registerPaneSerializerFor(ptyId)
 
-      // Strict precedence: main snapshot > provider snapshot > replay > coldRestore.
-      // Paint exactly one source per reattach. Painting snapshot AND replay
-      // produced the duplicated TUI output users saw on worktree switch (the
-      // relay replay buffer's tail typically overlaps with the daemon snapshot's
-      // tail, so both writing into xterm doubles the same lines). Snapshot wins
-      // because the main/provider authoritative buffer is freshest when present;
+      // Strict precedence: snapshot > replay > coldRestore. Paint exactly
+      // one source per reattach. Painting snapshot AND replay produced the
+      // duplicated TUI output users saw on worktree switch (the relay replay
+      // buffer's tail typically overlaps with the daemon snapshot's tail, so
+      // both writing into xterm doubles the same lines). Snapshot wins
+      // because the daemon's authoritative buffer is freshest when present;
       // replay wins over coldRestore because the relay's last 100 KB is
       // newer than disk-recorded scrollback. If we ever return all three,
       // the daemon and relay are by definition tracking the same session
       // and only the freshest source belongs on screen.
-      const restoredMainBufferSnapshot = shouldPreferMainBufferSnapshotForReattach({
-        ptyId,
-        staleSessionId,
-        connectResult
-      })
-        ? await restoreMainBufferSnapshotForReattach(ptyId)
-        : false
-      const currentPtyIdAfterMainSnapshot = transport.getPtyId()
-      if (
-        disposed ||
-        (currentPtyIdAfterMainSnapshot !== null && currentPtyIdAfterMainSnapshot !== ptyId)
-      ) {
-        return
-      }
-      if (
-        restoredMainBufferSnapshot &&
-        connectResult?.coldRestore &&
-        !isRemoteRuntimePtyId(ptyId)
-      ) {
-        window.api.pty.ackColdRestore(ptyId)
-      }
-      if (!restoredMainBufferSnapshot) {
-        if (connectResult?.snapshot) {
-          writeReplayData('\x1b[2J\x1b[3J\x1b[H')
-          writeReplayData(connectResult.snapshot)
-          // Snapshot reattach keeps a live session, so avoid the broader mode
-          // reset. We only drop stale cursor/focus state that should not leak
-          // from replay bytes into the restored renderer terminal.
-          writeReplayData(POST_REPLAY_REATTACH_RESET)
-          if (connectResult.coldRestore) {
-            // Snapshot superseded the cold-restore payload — ack it so the
-            // daemon does not redeliver it on the next reattach.
-            if (!isRemoteRuntimePtyId(ptyId)) {
-              window.api.pty.ackColdRestore(ptyId)
-            }
-          }
-        } else if (connectResult?.replay) {
-          // Relay replay holds the last 100 KB of raw output. The xterm may
-          // already hold pre-disconnect content; clear first to avoid
-          // duplication. The reattach reset prevents stale cursor/focus mode
-          // bits in the replayed data from leaking into the restored terminal.
-          writeReplayData('\x1b[2J\x1b[3J\x1b[H')
-          writeReplayData(connectResult.replay)
-          writeReplayData(POST_REPLAY_REATTACH_RESET)
-          if (connectResult.coldRestore) {
-            if (!isRemoteRuntimePtyId(ptyId)) {
-              window.api.pty.ackColdRestore(ptyId)
-            }
-          }
-        } else if (connectResult?.coldRestore) {
-          // restoreScrollbackBuffers() already wrote the saved xterm buffer
-          // before this rAF ran. The cold-restore scrollback overlaps with
-          // that content; clear first.
-          // replayIntoTerminal: the recorded scrollback is raw PTY output that
-          // may contain query sequences the previous agent CLI emitted;
-          // writing them through xterm.write would trigger auto-replies that
-          // land in the new shell's stdin. See replay-guard.ts.
-          writeReplayData('\x1b[2J\x1b[3J\x1b[H')
-          writeReplayData(connectResult.coldRestore.scrollback)
-          writeReplayData('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
-          // Cold-restore means the daemon lost the session and spawned a
-          // fresh shell — no TUI is consuming the mode-setting bytes that a
-          // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
-          // reset them to match the fresh shell's expectations.
-          writeReplayData(POST_REPLAY_MODE_RESET)
+      if (connectResult?.snapshot) {
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.snapshot)
+        // Snapshot reattach keeps a live session, so avoid the broader mode
+        // reset. We only drop stale cursor/focus state that should not leak
+        // from replay bytes into the restored renderer terminal.
+        writeReplayData(POST_REPLAY_REATTACH_RESET)
+        if (connectResult.coldRestore) {
+          // Snapshot superseded the cold-restore payload — ack it so the
+          // daemon does not redeliver it on the next reattach.
           if (!isRemoteRuntimePtyId(ptyId)) {
             window.api.pty.ackColdRestore(ptyId)
           }
+        }
+      } else if (connectResult?.replay) {
+        // Relay replay holds the last 100 KB of raw output. The xterm may
+        // already hold pre-disconnect content; clear first to avoid
+        // duplication. The reattach reset prevents stale cursor/focus mode
+        // bits in the replayed data from leaking into the restored terminal.
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.replay)
+        writeReplayData(POST_REPLAY_REATTACH_RESET)
+        if (connectResult.coldRestore) {
+          if (!isRemoteRuntimePtyId(ptyId)) {
+            window.api.pty.ackColdRestore(ptyId)
+          }
+        }
+      } else if (connectResult?.coldRestore) {
+        // restoreScrollbackBuffers() already wrote the saved xterm buffer
+        // before this rAF ran. The cold-restore scrollback overlaps with
+        // that content; clear first.
+        // replayIntoTerminal: the recorded scrollback is raw PTY output that
+        // may contain query sequences the previous agent CLI emitted;
+        // writing them through xterm.write would trigger auto-replies that
+        // land in the new shell's stdin. See replay-guard.ts.
+        writeReplayData('\x1b[2J\x1b[3J\x1b[H')
+        writeReplayData(connectResult.coldRestore.scrollback)
+        writeReplayData('\r\n\x1b[2m--- session restored ---\x1b[0m\r\n\r\n')
+        // Cold-restore means the daemon lost the session and spawned a
+        // fresh shell — no TUI is consuming the mode-setting bytes that a
+        // crashed TUI (e.g. Claude's \e[?1004h) left in the scrollback, so
+        // reset them to match the fresh shell's expectations.
+        writeReplayData(POST_REPLAY_MODE_RESET)
+        if (!isRemoteRuntimePtyId(ptyId)) {
+          window.api.pty.ackColdRestore(ptyId)
         }
       }
       // Why: when a mobile-fit override is active, skip sending desktop dims
@@ -2516,7 +2439,7 @@ export function connectPanePty(
                 )
                 if (!result && expiredReattachError) {
                   const gen = await preSignalPromise
-                  if (typeof gen === 'number' && typeof window !== 'undefined') {
+                  if (typeof gen === 'number') {
                     void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
                   }
                   if (disposed) {
@@ -2527,11 +2450,8 @@ export function connectPanePty(
                   startFreshSpawn()
                   return
                 }
-                await handleReattachResult(result, pendingSessionId)
+                handleReattachResult(result, pendingSessionId)
                 const gen = await preSignalPromise
-                if (disposed || typeof window === 'undefined') {
-                  return
-                }
                 if (typeof gen === 'number') {
                   if (!isRemoteRuntimePtyId(pendingSessionId)) {
                     void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
@@ -2540,7 +2460,7 @@ export function connectPanePty(
               })
               .catch(async (err) => {
                 const gen = await preSignalPromise
-                if (typeof gen === 'number' && typeof window !== 'undefined') {
+                if (typeof gen === 'number') {
                   void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
                 }
                 console.warn(`[pty-connection] Reattach FAILED for tab=${deps.tabId}:`, err)
@@ -2645,7 +2565,7 @@ export function connectPanePty(
         .then(async (result) => {
           if (!result && expiredReattachError) {
             const gen = await preSignalPromise
-            if (typeof gen === 'number' && typeof window !== 'undefined') {
+            if (typeof gen === 'number') {
               void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
             }
             if (disposed) {
@@ -2656,11 +2576,8 @@ export function connectPanePty(
             startFreshSpawn()
             return
           }
-          await handleReattachResult(result, deferredReattachSessionId)
+          handleReattachResult(result, deferredReattachSessionId)
           const gen = await preSignalPromise
-          if (disposed || typeof window === 'undefined') {
-            return
-          }
           if (typeof gen === 'number') {
             if (!isRemoteRuntimePtyId(deferredReattachSessionId)) {
               void window.api.pty.settlePaneSerializer(cacheKey, gen).catch(() => {})
@@ -2669,7 +2586,7 @@ export function connectPanePty(
         })
         .catch(async (err) => {
           const gen = await preSignalPromise
-          if (typeof gen === 'number' && typeof window !== 'undefined') {
+          if (typeof gen === 'number') {
             void window.api.pty.clearPendingPaneSerializer(cacheKey, gen).catch(() => {})
           }
           const message = err instanceof Error ? err.message : String(err)
