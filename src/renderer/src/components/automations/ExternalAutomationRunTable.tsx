@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: run rows are fetched from the external automation store; the loading state tracks that async request lifecycle. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, ChevronLeft, ChevronRight, FileText, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'

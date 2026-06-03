@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: image surface size is measured with ResizeObserver and DOM refs, which are external layout systems outside render derivation. */
 import { Image as ImageIcon, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
@@ -46,6 +47,14 @@ export default function ImageViewer({
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
+  const imageStateKey = `${filePath}\n${mimeType}\n${cleanedContent}`
+  const [lastImageStateKey, setLastImageStateKey] = useState(imageStateKey)
+  if (lastImageStateKey !== imageStateKey) {
+    setLastImageStateKey(imageStateKey)
+    setInlineZoom(1)
+    setPopupZoom(1)
+    setImageDimensions(null)
+  }
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
   const previewSrc = useMemo(
@@ -195,12 +204,6 @@ export default function ImageViewer({
     observer.observe(surface)
     return () => observer.disconnect()
   }, [isPopupOpen])
-
-  useEffect(() => {
-    setInlineZoom(1)
-    setPopupZoom(1)
-    setImageDimensions(null)
-  }, [filePath, mimeType, cleanedContent])
 
   if (isPdf) {
     return <PdfViewer content={cleanedContent} filePath={filePath} />

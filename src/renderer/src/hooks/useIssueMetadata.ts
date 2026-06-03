@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: repo metadata hooks share TTL caches and
 Linear/GitHub cache invalidation entrypoints used by the issue dialog. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: issue metadata hooks clear stale rows and track loading while async provider cache requests are in flight. */
 import { useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {

@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: duplicated from GitHubItemDialog so the dedicated PR full-page surface can evolve its Primer-styled header without destabilizing the issue dialog; planned to refactor shared parts out later. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PR pages hydrate provider data, diff sections, snippets, and cache refetches from async provider/virtualizer lifecycles. */
 import React, {
   Suspense,
   lazy,

@@ -21,6 +21,7 @@ export function useUnreadDockBadge(): typeof clearUnreadDockBadgeCount {
     })
   )
 
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: this syncs an external OS dock badge, not React render state.
   useEffect(() => {
     setUnreadDockBadgeCountBestEffort(unreadCount)
   }, [unreadCount])

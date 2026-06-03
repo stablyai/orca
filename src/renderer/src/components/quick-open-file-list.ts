@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: quick-open file lists are fetched over local or SSH runtime IPC, so loading/error/results track the request lifecycle. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Worktree } from '../../../shared/types'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'

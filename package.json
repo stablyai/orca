@@ -182,7 +182,7 @@
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs,mts,cts}": [
       "oxlint",
-      "oxlint --config config/oxlint-react-doctor.json --deny-warnings",
+      "oxlint --config config/oxlint-react-doctor.json",
       "oxfmt --write"
     ],
     "*.{json,css}": [

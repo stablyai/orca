@@ -44,16 +44,13 @@ export default function TabBarCreateEntry({
   const [error, setError] = useState<string | null>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [selectedIndexQuery, setSelectedIndexQuery] = useState(query)
+  const [lastMenuOpen, setLastMenuOpen] = useState(menuOpen)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
 
   useEffect(() => {
     if (!menuOpen) {
-      setQuery('')
-      setPending(false)
-      setError(null)
-      setSelectedIndex(0)
-      return undefined
+      return
     }
     const focusFrame = requestAnimationFrame(() => inputRef.current?.focus())
     return () => cancelAnimationFrame(focusFrame)
@@ -69,6 +66,16 @@ export default function TabBarCreateEntry({
     setSelectedIndexQuery(query)
     if (selectedIndex !== 0) {
       // Why: the first filtered action should be highlighted on the same paint as the new query.
+      setSelectedIndex(0)
+    }
+  }
+
+  if (lastMenuOpen !== menuOpen) {
+    setLastMenuOpen(menuOpen)
+    if (!menuOpen) {
+      setQuery('')
+      setPending(false)
+      setError(null)
       setSelectedIndex(0)
     }
   }
