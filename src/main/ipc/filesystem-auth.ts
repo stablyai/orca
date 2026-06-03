@@ -324,6 +324,21 @@ async function isPathAllowedIncludingRegisteredWorktrees(
 
   await ensureAuthorizedRootsCache(store)
 
+  // If this call is resolving a symlink (canonicalSourcePath differs from targetPath)
+  // and the symlink's source lives inside an authorized workspace root, permit access
+  // to the target. Placing a symlink inside a workspace root requires write access to
+  // that root, which already grants OS-level access to the target — Orca's boundary
+  // adds no additional protection in that scenario. This mirrors the SSH relay
+  // behavior from #1672, scoped to symlinks whose entry point is inside a trusted root.
+  if (
+    options.canonicalSourcePath &&
+    options.canonicalSourcePath !== targetPath &&
+    (isPathAllowed(options.canonicalSourcePath, store) ||
+      isRegisteredWorktreePath(options.canonicalSourcePath))
+  ) {
+    return true
+  }
+
   // Why: external linked worktrees are already trusted for git operations.
   // Cache their normalized roots once and reuse that index so quick-open and
   // file explorer do not spawn `git worktree list` on every filesystem read.
