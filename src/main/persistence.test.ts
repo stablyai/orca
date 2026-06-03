@@ -305,9 +305,10 @@ describe('Store', () => {
   })
 
   it('persists the existing-user onboarding backfill back to disk', async () => {
-    // Why: the upgrade-cohort backfill only happens once at load. It must be
-    // written back so the completed/dismissed gate survives the next launch
-    // without re-deriving it from a still-missing onboarding block.
+    // Why: the upgrade-cohort backfill is derived at load; this asserts the
+    // backfilled onboarding+gate state round-trips through a write intact (the
+    // load-time scheduleSave that triggers it without a manual flush is wired
+    // via loadNeedsSave at the no-onboarding-block branch).
     writeDataFile({
       schemaVersion: 1,
       ui: {}
