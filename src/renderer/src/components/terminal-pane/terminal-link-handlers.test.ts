@@ -29,6 +29,7 @@ const openFilePathMock = vi.fn()
 const openFileMock = vi.fn()
 const authorizeExternalPathMock = vi.fn()
 const statMock = vi.fn().mockResolvedValue({ isDirectory: false })
+const fsPathExistsMock = vi.fn().mockResolvedValue(true)
 const runtimeEnvironmentCallMock = vi.fn()
 const runtimeEnvironmentTransportCallMock = vi.fn()
 const setActiveWorktreeMock = vi.fn()
@@ -111,6 +112,7 @@ beforeEach(() => {
       },
       fs: {
         authorizeExternalPath: authorizeExternalPathMock,
+        pathExists: fsPathExistsMock,
         stat: statMock
       },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCallMock }
@@ -1038,13 +1040,13 @@ describe('createFilePathLinkProvider range bounds', () => {
       firstProvider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
     expect(firstLinks.map((link) => link.text)).toEqual(['shared.ts'])
-    expect(statMock).toHaveBeenCalledWith({
+    expect(fsPathExistsMock).toHaveBeenCalledWith({
       filePath: '/repo/shared.ts',
       connectionId: 'ssh-one'
     })
 
     vi.mocked(getConnectionId).mockReturnValue('ssh-two')
-    statMock.mockRejectedValueOnce(new Error('ENOENT'))
+    fsPathExistsMock.mockResolvedValueOnce(false)
     const secondProvider = createFilePathLinkProvider(
       1,
       deps,
@@ -1056,7 +1058,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     })
 
     expect(secondLinks).toEqual([])
-    expect(statMock).toHaveBeenLastCalledWith({
+    expect(fsPathExistsMock).toHaveBeenLastCalledWith({
       filePath: '/repo/shared.ts',
       connectionId: 'ssh-two'
     })
