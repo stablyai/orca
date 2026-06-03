@@ -33,7 +33,7 @@ import WorktreeCardAgents, {
   SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT
 } from './WorktreeCardAgents'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
-import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
+import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -382,6 +382,7 @@ type VirtualizedWorktreeViewportProps = {
   selectedWorktrees: readonly Worktree[]
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onImmediateWorktreeActivate: (worktreeId: string) => void
+  onToggleWorktreeUnread: (worktree: Worktree) => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -725,6 +726,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   selectedWorktrees,
   onSelectionGesture,
   onImmediateWorktreeActivate,
+  onToggleWorktreeUnread,
   onContextMenuSelect,
   repoMap,
   worktreeMap,
@@ -3169,6 +3171,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const isDeleting = deleteStateByWorktreeId[child.worktree.id]?.isDeleting ?? false
               const revealHighlightTone =
                 agentSendTargetWorktreeId === child.worktree.id ? 'ai' : 'default'
+              const showStatus = cardProps.includes('status')
+              const showUnreadQuickAction = cardProps.includes('unread')
+              const unreadTooltip = child.worktree.isUnread ? 'Mark read' : 'Mark unread'
+              const stopQuickActionPointerPropagation = (
+                event: React.PointerEvent<HTMLButtonElement>
+              ) => {
+                event.stopPropagation()
+              }
+              const handleToggleUnreadQuick = (event: React.MouseEvent<HTMLButtonElement>) => {
+                event.preventDefault()
+                event.stopPropagation()
+                onToggleWorktreeUnread(child.worktree)
+              }
               const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -3248,7 +3263,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         }
                       >
                         <span className="mt-[2px] flex w-4 shrink-0 justify-center pt-[2px]">
-                          <WorktreeActivityStatusIndicator worktreeId={child.worktree.id} />
+                          <WorktreeCardStatusSlot
+                            worktreeId={child.worktree.id}
+                            showStatus={showStatus}
+                            showUnreadAction={showUnreadQuickAction}
+                            isUnread={child.worktree.isUnread}
+                            unreadTooltip={unreadTooltip}
+                            onPointerDown={stopQuickActionPointerPropagation}
+                            onToggleUnread={handleToggleUnreadQuick}
+                          />
                         </span>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[12px] leading-tight text-foreground">
@@ -4310,6 +4333,13 @@ const WorktreeList = React.memo(function WorktreeList({
     [updateWorktreeMeta, worktreeMap, workspaceStatuses]
   )
 
+  const toggleWorktreeUnread = useCallback(
+    (worktree: Worktree) => {
+      void updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
+    },
+    [updateWorktreeMeta]
+  )
+
   const moveWorktreesToStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
@@ -4630,6 +4660,7 @@ const WorktreeList = React.memo(function WorktreeList({
         selectedWorktrees={selectedWorktrees}
         onSelectionGesture={updateSelectionForGesture}
         onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
+        onToggleWorktreeUnread={toggleWorktreeUnread}
         onContextMenuSelect={selectForContextMenu}
         repoMap={repoMap}
         worktreeMap={worktreeMap}

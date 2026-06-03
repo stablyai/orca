@@ -38,14 +38,18 @@ import {
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
-const EFFECTIVE_UPSTREAM_PROBE_CACHE_TTL_MS = 30_000
+const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 30_000
 
-// Why: source-control polling can repeatedly hit the same missing-upstream
-// refs; keep the result briefly without hiding external Git changes forever.
-const effectiveUpstreamStatusCache = new Map<
-  string,
-  { expiresAt: number; status: GitUpstreamStatus }
->()
+type EffectiveUpstreamStatusCacheEntry = {
+  expiresAt: number
+  status: GitUpstreamStatus
+}
+
+const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
+
+export function clearEffectiveUpstreamStatusCacheForTests(): void {
+  effectiveUpstreamStatusCache.clear()
+}
 
 export type GetStatusOptions = {
   includeIgnored?: boolean
@@ -179,19 +183,34 @@ export async function getStatus(
     statusSucceeded = true
 
     if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
-      const cacheKey = effectiveUpstreamStatusCacheKey(worktreePath, branch, upstreamName, head)
-      const cached = getCachedEffectiveUpstreamStatus(cacheKey)
+      const branchName = getShortBranchName(branch)
+      const cacheKey = branchName
+        ? getEffectiveUpstreamStatusCacheKey(worktreePath, branchName, upstreamName)
+        : null
+      effectiveUpstreamStatus = cacheKey
+        ? readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
+        : undefined
+      let probedSameNameOriginRef = false
       try {
-        effectiveUpstreamStatus =
-          cached ??
-          (await getEffectiveGitUpstreamStatus((args) =>
-            gitExecFileAsync(args, { cwd: worktreePath })
-          ))
-        if (!cached) {
-          effectiveUpstreamStatusCache.set(cacheKey, {
-            expiresAt: Date.now() + EFFECTIVE_UPSTREAM_PROBE_CACHE_TTL_MS,
-            status: effectiveUpstreamStatus
+        if (!effectiveUpstreamStatus) {
+          effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) => {
+            if (
+              branchName &&
+              args[0] === 'rev-parse' &&
+              args.includes(`refs/remotes/origin/${branchName}`)
+            ) {
+              probedSameNameOriginRef = true
+            }
+            return gitExecFileAsync(args, { cwd: worktreePath })
           })
+          if (cacheKey) {
+            rememberEffectiveUpstreamStatus(
+              cacheKey,
+              effectiveUpstreamStatus,
+              Date.now(),
+              probedSameNameOriginRef
+            )
+          }
         }
       } catch {
         // Why: git status polling should not fail just because the richer
@@ -290,6 +309,50 @@ function getShortBranchName(branch: string | undefined): string | null {
   return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
 }
 
+function getEffectiveUpstreamStatusCacheKey(
+  worktreePath: string,
+  branchName: string,
+  upstreamName: string | undefined
+): string {
+  return [worktreePath, branchName, upstreamName ?? ''].join('\0')
+}
+
+function readCachedEffectiveUpstreamStatus(
+  cacheKey: string,
+  now: number
+): GitUpstreamStatus | undefined {
+  const entry = effectiveUpstreamStatusCache.get(cacheKey)
+  if (!entry) {
+    return undefined
+  }
+  if (entry.expiresAt <= now) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return undefined
+  }
+  return entry.status
+}
+
+function rememberEffectiveUpstreamStatus(
+  cacheKey: string,
+  status: GitUpstreamStatus,
+  now: number,
+  probedSameNameOriginRef: boolean
+): void {
+  if (status.hasUpstream) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return
+  }
+  if (!probedSameNameOriginRef) {
+    return
+  }
+  // Why: a stable no-upstream branch should not spawn failed git probes every
+  // source-control poll, but remote refs can appear after push/fetch.
+  effectiveUpstreamStatusCache.set(cacheKey, {
+    status,
+    expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
+  })
+}
+
 function shouldProbeEffectiveUpstreamStatus(
   branch: string | undefined,
   upstreamName: string | undefined
@@ -303,27 +366,6 @@ function shouldProbeEffectiveUpstreamStatus(
   }
   const parsed = splitRemoteBranchName(upstreamName)
   return parsed?.remoteName === 'origin' && parsed.branchName !== branchName
-}
-
-function effectiveUpstreamStatusCacheKey(
-  worktreePath: string,
-  branch: string | undefined,
-  upstreamName: string | undefined,
-  head: string | undefined
-): string {
-  return `${worktreePath}\0${branch ?? ''}\0${upstreamName ?? ''}\0${head ?? ''}`
-}
-
-function getCachedEffectiveUpstreamStatus(cacheKey: string): GitUpstreamStatus | undefined {
-  const cached = effectiveUpstreamStatusCache.get(cacheKey)
-  if (!cached) {
-    return undefined
-  }
-  if (cached.expiresAt <= Date.now()) {
-    effectiveUpstreamStatusCache.delete(cacheKey)
-    return undefined
-  }
-  return cached.status
 }
 
 function parseBranchAheadBehind(line: string): { ahead: number; behind: number } | null {
