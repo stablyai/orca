@@ -93,10 +93,12 @@ const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
-const FOREGROUND_ANSI_BURST_IMMEDIATE_CHARS = 64 * 1024
-const FOREGROUND_ANSI_BURST_WINDOW_MS = 16
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 16 * 1024
 const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
+// Why: OpenTUI can emit many tiny redraws that each look interactive but
+// collectively starve timers unless foreground writes have a rolling budget.
+const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
+const FOREGROUND_BUDGET_WINDOW_MS = 500
 // Why: this is only shown if renderer backlog overflowed and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
@@ -1672,6 +1674,8 @@ export function connectPanePty(
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
     let hiddenOutputRestoreGeneration = 0
+    let foregroundImmediateBudgetChars = 0
+    let foregroundImmediateBudgetWindowStart = 0
     let hiddenMode2031ScanTail = ''
     const hiddenStartupRendererQueryUntil = shouldKeepHiddenStartupRendererQueriesLive(paneStartup)
       ? Date.now() + HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS
@@ -1712,35 +1716,33 @@ export function connectPanePty(
       recordTerminalOutput(pane.terminal)
     }
 
-    let foregroundAnsiBurstStartedAt = Number.NEGATIVE_INFINITY
-    let foregroundAnsiBurstChars = 0
-
-    function isWithinForegroundAnsiBurstBudget(data: string, now: number): boolean {
-      if (!data.includes('\x1b[')) {
-        foregroundAnsiBurstStartedAt = Number.NEGATIVE_INFINITY
-        foregroundAnsiBurstChars = 0
-        return true
+    function consumeForegroundImmediateBudget(dataLength: number): boolean {
+      const now = performance.now()
+      if (now - foregroundImmediateBudgetWindowStart > FOREGROUND_BUDGET_WINDOW_MS) {
+        foregroundImmediateBudgetChars = 0
+        foregroundImmediateBudgetWindowStart = now
       }
-
-      if (now - foregroundAnsiBurstStartedAt > FOREGROUND_ANSI_BURST_WINDOW_MS) {
-        foregroundAnsiBurstStartedAt = now
-        foregroundAnsiBurstChars = 0
+      if (foregroundImmediateBudgetChars + dataLength > FOREGROUND_IMMEDIATE_BUDGET_CHARS) {
+        return false
       }
-      foregroundAnsiBurstChars += data.length
-      // Why: OpenTUI-like renderers emit many tiny cursor-addressed frames in
-      // one task; after the first frame budget, they are throughput work.
-      return foregroundAnsiBurstChars <= FOREGROUND_ANSI_BURST_IMMEDIATE_CHARS
+      foregroundImmediateBudgetChars += dataLength
+      return true
     }
 
     function isLatencySensitiveForegroundOutput(data: string): boolean {
-      const now = performance.now()
       if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
-        return isWithinForegroundAnsiBurstBudget(data, now)
+        return consumeForegroundImmediateBudget(data.length)
       }
-      const recentInput = now - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
-      return (
-        recentInput && data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS && data.includes('\x1b[')
-      )
+      const recentInput =
+        performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+      if (
+        recentInput &&
+        data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
+        data.includes('\x1b[')
+      ) {
+        return consumeForegroundImmediateBudget(data.length)
+      }
+      return false
     }
 
     function containsNonAsciiOutput(data: string): boolean {
