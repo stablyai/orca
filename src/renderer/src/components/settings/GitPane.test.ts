@@ -20,10 +20,10 @@ function renderGitPane(searchQuery: string): string {
 }
 
 describe('GitPane', () => {
-  it('renders the default Source Control tab setting', () => {
+  it('selects All as the default Source Control tab setting', () => {
     const markup = renderGitPane('')
     expect(markup).toContain('Default Source Control Tab')
-    expect(markup).toContain('Uncommitted')
+    expect(markup).toMatch(/aria-checked="true"[^>]*>All/)
   })
 
   it('keeps the default Source Control tab setting searchable', () => {

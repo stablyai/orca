@@ -239,7 +239,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
-    sourceControlDefaultTab: 'uncommitted',
+    sourceControlDefaultTab: 'all',
     showTitlebarAppName: true,
     showTasksButton: true,
     showMobileButton: true,

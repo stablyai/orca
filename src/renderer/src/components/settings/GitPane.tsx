@@ -183,7 +183,7 @@ export function GitPane({
         </div>
         <SettingsSegmentedControl
           ariaLabel="Default Source Control Tab"
-          value={settings.sourceControlDefaultTab ?? 'uncommitted'}
+          value={settings.sourceControlDefaultTab ?? 'all'}
           onChange={(option) => updateSettings({ sourceControlDefaultTab: option })}
           options={[
             { value: 'all', label: 'All' },
