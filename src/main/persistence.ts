@@ -88,6 +88,7 @@ import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../share
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
+import { normalizeFileIconThemeId } from '../shared/file-icon-theme'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeAppIconId } from '../shared/app-icon'
@@ -1894,6 +1895,7 @@ export class Store {
               parsed.settings?.terminalQuickCommands
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            fileIconTheme: normalizeFileIconThemeId(parsed.settings?.fileIconTheme),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
@@ -3033,6 +3035,9 @@ export class Store {
     }
     if ('appIcon' in updates) {
       sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
+    }
+    if ('fileIconTheme' in updates) {
+      sanitizedUpdates.fileIconTheme = normalizeFileIconThemeId(updates.fileIconTheme)
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,

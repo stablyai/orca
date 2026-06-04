@@ -19,6 +19,7 @@ import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
 import type { AppIconId } from './app-icon'
+import type { FileIconThemeId } from './file-icon-theme'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
@@ -1956,6 +1957,7 @@ export type GlobalSettings = {
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
   appIcon: AppIconId
+  fileIconTheme?: FileIconThemeId
   appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number

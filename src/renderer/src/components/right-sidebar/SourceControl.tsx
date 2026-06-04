@@ -16,7 +16,6 @@ import {
   Undo2,
   Check,
   Copy,
-  Folder,
   FolderOpen,
   GitMerge,
   GitPullRequestArrow,
@@ -70,7 +69,7 @@ import {
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '@/lib/file-icon-theme-resolver'
 import {
   buildGitStatusSourceControlTree,
   buildSourceControlTree,
@@ -6401,6 +6400,7 @@ function SourceControlTreeDirectoryRow({
   onStagePaths: (paths: readonly string[]) => Promise<void>
   onUnstagePaths: (paths: readonly string[]) => Promise<void>
 }): React.JSX.Element {
+  const fileIconTheme = useAppStore((s) => s.settings?.fileIconTheme)
   // Why: filtered tree nodes only contain visible descendants. Folder-wide
   // bulk labels would overpromise if they acted on that filtered subset.
   const canStage = !hideBulkActions && actionPaths.stagePaths.length > 0
@@ -6423,11 +6423,13 @@ function SourceControlTreeDirectoryRow({
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
         />
-        {isCollapsed ? (
-          <Folder className="size-3 shrink-0" />
-        ) : (
-          <FolderOpen className="size-3 shrink-0" />
-        )}
+        <ThemedFileIcon
+          themeId={fileIconTheme}
+          path={node.path}
+          isDirectory
+          isExpanded={!isCollapsed}
+          className="size-3 shrink-0"
+        />
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
       </button>
       <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
@@ -6483,6 +6485,8 @@ function SourceControlBranchTreeDirectoryRow({
   isCollapsed: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  const fileIconTheme = useAppStore((s) => s.settings?.fileIconTheme)
+
   return (
     <div
       className="group relative flex w-full items-center gap-1 pr-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground"
@@ -6499,11 +6503,13 @@ function SourceControlBranchTreeDirectoryRow({
         <ChevronDown
           className={cn('size-3 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
         />
-        {isCollapsed ? (
-          <Folder className="size-3 shrink-0" />
-        ) : (
-          <FolderOpen className="size-3 shrink-0" />
-        )}
+        <ThemedFileIcon
+          themeId={fileIconTheme}
+          path={node.path}
+          isDirectory
+          isExpanded={!isCollapsed}
+          className="size-3 shrink-0"
+        />
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
       </button>
       <span className="w-4 shrink-0 text-center text-[10px] font-bold tabular-nums text-muted-foreground/80">
@@ -6570,7 +6576,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
-  const FileIcon = getFileTypeIcon(entry.path)
+  const fileIconTheme = useAppStore((s) => s.settings?.fileIconTheme)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -6637,7 +6643,12 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           }
         }}
       >
-        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+        <ThemedFileIcon
+          themeId={fileIconTheme}
+          path={entry.path}
+          className="size-3.5 shrink-0"
+          lucideStyle={{ color: STATUS_COLORS[entry.status] }}
+        />
         <div className="min-w-0 flex-1 text-xs">
           <span className="min-w-0 block truncate">
             <span className="text-foreground">{fileName}</span>
@@ -6772,7 +6783,7 @@ function BranchEntryRow({
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
-  const FileIcon = getFileTypeIcon(entry.path)
+  const fileIconTheme = useAppStore((s) => s.settings?.fileIconTheme)
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -6796,7 +6807,12 @@ function BranchEntryRow({
         }}
         onClick={onOpen}
       >
-        <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
+        <ThemedFileIcon
+          themeId={fileIconTheme}
+          path={entry.path}
+          className="size-3.5 shrink-0"
+          lucideStyle={{ color: STATUS_COLORS[entry.status] }}
+        />
         <span className="min-w-0 flex-1 truncate text-xs">
           <span className="text-foreground">{fileName}</span>
           {showPathHint && dirPath && (

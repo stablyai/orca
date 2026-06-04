@@ -2341,6 +2341,22 @@ describe('Store', () => {
     expect(store.updateSettings({ appIcon: 'not-real' as never }).appIcon).toBe('classic')
   })
 
+  it('normalizes file icon theme on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          fileIconTheme: 'not-real'
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().fileIconTheme).toBe('orca')
+    expect(store.updateSettings({ fileIconTheme: 'orca-color' }).fileIconTheme).toBe('orca-color')
+    expect(store.updateSettings({ fileIconTheme: 'not-real' as never }).fileIconTheme).toBe('orca')
+  })
+
   it('updateSettings keeps the legacy commit-message AI projection in sync', async () => {
     const store = await createStore()
     const current = store.getSettings().sourceControlAi!

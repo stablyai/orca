@@ -7,11 +7,8 @@ import {
   Copy,
   ExternalLink,
   Eye,
-  File,
   FilePlus,
   Files,
-  Folder,
-  FolderOpen,
   FolderPlus,
   Globe,
   ListCollapse,
@@ -34,7 +31,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { ThemedFileIcon } from '@/lib/file-icon-theme-resolver'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import {
   encodeWorkspaceFilePaths,
@@ -88,6 +85,7 @@ export function InlineInputRow({
   onSubmit: (value: string) => void
   onCancel: () => void
 }): React.JSX.Element {
+  const fileIconTheme = useAppStore((s) => s.settings?.fileIconTheme)
   const inputRef = useRef<HTMLInputElement>(null)
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submitted = useRef(false)
@@ -200,11 +198,13 @@ export function InlineInputRow({
       style={{ paddingLeft: `${depth * 16 + 8}px` }}
     >
       <span className="size-3 shrink-0" />
-      {inlineInput.type === 'folder' ? (
-        <Folder className="size-3 shrink-0 text-muted-foreground" />
-      ) : (
-        <File className="size-3 shrink-0 text-muted-foreground" />
-      )}
+      <ThemedFileIcon
+        themeId={fileIconTheme}
+        path={inlineInput.existingName ?? inlineInput.parentPath}
+        isDirectory={inlineInput.type === 'folder'}
+        className="size-3 shrink-0"
+        lucideClassName="text-muted-foreground"
+      />
       <input
         key={inlineInputKey}
         ref={setInputRef}
@@ -334,7 +334,7 @@ export function FileExplorerRow({
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
-  const FileIcon = getFileTypeIcon(node.relativePath || node.name)
+  const fileIconTheme = useAppStore((s) => s.settings?.fileIconTheme)
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
@@ -446,10 +446,15 @@ export function FileExplorerRow({
               />
               {isLoading ? (
                 <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
-              ) : isExpanded ? (
-                <FolderOpen className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                <Folder className="size-3 shrink-0 text-muted-foreground" />
+                <ThemedFileIcon
+                  themeId={fileIconTheme}
+                  path={node.relativePath || node.name}
+                  isDirectory
+                  isExpanded={isExpanded}
+                  className="size-3 shrink-0"
+                  lucideClassName="text-muted-foreground"
+                />
               )}
             </>
           ) : (
@@ -458,7 +463,12 @@ export function FileExplorerRow({
               {node.isSymlink ? (
                 <Link className="size-3 shrink-0 text-muted-foreground" />
               ) : (
-                <FileIcon className="size-3 shrink-0 text-muted-foreground" />
+                <ThemedFileIcon
+                  themeId={fileIconTheme}
+                  path={node.relativePath || node.name}
+                  className="size-3 shrink-0"
+                  lucideClassName="text-muted-foreground"
+                />
               )}
             </>
           )}
