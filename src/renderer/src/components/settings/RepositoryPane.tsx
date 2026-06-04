@@ -31,6 +31,40 @@ type RepositoryPaneProps = {
   removeProject: (repoId: string) => void
 }
 
+type RepoTextDraft = { repoId: string; text: string }
+
+// Why: updateRepo persists via async IPC before the store value updates, so a
+// store-controlled input resets mid-IME-composition (Hangul decomposes into
+// jamo). Keep keystrokes in local draft state; persist stays per-keystroke.
+export function RepoSettingsDraftInput({
+  repoId,
+  storeValue,
+  onTextChange,
+  ...inputProps
+}: {
+  repoId: string
+  storeValue: string
+  onTextChange: (text: string) => void
+} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>): React.JSX.Element {
+  const [draft, setDraft] = useState<RepoTextDraft>({ repoId, text: storeValue })
+  // Why: reset only when the pane switches repos — the store echo of an
+  // in-flight keystroke must not clobber newer draft text.
+  const resolved = draft.repoId === repoId ? draft : { repoId, text: storeValue }
+  if (resolved !== draft) {
+    setDraft(resolved)
+  }
+  return (
+    <Input
+      {...inputProps}
+      value={resolved.text}
+      onChange={(e) => {
+        setDraft({ repoId, text: e.target.value })
+        onTextChange(e.target.value)
+      }}
+    />
+  )
+}
+
 export function matchesRepositoryIdentitySearch(query: string, repo: Repo): boolean {
   const normalizedQuery = normalizeSettingsSearchQuery(query)
   if (!normalizedQuery) {
@@ -215,14 +249,14 @@ export function RepositoryPane({
           className="space-y-2"
           forceVisible={forceFullPaneForRepoMatch}
         >
-          <Label className="text-sm font-semibold">Display Name</Label>
-          <Input
-            value={repo.displayName}
-            onChange={(e) =>
-              updateRepo(repo.id, {
-                displayName: e.target.value
-              })
-            }
+          <Label htmlFor={`repo-display-name-${repo.id}`} className="text-sm font-semibold">
+            Display Name
+          </Label>
+          <RepoSettingsDraftInput
+            id={`repo-display-name-${repo.id}`}
+            repoId={repo.id}
+            storeValue={repo.displayName}
+            onTextChange={(text) => updateRepo(repo.id, { displayName: text })}
             className="h-9 text-sm"
           />
         </SearchableSetting>
@@ -292,13 +326,12 @@ export function RepositoryPane({
                   </Button>
                 ) : null}
               </div>
-              <Input
-                value={repo.worktreeBasePath ?? ''}
+              <RepoSettingsDraftInput
+                repoId={repo.id}
+                storeValue={repo.worktreeBasePath ?? ''}
                 placeholder={settings?.workspaceDir ?? ''}
-                onChange={(e) =>
-                  updateRepo(repo.id, {
-                    worktreeBasePath: e.target.value.trim() ? e.target.value : undefined
-                  })
+                onTextChange={(text) =>
+                  updateRepo(repo.id, { worktreeBasePath: text.trim() ? text : undefined })
                 }
                 className="h-9 text-sm"
               />
