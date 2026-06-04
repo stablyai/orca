@@ -18,6 +18,7 @@ const tempRoots: string[] = []
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 const REPO_STEP_HEADING = /Point Orca at some code/i
 const TASK_SOURCES_HEADING = /Connect your task sources/i
+const ONBOARDING_ADVANCE_LABEL = /^Continue\b|^Add your first project\b/
 test.describe.configure({ mode: 'serial' })
 test.afterAll(() => {
   for (const root of tempRoots.splice(0)) {
@@ -79,14 +80,14 @@ async function chooseFolderInNativeDialog(
 function onboardingFooter(page: Page) {
   return page
     .locator('footer')
-    .filter({ has: page.getByRole('button', { name: /Back|Continue|Set up|Skip/i }) })
+    .filter({
+      has: page.getByRole('button', { name: /Back|Continue|Add your first project|Skip/i })
+    })
     .first()
 }
 
 async function continueOnboarding(page: Page): Promise<void> {
-  await onboardingFooter(page)
-    .getByRole('button', { name: /^Continue\b/ })
-    .click()
+  await onboardingFooter(page).getByRole('button', { name: ONBOARDING_ADVANCE_LABEL }).click()
 }
 
 async function selectCodexAgent(page: Page): Promise<void> {
