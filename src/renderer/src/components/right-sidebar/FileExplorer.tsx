@@ -524,6 +524,7 @@ function FileExplorerInner(): React.JSX.Element {
               deleteShortcutLabel={deleteShortcutLabel}
               onClick={handleRowClick}
               onDoubleClick={handleDoubleClick}
+              onViewFile={handleClick}
               onContextMenuSelect={preserveSelectionForContextMenu}
               onCopyPaths={copyPathsForNode}
               onStartNew={startNew}

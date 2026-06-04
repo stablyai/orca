@@ -270,6 +270,7 @@ type FileExplorerRowProps = {
   selectionSize: number
   onClick: (event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: () => void
+  onViewFile: () => void
   onContextMenuSelect: () => void
   onCopyPaths: (pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', dir: string, depth: number) => void
@@ -312,6 +313,7 @@ export function FileExplorerRow({
   selectionSize,
   onClick,
   onDoubleClick,
+  onViewFile,
   onContextMenuSelect,
   onCopyPaths,
   onStartNew,
@@ -540,6 +542,12 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={onAddFolderAsProject}>
             <FolderPlus />
             Add as Project...
+          </ContextMenuItem>
+        )}
+        {!node.isDirectory && (
+          <ContextMenuItem onSelect={onViewFile}>
+            <File />
+            View File
           </ContextMenuItem>
         )}
         {!node.isDirectory && activeWorktreeId && (

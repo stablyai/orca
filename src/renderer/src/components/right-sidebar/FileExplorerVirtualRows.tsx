@@ -26,6 +26,7 @@ type FileExplorerVirtualRowsProps = {
   deleteShortcutLabel: string
   onClick: (node: TreeNode, event: React.MouseEvent<HTMLButtonElement>) => void
   onDoubleClick: (node: TreeNode) => void
+  onViewFile: (node: TreeNode) => void
   onContextMenuSelect: (node: TreeNode) => void
   onCopyPaths: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
@@ -66,6 +67,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     deleteShortcutLabel,
     onClick,
     onDoubleClick,
+    onViewFile,
     onContextMenuSelect,
     onCopyPaths,
     onStartNew,
@@ -168,6 +170,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               selectionSize={selectedPaths.has(n.path) ? visibleSelectionCount : 1}
               onClick={(event) => onClick(n, event)}
               onDoubleClick={() => onDoubleClick(n)}
+              onViewFile={() => onViewFile(n)}
               onContextMenuSelect={() => onContextMenuSelect(n)}
               onCopyPaths={(pathKind) => onCopyPaths(n, pathKind)}
               onStartNew={onStartNew}
