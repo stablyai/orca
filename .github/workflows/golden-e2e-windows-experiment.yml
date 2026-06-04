@@ -1,11 +1,7 @@
 name: Golden E2E Windows Experiment
 
 on:
-  # Why: this workflow is intentionally being trialed from PR #4615 before it
-  # exists on the default branch, so push is what makes the branch experiment run.
-  push:
-    branches:
-      - brennanb2025/golden-core-flow-tests
+  pull_request:
     paths:
       - '.github/workflows/golden-e2e-windows-experiment.yml'
       - 'package.json'
