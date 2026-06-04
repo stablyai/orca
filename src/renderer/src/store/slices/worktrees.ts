@@ -568,6 +568,9 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   for (const file of s.openFiles) {
     if (worktreeIdSet.has(file.worktreeId)) {
       removedFileIds.add(file.id)
+      if (file.markdownPreviewSourceFileId) {
+        removedFileIds.add(file.markdownPreviewSourceFileId)
+      }
     }
   }
 
@@ -673,6 +676,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // Per-file editor state for removed files
     editorDrafts: omitByFileId(s.editorDrafts),
     markdownViewMode: omitByFileId(s.markdownViewMode),
+    markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
     // Top-level actives
     openFiles: nextOpenFiles,
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
@@ -1300,19 +1304,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextGitBranchCompareRequestKeyByWorktree[worktreeId]
         // Why: clean up per-file editor state for files belonging to the removed
         // worktree so stale drafts and view modes never accumulate in memory.
-        const removedFileIds = new Set(
-          s.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
-        )
+        const removedFileIds = new Set<string>()
+        for (const file of s.openFiles) {
+          if (file.worktreeId !== worktreeId) {
+            continue
+          }
+          removedFileIds.add(file.id)
+          if (file.markdownPreviewSourceFileId) {
+            removedFileIds.add(file.markdownPreviewSourceFileId)
+          }
+        }
         const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
         const nextMarkdownViewMode =
           removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
         const nextEditorViewMode =
           removedFileIds.size > 0 ? { ...s.editorViewMode } : s.editorViewMode
+        const nextMarkdownFrontmatterVisible =
+          removedFileIds.size > 0
+            ? { ...s.markdownFrontmatterVisible }
+            : s.markdownFrontmatterVisible
         if (removedFileIds.size > 0) {
           for (const fileId of removedFileIds) {
             delete nextEditorDrafts[fileId]
             delete nextMarkdownViewMode[fileId]
             delete nextEditorViewMode[fileId]
+            delete nextMarkdownFrontmatterVisible[fileId]
           }
         }
         const nextExpandedDirs = { ...s.expandedDirs }
@@ -1379,6 +1395,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           editorDrafts: nextEditorDrafts,
           markdownViewMode: nextMarkdownViewMode,
           editorViewMode: nextEditorViewMode,
+          markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
           showDotfilesByWorktree: nextShowDotfilesByWorktree,
           expandedDirs: nextExpandedDirs,
           gitStatusByWorktree: nextGitStatusByWorktree,

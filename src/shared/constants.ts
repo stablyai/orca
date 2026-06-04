@@ -431,6 +431,7 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     openFilesByWorktree: {},
+    markdownFrontmatterVisible: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
     activeBrowserTabIdByWorktree: {},

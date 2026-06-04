@@ -287,6 +287,12 @@ export type EditorSlice = {
   editorViewMode: Record<string, EditorViewMode>
   setEditorViewMode: (fileId: string, mode: EditorViewMode) => void
 
+  // Per-file opt-in to render front matter in the markdown preview (#4468).
+  // Default is hidden; absent entry means hidden. Storing only the explicit
+  // true values keeps the record minimal and the default implicit.
+  markdownFrontmatterVisible: Record<string, boolean>
+  setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
+
   // Right sidebar
   rightSidebarOpen: boolean
   rightSidebarWidth: number
@@ -1215,6 +1221,26 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       return { editorViewMode: { ...s.editorViewMode, [fileId]: mode } }
     }),
 
+  // Markdown preview front-matter visibility (#4468). Default is hidden; the
+  // preview only renders the front-matter card when the user opts in per file.
+  markdownFrontmatterVisible: {},
+  setMarkdownFrontmatterVisible: (fileId, visible) =>
+    set((s) => {
+      // Why: default is hidden. Writing `false` explicitly when no entry exists
+      // would grow the record unnecessarily; delete instead so the shape stays
+      // minimal and hydration round-trips cleanly — same trade-off as
+      // setEditorViewMode above.
+      if (!visible) {
+        if (!(fileId in s.markdownFrontmatterVisible)) {
+          return s
+        }
+        const next = { ...s.markdownFrontmatterVisible }
+        delete next[fileId]
+        return { markdownFrontmatterVisible: next }
+      }
+      return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: true } }
+    }),
+
   // Right sidebar
   rightSidebarOpen: false,
   rightSidebarWidth: 280,
@@ -1425,6 +1451,27 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                     ([fileId]) => fileId !== replacedPreview.id
                   )
                 )
+          const frontmatterVisibilityKeys = new Set([replacedPreview.id])
+          if (replacedPreview.markdownPreviewSourceFileId) {
+            frontmatterVisibilityKeys.add(replacedPreview.markdownPreviewSourceFileId)
+          }
+          const frontmatterKeysToRemove = [...frontmatterVisibilityKeys].filter(
+            (key) =>
+              key in s.markdownFrontmatterVisible &&
+              !s.openFiles.some(
+                (file, index) =>
+                  index !== existingPreviewIdx &&
+                  (file.id === key || file.markdownPreviewSourceFileId === key)
+              )
+          )
+          const nextMarkdownFrontmatterVisible =
+            replacedPreview.id === id || frontmatterKeysToRemove.length === 0
+              ? s.markdownFrontmatterVisible
+              : Object.fromEntries(
+                  Object.entries(s.markdownFrontmatterVisible).filter(
+                    ([fileId]) => !frontmatterKeysToRemove.includes(fileId)
+                  )
+                )
           // Why: editorCursorLine entries accumulate per file; clean up the
           // evicted preview's entry so it does not leak across tab replacements.
           const nextEditorCursorLine =
@@ -1474,6 +1521,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             editorCursorLine: nextEditorCursorLine,
             markdownViewMode: nextMarkdownViewMode,
             editorViewMode: nextEditorViewMode,
+            markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
             recentlyClosedEditorTabsByWorktree: nextRecentlyClosed,
             ...previewTabBarUpdate,
             ...activeResult
@@ -1692,6 +1740,25 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       delete newMarkdownViewMode[fileId]
       const newEditorViewMode = { ...s.editorViewMode }
       delete newEditorViewMode[fileId]
+      const frontmatterVisibilityKeys = new Set([fileId])
+      if (closedFile?.markdownPreviewSourceFileId) {
+        frontmatterVisibilityKeys.add(closedFile.markdownPreviewSourceFileId)
+      }
+      const keysToRemove = [...frontmatterVisibilityKeys].filter(
+        (key) =>
+          key in s.markdownFrontmatterVisible &&
+          !newFiles.some((file) => file.id === key || file.markdownPreviewSourceFileId === key)
+      )
+      const newMarkdownFrontmatterVisible =
+        keysToRemove.length > 0
+          ? (() => {
+              const next = { ...s.markdownFrontmatterVisible }
+              for (const key of keysToRemove) {
+                delete next[key]
+              }
+              return next
+            })()
+          : s.markdownFrontmatterVisible
       // Why: editorCursorLine entries are keyed by fileId and accumulate on
       // every cursor move. Without cleanup they grow without bound across a
       // long session as files are opened and closed.
@@ -1817,6 +1884,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         markdownViewMode: newMarkdownViewMode,
         editorViewMode: newEditorViewMode,
+        markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
         pendingEditorReveal: null,
         recentlyClosedEditorTabsByWorktree: nextRecentlyClosed
@@ -1902,6 +1970,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           activeTabType: 'terminal',
           markdownViewMode: {},
           editorViewMode: {},
+          markdownFrontmatterVisible: {},
           pendingEditorReveal: null
         }
       }
@@ -1916,6 +1985,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
       const newEditorViewMode = Object.fromEntries(
         Object.entries(s.editorViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
+      )
+      const newMarkdownFrontmatterVisible = Object.fromEntries(
+        Object.entries(s.markdownFrontmatterVisible).filter(([fileId]) =>
+          remainingFileIds.has(fileId)
+        )
       )
       const newEditorCursorLine = Object.fromEntries(
         Object.entries(s.editorCursorLine).filter(([fileId]) => remainingFileIds.has(fileId))
@@ -1982,6 +2056,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         activeTabType: browserTabsForWorktree.length > 0 ? 'browser' : 'terminal',
         markdownViewMode: newMarkdownViewMode,
         editorViewMode: newEditorViewMode,
+        markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
         activeFileIdByWorktree: newActiveFileIdByWorktree,
         activeTabTypeByWorktree: newActiveTabTypeByWorktree,
         tabBarOrderByWorktree: nextTabBarOrderByWorktree,
@@ -3440,6 +3515,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const openFilesByWorktree = session.openFilesByWorktree ?? {}
       const persistedActiveFileIdByWorktree = session.activeFileIdByWorktree ?? {}
       const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
+      const persistedMarkdownFrontmatterVisible = session.markdownFrontmatterVisible ?? {}
 
       // Why: worktrees may have been deleted between sessions. Filter out
       // files for worktrees that no longer exist, mirroring the validation
@@ -3576,10 +3652,30 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       // browser or terminal instead of showing an empty editor surface.
       const nextActiveTabType =
         nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
+      const openFileIds = new Set(openFiles.map((file) => file.id))
+      const visibleFrontmatterEntries = new Map<string, boolean>()
+      for (const [persistedFileId, visible] of Object.entries(
+        persistedMarkdownFrontmatterVisible
+      )) {
+        if (!visible) {
+          continue
+        }
+        if (openFileIds.has(persistedFileId)) {
+          visibleFrontmatterEntries.set(persistedFileId, true)
+        }
+        for (const migrations of Object.values(editorFileIdMigrationsByWorktree)) {
+          const migratedFileId = migrations.get(persistedFileId)
+          if (migratedFileId && openFileIds.has(migratedFileId)) {
+            visibleFrontmatterEntries.set(migratedFileId, true)
+          }
+        }
+      }
+      const markdownFrontmatterVisible = Object.fromEntries(visibleFrontmatterEntries)
 
       return {
         openFiles,
         editorDrafts,
+        markdownFrontmatterVisible,
         activeFileId: nextActiveFileId,
         activeFileIdByWorktree: filteredActiveFileIdByWorktree,
         activeTabType: nextActiveTabType,

@@ -14,6 +14,7 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     activeTabIdByWorktree: {},
     openFiles: [],
     editorDrafts: {},
+    markdownFrontmatterVisible: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},

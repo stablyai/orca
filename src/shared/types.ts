@@ -684,6 +684,8 @@ export type WorkspaceSessionState = {
   openFilesByWorktree?: Record<string, PersistedOpenFile[]>
   /** Per-worktree active editor file ID (filePath) at shutdown. */
   activeFileIdByWorktree?: Record<string, string | null>
+  /** Per-file markdown preview front-matter visibility. Absent entry means hidden. */
+  markdownFrontmatterVisible?: Record<string, boolean>
   /** Persisted browser workspaces, keyed by worktree ID. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
   /** Persisted browser pages, keyed by workspace ID. */

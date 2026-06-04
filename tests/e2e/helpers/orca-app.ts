@@ -40,6 +40,9 @@ type OrcaTestFixtures = {
   // events for every other test. Dismiss it by default; onboarding.spec.ts
   // opts out via `test.use({ dismissOnboarding: false })`.
   dismissOnboarding: boolean
+  // Why: most E2E specs need a ready project before assertions start. Golden
+  // first-run specs opt out so they can prove the zero-project onboarding path.
+  seedTestRepo: boolean
 }
 
 type OrcaWorkerFixtures = {
@@ -63,6 +66,22 @@ const ORCA_E2E_SLOWMO_MS = ((): number => {
   }
   return Math.max(parsed, 0)
 })()
+
+async function removeUserDataDirAfterShutdown(userDataDir: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      rmSync(userDataDir, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (attempt === 4) {
+        throw error
+      }
+      // Why: Windows can briefly keep Electron profile files locked after the
+      // process exits; retrying avoids turning a passed flow into teardown noise.
+      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
+    }
+  }
+}
 
 function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   // Why: ORCA_E2E_FORCE_HEADFUL lets a developer watch any spec in a real
@@ -237,15 +256,16 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // descendants are gone in CI; worker teardown then hangs on open handles.
     await closeElectronAppForE2E(app)
     await cleanupE2EDaemons(userDataDir)
-    rmSync(userDataDir, { recursive: true, force: true })
+    await removeUserDataDirAfterShutdown(userDataDir)
   },
 
   // Default: dismiss the onboarding overlay so it doesn't intercept clicks.
   dismissOnboarding: [true, { option: true }],
+  seedTestRepo: [true, { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.
-  sharedPage: async ({ electronApp, testRepoPath }, provideFixture) => {
+  sharedPage: async ({ electronApp, seedTestRepo, testRepoPath }, provideFixture) => {
     // Why: the Electron app may take a while to create the first window,
     // especially on cold start with no prior dev userData. Isolated per-test
     // profiles make late-suite launches slower, so use the full test budget.
@@ -254,6 +274,16 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
 
     // Wait for the store to be available
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+
+    if (!seedTestRepo) {
+      await page.waitForFunction(
+        () => window.__store?.getState().workspaceSessionReady === true,
+        null,
+        { timeout: 30_000 }
+      )
+      await provideFixture(page)
+      return
+    }
 
     const repoPath = isValidGitRepo(testRepoPath) ? testRepoPath : createSeededTestRepo()
 

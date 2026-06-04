@@ -1,15 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Columns2,
-  Copy,
-  Eye,
-  ExternalLink,
-  FileText,
-  ListTree,
-  MoreHorizontal,
-  Pencil,
-  Rows2
-} from 'lucide-react'
+import { Columns2, Copy, Eye, ExternalLink, FileText, ListTree, Pencil, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import {
@@ -33,6 +23,7 @@ import type { EditorHeaderOpenFileState } from './editor-header'
 import { getEditorHeaderCopyState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
+import { EditorPanelMarkdownActionsMenu } from './EditorPanelMarkdownActionsMenu'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -62,6 +53,8 @@ type EditorPanelHeaderProps = {
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
   showMarkdownTableOfContents: boolean
+  canShowMarkdownFrontmatterToggle: boolean
+  markdownFrontmatterVisible: boolean
   sideBySide: boolean
   openFileState: EditorHeaderOpenFileState
   onCopyPath: () => void
@@ -72,6 +65,7 @@ type EditorPanelHeaderProps = {
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
+  onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
 }
 
@@ -93,6 +87,8 @@ export function EditorPanelHeader({
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
   showMarkdownTableOfContents,
+  canShowMarkdownFrontmatterToggle,
+  markdownFrontmatterVisible,
   sideBySide,
   openFileState,
   onCopyPath,
@@ -103,6 +99,7 @@ export function EditorPanelHeader({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
+  onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelHeaderProps): React.JSX.Element {
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
@@ -363,35 +360,15 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
-      {hasViewModeToggle && isMarkdown && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-              aria-label="More actions"
-              title="More actions"
-            >
-              <MoreHorizontal size={14} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={4}>
-            <DropdownMenuItem
-              // Why: the item is disabled (not hidden) only in source/Monaco
-              // mode, which has no document DOM to export. We intentionally
-              // don't poll the DOM (canExportActiveMarkdown) at render time:
-              // the Radix content renders in a Portal and the lookup can
-              // race with the active surface's paint, producing a stuck
-              // disabled state. exportActiveMarkdownToPdf is a safe no-op
-              // when no subtree is found.
-              disabled={mdViewMode === 'source'}
-              onSelect={onExportMarkdownToPdf}
-            >
-              Export as PDF
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      <EditorPanelMarkdownActionsMenu
+        isMarkdown={isMarkdown}
+        hasViewModeToggle={hasViewModeToggle}
+        mdViewMode={mdViewMode}
+        canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+        markdownFrontmatterVisible={markdownFrontmatterVisible}
+        onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
+        onExportMarkdownToPdf={onExportMarkdownToPdf}
+      />
     </div>
   )
 }

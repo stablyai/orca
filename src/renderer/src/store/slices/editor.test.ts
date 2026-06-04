@@ -895,6 +895,129 @@ describe('createEditorSlice editor view mode', () => {
   })
 })
 
+describe('createEditorSlice markdown frontmatter visibility (#4468)', () => {
+  it('stores visible=true as an explicit entry keyed by fileId', () => {
+    const store = createEditorStore()
+
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+  })
+
+  it('deletes the entry when visibility resets to hidden', () => {
+    const store = createEditorStore()
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+
+  it('is a no-op when hiding a file that was never shown', () => {
+    const store = createEditorStore()
+    const before = store.getState().markdownFrontmatterVisible
+
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', false)
+
+    expect(store.getState().markdownFrontmatterVisible).toBe(before)
+  })
+
+  it('drops the visibility flag when the file is closed', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().closeFile('/repo/notes.md')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+
+  it('keeps the visibility flag while a preview tab still references the source file', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openMarkdownPreview({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().closeFile('/repo/notes.md')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+
+    store.getState().closeFile('markdown-preview::/repo/notes.md')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+
+  it('keeps the visibility flag when replacing an edit preview referenced by a markdown preview', () => {
+    const store = createEditorStore()
+    store.getState().openFile(
+      {
+        filePath: '/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().openMarkdownPreview(
+      {
+        filePath: '/repo/notes.md',
+        relativePath: 'notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown'
+      },
+      { sourceFileId: '/repo/notes.md' }
+    )
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/guide.md',
+        relativePath: 'guide.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ '/repo/notes.md': true })
+  })
+
+  it('drops the visibility flag when all files are closed', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().setMarkdownFrontmatterVisible('/repo/notes.md', true)
+
+    store.getState().closeAllFiles()
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
+  })
+})
+
 describe('createEditorSlice openMarkdownPreview', () => {
   it('opens markdown preview as a separate read-only tab', () => {
     const store = createEditorStore()

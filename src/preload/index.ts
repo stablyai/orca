@@ -2600,6 +2600,12 @@ const api = {
       ipcRenderer.on('ui:reloadBrowserPage', listener)
       return () => ipcRenderer.removeListener('ui:reloadBrowserPage', listener)
     },
+    onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
+        callback(direction)
+      ipcRenderer.on('ui:zoomBrowserPage', listener)
+      return () => ipcRenderer.removeListener('ui:zoomBrowserPage', listener)
+    },
     onHardReloadBrowserPage: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:hardReloadBrowserPage', listener)
