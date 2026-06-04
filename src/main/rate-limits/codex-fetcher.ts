@@ -3,6 +3,7 @@ paths together in one file makes it easier to audit the protocol/parsing
 differences and ensure account-scoped env handling stays identical. */
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import { spawn } from 'node:child_process'
+import { codexAuthExists } from './codex-auth-presence'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { withMacTailscaleDnsHint } from '../network/macos-tailscale-dns-diagnostic'
 import { getCmdExePath, getSpawnArgsForWindows } from '../win32-utils'
@@ -520,6 +521,20 @@ async function fetchViaPty(options?: FetchCodexRateLimitsOptions): Promise<Provi
 export async function fetchCodexRateLimits(
   options?: FetchCodexRateLimitsOptions
 ): Promise<ProviderRateLimits> {
+  // Why: never spawn the `codex` binary unless the user has signed in. Without
+  // auth the RPC/PTY paths can only error, and spawning them shows up as an
+  // unexpected background Codex process for users who don't use Codex.
+  if (!codexAuthExists(options?.codexHomePath)) {
+    return {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: 'Codex not signed in',
+      status: 'unavailable'
+    }
+  }
+
   // Path A: try RPC first
   try {
     const rpcResult = await fetchViaRpc(options)

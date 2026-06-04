@@ -2,9 +2,8 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import icon from '../../../resources/icon.png?asset'
-import devIcon from '../../../resources/icon-dev.png?asset'
 import type { Store } from '../persistence'
+import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
@@ -264,7 +263,7 @@ export function createMainWindow(
           }
         }
       : {}),
-    icon: is.dev ? devIcon : icon,
+    icon: getAppIconPath(settings?.appIcon),
     ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

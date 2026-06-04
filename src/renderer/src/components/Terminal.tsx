@@ -34,6 +34,7 @@ import {
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { Tab, TabContentType, TabGroupLayoutNode } from '../../../shared/types'
+import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
@@ -283,7 +284,7 @@ function Terminal(): React.JSX.Element | null {
     : ''
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const hasSplitTerminalPane = useAppStore((s) =>
-    Boolean(s.featureInteractions['terminal-pane-split']?.interactionCount)
+    hasFeatureInteraction(s.featureInteractions, 'terminal-pane-split')
   )
 
   useContextualTour(

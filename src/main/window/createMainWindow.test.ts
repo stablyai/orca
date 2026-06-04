@@ -36,12 +36,8 @@ vi.mock('@electron-toolkit/utils', () => ({
   is: isMock
 }))
 
-vi.mock('../../../resources/icon.png?asset', () => ({
-  default: 'icon'
-}))
-
-vi.mock('../../../resources/icon-dev.png?asset', () => ({
-  default: 'icon-dev'
+vi.mock('../app-icon', () => ({
+  getAppIconPath: vi.fn(() => 'icon')
 }))
 
 vi.mock('../browser/browser-manager', () => ({
