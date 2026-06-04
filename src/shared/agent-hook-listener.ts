@@ -292,6 +292,33 @@ type ExtractedPromptText = {
     | null
 }
 
+// Why: some agents (Kimi Code) deliver the prompt as an array of content blocks
+// rather than a string. Flatten the `text` of each block (and bare-string
+// blocks) into one prompt line; returns undefined for non-array/empty input so
+// string-prompt agents fall through unchanged.
+function extractTextFromContentBlocks(value: unknown): string | undefined {
+  if (!Array.isArray(value)) {
+    return undefined
+  }
+  const parts: string[] = []
+  for (const block of value) {
+    if (typeof block === 'string') {
+      if (block.trim().length > 0) {
+        parts.push(block.trim())
+      }
+      continue
+    }
+    if (block && typeof block === 'object') {
+      const text = (block as Record<string, unknown>).text
+      if (typeof text === 'string' && text.trim().length > 0) {
+        parts.push(text.trim())
+      }
+    }
+  }
+  const joined = parts.join('\n').trim()
+  return joined.length > 0 ? joined : undefined
+}
+
 function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromptText {
   const candidateKeys = [
     'prompt',
@@ -308,6 +335,13 @@ function extractPromptText(hookPayload: Record<string, unknown>): ExtractedPromp
       // Why: trim so prompts match what readStringField produces elsewhere —
       // surrounding whitespace would otherwise leak into UI and caches.
       return { text: value.trim(), source: key as Exclude<ExtractedPromptText['source'], null> }
+    }
+    // Why: Kimi Code sends UserPromptSubmit `prompt` as a content-block array
+    // (`[{type:'text',text:'…'}]`), not a bare string. Flatten the text blocks
+    // so the prompt line shows instead of an empty status row.
+    const fromBlocks = extractTextFromContentBlocks(value)
+    if (fromBlocks) {
+      return { text: fromBlocks, source: key as Exclude<ExtractedPromptText['source'], null> }
     }
   }
   // Why: OpenCode's plugin sends MessagePart events with { role, text }. When
@@ -419,6 +453,12 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
   run_terminal_cmd: ['command'],
+  // Kimi Code's PascalCase built-in tools (toolInput object keys).
+  Shell: ['command'],
+  ReadFile: ['path'],
+  WriteFile: ['path'],
+  StrReplaceFile: ['path'],
+  FetchURL: ['url'],
   execute_code: ['code', 'command', 'cmd'],
   apply_patch: ['path', 'file_path'],
   view_image: ['path', 'file_path'],
@@ -1052,6 +1092,111 @@ function extractClaudeToolFields(
       if (lastFromTranscript) {
         update.lastAssistantMessage = lastFromTranscript
       }
+    }
+  }
+  return update
+}
+
+// Why: SetTodoList's input is `{ todos: [{ title, status }] }` (agent-core
+// tools/builtin/state/todo-list.ts; status ∈ pending|in_progress|done). Show the
+// in_progress title — Kimi keeps exactly one in_progress — falling back to the
+// first unfinished task, then a count, so the row reflects current progress.
+function deriveKimiTodoPreview(toolInput: unknown): string | undefined {
+  if (typeof toolInput !== 'object' || toolInput === null) {
+    return undefined
+  }
+  const todos = (toolInput as Record<string, unknown>).todos
+  if (!Array.isArray(todos)) {
+    return undefined
+  }
+  const titleOf = (todo: unknown): string | undefined => {
+    if (todo && typeof todo === 'object') {
+      const title = (todo as Record<string, unknown>).title
+      if (typeof title === 'string' && title.trim().length > 0) {
+        return title.trim()
+      }
+    }
+    return undefined
+  }
+  const statusOf = (todo: unknown): unknown =>
+    todo && typeof todo === 'object' ? (todo as Record<string, unknown>).status : undefined
+  const inProgress = titleOf(todos.find((todo) => statusOf(todo) === 'in_progress'))
+  if (inProgress) {
+    return inProgress
+  }
+  const unfinished = titleOf(todos.find((todo) => statusOf(todo) !== 'done'))
+  if (unfinished) {
+    return unfinished
+  }
+  return todos.length > 0 ? `${todos.length} tasks` : undefined
+}
+
+// Why: PostToolUseFailure/StopFailure carry a KimiErrorPayload object
+// ({ code, message, ... } — errors/serialize.ts), not a string, so the shared
+// extractToolResponseText (which looks for text/content) misses it. Read the
+// human-readable `message`; tolerate a bare string for forward-compat.
+function readKimiErrorMessage(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    return value.trim().length > 0 ? value : undefined
+  }
+  if (value !== null && typeof value === 'object') {
+    return readString(value as Record<string, unknown>, 'message')
+  }
+  return undefined
+}
+
+// Why: Kimi Code's hook engine snake_cases every top-level payload key before
+// writing it to the script's stdin (packages/agent-core/src/session/hooks/
+// engine.ts → toHookInputData → camelToSnake), so the wire fields are
+// `tool_name`, `tool_input`, `tool_output`, `error_message` — NOT the camelCase
+// internal names. Tool-bearing events (Pre/PostToolUse, Pre/PostToolUseFailure,
+// PermissionRequest/Result) all carry `tool_name` + `tool_input` (the raw args
+// object); PostToolUse adds `tool_output`, the failure events an `error`.
+function extractKimiToolFields(
+  eventName: unknown,
+  hookPayload: Record<string, unknown>
+): ToolSnapshot {
+  const update: ToolSnapshot = {}
+  if (
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure' ||
+    eventName === 'PermissionRequest' ||
+    eventName === 'PermissionResult'
+  ) {
+    const toolName = readString(hookPayload, 'tool_name')
+    // Why: Kimi's SetTodoList tool carries the live task list (todo-list.ts:
+    // todos[{title,status}], exactly one in_progress while working). Surface the
+    // active task title instead of an empty preview so the status row reads as
+    // "what step is Kimi on", matching how other tools show their target.
+    const toolInput =
+      toolName === 'SetTodoList'
+        ? deriveKimiTodoPreview(hookPayload.tool_input)
+        : deriveToolInputPreview(toolName, hookPayload.tool_input)
+    Object.assign(
+      update,
+      toolUpdate(
+        { toolName, toolInput },
+        { hasToolInputField: hasOwnField(hookPayload, 'tool_input') }
+      )
+    )
+  }
+  if (eventName === 'PostToolUse') {
+    const output = readString(hookPayload, 'tool_output')
+    if (output) {
+      update.lastAssistantMessage = output
+    }
+  }
+  if (eventName === 'PostToolUseFailure') {
+    const errorText = readKimiErrorMessage(hookPayload.error)
+    if (errorText) {
+      update.lastAssistantMessage = errorText
+    }
+  }
+  if (eventName === 'StopFailure') {
+    const errorText = readString(hookPayload, 'error_message')
+    if (errorText) {
+      update.lastAssistantMessage = errorText
     }
   }
   return update
@@ -1813,6 +1958,8 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     }
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
+    case 'kimi':
+      return eventName === 'UserPromptSubmit'
   }
 }
 
@@ -1897,6 +2044,8 @@ function extractToolFields(
       return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
     case 'hermes':
       return extractHermesToolFields(eventName, hookPayload)
+    case 'kimi':
+      return extractKimiToolFields(eventName, hookPayload)
   }
 }
 
@@ -1944,6 +2093,61 @@ function normalizeClaudeEvent(
       toolInput: snapshot.toolInput,
       lastAssistantMessage: snapshot.lastAssistantMessage,
       interrupted
+    })
+  )
+}
+
+function normalizeKimiEvent(
+  state: HookListenerState,
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
+  // Why: SessionStart fires when the Kimi TUI opens or resumes while still idle
+  // (source: startup|resume). Like Droid, drop it — only a real prompt or tool
+  // activity should create a visible working row — and clear any stale turn
+  // cache so a resumed session does not surface the previous turn's prompt/tool.
+  if (eventName === 'SessionStart') {
+    clearPaneTurnCacheState(state, paneKey)
+    return null
+  }
+
+  const stateName =
+    eventName === 'UserPromptSubmit' ||
+    eventName === 'PreToolUse' ||
+    eventName === 'PostToolUse' ||
+    eventName === 'PostToolUseFailure' ||
+    // Why: approval resolved (approved/rejected/cancelled/error) — Kimi resumes
+    // the turn, so clear the waiting red dot back to working.
+    eventName === 'PermissionResult'
+      ? 'working'
+      : // Why: Kimi blocks for user approval here (tool calls AND plan/
+        // ExitPlanMode), which is the waiting red dot.
+        eventName === 'PermissionRequest'
+        ? 'waiting'
+        : eventName === 'Stop' || eventName === 'StopFailure'
+          ? 'done'
+          : null
+
+  if (!stateName) {
+    return null
+  }
+
+  const snapshot = resolveToolState(state, paneKey, extractKimiToolFields(eventName, hookPayload), {
+    resetOnNewTurn: isNewTurnEvent('kimi', eventName)
+  })
+
+  return parseAgentStatusPayload(
+    JSON.stringify({
+      state: stateName,
+      prompt: resolvePrompt(state, paneKey, promptText, {
+        resetOnNewTurn: isNewTurnEvent('kimi', eventName)
+      }),
+      agentType: 'kimi',
+      toolName: snapshot.toolName,
+      toolInput: snapshot.toolInput,
+      lastAssistantMessage: snapshot.lastAssistantMessage
     })
   )
 }
@@ -2882,6 +3086,9 @@ export function normalizeHookPayload(
     case 'hermes':
       payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'kimi':
+      payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps
@@ -2932,7 +3139,8 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/command-code': 'command-code',
   '/hook/grok': 'grok',
   '/hook/copilot': 'copilot',
-  '/hook/hermes': 'hermes'
+  '/hook/hermes': 'hermes',
+  '/hook/kimi': 'kimi'
 })
 
 export function resolveHookSource(pathname: string): AgentHookSource | null {

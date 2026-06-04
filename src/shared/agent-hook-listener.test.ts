@@ -91,6 +91,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/pi')).toBe('pi')
     expect(resolveHookSource('/hook/omp')).toBe('omp')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
+    expect(resolveHookSource('/hook/kimi')).toBe('kimi')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
     expect(resolveHookSource('/')).toBeNull()
   })
@@ -124,6 +125,249 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
+  })
+
+  it('normalizes a Kimi UserPromptSubmit body to a working state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        // Why: Kimi's hook engine snake_cases every key before stdin (engine.ts
+        // toHookInputData → camelToSnake); event-name VALUES stay PascalCase.
+        // The prompt arrives as a ContentPart[] array, not a string (confirmed
+        // against agent-core turn/index.ts: prompt(input: readonly ContentPart[])).
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 's1',
+          cwd: '/tmp',
+          prompt: [{ type: 'text', text: 'fix the bug' }]
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('working')
+    expect(event!.payload.prompt).toBe('fix the bug')
+    expect(event!.payload.agentType).toBe('kimi')
+    expect(event!.hasExplicitPrompt).toBe(true)
+  })
+
+  it('normalizes a Kimi PreToolUse Shell event with a command preview', () => {
+    normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'run it' }
+      },
+      'production'
+    )
+    const tool = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Shell',
+          tool_input: { command: 'echo hi', description: 'greet' },
+          tool_call_id: 'call_1'
+        }
+      },
+      'production'
+    )
+    expect(tool!.payload.state).toBe('working')
+    expect(tool!.payload.toolName).toBe('Shell')
+    expect(tool!.payload.toolInput).toBe('echo hi')
+    // Why: tool pings carry no fresh user prompt — keep the cached one, not "explicit".
+    expect(tool!.payload.prompt).toBe('run it')
+    expect(tool!.hasExplicitPrompt).toBe(false)
+  })
+
+  it('previews the in_progress task for a Kimi SetTodoList call', () => {
+    normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: [{ type: 'text', text: 'do work' }]
+        }
+      },
+      'production'
+    )
+    const todo = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'SetTodoList',
+          tool_input: {
+            todos: [
+              { title: 'analyze issue', status: 'done' },
+              { title: 'implement fix', status: 'in_progress' },
+              { title: 'write tests', status: 'pending' }
+            ]
+          }
+        }
+      },
+      'production'
+    )
+    expect(todo!.payload.state).toBe('working')
+    expect(todo!.payload.toolName).toBe('SetTodoList')
+    expect(todo!.payload.toolInput).toBe('implement fix')
+  })
+
+  it('flips a Kimi PermissionRequest to the waiting state', () => {
+    normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'UserPromptSubmit', prompt: 'apply the plan' }
+      },
+      'production'
+    )
+    const waiting = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PermissionRequest', tool_name: 'ExitPlanMode', tool_input: {} }
+      },
+      'production'
+    )
+    expect(waiting!.payload.state).toBe('waiting')
+    expect(waiting!.payload.agentType).toBe('kimi')
+    expect(waiting!.payload.prompt).toBe('apply the plan')
+    // Approval resolves → back to working.
+    const resumed = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'PermissionResult', tool_name: 'ExitPlanMode' }
+      },
+      'production'
+    )
+    expect(resumed!.payload.state).toBe('working')
+  })
+
+  it('normalizes a Kimi Stop event to done', () => {
+    const done = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'Stop', session_id: 's1', cwd: '/tmp', stop_hook_active: false }
+      },
+      'production'
+    )
+    expect(done!.payload.state).toBe('done')
+    expect(done!.payload.agentType).toBe('kimi')
+  })
+
+  it('drops a Kimi SessionStart and clears stale turn state', () => {
+    // Seed a prior turn, then SessionStart (resume) must not emit a status…
+    normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: [{ type: 'text', text: 'old prompt' }]
+        }
+      },
+      'production'
+    )
+    const sessionStart = normalizeHookPayload(
+      state,
+      'kimi',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart', source: 'resume' } },
+      'production'
+    )
+    expect(sessionStart).toBeNull()
+    // …and the stale prompt must not leak into the next turn's events.
+    const next = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Glob',
+          tool_input: { pattern: '*.ts' }
+        }
+      },
+      'production'
+    )
+    expect(next!.payload.prompt).toBe('')
+  })
+
+  it('surfaces the tool output on a Kimi PostToolUse', () => {
+    const post = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Shell',
+          tool_input: { command: 'echo hi' },
+          tool_output: 'build succeeded'
+        }
+      },
+      'production'
+    )
+    expect(post!.payload.state).toBe('working')
+    expect(post!.payload.lastAssistantMessage).toBe('build succeeded')
+  })
+
+  it('surfaces the KimiErrorPayload message on a Kimi PostToolUseFailure', () => {
+    const fail = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUseFailure',
+          tool_name: 'Shell',
+          tool_input: { command: 'false' },
+          // Why: Kimi sends a KimiErrorPayload object, not a string.
+          error: { code: 'INTERNAL', message: 'command failed', retryable: false }
+        }
+      },
+      'production'
+    )
+    expect(fail!.payload.state).toBe('working')
+    expect(fail!.payload.lastAssistantMessage).toBe('command failed')
+  })
+
+  it('surfaces the error message on a Kimi StopFailure (done)', () => {
+    const failed = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'StopFailure',
+          error_type: 'ProviderError',
+          error_message: 'rate limited'
+        }
+      },
+      'production'
+    )
+    expect(failed!.payload.state).toBe('done')
+    expect(failed!.payload.lastAssistantMessage).toBe('rate limited')
   })
 
   it('normalizes Gemini BeforeTool to working with tool fields', () => {

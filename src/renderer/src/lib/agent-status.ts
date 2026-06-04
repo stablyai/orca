@@ -125,7 +125,8 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   droid: 'Droid',
   'command-code': 'Command Code',
   grok: 'Grok',
-  hermes: 'Hermes'
+  hermes: 'Hermes',
+  kimi: 'Kimi'
 }
 
 export function formatAgentTypeLabel(agentType: AgentType | null | undefined): string {
