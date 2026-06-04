@@ -89,6 +89,11 @@ export const TYPOGRAPHY_ENTRIES: SettingsSearchEntry[] = [
 
 export const LAYOUT_ENTRIES: SettingsSearchEntry[] = [
   {
+    title: 'File Icon Theme',
+    description: 'Choose the file and folder icons used in Explorer and Source Control.',
+    keywords: ['file icon theme', 'icons', 'explorer', 'source control', 'colored', 'folders']
+  },
+  {
     title: 'Show Git-Ignored Files',
     description: 'Dim files matched by .gitignore in the file explorer.',
     keywords: ['git', 'gitignore', 'ignored', 'file explorer', 'sidebar', 'hide']

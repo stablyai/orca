@@ -19,6 +19,7 @@ import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
+import { DEFAULT_FILE_ICON_THEME_ID } from './file-icon-theme'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -175,6 +176,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     enableGitHubAttribution: false,
     theme: 'system',
     appIcon: DEFAULT_APP_ICON_ID,
+    fileIconTheme: DEFAULT_FILE_ICON_THEME_ID,
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,

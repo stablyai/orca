@@ -17,6 +17,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })
 
+  it('uses Lucide Orca file icons by default', () => {
+    expect(getDefaultSettings('/tmp').fileIconTheme).toBe('orca')
+  })
+
   it('keeps first-work branch auto-renaming off by default for new settings', () => {
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWork).toBe(false)
   })

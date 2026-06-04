@@ -18,6 +18,7 @@ import {
 } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
 import { normalizeAppIconId } from '../../../../shared/app-icon'
+import { normalizeFileIconThemeId } from '../../../../shared/file-icon-theme'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
 import {
   APP_ICON_ENTRIES,
@@ -176,6 +177,35 @@ export function AppearancePane({
         <SettingsSubsectionHeader title="File Explorer" />
 
         <div className="divide-y divide-border/40">
+          <SearchableSetting
+            title="File Icon Theme"
+            description="Choose the file and folder icons used in Explorer and Source Control."
+            keywords={[
+              'file icon theme',
+              'icons',
+              'explorer',
+              'source control',
+              'colored',
+              'folders'
+            ]}
+          >
+            <SettingsRow
+              label="File Icon Theme"
+              description="Choose the file and folder icons used in Explorer and Source Control."
+              control={
+                <SettingsSegmentedControl
+                  ariaLabel="File Icon Theme"
+                  value={normalizeFileIconThemeId(settings.fileIconTheme)}
+                  onChange={(fileIconTheme) => updateSettings({ fileIconTheme })}
+                  options={[
+                    { value: 'orca', label: 'Orca' },
+                    { value: 'orca-color', label: 'Color' }
+                  ]}
+                />
+              }
+            />
+          </SearchableSetting>
+
           <SearchableSetting
             title="Show Git-Ignored Files"
             description="Show files matched by .gitignore in the file explorer."
