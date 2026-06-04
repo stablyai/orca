@@ -10,6 +10,7 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
+import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 
@@ -50,10 +51,6 @@ let cached: PreflightStatus | null = null
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
-}
-
-type WslPreflightTarget = {
-  distro?: string
 }
 
 function shellQuote(value: string): string {
@@ -184,10 +181,20 @@ async function detectCommandRuntime(
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
   const wslTarget = getPreflightWslTarget(context)
+  if (wslTarget) {
+    const foundCommands = await detectWslCommandsOnPath(
+      wslTarget,
+      KNOWN_AGENT_COMMANDS.map(({ cmd }) => cmd)
+    )
+    return uniqueAgentIds(
+      KNOWN_AGENT_COMMANDS.filter(({ cmd }) => foundCommands.has(cmd)).map(({ id }) => id)
+    )
+  }
+
   const checks = await Promise.all(
     KNOWN_AGENT_COMMANDS.map(async ({ id, cmd }) => ({
       id,
-      installed: await isCommandOnPath(cmd, wslTarget ?? undefined)
+      installed: await isCommandOnPath(cmd)
     }))
   )
   return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
