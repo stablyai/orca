@@ -21,4 +21,14 @@ describe('ExperimentalPane', () => {
     expect(markup).toContain('different branch')
     expect(EXPERIMENTAL_SEARCH_ENTRY.compactWorktreeCards.keywords).toContain('metadata')
   })
+
+  it('renders code intelligence as an off-by-default experimental switch', () => {
+    const markup = renderToStaticMarkup(
+      <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
+    )
+
+    expect(markup).toContain('Code intelligence')
+    expect(markup).toContain('excluding comment-only mentions')
+    expect(EXPERIMENTAL_SEARCH_ENTRY.codeIntelligence.keywords).toContain('references')
+  })
 })

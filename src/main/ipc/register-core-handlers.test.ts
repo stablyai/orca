@@ -38,6 +38,7 @@ const {
   setAgentBrowserBridgeRefMock,
   setTrustedBrowserRendererWebContentsIdMock,
   registerFilesystemWatcherHandlersMock,
+  registerCodeIntelHandlersMock,
   registerAppHandlersMock,
   registerLinearHandlersMock,
   registerGitLabHandlersMock,
@@ -84,6 +85,7 @@ const {
   setAgentBrowserBridgeRefMock: vi.fn(),
   setTrustedBrowserRendererWebContentsIdMock: vi.fn(),
   registerFilesystemWatcherHandlersMock: vi.fn(),
+  registerCodeIntelHandlersMock: vi.fn(),
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
   registerGitLabHandlersMock: vi.fn(),
@@ -210,6 +212,10 @@ vi.mock('./filesystem', () => ({
 
 vi.mock('./filesystem-watcher', () => ({
   registerFilesystemWatcherHandlers: registerFilesystemWatcherHandlersMock
+}))
+
+vi.mock('./code-intel', () => ({
+  registerCodeIntelHandlers: registerCodeIntelHandlersMock
 }))
 
 vi.mock('./rate-limits', () => ({

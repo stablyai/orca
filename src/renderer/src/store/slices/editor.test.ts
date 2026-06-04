@@ -2596,3 +2596,139 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(store.getState().pendingEditorReveal?.line).toBe(3)
   })
 })
+
+describe('createEditorSlice openCodeIntelDefinition', () => {
+  function flushFrames(pendingFrames: Map<number, FrameRequestCallback>): void {
+    while (pendingFrames.size > 0) {
+      const next = pendingFrames.entries().next()
+      if (next.done) {
+        break
+      }
+      const [frameId, callback] = next.value
+      pendingFrames.delete(frameId)
+      callback(0)
+    }
+  }
+
+  function seedSourceWorktree(store: StoreApi<AppState>): void {
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo',
+          displayName: 'Repo',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [
+          {
+            id: 'wt-1',
+            repoId: 'repo1',
+            path: '/repo',
+            branch: 'refs/heads/main',
+            head: 'abc',
+            isBare: false,
+            isMainWorktree: true,
+            displayName: 'main',
+            comment: '',
+            linkedIssue: null,
+            linkedPR: null,
+            linkedLinearIssue: null,
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0
+          }
+        ]
+      },
+      openFiles: [
+        {
+          id: '/repo/src/app.ts',
+          filePath: '/repo/src/app.ts',
+          relativePath: 'src/app.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as Partial<AppState>)
+  }
+
+  it('opens the target file as a preview tab and reveals the definition line', () => {
+    const store = createEditorStore()
+    seedSourceWorktree(store)
+    let nextFrameId = 1
+    const pendingFrames = new Map<number, FrameRequestCallback>()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      const frameId = nextFrameId++
+      pendingFrames.set(frameId, callback)
+      return frameId
+    })
+    vi.stubGlobal('cancelAnimationFrame', (frameId: number) => {
+      pendingFrames.delete(frameId)
+    })
+
+    store.getState().openCodeIntelDefinition({
+      sourceFilePath: '/repo/src/app.ts',
+      targetFilePath: '/repo/src/lib/util.ts',
+      line: 12,
+      column: 5
+    })
+
+    const opened = store.getState().openFiles.find((f) => f.filePath === '/repo/src/lib/util.ts')
+    expect(opened).toMatchObject({
+      filePath: '/repo/src/lib/util.ts',
+      relativePath: 'src/lib/util.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit',
+      isPreview: true
+    })
+
+    flushFrames(pendingFrames)
+    expect(store.getState().pendingEditorReveal).toMatchObject({
+      filePath: '/repo/src/lib/util.ts',
+      line: 12,
+      column: 5,
+      matchLength: 0
+    })
+
+    vi.unstubAllGlobals()
+  })
+
+  it('falls back to the basename for targets outside the worktree', () => {
+    const store = createEditorStore()
+    seedSourceWorktree(store)
+
+    store.getState().openCodeIntelDefinition({
+      sourceFilePath: '/repo/src/app.ts',
+      targetFilePath: '/elsewhere/node_modules/dep/index.d.ts',
+      line: 1,
+      column: 1
+    })
+
+    const opened = store
+      .getState()
+      .openFiles.find((f) => f.filePath === '/elsewhere/node_modules/dep/index.d.ts')
+    expect(opened?.relativePath).toBe('index.d.ts')
+  })
+
+  it('ignores navigation when the source file is not open', () => {
+    const store = createEditorStore()
+    seedSourceWorktree(store)
+    const openCountBefore = store.getState().openFiles.length
+
+    store.getState().openCodeIntelDefinition({
+      sourceFilePath: '/repo/src/unknown.ts',
+      targetFilePath: '/repo/src/lib/util.ts',
+      line: 3,
+      column: 1
+    })
+
+    expect(store.getState().openFiles).toHaveLength(openCountBefore)
+  })
+})

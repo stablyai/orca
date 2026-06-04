@@ -35,6 +35,10 @@ describe('getDefaultSettings', () => {
   it('keeps compact worktree cards experimental and disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalCompactWorktreeCards).toBe(false)
   })
+
+  it('keeps code intelligence experimental and disabled by default', () => {
+    expect(getDefaultSettings('/tmp').experimentalCodeIntelligence).toBe(false)
+  })
 })
 
 describe('getDefaultPrimarySelectionMiddleClickPaste', () => {

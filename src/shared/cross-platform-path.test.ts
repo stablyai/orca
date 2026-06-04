@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isPathInsideOrEqual, relativePathInsideRoot } from './cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison,
+  relativePathInsideRoot
+} from './cross-platform-path'
 
 describe('cross-platform path containment', () => {
   it('keeps POSIX sibling prefixes outside the root', () => {
@@ -14,6 +18,13 @@ describe('cross-platform path containment', () => {
     expect(relativePathInsideRoot('C:\\Repo', 'c:\\repo\\src\\index.ts')).toBe('src/index.ts')
     expect(isPathInsideOrEqual('C:\\Repo', 'D:\\Repo\\src\\index.ts')).toBe(false)
     expect(relativePathInsideRoot('C:\\', 'c:\\repo\\src\\index.ts')).toBe('repo/src/index.ts')
+  })
+
+  it('normalizes Monaco Windows file URI paths to runtime drive paths', () => {
+    expect(normalizeRuntimePathForComparison('/c:/Repo/src/index.ts')).toBe('c:/repo/src/index.ts')
+    expect(normalizeRuntimePathForComparison('/C:/Repo/src/index.ts')).toBe('c:/repo/src/index.ts')
+    expect(isPathInsideOrEqual('C:\\Repo', '/c:/repo/src/index.ts')).toBe(true)
+    expect(relativePathInsideRoot('C:\\Repo', '/c:/repo/src/index.ts')).toBe('src/index.ts')
   })
 
   it('handles UNC roots, trailing slashes, mixed separators, and case', () => {

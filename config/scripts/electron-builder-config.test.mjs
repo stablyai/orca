@@ -18,4 +18,15 @@ describe('electron-builder config', () => {
       artifactName: 'orca-ide-${version}.${arch}.${ext}'
     })
   })
+
+  it('unpacks forked sidecar entries and their runtime dependencies', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(
+      expect.arrayContaining([
+        'out/main/daemon-entry.js',
+        'out/main/computer-sidecar.js',
+        'out/main/code-intel-sidecar.js',
+        'node_modules/typescript/**'
+      ])
+    )
+  })
 })
