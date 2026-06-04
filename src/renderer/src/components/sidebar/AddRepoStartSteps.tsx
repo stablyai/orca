@@ -1,12 +1,8 @@
-import { useEffect, useId, useRef, useState, type ComponentType, type Ref } from 'react'
-import { ChevronDown, CircleStop, Loader2 } from 'lucide-react'
+import { CircleStop, FolderOpen, Globe, Lightbulb, Loader2, Monitor } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { getAddRepoLocalStartActions } from './add-repo-local-start-actions'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 
 type AddRepoNestedScanProgressNoticeProps = {
   busyLabel: string
@@ -145,7 +141,6 @@ export function AddRepoServerPathStartStep({
 
 type AddRepoLocalStartStepProps = {
   repoCount: number
-  isSshLikely: boolean
   isAdding: boolean
   addProjectBusyLabel: string | null
   nestedScanInProgress: boolean
@@ -159,7 +154,6 @@ type AddRepoLocalStartStepProps = {
 
 export function AddRepoLocalStartStep({
   repoCount,
-  isSshLikely,
   isAdding,
   addProjectBusyLabel,
   nestedScanInProgress,
@@ -170,25 +164,6 @@ export function AddRepoLocalStartStep({
   onOpenCreateStep,
   onStopNestedScan
 }: AddRepoLocalStartStepProps): React.JSX.Element {
-  const [showMoreOptions, setShowMoreOptions] = useState(false)
-  const moreOptionsId = useId()
-  const browseActionRef = useRef<HTMLButtonElement | null>(null)
-  const { primaryAction, secondaryAction, moreOptions } = getAddRepoLocalStartActions({
-    isSshLikely,
-    onBrowse,
-    onOpenCloneStep,
-    onOpenRemoteStep,
-    onOpenCreateStep
-  })
-  const primaryIsBrowse = primaryAction.kind === 'browse'
-  const secondaryIsBrowse = secondaryAction?.kind === 'browse'
-
-  useEffect(() => {
-    if (!isAdding) {
-      browseActionRef.current?.focus()
-    }
-  }, [isAdding])
-
   return (
     <>
       <DialogHeader>
@@ -200,63 +175,51 @@ export function AddRepoLocalStartStep({
         </DialogDescription>
       </DialogHeader>
 
-      <div className="space-y-3 pt-2">
-        <AddRepoPrimaryStartAction
-          icon={primaryAction.icon}
-          title={primaryAction.title}
-          description={primaryAction.description}
+      <div className="grid grid-cols-3 gap-3 pt-2">
+        <Button
+          onClick={onBrowse}
           disabled={isAdding}
-          buttonRef={primaryIsBrowse ? browseActionRef : undefined}
-          onClick={primaryAction.onClick}
-        />
-
-        {secondaryAction ? (
-          <AddRepoCompactStartAction
-            icon={secondaryAction.icon}
-            title={secondaryAction.title}
-            description={secondaryAction.description}
-            disabled={isAdding}
-            buttonRef={secondaryIsBrowse ? browseActionRef : undefined}
-            onClick={secondaryAction.onClick}
-          />
-        ) : null}
-
-        <Collapsible open={showMoreOptions} onOpenChange={setShowMoreOptions}>
-          <div className="space-y-2">
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                aria-controls={moreOptionsId}
-                disabled={isAdding}
-                className="inline-flex h-8 w-fit items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-40"
-              >
-                More options
-                <ChevronDown
-                  className={cn(
-                    'size-3.5 transition-transform',
-                    showMoreOptions ? 'rotate-180' : 'rotate-0'
-                  )}
-                />
-              </button>
-            </CollapsibleTrigger>
-
-            <CollapsibleContent id={moreOptionsId} className="collapsible-height-content">
-              <div className="overflow-hidden rounded-md border border-border bg-muted/30">
-                {moreOptions.map((option, index) => (
-                  <AddRepoMoreOption
-                    key={option.title}
-                    icon={option.icon}
-                    title={option.title}
-                    description={option.description}
-                    disabled={isAdding}
-                    onClick={option.onClick}
-                    className={index === 0 ? '' : 'border-t border-border/70'}
-                  />
-                ))}
-              </div>
-            </CollapsibleContent>
+          variant="outline"
+          className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
+        >
+          <FolderOpen className="size-6 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-medium">Browse folder</p>
+            <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
+              Local Git project or folder
+            </p>
           </div>
-        </Collapsible>
+        </Button>
+
+        <Button
+          onClick={onOpenCloneStep}
+          disabled={isAdding}
+          variant="outline"
+          className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
+        >
+          <Globe className="size-6 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-medium">Clone from URL</p>
+            <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
+              Remote Git repository
+            </p>
+          </div>
+        </Button>
+
+        <Button
+          onClick={onOpenRemoteStep}
+          disabled={isAdding}
+          variant="outline"
+          className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
+        >
+          <Monitor className="size-6 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-medium">Remote project</p>
+            <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
+              SSH connected target
+            </p>
+          </div>
+        </Button>
       </div>
 
       {isAdding && addProjectBusyLabel ? (
@@ -267,100 +230,24 @@ export function AddRepoLocalStartStep({
           onStopNestedScan={onStopNestedScan}
         />
       ) : null}
+
+      <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+        <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
+          <Lightbulb className="size-3.5" />
+        </span>
+        <span>Want to import many repos at once? Select the parent folder.</span>
+      </div>
+
+      <div className="flex items-center justify-center pt-1">
+        <button
+          type="button"
+          onClick={onOpenCreateStep}
+          disabled={isAdding}
+          className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
+        >
+          Or start a new project from scratch
+        </button>
+      </div>
     </>
-  )
-}
-
-type AddRepoStartActionProps = {
-  icon: ComponentType<{ className?: string }>
-  title: string
-  description: string
-  disabled: boolean
-  onClick: () => void
-  buttonRef?: Ref<HTMLButtonElement>
-}
-
-const AddRepoPrimaryStartAction = ({
-  icon: Icon,
-  title,
-  description,
-  disabled,
-  onClick,
-  buttonRef
-}: AddRepoStartActionProps): React.JSX.Element => (
-  <Button
-    ref={buttonRef}
-    type="button"
-    variant="outline"
-    onClick={onClick}
-    disabled={disabled}
-    className="h-auto min-h-24 w-full justify-start gap-4 whitespace-normal border-border/80 bg-background px-4 py-4 text-left"
-  >
-    <span className="grid size-11 shrink-0 place-items-center rounded-md border border-border bg-muted text-foreground">
-      <Icon className="size-5" />
-    </span>
-    <span className="min-w-0">
-      <span className="block text-sm font-semibold leading-5">{title}</span>
-      <span className="mt-0.5 block text-xs font-normal leading-5 text-muted-foreground">
-        {description}
-      </span>
-    </span>
-  </Button>
-)
-
-const AddRepoCompactStartAction = ({
-  icon: Icon,
-  title,
-  description,
-  disabled,
-  onClick,
-  buttonRef
-}: AddRepoStartActionProps): React.JSX.Element => (
-  <Button
-    ref={buttonRef}
-    type="button"
-    variant="outline"
-    onClick={onClick}
-    disabled={disabled}
-    className="h-auto min-h-14 w-full justify-start gap-3 whitespace-normal px-3 py-3 text-left"
-  >
-    <span className="grid size-8 shrink-0 place-items-center rounded-md border border-border bg-background text-muted-foreground">
-      <Icon className="size-4" />
-    </span>
-    <span className="min-w-0">
-      <span className="block text-sm font-medium leading-5">{title}</span>
-      <span className="mt-0.5 block text-xs font-normal leading-4 text-muted-foreground">
-        {description}
-      </span>
-    </span>
-  </Button>
-)
-
-function AddRepoMoreOption({
-  icon: Icon,
-  title,
-  description,
-  disabled,
-  onClick,
-  className
-}: AddRepoStartActionProps & { className?: string }): React.JSX.Element {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        'flex min-h-[3.25rem] w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-40',
-        className
-      )}
-    >
-      <span className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground">
-        <Icon className="size-4" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-medium leading-5 text-foreground">{title}</span>
-        <span className="block text-xs leading-4 text-muted-foreground">{description}</span>
-      </span>
-    </button>
   )
 }
