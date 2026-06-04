@@ -3018,12 +3018,14 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
+      const openAsPreview = !targetGroupId
       if (entry.conflictKind && entry.conflictStatus) {
         if (entry.conflictStatus === 'unresolved') {
           trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
         }
         openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path), {
-          targetGroupId
+          targetGroupId,
+          preview: openAsPreview
         })
         return
       }
@@ -3046,13 +3048,14 @@ function SourceControlInner(): React.JSX.Element {
             language,
             mode: 'edit'
           },
-          { targetGroupId }
+          { targetGroupId, preview: openAsPreview }
         )
         setEditorViewMode(filePath, 'changes')
         return
       }
       openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
-        targetGroupId
+        targetGroupId,
+        preview: openAsPreview
       })
     },
     [
@@ -3641,13 +3644,14 @@ function SourceControlInner(): React.JSX.Element {
       ) {
         return
       }
+      const targetGroupId = resolveSplitTargetGroupId(event)
       openBranchDiff(
         activeWorktreeId,
         worktreePath,
         entry,
         branchSummary,
         detectLanguage(entry.path),
-        { targetGroupId: resolveSplitTargetGroupId(event) }
+        { targetGroupId, preview: !targetGroupId }
       )
     },
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]

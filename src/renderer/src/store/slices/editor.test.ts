@@ -342,6 +342,109 @@ describe('createEditorSlice openDiff', () => {
     expect(diffTab?.entityId).toBe('wt-1::diff::unstaged::file.ts')
     expect(store.getState().activeGroupIdByWorktree['wt-1']).toBe(targetGroupId)
   })
+
+  it('reuses a preview editor tab when opening a preview diff', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/a.ts',
+        relativePath: 'a.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        filePath: '/repo/b.ts',
+        isPreview: true,
+        mode: 'diff'
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        contentType: 'diff',
+        entityId: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('opens a new preview diff beside a pinned file tab', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/a.ts',
+        relativePath: 'a.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().pinFile('/repo/a.ts')
+
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/a.ts',
+        isPreview: undefined
+      }),
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: '/repo/a.ts',
+        isPinned: true,
+        isPreview: false
+      }),
+      expect.objectContaining({
+        entityId: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('does not replace a dirty file that was opened as a preview', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/a.ts',
+        relativePath: 'a.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().markFileDirty('/repo/a.ts', true)
+
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/a.ts',
+        isDirty: true,
+        isPreview: undefined
+      }),
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+  })
 })
 
 describe('createEditorSlice floating editor activation', () => {

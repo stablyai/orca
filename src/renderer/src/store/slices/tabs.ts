@@ -204,6 +204,20 @@ function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] {
   })
 }
 
+function isReplaceablePreviewContentType(contentType: Tab['contentType']): boolean {
+  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+}
+
+function canReplacePreviewContentType(
+  incomingContentType: Tab['contentType'],
+  existingContentType: Tab['contentType']
+): boolean {
+  if (isReplaceablePreviewContentType(incomingContentType)) {
+    return isReplaceablePreviewContentType(existingContentType)
+  }
+  return existingContentType === incomingContentType
+}
+
 export function findSiblingGroupId(root: TabGroupLayoutNode, targetGroupId: string): string | null {
   if (root.type === 'leaf') {
     return null
@@ -455,7 +469,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       let nextOrder = dedupeTabOrder(group.tabOrder)
       if (init?.isPreview) {
         const existingPreview = existingTabs.find(
-          (tab) => tab.groupId === group.id && tab.isPreview && tab.contentType === contentType
+          (tab) =>
+            tab.groupId === group.id &&
+            tab.isPreview &&
+            canReplacePreviewContentType(contentType, tab.contentType)
         )
         if (existingPreview) {
           nextTabs = existingTabs.filter((tab) => tab.id !== existingPreview.id)
