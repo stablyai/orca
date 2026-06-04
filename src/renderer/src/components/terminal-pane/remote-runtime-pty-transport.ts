@@ -88,17 +88,16 @@ export function createRemoteRuntimePtyTransport(
     hostTabId: string
   ): string | null {
     const terminalTabs = snapshot.tabs.filter((tab) => tab.type === 'terminal')
+    if (leafId) {
+      const requestedLeaf = terminalTabs.find(
+        (tab) => tab.status === 'ready' && tab.parentTabId === hostTabId && tab.leafId === leafId
+      )
+      return requestedLeaf?.terminal ?? null
+    }
     const preferred =
       terminalTabs.find(
-        (tab) =>
-          tab.status === 'ready' &&
-          tab.parentTabId === hostTabId &&
-          (!leafId || tab.leafId === leafId)
-      ) ??
-      terminalTabs.find(
         (tab) => tab.status === 'ready' && tab.parentTabId === hostTabId && tab.isActive
-      ) ??
-      terminalTabs.find((tab) => tab.status === 'ready' && tab.parentTabId === hostTabId)
+      ) ?? terminalTabs.find((tab) => tab.status === 'ready' && tab.parentTabId === hostTabId)
     return preferred?.terminal ?? null
   }
 
@@ -107,7 +106,10 @@ export function createRemoteRuntimePtyTransport(
     hostTabId: string
   ): boolean {
     return snapshot.tabs.some(
-      (tab) => tab.type === 'terminal' && (tab.parentTabId === hostTabId || tab.id === hostTabId)
+      (tab) =>
+        tab.type === 'terminal' &&
+        (tab.parentTabId === hostTabId || tab.id === hostTabId) &&
+        (!leafId || tab.leafId === leafId)
     )
   }
 
@@ -118,7 +120,8 @@ export function createRemoteRuntimePtyTransport(
     const worktree = toRuntimeWorktreeSelector(worktreeId)
     const activated = await callRuntime<RuntimeMobileSessionTabsResult>('session.tabs.activate', {
       worktree,
-      tabId: hostTabId
+      tabId: hostTabId,
+      ...(leafId ? { leafId } : {})
     })
     const immediate = findReadyHostSessionHandle(activated, hostTabId)
     if (immediate) {

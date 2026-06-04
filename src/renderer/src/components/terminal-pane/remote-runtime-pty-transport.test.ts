@@ -381,7 +381,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'session.tabs.activate',
-        params: { worktree: 'id:wt-1', tabId: 'host-tab-1' }
+        params: { worktree: 'id:wt-1', tabId: 'host-tab-1', leafId: 'leaf-1' }
       })
     )
     expect(runtimeCall).not.toHaveBeenCalledWith(
@@ -394,6 +394,279 @@ describe('createRemoteRuntimePtyTransport', () => {
       terminal: 'terminal-1',
       viewport: { cols: 80, rows: 24 }
     })
+  })
+
+  it('activates the requested split leaf for pending host session mirrors', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'session.tabs.activate') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: 'host-tab-1::leaf-2',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-1',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-1',
+                title: 'Terminal 1',
+                isActive: false,
+                status: 'pending-handle',
+                terminal: null
+              },
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-2',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-2',
+                title: 'Terminal 2',
+                isActive: true,
+                status: 'pending-handle',
+                terminal: null
+              }
+            ]
+          }
+        })
+      }
+      if (args.method === 'session.tabs.list') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 2,
+            activeGroupId: 'group-1',
+            activeTabId: 'host-tab-1::leaf-2',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-1',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-1',
+                title: 'Terminal 1',
+                isActive: false,
+                status: 'ready',
+                terminal: 'terminal-1'
+              },
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-2',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-2',
+                title: 'Terminal 2',
+                isActive: true,
+                status: 'ready',
+                terminal: 'terminal-2'
+              }
+            ]
+          }
+        })
+      }
+      return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'leaf-2'
+    })
+
+    const result = await transport.connect({ url: '', callbacks: {} })
+
+    expect(result).toEqual({ id: 'remote:env-1@@terminal-2', replay: '' })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'session.tabs.activate',
+        params: { worktree: 'id:wt-1', tabId: 'host-tab-1', leafId: 'leaf-2' }
+      })
+    )
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.create'
+      })
+    )
+  })
+
+  it('does not attach a pending split leaf to a ready sibling', async () => {
+    let listCount = 0
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'session.tabs.activate') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: 'host-tab-1::leaf-2',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-1',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-1',
+                title: 'Terminal 1',
+                isActive: true,
+                status: 'ready',
+                terminal: 'terminal-1'
+              },
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-2',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-2',
+                title: 'Terminal 2',
+                isActive: false,
+                status: 'pending-handle',
+                terminal: null
+              }
+            ]
+          }
+        })
+      }
+      if (args.method === 'session.tabs.list') {
+        listCount += 1
+        return Promise.resolve({
+          ok: true,
+          result: {
+            worktree: 'id:wt-1',
+            publicationEpoch: 'epoch-1',
+            snapshotVersion: listCount + 1,
+            activeGroupId: 'group-1',
+            activeTabId: 'host-tab-1::leaf-2',
+            activeTabType: 'terminal',
+            tabs: [
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-1',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-1',
+                title: 'Terminal 1',
+                isActive: false,
+                status: 'ready',
+                terminal: 'terminal-1'
+              },
+              {
+                type: 'terminal',
+                id: 'host-tab-1::leaf-2',
+                parentTabId: 'host-tab-1',
+                leafId: 'leaf-2',
+                title: 'Terminal 2',
+                isActive: true,
+                status: 'ready',
+                terminal: 'terminal-2'
+              }
+            ]
+          }
+        })
+      }
+      return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'web-terminal-host-tab-1',
+      leafId: 'leaf-2'
+    })
+
+    const result = await transport.connect({ url: '', callbacks: {} })
+
+    expect(result).toEqual({ id: 'remote:env-1@@terminal-2', replay: '' })
+    expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-2' })
+  })
+
+  it('stops polling when a requested split leaf disappears but siblings remain', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeCall.mockImplementation((args) => {
+        if (args.method === 'session.tabs.activate') {
+          return Promise.resolve({
+            ok: true,
+            result: {
+              worktree: 'id:wt-1',
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 1,
+              activeGroupId: 'group-1',
+              activeTabId: 'host-tab-1::leaf-2',
+              activeTabType: 'terminal',
+              tabs: [
+                {
+                  type: 'terminal',
+                  id: 'host-tab-1::leaf-1',
+                  parentTabId: 'host-tab-1',
+                  leafId: 'leaf-1',
+                  title: 'Terminal 1',
+                  isActive: false,
+                  status: 'ready',
+                  terminal: 'terminal-1'
+                },
+                {
+                  type: 'terminal',
+                  id: 'host-tab-1::leaf-2',
+                  parentTabId: 'host-tab-1',
+                  leafId: 'leaf-2',
+                  title: 'Terminal 2',
+                  isActive: true,
+                  status: 'pending-handle',
+                  terminal: null
+                }
+              ]
+            }
+          })
+        }
+        if (args.method === 'session.tabs.list') {
+          return Promise.resolve({
+            ok: true,
+            result: {
+              worktree: 'id:wt-1',
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 2,
+              activeGroupId: 'group-1',
+              activeTabId: 'host-tab-1::leaf-1',
+              activeTabType: 'terminal',
+              tabs: [
+                {
+                  type: 'terminal',
+                  id: 'host-tab-1::leaf-1',
+                  parentTabId: 'host-tab-1',
+                  leafId: 'leaf-1',
+                  title: 'Terminal 1',
+                  isActive: true,
+                  status: 'ready',
+                  terminal: 'terminal-1'
+                }
+              ]
+            }
+          })
+        }
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onError = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'web-terminal-host-tab-1',
+        leafId: 'leaf-2'
+      })
+
+      const connect = transport.connect({ url: '', callbacks: { onError } })
+      await vi.advanceTimersByTimeAsync(150)
+
+      await expect(connect).resolves.toBeUndefined()
+      expect(onError).toHaveBeenCalledWith('Remote terminal was closed.')
+      expect(
+        runtimeCall.mock.calls.filter((call) => call[0].method === 'session.tabs.list')
+      ).toHaveLength(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('stops polling when a host session mirror never publishes a ready handle', async () => {

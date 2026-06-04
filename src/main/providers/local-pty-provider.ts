@@ -120,6 +120,26 @@ function clearPtyState(id: string): void {
   ptyLoadGeneration.delete(id)
 }
 
+function allocatePtyId(sessionId: string | undefined): string {
+  const requested = normalizeLocalCallerSessionId(sessionId)
+  if (requested) {
+    return requested
+  }
+  let id: string
+  do {
+    id = String(++ptyCounter)
+  } while (ptyProcesses.has(id))
+  return id
+}
+
+function normalizeLocalCallerSessionId(sessionId: string | undefined): string | null {
+  const requested = sessionId?.trim()
+  if (!requested || /^\d+$/.test(requested)) {
+    return null
+  }
+  return requested
+}
+
 function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
   // Why: node-pty's UnixTerminal.destroy() closes the master socket, which
   // releases the ptmx fd to the OS — without this call the fd leaks until GC
@@ -192,7 +212,19 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
-    const id = String(++ptyCounter)
+    const reattachId = normalizeLocalCallerSessionId(args.sessionId)
+    if (reattachId) {
+      const existing = ptyProcesses.get(reattachId)
+      if (existing) {
+        try {
+          existing.resize(args.cols, args.rows)
+        } catch {
+          /* Existing PTY may reject resize during teardown; still return the live handle. */
+        }
+        return { id: reattachId, pid: existing.pid, isReattach: true }
+      }
+    }
+    const id = allocatePtyId(reattachId ?? undefined)
 
     const defaultCwd = getDefaultCwd()
     const cwd = args.cwd || defaultCwd

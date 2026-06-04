@@ -157,6 +157,23 @@ export function shouldApplyWebSessionTabsSnapshot(
   return true
 }
 
+export function shouldBootstrapInitialWebRuntimeTerminal(args: {
+  event: SessionTabsStreamEvent
+  activeWorktreeId: string
+  requestedInitialTerminal: boolean
+  snapshotIsFresh: boolean
+  localTerminalCount: number
+}): boolean {
+  return (
+    args.snapshotIsFresh &&
+    args.event.type === 'snapshot' &&
+    args.event.tabs.length === 0 &&
+    args.localTerminalCount === 0 &&
+    !args.requestedInitialTerminal &&
+    args.activeWorktreeId === args.event.worktree
+  )
+}
+
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
@@ -402,7 +419,7 @@ function buildMirroredTerminalTabs(
     return {
       tab: {
         id: localTabId,
-        ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? ptyIds[0] ?? null,
+        ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? null,
         worktreeId: snapshot.worktree,
         title,
         defaultTitle: existing?.defaultTitle ?? title,
@@ -2177,12 +2194,15 @@ export function useWebSessionTabsSync(): void {
             if (event.type !== 'snapshot' && event.type !== 'updated') {
               return
             }
-            const shouldBootstrapInitialTerminal =
-              event.type === 'snapshot' &&
-              event.tabs.length === 0 &&
-              !requestedInitialTerminal &&
-              activeWorktreeId === event.worktree
             const fresh = shouldApplyWebSessionTabsSnapshot(event, environmentId)
+            const shouldBootstrapInitialTerminal = shouldBootstrapInitialWebRuntimeTerminal({
+              event,
+              activeWorktreeId,
+              requestedInitialTerminal,
+              snapshotIsFresh: fresh,
+              localTerminalCount:
+                useAppStore.getState().tabsByWorktree[activeWorktreeId]?.length ?? 0
+            })
             if (fresh) {
               useAppStore.setState((state) =>
                 applyWebSessionTabsSnapshot(state, event, environmentId)
