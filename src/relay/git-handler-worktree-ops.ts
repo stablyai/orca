@@ -1,8 +1,33 @@
 import * as path from 'node:path'
+import {
+  findGitCryptStateDirectory,
+  shareGitCryptStateWithWorktree
+} from '../shared/git-crypt-worktree-state'
 import { resolveWorktreeAddBaseRef } from '../shared/worktree-base-ref'
 import type { GitExec } from './git-handler-ops'
 export { removeWorktreeOp } from './git-handler-worktree-remove'
 export { readRelayWorktreeList } from './git-handler-worktree-list'
+
+async function rollbackRelayWorktreeCreate(
+  git: GitExec,
+  repoPath: string,
+  targetDir: string,
+  branchName: string,
+  deleteBranch: boolean,
+  error: unknown
+): Promise<never> {
+  const wrapped = error instanceof Error ? error : new Error(String(error))
+  try {
+    await git(['worktree', 'remove', '--force', targetDir], repoPath)
+    await git(['worktree', 'prune'], repoPath)
+    if (deleteBranch) {
+      await git(['branch', '-D', '--', branchName], repoPath)
+    }
+  } catch {
+    wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${targetDir}" may need manual removal)`
+  }
+  throw wrapped
+}
 
 async function persistRelayWorktreeCreationBase(
   git: GitExec,
@@ -62,17 +87,43 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
         })
       : undefined
 
-  const args = checkoutExistingBranch
-    ? ['worktree', 'add', targetDir, branchName]
-    : ['worktree', 'add', '--no-track', '-b', branchName, targetDir]
-  if (!checkoutExistingBranch && noCheckout) {
-    args.splice(3, 0, '--no-checkout')
+  // Why: git-crypt resolves state through each worktree's private Git dir;
+  // defer checkout until that dir references the repository-wide state.
+  const gitCryptDir = await findGitCryptStateDirectory(git, repoPath)
+  const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
+
+  const args = ['worktree', 'add']
+  if (noCheckout || deferCheckoutForGitCrypt) {
+    args.push('--no-checkout')
+  }
+  if (checkoutExistingBranch) {
+    args.push(targetDir, branchName)
+  } else {
+    args.push('--no-track', '-b', branchName, targetDir)
   }
   if (effectiveBase) {
     args.push(effectiveBase)
   }
 
   await git(args, repoPath)
+
+  if (gitCryptDir) {
+    try {
+      await shareGitCryptStateWithWorktree(git, gitCryptDir, targetDir)
+      if (deferCheckoutForGitCrypt) {
+        await git(['checkout'], targetDir)
+      }
+    } catch (error) {
+      return rollbackRelayWorktreeCreate(
+        git,
+        repoPath,
+        targetDir,
+        branchName,
+        !checkoutExistingBranch,
+        error
+      )
+    }
+  }
 
   if (checkoutExistingBranch) {
     return

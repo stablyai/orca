@@ -24,7 +24,11 @@ import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree-submodule-removal'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
+import {
+  findGitCryptStateDirectory,
+  shareGitCryptStateWithWorktree
+} from '../../shared/git-crypt-worktree-state'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedRevParsePathFormatError,
@@ -896,6 +900,40 @@ async function refreshLocalBaseRefForWorktreeCreate(
   }
 }
 
+function resolveGitOutputPath(
+  repoPath: string,
+  outputPath: string,
+  options: GitWorktreeExecOptions
+): string {
+  const value = outputPath.trim()
+  const distro = parseWslUncPath(repoPath)?.distro ?? options.wslDistro
+  if (distro && posix.isAbsolute(value)) {
+    return toWindowsWslPath(value, distro)
+  }
+  return resolveRevParsePath(repoPath, value)
+}
+
+async function rollbackDeferredWorktreeCreate(
+  repoPath: string,
+  worktreePath: string,
+  options: AddWorktreeOptions,
+  error: unknown
+): Promise<never> {
+  const wrapped: SparseWorktreeCreateError =
+    error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
+  try {
+    await removeWorktree(repoPath, worktreePath, true, {
+      deleteBranch: !options.checkoutExistingBranch,
+      forceBranchDelete: !options.checkoutExistingBranch,
+      ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
+    })
+  } catch {
+    wrapped.cleanupFailed = true
+    wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
+  }
+  throw wrapped
+}
+
 /**
  * Create a new worktree.
  * @param repoPath - Path to the main repo (or bare repo)
@@ -943,9 +981,21 @@ async function performAddWorktree(
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
+  // Why: git-crypt resolves state through the per-worktree Git dir, so setup
+  // must happen before checkout or its smudge filter aborts worktree creation.
+  const runGitCryptCommand = (args: string[], cwd: string) =>
+    gitExecFileAsync(args, gitExecOptions(cwd, options))
+  const resolveGitCryptPath = (cwd: string, outputPath: string) =>
+    resolveGitOutputPath(cwd, outputPath, options)
+  const gitCryptDir = await findGitCryptStateDirectory(
+    runGitCryptCommand,
+    repoPath,
+    resolveGitCryptPath
+  )
+  const deferCheckoutForGitCrypt = gitCryptDir !== null && !noCheckout
   const args = ['worktree', 'add']
   let effectiveBase: string | undefined
-  if (noCheckout) {
+  if (noCheckout || deferCheckoutForGitCrypt) {
     args.push('--no-checkout')
   }
   if (options.checkoutExistingBranch) {
@@ -984,6 +1034,25 @@ async function performAddWorktree(
     // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292) fails fast instead of hanging.
     timeout: WORKTREE_ADD_TIMEOUT_MS
   })
+
+  if (gitCryptDir) {
+    try {
+      await shareGitCryptStateWithWorktree(
+        runGitCryptCommand,
+        gitCryptDir,
+        worktreePath,
+        resolveGitCryptPath
+      )
+      if (deferCheckoutForGitCrypt) {
+        await gitExecFileAsync(['checkout'], {
+          ...gitExecOptions(worktreePath, options),
+          timeout: WORKTREE_ADD_TIMEOUT_MS
+        })
+      }
+    } catch (error) {
+      return rollbackDeferredWorktreeCreate(repoPath, worktreePath, options, error)
+    }
+  }
 
   if (options.checkoutExistingBranch) {
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}
