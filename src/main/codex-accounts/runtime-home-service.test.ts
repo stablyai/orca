@@ -82,6 +82,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     openLinksInApp: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
+    sourceControlDefaultTab: 'uncommitted',
     showTitlebarAppName: true,
     showTasksButton: true,
     floatingTerminalEnabled: false,

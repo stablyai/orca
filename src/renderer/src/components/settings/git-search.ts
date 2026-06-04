@@ -21,6 +21,11 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'worktree'
     ]
   },
+  {
+    title: 'Default Source Control Tab',
+    description: 'Choose which Source Control sub-tab opens when you switch to Source Control.',
+    keywords: ['source control', 'default tab', 'all', 'uncommitted', 'changes']
+  },
   ...AUTO_RENAME_BRANCH_SEARCH_ENTRIES,
   {
     title: 'GitHub API Budget',

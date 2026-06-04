@@ -159,6 +159,7 @@ import type {
   GitConflictKind,
   GitConflictOperation,
   GitStatusEntry,
+  SourceControlDefaultTab,
   SourceControlViewMode,
   TuiAgent
 } from '../../../../shared/types'
@@ -196,7 +197,7 @@ import {
   type SourceControlRowOpenEvent
 } from './source-control-split-open'
 
-export type SourceControlScope = 'all' | 'uncommitted'
+export type SourceControlScope = SourceControlDefaultTab
 type AbortConflictOperation = Extract<GitConflictOperation, 'merge' | 'rebase'>
 type AbortActionErrorKind = 'abort_merge' | 'abort_rebase'
 export type SourceControlActionError = {
@@ -368,6 +369,10 @@ type PullRequestGenerationRecords = Record<string, PullRequestGenerationRecord>
 
 export function normalizeSourceControlViewMode(value: unknown): SourceControlViewMode {
   return value === 'tree' || value === 'list' ? value : 'list'
+}
+
+export function normalizeSourceControlDefaultTab(value: unknown): SourceControlScope {
+  return value === 'all' || value === 'uncommitted' ? value : 'uncommitted'
 }
 
 type GitStatusSourceControlTreeNode = SourceControlTreeNode<
@@ -1222,7 +1227,15 @@ function SourceControlInner(): React.JSX.Element {
     pendingDiffCommentsClearCount
   ])
 
-  const [scope, setScope] = useState<SourceControlScope>('all')
+  const defaultSourceControlTab = normalizeSourceControlDefaultTab(
+    settings?.sourceControlDefaultTab
+  )
+  const [scope, setScope] = useState<SourceControlScope>(defaultSourceControlTab)
+  const defaultSourceControlTabRef = useRef(defaultSourceControlTab)
+  useEffect(() => {
+    defaultSourceControlTabRef.current = defaultSourceControlTab
+    setScope(defaultSourceControlTab)
+  }, [defaultSourceControlTab])
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     createDefaultCollapsedSections
   )
@@ -1921,7 +1934,7 @@ function SourceControlInner(): React.JSX.Element {
   // Instead, reset worktree-specific local state here so the previous
   // worktree's UI state doesn't leak into the new one.
   useEffect(() => {
-    setScope('all')
+    setScope(defaultSourceControlTabRef.current)
     setCollapsedSections(createDefaultCollapsedSections())
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)

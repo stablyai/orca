@@ -17,6 +17,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })
 
+  it('uses Uncommitted as the Source Control default tab', () => {
+    expect(getDefaultSettings('/tmp').sourceControlDefaultTab).toBe('uncommitted')
+  })
+
   it('keeps first-work branch auto-renaming off by default for new settings', () => {
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWork).toBe(false)
   })

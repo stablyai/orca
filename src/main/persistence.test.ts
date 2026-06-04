@@ -1142,6 +1142,7 @@ describe('Store', () => {
     expect(store.getSettings().refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(store.getSettings().rightSidebarOpenByDefault).toBe(true)
     expect(store.getSettings().sourceControlViewMode).toBe('list')
+    expect(store.getSettings().sourceControlDefaultTab).toBe('uncommitted')
     expect(store.getSettings().showGitIgnoredFiles).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
@@ -2461,6 +2462,14 @@ describe('Store', () => {
     expect(store.getSettings().sourceControlViewMode).toBe('tree')
   })
 
+  it('updateSettings persists sourceControlDefaultTab as a user setting', async () => {
+    const store = await createStore()
+    expect(store.getSettings().sourceControlDefaultTab).toBe('uncommitted')
+
+    store.updateSettings({ sourceControlDefaultTab: 'all' })
+    expect(store.getSettings().sourceControlDefaultTab).toBe('all')
+  })
+
   it('updateSettings normalizes terminal shortcut policy', async () => {
     const store = await createStore()
 
@@ -2471,7 +2480,7 @@ describe('Store', () => {
     expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
   })
 
-  it('reloads sourceControlViewMode from global settings without touching workspace state', async () => {
+  it('reloads source control UI defaults from global settings without touching workspace state', async () => {
     const workspaceSession = {
       activeRepoId: 'r1',
       activeWorktreeId: 'repo1::/worktree-a',
@@ -2515,16 +2524,18 @@ describe('Store', () => {
 
     const store = await createStore()
     expect(store.getSettings().sourceControlViewMode).toBe('list')
+    expect(store.getSettings().sourceControlDefaultTab).toBe('uncommitted')
 
-    store.updateSettings({ sourceControlViewMode: 'tree' })
+    store.updateSettings({ sourceControlViewMode: 'tree', sourceControlDefaultTab: 'all' })
     store.flush()
 
     const persisted = readDataFile() as {
-      settings?: { sourceControlViewMode?: string }
+      settings?: { sourceControlViewMode?: string; sourceControlDefaultTab?: string }
       workspaceSession?: typeof workspaceSession
       worktreeMeta?: Record<string, unknown>
     }
     expect(persisted.settings?.sourceControlViewMode).toBe('tree')
+    expect(persisted.settings?.sourceControlDefaultTab).toBe('all')
     expect(persisted.workspaceSession).toEqual(workspaceSession)
     expect(persisted.worktreeMeta).toEqual({
       'repo1::/worktree-a': { status: 'active' },
@@ -2533,9 +2544,13 @@ describe('Store', () => {
     expect(collectPropertyPaths(persisted, 'sourceControlViewMode')).toEqual([
       'settings.sourceControlViewMode'
     ])
+    expect(collectPropertyPaths(persisted, 'sourceControlDefaultTab')).toEqual([
+      'settings.sourceControlDefaultTab'
+    ])
 
     const reloaded = await createStore()
     expect(reloaded.getSettings().sourceControlViewMode).toBe('tree')
+    expect(reloaded.getSettings().sourceControlDefaultTab).toBe('all')
     expect(reloaded.getWorkspaceSession().activeWorktreeId).toBe('repo1::/worktree-a')
   })
 
