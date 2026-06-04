@@ -2981,7 +2981,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <TooltipTrigger asChild>
                           {createState?.disabled ? (
                             <span
-                              className="inline-flex cursor-not-allowed"
+                              className="inline-flex cursor-not-allowed opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
                               tabIndex={0}
                               aria-label={createState.ariaLabel}
                               onKeyDown={stopRepoHeaderKeyboardToggle}
@@ -3004,7 +3004,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               type="button"
                               variant="ghost"
                               size="icon-xs"
-                              className="size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-opacity"
+                              className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
                               aria-label={
                                 createState?.ariaLabel ?? `Create workspace for ${row.label}`
                               }
