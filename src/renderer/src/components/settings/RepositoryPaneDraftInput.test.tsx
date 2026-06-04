@@ -79,6 +79,15 @@ describe('RepoSettingsDraftInput', () => {
     expect(getInput().value).toBe('가나')
   })
 
+  it('accepts same-repo store changes that did not come from the input draft', () => {
+    const onTextChange = vi.fn()
+    render({ repoId: 'repo-1', storeValue: '../custom-worktrees', onTextChange })
+
+    render({ repoId: 'repo-1', storeValue: '', onTextChange })
+
+    expect(getInput().value).toBe('')
+  })
+
   it('resets the draft when the pane switches repos', () => {
     const onTextChange = vi.fn()
     render({ repoId: 'repo-1', storeValue: 'Repo One', onTextChange })

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -47,19 +47,40 @@ export function RepoSettingsDraftInput({
   onTextChange: (text: string) => void
 } & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>): React.JSX.Element {
   const [draft, setDraft] = useState<RepoTextDraft>({ repoId, text: storeValue })
-  // Why: reset only when the pane switches repos — the store echo of an
-  // in-flight keystroke must not clobber newer draft text.
-  const resolved = draft.repoId === repoId ? draft : { repoId, text: storeValue }
-  if (resolved !== draft) {
-    setDraft(resolved)
-  }
+  const pendingStoreEchoesRef = useRef<string[]>([])
+
+  useEffect(() => {
+    setDraft((current) => {
+      if (current.repoId !== repoId) {
+        pendingStoreEchoesRef.current = []
+        return { repoId, text: storeValue }
+      }
+      if (storeValue === current.text) {
+        pendingStoreEchoesRef.current = []
+        return current
+      }
+      const pendingEchoIndex = pendingStoreEchoesRef.current.indexOf(storeValue)
+      if (pendingEchoIndex !== -1) {
+        // Why: queued updateRepo calls can echo older input text after newer
+        // keystrokes; accepting that echo re-cancels active IME composition.
+        pendingStoreEchoesRef.current.splice(0, pendingEchoIndex + 1)
+        return current
+      }
+      pendingStoreEchoesRef.current = []
+      return { repoId, text: storeValue }
+    })
+  }, [repoId, storeValue])
+
+  const text = draft.repoId === repoId ? draft.text : storeValue
   return (
     <Input
       {...inputProps}
-      value={resolved.text}
+      value={text}
       onChange={(e) => {
-        setDraft({ repoId, text: e.target.value })
-        onTextChange(e.target.value)
+        const nextText = e.target.value
+        pendingStoreEchoesRef.current.push(nextText)
+        setDraft({ repoId, text: nextText })
+        onTextChange(nextText)
       }}
     />
   )
