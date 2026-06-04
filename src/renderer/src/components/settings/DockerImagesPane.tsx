@@ -8,7 +8,13 @@ type DockerImagesPaneProps = {
   initialImages?: DockerCachedImage[]
 }
 
-export function DockerImagesPane({ initialImages = [] }: DockerImagesPaneProps): React.JSX.Element {
+// Why: a stable module-level default keeps referential equality across renders
+// (lint: react/no-object-type-as-default-prop).
+const NO_INITIAL_IMAGES: DockerCachedImage[] = []
+
+export function DockerImagesPane({
+  initialImages = NO_INITIAL_IMAGES
+}: DockerImagesPaneProps): React.JSX.Element {
   const [images, setImages] = useState<DockerCachedImage[]>(initialImages)
   const [loading, setLoading] = useState(initialImages.length === 0)
   const [pruningId, setPruningId] = useState<string | null>(null)

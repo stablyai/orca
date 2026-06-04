@@ -22,7 +22,8 @@ import type {
   GitStatusEntry,
   GitStatusResult,
   GitUpstreamStatus,
-  GitWorktreeInfo
+  GitWorktreeInfo,
+  RemoveWorktreeResult
 } from '../../shared/types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
@@ -485,6 +486,27 @@ export class DockerGitProvider implements IGitProvider {
     }
   }
 
+  async fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void> {
+    try {
+      if (pushTarget) {
+        const target = await this.validatePushTarget(worktreePath, pushTarget)
+        await this.git(['pull', '--ff-only', target.remoteName, target.branchName], worktreePath)
+        return
+      }
+      const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
+      if (upstream && !upstream.isConfiguredUpstream) {
+        await this.git(
+          ['pull', '--ff-only', upstream.remoteName, upstream.branchName],
+          worktreePath
+        )
+        return
+      }
+      await this.git(['pull', '--ff-only'], worktreePath)
+    } catch (error) {
+      throw new Error(normalizeGitErrorMessage(error, 'pull'))
+    }
+  }
+
   async rebaseFromBase(worktreePath: string, baseRef: string): Promise<void> {
     try {
       const source = await resolveGitRemoteRebaseSource(
@@ -544,14 +566,17 @@ export class DockerGitProvider implements IGitProvider {
     worktreePath: string,
     force?: boolean,
     options: { deleteBranch?: boolean; forceBranchDelete?: boolean } = {}
-  ): Promise<void> {
+  ): Promise<RemoveWorktreeResult> {
     const safeWorktreePath = this.worktreePath(worktreePath)
     await this.git(
       ['worktree', 'remove', ...(force ? ['--force'] : []), safeWorktreePath],
       this.target.workdir
     )
     await this.git(['worktree', 'prune'], this.target.workdir)
+    // Why: container-side removal does not attempt branch cleanup, so there is
+    // never a preserved-branch outcome to report.
     void options
+    return {}
   }
 
   async exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }> {
