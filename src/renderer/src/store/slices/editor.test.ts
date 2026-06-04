@@ -376,6 +376,92 @@ describe('createEditorSlice openDiff', () => {
     ])
   })
 
+  it('keeps an existing preview replaceable when it is opened as preview again', () => {
+    const store = createEditorTabsStore()
+
+    const openPreviewFile = (): void =>
+      store.getState().openFile(
+        {
+          filePath: '/repo/a.ts',
+          relativePath: 'a.ts',
+          worktreeId: 'wt-1',
+          language: 'typescript',
+          mode: 'edit'
+        },
+        { preview: true }
+      )
+
+    openPreviewFile()
+    openPreviewFile()
+
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: '/repo/a.ts',
+        isPreview: true
+      })
+    ])
+
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, { preview: true })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+  })
+
+  it('does not orphan another split group when replacing a shared preview diff', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, { preview: true })
+    const firstGroupId = store.getState().groupsByWorktree['wt-1'][0].id
+    const secondGroupId = store.getState().createEmptySplitGroup('wt-1', firstGroupId, 'right')
+
+    expect(secondGroupId).toBeTruthy()
+
+    store.getState().openDiff('wt-1', '/repo/a.ts', 'a.ts', 'typescript', false, {
+      preview: true,
+      targetGroupId: secondGroupId ?? undefined
+    })
+    store.getState().openDiff('wt-1', '/repo/b.ts', 'b.ts', 'typescript', false, {
+      preview: true,
+      targetGroupId: secondGroupId ?? undefined
+    })
+
+    const state = store.getState()
+    expect(state.openFiles).toEqual([
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::a.ts',
+        isPreview: true
+      }),
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+    expect(state.unifiedTabsByWorktree['wt-1']).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          groupId: firstGroupId,
+          entityId: 'wt-1::diff::unstaged::a.ts',
+          isPreview: true
+        }),
+        expect.objectContaining({
+          groupId: secondGroupId,
+          entityId: 'wt-1::diff::unstaged::b.ts',
+          isPreview: true
+        })
+      ])
+    )
+  })
+
   it('opens a new preview diff beside a pinned file tab', () => {
     const store = createEditorTabsStore()
 
@@ -416,6 +502,36 @@ describe('createEditorSlice openDiff', () => {
     ])
   })
 
+  it('makes a preview file permanent without pinning the tab', () => {
+    const store = createEditorTabsStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/a.ts',
+        relativePath: 'a.ts',
+        worktreeId: 'wt-1',
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { preview: true }
+    )
+    store.getState().makePreviewFilePermanent('/repo/a.ts')
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: '/repo/a.ts',
+        isPreview: undefined
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: '/repo/a.ts',
+        isPinned: undefined,
+        isPreview: false
+      })
+    ])
+  })
+
   it('does not replace a dirty file that was opened as a preview', () => {
     const store = createEditorTabsStore()
 
@@ -441,6 +557,16 @@ describe('createEditorSlice openDiff', () => {
       }),
       expect.objectContaining({
         id: 'wt-1::diff::unstaged::b.ts',
+        isPreview: true
+      })
+    ])
+    expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([
+      expect.objectContaining({
+        entityId: '/repo/a.ts',
+        isPreview: false
+      }),
+      expect.objectContaining({
+        entityId: 'wt-1::diff::unstaged::b.ts',
         isPreview: true
       })
     ])

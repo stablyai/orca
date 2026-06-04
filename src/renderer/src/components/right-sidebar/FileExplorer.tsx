@@ -49,7 +49,7 @@ function FileExplorerInner(): React.JSX.Element {
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
   const openFile = useAppStore((s) => s.openFile)
-  const pinFile = useAppStore((s) => s.pinFile)
+  const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -347,7 +347,7 @@ function FileExplorerInner(): React.JSX.Element {
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
     activeWorktreeId,
     openFile,
-    pinFile,
+    makePreviewFilePermanent,
     toggleDir,
     loadDir,
     statPath,

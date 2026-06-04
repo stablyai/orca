@@ -69,7 +69,7 @@ export type TabsSlice = {
     entityId: string,
     contentType?: TabContentType
   ) => Tab | null
-  activateTab: (tabId: string) => void
+  activateTab: (tabId: string, opts?: { preservePreview?: boolean }) => void
   closeUnifiedTab: (
     tabId: string,
     opts?: { recordInteraction?: boolean }
@@ -553,7 +553,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   findTabForEntityInGroup: (worktreeId, groupId, entityId, contentType) =>
     findTabByEntityInGroup(get().unifiedTabsByWorktree, worktreeId, groupId, entityId, contentType),
 
-  activateTab: (tabId) => {
+  activateTab: (tabId, opts) => {
     set((state) => {
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {
@@ -579,12 +579,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             })()
           : state.unreadTerminalTabs
       return {
-        unifiedTabsByWorktree: {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
-            item.id === tabId ? { ...item, isPreview: false } : item
-          )
-        },
+        unifiedTabsByWorktree: opts?.preservePreview
+          ? state.unifiedTabsByWorktree
+          : {
+              ...state.unifiedTabsByWorktree,
+              [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
+                item.id === tabId ? { ...item, isPreview: false } : item
+              )
+            },
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).map((group) =>

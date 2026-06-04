@@ -17,7 +17,7 @@ type UseFileExplorerHandlersParams = {
     },
     options?: { preview?: boolean }
   ) => void
-  pinFile: (filePath: string) => void
+  makePreviewFilePermanent: (filePath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   loadDir: (
     dirPath: string,
@@ -106,7 +106,7 @@ export async function activateFileExplorerNode(args: {
 export function useFileExplorerHandlers({
   activeWorktreeId,
   openFile,
-  pinFile,
+  makePreviewFilePermanent,
   toggleDir,
   loadDir,
   statPath,
@@ -135,9 +135,9 @@ export function useFileExplorerHandlers({
       if (!activeWorktreeId || node.isDirectory) {
         return
       }
-      pinFile(node.path)
+      makePreviewFilePermanent(node.path)
     },
-    [activeWorktreeId, pinFile]
+    [activeWorktreeId, makePreviewFilePermanent]
   )
 
   const handleWheelCapture = useCallback(

@@ -168,6 +168,7 @@ export function FloatingTerminalPanel({
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const setTabPaneExpanded = useAppStore((s) => s.setTabPaneExpanded)
+  const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const pinFile = useAppStore((s) => s.pinFile)
   const openFile = useAppStore((s) => s.openFile)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
@@ -1326,6 +1327,7 @@ export function FloatingTerminalPanel({
                 })()
               }}
               onCloseAllFiles={closeAllFiles}
+              onMakePreviewFilePermanent={makePreviewFilePermanent}
               onPinFile={pinFile}
               tabBarOrder={tabBarOrder}
             />
