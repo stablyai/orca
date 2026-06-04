@@ -255,6 +255,13 @@ jobs:
             node config/scripts/release-rc-history.mjs "$1"
           }
 
+          current_package_stable() {
+            node -e '
+              const { version } = require("./package.json");
+              if (/^[0-9]+\.[0-9]+\.[0-9]+$/.test(version)) console.log(version);
+            '
+          }
+
           tag_matches_current_ref() {
             local tag="$1"
             local tag_commit
@@ -315,6 +322,25 @@ jobs:
           # Fresh repo fallback so the math below never divides by zero.
           if [[ -z "$latest_stable" ]]; then
             latest_stable="0.0.0"
+          fi
+
+          package_stable="$(current_package_stable)"
+          if [[ -n "$package_stable" ]]; then
+            # Why: if a stable release is deleted after its version-bump commit
+            # reached main, GitHub's release list regresses. package.json is the
+            # floor for the current ref so the next cut cannot reuse an older
+            # stable number just because the public release was nuked.
+            if semver_gt "$package_stable" "$latest_stable"; then
+              if [[ "$KIND" != "rc" ]]; then
+                package_tag="v$package_stable"
+                if git rev-parse "$package_tag" >/dev/null 2>&1; then
+                  recover_unpublished_tag "$package_tag" "current ref stable tag is newer than latest published stable" || true
+                fi
+              fi
+
+              echo "Stable floor from package.json: $package_stable"
+              latest_stable="$package_stable"
+            fi
           fi
 
           case "$KIND" in
