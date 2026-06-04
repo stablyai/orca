@@ -2492,6 +2492,7 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {},
       openFilesByWorktree: {},
+      markdownFrontmatterVisible: {},
       browserTabsByWorktree: {},
       browserPagesByWorkspace: {},
       activeBrowserTabIdByWorktree: {},
