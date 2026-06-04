@@ -3,7 +3,7 @@ import type { SettingsSearchEntry } from './settings-search'
 export const BROWSER_USE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Enable Orca CLI',
-    description: 'Register the orca shell command so agents can drive the browser.',
+    description: 'Register the Orca CLI so agents can drive the browser.',
     keywords: ['browser use', 'cli', 'orca', 'path', 'command', 'shell', 'enable', 'setup']
   },
   {

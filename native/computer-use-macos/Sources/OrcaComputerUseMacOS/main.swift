@@ -135,6 +135,26 @@ struct Snapshot {
     let elements: [Int: ElementRecord]
     let truncated: Bool
     let maxDepthReached: Bool
+
+    func withoutScreenshotPayload() -> Snapshot {
+        Snapshot(
+            id: id,
+            app: app,
+            windowTitle: windowTitle,
+            windowBounds: windowBounds,
+            windowId: windowId,
+            windowLayer: windowLayer,
+            treeText: treeText,
+            focusedElementId: focusedElementId,
+            screenshot: nil,
+            screenshotStatus: .skipped,
+            screenshotScale: CGSize(width: 1, height: 1),
+            screenshotEngine: nil,
+            elements: elements,
+            truncated: truncated,
+            maxDepthReached: maxDepthReached
+        )
+    }
 }
 
 struct ScreenshotPayload {
@@ -157,7 +177,6 @@ enum ScreenshotStatus {
 
 final class Provider {
     private var snapshots: [String: Snapshot] = [:]
-    private var hasPromptedForAccessibility = false
 
     func handle(method: String, params: [String: JSONValue]) throws -> Any {
         switch method {
@@ -224,18 +243,21 @@ final class Provider {
         )
         let keys = [query, app.name, app.bundleId ?? ""].filter { !$0.isEmpty }.map { $0.lowercased() }
         let namespace = snapshotNamespace(params)
+        // Why: cached snapshots only validate element identity for follow-up
+        // actions; retaining MB-scale screenshot base64 in the long-lived agent grows memory.
+        let cachedSnapshot = snapshot.withoutScreenshotPayload()
         for key in keys {
             if !isExplicitSnapshotNamespace(namespace) {
-                snapshots[key] = snapshot
-                snapshots[snapshotWindowKey(key, snapshot.windowId)] = snapshot
+                snapshots[key] = cachedSnapshot
+                snapshots[snapshotWindowKey(key, snapshot.windowId)] = cachedSnapshot
                 if let windowIndex {
-                    snapshots[snapshotWindowIndexKey(key, windowIndex)] = snapshot
+                    snapshots[snapshotWindowIndexKey(key, windowIndex)] = cachedSnapshot
                 }
             }
-            snapshots[namespacedSnapshotKey(namespace, key)] = snapshot
-            snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = snapshot
+            snapshots[namespacedSnapshotKey(namespace, key)] = cachedSnapshot
+            snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = cachedSnapshot
             if let windowIndex {
-                snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = snapshot
+                snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = cachedSnapshot
             }
         }
         return snapshot
@@ -251,11 +273,9 @@ final class Provider {
     }
 
     private func currentKeyboardSnapshot(params: [String: JSONValue]) throws -> Snapshot {
-        let snapshot = try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
-        if params["restoreWindow"]?.bool != true && !isTargetWindowFocused(snapshot) {
-            throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; retry with --restore-window or use set-value for editable elements")
-        }
-        return snapshot
+        // Why: AX text replacement/select-all do not post global input, so only
+        // synthetic fallback paths require the target window to be focused.
+        try currentSnapshot(params: params.merging(["noScreenshot": .bool(true)]) { _, replacement in replacement })
     }
 
     private func cachedSnapshot(params: [String: JSONValue]) throws -> Snapshot? {
@@ -299,14 +319,6 @@ final class Provider {
         guard WindowCapture.candidates(pid: snapshot.app.pid).contains(where: { $0.windowId == snapshot.windowId }) else {
             throw ProviderError.coded("window_stale", "window \(Int(snapshot.windowId)) is no longer available; run get-app-state again to refresh the target window")
         }
-    }
-
-    private func promptForAccessibilityOnce() {
-        guard !hasPromptedForAccessibility else {
-            return
-        }
-        hasPromptedForAccessibility = true
-        _ = promptForAccessibility()
     }
 
     private func listApps() -> [AppDescriptor] {
@@ -467,8 +479,12 @@ final class Provider {
         restoreWindow: Bool
     ) throws -> Snapshot {
         guard accessibilityTrusted() else {
-            promptForAccessibilityOnce()
-            throw ProviderError.coded("permission_denied", "Accessibility permission is required for Orca Computer Use.")
+            // Why: agents retry failed observations. Only the explicit setup flow
+            // should open macOS privacy prompts/settings; runtime calls stay quiet.
+            throw ProviderError.coded(
+                "permission_denied",
+                "Accessibility permission is required for Orca Computer Use. Run `orca computer permissions` or open Settings > Computer Use, grant Accessibility to Orca Computer Use, then retry."
+            )
         }
         let appElement = AXUIElementCreateApplication(app.pid)
         enableManualAccessibilityIfNeeded(appElement, app: app)
@@ -480,7 +496,14 @@ final class Provider {
             allowRecovery: restoreWindow
         )
         let focusedTitle = stringAttribute(focused, kAXTitleAttribute as String) ?? app.name
-        guard let capture = WindowCapture.resolve(candidates: windowCandidates, titleHint: focusedTitle, windowId: windowId, windowIndex: windowIndex) else {
+        let canCaptureScreenshot = includeScreenshot && screenCaptureTrusted()
+        guard let capture = WindowCapture.resolve(
+            candidates: windowCandidates,
+            titleHint: focusedTitle,
+            windowId: windowId,
+            windowIndex: windowIndex,
+            captureImage: canCaptureScreenshot
+        ) else {
             throw ProviderError.coded("window_not_found", "app '\(app.name)' has no on-screen window")
         }
         guard let window = matchingWindow(appElement: appElement, capture: capture, focused: focused, explicitTarget: windowId != nil || windowIndex != nil) else {
@@ -492,7 +515,7 @@ final class Provider {
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
             .captured
-        } else if includeScreenshot && !screenCaptureTrusted() {
+        } else if includeScreenshot && !canCaptureScreenshot {
             .failed("Screen Recording permission is required for Orca Computer Use; grant permission or pass --no-screenshot to inspect accessibility state only.")
         } else if includeScreenshot {
             .failed("window screenshot capture returned no image; retry with --no-screenshot if accessibility state is sufficient.")
@@ -646,12 +669,14 @@ final class Provider {
 
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.typeText(try requiredString(params, "text"), pid: snapshot.app.pid)
         return actionMetadata(path: "synthetic")
     }
 
     private func pressKey(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pressKey(try requiredString(params, "key"), pid: snapshot.app.pid)
         return actionMetadata(path: "synthetic")
     }
@@ -666,6 +691,7 @@ final class Provider {
                 verification: TextInput.selectionVerification(focused.element)
             )
         }
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pressKey(key, pid: snapshot.app.pid)
         return actionMetadata(
             path: "synthetic",
@@ -680,6 +706,7 @@ final class Provider {
         if let focused = focusedRecord(snapshot), let verification = TextInput.replaceSelection(focused.element, with: text) {
             return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
         }
+        try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pasteText(text, pid: snapshot.app.pid)
         return actionMetadata(
             path: "clipboard",
@@ -817,11 +844,6 @@ private func accessibilityTrusted() -> Bool {
     AXIsProcessTrusted()
 }
 
-private func promptForAccessibility() -> Bool {
-    let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
-    return AXIsProcessTrustedWithOptions(options)
-}
-
 private func screenCaptureTrusted() -> Bool {
     CGPreflightScreenCaptureAccess()
 }
@@ -914,6 +936,21 @@ private func isTargetWindowFocused(_ snapshot: Snapshot) -> Bool {
     }
     let intersection = frame.intersection(snapshot.windowBounds)
     return !intersection.isNull && intersection.area >= min(frame.area, snapshot.windowBounds.area) * 0.75
+}
+
+private func requireTargetWindowFocused(_ snapshot: Snapshot, restoreWindowRequested: Bool) throws {
+    guard let failure = KeyboardInputSafety.syntheticInputFocusFailure(
+        targetWindowFocused: isTargetWindowFocused(snapshot),
+        restoreWindowRequested: restoreWindowRequested
+    ) else {
+        return
+    }
+    switch failure {
+    case .targetNotFocused:
+        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; retry with --restore-window or use set-value for editable elements")
+    case .targetNotFocusedAfterRestore:
+        throw ProviderError.coded("window_not_focused", "keyboard input requires the target \(snapshot.app.name) window to be focused; --restore-window was requested but the target is still not focused; bring it forward manually or check Accessibility permissions")
+    }
 }
 
 private func matchingWindow(appElement: AXUIElement, capture: WindowCapture, focused: AXUIElement, explicitTarget: Bool) -> AXUIElement? {
@@ -1628,19 +1665,37 @@ private struct WindowCapture {
     let title: String?
     let image: CapturedImage?
 
-    static func resolve(pid: pid_t, titleHint: String?, windowId: CGWindowID?, windowIndex: Int?) -> WindowCapture? {
-        resolve(candidates: candidates(pid: pid), titleHint: titleHint, windowId: windowId, windowIndex: windowIndex)
+    static func resolve(
+        pid: pid_t,
+        titleHint: String?,
+        windowId: CGWindowID?,
+        windowIndex: Int?,
+        captureImage: Bool
+    ) -> WindowCapture? {
+        resolve(
+            candidates: candidates(pid: pid),
+            titleHint: titleHint,
+            windowId: windowId,
+            windowIndex: windowIndex,
+            captureImage: captureImage
+        )
     }
 
-    static func resolve(candidates: [WindowCandidate], titleHint: String?, windowId: CGWindowID?, windowIndex: Int?) -> WindowCapture? {
+    static func resolve(
+        candidates: [WindowCandidate],
+        titleHint: String?,
+        windowId: CGWindowID?,
+        windowIndex: Int?,
+        captureImage: Bool
+    ) -> WindowCapture? {
         if let windowId {
             guard let candidate = candidates.first(where: { $0.windowId == windowId }) else { return nil }
-            return WindowCapture(candidate: candidate)
+            return WindowCapture(candidate: candidate, captureImage: captureImage)
         }
         if let windowIndex {
             let visibleWindows = candidates.filter { $0.layer == 0 }
             guard visibleWindows.indices.contains(windowIndex) else { return nil }
-            return WindowCapture(candidate: visibleWindows[windowIndex])
+            return WindowCapture(candidate: visibleWindows[windowIndex], captureImage: captureImage)
         }
         guard let best = candidates.sorted(by: { lhs, rhs in
             if let titleHint, lhs.title == titleHint, rhs.title != titleHint { return true }
@@ -1649,15 +1704,21 @@ private struct WindowCapture {
         }).first else {
             return nil
         }
-        return WindowCapture(candidate: best)
+        return WindowCapture(candidate: best, captureImage: captureImage)
     }
 
-    private init(candidate: WindowCandidate) {
+    private init(candidate: WindowCandidate, captureImage: Bool) {
         self.windowId = candidate.windowId
         self.layer = candidate.layer
         self.bounds = candidate.bounds
         self.title = candidate.title
-        self.image = Self.captureImage(windowId: candidate.windowId, bounds: candidate.bounds)
+        // Why: probing image APIs before TCC preflight can raise Screen
+        // Recording prompts, even for --no-screenshot calls.
+        if captureImage {
+            self.image = Self.captureImage(windowId: candidate.windowId, bounds: candidate.bounds)
+        } else {
+            self.image = nil
+        }
     }
 
     static func candidates(pid: pid_t) -> [WindowCandidate] {
@@ -3000,11 +3061,11 @@ private final class SocketListener: @unchecked Sendable {
             close(socketFd)
             socketFd = -1
         }
-        unlink(socketPath)
+        // Why: the parent owns the private temp directory cleanup; the helper
+        // must not unlink arbitrary caller-supplied paths on shutdown.
     }
 
     private func bindSocket() throws {
-        unlink(socketPath)
         socketFd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard socketFd >= 0 else {
             throw ProviderError.coded("accessibility_error", "failed to create computer-use socket")
@@ -3028,9 +3089,16 @@ private final class SocketListener: @unchecked Sendable {
             }
         }
         guard result == 0 else {
-            let message = String(cString: strerror(errno))
+            let bindErrno = errno
+            let message = String(cString: strerror(bindErrno))
             close(socketFd)
             socketFd = -1
+            if UnixSocketPathSafety.shouldRejectExistingPathAfterBindFailure(
+                bindErrno: bindErrno,
+                existingMode: existingPathMode(socketPath)
+            ) {
+                throw ProviderError.coded("invalid_argument", "refusing to replace non-socket file at computer-use socket path")
+            }
             throw ProviderError.coded("accessibility_error", "failed to bind computer-use socket: \(message)")
         }
         chmod(socketPath, 0o600)
@@ -3080,6 +3148,14 @@ private final class SocketListener: @unchecked Sendable {
     }
 }
 
+private func existingPathMode(_ path: String) -> mode_t? {
+    var statInfo = stat()
+    guard lstat(path, &statInfo) == 0 else {
+        return nil
+    }
+    return statInfo.st_mode
+}
+
 private func peerProcessId(_ fd: Int32) -> pid_t? {
     var pid = pid_t(0)
     var length = socklen_t(MemoryLayout<pid_t>.size)
@@ -3109,7 +3185,11 @@ private func isTrustedOrcaApplication(_ pid: pid_t) -> Bool {
     else {
         return false
     }
-    return bundleId == "com.stablyai.orca" || bundleId == "com.github.Electron"
+    // Why: dev validation runs from per-worktree wrapper apps with stable
+    // Orca-owned bundle ids; the sidecar peer check must still authorize them.
+    return bundleId == "com.stablyai.orca" ||
+        bundleId.hasPrefix("com.stablyai.orca.dev.") ||
+        bundleId == "com.github.Electron"
 }
 
 private func parentProcessId(_ pid: pid_t) -> pid_t? {
@@ -3290,7 +3370,6 @@ if arguments.first == "--agent" {
         let valueIndex = index + 1
         guard valueIndex < arguments.count else { return nil }
         let tokenPath = arguments[valueIndex]
-        defer { unlink(tokenPath) }
         return try? String(contentsOfFile: tokenPath, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }

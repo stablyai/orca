@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Check, ExternalLink } from 'lucide-react'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -34,12 +34,15 @@ export function AgentStep({ selectedAgent, onSelect, detectedSet, isDetecting }:
   // disclosure once it's open; controlling `open` directly off the prop would
   // slam it shut as soon as `selectedEntryIsCollapsed` flips back to false.
   const [openState, setOpenState] = useState(selectedEntryIsCollapsed)
-  const fallbackRestLabel = openState ? 'Hide agents' : `Show ${fallbackRest.length} more agents→`
-  useEffect(() => {
-    if (selectedEntryIsCollapsed) {
+  const [previousSelectedEntryIsCollapsed, setPreviousSelectedEntryIsCollapsed] =
+    useState(selectedEntryIsCollapsed)
+  if (selectedEntryIsCollapsed !== previousSelectedEntryIsCollapsed) {
+    setPreviousSelectedEntryIsCollapsed(selectedEntryIsCollapsed)
+    if (selectedEntryIsCollapsed && !openState) {
       setOpenState(true)
     }
-  }, [selectedEntryIsCollapsed])
+  }
+  const fallbackRestLabel = openState ? 'Hide agents' : `Show ${fallbackRest.length} more agents→`
   return (
     <div className="space-y-5">
       {!hasDetected && !isDetecting && (

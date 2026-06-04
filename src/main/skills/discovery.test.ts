@@ -52,8 +52,9 @@ describe('skill discovery', () => {
       repos: [makeRepo('/remote/repo', 'ssh-1')]
     })
 
-    expect(roots.map((root) => root.path)).not.toContain('/remote/repo/.claude/skills')
-    expect(roots.map((root) => root.path)).toContain('/workspace/current/.claude/skills')
+    const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
+    expect(rootPaths).not.toContain('/remote/repo/.claude/skills')
+    expect(rootPaths).toContain('/workspace/current/.claude/skills')
   })
 
   it('discovers skill packages through symlinked skill directories', async () => {
@@ -76,6 +77,31 @@ describe('skill discovery', () => {
     expect(skill?.directoryPath).toBe(linkedSkill)
   })
 
+  it('keeps home classification when cwd points at the same directory as home', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillDir = join(home, '.agents', 'skills', 'orca-cli')
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(
+      join(skillDir, 'SKILL.md'),
+      ['---', 'name: orca-cli', 'description: Use the Orca CLI.', '---', ''].join('\n')
+    )
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: home,
+      repos: []
+    })
+
+    expect(result.skills.filter((entry) => entry.name === 'orca-cli')).toMatchObject([
+      {
+        sourceKind: 'home',
+        sourceLabel: 'Agent skills home',
+        directoryPath: skillDir
+      }
+    ])
+  })
+
   it('does not loop through recursive symlinked skill directories', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -93,5 +119,20 @@ describe('skill discovery', () => {
     })
 
     expect(result.skills).toEqual([])
+  })
+
+  it('enforces depth limits for valid child directories whose names start with dot-dot', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const deepSkill = join(home, '.agents', 'skills', '..deep', 'a', 'b', 'c', 'd', 'too-deep')
+    await mkdir(deepSkill, { recursive: true })
+    await writeFile(join(deepSkill, 'SKILL.md'), '# Too Deep\n\nShould not be discovered.')
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd')
+    })
+
+    expect(result.skills.map((skill) => skill.name)).not.toContain('Too Deep')
   })
 })

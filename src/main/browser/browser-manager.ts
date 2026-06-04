@@ -640,12 +640,23 @@ export class BrowserManager {
     guest.on('will-navigate', navigationGuard)
     guest.on('will-redirect', navigationGuard)
     guest.on('did-fail-load', didFailLoadHandler)
+    const handleDestroyed = (): void => {
+      // Why: guests can be destroyed before renderer registration. Without
+      // this, attach-time policy closures remain retained until app shutdown.
+      this.cleanupGuestPolicyAttachment(guest.id)
+    }
+    guest.on('destroyed', handleDestroyed)
 
     // Why: store cleanup so unregisterGuest can remove these listeners when the
     // guest surface is torn down, preventing the callbacks from preventing GC of
     // the underlying WebContents wrapper.
     this.policyCleanupByGuestId.set(guest.id, () => {
       disposeAntiDetection()
+      try {
+        guest.off('destroyed', handleDestroyed)
+      } catch {
+        // guest may already be destroyed
+      }
       if (!guest.isDestroyed()) {
         guest.off('will-navigate', navigationGuard)
         guest.off('will-redirect', navigationGuard)
@@ -660,17 +671,20 @@ export class BrowserManager {
     // resolving to the live page, or stale download/popup/permission callbacks
     // can be delivered to the wrong session after the swap.
     this.tabIdByWebContentsId.delete(previousWebContentsId)
+    this.cleanupGuestPolicyAttachment(previousWebContentsId)
+  }
 
-    const policyCleanup = this.policyCleanupByGuestId.get(previousWebContentsId)
+  private cleanupGuestPolicyAttachment(guestWebContentsId: number): void {
+    const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
     if (policyCleanup) {
       policyCleanup()
-      this.policyCleanupByGuestId.delete(previousWebContentsId)
+      this.policyCleanupByGuestId.delete(guestWebContentsId)
     }
-    this.policyAttachedGuestIds.delete(previousWebContentsId)
-    this.pendingLoadFailuresByGuestId.delete(previousWebContentsId)
-    this.pendingPermissionEventsByGuestId.delete(previousWebContentsId)
-    this.pendingPopupEventsByGuestId.delete(previousWebContentsId)
-    this.pendingDownloadIdsByGuestId.delete(previousWebContentsId)
+    this.policyAttachedGuestIds.delete(guestWebContentsId)
+    this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
+    this.pendingPermissionEventsByGuestId.delete(guestWebContentsId)
+    this.pendingPopupEventsByGuestId.delete(guestWebContentsId)
+    this.pendingDownloadIdsByGuestId.delete(guestWebContentsId)
   }
 
   registerGuest({
@@ -754,12 +768,7 @@ export class BrowserManager {
     // the underlying Chromium surface after the guest is destroyed.
     const guestWebContentsId = this.webContentsIdByTabId.get(browserTabId)
     if (guestWebContentsId !== undefined) {
-      const policyCleanup = this.policyCleanupByGuestId.get(guestWebContentsId)
-      if (policyCleanup) {
-        policyCleanup()
-        this.policyCleanupByGuestId.delete(guestWebContentsId)
-      }
-      this.policyAttachedGuestIds.delete(guestWebContentsId)
+      this.cleanupGuestPolicyAttachment(guestWebContentsId)
     }
 
     const cleanup = this.contextMenuCleanupByTabId.get(browserTabId)
@@ -929,6 +938,11 @@ export class BrowserManager {
     download.pendingCancelTimer = setTimeout(() => {
       this.cancelDownloadInternal(downloadId, 'Timed out waiting for user approval.')
     }, 60_000)
+    // Why: approval timeout is a fail-closed safety net, not a reason to keep
+    // Electron main alive after the browser/runtime is otherwise shutting down.
+    if (typeof download.pendingCancelTimer.unref === 'function') {
+      download.pendingCancelTimer.unref()
+    }
   }
 
   getDownloadPrompt(downloadId: string, senderWebContentsId: number): { filename: string } | null {
@@ -1035,8 +1049,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
     guest.openDevTools({ mode: 'detach' })
@@ -1102,8 +1117,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
 
@@ -1131,8 +1147,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(webContentsId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return false
     }
 
@@ -1238,8 +1255,9 @@ export class BrowserManager {
     }
     const guest = webContents.fromId(guestId)
     if (!guest || guest.isDestroyed()) {
-      this.webContentsIdByTabId.delete(browserTabId)
-      this.tabIdByWebContentsId.delete(guestId)
+      // Why: stale guest discovery must clear every per-tab registry entry,
+      // not just the forward/reverse WebContents maps.
+      this.unregisterGuest(browserTabId)
       return null
     }
     return guest

@@ -25,6 +25,8 @@ type FileExplorerToolbarProps = {
   showGitIgnoredFilesToggle: boolean
   showGitIgnoredFiles: boolean
   onToggleGitIgnoredFiles: () => void
+  showDotfiles: boolean
+  onToggleDotfiles: () => void
 }
 
 export function FileExplorerToolbar({
@@ -36,7 +38,9 @@ export function FileExplorerToolbar({
   onCollapseAll,
   showGitIgnoredFilesToggle,
   showGitIgnoredFiles,
-  onToggleGitIgnoredFiles
+  onToggleGitIgnoredFiles,
+  showDotfiles,
+  onToggleDotfiles
 }: FileExplorerToolbarProps): React.JSX.Element {
   return (
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
@@ -106,6 +110,9 @@ export function FileExplorerToolbar({
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end" className="min-w-[12rem]">
+          <DropdownMenuCheckboxItem checked={showDotfiles} onCheckedChange={onToggleDotfiles}>
+            Show Dotfiles
+          </DropdownMenuCheckboxItem>
           {showGitIgnoredFilesToggle ? (
             <DropdownMenuCheckboxItem
               checked={showGitIgnoredFiles}
@@ -114,7 +121,7 @@ export function FileExplorerToolbar({
               Show Git Ignored Files
             </DropdownMenuCheckboxItem>
           ) : null}
-          {showGitIgnoredFilesToggle ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuSeparator />
           <WorktreeOpenInMenuItems
             worktreePath={worktreePath}
             connectionId={connectionId}

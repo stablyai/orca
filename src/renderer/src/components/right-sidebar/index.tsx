@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Plug, Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import type { ActivityBarPosition } from '@/store/slices/editor'
@@ -29,6 +29,11 @@ import {
 import { getActiveChecksStatus } from './active-checks-status'
 import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-visibility'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import {
+  RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
+  RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME,
+  RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME
+} from './right-sidebar-titlebar-drag-regions'
 
 const MIN_WIDTH = 220
 // Why: long file names (e.g. construction drawing sheets, multi-part document
@@ -49,14 +54,18 @@ function RightSidebarInner(): React.JSX.Element {
   const sourceControlShortcut = useShortcutLabel('sidebar.sourceControl.toggle')
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
-  const activeWorktree = useActiveWorktree()
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const activeWorktree = useAppStore((s) =>
+    rightSidebarOpen && s.activeWorktreeId
+      ? (s.getKnownWorktreeById(s.activeWorktreeId) ?? null)
+      : null
+  )
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const setRightSidebarWidth = useAppStore((s) => s.setRightSidebarWidth)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const setRightSidebarTab = useAppStore((s) => s.setRightSidebarTab)
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
-  const checksStatus = useAppStore(getActiveChecksStatus)
+  const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
@@ -129,7 +138,7 @@ function RightSidebarInner(): React.JSX.Element {
   })
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
 
-  const panelContent = (
+  const panelContent = rightSidebarOpen ? (
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
       {/* Why: sidebar panels no longer use key={activeWorktreeId} because
           the full unmount/remount cycle on every worktree switch triggered
@@ -155,7 +164,7 @@ function RightSidebarInner(): React.JSX.Element {
         )}
       </div>
     </div>
-  )
+  ) : null
 
   const topActivityLayout = useMemo(
     () => getTopActivityBarLayout(visibleItems, topActivityStripWidth, effectiveTab),
@@ -220,41 +229,58 @@ function RightSidebarInner(): React.JSX.Element {
                   <ContextMenuTrigger asChild>
                     <div
                       ref={topActivityStripRef}
-                      className="right-sidebar-activity-strip flex min-w-0 flex-1 items-center overflow-hidden pl-2 right-sidebar-header-no-drag"
+                      className={RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME}
                     >
-                      {/* Why: the top strip shares a narrow titlebar with the close
-                          button and Windows controls. Overflow goes behind More
-                          instead of creating a horizontally scrollable toolbar. */}
-                      <div className="flex min-w-0 shrink">
-                        {topActivityLayout.visibleItems.map((item) => (
-                          <ActivityBarButton
-                            key={item.id}
-                            item={item}
-                            active={effectiveTab === item.id}
-                            onClick={() => setRightSidebarTab(item.id)}
-                            layout="top"
-                            statusIndicator={item.id === 'checks' ? checksStatus : null}
+                      <div
+                        className={cn(
+                          'flex min-w-0 shrink',
+                          RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
+                        )}
+                      >
+                        {/* Why: the top strip shares a narrow titlebar with the close
+                            button and Windows controls. Overflow goes behind More
+                            instead of creating a horizontally scrollable toolbar. */}
+                        <div className="flex min-w-0 shrink">
+                          {topActivityLayout.visibleItems.map((item) => (
+                            <ActivityBarButton
+                              key={item.id}
+                              item={item}
+                              active={effectiveTab === item.id}
+                              onClick={() => setRightSidebarTab(item.id)}
+                              layout="top"
+                              statusIndicator={item.id === 'checks' ? checksStatus : null}
+                            />
+                          ))}
+                        </div>
+                        {topActivityLayout.overflowItems.length > 0 && (
+                          <TopActivityOverflowMenu
+                            items={topActivityLayout.overflowItems}
+                            activeTab={effectiveTab}
+                            onSelect={setRightSidebarTab}
+                            checksStatus={checksStatus}
                           />
-                        ))}
+                        )}
                       </div>
-                      {topActivityLayout.overflowItems.length > 0 && (
-                        <TopActivityOverflowMenu
-                          items={topActivityLayout.overflowItems}
-                          activeTab={effectiveTab}
-                          onSelect={setRightSidebarTab}
-                          checksStatus={checksStatus}
-                        />
-                      )}
                     </div>
                   </ContextMenuTrigger>
-                  <div className="flex shrink-0 items-center pr-1 right-sidebar-header-no-drag">
+                  <div
+                    className={cn(
+                      'flex shrink-0 items-center pr-1',
+                      RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
+                    )}
+                  >
                     {closeButton}
                   </div>
                 </TooltipProvider>
               )}
               {isWindows && (
                 <TooltipProvider delayDuration={400}>
-                  <div className="ml-auto flex shrink-0 items-center pr-1 right-sidebar-header-no-drag">
+                  <div
+                    className={cn(
+                      'ml-auto flex shrink-0 items-center pr-1',
+                      RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
+                    )}
+                  >
                     {closeButton}
                   </div>
                 </TooltipProvider>
@@ -265,7 +291,7 @@ function RightSidebarInner(): React.JSX.Element {
                 <ContextMenuTrigger asChild>
                   <div
                     ref={topActivityStripRef}
-                    className="right-sidebar-activity-strip flex h-10 min-h-10 items-center border-b border-border px-2 right-sidebar-header-no-drag"
+                    className={RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME}
                   >
                     {/* Why: Windows has fixed native-style controls in the titlebar
                         area; keep sidebar navigation in the sidebar body so the

@@ -4,7 +4,7 @@ import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 // Resolution is done at send-time: one message record per recipient, same thread_id,
 // so each recipient gets their own read-tracking (Section 4.5).
 
-const AGENT_NAME_GROUPS = ['claude', 'codex', 'opencode', 'gemini'] as const
+const AGENT_NAME_GROUPS = ['claude', 'openclaude', 'codex', 'opencode', 'gemini'] as const
 
 export type GroupAddress =
   | '@all'
@@ -14,6 +14,15 @@ export type GroupAddress =
 
 export function isGroupAddress(to: string): boolean {
   return to.startsWith('@')
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function titleMatchesAgentNameGroup(title: string, agentName: string): boolean {
+  const tokenRe = new RegExp(`(?<![\\w./\\\\-])${escapeRegExp(agentName)}(?![\\w./\\\\-])`, 'i')
+  return tokenRe.test(title)
 }
 
 export function resolveGroupAddress(
@@ -59,8 +68,7 @@ export function resolveGroupAddress(
         if (t.handle === senderHandle) {
           return false
         }
-        const title = (t.title ?? '').toLowerCase()
-        return title.includes(agentName)
+        return titleMatchesAgentNameGroup(t.title ?? '', agentName)
       })
       .map((t) => t.handle)
   }

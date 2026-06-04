@@ -16,7 +16,7 @@
  *   await term.connect()
  *   const ptyId = await term.discoverActivePtyId()
  *   await term.send(ptyId, 'echo hello\r')
- *   const screenshot = await term.screenshot('/tmp/test.png')
+ *   const screenshot = await term.screenshot()
  *   await term.waitForOutput(ptyId, 'hello')
  *
  * Or run directly:
@@ -24,8 +24,19 @@
  */
 
 import { execFileSync } from 'child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const AGENT_BROWSER = 'agent-browser'
+const sleepBuffer = new Int32Array(new SharedArrayBuffer(4))
+
+function sleep(ms) {
+  Atomics.wait(sleepBuffer, 0, 0, ms)
+}
+
+function tempScreenshotPath(filename) {
+  return join(tmpdir(), filename)
+}
 
 /** Thin wrapper around `agent-browser --cdp <port> <subcommand>`. */
 function ab(port, args) {
@@ -77,7 +88,7 @@ export class OrcaTerminal {
     evalInRenderer(this.port, js)
 
     // Wait for output to render
-    execFileSync('sleep', ['1.5'])
+    sleep(1_500)
 
     // Read the visible xterm buffer to find which marker appeared
     const bufferJs = `
@@ -129,14 +140,11 @@ export class OrcaTerminal {
    * @param {number} maxId — highest PTY ID to probe
    * @param {string} screenshotPath — where to save the screenshot
    */
-  probePtyIdWithScreenshot(maxId = 10, screenshotPath = '/tmp/orca-pty-probe.png') {
+  probePtyIdWithScreenshot(maxId = 10, screenshotPath = tempScreenshotPath('orca-pty-probe.png')) {
     for (let i = 1; i <= maxId; i++) {
-      evalInRenderer(
-        this.port,
-        `window.api.pty.write('${i}', '\\x03\\x15echo PTY_ID_${i}\\r')`
-      )
+      evalInRenderer(this.port, `window.api.pty.write('${i}', '\\x03\\x15echo PTY_ID_${i}\\r')`)
     }
-    execFileSync('sleep', ['2'])
+    sleep(2_000)
     this.screenshot(screenshotPath)
     return screenshotPath
   }
@@ -179,7 +187,7 @@ export class OrcaTerminal {
    * @param {string} path — output file path
    * @returns {string} the screenshot path
    */
-  screenshot(path = '/tmp/orca-terminal.png') {
+  screenshot(path = tempScreenshotPath('orca-terminal.png')) {
     ab(this.port, ['screenshot', path])
     return path
   }
@@ -190,7 +198,7 @@ export class OrcaTerminal {
    */
   newTerminal() {
     ab(this.port, ['click', '@e7']) // "New terminal (Cmd+T)" button
-    execFileSync('sleep', ['2'])
+    sleep(2_000)
   }
 
   /**
@@ -201,9 +209,9 @@ export class OrcaTerminal {
    */
   readLang(ptyId) {
     this.exec(ptyId, 'echo __LANG__=$LANG')
-    execFileSync('sleep', ['1'])
+    sleep(1_000)
     // Screenshot and return for inspection
-    return this.screenshot('/tmp/orca-lang-check.png')
+    return this.screenshot(tempScreenshotPath('orca-lang-check.png'))
   }
 }
 

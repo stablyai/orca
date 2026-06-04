@@ -15,6 +15,7 @@ type WorktreeSymlinksSectionProps = {
 }
 
 type DirEntry = { name: string; isDirectory: boolean }
+type DirectorySuggestionState = { requestKey: string; entries: DirEntry[] }
 
 const MAX_SUGGESTIONS = 50
 
@@ -24,15 +25,21 @@ export function WorktreeSymlinksSection({
 }: WorktreeSymlinksSectionProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [entries, setEntries] = useState<DirEntry[]>([])
   const activeRuntimeEnvironmentId = useAppStore((s) => s.settings?.activeRuntimeEnvironmentId)
 
   const paths = repo.symlinkPaths ?? []
   const queryTrimmed = query.trim().replace(/^\/+/, '')
+  const useLocalDirectorySuggestions = !activeRuntimeEnvironmentId?.trim()
+  const directorySuggestionKey = `${repo.path}\n${repo.connectionId ?? ''}`
+  const [directorySuggestions, setDirectorySuggestions] = useState<DirectorySuggestionState>(
+    () => ({
+      requestKey: directorySuggestionKey,
+      entries: []
+    })
+  )
 
   useEffect(() => {
-    if (activeRuntimeEnvironmentId?.trim()) {
-      setEntries([])
+    if (!useLocalDirectorySuggestions) {
       return
     }
     let cancelled = false
@@ -42,7 +49,10 @@ export function WorktreeSymlinksSection({
         if (cancelled) {
           return
         }
-        setEntries(list.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory })))
+        setDirectorySuggestions({
+          requestKey: directorySuggestionKey,
+          entries: list.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }))
+        })
       })
       .catch(() => {
         // Non-fatal: without entries the combobox still works as a free-text
@@ -51,13 +61,19 @@ export function WorktreeSymlinksSection({
     return () => {
       cancelled = true
     }
-  }, [activeRuntimeEnvironmentId, repo.path, repo.connectionId])
+  }, [useLocalDirectorySuggestions, repo.path, repo.connectionId, directorySuggestionKey])
 
   const filtered = useMemo(() => {
     const q = queryTrimmed.toLowerCase()
-    const base = q ? entries.filter((e) => e.name.toLowerCase().includes(q)) : entries
+    const suggestionEntries =
+      useLocalDirectorySuggestions && directorySuggestions.requestKey === directorySuggestionKey
+        ? directorySuggestions.entries
+        : []
+    const base = q
+      ? suggestionEntries.filter((e) => e.name.toLowerCase().includes(q))
+      : suggestionEntries
     return base.slice(0, MAX_SUGGESTIONS)
-  }, [queryTrimmed, entries])
+  }, [queryTrimmed, directorySuggestionKey, directorySuggestions, useLocalDirectorySuggestions])
 
   const hasExactMatch = filtered.some((e) => e.name === queryTrimmed)
   const showLiteralItem = queryTrimmed.length > 0 && !hasExactMatch && !paths.includes(queryTrimmed)

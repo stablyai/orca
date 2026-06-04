@@ -104,6 +104,7 @@ Update snapshots with `vitest -u`.
 ## When to use this framework
 
 Use this framework for **new shell-ready tests** where:
+
 - You want the test to be easy to replicate manually
 - The setup is shell-script-based (file creation, env vars)
 - You want a declarative snapshot-driven style

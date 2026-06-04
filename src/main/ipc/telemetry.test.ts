@@ -156,6 +156,14 @@ describe('telemetry IPC handlers', () => {
     })
   })
 
+  it('drops main-owned events from renderer telemetry IPC', () => {
+    registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
+    const handler = handlers.get('telemetry:track')!
+    handler({}, 'app_starred_orca', { source: 'settings' })
+    expect(trackMock).not.toHaveBeenCalled()
+    expect(getCohortAtEmitMock).not.toHaveBeenCalled()
+  })
+
   it('injects cohort for setup script prompt events', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 3 })

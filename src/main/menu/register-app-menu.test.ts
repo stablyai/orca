@@ -27,6 +27,7 @@ function buildMenuOptions() {
   return {
     onCheckForUpdates: vi.fn(),
     onOpenSettings: vi.fn(),
+    onOpenSetupGuide: vi.fn(),
     onOpenFeatureTour: vi.fn(),
     onOpenCrashReport: vi.fn(),
     onBeforeReload: vi.fn(),
@@ -197,7 +198,12 @@ describe('registerAppMenu', () => {
 
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
     expect(helpLabels).toEqual(
-      expect.arrayContaining(['Report Crash...', 'Explore Orca', 'Check for Updates...'])
+      expect.arrayContaining([
+        'Report Crash...',
+        'Getting Started with Orca',
+        'Explore Orca',
+        'Check for Updates...'
+      ])
     )
   })
 
@@ -216,7 +222,28 @@ describe('registerAppMenu', () => {
     expect(fileLabels).not.toContain(`Settings\t${isMac ? '⌘,' : 'Ctrl+,'}`)
     expect(fileLabels).not.toContain('Exit')
     const helpLabels = getSubmenu(template, 'Help').map((item) => item.label)
-    expect(helpLabels).toEqual(['Report Crash...', undefined, 'Explore Orca'])
+    expect(helpLabels).toEqual([
+      'Report Crash...',
+      undefined,
+      'Explore Orca',
+      'Getting Started with Orca'
+    ])
+  })
+
+  it('routes Getting Started with Orca through its callback', () => {
+    const options = buildMenuOptions()
+    registerAppMenu(options)
+
+    const setupGuideItem = getSubmenu(getTemplate(), 'Help').find(
+      (entry) => entry.label === 'Getting Started with Orca'
+    )
+    expect(setupGuideItem?.accelerator).toBeUndefined()
+
+    const targetWindow = {} as Electron.BaseWindow
+    setupGuideItem?.click?.({} as never, targetWindow, {} as Electron.KeyboardEvent)
+
+    expect(options.onOpenSetupGuide).toHaveBeenCalledTimes(1)
+    expect(options.onOpenSetupGuide).toHaveBeenCalledWith(targetWindow)
   })
 
   it('routes Feature tour through its callback', () => {

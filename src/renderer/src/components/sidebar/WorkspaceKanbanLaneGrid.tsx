@@ -12,7 +12,6 @@ type WorkspaceKanbanLaneGridProps = {
   worktreesByStatus: ReadonlyMap<WorkspaceStatus, readonly Worktree[]>
   repoMap: Map<string, Repo>
   activeWorktreeId: string | null
-  compact: boolean
   columnWidth: number
   isResizingColumn: boolean
   dragOverStatus: WorkspaceStatus | null
@@ -38,7 +37,6 @@ export default function WorkspaceKanbanLaneGrid({
   worktreesByStatus,
   repoMap,
   activeWorktreeId,
-  compact,
   columnWidth,
   isResizingColumn,
   dragOverStatus,
@@ -58,6 +56,7 @@ export default function WorkspaceKanbanLaneGrid({
   return (
     <div
       className="grid h-full min-h-0 min-w-full grid-rows-[minmax(0,1fr)] gap-3"
+      data-contextual-tour-target="workspace-board-lanes"
       style={{
         gridTemplateColumns: `repeat(${statuses.length}, minmax(${columnWidth}px, ${columnWidth}px))`
       }}
@@ -69,7 +68,6 @@ export default function WorkspaceKanbanLaneGrid({
           items={worktreesByStatus.get(status.id) ?? []}
           repoMap={repoMap}
           activeWorktreeId={activeWorktreeId}
-          compact={compact}
           columnWidth={columnWidth}
           isResizingColumn={isResizingColumn}
           isDragTarget={dragOverStatus === status.id}

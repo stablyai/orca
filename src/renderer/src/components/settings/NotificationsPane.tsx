@@ -1,5 +1,4 @@
-/* eslint-disable max-lines -- Why: notification settings keeps delivery toggles, system test feedback, and sound selection on one settings merge path. */
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
 import { Button } from '../ui/button'
@@ -16,7 +15,9 @@ import {
 } from '../ui/select'
 import { BellRing, Bot, FileAudio, Siren, Upload, Volume2 } from 'lucide-react'
 import { getNotificationSoundOptions } from '@/components/notification-sound-options'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
+import { NotificationSettingToggle } from './NotificationSettingToggle'
 export { NOTIFICATIONS_PANE_SEARCH_ENTRIES } from './notifications-search'
 
 type NotificationsPaneProps = {
@@ -39,6 +40,29 @@ function isNotificationSoundId(
 type SystemNotificationSettingsCopy = {
   failureTitle: string
   failureDescription: string
+}
+
+type NotificationVolumeDraftState = {
+  sourceVolume: number
+  draft: number
+}
+
+export function createNotificationVolumeDraftState(
+  sourceVolume: number
+): NotificationVolumeDraftState {
+  return {
+    sourceVolume,
+    draft: sourceVolume
+  }
+}
+
+export function resolveNotificationVolumeDraftState(
+  state: NotificationVolumeDraftState,
+  sourceVolume: number
+): NotificationVolumeDraftState {
+  return state.sourceVolume === sourceVolume
+    ? state
+    : createNotificationVolumeDraftState(sourceVolume)
 }
 
 function getSystemNotificationSettingsCopy(
@@ -142,6 +166,7 @@ export function NotificationsPane({
 }: NotificationsPaneProps): React.JSX.Element {
   const notificationSettings = settings.notifications
   const notificationSettingsRef = useRef(notificationSettings)
+  const mountedRef = useMountedRef()
   const [isPickingSound, setIsPickingSound] = useState(false)
 
   const updateNotificationSettings = async (
@@ -159,14 +184,31 @@ export function NotificationsPane({
     })
   }
 
-  // Why: keep dragging local and persist only on Radix's commit event. That
-  // avoids IPC on every tick without a debounce timer that can race settings updates.
-  const [volumeDraft, setVolumeDraft] = useState(notificationSettings.customSoundVolume)
-
   useEffect(() => {
     notificationSettingsRef.current = notificationSettings
-    setVolumeDraft(notificationSettings.customSoundVolume)
   }, [notificationSettings])
+
+  // Why: keep dragging local and persist only on Radix's commit event. That
+  // avoids IPC on every tick without a debounce timer that can race settings updates.
+  const [volumeDraftState, setVolumeDraftState] = useState(() =>
+    createNotificationVolumeDraftState(notificationSettings.customSoundVolume)
+  )
+  const resolvedVolumeDraftState = resolveNotificationVolumeDraftState(
+    volumeDraftState,
+    notificationSettings.customSoundVolume
+  )
+  if (resolvedVolumeDraftState !== volumeDraftState) {
+    // Why: external settings writes should update the slider before paint, but
+    // unrelated notification toggles should not restart an in-progress drag.
+    setVolumeDraftState(resolvedVolumeDraftState)
+  }
+  const volumeDraft = resolvedVolumeDraftState.draft
+  const setVolumeDraft = (value: number): void => {
+    setVolumeDraftState((current) => ({
+      ...resolveNotificationVolumeDraftState(current, notificationSettings.customSoundVolume),
+      draft: value
+    }))
+  }
 
   const handleVolumeCommit = (value: number): void => {
     if (notificationSettingsRef.current.customSoundVolume !== value) {
@@ -203,7 +245,9 @@ export function NotificationsPane({
         await previewSound('custom')
       }
     } finally {
-      setIsPickingSound(false)
+      if (mountedRef.current) {
+        setIsPickingSound(false)
+      }
     }
   }
 
@@ -221,7 +265,7 @@ export function NotificationsPane({
 
   return (
     <div className="space-y-1">
-      <SettingToggle
+      <NotificationSettingToggle
         label="Enable Notifications"
         description="Native system notifications for background events."
         checked={notificationSettings.enabled}
@@ -235,7 +279,7 @@ export function NotificationsPane({
 
       <Separator />
 
-      <SettingToggle
+      <NotificationSettingToggle
         icon={<Bot className="size-4" />}
         label="Agent Task Complete"
         description="A coding agent finishes and becomes idle."
@@ -248,7 +292,7 @@ export function NotificationsPane({
         }
       />
 
-      <SettingToggle
+      <NotificationSettingToggle
         icon={<Siren className="size-4" />}
         label="Terminal Bell"
         description="A background terminal emits a bell character."
@@ -331,7 +375,7 @@ export function NotificationsPane({
 
       <Separator />
 
-      <SettingToggle
+      <NotificationSettingToggle
         label="Suppress While Focused"
         description="Skip notifications when the triggering worktree is already visible."
         checked={notificationSettings.suppressWhenFocused}
@@ -355,52 +399,6 @@ export function NotificationsPane({
           Send Test Notification
         </Button>
       </div>
-    </div>
-  )
-}
-
-export type SettingToggleProps = {
-  label: string
-  description: string
-  checked: boolean
-  onToggle: () => void
-  disabled?: boolean
-  icon?: ReactNode
-}
-
-export function SettingToggle({
-  label,
-  description,
-  checked,
-  onToggle,
-  disabled = false,
-  icon
-}: SettingToggleProps): React.JSX.Element {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div className="space-y-0.5">
-        <div className="flex items-center gap-2">
-          {icon}
-          <Label>{label}</Label>
-        </div>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-      <button
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        disabled={disabled}
-        onClick={onToggle}
-        className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
-          checked ? 'bg-foreground' : 'bg-muted-foreground/30'
-        } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
-      >
-        <span
-          className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-            checked ? 'translate-x-4' : 'translate-x-0.5'
-          }`}
-        />
-      </button>
     </div>
   )
 }

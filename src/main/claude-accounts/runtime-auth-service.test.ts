@@ -1132,6 +1132,48 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
   })
 
+  it('reads back identity-less refreshed credentials when runtime oauth metadata matches', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const runtimeConfigPath = join(testState.fakeHomeDir, '.claude.json')
+    const originalCredentials = createClaudeCredentialsJson(
+      'user@example.com',
+      'original',
+      'org-a',
+      1_000
+    )
+    const refreshedCredentials = createClaudeCredentialsWithoutEmail('refreshed', null, {
+      expiresAt: 2_000,
+      refreshToken: 'rotated-refresh-token'
+    })
+    writeFileSync(runtimeConfigPath, '{}\n', 'utf-8')
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      originalCredentials,
+      '{"accountUuid":"account-uuid-1","emailAddress":"user@example.com","organizationUuid":"org-a"}\n'
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, {
+          email: 'user@example.com',
+          organizationUuid: 'org-a'
+        })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    writeFileSync(runtimeCredentialsPath, refreshedCredentials, 'utf-8')
+    await service.syncForCurrentSelection()
+
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(refreshedCredentials)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
+  })
+
   it('rules out other identity-less accounts with different refresh tokens', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const account1RefreshToken = 'account-1-refresh-token'
@@ -3132,7 +3174,10 @@ describe('ClaudeRuntimeAuthService', () => {
     const service = new ClaudeRuntimeAuthService(store as never)
     const preparation = await service.prepareForClaudeLaunch()
 
-    expect(store.updateSettings).toHaveBeenCalledWith({ activeClaudeManagedAccountId: null })
+    expect(store.updateSettings).toHaveBeenCalledWith({
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: {} }
+    })
     expect(preparation.configDir).toBe(join(testState.fakeHomeDir, '.claude'))
     expect(preparation.stripAuthEnv).toBe(false)
     expect(preparation.provenance).toBe('system')
@@ -3335,6 +3380,99 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readRuntimeOauthAccountForTest()).toEqual({ accountUuid: 'missing-account' })
     expect(testState.scopedKeychainCredentials).toBe(staleManagedCredentials)
     expect(testState.legacyKeychainCredentials).toBe(staleManagedCredentials)
+  })
+
+  it('clears a selected WSL managed account when its credentials are missing', async () => {
+    const managedAuthPath = join(testState.userDataDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(managedAuthPath, { recursive: true })
+    writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, {
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/account-1/auth'
+        })
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'account-1' } }
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith({
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
+    })
+    expect(preparation.runtime).toBe('wsl')
+    expect(preparation.provenance).toBe('wsl:Ubuntu:system')
+    expect(preparation.stripAuthEnv).toBe(true)
+  })
+
+  it('uses the default distro selection for WSL-default Claude preparation', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => join(testState.userDataDir, 'wsl-home')
+    }))
+    const ubuntuAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'ubuntu-account',
+      createClaudeCredentialsJson('ubuntu@example.com', 'ubuntu-token')
+    )
+    const debianAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'debian-account',
+      createClaudeCredentialsJson('debian@example.com', 'debian-token')
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('ubuntu-account', ubuntuAuthPath, {
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth'
+        }),
+        createClaudeAccount('debian-account', debianAuthPath, {
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Debian',
+          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/debian/auth'
+        })
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: {
+        host: null,
+        wsl: { Ubuntu: 'ubuntu-account', Debian: 'debian-account' }
+      }
+    })
+    const store = createStore(settings)
+
+    try {
+      const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+      const service = new ClaudeRuntimeAuthService(store as never)
+      const preparation = await service.prepareForClaudeLaunch({
+        runtime: 'wsl',
+        wslDistro: null
+      })
+
+      expect(preparation).toMatchObject({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu',
+        wslLinuxConfigDir: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth',
+        provenance: 'managed:ubuntu-account:wsl:Ubuntu',
+        stripAuthEnv: true
+      })
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+    }
   })
 
   it('does not clobber fresh Claude credentials after clearLastWrittenCredentialsJson', async () => {

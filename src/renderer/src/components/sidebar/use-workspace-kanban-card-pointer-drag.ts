@@ -5,7 +5,9 @@ import {
   CARD_SELECTOR,
   getCardDropTarget,
   removeCardDropIndicator,
-  updateCardDropIndicator
+  resolveWorkspaceKanbanCardDropCommitTarget,
+  updateCardDropIndicator,
+  type WorkspaceKanbanCardTrackedDropTarget
 } from './workspace-kanban-card-pointer-drag-dom'
 import {
   createDragPreview,
@@ -14,6 +16,12 @@ import {
   setDraggedCardsDragging,
   updateDragPreviewPosition
 } from './workspace-kanban-card-drag-preview-dom'
+import {
+  shouldIgnoreWorkspaceKanbanCardPointerDown,
+  shouldStartWorkspaceKanbanCardPointerDrag
+} from './workspace-kanban-card-pointer-drag-start'
+
+export { shouldStartWorkspaceKanbanCardPointerDrag } from './workspace-kanban-card-pointer-drag-start'
 
 const POINTER_DRAG_THRESHOLD = 5
 
@@ -31,6 +39,7 @@ type DragState = {
   previewOffsetY: number
   started: boolean
   frameId: number | null
+  latestDropTarget: WorkspaceKanbanCardTrackedDropTarget | null
 }
 
 type UseWorkspaceKanbanCardPointerDragParams = {
@@ -47,36 +56,6 @@ type UseWorkspaceKanbanCardPointerDragParams = {
   onPinWorktrees: (worktreeIds: readonly string[]) => void
   onDragTargetChange: (status: WorkspaceStatus | null) => void
   onPinDragTargetChange: (isOver: boolean) => void
-}
-
-export function shouldStartWorkspaceKanbanCardPointerDrag(
-  event: Pick<PointerEvent, 'button' | 'pointerType' | 'shiftKey' | 'metaKey' | 'ctrlKey'>
-): boolean {
-  if (event.button !== 0 || event.pointerType === 'touch') {
-    return false
-  }
-  // Why: modifier gestures are reserved for selection/context-menu intent.
-  // Letting tiny pointer drift start a drag makes Cmd/Ctrl/Shift selection flaky.
-  return !event.shiftKey && !event.metaKey && !event.ctrlKey
-}
-
-function shouldIgnorePointerDown(target: EventTarget | null, card: HTMLElement): boolean {
-  if (!(target instanceof Element)) {
-    return false
-  }
-  const interactive = target.closest(
-    [
-      'a',
-      'input',
-      'button',
-      'select',
-      'textarea',
-      '[contenteditable="true"]',
-      '[data-workspace-board-column-resize-handle]',
-      '[role="menuitem"]'
-    ].join(',')
-  )
-  return interactive !== null && interactive !== card
 }
 
 export function useWorkspaceKanbanCardPointerDrag({
@@ -104,15 +83,15 @@ export function useWorkspaceKanbanCardPointerDrag({
   const dragTargetChangeRef = useRef(onDragTargetChange)
   const pinDragTargetChangeRef = useRef(onPinDragTargetChange)
 
-  useEffect(() => {
-    selectedWorktreeIdsRef.current = selectedWorktreeIds
-    selectedWorktreesRef.current = selectedWorktrees
-    dropWorktreesInStatusRef.current = onDropWorktreesInStatus
-    shouldShowDropIndicatorRef.current = onShouldShowDropIndicator
-    pinWorktreesRef.current = onPinWorktrees
-    dragTargetChangeRef.current = onDragTargetChange
-    pinDragTargetChangeRef.current = onPinDragTargetChange
-  })
+  // Why: document-level pointer handlers stay stable during drags, but their
+  // selection/drop refs must reflect the latest board state before events run.
+  selectedWorktreeIdsRef.current = selectedWorktreeIds
+  selectedWorktreesRef.current = selectedWorktrees
+  dropWorktreesInStatusRef.current = onDropWorktreesInStatus
+  shouldShowDropIndicatorRef.current = onShouldShowDropIndicator
+  pinWorktreesRef.current = onPinWorktrees
+  dragTargetChangeRef.current = onDragTargetChange
+  pinDragTargetChangeRef.current = onPinDragTargetChange
 
   const clearDragTarget = useCallback(() => {
     dragTargetChangeRef.current(null)
@@ -125,6 +104,15 @@ export function useWorkspaceKanbanCardPointerDrag({
       if (!state) {
         return
       }
+      const commitTarget =
+        commit && state.started && boardRef.current
+          ? resolveWorkspaceKanbanCardDropCommitTarget({
+              currentTarget: getCardDropTarget(boardRef.current, state.currentX, state.currentY),
+              latestTrackedTarget: state.latestDropTarget,
+              x: state.currentX,
+              y: state.currentY
+            })
+          : null
       dragRef.current = null
       if (state.frameId !== null) {
         window.cancelAnimationFrame(state.frameId)
@@ -141,22 +129,17 @@ export function useWorkspaceKanbanCardPointerDrag({
 
       isPointerDragActiveRef.current = false
       suppressClickUntilRef.current = performance.now() + 250
-      if (!commit) {
+      if (!commit || !commitTarget) {
         return
       }
 
-      const board = boardRef.current
-      if (!board) {
-        return
-      }
-      const dropTarget = getCardDropTarget(board, state.currentX, state.currentY)
-      if (dropTarget.isPinDrop) {
+      if (commitTarget.isPinDrop) {
         pinWorktreesRef.current(state.worktreeIds)
-      } else if (dropTarget.status) {
+      } else if (commitTarget.status) {
         dropWorktreesInStatusRef.current({
           worktreeIds: state.worktreeIds,
-          status: dropTarget.status,
-          dropIndex: dropTarget.dropIndex
+          status: commitTarget.status,
+          dropIndex: commitTarget.dropIndex
         })
       }
     },
@@ -180,6 +163,11 @@ export function useWorkspaceKanbanCardPointerDrag({
         return
       }
       const dropTarget = getCardDropTarget(board, state.currentX, state.currentY)
+      state.latestDropTarget = {
+        target: dropTarget,
+        x: state.currentX,
+        y: state.currentY
+      }
       pinDragTargetChangeRef.current(dropTarget.isPinDrop)
       dragTargetChangeRef.current(dropTarget.status)
       if (
@@ -292,7 +280,12 @@ export function useWorkspaceKanbanCardPointerDrag({
       const card = target.closest<HTMLElement>(CARD_SELECTOR)
       const worktreeId = card?.dataset.workspaceBoardCardId
       const board = boardRef.current
-      if (!card || !worktreeId || !board?.contains(card) || shouldIgnorePointerDown(target, card)) {
+      if (
+        !card ||
+        !worktreeId ||
+        !board?.contains(card) ||
+        shouldIgnoreWorkspaceKanbanCardPointerDown(target, card)
+      ) {
         return
       }
 
@@ -315,7 +308,8 @@ export function useWorkspaceKanbanCardPointerDrag({
         previewOffsetX: 0,
         previewOffsetY: 0,
         started: false,
-        frameId: null
+        frameId: null,
+        latestDropTarget: null
       }
     },
     [boardRef, open]

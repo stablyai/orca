@@ -97,6 +97,7 @@ describe('buildGuestOverlayScript', () => {
   it('teardown script cancels pending awaitClick', () => {
     const script = buildGuestOverlayScript('teardown')
     expect(script).toContain('cancelAwait')
+    expect(buildGuestOverlayScript('awaitClick')).toContain('__orcaCancelled')
   })
 
   it('arm script uses full-viewport overlay as click catcher', () => {
@@ -118,6 +119,13 @@ describe('buildGuestOverlayScript', () => {
     const script = buildGuestOverlayScript('arm')
     // The catch block should return '' not the raw URL
     expect(script).toContain("return '';")
+  })
+
+  it('arm script rejects executable and embedded URL schemes', () => {
+    const script = buildGuestOverlayScript('arm')
+
+    expect(script).toContain('SAFE_URL_PROTOCOLS')
+    expect(script).toContain('!SAFE_URL_PROTOCOLS.has(u.protocol)')
   })
 
   it('arm script slices text nodes before normalizing bounded text', () => {

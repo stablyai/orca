@@ -1,6 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core'
 import { isEditableDetailsHtmlBlock, matchDetailsHtmlBlock } from './details-markdown-html'
-import { getMarkdownDocLinkTarget } from './markdown-doc-links'
+import { formatMarkdownDocLinkBody, parseMarkdownDocLink } from './markdown-doc-links'
 
 const INLINE_PLACEHOLDER_PREFIX = '[[ORCA_RAW_HTML_INLINE:'
 const BLOCK_PLACEHOLDER_PREFIX = '[[ORCA_RAW_HTML_BLOCK:'
@@ -203,9 +203,12 @@ export function encodeRawMarkdownHtmlForRichEditor(content: string): string {
       const closingIndex = content.indexOf(']]', index + 2)
       if (closingIndex !== -1) {
         const rawTarget = content.slice(index + 2, closingIndex)
-        const target = getMarkdownDocLinkTarget(rawTarget)
-        if (target) {
-          result += `${DOC_LINK_PLACEHOLDER_PREFIX}${target}${PLACEHOLDER_SUFFIX}`
+        const link = parseMarkdownDocLink(rawTarget)
+        if (link) {
+          result += `${DOC_LINK_PLACEHOLDER_PREFIX}${formatMarkdownDocLinkBody(
+            link.target,
+            link.alias
+          )}${PLACEHOLDER_SUFFIX}`
           index = closingIndex + 2
           continue
         }

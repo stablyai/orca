@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: the script editor, advanced/Command Source disclosure, issue-command override, and YAML state surfaces share tightly coupled state and persistence; splitting them across files would scatter prop drilling. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: repository hook saves and issue-command overrides synchronize debounced persistence state with external repo settings. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type {
   HookCommandSourcePolicy,
@@ -99,16 +100,15 @@ const ENV_VARS: readonly { name: string; description: string }[] = [
   {
     name: '$ORCA_ROOT_PATH',
     description:
-      "The main repo's path on disk - useful for copying files (e.g. .env) into the worktree."
+      'Path to the main repo checkout. Useful for copying shared files, like .env, into a worktree.'
   },
   {
     name: '$ORCA_WORKTREE_PATH',
-    description:
-      "The new worktree's path - where setup commands run and where files should be copied to."
+    description: 'Path to the worktree being created. Setup commands run from this directory.'
   },
   {
     name: '$ORCA_WORKSPACE_NAME',
-    description: 'The workspace (branch) name for this worktree.'
+    description: 'Name of the workspace, usually based on the branch name.'
   }
 ]
 
@@ -338,7 +338,7 @@ function EnvVarChips(): React.JSX.Element {
                   {name}
                 </code>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={6} className="max-w-72">
+              <TooltipContent side="top" sideOffset={6} className="max-w-80 text-left text-wrap">
                 {description}
               </TooltipContent>
             </Tooltip>
@@ -464,15 +464,7 @@ function ScriptEditor({
     }
   }, [value])
 
-  useEffect(() => {
-    // Why: when the repo or its persisted local script changes (e.g. switching repos),
-    // re-evaluate whether the local block should be visible by default.
-    if (value.length > 0) {
-      setShowLocal(true)
-    }
-  }, [value])
-
-  const showLocalEditor = showLocal || !hasShared
+  const showLocalEditor = showLocal || value.length > 0 || !hasShared
   const lineCount = value ? value.split('\n').length : 0
 
   return (
@@ -658,6 +650,17 @@ export function RepositoryHooksSection({
     flushScriptDraft()
   }, [flushScriptDraft])
 
+  // Why: unmount can happen before textareas blur; the root ref preserves the
+  // pending local-command save without paying for a cleanup-only Effect.
+  const flushScriptDraftOnUnmount = useCallback(
+    (node: HTMLElement | null): void => {
+      if (node === null) {
+        flushScriptDraft()
+      }
+    },
+    [flushScriptDraft]
+  )
+
   const updateHookSettingsPolicyDraft = useCallback(
     (updates: HookSettingsPolicyDraft) => {
       persistHookSettings({ ...hookSettingsDraftRef.current, ...updates })
@@ -685,12 +688,6 @@ export function RepositoryHooksSection({
     hookSettingsDraftRef.current = next
     setHookSettingsDraft(next)
   }, [flushScriptDraft, onUpdateHookSettings, repo.id, repo.hookSettings, syncHookSettingsDraft])
-
-  useEffect(() => {
-    return () => {
-      flushScriptDraft()
-    }
-  }, [flushScriptDraft])
 
   useEffect(() => {
     let cancelled = false
@@ -781,7 +778,7 @@ export function RepositoryHooksSection({
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
 
   return (
-    <section className="space-y-6">
+    <section ref={flushScriptDraftOnUnmount} className="space-y-6">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">Worktree Hooks</h2>
         <p className="text-xs text-muted-foreground">

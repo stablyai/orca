@@ -1,10 +1,9 @@
 /* eslint-disable max-lines -- Why: the Linear drawer co-locates read-only preview, edit controls, and comment input so the full issue surface stays in one file. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Linear drawer state hydrates full issue details and comments from provider IPC for the selected issue. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  AlertTriangle,
   ArrowRight,
   ChevronDown,
-  Circle,
   ExternalLink,
   Gauge,
   LoaderCircle,
@@ -37,6 +36,7 @@ import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
+import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import type { LinearIssue, LinearComment } from '../../../shared/types'
 import {
   linearAddIssueComment,
@@ -74,6 +74,10 @@ const LINEAR_ESTIMATE_PRESETS = [1, 2, 3, 5, 8] as const
 
 export function formatLinearEstimateLabel(estimate: number | null | undefined): string {
   return estimate === null || estimate === undefined ? 'Set estimate' : `Estimate ${estimate}`
+}
+
+function formatLinearEstimateInput(estimate: number | null | undefined): string {
+  return estimate === null || estimate === undefined ? '' : String(estimate)
 }
 
 function LinearEditChipAdornment({
@@ -139,7 +143,6 @@ export function LinearIssueEditSection({
 }: EditSectionProps): React.JSX.Element {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [estimatePopoverOpen, setEstimatePopoverOpen] = useState(false)
-  const [estimateInput, setEstimateInput] = useState('')
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const settings = useAppStore((s) => s.settings)
   const { isPending, run } = useImmediateMutation()
@@ -152,19 +155,22 @@ export function LinearIssueEditSection({
     labelIds: localLabelIds,
     labels: localLabels
   } = editState
+  const [estimateInput, setEstimateInput] = useState(() => formatLinearEstimateInput(localEstimate))
 
   const teamId = issue.team?.id || null
   const states = useTeamStates(teamId, settings, issue.workspaceId)
   const labels = useTeamLabels(teamId, settings, issue.workspaceId)
   const members = useTeamMembers(teamId, settings, issue.workspaceId)
 
-  useEffect(() => {
-    if (!estimatePopoverOpen) {
-      setEstimateInput(
-        localEstimate === null || localEstimate === undefined ? '' : String(localEstimate)
-      )
-    }
-  }, [estimatePopoverOpen, localEstimate])
+  const handleEstimatePopoverOpenChange = useCallback(
+    (open: boolean) => {
+      setEstimatePopoverOpen(open)
+      if (open) {
+        setEstimateInput(formatLinearEstimateInput(localEstimate))
+      }
+    },
+    [localEstimate]
+  )
 
   const handleStateChange = useCallback(
     (stateId: string) => {
@@ -434,11 +440,7 @@ export function LinearIssueEditSection({
                   className={propertyRowClass}
                   aria-busy={priorityPending}
                 >
-                  {localPriority === 1 ? (
-                    <AlertTriangle className="size-4 shrink-0 text-destructive" />
-                  ) : (
-                    <Circle className={propertyIconClass} />
-                  )}
+                  <LinearPriorityIcon priority={localPriority} />
                   <span className="min-w-0 flex-1 truncate">
                     {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
                   </span>
@@ -452,10 +454,11 @@ export function LinearIssueEditSection({
                     type="button"
                     onClick={() => handlePriorityChange(String(p))}
                     className={cn(
-                      LINEAR_EDIT_MENU_ITEM_CLASS,
+                      LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
                       localPriority === p && 'bg-accent/50'
                     )}
                   >
+                    <LinearPriorityIcon priority={p} />
                     {PRIORITY_LABELS[p]}
                   </button>
                 ))}
@@ -525,7 +528,7 @@ export function LinearIssueEditSection({
               </PopoverContent>
             </Popover>
 
-            <Popover open={estimatePopoverOpen} onOpenChange={setEstimatePopoverOpen}>
+            <Popover open={estimatePopoverOpen} onOpenChange={handleEstimatePopoverOpenChange}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
@@ -737,6 +740,7 @@ export function LinearIssueEditSection({
             className={LINEAR_EDIT_CHIP_CLASS}
             aria-busy={priorityPending}
           >
+            <LinearPriorityIcon priority={localPriority} />
             <span className="truncate">
               {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
             </span>
@@ -749,8 +753,12 @@ export function LinearIssueEditSection({
               key={p}
               type="button"
               onClick={() => handlePriorityChange(String(p))}
-              className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, localPriority === p && 'bg-accent/50')}
+              className={cn(
+                LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
+                localPriority === p && 'bg-accent/50'
+              )}
             >
+              <LinearPriorityIcon priority={p} />
               {PRIORITY_LABELS[p]}
             </button>
           ))}
@@ -758,7 +766,7 @@ export function LinearIssueEditSection({
       </Popover>
 
       {/* Estimate */}
-      <Popover open={estimatePopoverOpen} onOpenChange={setEstimatePopoverOpen}>
+      <Popover open={estimatePopoverOpen} onOpenChange={handleEstimatePopoverOpenChange}>
         <PopoverTrigger asChild>
           <button
             type="button"
@@ -953,6 +961,13 @@ export function LinearIssueCommentFooter({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mountedRef = useRef(true)
+
+  const handleFooterRef = useCallback((node: HTMLDivElement | null): void => {
+    // Why: comment submission can resolve after the footer unmounts; the root
+    // ref keeps that completion from writing stale local state without an Effect.
+    mountedRef.current = node !== null
+  }, [])
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -972,6 +987,9 @@ export function LinearIssueCommentFooter({
     try {
       const result = await linearAddIssueComment(settings, issueId, trimmed, workspaceId)
       const typed = result as { ok: boolean; id?: string; error?: string }
+      if (!mountedRef.current) {
+        return
+      }
       if (typed.ok) {
         setBody('')
         onCommentAdded({
@@ -983,9 +1001,13 @@ export function LinearIssueCommentFooter({
         toast.error(typed.error ?? 'Failed to add comment')
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      if (mountedRef.current) {
+        toast.error(err instanceof Error ? err.message : 'Failed to add comment')
+      }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [body, issueId, onCommentAdded, settings, workspaceId])
 
@@ -1001,7 +1023,10 @@ export function LinearIssueCommentFooter({
 
   if (variant === 'linear-page') {
     return (
-      <div className="rounded-xl border border-border/70 bg-background shadow-xs">
+      <div
+        ref={handleFooterRef}
+        className="rounded-xl border border-border/70 bg-background shadow-xs"
+      >
         <textarea
           ref={textareaRef}
           value={body}
@@ -1036,7 +1061,10 @@ export function LinearIssueCommentFooter({
   }
 
   return (
-    <div className="flex items-end gap-2 border-t border-border/60 bg-background/40 px-4 py-3">
+    <div
+      ref={handleFooterRef}
+      className="flex items-end gap-2 border-t border-border/60 bg-background/40 px-4 py-3"
+    >
       <textarea
         ref={textareaRef}
         value={body}
@@ -1179,7 +1207,9 @@ export default function LinearItemDrawer({
     }
     let cancelled = false
     let count = 0
+    let frameId: number | null = null
     const tick = (): void => {
+      frameId = null
       if (cancelled) {
         return
       }
@@ -1187,12 +1217,15 @@ export default function LinearItemDrawer({
         document.body.style.pointerEvents = ''
       }
       if (count++ < 5) {
-        requestAnimationFrame(tick)
+        frameId = requestAnimationFrame(tick)
       }
     }
     tick()
     return () => {
       cancelled = true
+      if (frameId !== null) {
+        cancelAnimationFrame(frameId)
+      }
     }
   }, [issue?.id])
 

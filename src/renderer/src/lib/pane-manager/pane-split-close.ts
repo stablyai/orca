@@ -12,12 +12,13 @@ import {
   promoteSibling,
   removeDividers,
   safeFit,
+  updateTerminalSplitEdgeState,
   wrapInSplit
 } from './pane-tree-ops'
 import { applyDividerStyles, applyPaneOpacity } from './pane-divider'
 import { disposePane, openTerminal } from './pane-lifecycle'
 import { disposeWebgl } from './pane-webgl-renderer'
-import { scheduleSplitScrollRestore } from './pane-split-scroll'
+import { clearPendingSplitScrollRestore, scheduleSplitScrollRestore } from './pane-split-scroll'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 import { toPublicPane } from './pane-public-view'
 
@@ -64,6 +65,7 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
 
   wrapInSplit(existingContainer, newPane.container, isVertical, divider, args.opts)
+  updateTerminalSplitEdgeState(args.root)
   args.setActivePaneId(newPane.id)
   openSplitPane(args, newPane, args.opts?.cwd)
 
@@ -91,6 +93,7 @@ function prepareMovedPanesForSplit(
   }
 
   return movedPanes.map((pane) => {
+    clearPendingSplitScrollRestore(pane)
     // Why: wrapInSplit reparents moved containers, resetting browser scrollTop.
     const scrollState = captureScrollState(pane.terminal)
     // Why: lock prevents safeFit/fitAllPanes from restoring scroll during the
@@ -196,8 +199,10 @@ function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneIntern
     paneContainer.remove()
     removeDividers(parent)
     promoteSibling(sibling, parent, args.root)
+    updateTerminalSplitEdgeState(args.root)
   } else {
     paneContainer.remove()
+    updateTerminalSplitEdgeState(args.root)
   }
 }
 

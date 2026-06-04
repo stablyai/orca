@@ -19,6 +19,7 @@ function makeRun(overrides: Partial<AutomationRun>): AutomationRun {
     chatSessionId: null,
     terminalSessionId: 'tab-1',
     outputSnapshot: null,
+    precheckResult: null,
     usage: null,
     error: null,
     startedAt: 1,

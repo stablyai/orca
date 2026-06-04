@@ -23,5 +23,6 @@ describe('resolveWindowsShellLaunchTarget', () => {
   it('passes through non-PowerShell shells unchanged', () => {
     expect(resolveWindowsShellLaunchTarget('cmd.exe', 'auto', true)).toBe('cmd.exe')
     expect(resolveWindowsShellLaunchTarget('wsl.exe', 'auto', true)).toBe('wsl.exe')
+    expect(resolveWindowsShellLaunchTarget('git-bash', 'auto', true)).toBe('git-bash')
   })
 })

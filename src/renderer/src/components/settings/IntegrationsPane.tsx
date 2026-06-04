@@ -10,7 +10,6 @@ import {
   GitPullRequestArrow,
   ExternalLink,
   LoaderCircle,
-  Lock,
   Terminal,
   Unlink,
   CheckCircle2,
@@ -18,15 +17,12 @@ import {
 } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
-import { Input } from '../ui/input'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from '../ui/dialog'
+  getPreflightIntegrationStatuses,
+  type PreflightRefreshProvider
+} from './integrations-pane-status'
 export { INTEGRATIONS_PANE_SEARCH_ENTRIES } from './integrations-search'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
@@ -37,82 +33,21 @@ function LinearIcon({ className }: { className?: string }): React.JSX.Element {
   )
 }
 
-type GhStatus = 'checking' | 'connected' | 'not-installed' | 'not-authenticated'
-// Why: parallel to GhStatus — GitLab uses glab and the same three failure
-// modes (probe in-flight / installed-but-unauth / missing entirely).
-type GlabStatus = GhStatus
-type BitbucketStatus = 'checking' | 'connected' | 'not-configured' | 'not-authenticated'
-type AzureDevOpsStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
-type GiteaStatus = 'checking' | 'configured' | 'not-configured' | 'not-authenticated'
-
-type TokenApiPreflightStatus = {
-  configured: boolean
-  authenticated: boolean
-  account: string | null
-  baseUrl: string | null
-  tokenConfigured: boolean
-}
-
-type GiteaPreflightStatus = {
-  configured: boolean
-  authenticated: boolean
-  account: string | null
-  baseUrl: string | null
-  tokenConfigured: boolean
-}
-
-function tokenApiStatusFromPreflight(
-  status: TokenApiPreflightStatus | undefined
-): AzureDevOpsStatus {
-  if (!status?.configured) {
-    return 'not-configured'
-  }
-  if (status.tokenConfigured && !status.baseUrl) {
-    return 'configured'
-  }
-  if (status.tokenConfigured && !status.authenticated) {
-    return 'not-authenticated'
-  }
-  return 'configured'
-}
-
-function giteaStatusFromPreflight(status: GiteaPreflightStatus | undefined): GiteaStatus {
-  if (!status?.configured) {
-    return 'not-configured'
-  }
-  if (status.tokenConfigured && !status.authenticated) {
-    return 'not-authenticated'
-  }
-  return 'configured'
-}
-
 export function IntegrationsPane(): React.JSX.Element {
   const linearStatus = useAppStore((s) => s.linearStatus)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
-  const connectLinear = useAppStore((s) => s.connectLinear)
   const disconnectLinear = useAppStore((s) => s.disconnectLinear)
   const disconnectLinearWorkspace = useAppStore((s) => s.disconnectLinearWorkspace)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const testLinearConnection = useAppStore((s) => s.testLinearConnection)
   const linearWorkspaces = linearStatus.workspaces ?? []
+  const mountedRef = useMountedRef()
 
-  const [ghStatus, setGhStatus] = useState<GhStatus>('checking')
-  const [glabStatus, setGlabStatus] = useState<GlabStatus>('checking')
-  const [bitbucketStatus, setBitbucketStatus] = useState<BitbucketStatus>('checking')
-  const [bitbucketAccount, setBitbucketAccount] = useState<string | null>(null)
-  const [azureDevOpsStatus, setAzureDevOpsStatus] = useState<AzureDevOpsStatus>('checking')
-  const [azureDevOpsAccount, setAzureDevOpsAccount] = useState<string | null>(null)
-  const [azureDevOpsBaseUrl, setAzureDevOpsBaseUrl] = useState<string | null>(null)
-  const [giteaStatus, setGiteaStatus] = useState<GiteaStatus>('checking')
-  const [giteaAccount, setGiteaAccount] = useState<string | null>(null)
-  const [giteaBaseUrl, setGiteaBaseUrl] = useState<string | null>(null)
+  const [refreshingPreflightProviders, setRefreshingPreflightProviders] = useState<
+    Set<PreflightRefreshProvider>
+  >(new Set())
   const [linearDialogOpen, setLinearDialogOpen] = useState(false)
-  const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
-  const [linearConnectState, setLinearConnectState] = useState<'idle' | 'connecting' | 'error'>(
-    'idle'
-  )
-  const [linearConnectError, setLinearConnectError] = useState<string | null>(null)
   const [linearTestingWorkspaceId, setLinearTestingWorkspaceId] = useState<string | null>(null)
   const [linearTestResultByWorkspace, setLinearTestResultByWorkspace] = useState<
     Record<string, { state: 'ok' | 'error'; error?: string }>
@@ -123,71 +58,24 @@ export function IntegrationsPane(): React.JSX.Element {
     void refreshPreflightStatus()
   }, [checkLinearConnection, refreshPreflightStatus])
 
-  useEffect(() => {
-    if (!preflightStatus) {
-      return
-    }
-    if (!preflightStatus.gh.installed) {
-      setGhStatus('not-installed')
-    } else if (!preflightStatus.gh.authenticated) {
-      setGhStatus('not-authenticated')
-    } else {
-      setGhStatus('connected')
-    }
-    const glab = preflightStatus.glab
-    if (!glab || !glab.installed) {
-      setGlabStatus('not-installed')
-    } else if (!glab.authenticated) {
-      setGlabStatus('not-authenticated')
-    } else {
-      setGlabStatus('connected')
-    }
-    const bitbucket = preflightStatus.bitbucket
-    setBitbucketAccount(bitbucket?.account ?? null)
-    if (!bitbucket?.configured) {
-      setBitbucketStatus('not-configured')
-    } else if (!bitbucket.authenticated) {
-      setBitbucketStatus('not-authenticated')
-    } else {
-      setBitbucketStatus('connected')
-    }
-    const azureDevOps = preflightStatus.azureDevOps
-    setAzureDevOpsAccount(azureDevOps?.account ?? null)
-    setAzureDevOpsBaseUrl(azureDevOps?.baseUrl ?? null)
-    setAzureDevOpsStatus(tokenApiStatusFromPreflight(azureDevOps))
-    const gitea = preflightStatus.gitea
-    setGiteaAccount(gitea?.account ?? null)
-    setGiteaBaseUrl(gitea?.baseUrl ?? null)
-    setGiteaStatus(giteaStatusFromPreflight(gitea))
-  }, [preflightStatus])
-
-  const handleLinearConnect = async (): Promise<void> => {
-    if (!linearApiKeyDraft.trim()) {
-      return
-    }
-    setLinearConnectState('connecting')
-    setLinearConnectError(null)
-    try {
-      const result = await connectLinear(linearApiKeyDraft.trim())
-      if (result.ok) {
-        setLinearApiKeyDraft('')
-        setLinearConnectState('idle')
-        setLinearDialogOpen(false)
-        setLinearTestResultByWorkspace({})
-      } else {
-        setLinearConnectState('error')
-        setLinearConnectError(result.error)
-      }
-    } catch (error) {
-      setLinearConnectState('error')
-      setLinearConnectError(error instanceof Error ? error.message : 'Connection failed')
-    }
-  }
+  const {
+    ghStatus,
+    glabStatus,
+    bitbucketStatus,
+    bitbucketAccount,
+    azureDevOpsStatus,
+    azureDevOpsAccount,
+    azureDevOpsBaseUrl,
+    giteaStatus,
+    giteaAccount,
+    giteaBaseUrl
+  } = getPreflightIntegrationStatuses(preflightStatus, refreshingPreflightProviders)
 
   const handleLinearDisconnect = async (workspaceId?: string): Promise<void> => {
     await (workspaceId ? disconnectLinearWorkspace(workspaceId) : disconnectLinear())
-    setLinearConnectState('idle')
-    setLinearConnectError(null)
+    if (!mountedRef.current) {
+      return
+    }
     setLinearTestResultByWorkspace({})
   }
 
@@ -203,6 +91,9 @@ export function IntegrationsPane(): React.JSX.Element {
       return next
     })
     const result = await testLinearConnection(workspaceId)
+    if (!mountedRef.current) {
+      return
+    }
     if (result.ok) {
       setLinearTestResultByWorkspace((prev) => ({
         ...prev,
@@ -217,30 +108,32 @@ export function IntegrationsPane(): React.JSX.Element {
     setLinearTestingWorkspaceId(null)
   }
 
-  const handleRefreshGlab = (): void => {
-    setGlabStatus('checking')
-    void refreshPreflightStatus({ force: true })
+  const refreshPreflightProvider = (provider: PreflightRefreshProvider): void => {
+    setRefreshingPreflightProviders((prev) => new Set(prev).add(provider))
+    void refreshPreflightStatus({ force: true }).finally(() => {
+      if (!mountedRef.current) {
+        return
+      }
+      setRefreshingPreflightProviders((prev) => {
+        if (!prev.has(provider)) {
+          return prev
+        }
+        const next = new Set(prev)
+        next.delete(provider)
+        return next
+      })
+    })
   }
 
-  const handleRefreshGh = (): void => {
-    setGhStatus('checking')
-    void refreshPreflightStatus({ force: true })
-  }
+  const handleRefreshGlab = (): void => refreshPreflightProvider('glab')
 
-  const handleRefreshBitbucket = (): void => {
-    setBitbucketStatus('checking')
-    void refreshPreflightStatus({ force: true })
-  }
+  const handleRefreshGh = (): void => refreshPreflightProvider('gh')
 
-  const handleRefreshAzureDevOps = (): void => {
-    setAzureDevOpsStatus('checking')
-    void refreshPreflightStatus({ force: true })
-  }
+  const handleRefreshBitbucket = (): void => refreshPreflightProvider('bitbucket')
 
-  const handleRefreshGitea = (): void => {
-    setGiteaStatus('checking')
-    void refreshPreflightStatus({ force: true })
-  }
+  const handleRefreshAzureDevOps = (): void => refreshPreflightProvider('azureDevOps')
+
+  const handleRefreshGitea = (): void => refreshPreflightProvider('gitea')
 
   return (
     <div className="space-y-3">
@@ -661,13 +554,13 @@ export function IntegrationsPane(): React.JSX.Element {
             <p className="text-xs text-muted-foreground">
               {linearStatus.connected
                 ? `${linearWorkspaces.length} workspace${linearWorkspaces.length === 1 ? '' : 's'} connected`
-                : 'Browse and link issues to workspaces.'}
+                : 'Add Linear access to browse and link issues.'}
             </p>
           </div>
           {linearStatus.connected ? (
             <div className="flex shrink-0 items-center gap-1.5">
               <Button variant="outline" size="sm" onClick={() => setLinearDialogOpen(true)}>
-                Add workspace
+                Add workspace access
               </Button>
               <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                 Connected
@@ -678,7 +571,7 @@ export function IntegrationsPane(): React.JSX.Element {
               className="shrink-0 rounded-full border border-border/50 bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               onClick={() => setLinearDialogOpen(true)}
             >
-              Connect
+              Add Linear access
             </button>
           )}
         </div>
@@ -740,101 +633,20 @@ export function IntegrationsPane(): React.JSX.Element {
               )
             })}
             <p className="text-[11px] text-muted-foreground/70">
-              Each workspace uses its own locally stored API key.
+              Each connected Linear workspace has one key stored by the active runtime. Full-access
+              keys can cover all teams the key owner can access; restricted keys can be replaced any
+              time.
             </p>
           </div>
         )}
       </div>
 
-      {/* Linear Connect Dialog */}
-      <Dialog
+      <LinearApiKeyDialog
         open={linearDialogOpen}
-        onOpenChange={(open) => {
-          if (linearConnectState !== 'connecting') {
-            setLinearDialogOpen(open)
-          }
-        }}
-      >
-        <DialogContent
-          className="sm:max-w-md"
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Enter' &&
-              linearApiKeyDraft.trim() &&
-              linearConnectState !== 'connecting'
-            ) {
-              e.preventDefault()
-              void handleLinearConnect()
-            }
-          }}
-        >
-          <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Linear workspace</DialogTitle>
-            <DialogDescription>
-              Paste a <strong className="font-semibold text-foreground">Personal API key</strong> to
-              add a workspace to Orca.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-3">
-            <Input
-              autoFocus
-              type="password"
-              placeholder="lin_api_..."
-              value={linearApiKeyDraft}
-              onChange={(e) => {
-                setLinearApiKeyDraft(e.target.value)
-                if (linearConnectState === 'error') {
-                  setLinearConnectState('idle')
-                  setLinearConnectError(null)
-                }
-              }}
-              disabled={linearConnectState === 'connecting'}
-            />
-            {linearConnectState === 'error' && linearConnectError && (
-              <p className="text-xs text-destructive">{linearConnectError}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              Create one in{' '}
-              <button
-                className="text-primary underline-offset-2 hover:underline"
-                onClick={() =>
-                  window.api.shell.openUrl('https://linear.app/settings/account/security')
-                }
-              >
-                Linear Settings → Security
-              </button>{' '}
-              → <strong className="font-semibold text-foreground">New API key</strong> (not{' '}
-              <span className="text-foreground">New passkey</span>).
-            </p>
-            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
-              <Lock className="size-3 shrink-0" />
-              Your key is encrypted via the OS keychain and stored locally.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setLinearDialogOpen(false)}
-              disabled={linearConnectState === 'connecting'}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => void handleLinearConnect()}
-              disabled={!linearApiKeyDraft.trim() || linearConnectState === 'connecting'}
-            >
-              {linearConnectState === 'connecting' ? (
-                <>
-                  <LoaderCircle className="size-4 animate-spin" />
-                  Verifying…
-                </>
-              ) : (
-                'Connect'
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        onOpenChange={setLinearDialogOpen}
+        connectLabel="Add Linear access"
+        onConnected={() => setLinearTestResultByWorkspace({})}
+      />
     </div>
   )
 }

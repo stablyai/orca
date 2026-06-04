@@ -3,38 +3,48 @@ import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  type AgentStatusEntry
+  type AgentStatusEntry,
+  type AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status-types'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
   hasLiveWorking: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
 }
+
+const EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>> = {}
 
 const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasPermission: false,
   hasLiveWorking: false,
   hasLiveDone: false,
-  hasRetainedDone: false
+  hasRetainedDone: false,
+  agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
 }
+
+type AgentActivityTabsByWorktree = Record<string, readonly { id: string }[]>
 
 export type AgentActivityInput = Pick<
   AppState,
-  | 'tabsByWorktree'
   | 'agentStatusEpoch'
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
->
+> & {
+  tabsByWorktree: AgentActivityTabsByWorktree
+  runtimeAgentOrchestrationByPaneKey?: AppState['runtimeAgentOrchestrationByPaneKey']
+}
 
 type AgentActivityCache = {
-  tabsByWorktree: AppState['tabsByWorktree']
+  tabsByWorktree: AgentActivityTabsByWorktree
   agentStatusEpoch: number
   migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   retainedAgentsByPaneKey: AppState['retainedAgentsByPaneKey']
+  runtimeAgentOrchestrationByPaneKey: AppState['runtimeAgentOrchestrationByPaneKey'] | undefined
   summaries: Map<string, WorktreeAgentActivitySummary>
 }
 
@@ -50,12 +60,14 @@ export function selectWorktreeAgentActivitySummary(
 function getWorktreeAgentActivitySummaries(
   state: AgentActivityInput
 ): Map<string, WorktreeAgentActivitySummary> {
+  const runtimeAgentOrchestrationByPaneKey = state.runtimeAgentOrchestrationByPaneKey
   if (
     agentActivityCache &&
     agentActivityCache.tabsByWorktree === state.tabsByWorktree &&
     agentActivityCache.agentStatusEpoch === state.agentStatusEpoch &&
     agentActivityCache.migrationUnsupportedByPtyId === state.migrationUnsupportedByPtyId &&
-    agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey
+    agentActivityCache.retainedAgentsByPaneKey === state.retainedAgentsByPaneKey &&
+    agentActivityCache.runtimeAgentOrchestrationByPaneKey === runtimeAgentOrchestrationByPaneKey
   ) {
     return agentActivityCache.summaries
   }
@@ -82,11 +94,27 @@ function getWorktreeAgentActivitySummaries(
 
   const now = Date.now()
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    const worktreeId = worktreeIdForPaneKey(paneKey, tabIdToWorktreeId)
+    const paneIdentity = parseAgentStatusPaneKey(paneKey)
+    if (!paneIdentity) {
+      continue
+    }
+    const orchestration = resolveEntryOrchestration(
+      entry,
+      runtimeAgentOrchestrationByPaneKey?.[paneKey]
+    )
+    const worktreeId =
+      tabIdToWorktreeId.get(paneIdentity.tabId) ??
+      entry.worktreeId ??
+      worktreeIdForPaneKey(orchestration?.parentPaneKey, tabIdToWorktreeId)
     if (!worktreeId || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
     }
-    applyLiveAgentState(summaryForWorktree(worktreeId), entry)
+    const summary = summaryForWorktree(worktreeId)
+    addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
+    if (entry.state === 'done') {
+      addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
+    }
+    applyLiveAgentState(summary, entry)
   }
 
   for (const unsupported of Object.values(state.migrationUnsupportedByPtyId ?? {})) {
@@ -97,8 +125,18 @@ function getWorktreeAgentActivitySummaries(
     }
   }
 
-  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
-    summaryForWorktree(retained.worktreeId).hasRetainedDone = true
+  for (const retained of Object.values(state.retainedAgentsByPaneKey ?? {})) {
+    const summary = summaryForWorktree(retained.worktreeId)
+    summary.hasRetainedDone = true
+    const paneIdentity = parseAgentStatusPaneKey(retained.entry?.paneKey)
+    if (paneIdentity) {
+      addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
+    }
+    const orchestration = resolveEntryOrchestration(
+      retained.entry,
+      runtimeAgentOrchestrationByPaneKey?.[retained.entry.paneKey]
+    )
+    addParentPaneId(summary, orchestration, retained.worktreeId, tabIdToWorktreeId)
   }
 
   agentActivityCache = {
@@ -106,9 +144,29 @@ function getWorktreeAgentActivitySummaries(
     agentStatusEpoch: state.agentStatusEpoch,
     migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+    runtimeAgentOrchestrationByPaneKey,
     summaries
   }
   return summaries
+}
+
+function resolveEntryOrchestration(
+  entry: Pick<AgentStatusEntry, 'orchestration'>,
+  runtimeOrchestration: AgentStatusOrchestrationContext | undefined
+): AgentStatusOrchestrationContext | undefined {
+  if (!entry.orchestration) {
+    return runtimeOrchestration
+  }
+  if (!runtimeOrchestration) {
+    return entry.orchestration
+  }
+  if (
+    entry.orchestration.taskId === runtimeOrchestration.taskId &&
+    entry.orchestration.dispatchId === runtimeOrchestration.dispatchId
+  ) {
+    return { ...entry.orchestration, ...runtimeOrchestration }
+  }
+  return entry.orchestration
 }
 
 function applyLiveAgentState(
@@ -124,25 +182,63 @@ function applyLiveAgentState(
   }
 }
 
-function worktreeIdForPaneKey(
-  paneKey: string,
-  tabIdToWorktreeId: Map<string, string>
-): string | null {
-  const tabId = getPaneKeyTabId(paneKey)
-  return tabId ? (tabIdToWorktreeId.get(tabId) ?? null) : null
+function addAgentStatusPaneId(
+  summary: WorktreeAgentActivitySummary,
+  tabId: string,
+  paneId: string
+): void {
+  if (summary.agentStatusPaneIdsByTabId === EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID) {
+    summary.agentStatusPaneIdsByTabId = {}
+  }
+  let paneIds = summary.agentStatusPaneIdsByTabId[tabId] as Set<string> | undefined
+  if (!paneIds) {
+    paneIds = new Set<string>()
+    summary.agentStatusPaneIdsByTabId[tabId] = paneIds
+  }
+  paneIds.add(paneId)
 }
 
-function getPaneKeyTabId(paneKey: string): string | null {
-  const parsed = parsePaneKey(paneKey)
-  if (parsed) {
-    return parsed.tabId
-  }
+function worktreeIdForPaneKey(
+  paneKey: string | undefined,
+  tabIdToWorktreeId: Map<string, string>
+): string | null {
+  const paneIdentity = parseAgentStatusPaneKey(paneKey)
+  return paneIdentity ? (tabIdToWorktreeId.get(paneIdentity.tabId) ?? null) : null
+}
 
-  // Why: restored snapshots and older test fixtures can still carry the
-  // pre-stable-pane-id `tabId:numericPaneId` key; status only needs tab scope.
-  const sepIdx = paneKey.indexOf(':')
-  if (sepIdx <= 0 || sepIdx !== paneKey.lastIndexOf(':') || sepIdx === paneKey.length - 1) {
+function addParentPaneId(
+  summary: WorktreeAgentActivitySummary,
+  orchestration: AgentStatusOrchestrationContext | undefined,
+  worktreeId: string,
+  tabIdToWorktreeId: Map<string, string>
+): void {
+  const parentPaneIdentity = parseAgentStatusPaneKey(orchestration?.parentPaneKey)
+  if (!parentPaneIdentity) {
+    return
+  }
+  // Why: a completed worker can be the only visible row for a worktree while
+  // its parent pane still carries a stale spinner title. Let that row own the
+  // parent pane's title for this worktree without touching other worktrees.
+  if (tabIdToWorktreeId.get(parentPaneIdentity.tabId) !== worktreeId) {
+    return
+  }
+  addAgentStatusPaneId(summary, parentPaneIdentity.tabId, parentPaneIdentity.paneId)
+}
+
+function parseAgentStatusPaneKey(
+  paneKey: string | undefined
+): { tabId: string; paneId: string } | null {
+  if (!paneKey) {
     return null
   }
-  return paneKey.slice(0, sepIdx)
+  const parsed = parsePaneKey(paneKey)
+  if (parsed) {
+    return { tabId: parsed.tabId, paneId: parsed.leafId }
+  }
+
+  const legacy = parseLegacyNumericPaneKey(paneKey)
+  // Why: imported/restored agent rows can still carry pre-UUID pane keys.
+  // Keep their numeric pane id so the matching runtime title cannot revive
+  // a stale spinner after the row reports done.
+  return legacy ? { tabId: legacy.tabId, paneId: legacy.numericPaneId } : null
 }

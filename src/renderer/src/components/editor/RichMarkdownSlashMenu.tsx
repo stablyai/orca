@@ -2,8 +2,8 @@ import React from 'react'
 import type { Editor } from '@tiptap/react'
 import { Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { runSlashCommand } from './rich-markdown-commands'
-import type { SlashCommand, SlashMenuState } from './rich-markdown-commands'
+import { runSlashCommand } from './rich-markdown-slash-commands'
+import type { SlashCommand, SlashMenuState } from './rich-markdown-slash-commands'
 
 type RichMarkdownSlashMenuProps = {
   editor: Editor | null

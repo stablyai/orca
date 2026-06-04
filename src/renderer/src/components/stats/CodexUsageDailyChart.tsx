@@ -11,12 +11,22 @@ function formatTokens(value: number): string {
   return value.toLocaleString()
 }
 
+function getMaxDailyTotal(daily: CodexUsageDailyPoint[]): number {
+  let max = 1
+  // Why: all-time usage histories can exceed V8's argument limit if spread
+  // into Math.max, even though the chart only renders the last 10 days.
+  for (const entry of daily) {
+    max = Math.max(max, entry.totalTokens)
+  }
+  return max
+}
+
 type CodexUsageDailyChartProps = {
   daily: CodexUsageDailyPoint[]
 }
 
 export function CodexUsageDailyChart({ daily }: CodexUsageDailyChartProps): React.JSX.Element {
-  const maxDailyTotal = Math.max(1, ...daily.map((entry) => entry.totalTokens))
+  const maxDailyTotal = getMaxDailyTotal(daily)
 
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">

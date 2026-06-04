@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: split-tree DOM reparent, promote, and equalize rules need one consistent owner. */
 import type {
   DropZone,
   ManagedPane,
@@ -5,7 +6,7 @@ import type {
   PaneStyleOptions,
   ScrollState
 } from './pane-manager-types'
-import { createDivider } from './pane-divider'
+import { createDivider, disposeDivider } from './pane-divider'
 import { getFitOverrideForPty } from './mobile-fit-overrides'
 import { disposeWebgl, attachWebgl } from './pane-webgl-renderer'
 import { captureScrollState, restoreScrollStateAfterLayout } from './pane-scroll'
@@ -22,6 +23,37 @@ type TreeOpsCallbacks = {
   safeFit: (pane: ManagedPane) => void
   refitPanesUnder: (el: HTMLElement) => void
   onLayoutChanged?: () => void
+  isDestroyed?: () => boolean
+  requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
+}
+
+type TerminalSplitEdges = {
+  blockStart: boolean
+  blockEnd: boolean
+  inlineStart: boolean
+  inlineEnd: boolean
+}
+
+const TERMINAL_EDGE_ATTRIBUTES = [
+  'data-terminal-edge-block-start',
+  'data-terminal-edge-block-end',
+  'data-terminal-edge-inline-start',
+  'data-terminal-edge-inline-end'
+] as const
+
+function isPaneTreeHTMLElement(value: unknown): value is HTMLElement {
+  if (typeof HTMLElement !== 'undefined') {
+    return value instanceof HTMLElement
+  }
+  // Why: pane-manager unit tests run split-tree logic with small DOM doubles
+  // under node, where the browser HTMLElement constructor is unavailable.
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'classList' in value &&
+    'children' in value &&
+    'style' in value
+  )
 }
 
 function getProposedDimensions(pane: ManagedPane): { cols: number; rows: number } | null {
@@ -120,6 +152,7 @@ export function refitPanesUnder(el: HTMLElement, panes: Map<number, ManagedPaneI
 export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOpsCallbacks): void {
   const container = pane.container
   const parent = container.parentElement
+  const root = callbacks.getRoot()
   if (!parent) {
     return
   }
@@ -127,13 +160,14 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
   if (!parent.classList.contains('pane-split')) {
     // Direct child of root — just remove it
     container.remove()
+    updateTerminalSplitEdgeState(root)
     return
   }
 
   // Find sibling (skip dividers)
   const children = Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
+      isPaneTreeHTMLElement(child) &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
   const sibling = children.find((c) => c !== container) ?? null
@@ -143,7 +177,8 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
   removeDividers(parent)
 
   // Promote sibling to replace the split container
-  promoteSibling(sibling, parent, callbacks.getRoot())
+  promoteSibling(sibling, parent, root)
+  updateTerminalSplitEdgeState(root)
 }
 
 /** Insert source pane next to target pane by wrapping target in a new split. */
@@ -215,8 +250,15 @@ export function insertPaneNextTo(
     split.appendChild(divider)
     split.appendChild(source.container)
   }
+  updateTerminalSplitEdgeState(callbacks.getRoot())
 
-  requestAnimationFrame(() => {
+  const requestReparentFrame =
+    callbacks.requestPaneReparentFrame ??
+    ((callback: FrameRequestCallback) => requestAnimationFrame(callback))
+  requestReparentFrame(() => {
+    if (callbacks.isDestroyed?.()) {
+      return
+    }
     if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
       attachWebgl(source)
     }
@@ -261,6 +303,88 @@ export function promoteSibling(
   }
 }
 
+export function updateTerminalSplitEdgeState(root: HTMLElement): void {
+  clearTerminalSplitEdgeState(root)
+  const child = root.firstElementChild
+  if (!isPaneTreeHTMLElement(child)) {
+    return
+  }
+  markTerminalSplitEdges(child, {
+    blockStart: true,
+    blockEnd: true,
+    inlineStart: true,
+    inlineEnd: true
+  })
+}
+
+function clearTerminalSplitEdgeState(root: HTMLElement): void {
+  visitPaneTree(root, (element) => {
+    if (!element.classList.contains('pane-split')) {
+      return
+    }
+    for (const attr of TERMINAL_EDGE_ATTRIBUTES) {
+      element.removeAttribute(attr)
+    }
+  })
+}
+
+function markTerminalSplitEdges(element: HTMLElement, edges: TerminalSplitEdges): void {
+  if (!element.classList.contains('pane-split')) {
+    return
+  }
+
+  applyTerminalSplitEdgeAttributes(element, edges)
+
+  const children = findPaneChildren(element)
+  if (children.length === 0) {
+    return
+  }
+
+  const isHorizontal = element.classList.contains('is-horizontal')
+  for (const [index, child] of children.entries()) {
+    if (isHorizontal) {
+      markTerminalSplitEdges(child, {
+        blockStart: edges.blockStart && index === 0,
+        blockEnd: edges.blockEnd && index === children.length - 1,
+        inlineStart: edges.inlineStart,
+        inlineEnd: edges.inlineEnd
+      })
+      continue
+    }
+
+    markTerminalSplitEdges(child, {
+      blockStart: edges.blockStart,
+      blockEnd: edges.blockEnd,
+      inlineStart: edges.inlineStart && index === 0,
+      inlineEnd: edges.inlineEnd && index === children.length - 1
+    })
+  }
+}
+
+function applyTerminalSplitEdgeAttributes(split: HTMLElement, edges: TerminalSplitEdges): void {
+  if (edges.blockStart) {
+    split.setAttribute('data-terminal-edge-block-start', '')
+  }
+  if (edges.blockEnd) {
+    split.setAttribute('data-terminal-edge-block-end', '')
+  }
+  if (edges.inlineStart) {
+    split.setAttribute('data-terminal-edge-inline-start', '')
+  }
+  if (edges.inlineEnd) {
+    split.setAttribute('data-terminal-edge-inline-end', '')
+  }
+}
+
+function visitPaneTree(element: HTMLElement, visit: (element: HTMLElement) => void): void {
+  visit(element)
+  for (const child of Array.from(element.children)) {
+    if (isPaneTreeHTMLElement(child)) {
+      visitPaneTree(child, visit)
+    }
+  }
+}
+
 /** Apply standard flex styles to a pane container inside a split. */
 export function applyPaneFlexStyle(el: HTMLElement): void {
   el.style.flex = '1 1 0%'
@@ -278,9 +402,10 @@ export function applyPaneFlexStyle(el: HTMLElement): void {
 export function removeDividers(parent: HTMLElement): void {
   const dividers = Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement && child.classList.contains('pane-divider')
+      isPaneTreeHTMLElement(child) && child.classList.contains('pane-divider')
   )
   for (const d of dividers) {
+    disposeDivider(d)
     d.remove()
   }
 }
@@ -289,7 +414,7 @@ export function removeDividers(parent: HTMLElement): void {
 export function findPaneChildren(parent: HTMLElement): HTMLElement[] {
   return Array.from(parent.children).filter(
     (child): child is HTMLElement =>
-      child instanceof HTMLElement &&
+      isPaneTreeHTMLElement(child) &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
 }

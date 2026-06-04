@@ -6,17 +6,22 @@ const captureScrollState = vi.hoisted(() => vi.fn())
 const wrapInSplit = vi.hoisted(() => vi.fn())
 const openTerminal = vi.hoisted(() => vi.fn())
 const disposeWebgl = vi.hoisted(() => vi.fn())
+const clearPendingSplitScrollRestore = vi.hoisted(() => vi.fn())
 const scheduleSplitScrollRestore = vi.hoisted(() => vi.fn())
 const updateMultiPaneState = vi.hoisted(() => vi.fn())
 const applyPaneOpacity = vi.hoisted(() => vi.fn())
 const applyDividerStyles = vi.hoisted(() => vi.fn())
+const updateTerminalSplitEdgeState = vi.hoisted(() => vi.fn())
+const findPaneChildren = vi.hoisted(() => vi.fn())
+const promoteSibling = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-tree-ops', () => ({
   captureScrollState,
-  findPaneChildren: vi.fn(),
-  promoteSibling: vi.fn(),
+  findPaneChildren,
+  promoteSibling,
   removeDividers: vi.fn(),
   safeFit: vi.fn(),
+  updateTerminalSplitEdgeState,
   wrapInSplit
 }))
 
@@ -30,6 +35,7 @@ vi.mock('./pane-webgl-renderer', () => ({
 }))
 
 vi.mock('./pane-split-scroll', () => ({
+  clearPendingSplitScrollRestore,
   scheduleSplitScrollRestore
 }))
 
@@ -42,7 +48,7 @@ vi.mock('./pane-divider', () => ({
   applyPaneOpacity
 }))
 
-import { splitManagedPane } from './pane-split-close'
+import { closeManagedPane, splitManagedPane } from './pane-split-close'
 
 const TEST_LEAF_ID = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
 
@@ -66,6 +72,8 @@ class MockElement {
   querySelectorAll(): MockElement[] {
     return this.descendants
   }
+
+  remove(): void {}
 }
 
 function createScrollState(viewportY: number): ScrollState {
@@ -159,6 +167,8 @@ describe('splitManagedPane', () => {
     expect(result?.id).toBe(newPane.id)
     expect(captureScrollState).toHaveBeenCalledWith(fallbackPane.terminal)
     expect(captureScrollState).toHaveBeenCalledWith(siblingPane.terminal)
+    expect(clearPendingSplitScrollRestore).toHaveBeenCalledWith(fallbackPane)
+    expect(clearPendingSplitScrollRestore).toHaveBeenCalledWith(siblingPane)
     expect(fallbackPane.pendingSplitScrollState).toBe(fallbackScrollState)
     expect(siblingPane.pendingSplitScrollState).toBe(siblingScrollState)
     expect(disposeWebgl).toHaveBeenCalledWith(fallbackPane)
@@ -170,6 +180,7 @@ describe('splitManagedPane', () => {
       expect.anything(),
       undefined
     )
+    expect(updateTerminalSplitEdgeState).toHaveBeenCalledWith(root)
     expect(scheduleSplitScrollRestore).toHaveBeenCalledTimes(2)
     expect(scheduleSplitScrollRestore).toHaveBeenNthCalledWith(
       1,
@@ -187,5 +198,32 @@ describe('splitManagedPane', () => {
       expect.any(Function),
       expect.any(Function)
     )
+  })
+
+  it('recomputes terminal split edge state after closing and promoting a sibling', () => {
+    const pane = createPane(1, null)
+    const sibling = new MockElement(['pane'])
+    const parent = new MockElement(['pane-split'])
+    const root = new MockElement(['root'])
+    ;(pane.container as unknown as MockElement).parentElement = parent
+    sibling.parentElement = parent
+    parent.parentElement = root
+    findPaneChildren.mockReturnValue([pane.container, sibling])
+    const panes = new Map<number, ManagedPaneInternal>([[pane.id, pane]])
+
+    closeManagedPane({
+      paneId: pane.id,
+      activePaneId: pane.id,
+      panes,
+      root: root as unknown as HTMLElement,
+      styleOptions: {},
+      managerOptions: {},
+      getDragCallbacks: () => ({}) as never,
+      releasePaneIdentity: vi.fn(),
+      setActivePaneId: vi.fn()
+    })
+
+    expect(promoteSibling).toHaveBeenCalledWith(sibling, parent, root)
+    expect(updateTerminalSplitEdgeState).toHaveBeenCalledWith(root)
   })
 })

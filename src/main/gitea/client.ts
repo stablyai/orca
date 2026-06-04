@@ -186,9 +186,10 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
 
 export async function getGiteaPullRequest(
   repoPath: string,
-  prNumber: number
+  prNumber: number,
+  connectionId?: string | null
 ): Promise<GiteaPullRequestInfo | null> {
-  const repo = await getGiteaRepoRef(repoPath)
+  const repo = await getGiteaRepoRef(repoPath, connectionId)
   if (!repo) {
     return null
   }
@@ -202,14 +203,15 @@ export async function getGiteaPullRequest(
 export async function getGiteaPullRequestForBranch(
   repoPath: string,
   branch: string,
-  linkedPRNumber?: number | null
+  linkedPRNumber?: number | null,
+  connectionId?: string | null
 ): Promise<GiteaPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
   if (!branchName && linkedPRNumber == null) {
     return null
   }
 
-  const repo = await getGiteaRepoRef(repoPath)
+  const repo = await getGiteaRepoRef(repoPath, connectionId)
   if (!repo) {
     return null
   }
@@ -248,6 +250,9 @@ export async function getGiteaPullRequestForBranch(
   return raw ? normalizePullRequest(repo, raw) : null
 }
 
-export async function getGiteaRepoSlug(repoPath: string): Promise<GiteaRepoRef | null> {
-  return getGiteaRepoRef(repoPath)
+export async function getGiteaRepoSlug(
+  repoPath: string,
+  connectionId?: string | null
+): Promise<GiteaRepoRef | null> {
+  return getGiteaRepoRef(repoPath, connectionId)
 }

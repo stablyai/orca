@@ -27,6 +27,7 @@ describe('feature interactions', () => {
       : never = true
     const expectedIds: FeatureInteractionId[] = [
       'workspace-board',
+      'workspace-agent-sessions',
       'workspace-board-actions',
       'browser',
       'tasks',
@@ -55,6 +56,7 @@ describe('feature interactions', () => {
       'resource-manager',
       'review-notes',
       'ssh',
+      'terminal-pane-split',
       'terminal-panes',
       'terminal-tabs',
       'tab-splits',
@@ -110,8 +112,13 @@ describe('feature interactions', () => {
       const directRecord = new RegExp(
         `recordFeatureInteraction(?:\\?\\.)?\\(\\s*['"]${escaped}['"]`
       )
+      const contextualTourRecord = new RegExp(`useContextualTour\\(\\s*['"]${escaped}['"]`)
       const runtimeMappingReturn = new RegExp(`return[^\\n]*['"]${escaped}['"]`)
-      return !directRecord.test(productionText) && !runtimeMappingReturn.test(productionText)
+      return (
+        !directRecord.test(productionText) &&
+        !contextualTourRecord.test(productionText) &&
+        !runtimeMappingReturn.test(productionText)
+      )
     })
 
     expect(missingWriters).toEqual([])

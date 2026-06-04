@@ -2,6 +2,8 @@ export type SettingsSearchEntry = {
   title: string
   description?: string
   keywords?: string[]
+  cmdJKeywords?: string[]
+  targetSectionId?: string
 }
 
 export function normalizeSettingsSearchQuery(query: string): string {

@@ -10,6 +10,9 @@ const SHELL_READY_MARKER = '\x1b]777;orca-shell-ready\x07'
 
 export type SubprocessHandle = {
   pid: number
+  /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
+   *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
+  getForegroundProcess(): string | null
   write(data: string): void
   resize(cols: number, rows: number): void
   kill(): void
@@ -182,6 +185,10 @@ export class Session {
 
   getCwd(): string | null {
     return this.emulator.getCwd()
+  }
+
+  getForegroundProcess(): string | null {
+    return this.subprocess.getForegroundProcess()
   }
 
   clearScrollback(): void {

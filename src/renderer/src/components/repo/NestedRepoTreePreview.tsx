@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { FolderTree, GitBranch } from 'lucide-react'
 import type { NestedRepoCandidate, NestedRepoScanResult } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
@@ -124,16 +124,18 @@ function NestedRepoSelectAllRow({
   const allSelected = total > 0 && selectedCount === total
   const noneSelected = selectedCount === 0
   const isMixed = !allSelected && !noneSelected
-  const checkboxRef = useRef<HTMLInputElement | null>(null)
-  useEffect(() => {
-    if (checkboxRef.current) {
-      checkboxRef.current.indeterminate = isMixed
-    }
-  }, [isMixed])
+  const handleCheckboxRef = useCallback(
+    (checkbox: HTMLInputElement | null) => {
+      if (checkbox) {
+        checkbox.indeterminate = isMixed
+      }
+    },
+    [isMixed]
+  )
   return (
     <label className="flex min-w-0 cursor-pointer items-center gap-2.5 bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50">
       <input
-        ref={checkboxRef}
+        ref={handleCheckboxRef}
         type="checkbox"
         className="size-3.5"
         checked={allSelected}

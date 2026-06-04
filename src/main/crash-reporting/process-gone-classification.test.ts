@@ -146,6 +146,24 @@ describe('shouldRecordProcessGoneCrash', () => {
     expect(
       shouldRecordProcessGoneCrash({
         source: 'child',
+        processType: 'GPU',
+        reason: 'abnormal-exit',
+        exitCode: 512,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'GPU',
+        reason: 'abnormal-exit',
+        exitCode: 8704,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
         processType: 'Utility',
         serviceName: 'network.mojom.NetworkService',
         reason: 'killed',
@@ -158,6 +176,26 @@ describe('shouldRecordProcessGoneCrash', () => {
         source: 'child',
         processType: 'Utility',
         serviceName: 'network.mojom.NetworkService',
+        reason: 'crashed',
+        exitCode: -1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'audio.mojom.AudioService',
+        reason: 'killed',
+        exitCode: 1,
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'child',
+        processType: 'Utility',
+        serviceName: 'audio.mojom.AudioService',
         reason: 'crashed',
         exitCode: -1,
         expectedTeardown: 'none'
@@ -207,6 +245,18 @@ describe('shouldRecordProcessGoneCrash', () => {
         processType: 'renderer',
         reason: 'killed',
         exitCode: 61696,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+  })
+
+  it('still records renderer launch failures for diagnostics', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'launch-failed',
+        exitCode: 18,
         expectedTeardown: 'none'
       })
     ).toBe(true)
@@ -262,6 +312,27 @@ describe('shouldRecoverRendererAfterProcessGone', () => {
       shouldRecoverRendererAfterProcessGone({
         reason: 'crashed',
         expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(false)
+  })
+
+  it('does not recover renderer startup and security launch failures', () => {
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'launch-failed',
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'launch-failed',
+        expectedTeardown: 'renderer-reload'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'integrity-failure',
+        expectedTeardown: 'none'
       })
     ).toBe(false)
   })

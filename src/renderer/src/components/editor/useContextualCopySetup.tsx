@@ -1,19 +1,10 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react'
+import React, { useRef, useState, useCallback } from 'react'
 import type { editor } from 'monaco-editor'
 import { setupContextualCopy } from './setup-contextual-copy'
 
 export function useContextualCopySetup() {
   const [copyToast, setCopyToast] = useState<{ left: number; top: number } | null>(null)
   const copyToastTimeoutRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    const toastRef = copyToastTimeoutRef
-    return () => {
-      if (toastRef.current !== null) {
-        window.clearTimeout(toastRef.current)
-      }
-    }
-  }, [])
 
   const setupCopy = useCallback(
     (

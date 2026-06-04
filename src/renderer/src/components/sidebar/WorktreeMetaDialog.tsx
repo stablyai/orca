@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -15,6 +15,12 @@ import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/gith
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
 import type { WorktreeMeta } from '../../../../shared/types'
+import { useMountedRef } from '@/hooks/useMountedRef'
+
+type WorktreeMetaSavedPayload = {
+  worktreeId: string
+  updates: Partial<WorktreeMeta>
+}
 
 function parseExplicitGitHubIssueUrl(input: string): string | null {
   const trimmed = input.trim()
@@ -24,6 +30,11 @@ function parseExplicitGitHubIssueUrl(input: string): string | null {
   }
 
   return trimmed
+}
+
+function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
+  textarea.style.height = 'auto'
+  textarea.style.height = `${textarea.scrollHeight}px`
 }
 
 const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
@@ -46,6 +57,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const currentComment =
     typeof modalData.currentComment === 'string' ? modalData.currentComment : ''
   const focusField = typeof modalData.focus === 'string' ? modalData.focus : 'comment'
+  const afterSave =
+    typeof modalData.afterSave === 'function'
+      ? (modalData.afterSave as (payload: WorktreeMetaSavedPayload) => void | Promise<void>)
+      : null
 
   const [displayNameInput, setDisplayNameInput] = useState('')
   const [issueInput, setIssueInput] = useState('')
@@ -59,6 +74,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const prevIsOpenRef = useRef(false)
   const displayNameInputRef = useRef<HTMLInputElement>(null)
+  const mountedRef = useMountedRef()
   if (isOpen && !prevIsOpenRef.current) {
     setDisplayNameInput(currentDisplayName)
     setIssueInput(currentIssue)
@@ -93,20 +109,21 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     ? Boolean(issueUrlFromInput)
     : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
-  const autoResize = useCallback(() => {
-    const ta = textareaRef.current
-    if (!ta) {
-      return
-    }
-    ta.style.height = 'auto'
-    ta.style.height = `${ta.scrollHeight}px`
-  }, [])
+  const setCommentTextareaRef = useCallback(
+    (textarea: HTMLTextAreaElement | null) => {
+      textareaRef.current = textarea
+      if (textarea && isEditMeta) {
+        resizeCommentTextarea(textarea)
+      }
+    },
+    [isEditMeta]
+  )
 
-  useEffect(() => {
-    if (isEditMeta) {
-      autoResize()
-    }
-  }, [isEditMeta, commentInput, autoResize])
+  const handleCommentChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setCommentInput(event.target.value)
+    // Why: notes should grow in the same input event; a passive Effect leaves a stale height.
+    resizeCommentTextarea(event.currentTarget)
+  }, [])
 
   const canSave = useMemo(() => {
     if (!worktreeId) {
@@ -159,8 +176,17 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
       await updateWorktreeMeta(worktreeId, updates)
       closeModal()
+      // Why: follow-up refreshes should not turn a successful metadata save
+      // into a failed dialog.
+      try {
+        void Promise.resolve(afterSave?.({ worktreeId, updates })).catch(console.error)
+      } catch (error) {
+        console.error(error)
+      }
     } finally {
-      setSaving(false)
+      if (mountedRef.current) {
+        setSaving(false)
+      }
     }
   }, [
     worktreeId,
@@ -171,7 +197,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     prInput,
     commentInput,
     updateWorktreeMeta,
-    closeModal
+    closeModal,
+    afterSave,
+    mountedRef
   ])
 
   const handleCommentKeyDown = useCallback(
@@ -226,7 +254,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         void window.api.shell.openUrl(issue.url)
       }
     } finally {
-      setOpeningIssue(false)
+      if (mountedRef.current) {
+        setOpeningIssue(false)
+      }
     }
   }, [
     cachedIssueUrl,
@@ -235,6 +265,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     issueNumber,
     issueRepo,
     issueUrlFromInput,
+    mountedRef,
     openingIssue
   ])
 
@@ -336,9 +367,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-muted-foreground">Comment</label>
             <textarea
-              ref={textareaRef}
+              ref={setCommentTextareaRef}
               value={commentInput}
-              onChange={(e) => setCommentInput(e.target.value)}
+              onChange={handleCommentChange}
               onKeyDown={handleCommentKeyDown}
               placeholder="Notes about this worktree..."
               rows={3}

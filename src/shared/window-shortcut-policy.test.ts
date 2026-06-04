@@ -71,6 +71,36 @@ describe('resolveWindowShortcutAction', () => {
         'darwin'
       )
     ).toEqual({ type: 'jumpToWorktreeIndex', index: 2 })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'darwin'
+      )
+    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
+  })
+
+  it('uses Alt+number for tab jumps on Windows/Linux without stealing workspace jumps', () => {
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit4', key: '4', meta: false, control: true, alt: false, shift: false },
+        'linux'
+      )
+    ).toEqual({ type: 'jumpToWorktreeIndex', index: 3 })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit4', key: '4', meta: false, control: false, alt: true, shift: false },
+        'linux'
+      )
+    ).toEqual({ type: 'jumpToTabIndex', index: 3 })
+
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit4', key: '4', meta: false, control: false, alt: true, shift: true },
+        'win32'
+      )
+    ).toBeNull()
   })
 
   it('keeps Orca-first active in terminal context but lets Terminal-first pass risky app chords', () => {
@@ -111,6 +141,22 @@ describe('resolveWindowShortcutAction', () => {
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toEqual({ type: 'switchRecentTab' })
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'darwin',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBeNull()
+    expect(
+      resolveWindowShortcutAction(
+        { code: 'Digit3', key: '3', meta: false, control: true, alt: false, shift: false },
+        'darwin',
+        undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'orca-first' }
+      )
+    ).toEqual({ type: 'jumpToTabIndex', index: 2 })
   })
 
   it('routes menu-backed actions through the same window shortcut policy', () => {
@@ -213,6 +259,32 @@ describe('resolveWindowShortcutAction', () => {
         overrides
       )
     ).toEqual({ type: 'openTasks' })
+  })
+
+  it('leaves workspace delete unbound by default but honors custom terminal-active bindings', () => {
+    const input = {
+      code: 'Backspace',
+      key: 'Backspace',
+      meta: false,
+      control: true,
+      alt: false,
+      shift: true
+    }
+
+    expect(resolveWindowShortcutAction(input, 'linux')).toBeNull()
+    expect(
+      resolveWindowShortcutAction(input, 'linux', {
+        'workspace.delete': ['Mod+Shift+Backspace']
+      })
+    ).toEqual({ type: 'deleteCurrentWorkspace' })
+    expect(
+      resolveWindowShortcutAction(
+        input,
+        'linux',
+        { 'workspace.delete': ['Mod+Shift+Backspace'] },
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toEqual({ type: 'deleteCurrentWorkspace' })
   })
 
   it('resolves the MRU tab quick-toggle chord', () => {

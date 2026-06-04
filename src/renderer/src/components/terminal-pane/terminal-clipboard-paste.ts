@@ -21,7 +21,13 @@ export async function pasteTerminalClipboard({
   connectionId,
   onImagePasteError
 }: PasteTerminalClipboardDeps): Promise<void> {
-  const text = await readClipboardText()
+  let text = ''
+  try {
+    text = await readClipboardText()
+  } catch {
+    // Why: browser clipboard text reads can fail for image-only clipboards.
+    // Still try the image path so Cmd/Ctrl+V works for screenshots.
+  }
   if (text) {
     pasteText(text)
     return

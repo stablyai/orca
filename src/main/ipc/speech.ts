@@ -21,13 +21,28 @@ export function registerSpeechHandlers(store: Store): void {
     if (!window) {
       return
     }
-    manager.setProgressCallback((id, progress) => {
+    const clearProgressCallback = manager.setProgressCallback((id, progress) => {
       if (!window.isDestroyed()) {
         window.webContents.send('speech:downloadProgress', { modelId: id, progress })
       }
     })
-
-    await manager.downloadModel(modelId)
+    // Why: ModelManager is process-wide; scope this BrowserWindow closure to
+    // the download/window lifetime so stale windows are not retained.
+    let progressCallbackCleared = false
+    const cleanupProgressCallback = (): void => {
+      if (progressCallbackCleared) {
+        return
+      }
+      progressCallbackCleared = true
+      window.off('closed', cleanupProgressCallback)
+      clearProgressCallback()
+    }
+    window.once('closed', cleanupProgressCallback)
+    try {
+      await manager.downloadModel(modelId)
+    } finally {
+      cleanupProgressCallback()
+    }
   })
 
   ipcMain.handle('speech:cancelDownload', async (_event, modelId: string) => {

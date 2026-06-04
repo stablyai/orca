@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { equalizePaneSplitSizes, safeFit } from './pane-tree-ops'
+import { equalizePaneSplitSizes, safeFit, updateTerminalSplitEdgeState } from './pane-tree-ops'
 import type { ManagedPaneInternal, ScrollState } from './pane-manager-types'
 import { setFitOverride, hydrateOverrides } from './mobile-fit-overrides'
 
@@ -7,11 +7,30 @@ class MockHTMLElement {
   classList: { contains: (cls: string) => boolean }
   children: MockHTMLElement[]
   style: Record<string, string>
+  private readonly classNames: Set<string>
+  private readonly attributes = new Set<string>()
 
   constructor(classes: string[], children: MockHTMLElement[] = [], flex = '') {
-    this.classList = { contains: (cls: string) => classes.includes(cls) }
+    this.classNames = new Set(classes)
+    this.classList = { contains: (cls: string) => this.classNames.has(cls) }
     this.children = children
     this.style = { flex }
+  }
+
+  get firstElementChild(): MockHTMLElement | null {
+    return this.children[0] ?? null
+  }
+
+  setAttribute(name: string): void {
+    this.attributes.add(name)
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name)
+  }
+
+  hasAttribute(name: string): boolean {
+    return this.attributes.has(name)
   }
 }
 
@@ -344,5 +363,105 @@ describe('equalizePaneSplitSizes', () => {
   it('returns false when there is no split tree to change', () => {
     expect(equalizePaneSplitSizes(pane() as unknown as HTMLElement)).toBe(false)
     expect(equalizePaneSplitSizes(null)).toBe(false)
+  })
+})
+
+describe('updateTerminalSplitEdgeState', () => {
+  const pane = (): MockHTMLElement => new MockHTMLElement(['pane'])
+  const split = (
+    direction: 'vertical' | 'horizontal',
+    children: MockHTMLElement[]
+  ): MockHTMLElement =>
+    new MockHTMLElement(
+      ['pane-split', direction === 'vertical' ? 'is-vertical' : 'is-horizontal'],
+      children
+    )
+  const root = (child: MockHTMLElement): MockHTMLElement =>
+    new MockHTMLElement(['pane-manager-root'], [child])
+
+  const edge = {
+    blockStart: 'data-terminal-edge-block-start',
+    blockEnd: 'data-terminal-edge-block-end',
+    inlineStart: 'data-terminal-edge-inline-start',
+    inlineEnd: 'data-terminal-edge-inline-end'
+  } as const
+
+  function expectEdges(
+    element: MockHTMLElement,
+    expected: Partial<Record<keyof typeof edge, boolean>>
+  ): void {
+    for (const [name, attr] of Object.entries(edge) as [keyof typeof edge, string][]) {
+      expect(element.hasAttribute(attr), name).toBe(expected[name] === true)
+    }
+  }
+
+  it('marks a root vertical split as touching both block edges', () => {
+    const rootSplit = split('vertical', [pane(), pane()])
+
+    updateTerminalSplitEdgeState(root(rootSplit) as unknown as HTMLElement)
+
+    expectEdges(rootSplit, {
+      blockStart: true,
+      blockEnd: true,
+      inlineStart: true,
+      inlineEnd: true
+    })
+  })
+
+  it('marks a root horizontal split as touching both inline edges', () => {
+    const rootSplit = split('horizontal', [pane(), pane()])
+
+    updateTerminalSplitEdgeState(root(rootSplit) as unknown as HTMLElement)
+
+    expectEdges(rootSplit, {
+      blockStart: true,
+      blockEnd: true,
+      inlineStart: true,
+      inlineEnd: true
+    })
+  })
+
+  it('clamps only the outer endpoint for a nested vertical split on the top edge', () => {
+    const topNestedVertical = split('vertical', [pane(), pane()])
+    const rootSplit = split('horizontal', [topNestedVertical, pane()])
+
+    updateTerminalSplitEdgeState(root(rootSplit) as unknown as HTMLElement)
+
+    expectEdges(topNestedVertical, {
+      blockStart: true,
+      blockEnd: false,
+      inlineStart: true,
+      inlineEnd: true
+    })
+  })
+
+  it('clamps only the outer endpoint for a nested horizontal split on the left edge', () => {
+    const leftNestedHorizontal = split('horizontal', [pane(), pane()])
+    const rootSplit = split('vertical', [leftNestedHorizontal, pane()])
+
+    updateTerminalSplitEdgeState(root(rootSplit) as unknown as HTMLElement)
+
+    expectEdges(leftNestedHorizontal, {
+      blockStart: true,
+      blockEnd: true,
+      inlineStart: true,
+      inlineEnd: false
+    })
+  })
+
+  it('removes stale edge markers when a split position changes', () => {
+    const promotedSplit = split('horizontal', [pane(), pane()])
+    promotedSplit.setAttribute(edge.inlineEnd)
+
+    const rootSplit = split('vertical', [promotedSplit, pane()])
+
+    updateTerminalSplitEdgeState(root(rootSplit) as unknown as HTMLElement)
+
+    expectEdges(promotedSplit, {
+      blockStart: true,
+      blockEnd: true,
+      inlineStart: true,
+      inlineEnd: false
+    })
   })
 })

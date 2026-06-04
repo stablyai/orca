@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Socket } from 'net'
 import { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import { createNdjsonParser } from './ndjson'
 
-function createBatcher() {
+function createBatcher(options?: ConstructorParameters<typeof DaemonStreamDataBatcher>[1]) {
   const streamSocket = {
     destroyed: false,
     write: vi.fn()
   } as unknown as Socket & { write: ReturnType<typeof vi.fn> }
-  const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket }))
+  const batcher = new DaemonStreamDataBatcher(() => ({ streamSocket }), options)
   return { batcher, streamSocket }
 }
 
@@ -96,6 +97,34 @@ describe('DaemonStreamDataBatcher', () => {
         '"sessionId":"session-background"'
       )
       expect(String(streamSocket.write.mock.calls[1]?.[0])).toContain(`"data":"${background}"`)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('writes large stream data as parser-sized NDJSON events', () => {
+    vi.useFakeTimers()
+    try {
+      const maxLineBytes = 256
+      const { batcher, streamSocket } = createBatcher({ maxLineBytes })
+      const data = 'x'.repeat(maxLineBytes * 3)
+      const onMessage = vi.fn()
+      const onError = vi.fn()
+      const parser = createNdjsonParser(onMessage, onError, { maxLineBytes })
+
+      batcher.enqueue('client-1', 'session-1', data)
+      vi.advanceTimersByTime(8)
+      for (const [line] of streamSocket.write.mock.calls) {
+        parser.feed(String(line))
+      }
+
+      expect(onError).not.toHaveBeenCalled()
+      expect(onMessage).toHaveBeenCalled()
+      expect(
+        onMessage.mock.calls
+          .map(([message]) => (message as { payload?: { data?: string } }).payload?.data ?? '')
+          .join('')
+      ).toBe(data)
     } finally {
       vi.useRealTimers()
     }

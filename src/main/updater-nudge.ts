@@ -33,10 +33,18 @@ export async function fetchNudge(): Promise<NudgeConfig | null> {
       return null
     }
 
-    if (minVersion !== undefined && typeof minVersion !== 'string') {return null}
-    if (maxVersion !== undefined && typeof maxVersion !== 'string') {return null}
-    if (minVersion !== undefined && !isValidVersion(minVersion)) {return null}
-    if (maxVersion !== undefined && !isValidVersion(maxVersion)) {return null}
+    if (minVersion !== undefined && typeof minVersion !== 'string') {
+      return null
+    }
+    if (maxVersion !== undefined && typeof maxVersion !== 'string') {
+      return null
+    }
+    if (minVersion !== undefined && !isValidVersion(minVersion)) {
+      return null
+    }
+    if (maxVersion !== undefined && !isValidVersion(maxVersion)) {
+      return null
+    }
     if (
       minVersion !== undefined &&
       maxVersion !== undefined &&

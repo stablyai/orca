@@ -13,6 +13,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  _getProjectRefCacheSize,
   _resetKnownHostsCache,
   _resetProjectRefCache,
   classifyGlabError,
@@ -87,6 +88,17 @@ describe('gitlab project ref parsing', () => {
 
   it('handles missing .git suffix', () => {
     expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets')).toEqual({
+      host: 'gitlab.com',
+      path: 'acme/widgets'
+    })
+  })
+
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets.git/')).toEqual({
+      host: 'gitlab.com',
+      path: 'acme/widgets'
+    })
+    expect(parseGitLabProjectRef('ssh://git@gitlab.com/acme/widgets.git/')).toEqual({
       host: 'gitlab.com',
       path: 'acme/widgets'
     })
@@ -177,6 +189,19 @@ describe('gitlab project ref resolution', () => {
 
     expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('bounds cached project refs for distinct repo paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'git@gitlab.com:stablyai/orca.git\n',
+      stderr: ''
+    })
+
+    for (let i = 0; i < 513; i += 1) {
+      await getProjectRef(`/repo-${i}`)
+    }
+
+    expect(_getProjectRefCacheSize()).toBe(512)
   })
 
   it('does not cache a missing SSH provider as a permanent null project ref', async () => {

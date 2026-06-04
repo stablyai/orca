@@ -16,6 +16,12 @@ describe('getMarkdownPreviewLinkTarget', () => {
     )
   })
 
+  it('preserves hash fragments on Windows drive-letter absolute links', () => {
+    expect(
+      getMarkdownPreviewLinkTarget('C:\\repo\\docs\\guide.md#L10', '/repo/docs/README.md')
+    ).toBe('file:///C:/repo/docs/guide.md#L10')
+  })
+
   it('preserves external links', () => {
     expect(getMarkdownPreviewLinkTarget('https://example.com/docs', '/repo/docs/README.md')).toBe(
       'https://example.com/docs'
@@ -46,6 +52,18 @@ describe('getMarkdownPreviewImageSrc', () => {
     expect(getMarkdownPreviewImageSrc('./diagram.png', 'C:\\repo\\docs\\README.md')).toBe(
       'file:///C:/repo/docs/diagram.png'
     )
+  })
+
+  it('resolves Windows drive-letter absolute image paths', () => {
+    expect(
+      getMarkdownPreviewImageSrc('C:\\repo\\assets\\diagram.png', '/repo/docs/README.md')
+    ).toBe('file:///C:/repo/assets/diagram.png')
+  })
+
+  it('resolves relative paths for Windows UNC markdown files', () => {
+    expect(
+      getMarkdownPreviewImageSrc('./diagram.png', '\\\\server\\share\\repo\\docs\\README.md')
+    ).toBe('file://server/share/repo/docs/diagram.png')
   })
 
   it('leaves unsupported schemes unchanged', () => {
@@ -107,6 +125,18 @@ describe('resolveImageAbsolutePath', () => {
     )
   })
 
+  it('resolves Windows drive-letter absolute image paths to filesystem paths', () => {
+    expect(resolveImageAbsolutePath('C:\\repo\\assets\\diagram.png', '/repo/docs/README.md')).toBe(
+      'C:/repo/assets/diagram.png'
+    )
+  })
+
+  it('resolves Windows UNC paths without dropping the server name', () => {
+    expect(
+      resolveImageAbsolutePath('./diagram.png', '\\\\server\\share\\repo\\docs\\README.md')
+    ).toBe('//server/share/repo/docs/diagram.png')
+  })
+
   it('returns null for http URLs', () => {
     expect(resolveImageAbsolutePath('https://example.com/img.png', '/repo/README.md')).toBeNull()
   })
@@ -129,6 +159,18 @@ describe('fileUrlToAbsolutePath', () => {
 
   it('converts windows file URLs to absolute paths', () => {
     expect(fileUrlToAbsolutePath(new URL('file:///C:/repo/docs/README.md'))).toBe(
+      'C:/repo/docs/README.md'
+    )
+  })
+
+  it('converts UNC file URLs to absolute paths with the server name', () => {
+    expect(fileUrlToAbsolutePath(new URL('file://server/share/repo/docs/README.md'))).toBe(
+      '//server/share/repo/docs/README.md'
+    )
+  })
+
+  it('treats localhost file URLs as local paths', () => {
+    expect(fileUrlToAbsolutePath(new URL('file://localhost/C:/repo/docs/README.md'))).toBe(
       'C:/repo/docs/README.md'
     )
   })

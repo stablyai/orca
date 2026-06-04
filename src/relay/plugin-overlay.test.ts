@@ -104,6 +104,17 @@ describe('PluginOverlayManager', () => {
     writeFileSync(join(piAgentDir, 'auth.json'), 'secret token')
     writeFileSync(join(piAgentDir, 'skills', 'my-skill', 'SKILL.md'), 'critical user skill')
     writeFileSync(join(piAgentDir, 'extensions', 'user-ext', 'ext.ts'), 'user extension')
+    writeFileSync(
+      join(piAgentDir, 'settings.json'),
+      JSON.stringify({
+        defaultProvider: 'amazon-bedrock',
+        hideThinkingBlock: false,
+        terminal: {
+          showImages: false,
+          clearOnShrink: false
+        }
+      })
+    )
 
     manager.setSources({ piExtensionSource: '// pi extension' })
     const dir = manager.materializePi('tab-pi:0')
@@ -120,6 +131,22 @@ describe('PluginOverlayManager', () => {
       'orca-agent-status.ts',
       'user-ext'
     ])
+    expect(JSON.parse(readFileSync(join(dir!, 'settings.json'), 'utf8'))).toEqual({
+      defaultProvider: 'amazon-bedrock',
+      hideThinkingBlock: true,
+      terminal: {
+        showImages: false,
+        clearOnShrink: true
+      }
+    })
+    expect(JSON.parse(readFileSync(join(piAgentDir, 'settings.json'), 'utf8'))).toEqual({
+      defaultProvider: 'amazon-bedrock',
+      hideThinkingBlock: false,
+      terminal: {
+        showImages: false,
+        clearOnShrink: false
+      }
+    })
   })
 
   it('mirrors a preexisting remote Pi agent dir instead of the default', () => {
@@ -208,6 +235,10 @@ describe('PluginOverlayManager', () => {
       expect(existsSync(join(dir!, 'auth.json'))).toBe(false)
       const overlayExtensions = readdirSync(join(dir!, 'extensions')).sort()
       expect(overlayExtensions).toEqual(['orca-agent-status.ts'])
+      expect(JSON.parse(readFileSync(join(dir!, 'settings.json'), 'utf8'))).toEqual({
+        hideThinkingBlock: true,
+        terminal: { clearOnShrink: true }
+      })
     })
   })
 

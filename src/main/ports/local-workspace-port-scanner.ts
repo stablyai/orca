@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: the platform-specific scan paths share parsing,
 attribution, and normalization rules that must stay in lockstep. */
 import { execFile } from 'child_process'
-import { promisify } from 'util'
 import { readFile, readdir, readlink } from 'fs/promises'
 import path from 'path'
 import type {
@@ -11,8 +10,6 @@ import type {
   WorkspacePortScanResult
 } from '../../shared/workspace-ports'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from './advertised-url-watcher'
-
-const execFileAsync = promisify(execFile)
 
 const COMMAND_TIMEOUT_MS = 4_000
 const MAX_PORTS = 200
@@ -34,15 +31,21 @@ type ProcessMetadata = {
   cwd?: string
 }
 
+type NormalizedWorkspacePortProbe = {
+  worktree: WorkspacePortProbe
+  normalizedPath: string
+}
+
 export async function scanWorkspacePorts(
   worktrees: WorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup' | 'reconcileScan'> = advertisedUrlWatcher
 ): Promise<WorkspacePortScanResult> {
   try {
     const rawPorts = await scanPlatformListeningPorts()
-    reconcileAdvertisedUrls(rawPorts, worktrees, urlWatcher)
+    const normalizedWorktrees = normalizeWorkspacePortProbes(worktrees)
+    reconcileAdvertisedUrls(rawPorts, normalizedWorktrees, urlWatcher)
     const ports = rawPorts
-      .map((port) => enrichPort(port, worktrees, urlWatcher))
+      .map((port) => enrichPort(port, normalizedWorktrees, urlWatcher))
       .sort(compareWorkspacePorts)
       .slice(0, MAX_PORTS)
     return { platform: process.platform, scannedAt: Date.now(), ports }
@@ -61,16 +64,30 @@ export function attributePortToWorkspace(
   port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
   worktrees: WorkspacePortProbe[]
 ): WorkspacePortOwner | undefined {
+  return attributePortToNormalizedWorkspaces(port, normalizeWorkspacePortProbes(worktrees))
+}
+
+function normalizeWorkspacePortProbes(
+  worktrees: readonly WorkspacePortProbe[]
+): NormalizedWorkspacePortProbe[] {
+  return worktrees.map((worktree) => ({
+    worktree,
+    normalizedPath: normalizeComparablePath(worktree.path)
+  }))
+}
+
+function attributePortToNormalizedWorkspaces(
+  port: Pick<RawListeningPort, 'cwd' | 'commandLine'>,
+  worktrees: readonly NormalizedWorkspacePortProbe[]
+): WorkspacePortOwner | undefined {
   const cwd = port.cwd ? normalizeComparablePath(port.cwd) : null
   const commandLine = port.commandLine ? normalizeComparableText(port.commandLine) : null
 
-  const cwdMatches = cwd
-    ? worktrees
-        .map((worktree) => ({ worktree, normalizedPath: normalizeComparablePath(worktree.path) }))
-        .filter(({ normalizedPath }) => isSameOrDescendant(cwd, normalizedPath))
-    : []
-
-  const cwdMatch = pickDeepestMatch(cwdMatches)
+  const cwdMatch = cwd
+    ? pickDeepestMatching(worktrees, ({ normalizedPath }) =>
+        isSameOrDescendant(cwd, normalizedPath)
+      )
+    : undefined
   if (cwdMatch) {
     return toOwner(cwdMatch.worktree, 'cwd')
   }
@@ -79,10 +96,9 @@ export function attributePortToWorkspace(
     return undefined
   }
 
-  const commandMatches = worktrees
-    .map((worktree) => ({ worktree, normalizedPath: normalizeComparablePath(worktree.path) }))
-    .filter(({ normalizedPath }) => includesPathBoundary(commandLine, normalizedPath))
-  const commandMatch = pickDeepestMatch(commandMatches)
+  const commandMatch = pickDeepestMatching(worktrees, ({ normalizedPath }) =>
+    includesPathBoundary(commandLine, normalizedPath)
+  )
   return commandMatch ? toOwner(commandMatch.worktree, 'command') : undefined
 }
 
@@ -223,6 +239,9 @@ async function readProcNet(
 
 async function mapLinuxInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
   const result = new Map<number, number>()
+  if (inodes.size === 0) {
+    return result
+  }
   let pids: string[]
   try {
     pids = (await readdir('/proc')).filter((entry) => /^\d+$/.test(entry))
@@ -340,12 +359,50 @@ async function loadWindowsProcessMetadata(
 }
 
 async function runCommand(command: string, args: string[]): Promise<{ stdout: string }> {
-  const { stdout } = await execFileAsync(command, args, {
-    timeout: COMMAND_TIMEOUT_MS,
-    maxBuffer: 2 * 1024 * 1024,
-    windowsHide: true
+  return await new Promise((resolve, reject) => {
+    let settled = false
+    let child: ReturnType<typeof execFile> | undefined
+    const timer = setTimeout(() => {
+      if (settled) {
+        return
+      }
+      settled = true
+      child?.kill()
+      reject(new Error(`${command} timed out after ${COMMAND_TIMEOUT_MS}ms`))
+    }, COMMAND_TIMEOUT_MS)
+
+    const settle = (callback: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      callback()
+    }
+
+    // Why: Node's execFile timeout only signals the child; if the callback
+    // never arrives, the workspace port scan would otherwise hang forever.
+    try {
+      child = execFile(
+        command,
+        args,
+        {
+          timeout: COMMAND_TIMEOUT_MS,
+          maxBuffer: 2 * 1024 * 1024,
+          windowsHide: true
+        },
+        (error, stdout) => {
+          if (error) {
+            settle(() => reject(error))
+            return
+          }
+          settle(() => resolve({ stdout: String(stdout) }))
+        }
+      )
+    } catch (error) {
+      settle(() => reject(error))
+    }
   })
-  return { stdout: String(stdout) }
 }
 
 async function readTextIfAvailable(filePath: string): Promise<string | undefined> {
@@ -358,10 +415,10 @@ async function readTextIfAvailable(filePath: string): Promise<string | undefined
 
 function enrichPort(
   port: RawListeningPort,
-  worktrees: WorkspacePortProbe[],
+  worktrees: readonly NormalizedWorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'>
 ): WorkspacePort {
-  const owner = attributePortToWorkspace(port, worktrees)
+  const owner = attributePortToNormalizedWorkspaces(port, worktrees)
   const base = {
     id: `${port.host}:${port.port}:${port.pid ?? 'unknown'}`,
     bindHost: port.host,
@@ -393,15 +450,15 @@ function enrichPort(
 
 function reconcileAdvertisedUrls(
   ports: RawListeningPort[],
-  worktrees: WorkspacePortProbe[],
+  worktrees: readonly NormalizedWorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'reconcileScan'>
 ): void {
   const observationsByWorktree = new Map<string, { port: number; pid?: number }[]>()
   for (const worktree of worktrees) {
-    observationsByWorktree.set(worktree.id, [])
+    observationsByWorktree.set(worktree.worktree.id, [])
   }
   for (const port of ports) {
-    const owner = attributePortToWorkspace(port, worktrees)
+    const owner = attributePortToNormalizedWorkspaces(port, worktrees)
     if (!owner) {
       continue
     }
@@ -450,8 +507,20 @@ function toOwner(
   }
 }
 
-function pickDeepestMatch<T extends { normalizedPath: string }>(matches: T[]): T | undefined {
-  return matches.sort((a, b) => b.normalizedPath.length - a.normalizedPath.length)[0]
+function pickDeepestMatching<T extends { normalizedPath: string }>(
+  candidates: readonly T[],
+  predicate: (candidate: T) => boolean
+): T | undefined {
+  let best: T | undefined
+  for (const candidate of candidates) {
+    if (!predicate(candidate)) {
+      continue
+    }
+    if (!best || candidate.normalizedPath.length > best.normalizedPath.length) {
+      best = candidate
+    }
+  }
+  return best
 }
 
 function isSameOrDescendant(candidate: string, parent: string): boolean {

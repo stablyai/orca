@@ -1,5 +1,6 @@
 import type { StatusBarItem } from '../../../../shared/types'
 import type { SettingsSearchEntry } from './settings-search'
+import { TERMINAL_APPEARANCE_SEARCH_ENTRIES } from './terminal-search'
 
 export const STATUS_BAR_TOGGLES: readonly {
   id: StatusBarItem
@@ -119,12 +120,22 @@ export const SIDEBAR_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
+export const APP_ICON_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'App Icon',
+    description: 'Choose the app icon shown in the Dock and window switcher.',
+    keywords: ['app icon', 'orca', 'dock', 'window', 'switcher', 'blue', 'watercolor']
+  }
+]
+
 export const APPEARANCE_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...THEME_ENTRIES,
   ...TYPOGRAPHY_ENTRIES,
   ...ZOOM_ENTRIES,
+  ...TERMINAL_APPEARANCE_SEARCH_ENTRIES,
   ...LAYOUT_ENTRIES,
   ...TITLEBAR_ENTRIES,
   ...STATUS_BAR_ENTRIES,
-  ...SIDEBAR_ENTRIES
+  ...SIDEBAR_ENTRIES,
+  ...APP_ICON_ENTRIES
 ]

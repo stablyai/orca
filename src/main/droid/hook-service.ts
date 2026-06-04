@@ -21,6 +21,9 @@ const DROID_EVENTS = [
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
   { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: sub-droid completion is mission progress, not parent Droid completion.
+  // The listener intentionally ignores SubagentStop so it cannot notify.
+  { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
   {
     eventName: 'PreToolUse',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
@@ -83,7 +86,9 @@ function getManagedScript(): string {
     'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
+    // Timeout caps best-effort hook posts if the local listener stalls.
     'curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/droid" \\',
+    '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
     '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',

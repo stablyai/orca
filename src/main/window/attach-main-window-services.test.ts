@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   onMock,
   removeAllListenersMock,
+  removeListenerMock,
   setPermissionRequestHandlerMock,
   setPermissionCheckHandlerMock,
+  setDevicePermissionHandlerMock,
   setDisplayMediaRequestHandlerMock,
   handleMock,
   removeHandlerMock,
@@ -22,8 +24,10 @@ const {
 } = vi.hoisted(() => ({
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
+  removeListenerMock: vi.fn(),
   setPermissionRequestHandlerMock: vi.fn(),
   setPermissionCheckHandlerMock: vi.fn(),
+  setDevicePermissionHandlerMock: vi.fn(),
   setDisplayMediaRequestHandlerMock: vi.fn(),
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -52,6 +56,7 @@ vi.mock('electron', () => ({
   ipcMain: {
     on: onMock,
     removeAllListeners: removeAllListenersMock,
+    removeListener: removeListenerMock,
     removeHandler: removeHandlerMock,
     handle: handleMock
   },
@@ -95,6 +100,7 @@ import { attachMainWindowServices } from './attach-main-window-services'
 type MockFn = ReturnType<typeof vi.fn>
 
 type MainWindowStub = {
+  id?: number
   isDestroyed?: MockFn
   on: MockFn
   webContents: {
@@ -119,6 +125,7 @@ type RuntimeStub = {
 
 function createMainWindow(extraWebContents: { on?: MockFn; send?: MockFn } = {}): MainWindowStub {
   return {
+    id: 1,
     isDestroyed: vi.fn(() => false),
     on: vi.fn(),
     webContents: {
@@ -148,14 +155,22 @@ function createRuntime(): RuntimeStub {
   }
 }
 
+function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
+  return mainWindowOnMock.mock.calls
+    .filter(([event]) => event === 'closed')
+    .map(([, handler]) => handler as () => void)
+}
+
 describe('attachMainWindowServices', () => {
   beforeEach(() => {
     onMock.mockReset()
     removeAllListenersMock.mockReset()
+    removeListenerMock.mockReset()
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     setPermissionRequestHandlerMock.mockReset()
     setPermissionCheckHandlerMock.mockReset()
+    setDevicePermissionHandlerMock.mockReset()
     setDisplayMediaRequestHandlerMock.mockReset()
     systemPreferencesAskForMediaAccessMock.mockReset()
     systemPreferencesGetMediaAccessStatusMock.mockReset()
@@ -170,6 +185,7 @@ describe('attachMainWindowServices', () => {
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
       on: vi.fn(),
       removeListener: vi.fn()
@@ -273,6 +289,48 @@ describe('attachMainWindowServices', () => {
     expect(mainWindow.webContents.reload).not.toHaveBeenCalled()
   })
 
+  it('removes the app reload IPC handler when the owning window closes', () => {
+    const mainWindowOnMock = vi.fn()
+    const mainWindow = createMainWindow()
+    mainWindow.on = mainWindowOnMock
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    removeHandlerMock.mockClear()
+    const closedHandlers = getClosedHandlers(mainWindowOnMock)
+    expect(closedHandlers.length).toBeGreaterThan(0)
+    for (const handler of closedHandlers) {
+      handler()
+    }
+
+    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
+  })
+
+  it('keeps a newer app reload handler when an older window closes late', () => {
+    const oldWindowOnMock = vi.fn()
+    const oldWindow = createMainWindow()
+    oldWindow.on = oldWindowOnMock
+    attachMainWindowServices(oldWindow as never, createStore(), createRuntime() as never)
+    const oldClosedHandlers = getClosedHandlers(oldWindowOnMock)
+
+    const newWindowOnMock = vi.fn()
+    const newWindow = createMainWindow()
+    newWindow.on = newWindowOnMock
+    attachMainWindowServices(newWindow as never, createStore(), createRuntime() as never)
+
+    removeHandlerMock.mockClear()
+    for (const handler of oldClosedHandlers) {
+      handler()
+    }
+
+    expect(removeHandlerMock).not.toHaveBeenCalledWith('app:reload')
+
+    for (const handler of getClosedHandlers(newWindowOnMock)) {
+      handler()
+    }
+    expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
+  })
+
   it('only allows the explicit permission allowlist', async () => {
     attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
 
@@ -316,6 +374,7 @@ describe('attachMainWindowServices', () => {
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
       on: browserSessionOnMock,
       removeListener: vi.fn()
@@ -380,12 +439,107 @@ describe('attachMainWindowServices', () => {
     })
   })
 
+  it('wires browser-session WebAuthn device selection for security keys', () => {
+    const browserSessionOnMock = vi.fn()
+    sessionFromPartitionMock.mockReturnValue({
+      setPermissionRequestHandler: setPermissionRequestHandlerMock,
+      setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
+      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
+      on: browserSessionOnMock,
+      removeListener: vi.fn()
+    })
+
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+
+    expect(setDevicePermissionHandlerMock).toHaveBeenCalledWith(expect.any(Function))
+    const devicePermissionHandler = setDevicePermissionHandlerMock.mock.calls[0][0] as (details: {
+      deviceType: string
+      origin: string
+      device: { collections?: { usagePage?: number }[] }
+    }) => boolean
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'https://github.com',
+        device: { collections: [{ usagePage: 0xf1d0 }] }
+      })
+    ).toBe(true)
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'http://[::1]:5173',
+        device: { collections: [{ usagePage: 0xf1d0 }] }
+      })
+    ).toBe(true)
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'https://github.com',
+        device: { collections: [{ usagePage: 1 }] }
+      })
+    ).toBe(false)
+
+    const browserCheckHandler = setPermissionCheckHandlerMock.mock.calls[1][0] as (
+      wc: unknown,
+      permission: string,
+      origin: string,
+      details?: { securityOrigin?: string }
+    ) => boolean
+    expect(browserCheckHandler(null, 'hid', '', { securityOrigin: 'https://github.com' })).toBe(
+      true
+    )
+
+    const selectHidHandler = browserSessionOnMock.mock.calls.find(
+      ([eventName]) => eventName === 'select-hid-device'
+    )?.[1] as (
+      event: { preventDefault: () => void },
+      details: {
+        deviceList: { deviceId: string; collections?: { usagePage?: number }[] }[]
+        frame: { url: string }
+      },
+      callback: (deviceId?: string) => void
+    ) => void
+    const preventDefault = vi.fn()
+    const callback = vi.fn()
+    selectHidHandler(
+      { preventDefault },
+      {
+        frame: { url: 'https://github.com' },
+        deviceList: [
+          { deviceId: 'keyboard', collections: [{ usagePage: 1 }] },
+          { deviceId: 'security-key', collections: [{ usagePage: 0xf1d0 }] }
+        ]
+      },
+      callback
+    )
+
+    expect(preventDefault).toHaveBeenCalled()
+    expect(callback).toHaveBeenCalledWith('security-key')
+
+    const selectWebAuthnHandler = browserSessionOnMock.mock.calls.find(
+      ([eventName]) => eventName === 'select-webauthn-account'
+    )?.[1] as (
+      event: { preventDefault: () => void },
+      details: { accounts: { credentialId: string }[] },
+      callback: (credentialId?: string | null) => void
+    ) => void
+    const webAuthnCallback = vi.fn()
+    selectWebAuthnHandler(
+      { preventDefault: vi.fn() },
+      { accounts: [{ credentialId: 'credential-1' }] },
+      webAuthnCallback
+    )
+    expect(webAuthnCallback).toHaveBeenCalledWith('credential-1')
+  })
+
   it('replaces the persistent browser-session download handler on re-attach', () => {
     const browserSessionOnMock = vi.fn()
     const browserSessionRemoveListenerMock = vi.fn()
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
       on: browserSessionOnMock,
       removeListener: browserSessionRemoveListenerMock
@@ -409,6 +563,7 @@ describe('attachMainWindowServices', () => {
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
       on: vi.fn(),
       removeListener: vi.fn()
@@ -419,12 +574,73 @@ describe('attachMainWindowServices', () => {
 
     attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
 
-    const closedHandler = mainWindowOnMock.mock.calls
-      .filter(([event]) => event === 'closed')
-      .at(-1)?.[1] as (() => void) | undefined
+    const closedHandler = getClosedHandlers(mainWindowOnMock).at(-1)
     expect(closedHandler).toBeTypeOf('function')
     closedHandler?.()
     expect(browserManagerUnregisterAllMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('removes the native file-drop relay when the main window closes', () => {
+    const mainWindowOnMock = vi.fn()
+    const mainWindow = createMainWindow({ send: vi.fn() })
+    mainWindow.on = mainWindowOnMock
+
+    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
+    const channel = 'terminal:file-dropped-from-preload'
+    const relayHandler = onMock.mock.calls.find(([event]) => event === channel)?.[1]
+    expect(relayHandler).toBeTypeOf('function')
+    expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
+
+    const closedHandlers = getClosedHandlers(mainWindowOnMock)
+    for (const handler of closedHandlers) {
+      handler()
+    }
+
+    expect(removeListenerMock).toHaveBeenCalledWith(channel, relayHandler)
+  })
+
+  it('clears the runtime notifier when the owning window closes', () => {
+    const mainWindowOnMock = vi.fn()
+    const mainWindow = createMainWindow()
+    mainWindow.on = mainWindowOnMock
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    runtime.setNotifier.mockClear()
+    for (const handler of getClosedHandlers(mainWindowOnMock)) {
+      handler()
+    }
+
+    expect(runtime.markGraphUnavailable).toHaveBeenCalledWith(1)
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
+  })
+
+  it('keeps a newer runtime notifier when an older window closes late', () => {
+    const runtime = createRuntime()
+    const oldWindowOnMock = vi.fn()
+    const oldWindow = createMainWindow()
+    oldWindow.on = oldWindowOnMock
+    attachMainWindowServices(oldWindow as never, createStore(), runtime as never)
+    const oldClosedHandlers = getClosedHandlers(oldWindowOnMock)
+
+    const newWindowOnMock = vi.fn()
+    const newWindow = createMainWindow()
+    newWindow.on = newWindowOnMock
+    attachMainWindowServices(newWindow as never, createStore(), runtime as never)
+
+    runtime.setNotifier.mockClear()
+    for (const handler of oldClosedHandlers) {
+      handler()
+    }
+
+    expect(runtime.setNotifier).not.toHaveBeenCalledWith(null)
+
+    for (const handler of getClosedHandlers(newWindowOnMock)) {
+      handler()
+    }
+    expect(runtime.setNotifier).toHaveBeenCalledWith(null)
   })
 
   it('forwards runtime notifier events to the renderer', () => {

@@ -1,1030 +1,1420 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Orca Mobile - Tasks Mock</title>
-<style>
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-    -webkit-tap-highlight-color: transparent;
-  }
-
-  :root {
-    --bg-base: #111111;
-    --bg-panel: #1a1a1a;
-    --bg-raised: #242424;
-    --border-subtle: #2a2a2a;
-    --text-primary: #e0e0e0;
-    --text-secondary: #888888;
-    --text-muted: #555555;
-    --accent-blue: #3b82f6;
-    --status-green: #22c55e;
-    --status-amber: #f59e0b;
-    --status-red: #ef4444;
-  }
-
-  body {
-    min-height: 100vh;
-    background: #0b0b0b;
-    color: var(--text-primary);
-    font-family: Geist, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  }
-
-  button,
-  input,
-  textarea {
-    color: inherit;
-    font: inherit;
-  }
-
-  button {
-    border: 0;
-    cursor: pointer;
-  }
-
-  .stage {
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    padding: 28px;
-  }
-
-  .phone {
-    width: min(430px, 100vw);
-    height: min(844px, 100vh);
-    min-height: 720px;
-    background: var(--bg-base);
-    border: 1px solid var(--border-subtle);
-    border-radius: 34px;
-    overflow: hidden;
-    position: relative;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-  }
-
-  .screen {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg-base);
-  }
-
-  .top-chrome {
-    background: var(--bg-panel);
-    border-bottom: 1px solid var(--border-subtle);
-    flex: none;
-  }
-
-  .status-bar {
-    min-height: 42px;
-    padding: 6px 16px 4px;
-    display: flex;
-    align-items: center;
-  }
-
-  .back-button,
-  .icon-button {
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
-    background: transparent;
-    color: var(--text-secondary);
-    border-radius: 6px;
-  }
-
-  .back-button {
-    color: var(--text-primary);
-    margin-right: 4px;
-  }
-
-  .back-button:active,
-  .icon-button:active,
-  .segment-button:active,
-  .task-row:active,
-  .drawer-row:active,
-  .target-button:active {
-    background: var(--bg-raised);
-  }
-
-  .title-wrap {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    min-width: 0;
-  }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--status-green);
-    margin-right: 8px;
-    flex: none;
-  }
-
-  .title {
-    font-size: 16px;
-    line-height: 20px;
-    font-weight: 700;
-  }
-
-  .toolbar {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    padding: 6px 12px;
-    border-top: 1px solid var(--border-subtle);
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .toolbar::-webkit-scrollbar {
-    display: none;
-  }
-
-  .toolbar-inline {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    flex: none;
-  }
-
-  .segment-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    min-height: 26px;
-    padding: 4px 10px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    background: transparent;
-    color: var(--text-primary);
-    white-space: nowrap;
-  }
-
-  .segment-button .primary {
-    font-size: 12px;
-    font-weight: 600;
-  }
-
-  .segment-button .secondary {
-    font-size: 12px;
-    color: var(--text-secondary);
-  }
-
-  .search-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border-top: 1px solid var(--border-subtle);
-    color: var(--text-muted);
-  }
-
-  .search-input {
-    flex: 1;
-    min-width: 0;
-    border: 0;
-    outline: 0;
-    background: transparent;
-    color: var(--text-primary);
-    font-size: 13px;
-    line-height: 18px;
-    padding: 2px 0;
-  }
-
-  .search-input::placeholder {
-    color: var(--text-muted);
-  }
-
-  .clear-search {
-    width: 24px;
-    height: 24px;
-    display: none;
-    place-items: center;
-    background: transparent;
-    color: var(--text-secondary);
-  }
-
-  .clear-search.visible {
-    display: grid;
-  }
-
-  .error-banner {
-    display: none;
-    padding: 8px 16px;
-    background: var(--bg-panel);
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .error-banner.visible {
-    display: block;
-  }
-
-  .error-text {
-    color: var(--status-red);
-    font-size: 13px;
-    line-height: 17px;
-  }
-
-  .list {
-    flex: 1;
-    overflow: auto;
-    padding-top: 4px;
-  }
-
-  .task-row {
-    width: 100%;
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 10px 16px;
-    background: transparent;
-    text-align: left;
-  }
-
-  .task-row + .task-row {
-    border-top: 1px solid var(--border-subtle);
-    border-image: linear-gradient(to right, transparent 44px, var(--border-subtle) 44px, var(--border-subtle) calc(100% - 16px), transparent calc(100% - 16px)) 1;
-  }
-
-  .task-icon {
-    width: 20px;
-    padding-top: 3px;
-    color: var(--text-secondary);
-    flex: none;
-    display: grid;
-    place-items: center;
-  }
-
-  .task-main {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .task-title-row {
-    display: flex;
-    gap: 8px;
-    align-items: flex-start;
-  }
-
-  .task-title {
-    flex: 1;
-    min-width: 0;
-    font-size: 14px;
-    line-height: 18px;
-    font-weight: 600;
-    color: var(--text-primary);
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .updated-at {
-    padding-top: 2px;
-    font-size: 11px;
-    line-height: 14px;
-    color: var(--text-muted);
-    flex: none;
-  }
-
-  .meta-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-top: 4px;
-    min-width: 0;
-  }
-
-  .repo-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 999px;
-    flex: none;
-  }
-
-  .subtitle {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11px;
-    line-height: 15px;
-    color: var(--text-secondary);
-  }
-
-  .status-pill {
-    max-width: 88px;
-    margin-top: 1px;
-    padding: 3px 8px;
-    border-radius: 999px;
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-raised);
-    flex: none;
-  }
-
-  .status-text {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11px;
-    line-height: 14px;
-    color: var(--text-secondary);
-  }
-
-  .empty-state,
-  .loading-state {
-    height: 100%;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-secondary);
-    font-size: 14px;
-  }
-
-  .loading-dot {
-    width: 16px;
-    height: 16px;
-    border-radius: 999px;
-    border: 2px solid var(--text-muted);
-    border-top-color: var(--text-secondary);
-    animation: spin 0.8s linear infinite;
-  }
-
-  .overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 30;
-    display: none;
-  }
-
-  .overlay.visible {
-    display: block;
-  }
-
-  .backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-  }
-
-  .drawer {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-height: calc(100% - 24px);
-    overflow: auto;
-    background: var(--bg-base);
-    border-top-left-radius: 16px;
-    border-top-right-radius: 16px;
-    padding: 8px 12px 28px;
-    transform: translateY(100%);
-    animation: drawer-in 180ms ease forwards;
-    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
-  }
-
-  .handle-hit-area {
-    display: flex;
-    justify-content: center;
-    padding: 0 0 12px;
-  }
-
-  .handle {
-    width: 36px;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--text-muted);
-    opacity: 0.4;
-  }
-
-  .sheet-header {
-    padding: 0 4px;
-    margin-bottom: 12px;
-  }
-
-  .sheet-title {
-    font-size: 15px;
-    line-height: 20px;
-    font-weight: 700;
-    color: var(--text-primary);
-  }
-
-  .sheet-subtitle {
-    margin-top: 2px;
-    font-size: 12px;
-    line-height: 16px;
-    color: var(--text-muted);
-  }
-
-  .drawer-group,
-  .action-group,
-  .detail-group {
-    background: var(--bg-panel);
-    border-radius: 12px;
-    overflow: hidden;
-  }
-
-  .detail-group {
-    padding: 12px;
-    margin-bottom: 12px;
-    display: grid;
-    gap: 12px;
-  }
-
-  .detail-meta-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .detail-meta-item {
-    min-width: 96px;
-    flex: 1;
-  }
-
-  .detail-meta-label {
-    display: block;
-    margin-bottom: 2px;
-    font-size: 11px;
-    line-height: 15px;
-    color: var(--text-muted);
-  }
-
-  .detail-meta-value {
-    display: block;
-    font-size: 13px;
-    line-height: 17px;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .chip-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .detail-chip {
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-raised);
-    border-radius: 999px;
-    padding: 2px 8px;
-    font-size: 11px;
-    line-height: 15px;
-    color: var(--text-secondary);
-  }
-
-  .detail-section {
-    display: grid;
-    gap: 4px;
-  }
-
-  .detail-section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  .detail-section-title {
-    font-size: 11px;
-    line-height: 15px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .detail-section-meta {
-    flex: none;
-    font-size: 11px;
-    line-height: 15px;
-    color: var(--text-muted);
-  }
-
-  .detail-body,
-  .comment-body {
-    font-size: 13px;
-    line-height: 18px;
-    color: var(--text-primary);
-    white-space: pre-line;
-  }
-
-  .detail-line,
-  .detail-muted {
-    font-size: 12px;
-    line-height: 17px;
-    color: var(--text-secondary);
-  }
-
-  .comment-block {
-    border-top: 1px solid var(--border-subtle);
-    padding-top: 8px;
-  }
-
-  .comment-source {
-    margin-bottom: 2px;
-    font-size: 11px;
-    line-height: 15px;
-    color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .comment-meta {
-    margin-bottom: 2px;
-    font-size: 11px;
-    line-height: 15px;
-    color: var(--text-muted);
-  }
-
-  .drawer-row,
-  .action-row {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 14px;
-    background: transparent;
-    text-align: left;
-  }
-
-  .drawer-row + .drawer-row,
-  .action-row + .action-row,
-  .linear-state-row + .linear-state-row {
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .drawer-row-main,
-  .action-text {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .drawer-row-label,
-  .action-text {
-    font-size: 14px;
-    line-height: 18px;
-    color: var(--text-primary);
-  }
-
-  .drawer-row-label.selected {
-    font-weight: 600;
-  }
-
-  .drawer-row-subtitle {
-    margin-top: 1px;
-    font-size: 11px;
-    line-height: 15px;
-    color: var(--text-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .create-form {
-    display: grid;
-    gap: 8px;
-  }
-
-  .field-label {
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 600;
-    color: var(--text-secondary);
-  }
-
-  .target-button,
-  .field-input,
-  .field-textarea {
-    width: 100%;
-    border: 1px solid var(--border-subtle);
-    border-radius: 6px;
-    background: var(--bg-panel);
-    color: var(--text-primary);
-    font-size: 14px;
-    line-height: 18px;
-    padding: 10px 12px;
-    outline: 0;
-  }
-
-  .target-button {
-    text-align: left;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .field-input::placeholder,
-  .field-textarea::placeholder {
-    color: var(--text-muted);
-  }
-
-  .field-textarea {
-    min-height: 88px;
-    resize: none;
-  }
-
-  .create-button {
-    margin-top: 8px;
-    width: 100%;
-    border-radius: 6px;
-    padding: 10px 12px;
-    background: var(--text-primary);
-    color: var(--bg-base);
-    font-size: 14px;
-    line-height: 18px;
-    font-weight: 700;
-  }
-
-  .create-button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  .linear-states-block {
-    padding-top: 8px;
-  }
-
-  .linear-states-title {
-    padding: 0 14px 4px;
-    font-size: 11px;
-    line-height: 15px;
-    font-weight: 600;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .toast {
-    position: absolute;
-    left: 16px;
-    right: 16px;
-    bottom: 18px;
-    z-index: 50;
-    display: none;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--border-subtle);
-    background: var(--bg-raised);
-    color: var(--text-primary);
-    font-size: 13px;
-    line-height: 17px;
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
-  }
-
-  .toast.visible {
-    display: block;
-    animation: toast-in 140ms ease;
-  }
-
-  .icon {
-    width: 16px;
-    height: 16px;
-    stroke: currentColor;
-    stroke-width: 2;
-    fill: none;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    flex: none;
-  }
-
-  .icon.sm {
-    width: 14px;
-    height: 14px;
-  }
-
-  .icon.xs {
-    width: 12px;
-    height: 12px;
-  }
-
-  @keyframes drawer-in {
-    to { transform: translateY(0); }
-  }
-
-  @keyframes toast-in {
-    from { transform: translateY(8px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  @media (max-width: 480px) {
-    .stage {
-      padding: 0;
-    }
-
-    .phone {
-      width: 100vw;
-      height: 100vh;
-      min-height: 100vh;
-      border: 0;
-      border-radius: 0;
-    }
-  }
-</style>
-</head>
-<body>
-  <div class="stage">
-    <main class="phone" aria-label="Orca mobile Tasks mock">
-      <section class="screen">
-        <header class="top-chrome">
-          <div class="status-bar">
-            <button class="back-button" type="button" aria-label="Back" data-action="toast" data-message="Back">
-              <svg class="icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
-            </button>
-            <div class="title-wrap">
-              <span class="status-dot" aria-hidden="true"></span>
-              <h1 class="title">Tasks</h1>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Orca Mobile - Tasks Mock</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        -webkit-tap-highlight-color: transparent;
+      }
+
+      :root {
+        --bg-base: #111111;
+        --bg-panel: #1a1a1a;
+        --bg-raised: #242424;
+        --border-subtle: #2a2a2a;
+        --text-primary: #e0e0e0;
+        --text-secondary: #888888;
+        --text-muted: #555555;
+        --accent-blue: #3b82f6;
+        --status-green: #22c55e;
+        --status-amber: #f59e0b;
+        --status-red: #ef4444;
+      }
+
+      body {
+        min-height: 100vh;
+        background: #0b0b0b;
+        color: var(--text-primary);
+        font-family:
+          Geist,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          sans-serif;
+      }
+
+      button,
+      input,
+      textarea {
+        color: inherit;
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        cursor: pointer;
+      }
+
+      .stage {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 28px;
+      }
+
+      .phone {
+        width: min(430px, 100vw);
+        height: min(844px, 100vh);
+        min-height: 720px;
+        background: var(--bg-base);
+        border: 1px solid var(--border-subtle);
+        border-radius: 34px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+      }
+
+      .screen {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-base);
+      }
+
+      .top-chrome {
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border-subtle);
+        flex: none;
+      }
+
+      .status-bar {
+        min-height: 42px;
+        padding: 6px 16px 4px;
+        display: flex;
+        align-items: center;
+      }
+
+      .back-button,
+      .icon-button {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        background: transparent;
+        color: var(--text-secondary);
+        border-radius: 6px;
+      }
+
+      .back-button {
+        color: var(--text-primary);
+        margin-right: 4px;
+      }
+
+      .back-button:active,
+      .icon-button:active,
+      .segment-button:active,
+      .task-row:active,
+      .drawer-row:active,
+      .target-button:active {
+        background: var(--bg-raised);
+      }
+
+      .title-wrap {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        min-width: 0;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: var(--status-green);
+        margin-right: 8px;
+        flex: none;
+      }
+
+      .title {
+        font-size: 16px;
+        line-height: 20px;
+        font-weight: 700;
+      }
+
+      .toolbar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 12px;
+        border-top: 1px solid var(--border-subtle);
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+
+      .toolbar::-webkit-scrollbar {
+        display: none;
+      }
+
+      .toolbar-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex: none;
+      }
+
+      .segment-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 26px;
+        padding: 4px 10px;
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .segment-button .primary {
+        font-size: 12px;
+        font-weight: 600;
+      }
+
+      .segment-button .secondary {
+        font-size: 12px;
+        color: var(--text-secondary);
+      }
+
+      .search-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-top: 1px solid var(--border-subtle);
+        color: var(--text-muted);
+      }
+
+      .search-input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: var(--text-primary);
+        font-size: 13px;
+        line-height: 18px;
+        padding: 2px 0;
+      }
+
+      .search-input::placeholder {
+        color: var(--text-muted);
+      }
+
+      .clear-search {
+        width: 24px;
+        height: 24px;
+        display: none;
+        place-items: center;
+        background: transparent;
+        color: var(--text-secondary);
+      }
+
+      .clear-search.visible {
+        display: grid;
+      }
+
+      .error-banner {
+        display: none;
+        padding: 8px 16px;
+        background: var(--bg-panel);
+        border-bottom: 1px solid var(--border-subtle);
+      }
+
+      .error-banner.visible {
+        display: block;
+      }
+
+      .error-text {
+        color: var(--status-red);
+        font-size: 13px;
+        line-height: 17px;
+      }
+
+      .list {
+        flex: 1;
+        overflow: auto;
+        padding-top: 4px;
+      }
+
+      .task-row {
+        width: 100%;
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 16px;
+        background: transparent;
+        text-align: left;
+      }
+
+      .task-row + .task-row {
+        border-top: 1px solid var(--border-subtle);
+        border-image: linear-gradient(
+            to right,
+            transparent 44px,
+            var(--border-subtle) 44px,
+            var(--border-subtle) calc(100% - 16px),
+            transparent calc(100% - 16px)
+          )
+          1;
+      }
+
+      .task-icon {
+        width: 20px;
+        padding-top: 3px;
+        color: var(--text-secondary);
+        flex: none;
+        display: grid;
+        place-items: center;
+      }
+
+      .task-main {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .task-title-row {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+      }
+
+      .task-title {
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+        line-height: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .updated-at {
+        padding-top: 2px;
+        font-size: 11px;
+        line-height: 14px;
+        color: var(--text-muted);
+        flex: none;
+      }
+
+      .meta-row {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        min-width: 0;
+      }
+
+      .repo-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 999px;
+        flex: none;
+      }
+
+      .subtitle {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+        line-height: 15px;
+        color: var(--text-secondary);
+      }
+
+      .status-pill {
+        max-width: 88px;
+        margin-top: 1px;
+        padding: 3px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-raised);
+        flex: none;
+      }
+
+      .status-text {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 11px;
+        line-height: 14px;
+        color: var(--text-secondary);
+      }
+
+      .empty-state,
+      .loading-state {
+        height: 100%;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-secondary);
+        font-size: 14px;
+      }
+
+      .loading-dot {
+        width: 16px;
+        height: 16px;
+        border-radius: 999px;
+        border: 2px solid var(--text-muted);
+        border-top-color: var(--text-secondary);
+        animation: spin 0.8s linear infinite;
+      }
+
+      .overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 30;
+        display: none;
+      }
+
+      .overlay.visible {
+        display: block;
+      }
+
+      .backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+      }
+
+      .drawer {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        max-height: calc(100% - 24px);
+        overflow: auto;
+        background: var(--bg-base);
+        border-top-left-radius: 16px;
+        border-top-right-radius: 16px;
+        padding: 8px 12px 28px;
+        transform: translateY(100%);
+        animation: drawer-in 180ms ease forwards;
+        box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+      }
+
+      .handle-hit-area {
+        display: flex;
+        justify-content: center;
+        padding: 0 0 12px;
+      }
+
+      .handle {
+        width: 36px;
+        height: 4px;
+        border-radius: 2px;
+        background: var(--text-muted);
+        opacity: 0.4;
+      }
+
+      .sheet-header {
+        padding: 0 4px;
+        margin-bottom: 12px;
+      }
+
+      .sheet-title {
+        font-size: 15px;
+        line-height: 20px;
+        font-weight: 700;
+        color: var(--text-primary);
+      }
+
+      .sheet-subtitle {
+        margin-top: 2px;
+        font-size: 12px;
+        line-height: 16px;
+        color: var(--text-muted);
+      }
+
+      .drawer-group,
+      .action-group,
+      .detail-group {
+        background: var(--bg-panel);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .detail-group {
+        padding: 12px;
+        margin-bottom: 12px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .detail-meta-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .detail-meta-item {
+        min-width: 96px;
+        flex: 1;
+      }
+
+      .detail-meta-label {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 11px;
+        line-height: 15px;
+        color: var(--text-muted);
+      }
+
+      .detail-meta-value {
+        display: block;
+        font-size: 13px;
+        line-height: 17px;
+        font-weight: 600;
+        color: var(--text-primary);
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+
+      .detail-chip {
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-raised);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        line-height: 15px;
+        color: var(--text-secondary);
+      }
+
+      .detail-section {
+        display: grid;
+        gap: 4px;
+      }
+
+      .detail-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .detail-section-title {
+        font-size: 11px;
+        line-height: 15px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .detail-section-meta {
+        flex: none;
+        font-size: 11px;
+        line-height: 15px;
+        color: var(--text-muted);
+      }
+
+      .detail-body,
+      .comment-body {
+        font-size: 13px;
+        line-height: 18px;
+        color: var(--text-primary);
+        white-space: pre-line;
+      }
+
+      .detail-line,
+      .detail-muted {
+        font-size: 12px;
+        line-height: 17px;
+        color: var(--text-secondary);
+      }
+
+      .comment-block {
+        border-top: 1px solid var(--border-subtle);
+        padding-top: 8px;
+      }
+
+      .comment-source {
+        margin-bottom: 2px;
+        font-size: 11px;
+        line-height: 15px;
+        color: var(--text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .comment-meta {
+        margin-bottom: 2px;
+        font-size: 11px;
+        line-height: 15px;
+        color: var(--text-muted);
+      }
+
+      .drawer-row,
+      .action-row {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        background: transparent;
+        text-align: left;
+      }
+
+      .drawer-row + .drawer-row,
+      .action-row + .action-row,
+      .linear-state-row + .linear-state-row {
+        border-top: 1px solid var(--border-subtle);
+      }
+
+      .drawer-row-main,
+      .action-text {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .drawer-row-label,
+      .action-text {
+        font-size: 14px;
+        line-height: 18px;
+        color: var(--text-primary);
+      }
+
+      .drawer-row-label.selected {
+        font-weight: 600;
+      }
+
+      .drawer-row-subtitle {
+        margin-top: 1px;
+        font-size: 11px;
+        line-height: 15px;
+        color: var(--text-muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .create-form {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field-label {
+        font-size: 12px;
+        line-height: 16px;
+        font-weight: 600;
+        color: var(--text-secondary);
+      }
+
+      .target-button,
+      .field-input,
+      .field-textarea {
+        width: 100%;
+        border: 1px solid var(--border-subtle);
+        border-radius: 6px;
+        background: var(--bg-panel);
+        color: var(--text-primary);
+        font-size: 14px;
+        line-height: 18px;
+        padding: 10px 12px;
+        outline: 0;
+      }
+
+      .target-button {
+        text-align: left;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .field-input::placeholder,
+      .field-textarea::placeholder {
+        color: var(--text-muted);
+      }
+
+      .field-textarea {
+        min-height: 88px;
+        resize: none;
+      }
+
+      .create-button {
+        margin-top: 8px;
+        width: 100%;
+        border-radius: 6px;
+        padding: 10px 12px;
+        background: var(--text-primary);
+        color: var(--bg-base);
+        font-size: 14px;
+        line-height: 18px;
+        font-weight: 700;
+      }
+
+      .create-button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .linear-states-block {
+        padding-top: 8px;
+      }
+
+      .linear-states-title {
+        padding: 0 14px 4px;
+        font-size: 11px;
+        line-height: 15px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .toast {
+        position: absolute;
+        left: 16px;
+        right: 16px;
+        bottom: 18px;
+        z-index: 50;
+        display: none;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-raised);
+        color: var(--text-primary);
+        font-size: 13px;
+        line-height: 17px;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+      }
+
+      .toast.visible {
+        display: block;
+        animation: toast-in 140ms ease;
+      }
+
+      .icon {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        stroke-width: 2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex: none;
+      }
+
+      .icon.sm {
+        width: 14px;
+        height: 14px;
+      }
+
+      .icon.xs {
+        width: 12px;
+        height: 12px;
+      }
+
+      @keyframes drawer-in {
+        to {
+          transform: translateY(0);
+        }
+      }
+
+      @keyframes toast-in {
+        from {
+          transform: translateY(8px);
+          opacity: 0;
+        }
+        to {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @media (max-width: 480px) {
+        .stage {
+          padding: 0;
+        }
+
+        .phone {
+          width: 100vw;
+          height: 100vh;
+          min-height: 100vh;
+          border: 0;
+          border-radius: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <main class="phone" aria-label="Orca mobile Tasks mock">
+        <section class="screen">
+          <header class="top-chrome">
+            <div class="status-bar">
+              <button
+                class="back-button"
+                type="button"
+                aria-label="Back"
+                data-action="toast"
+                data-message="Back"
+              >
+                <svg class="icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></svg>
+              </button>
+              <div class="title-wrap">
+                <span class="status-dot" aria-hidden="true"></span>
+                <h1 class="title">Tasks</h1>
+              </div>
+              <button class="icon-button" type="button" aria-label="Refresh" data-action="refresh">
+                <svg class="icon" viewBox="0 0 24 24">
+                  <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                  <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                  <path d="M16 16h5v5" />
+                </svg>
+              </button>
+              <button
+                class="icon-button"
+                type="button"
+                aria-label="Create task"
+                data-action="open-create"
+              >
+                <svg class="icon" viewBox="0 0 24 24">
+                  <path d="M5 12h14" />
+                  <path d="M12 5v14" />
+                </svg>
+              </button>
             </div>
-            <button class="icon-button" type="button" aria-label="Refresh" data-action="refresh">
-              <svg class="icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
-            </button>
-            <button class="icon-button" type="button" aria-label="Create task" data-action="open-create">
-              <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-            </button>
+
+            <div class="toolbar">
+              <button class="segment-button" type="button" data-action="open-provider">
+                <span id="providerIcon"></span>
+                <span class="primary" id="providerLabel">GitHub</span>
+              </button>
+              <span id="filterControls" class="toolbar-inline"></span>
+            </div>
+
+            <label class="search-bar">
+              <svg class="icon sm" viewBox="0 0 24 24">
+                <path d="m21 21-4.34-4.34" />
+                <circle cx="11" cy="11" r="8" />
+              </svg>
+              <input
+                class="search-input"
+                id="searchInput"
+                type="search"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="Search GitHub tasks..."
+              />
+              <button
+                class="clear-search"
+                id="clearSearch"
+                type="button"
+                aria-label="Clear search"
+                data-action="clear-search"
+              >
+                <svg class="icon sm" viewBox="0 0 24 24">
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </button>
+            </label>
+          </header>
+
+          <div class="error-banner" id="errorBanner">
+            <p class="error-text" id="errorText"></p>
           </div>
 
-          <div class="toolbar">
-            <button class="segment-button" type="button" data-action="open-provider">
-              <span id="providerIcon"></span>
-              <span class="primary" id="providerLabel">GitHub</span>
-            </button>
-            <span id="filterControls" class="toolbar-inline"></span>
+          <div class="list" id="taskList"></div>
+          <div class="empty-state" id="emptyState">No GitHub tasks</div>
+          <div class="loading-state" id="loadingState"><span class="loading-dot"></span></div>
+        </section>
+
+        <div class="overlay" id="overlay" aria-hidden="true">
+          <div class="backdrop" data-action="close-drawer"></div>
+          <div class="drawer" id="drawer" role="dialog" aria-modal="true">
+            <div class="handle-hit-area" data-action="close-drawer">
+              <span class="handle"></span>
+            </div>
+            <div id="drawerContent"></div>
           </div>
-
-          <label class="search-bar">
-            <svg class="icon sm" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg>
-            <input class="search-input" id="searchInput" type="search" autocomplete="off" spellcheck="false" placeholder="Search GitHub tasks...">
-            <button class="clear-search" id="clearSearch" type="button" aria-label="Clear search" data-action="clear-search">
-              <svg class="icon sm" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </button>
-          </label>
-        </header>
-
-        <div class="error-banner" id="errorBanner">
-          <p class="error-text" id="errorText"></p>
         </div>
 
-        <div class="list" id="taskList"></div>
-        <div class="empty-state" id="emptyState">No GitHub tasks</div>
-        <div class="loading-state" id="loadingState"><span class="loading-dot"></span></div>
-      </section>
+        <div class="toast" id="toast"></div>
+      </main>
+    </div>
 
-      <div class="overlay" id="overlay" aria-hidden="true">
-        <div class="backdrop" data-action="close-drawer"></div>
-        <div class="drawer" id="drawer" role="dialog" aria-modal="true">
-          <div class="handle-hit-area" data-action="close-drawer"><span class="handle"></span></div>
-          <div id="drawerContent"></div>
-        </div>
-      </div>
+    <script>
+      const repoPalette = [
+        '#f97316',
+        '#8b5cf6',
+        '#06b6d4',
+        '#ec4899',
+        '#84cc16',
+        '#f59e0b',
+        '#6366f1'
+      ]
 
-      <div class="toast" id="toast"></div>
-    </main>
-  </div>
+      const repos = [
+        { id: 'repo-orca', displayName: 'orca', path: '/Users/jinwoo/orca' },
+        { id: 'repo-sdk', displayName: 'stably-sdk', path: '/Users/jinwoo/stably-sdk' },
+        { id: 'repo-ssh', displayName: 'prod-remote', path: 'ssh://desk/orca' },
+        {
+          id: 'repo-folder',
+          displayName: 'notes-folder',
+          path: '/Users/jinwoo/notes',
+          unsupported: true
+        }
+      ]
 
-<script>
-  const repoPalette = ["#f97316", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16", "#f59e0b", "#6366f1"];
+      const teams = [
+        { id: 'team-mobile', name: 'Mobile', workspaceName: 'Orca' },
+        { id: 'team-runtime', name: 'Runtime', workspaceName: 'Orca' }
+      ]
 
-  const repos = [
-    { id: "repo-orca", displayName: "orca", path: "/Users/jinwoo/orca" },
-    { id: "repo-sdk", displayName: "stably-sdk", path: "/Users/jinwoo/stably-sdk" },
-    { id: "repo-ssh", displayName: "prod-remote", path: "ssh://desk/orca" },
-    { id: "repo-folder", displayName: "notes-folder", path: "/Users/jinwoo/notes", unsupported: true }
-  ];
+      const linearStates = [
+        { id: 'triage', name: 'Triage' },
+        { id: 'todo', name: 'Todo' },
+        { id: 'in-progress', name: 'In Progress' },
+        { id: 'done', name: 'Done' }
+      ]
 
-  const teams = [
-    { id: "team-mobile", name: "Mobile", workspaceName: "Orca" },
-    { id: "team-runtime", name: "Runtime", workspaceName: "Orca" }
-  ];
+      const tasks = {
+        github: [
+          {
+            key: 'gh-pr-1284',
+            type: 'pr',
+            number: 1284,
+            title: 'Add mobile task drawer with repo-aware workspace creation',
+            repoId: 'repo-orca',
+            repoName: 'orca',
+            status: 'Open',
+            state: 'open',
+            updatedAt: '18m',
+            labels: ['mobile', 'tasks'],
+            assignees: ['jinwoo'],
+            body: 'Mobile Tasks should match the desktop workflow: inspect the issue, understand the recent discussion, then create a workspace without bouncing to a browser.',
+            comments: [
+              {
+                id: 1,
+                author: 'mira',
+                createdAt: '2026-05-19',
+                body: 'The action sheet needs the same context as desktop, especially comments and labels.'
+              },
+              {
+                id: 2,
+                author: 'alex',
+                createdAt: '2026-05-19',
+                body: 'Can we keep this below the search row so refresh stays reachable?',
+                path: 'mobile/app/h/[hostId]/tasks.tsx',
+                line: 1312,
+                threadId: 'thread-1',
+                isResolved: false
+              },
+              {
+                id: 3,
+                author: 'sam',
+                createdAt: '2026-05-20',
+                body: 'Verified the drawer works on iPhone SE width.',
+                path: 'mobile/app/h/[hostId]/tasks.tsx',
+                startLine: 1722,
+                line: 1730,
+                threadId: 'thread-2',
+                isResolved: true
+              }
+            ],
+            checks: [
+              { name: 'typecheck:mobile', status: 'completed', conclusion: 'success' },
+              { name: 'runtime RPC tests', status: 'completed', conclusion: 'success' }
+            ],
+            files: [{ path: 'mobile/app/h/[hostId]/tasks.tsx' }]
+          },
+          {
+            key: 'gh-issue-1197',
+            type: 'issue',
+            number: 1197,
+            title: 'Investigate remote client selector_ambiguous errors when listing work items',
+            repoId: 'repo-orca',
+            repoName: 'orca',
+            status: 'Open',
+            state: 'open',
+            updatedAt: '2h',
+            labels: ['rpc'],
+            assignees: ['alex'],
+            body: 'The web client occasionally passes repo names that collide. Prefer stable repo ids for remote RPC selectors.',
+            comments: [
+              {
+                id: 2,
+                author: 'alex',
+                createdAt: '2026-05-18',
+                body: 'Confirmed this happens when two repos share a display path suffix.'
+              }
+            ],
+            checks: [],
+            files: []
+          },
+          {
+            key: 'gh-pr-812',
+            type: 'pr',
+            number: 812,
+            title: 'Persist linked issue metadata after remote worktree creation',
+            repoId: 'repo-sdk',
+            repoName: 'stably-sdk',
+            status: 'Draft',
+            state: 'draft',
+            updatedAt: '6h',
+            labels: ['worktree'],
+            assignees: [],
+            body: 'Remote-created worktrees need to carry linked task metadata so desktop and mobile show the same task affordances.',
+            comments: [],
+            checks: [{ name: 'unit', status: 'queued', conclusion: null }],
+            files: [{ path: 'src/main/ipc/worktree-remote.ts' }]
+          },
+          {
+            key: 'gh-issue-1088',
+            type: 'issue',
+            number: 1088,
+            title: 'Clean up stale task results after switching hosts',
+            repoId: 'repo-orca',
+            repoName: 'orca',
+            status: 'Closed',
+            state: 'closed',
+            updatedAt: '1d',
+            labels: ['bug'],
+            assignees: ['sam'],
+            body: 'Switching hosts should not let slow responses from the previous host overwrite the current list.',
+            comments: [],
+            checks: [],
+            files: []
+          }
+        ],
+        gitlab: [
+          {
+            key: 'gl-mr-73',
+            type: 'mr',
+            number: 73,
+            title: 'Resolve merge request source branch from preferred GitLab remote',
+            repoId: 'repo-orca',
+            repoName: 'orca',
+            status: 'Open',
+            state: 'opened',
+            updatedAt: '12m',
+            labels: ['gitlab'],
+            assignees: ['jinwoo'],
+            body: 'MR workspaces should start from the source branch fetched from the same remote selected for GitLab issue-source preference.',
+            comments: [
+              {
+                id: 5,
+                author: 'nora',
+                createdAt: '2026-05-19',
+                body: 'Please verify forks fail with a clear message on mobile.'
+              },
+              {
+                id: 6,
+                author: 'lee',
+                createdAt: '2026-05-20',
+                body: 'This should mention which remote was selected.',
+                path: 'src/main/runtime/orca-runtime.ts',
+                line: 5210,
+                threadId: 'gl-discussion-1',
+                isResolved: false
+              }
+            ],
+            pipelineJobs: [
+              { stage: 'test', name: 'node', status: 'success' },
+              { stage: 'lint', name: 'oxlint', status: 'success' }
+            ]
+          },
+          {
+            key: 'gl-issue-64',
+            type: 'issue',
+            number: 64,
+            title: 'Support search query passthrough for GitLab work items',
+            repoId: 'repo-orca',
+            repoName: 'orca',
+            status: 'Open',
+            state: 'opened',
+            updatedAt: '3h',
+            labels: ['api'],
+            assignees: [],
+            body: 'GitLab search should be sent to the API instead of only filtering after fetching a page.',
+            comments: [],
+            pipelineJobs: []
+          },
+          {
+            key: 'gl-mr-58',
+            type: 'mr',
+            number: 58,
+            title: 'Forward push target for mobile MR workspaces',
+            repoId: 'repo-sdk',
+            repoName: 'stably-sdk',
+            status: 'Merged',
+            state: 'merged',
+            updatedAt: '2d',
+            labels: ['workspace'],
+            assignees: ['lee'],
+            body: 'The created workspace needs the MR source branch push target so follow-up changes go to the right branch.',
+            comments: [],
+            pipelineJobs: [{ stage: 'build', name: 'bundle', status: 'success' }]
+          },
+          {
+            key: 'gl-issue-49',
+            type: 'issue',
+            number: 49,
+            title: 'Keep folder-only repositories out of hosted task queries',
+            repoId: 'repo-orca',
+            repoName: 'orca',
+            status: 'Closed',
+            state: 'closed',
+            updatedAt: '4d',
+            labels: ['mobile'],
+            assignees: [],
+            body: 'Hosted task APIs require Git remotes. SSH repos should load; folder-only repos should be explicit skips.',
+            comments: [],
+            pipelineJobs: []
+          }
+        ],
+        gitlabTodos: [
+          {
+            key: 'gl-todo-1',
+            targetType: 'MergeRequest',
+            targetIid: 73,
+            title: 'Resolve merge request source branch from preferred GitLab remote',
+            projectPath: 'stably/orca',
+            status: 'review requested',
+            updatedAt: '18m'
+          },
+          {
+            key: 'gl-todo-2',
+            targetType: 'Issue',
+            targetIid: 64,
+            title: 'Support search query passthrough for GitLab work items',
+            projectPath: 'stably/orca',
+            status: 'mentioned',
+            updatedAt: '3h'
+          }
+        ],
+        linear: [
+          {
+            key: 'lin-412',
+            identifier: 'MOB-412',
+            title: 'Review mobile Tasks page action sheet density',
+            team: 'Mobile',
+            status: 'In Progress',
+            state: 'in-progress',
+            updatedAt: '25m',
+            labels: ['ux'],
+            assignee: 'Jinwoo',
+            project: 'Mobile parity',
+            description:
+              'Audit whether the mobile task sheet gives enough context to act without opening Linear on desktop.',
+            comments: [
+              {
+                id: 'c1',
+                user: { displayName: 'Priya' },
+                createdAt: '2026-05-19',
+                body: 'The detail view should expose recent comments and child tasks.'
+              }
+            ],
+            children: [{ identifier: 'MOB-413', title: 'Add comment preview' }]
+          },
+          {
+            key: 'lin-405',
+            identifier: 'MOB-405',
+            title: 'Add Linear team picker when creating issues from mobile',
+            team: 'Mobile',
+            status: 'Todo',
+            state: 'todo',
+            updatedAt: '4h',
+            labels: ['tasks'],
+            assignee: 'Mira',
+            project: 'Tasks',
+            description:
+              'When creating a Linear issue, mobile should let the user pick a team from the connected workspace.',
+            comments: [],
+            children: []
+          },
+          {
+            key: 'lin-384',
+            identifier: 'RUN-384',
+            title: 'Keep RPC allowlist aligned with remote client task methods',
+            team: 'Runtime',
+            status: 'Triage',
+            state: 'triage',
+            updatedAt: '1d',
+            labels: ['rpc'],
+            assignee: 'Alex',
+            project: 'Runtime',
+            description:
+              'Mobile and web remote clients should expose the same read paths required by Tasks.',
+            comments: [],
+            children: []
+          },
+          {
+            key: 'lin-351',
+            identifier: 'MOB-351',
+            title: 'Completed task fixture for filter review',
+            team: 'Mobile',
+            status: 'Done',
+            state: 'done',
+            updatedAt: '6d',
+            labels: ['done'],
+            assignee: 'Sam',
+            project: 'Fixtures',
+            description: 'A completed fixture used to test the filter drawer.',
+            comments: [],
+            children: []
+          }
+        ]
+      }
 
-  const linearStates = [
-    { id: "triage", name: "Triage" },
-    { id: "todo", name: "Todo" },
-    { id: "in-progress", name: "In Progress" },
-    { id: "done", name: "Done" }
-  ];
+      const state = {
+        provider: 'github',
+        githubKind: 'issues',
+        githubPreset: 'issues',
+        gitlabView: 'project',
+        gitlabFilter: 'opened',
+        linearFilter: 'all',
+        query: 'is:issue is:open',
+        drawer: null,
+        selectedItem: null,
+        createTitle: '',
+        createBody: '',
+        createTargetId: 'repo-orca',
+        loading: false
+      }
 
-  const tasks = {
-    github: [
-      { key: "gh-pr-1284", type: "pr", number: 1284, title: "Add mobile task drawer with repo-aware workspace creation", repoId: "repo-orca", repoName: "orca", status: "Open", state: "open", updatedAt: "18m", labels: ["mobile", "tasks"], assignees: ["jinwoo"], body: "Mobile Tasks should match the desktop workflow: inspect the issue, understand the recent discussion, then create a workspace without bouncing to a browser.", comments: [{ id: 1, author: "mira", createdAt: "2026-05-19", body: "The action sheet needs the same context as desktop, especially comments and labels." }, { id: 2, author: "alex", createdAt: "2026-05-19", body: "Can we keep this below the search row so refresh stays reachable?", path: "mobile/app/h/[hostId]/tasks.tsx", line: 1312, threadId: "thread-1", isResolved: false }, { id: 3, author: "sam", createdAt: "2026-05-20", body: "Verified the drawer works on iPhone SE width.", path: "mobile/app/h/[hostId]/tasks.tsx", startLine: 1722, line: 1730, threadId: "thread-2", isResolved: true }], checks: [{ name: "typecheck:mobile", status: "completed", conclusion: "success" }, { name: "runtime RPC tests", status: "completed", conclusion: "success" }], files: [{ path: "mobile/app/h/[hostId]/tasks.tsx" }] },
-      { key: "gh-issue-1197", type: "issue", number: 1197, title: "Investigate remote client selector_ambiguous errors when listing work items", repoId: "repo-orca", repoName: "orca", status: "Open", state: "open", updatedAt: "2h", labels: ["rpc"], assignees: ["alex"], body: "The web client occasionally passes repo names that collide. Prefer stable repo ids for remote RPC selectors.", comments: [{ id: 2, author: "alex", createdAt: "2026-05-18", body: "Confirmed this happens when two repos share a display path suffix." }], checks: [], files: [] },
-      { key: "gh-pr-812", type: "pr", number: 812, title: "Persist linked issue metadata after remote worktree creation", repoId: "repo-sdk", repoName: "stably-sdk", status: "Draft", state: "draft", updatedAt: "6h", labels: ["worktree"], assignees: [], body: "Remote-created worktrees need to carry linked task metadata so desktop and mobile show the same task affordances.", comments: [], checks: [{ name: "unit", status: "queued", conclusion: null }], files: [{ path: "src/main/ipc/worktree-remote.ts" }] },
-      { key: "gh-issue-1088", type: "issue", number: 1088, title: "Clean up stale task results after switching hosts", repoId: "repo-orca", repoName: "orca", status: "Closed", state: "closed", updatedAt: "1d", labels: ["bug"], assignees: ["sam"], body: "Switching hosts should not let slow responses from the previous host overwrite the current list.", comments: [], checks: [], files: [] }
-    ],
-    gitlab: [
-      { key: "gl-mr-73", type: "mr", number: 73, title: "Resolve merge request source branch from preferred GitLab remote", repoId: "repo-orca", repoName: "orca", status: "Open", state: "opened", updatedAt: "12m", labels: ["gitlab"], assignees: ["jinwoo"], body: "MR workspaces should start from the source branch fetched from the same remote selected for GitLab issue-source preference.", comments: [{ id: 5, author: "nora", createdAt: "2026-05-19", body: "Please verify forks fail with a clear message on mobile." }, { id: 6, author: "lee", createdAt: "2026-05-20", body: "This should mention which remote was selected.", path: "src/main/runtime/orca-runtime.ts", line: 5210, threadId: "gl-discussion-1", isResolved: false }], pipelineJobs: [{ stage: "test", name: "node", status: "success" }, { stage: "lint", name: "oxlint", status: "success" }] },
-      { key: "gl-issue-64", type: "issue", number: 64, title: "Support search query passthrough for GitLab work items", repoId: "repo-orca", repoName: "orca", status: "Open", state: "opened", updatedAt: "3h", labels: ["api"], assignees: [], body: "GitLab search should be sent to the API instead of only filtering after fetching a page.", comments: [], pipelineJobs: [] },
-      { key: "gl-mr-58", type: "mr", number: 58, title: "Forward push target for mobile MR workspaces", repoId: "repo-sdk", repoName: "stably-sdk", status: "Merged", state: "merged", updatedAt: "2d", labels: ["workspace"], assignees: ["lee"], body: "The created workspace needs the MR source branch push target so follow-up changes go to the right branch.", comments: [], pipelineJobs: [{ stage: "build", name: "bundle", status: "success" }] },
-      { key: "gl-issue-49", type: "issue", number: 49, title: "Keep folder-only repositories out of hosted task queries", repoId: "repo-orca", repoName: "orca", status: "Closed", state: "closed", updatedAt: "4d", labels: ["mobile"], assignees: [], body: "Hosted task APIs require Git remotes. SSH repos should load; folder-only repos should be explicit skips.", comments: [], pipelineJobs: [] }
-    ],
-    gitlabTodos: [
-      { key: "gl-todo-1", targetType: "MergeRequest", targetIid: 73, title: "Resolve merge request source branch from preferred GitLab remote", projectPath: "stably/orca", status: "review requested", updatedAt: "18m" },
-      { key: "gl-todo-2", targetType: "Issue", targetIid: 64, title: "Support search query passthrough for GitLab work items", projectPath: "stably/orca", status: "mentioned", updatedAt: "3h" }
-    ],
-    linear: [
-      { key: "lin-412", identifier: "MOB-412", title: "Review mobile Tasks page action sheet density", team: "Mobile", status: "In Progress", state: "in-progress", updatedAt: "25m", labels: ["ux"], assignee: "Jinwoo", project: "Mobile parity", description: "Audit whether the mobile task sheet gives enough context to act without opening Linear on desktop.", comments: [{ id: "c1", user: { displayName: "Priya" }, createdAt: "2026-05-19", body: "The detail view should expose recent comments and child tasks." }], children: [{ identifier: "MOB-413", title: "Add comment preview" }] },
-      { key: "lin-405", identifier: "MOB-405", title: "Add Linear team picker when creating issues from mobile", team: "Mobile", status: "Todo", state: "todo", updatedAt: "4h", labels: ["tasks"], assignee: "Mira", project: "Tasks", description: "When creating a Linear issue, mobile should let the user pick a team from the connected workspace.", comments: [], children: [] },
-      { key: "lin-384", identifier: "RUN-384", title: "Keep RPC allowlist aligned with remote client task methods", team: "Runtime", status: "Triage", state: "triage", updatedAt: "1d", labels: ["rpc"], assignee: "Alex", project: "Runtime", description: "Mobile and web remote clients should expose the same read paths required by Tasks.", comments: [], children: [] },
-      { key: "lin-351", identifier: "MOB-351", title: "Completed task fixture for filter review", team: "Mobile", status: "Done", state: "done", updatedAt: "6d", labels: ["done"], assignee: "Sam", project: "Fixtures", description: "A completed fixture used to test the filter drawer.", comments: [], children: [] }
-    ]
-  };
+      const providerOptions = [
+        { value: 'github', label: 'GitHub', subtitle: 'Issues and pull requests' },
+        { value: 'gitlab', label: 'GitLab', subtitle: 'Issues and merge requests' },
+        { value: 'linear', label: 'Linear', subtitle: 'Assigned and team issues' }
+      ]
 
-  const state = {
-    provider: "github",
-    githubKind: "issues",
-    githubPreset: "issues",
-    gitlabView: "project",
-    gitlabFilter: "opened",
-    linearFilter: "all",
-    query: "is:issue is:open",
-    drawer: null,
-    selectedItem: null,
-    createTitle: "",
-    createBody: "",
-    createTargetId: "repo-orca",
-    loading: false
-  };
+      const gitlabFilters = [
+        { value: 'opened', label: 'Open', subtitle: 'Open issues and merge requests' },
+        { value: 'merged', label: 'Merged', subtitle: 'Merged merge requests' },
+        { value: 'closed', label: 'Closed', subtitle: 'Closed issues and merge requests' },
+        { value: 'all', label: 'All', subtitle: 'Any GitLab state' }
+      ]
 
-  const providerOptions = [
-    { value: "github", label: "GitHub", subtitle: "Issues and pull requests" },
-    { value: "gitlab", label: "GitLab", subtitle: "Issues and merge requests" },
-    { value: "linear", label: "Linear", subtitle: "Assigned and team issues" }
-  ];
+      const linearFilters = [
+        { value: 'all', label: 'All', subtitle: 'Open issues across connected workspaces' },
+        { value: 'assigned', label: 'My Issues', subtitle: 'Issues assigned to you' },
+        { value: 'created', label: 'Created', subtitle: 'Issues created by you' },
+        { value: 'completed', label: 'Completed', subtitle: 'Recently completed issues' }
+      ]
 
-  const gitlabFilters = [
-    { value: "opened", label: "Open", subtitle: "Open issues and merge requests" },
-    { value: "merged", label: "Merged", subtitle: "Merged merge requests" },
-    { value: "closed", label: "Closed", subtitle: "Closed issues and merge requests" },
-    { value: "all", label: "All", subtitle: "Any GitLab state" }
-  ];
+      const issuePresets = [
+        { value: 'issues', label: 'Open', query: 'is:issue is:open' },
+        { value: 'my-issues', label: 'Assigned to me', query: 'assignee:@me is:issue is:open' }
+      ]
 
-  const linearFilters = [
-    { value: "all", label: "All", subtitle: "Open issues across connected workspaces" },
-    { value: "assigned", label: "My Issues", subtitle: "Issues assigned to you" },
-    { value: "created", label: "Created", subtitle: "Issues created by you" },
-    { value: "completed", label: "Completed", subtitle: "Recently completed issues" }
-  ];
+      const prPresets = [
+        { value: 'prs', label: 'Open', query: 'is:pr is:open' },
+        { value: 'my-prs', label: 'Mine', query: 'author:@me is:pr is:open' },
+        { value: 'review', label: 'Needs review', query: 'review-requested:@me is:pr is:open' }
+      ]
 
-  const issuePresets = [
-    { value: "issues", label: "Open", query: "is:issue is:open" },
-    { value: "my-issues", label: "Assigned to me", query: "assignee:@me is:issue is:open" }
-  ];
+      const githubKindOptions = [
+        { value: 'issues', label: 'Issues', subtitle: 'GitHub issues' },
+        { value: 'prs', label: 'PRs', subtitle: 'GitHub pull requests' }
+      ]
 
-  const prPresets = [
-    { value: "prs", label: "Open", query: "is:pr is:open" },
-    { value: "my-prs", label: "Mine", query: "author:@me is:pr is:open" },
-    { value: "review", label: "Needs review", query: "review-requested:@me is:pr is:open" }
-  ];
+      const gitlabViewOptions = [
+        {
+          value: 'project',
+          label: 'Project MRs',
+          subtitle: 'Merge requests and issues by repository'
+        },
+        { value: 'todos', label: 'My Todos', subtitle: 'Pending GitLab todos' }
+      ]
 
-  const githubKindOptions = [
-    { value: "issues", label: "Issues", subtitle: "GitHub issues" },
-    { value: "prs", label: "PRs", subtitle: "GitHub pull requests" }
-  ];
+      const icons = {
+        github:
+          '<svg class="icon sm" viewBox="0 0 24 24"><path d="M18 18h.01"/><path d="M6 6h.01"/><path d="M13 6h3a2 2 0 0 1 2 2v10"/><path d="M6 6v12"/><path d="M6 18h12"/></svg>',
+        gitlab:
+          '<svg class="icon sm" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M6 8h12"/><path d="M6 16h12"/></svg>',
+        linear:
+          '<svg class="icon sm" viewBox="0 0 24 24"><path d="M11 4h10"/><path d="M11 12h10"/><path d="M11 20h10"/><path d="M4 4h1"/><path d="M4 12h1"/><path d="M4 20h1"/></svg>',
+        check: '<svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>',
+        plus: '<svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
+        branch:
+          '<svg class="icon" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>'
+      }
 
-  const gitlabViewOptions = [
-    { value: "project", label: "Project MRs", subtitle: "Merge requests and issues by repository" },
-    { value: "todos", label: "My Todos", subtitle: "Pending GitLab todos" }
-  ];
+      const taskList = document.getElementById('taskList')
+      const emptyState = document.getElementById('emptyState')
+      const loadingState = document.getElementById('loadingState')
+      const overlay = document.getElementById('overlay')
+      const drawerContent = document.getElementById('drawerContent')
+      const searchInput = document.getElementById('searchInput')
+      const clearSearch = document.getElementById('clearSearch')
+      const toast = document.getElementById('toast')
 
-  const icons = {
-    github: '<svg class="icon sm" viewBox="0 0 24 24"><path d="M18 18h.01"/><path d="M6 6h.01"/><path d="M13 6h3a2 2 0 0 1 2 2v10"/><path d="M6 6v12"/><path d="M6 18h12"/></svg>',
-    gitlab: '<svg class="icon sm" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="M6 8h12"/><path d="M6 16h12"/></svg>',
-    linear: '<svg class="icon sm" viewBox="0 0 24 24"><path d="M11 4h10"/><path d="M11 12h10"/><path d="M11 20h10"/><path d="M4 4h1"/><path d="M4 12h1"/><path d="M4 20h1"/></svg>',
-    check: '<svg class="icon" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>',
-    plus: '<svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
-    branch: '<svg class="icon" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>'
-  };
+      function providerLabel() {
+        return state.provider === 'github'
+          ? 'GitHub'
+          : state.provider === 'gitlab'
+            ? 'GitLab'
+            : 'Linear'
+      }
 
-  const taskList = document.getElementById("taskList");
-  const emptyState = document.getElementById("emptyState");
-  const loadingState = document.getElementById("loadingState");
-  const overlay = document.getElementById("overlay");
-  const drawerContent = document.getElementById("drawerContent");
-  const searchInput = document.getElementById("searchInput");
-  const clearSearch = document.getElementById("clearSearch");
-  const toast = document.getElementById("toast");
+      function repoColor(name) {
+        let hash = 0
+        for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0
+        return repoPalette[Math.abs(hash) % repoPalette.length]
+      }
 
-  function providerLabel() {
-    return state.provider === "github" ? "GitHub" : state.provider === "gitlab" ? "GitLab" : "Linear";
-  }
+      function subtitleFor(item) {
+        if (state.provider === 'gitlab' && state.gitlabView === 'todos')
+          return `${item.projectPath}${item.targetIid ? ` !${item.targetIid}` : ''}`
+        if (state.provider === 'github') return `${item.repoName} #${item.number}`
+        if (state.provider === 'gitlab')
+          return `${item.repoName} ${item.type === 'mr' ? '!' : '#'}${item.number}`
+        return `${item.identifier} · ${item.team}`
+      }
 
-  function repoColor(name) {
-    let hash = 0;
-    for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-    return repoPalette[Math.abs(hash) % repoPalette.length];
-  }
+      function toolbarButton(label, action) {
+        return `<button class="segment-button" type="button" data-action="${action}"><span class="secondary">${escapeHtml(label)}</span></button>`
+      }
 
-  function subtitleFor(item) {
-    if (state.provider === "gitlab" && state.gitlabView === "todos") return `${item.projectPath}${item.targetIid ? ` !${item.targetIid}` : ""}`;
-    if (state.provider === "github") return `${item.repoName} #${item.number}`;
-    if (state.provider === "gitlab") return `${item.repoName} ${item.type === "mr" ? "!" : "#"}${item.number}`;
-    return `${item.identifier} · ${item.team}`;
-  }
+      function renderFilterControls() {
+        const controls = document.getElementById('filterControls')
+        if (state.provider === 'github') {
+          const presets = state.githubKind === 'prs' ? prPresets : issuePresets
+          const preset = presets.find((entry) => entry.value === state.githubPreset) || presets[0]
+          controls.innerHTML = [
+            toolbarButton(state.githubKind === 'prs' ? 'PRs' : 'Issues', 'open-github-kind'),
+            toolbarButton(preset.label, 'open-github-preset')
+          ].join('')
+          return
+        }
+        if (state.provider === 'gitlab') {
+          controls.innerHTML = [
+            toolbarButton(
+              state.gitlabView === 'project' ? 'Project MRs' : 'My Todos',
+              'open-gitlab-view'
+            ),
+            ...(state.gitlabView === 'project'
+              ? [
+                  toolbarButton(
+                    (
+                      gitlabFilters.find((filter) => filter.value === state.gitlabFilter) ||
+                      gitlabFilters[0]
+                    ).label,
+                    'open-gitlab-filter'
+                  )
+                ]
+              : [])
+          ].join('')
+          return
+        }
+        controls.innerHTML = toolbarButton(
+          (linearFilters.find((filter) => filter.value === state.linearFilter) || linearFilters[0])
+            .label,
+          'open-linear-filter'
+        )
+      }
 
-  function toolbarButton(label, action) {
-    return `<button class="segment-button" type="button" data-action="${action}"><span class="secondary">${escapeHtml(label)}</span></button>`;
-  }
+      function itemKindLabel(item) {
+        if (state.provider === 'gitlab' && state.gitlabView === 'todos') return 'GitLab todo'
+        if (state.provider === 'github') return item.type === 'pr' ? 'Pull request' : 'Issue'
+        if (state.provider === 'gitlab') return item.type === 'mr' ? 'Merge request' : 'Issue'
+        return 'Linear ticket'
+      }
 
-  function renderFilterControls() {
-    const controls = document.getElementById("filterControls");
-    if (state.provider === "github") {
-      const presets = state.githubKind === "prs" ? prPresets : issuePresets;
-      const preset = presets.find((entry) => entry.value === state.githubPreset) || presets[0];
-      controls.innerHTML = [
-        toolbarButton(state.githubKind === "prs" ? "PRs" : "Issues", "open-github-kind"),
-        toolbarButton(preset.label, "open-github-preset")
-      ].join("");
-      return;
-    }
-    if (state.provider === "gitlab") {
-      controls.innerHTML = [
-        toolbarButton(state.gitlabView === "project" ? "Project MRs" : "My Todos", "open-gitlab-view"),
-        ...(state.gitlabView === "project" ? [toolbarButton((gitlabFilters.find((filter) => filter.value === state.gitlabFilter) || gitlabFilters[0]).label, "open-gitlab-filter")] : [])
-      ].join("");
-      return;
-    }
-    controls.innerHTML = toolbarButton((linearFilters.find((filter) => filter.value === state.linearFilter) || linearFilters[0]).label, "open-linear-filter");
-  }
+      function statusActionLabel(item) {
+        const verb = item.state === 'closed' ? 'Reopen' : 'Close'
+        return `${verb} ${itemKindLabel(item).toLowerCase()}`
+      }
 
-  function itemKindLabel(item) {
-    if (state.provider === "gitlab" && state.gitlabView === "todos") return "GitLab todo";
-    if (state.provider === "github") return item.type === "pr" ? "Pull request" : "Issue";
-    if (state.provider === "gitlab") return item.type === "mr" ? "Merge request" : "Issue";
-    return "Linear ticket";
-  }
+      function visibleItems() {
+        const query = state.query.trim().toLowerCase()
+        let items =
+          state.provider === 'gitlab' && state.gitlabView === 'todos'
+            ? tasks.gitlabTodos.slice()
+            : tasks[state.provider].slice()
+        if (state.provider === 'github') {
+          items = items.filter((item) =>
+            state.githubKind === 'prs' ? item.type === 'pr' : item.type === 'issue'
+          )
+        }
+        if (
+          state.provider === 'gitlab' &&
+          state.gitlabView === 'project' &&
+          state.gitlabFilter !== 'all'
+        ) {
+          items = items.filter((item) => item.state === state.gitlabFilter)
+        }
+        if (state.provider === 'linear') {
+          if (state.linearFilter === 'completed')
+            items = items.filter((item) => item.state === 'done')
+          else if (state.linearFilter === 'assigned')
+            items = items.filter((item) => item.assignee === 'Jinwoo')
+          else if (state.linearFilter === 'created')
+            items = items.filter((item) => item.key === 'lin-405')
+        }
+        if (query && state.provider !== 'github') {
+          items = items.filter((item) => {
+            const haystack = [item.title, item.repoName, item.identifier, item.team, item.status]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase()
+            return haystack.includes(query)
+          })
+        }
+        return items
+      }
 
-  function statusActionLabel(item) {
-    const verb = item.state === "closed" ? "Reopen" : "Close";
-    return `${verb} ${itemKindLabel(item).toLowerCase()}`;
-  }
+      function render() {
+        document.getElementById('providerIcon').innerHTML = icons[state.provider]
+        document.getElementById('providerLabel').textContent = providerLabel()
+        searchInput.placeholder = `Search ${providerLabel()} tasks...`
+        if (document.activeElement !== searchInput && searchInput.value !== state.query) {
+          searchInput.value = state.query
+        }
+        clearSearch.classList.toggle('visible', Boolean(state.query))
+        renderFilterControls()
 
-  function visibleItems() {
-    const query = state.query.trim().toLowerCase();
-    let items = state.provider === "gitlab" && state.gitlabView === "todos" ? tasks.gitlabTodos.slice() : tasks[state.provider].slice();
-    if (state.provider === "github") {
-      items = items.filter((item) => state.githubKind === "prs" ? item.type === "pr" : item.type === "issue");
-    }
-    if (state.provider === "gitlab" && state.gitlabView === "project" && state.gitlabFilter !== "all") {
-      items = items.filter((item) => item.state === state.gitlabFilter);
-    }
-    if (state.provider === "linear") {
-      if (state.linearFilter === "completed") items = items.filter((item) => item.state === "done");
-      else if (state.linearFilter === "assigned") items = items.filter((item) => item.assignee === "Jinwoo");
-      else if (state.linearFilter === "created") items = items.filter((item) => item.key === "lin-405");
-    }
-    if (query && state.provider !== "github") {
-      items = items.filter((item) => {
-        const haystack = [item.title, item.repoName, item.identifier, item.team, item.status].filter(Boolean).join(" ").toLowerCase();
-        return haystack.includes(query);
-      });
-    }
-    return items;
-  }
+        const errorBanner = document.getElementById('errorBanner')
+        const errorText = document.getElementById('errorText')
+        const showUnsupported = false
+        errorBanner.classList.toggle('visible', showUnsupported)
+        errorText.textContent = ''
 
-  function render() {
-    document.getElementById("providerIcon").innerHTML = icons[state.provider];
-    document.getElementById("providerLabel").textContent = providerLabel();
-    searchInput.placeholder = `Search ${providerLabel()} tasks...`;
-    if (document.activeElement !== searchInput && searchInput.value !== state.query) {
-      searchInput.value = state.query;
-    }
-    clearSearch.classList.toggle("visible", Boolean(state.query));
-    renderFilterControls();
+        const items = visibleItems()
+        taskList.innerHTML = ''
+        loadingState.style.display = state.loading ? 'flex' : 'none'
+        taskList.style.display = state.loading ? 'none' : 'block'
+        emptyState.style.display = !state.loading && items.length === 0 ? 'flex' : 'none'
+        emptyState.textContent = state.query ? 'No matching tasks' : `No ${providerLabel()} tasks`
 
-    const errorBanner = document.getElementById("errorBanner");
-    const errorText = document.getElementById("errorText");
-    const showUnsupported = false;
-    errorBanner.classList.toggle("visible", showUnsupported);
-    errorText.textContent = "";
-
-    const items = visibleItems();
-    taskList.innerHTML = "";
-    loadingState.style.display = state.loading ? "flex" : "none";
-    taskList.style.display = state.loading ? "none" : "block";
-    emptyState.style.display = !state.loading && items.length === 0 ? "flex" : "none";
-    emptyState.textContent = state.query ? "No matching tasks" : `No ${providerLabel()} tasks`;
-
-    if (!state.loading) {
-      for (const item of items) {
-        const provider = state.provider;
-        const dot = provider === "linear" || (provider === "gitlab" && state.gitlabView === "todos") ? "var(--accent-blue)" : repoColor(item.repoName);
-        const row = document.createElement("button");
-        row.className = "task-row";
-        row.type = "button";
-        row.dataset.action = "open-action";
-        row.dataset.key = item.key;
-        row.innerHTML = `
+        if (!state.loading) {
+          for (const item of items) {
+            const provider = state.provider
+            const dot =
+              provider === 'linear' || (provider === 'gitlab' && state.gitlabView === 'todos')
+                ? 'var(--accent-blue)'
+                : repoColor(item.repoName)
+            const row = document.createElement('button')
+            row.className = 'task-row'
+            row.type = 'button'
+            row.dataset.action = 'open-action'
+            row.dataset.key = item.key
+            row.innerHTML = `
           <span class="task-icon">${icons[provider]}</span>
           <span class="task-main">
             <span class="task-title-row">
@@ -1037,97 +1427,118 @@
             </span>
           </span>
           <span class="status-pill"><span class="status-text">${escapeHtml(item.status)}</span></span>
-        `;
-        taskList.appendChild(row);
+        `
+            taskList.appendChild(row)
+          }
+        }
+
+        if (state.drawer) renderDrawer()
       }
-    }
 
-    if (state.drawer) renderDrawer();
-  }
+      function openDrawer(type, item) {
+        state.drawer = type
+        state.selectedItem = item || null
+        overlay.classList.add('visible')
+        overlay.setAttribute('aria-hidden', 'false')
+        renderDrawer()
+      }
 
-  function openDrawer(type, item) {
-    state.drawer = type;
-    state.selectedItem = item || null;
-    overlay.classList.add("visible");
-    overlay.setAttribute("aria-hidden", "false");
-    renderDrawer();
-  }
+      function closeDrawer() {
+        state.drawer = null
+        state.selectedItem = null
+        overlay.classList.remove('visible')
+        overlay.setAttribute('aria-hidden', 'true')
+        drawerContent.innerHTML = ''
+      }
 
-  function closeDrawer() {
-    state.drawer = null;
-    state.selectedItem = null;
-    overlay.classList.remove("visible");
-    overlay.setAttribute("aria-hidden", "true");
-    drawerContent.innerHTML = "";
-  }
-
-  function renderDrawer() {
-    if (state.drawer === "provider") {
-      renderPicker("Task Source", providerOptions, state.provider, "select-provider");
-      return;
-    }
-    if (state.drawer === "github-kind") {
-      renderPicker("GitHub View", githubKindOptions, state.githubKind, "select-github-kind");
-      return;
-    }
-    if (state.drawer === "github-preset") {
-      const presets = state.githubKind === "prs" ? prPresets : issuePresets;
-      renderPicker(state.githubKind === "prs" ? "Pull Requests" : "Issues", presets, state.githubPreset, "select-github-preset");
-      return;
-    }
-    if (state.drawer === "gitlab-view") {
-      renderPicker("GitLab View", gitlabViewOptions, state.gitlabView, "select-gitlab-view");
-      return;
-    }
-    if (state.drawer === "gitlab-filter") {
-      renderPicker("GitLab Filter", gitlabFilters, state.gitlabFilter, "select-gitlab-filter");
-      return;
-    }
-    if (state.drawer === "linear-filter") {
-      renderPicker("Linear Filter", linearFilters, state.linearFilter, "select-linear-filter");
-      return;
-    }
-    if (state.drawer === "create-target") {
-      const options = state.provider === "linear"
-        ? teams.map((team) => ({ value: team.id, label: team.name, subtitle: team.workspaceName }))
-        : repos.filter((repo) => !repo.unsupported).map((repo) => ({ value: repo.id, label: repo.displayName, subtitle: repo.path }));
-      renderPicker(state.provider === "linear" ? "Linear Team" : "Repository", options, state.createTargetId, "select-create-target");
-      return;
-    }
-    if (state.drawer === "workspace-target") {
-      const options = repos.filter((repo) => !repo.unsupported).map((repo) => ({ value: repo.id, label: repo.displayName, subtitle: repo.path }));
-      renderPicker("Create Workspace In", options, repos[0].id, "select-workspace-target");
-      return;
-    }
-    if (state.drawer === "create") {
-      const target = state.provider === "linear"
-        ? teams.find((team) => team.id === state.createTargetId) || teams[0]
-        : repos.find((repo) => repo.id === state.createTargetId) || repos[0];
-      drawerContent.innerHTML = `
+      function renderDrawer() {
+        if (state.drawer === 'provider') {
+          renderPicker('Task Source', providerOptions, state.provider, 'select-provider')
+          return
+        }
+        if (state.drawer === 'github-kind') {
+          renderPicker('GitHub View', githubKindOptions, state.githubKind, 'select-github-kind')
+          return
+        }
+        if (state.drawer === 'github-preset') {
+          const presets = state.githubKind === 'prs' ? prPresets : issuePresets
+          renderPicker(
+            state.githubKind === 'prs' ? 'Pull Requests' : 'Issues',
+            presets,
+            state.githubPreset,
+            'select-github-preset'
+          )
+          return
+        }
+        if (state.drawer === 'gitlab-view') {
+          renderPicker('GitLab View', gitlabViewOptions, state.gitlabView, 'select-gitlab-view')
+          return
+        }
+        if (state.drawer === 'gitlab-filter') {
+          renderPicker('GitLab Filter', gitlabFilters, state.gitlabFilter, 'select-gitlab-filter')
+          return
+        }
+        if (state.drawer === 'linear-filter') {
+          renderPicker('Linear Filter', linearFilters, state.linearFilter, 'select-linear-filter')
+          return
+        }
+        if (state.drawer === 'create-target') {
+          const options =
+            state.provider === 'linear'
+              ? teams.map((team) => ({
+                  value: team.id,
+                  label: team.name,
+                  subtitle: team.workspaceName
+                }))
+              : repos
+                  .filter((repo) => !repo.unsupported)
+                  .map((repo) => ({ value: repo.id, label: repo.displayName, subtitle: repo.path }))
+          renderPicker(
+            state.provider === 'linear' ? 'Linear Team' : 'Repository',
+            options,
+            state.createTargetId,
+            'select-create-target'
+          )
+          return
+        }
+        if (state.drawer === 'workspace-target') {
+          const options = repos
+            .filter((repo) => !repo.unsupported)
+            .map((repo) => ({ value: repo.id, label: repo.displayName, subtitle: repo.path }))
+          renderPicker('Create Workspace In', options, repos[0].id, 'select-workspace-target')
+          return
+        }
+        if (state.drawer === 'create') {
+          const target =
+            state.provider === 'linear'
+              ? teams.find((team) => team.id === state.createTargetId) || teams[0]
+              : repos.find((repo) => repo.id === state.createTargetId) || repos[0]
+          drawerContent.innerHTML = `
         <div class="sheet-header">
           <div class="sheet-title">New ${providerLabel()} Issue</div>
-          <div class="sheet-subtitle">${state.provider === "linear" ? "Create an issue in the selected Linear team." : "Create an issue in the selected repository."}</div>
+          <div class="sheet-subtitle">${state.provider === 'linear' ? 'Create an issue in the selected Linear team.' : 'Create an issue in the selected repository.'}</div>
         </div>
         <div class="create-form">
-          <label class="field-label">${state.provider === "linear" ? "Team" : "Repository"}</label>
+          <label class="field-label">${state.provider === 'linear' ? 'Team' : 'Repository'}</label>
           <button class="target-button" type="button" data-action="open-create-target">${escapeHtml(target.displayName || target.name)}</button>
           <label class="field-label" for="createTitle">Title</label>
           <input class="field-input" id="createTitle" placeholder="Task title" value="${escapeAttr(state.createTitle)}">
           <label class="field-label" for="createBody">Description</label>
           <textarea class="field-textarea" id="createBody" placeholder="Add context">${escapeHtml(state.createBody)}</textarea>
-          <button class="create-button" type="button" data-action="create-issue" ${state.createTitle.trim() ? "" : "disabled"}>Create Issue</button>
+          <button class="create-button" type="button" data-action="create-issue" ${state.createTitle.trim() ? '' : 'disabled'}>Create Issue</button>
         </div>
-      `;
-      return;
-    }
-    if (state.drawer === "action" && state.selectedItem) {
-      const item = state.selectedItem;
-      const canToggle = state.provider === "github"
-        ? item.state !== "merged"
-        : state.provider === "gitlab"
-          ? item.state !== "merged" && item.state !== "locked"
-          : false;
-      drawerContent.innerHTML = `
+      `
+          return
+        }
+        if (state.drawer === 'action' && state.selectedItem) {
+          const item = state.selectedItem
+          const canToggle =
+            state.provider === 'github'
+              ? item.state !== 'merged'
+              : state.provider === 'gitlab'
+                ? item.state !== 'merged' && item.state !== 'locked'
+                : false
+          drawerContent.innerHTML = `
         <div class="sheet-header">
           <div class="sheet-title">${escapeHtml(item.title)}</div>
           <div class="sheet-subtitle">${escapeHtml(itemKindLabel(item))} · ${escapeHtml(subtitleFor(item))}</div>
@@ -1142,22 +1553,26 @@
             <svg class="icon" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
             <span class="action-text">Open in Browser</span>
           </button>
-          ${canToggle ? `
+          ${
+            canToggle
+              ? `
             <button class="action-row" type="button" data-action="toggle-status">
               ${icons.check}
               <span class="action-text">${statusActionLabel(item)}</span>
-            </button>` : ""}
-          ${state.provider === "linear" ? linearStatesMarkup(item) : ""}
+            </button>`
+              : ''
+          }
+          ${state.provider === 'linear' ? linearStatesMarkup(item) : ''}
         </div>
-      `;
-    }
-  }
+      `
+        }
+      }
 
-  function detailMarkup(item) {
-    const comments = item.comments || [];
-    const labels = item.labels || [];
-    const assignees = item.assignees || (item.assignee ? [item.assignee] : []);
-    return `
+      function detailMarkup(item) {
+        const comments = item.comments || []
+        const labels = item.labels || []
+        const assignees = item.assignees || (item.assignee ? [item.assignee] : [])
+        return `
       <div class="detail-group">
         <div class="detail-meta-grid">
           <div class="detail-meta-item">
@@ -1168,21 +1583,36 @@
             <span class="detail-meta-label">Status</span>
             <span class="detail-meta-value">${escapeHtml(item.status)}</span>
           </div>
-          ${assignees.length ? `
+          ${
+            assignees.length
+              ? `
             <div class="detail-meta-item">
-              <span class="detail-meta-label">${state.provider === "linear" ? "Assignee" : "Assignees"}</span>
-              <span class="detail-meta-value">${escapeHtml(assignees.slice(0, 3).join(", "))}</span>
-            </div>` : ""}
-          ${item.project ? `
+              <span class="detail-meta-label">${state.provider === 'linear' ? 'Assignee' : 'Assignees'}</span>
+              <span class="detail-meta-value">${escapeHtml(assignees.slice(0, 3).join(', '))}</span>
+            </div>`
+              : ''
+          }
+          ${
+            item.project
+              ? `
             <div class="detail-meta-item">
               <span class="detail-meta-label">Project</span>
               <span class="detail-meta-value">${escapeHtml(item.project)}</span>
-            </div>` : ""}
+            </div>`
+              : ''
+          }
         </div>
-        ${labels.length ? `<div class="chip-row">${labels.slice(0, 6).map((label) => `<span class="detail-chip">${escapeHtml(label)}</span>`).join("")}</div>` : ""}
+        ${
+          labels.length
+            ? `<div class="chip-row">${labels
+                .slice(0, 6)
+                .map((label) => `<span class="detail-chip">${escapeHtml(label)}</span>`)
+                .join('')}</div>`
+            : ''
+        }
         <div class="detail-section">
           <div class="detail-section-title">Description</div>
-          <div class="detail-body">${escapeHtml(compact(item.description || item.body || "No description."))}</div>
+          <div class="detail-body">${escapeHtml(compact(item.description || item.body || 'No description.'))}</div>
         </div>
         ${detailSupplementMarkup(item)}
         <div class="detail-section">
@@ -1190,303 +1620,366 @@
             <div class="detail-section-title">Recent discussion</div>
             <div class="detail-section-meta">${discussionSummary(comments.length)}</div>
           </div>
-          ${comments.length ? comments.slice(-3).map((comment) => `
+          ${
+            comments.length
+              ? comments
+                  .slice(-3)
+                  .map(
+                    (comment) => `
             <div class="comment-block">
               <div class="comment-source">${escapeHtml(commentSourceLabel(comment))}</div>
-              <div class="comment-meta">${escapeHtml(comment.author || comment.user?.displayName || "unknown")}${comment.createdAt ? ` · ${escapeHtml(comment.createdAt)}` : ""}</div>
+              <div class="comment-meta">${escapeHtml(comment.author || comment.user?.displayName || 'unknown')}${comment.createdAt ? ` · ${escapeHtml(comment.createdAt)}` : ''}</div>
               <div class="comment-body">${escapeHtml(compact(comment.body))}</div>
             </div>
-          `).join("") : `<div class="detail-muted">No comments.</div>`}
+          `
+                  )
+                  .join('')
+              : `<div class="detail-muted">No comments.</div>`
+          }
         </div>
       </div>
-    `;
-  }
+    `
+      }
 
-  function detailSupplementMarkup(item) {
-    if (state.provider === "github" && item.checks?.length) {
-      return `
+      function detailSupplementMarkup(item) {
+        if (state.provider === 'github' && item.checks?.length) {
+          return `
         <div class="detail-section">
           <div class="detail-section-title">Checks</div>
-          ${item.checks.slice(0, 3).map((check) => `<div class="detail-line">${escapeHtml(check.name)} · ${escapeHtml(check.conclusion || check.status)}</div>`).join("")}
+          ${item.checks
+            .slice(0, 3)
+            .map(
+              (check) =>
+                `<div class="detail-line">${escapeHtml(check.name)} · ${escapeHtml(check.conclusion || check.status)}</div>`
+            )
+            .join('')}
         </div>
-      `;
-    }
-    if (state.provider === "gitlab" && item.pipelineJobs?.length) {
-      return `
+      `
+        }
+        if (state.provider === 'gitlab' && item.pipelineJobs?.length) {
+          return `
         <div class="detail-section">
           <div class="detail-section-title">Pipeline</div>
-          ${item.pipelineJobs.slice(0, 3).map((job) => `<div class="detail-line">${job.stage ? `${escapeHtml(job.stage)} · ` : ""}${escapeHtml(job.name)} · ${escapeHtml(job.status)}</div>`).join("")}
+          ${item.pipelineJobs
+            .slice(0, 3)
+            .map(
+              (job) =>
+                `<div class="detail-line">${job.stage ? `${escapeHtml(job.stage)} · ` : ''}${escapeHtml(job.name)} · ${escapeHtml(job.status)}</div>`
+            )
+            .join('')}
         </div>
-      `;
-    }
-    if (state.provider === "linear" && item.children?.length) {
-      return `
+      `
+        }
+        if (state.provider === 'linear' && item.children?.length) {
+          return `
         <div class="detail-section">
           <div class="detail-section-title">Sub-issues</div>
-          ${item.children.slice(0, 3).map((child) => `<div class="detail-line">${escapeHtml(child.identifier)} · ${escapeHtml(child.title)}</div>`).join("")}
+          ${item.children
+            .slice(0, 3)
+            .map(
+              (child) =>
+                `<div class="detail-line">${escapeHtml(child.identifier)} · ${escapeHtml(child.title)}</div>`
+            )
+            .join('')}
         </div>
-      `;
-    }
-    return "";
-  }
+      `
+        }
+        return ''
+      }
 
-  function compact(value) {
-    const text = String(value || "").trim();
-    return text.length > 600 ? `${text.slice(0, 600).trimEnd()}...` : text;
-  }
+      function compact(value) {
+        const text = String(value || '').trim()
+        return text.length > 600 ? `${text.slice(0, 600).trimEnd()}...` : text
+      }
 
-  function commentSourceLabel(comment) {
-    if (comment.path) {
-      const line = typeof comment.line === "number"
-        ? typeof comment.startLine === "number" && comment.startLine !== comment.line
-          ? `${comment.startLine}-${comment.line}`
-          : String(comment.line)
-        : "";
-      const location = line ? `${comment.path}:${line}` : comment.path;
-      return `${comment.isResolved ? "Resolved review" : "Review"} · ${location}`;
-    }
-    if (comment.threadId) return comment.isResolved ? "Resolved review thread" : "Review thread";
-    return "Top-level comment";
-  }
+      function commentSourceLabel(comment) {
+        if (comment.path) {
+          const line =
+            typeof comment.line === 'number'
+              ? typeof comment.startLine === 'number' && comment.startLine !== comment.line
+                ? `${comment.startLine}-${comment.line}`
+                : String(comment.line)
+              : ''
+          const location = line ? `${comment.path}:${line}` : comment.path
+          return `${comment.isResolved ? 'Resolved review' : 'Review'} · ${location}`
+        }
+        if (comment.threadId) return comment.isResolved ? 'Resolved review thread' : 'Review thread'
+        return 'Top-level comment'
+      }
 
-  function discussionSummary(count) {
-    if (count === 0) return "No comments yet";
-    if (count <= 3) return `${count} ${count === 1 ? "comment" : "comments"}`;
-    return `Latest 3 of ${count}`;
-  }
+      function discussionSummary(count) {
+        if (count === 0) return 'No comments yet'
+        if (count <= 3) return `${count} ${count === 1 ? 'comment' : 'comments'}`
+        return `Latest 3 of ${count}`
+      }
 
-  function renderPicker(title, options, selected, action) {
-    drawerContent.innerHTML = `
+      function renderPicker(title, options, selected, action) {
+        drawerContent.innerHTML = `
       <div class="sheet-header"><div class="sheet-title">${title}</div></div>
       <div class="drawer-group">
-        ${options.map((option) => `
+        ${options
+          .map(
+            (option) => `
           <button class="drawer-row" type="button" data-action="${action}" data-value="${escapeAttr(option.value)}">
             <span class="drawer-row-main">
-              <span class="drawer-row-label ${option.value === selected ? "selected" : ""}">${escapeHtml(option.label)}</span>
-              ${option.subtitle ? `<span class="drawer-row-subtitle">${escapeHtml(option.subtitle)}</span>` : ""}
+              <span class="drawer-row-label ${option.value === selected ? 'selected' : ''}">${escapeHtml(option.label)}</span>
+              ${option.subtitle ? `<span class="drawer-row-subtitle">${escapeHtml(option.subtitle)}</span>` : ''}
             </span>
-            ${option.value === selected ? icons.check : ""}
+            ${option.value === selected ? icons.check : ''}
           </button>
-        `).join("")}
+        `
+          )
+          .join('')}
       </div>
-    `;
-  }
+    `
+      }
 
-  function linearStatesMarkup(item) {
-    return `
+      function linearStatesMarkup(item) {
+        return `
       <div class="linear-states-block">
         <div class="linear-states-title">Status</div>
-        ${linearStates.map((linearState) => `
+        ${linearStates
+          .map(
+            (linearState) => `
           <button class="action-row linear-state-row" type="button" data-action="set-linear-status" data-value="${linearState.id}">
             ${icons.branch}
             <span class="action-text">${escapeHtml(linearState.name)}</span>
-            ${linearState.name === item.status ? icons.check : ""}
+            ${linearState.name === item.status ? icons.check : ''}
           </button>
-        `).join("")}
+        `
+          )
+          .join('')}
       </div>
-    `;
-  }
-
-  function setProvider(provider) {
-    state.provider = provider;
-    state.query = provider === "github" ? "is:issue is:open" : "";
-    state.githubKind = "issues";
-    state.githubPreset = "issues";
-    state.createTargetId = provider === "linear" ? teams[0].id : repos[0].id;
-    searchInput.value = state.query;
-    closeDrawer();
-    simulateLoad();
-  }
-
-  function simulateLoad() {
-    state.loading = true;
-    render();
-    window.setTimeout(() => {
-      state.loading = false;
-      render();
-    }, 240);
-  }
-
-  function showToast(message) {
-    toast.textContent = message;
-    toast.classList.add("visible");
-    window.clearTimeout(showToast.timer);
-    showToast.timer = window.setTimeout(() => toast.classList.remove("visible"), 1500);
-  }
-
-  function mutateSelectedStatus() {
-    const item = state.selectedItem;
-    if (!item) return;
-    if (state.provider === "linear") return;
-    if (item.state === "closed") {
-      item.state = state.provider === "gitlab" ? "opened" : "open";
-      item.status = "Open";
-    } else {
-      item.state = "closed";
-      item.status = "Closed";
-    }
-    closeDrawer();
-    render();
-    showToast("Status updated");
-  }
-
-  function createIssueFromForm() {
-    const title = state.createTitle.trim();
-    if (!title) return;
-    const target = state.provider === "linear"
-      ? teams.find((team) => team.id === state.createTargetId) || teams[0]
-      : repos.find((repo) => repo.id === state.createTargetId) || repos[0];
-    const newItem = state.provider === "linear"
-      ? { key: `lin-${Date.now()}`, identifier: "MOB-500", title, team: target.name, status: "Todo", state: "todo", updatedAt: "now", labels: [] }
-      : { key: `${state.provider}-${Date.now()}`, type: "issue", number: state.provider === "github" ? 1291 : 75, title, repoId: target.id, repoName: target.displayName, status: "Open", state: state.provider === "github" ? "open" : "opened", updatedAt: "now", labels: [] };
-    tasks[state.provider].unshift(newItem);
-    state.createTitle = "";
-    state.createBody = "";
-    closeDrawer();
-    render();
-    showToast("Issue created");
-  }
-
-  function findCurrentItem(key) {
-    if (state.provider === "gitlab" && state.gitlabView === "todos") return tasks.gitlabTodos.find((item) => item.key === key);
-    return tasks[state.provider].find((item) => item.key === key);
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function escapeAttr(value) {
-    return escapeHtml(value).replace(/`/g, "&#096;");
-  }
-
-  document.addEventListener("click", (event) => {
-    const trigger = event.target.closest("[data-action]");
-    if (!trigger) return;
-    const action = trigger.dataset.action;
-
-    if (action === "open-provider") openDrawer("provider");
-    if (action === "open-github-kind") openDrawer("github-kind");
-    if (action === "open-github-preset") openDrawer("github-preset");
-    if (action === "open-gitlab-view") openDrawer("gitlab-view");
-    if (action === "open-gitlab-filter") openDrawer("gitlab-filter");
-    if (action === "open-linear-filter") openDrawer("linear-filter");
-    if (action === "close-drawer") closeDrawer();
-    if (action === "open-create") {
-      state.createTitle = "";
-      state.createBody = "";
-      state.createTargetId = state.provider === "linear" ? teams[0].id : repos[0].id;
-      openDrawer("create");
-    }
-    if (action === "open-create-target") openDrawer("create-target");
-    if (action === "clear-search") {
-      state.query = "";
-      searchInput.value = "";
-      render();
-    }
-    if (action === "refresh") {
-      simulateLoad();
-      showToast("Tasks refreshed");
-    }
-    if (action === "toast") showToast(trigger.dataset.message || "Action");
-    if (action === "open-action") {
-      const item = findCurrentItem(trigger.dataset.key);
-      if (state.provider === "gitlab" && state.gitlabView === "todos") {
-        showToast("Would open GitLab todo URL");
-        return;
+    `
       }
-      if (item) openDrawer("action", item);
-    }
-    if (action === "select-provider") setProvider(trigger.dataset.value);
-    if (action === "select-github-kind") {
-      state.githubKind = trigger.dataset.value;
-      const preset = state.githubKind === "prs" ? prPresets[0] : issuePresets[0];
-      state.githubPreset = preset.value;
-      state.query = preset.query;
-      searchInput.value = state.query;
-      closeDrawer();
-      render();
-    }
-    if (action === "select-github-preset") {
-      const preset = [...issuePresets, ...prPresets].find((entry) => entry.value === trigger.dataset.value);
-      if (preset) {
-        state.githubPreset = preset.value;
-        state.githubKind = preset.value === "issues" || preset.value === "my-issues" ? "issues" : "prs";
-        state.query = preset.query;
-        searchInput.value = state.query;
-      }
-      closeDrawer();
-      render();
-    }
-    if (action === "select-gitlab-view") {
-      state.gitlabView = trigger.dataset.value;
-      closeDrawer();
-      render();
-    }
-    if (action === "select-gitlab-filter") {
-      state.gitlabFilter = trigger.dataset.value;
-      closeDrawer();
-      render();
-    }
-    if (action === "select-linear-filter") {
-      state.linearFilter = trigger.dataset.value;
-      closeDrawer();
-      render();
-    }
-    if (action === "select-create-target") {
-      state.createTargetId = trigger.dataset.value;
-      openDrawer("create");
-    }
-    if (action === "select-workspace-target") {
-      closeDrawer();
-      showToast("Workspace created");
-    }
-    if (action === "create-workspace") {
-      if (state.provider === "linear" && repos.filter((repo) => !repo.unsupported).length > 1) openDrawer("workspace-target", state.selectedItem);
-      else {
-        closeDrawer();
-        showToast("Workspace created");
-      }
-    }
-    if (action === "open-browser") showToast("Would open task URL");
-    if (action === "toggle-status") mutateSelectedStatus();
-    if (action === "set-linear-status") {
-      const selected = linearStates.find((entry) => entry.id === trigger.dataset.value);
-      if (state.selectedItem && selected) {
-        state.selectedItem.state = selected.id;
-        state.selectedItem.status = selected.name;
-      }
-      closeDrawer();
-      render();
-      showToast("Linear status updated");
-    }
-    if (action === "create-issue") createIssueFromForm();
-  });
 
-  document.addEventListener("input", (event) => {
-    if (event.target === searchInput) {
-      state.query = searchInput.value;
-      render();
-      return;
-    }
-    if (event.target.id === "createTitle") {
-      state.createTitle = event.target.value;
-      renderDrawer();
-      const input = document.getElementById("createTitle");
-      input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
-    }
-    if (event.target.id === "createBody") {
-      state.createBody = event.target.value;
-    }
-  });
+      function setProvider(provider) {
+        state.provider = provider
+        state.query = provider === 'github' ? 'is:issue is:open' : ''
+        state.githubKind = 'issues'
+        state.githubPreset = 'issues'
+        state.createTargetId = provider === 'linear' ? teams[0].id : repos[0].id
+        searchInput.value = state.query
+        closeDrawer()
+        simulateLoad()
+      }
 
-  render();
-</script>
-</body>
+      function simulateLoad() {
+        state.loading = true
+        render()
+        window.setTimeout(() => {
+          state.loading = false
+          render()
+        }, 240)
+      }
+
+      function showToast(message) {
+        toast.textContent = message
+        toast.classList.add('visible')
+        window.clearTimeout(showToast.timer)
+        showToast.timer = window.setTimeout(() => toast.classList.remove('visible'), 1500)
+      }
+
+      function mutateSelectedStatus() {
+        const item = state.selectedItem
+        if (!item) return
+        if (state.provider === 'linear') return
+        if (item.state === 'closed') {
+          item.state = state.provider === 'gitlab' ? 'opened' : 'open'
+          item.status = 'Open'
+        } else {
+          item.state = 'closed'
+          item.status = 'Closed'
+        }
+        closeDrawer()
+        render()
+        showToast('Status updated')
+      }
+
+      function createIssueFromForm() {
+        const title = state.createTitle.trim()
+        if (!title) return
+        const target =
+          state.provider === 'linear'
+            ? teams.find((team) => team.id === state.createTargetId) || teams[0]
+            : repos.find((repo) => repo.id === state.createTargetId) || repos[0]
+        const newItem =
+          state.provider === 'linear'
+            ? {
+                key: `lin-${Date.now()}`,
+                identifier: 'MOB-500',
+                title,
+                team: target.name,
+                status: 'Todo',
+                state: 'todo',
+                updatedAt: 'now',
+                labels: []
+              }
+            : {
+                key: `${state.provider}-${Date.now()}`,
+                type: 'issue',
+                number: state.provider === 'github' ? 1291 : 75,
+                title,
+                repoId: target.id,
+                repoName: target.displayName,
+                status: 'Open',
+                state: state.provider === 'github' ? 'open' : 'opened',
+                updatedAt: 'now',
+                labels: []
+              }
+        tasks[state.provider].unshift(newItem)
+        state.createTitle = ''
+        state.createBody = ''
+        closeDrawer()
+        render()
+        showToast('Issue created')
+      }
+
+      function findCurrentItem(key) {
+        if (state.provider === 'gitlab' && state.gitlabView === 'todos')
+          return tasks.gitlabTodos.find((item) => item.key === key)
+        return tasks[state.provider].find((item) => item.key === key)
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;')
+      }
+
+      function escapeAttr(value) {
+        return escapeHtml(value).replace(/`/g, '&#096;')
+      }
+
+      document.addEventListener('click', (event) => {
+        const trigger = event.target.closest('[data-action]')
+        if (!trigger) return
+        const action = trigger.dataset.action
+
+        if (action === 'open-provider') openDrawer('provider')
+        if (action === 'open-github-kind') openDrawer('github-kind')
+        if (action === 'open-github-preset') openDrawer('github-preset')
+        if (action === 'open-gitlab-view') openDrawer('gitlab-view')
+        if (action === 'open-gitlab-filter') openDrawer('gitlab-filter')
+        if (action === 'open-linear-filter') openDrawer('linear-filter')
+        if (action === 'close-drawer') closeDrawer()
+        if (action === 'open-create') {
+          state.createTitle = ''
+          state.createBody = ''
+          state.createTargetId = state.provider === 'linear' ? teams[0].id : repos[0].id
+          openDrawer('create')
+        }
+        if (action === 'open-create-target') openDrawer('create-target')
+        if (action === 'clear-search') {
+          state.query = ''
+          searchInput.value = ''
+          render()
+        }
+        if (action === 'refresh') {
+          simulateLoad()
+          showToast('Tasks refreshed')
+        }
+        if (action === 'toast') showToast(trigger.dataset.message || 'Action')
+        if (action === 'open-action') {
+          const item = findCurrentItem(trigger.dataset.key)
+          if (state.provider === 'gitlab' && state.gitlabView === 'todos') {
+            showToast('Would open GitLab todo URL')
+            return
+          }
+          if (item) openDrawer('action', item)
+        }
+        if (action === 'select-provider') setProvider(trigger.dataset.value)
+        if (action === 'select-github-kind') {
+          state.githubKind = trigger.dataset.value
+          const preset = state.githubKind === 'prs' ? prPresets[0] : issuePresets[0]
+          state.githubPreset = preset.value
+          state.query = preset.query
+          searchInput.value = state.query
+          closeDrawer()
+          render()
+        }
+        if (action === 'select-github-preset') {
+          const preset = [...issuePresets, ...prPresets].find(
+            (entry) => entry.value === trigger.dataset.value
+          )
+          if (preset) {
+            state.githubPreset = preset.value
+            state.githubKind =
+              preset.value === 'issues' || preset.value === 'my-issues' ? 'issues' : 'prs'
+            state.query = preset.query
+            searchInput.value = state.query
+          }
+          closeDrawer()
+          render()
+        }
+        if (action === 'select-gitlab-view') {
+          state.gitlabView = trigger.dataset.value
+          closeDrawer()
+          render()
+        }
+        if (action === 'select-gitlab-filter') {
+          state.gitlabFilter = trigger.dataset.value
+          closeDrawer()
+          render()
+        }
+        if (action === 'select-linear-filter') {
+          state.linearFilter = trigger.dataset.value
+          closeDrawer()
+          render()
+        }
+        if (action === 'select-create-target') {
+          state.createTargetId = trigger.dataset.value
+          openDrawer('create')
+        }
+        if (action === 'select-workspace-target') {
+          closeDrawer()
+          showToast('Workspace created')
+        }
+        if (action === 'create-workspace') {
+          if (state.provider === 'linear' && repos.filter((repo) => !repo.unsupported).length > 1)
+            openDrawer('workspace-target', state.selectedItem)
+          else {
+            closeDrawer()
+            showToast('Workspace created')
+          }
+        }
+        if (action === 'open-browser') showToast('Would open task URL')
+        if (action === 'toggle-status') mutateSelectedStatus()
+        if (action === 'set-linear-status') {
+          const selected = linearStates.find((entry) => entry.id === trigger.dataset.value)
+          if (state.selectedItem && selected) {
+            state.selectedItem.state = selected.id
+            state.selectedItem.status = selected.name
+          }
+          closeDrawer()
+          render()
+          showToast('Linear status updated')
+        }
+        if (action === 'create-issue') createIssueFromForm()
+      })
+
+      document.addEventListener('input', (event) => {
+        if (event.target === searchInput) {
+          state.query = searchInput.value
+          render()
+          return
+        }
+        if (event.target.id === 'createTitle') {
+          state.createTitle = event.target.value
+          renderDrawer()
+          const input = document.getElementById('createTitle')
+          input.focus()
+          input.setSelectionRange(input.value.length, input.value.length)
+        }
+        if (event.target.id === 'createBody') {
+          state.createBody = event.target.value
+        }
+      })
+
+      render()
+    </script>
+  </body>
 </html>

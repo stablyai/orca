@@ -64,7 +64,7 @@ import {
 } from '../text-generation/commit-message-text-generation'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { getUpstreamStatus } from '../git/upstream'
-import { gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
+import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } from '../git/remote'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
@@ -485,6 +485,27 @@ export function registerFilesystemHandlers(
     }
   )
 
+  ipcMain.handle(
+    'fs:pathExists',
+    async (_event, args: { filePath: string; connectionId?: string }): Promise<boolean> => {
+      try {
+        if (args.connectionId) {
+          const provider = requireSshFilesystemProvider(args.connectionId)
+          await provider.stat(args.filePath)
+          return true
+        }
+        const filePath = await resolveAuthorizedPath(args.filePath, store)
+        await stat(filePath)
+        return true
+      } catch (error) {
+        if (isENOENT(error)) {
+          return false
+        }
+        throw error
+      }
+    }
+  )
+
   // ─── Search ────────────────────────────────────────────
   ipcMain.handle(
     'fs:search',
@@ -523,6 +544,7 @@ export function registerFilesystemHandlers(
         let stdoutBuffer = ''
         let resolved = false
         let child: ChildProcess | null = null
+        let killTimeout: ReturnType<typeof setTimeout>
 
         // Why: when rg runs inside WSL, output paths are Linux-native
         // (e.g. /home/user/repo/src/file.ts). Translate them back to
@@ -541,6 +563,12 @@ export function registerFilesystemHandlers(
             activeTextSearches.delete(searchKey)
           }
           clearTimeout(killTimeout)
+          // Why: child.kill() is advisory. If rg ignores it, detach our
+          // closures so repeated local searches do not retain old scans.
+          child?.stdout?.off('data', handleStdoutData)
+          child?.stderr?.off('data', handleStderrData)
+          child?.off('error', handleError)
+          child?.off('close', handleClose)
           resolvePromise(finalize(acc))
         }
 
@@ -558,35 +586,39 @@ export function registerFilesystemHandlers(
         child = nextChild
         activeTextSearches.set(searchKey, nextChild)
 
-        nextChild.stdout!.setEncoding('utf-8')
-        nextChild.stdout!.on('data', (chunk: string) => {
+        const handleStdoutData = (chunk: string): void => {
           stdoutBuffer += chunk
           const lines = stdoutBuffer.split('\n')
           stdoutBuffer = lines.pop() ?? ''
           for (const line of lines) {
             processLine(line)
           }
-        })
-        nextChild.stderr!.on('data', () => {
+        }
+        const handleStderrData = (): void => {
           // Drain stderr so rg cannot block on a full pipe.
-        })
-
-        nextChild.once('error', () => {
+        }
+        const handleError = (): void => {
           resolveOnce()
-        })
-
-        nextChild.once('close', () => {
+        }
+        const handleClose = (): void => {
           if (stdoutBuffer) {
             processLine(stdoutBuffer)
           }
           resolveOnce()
-        })
+        }
+
+        nextChild.stdout!.setEncoding('utf-8')
+        nextChild.stdout!.on('data', handleStdoutData)
+        nextChild.stderr!.on('data', handleStderrData)
+        nextChild.once('error', handleError)
+        nextChild.once('close', handleClose)
 
         // Why: if the timeout fires, the child is killed and results are partial.
         // We must mark them as truncated so the UI can indicate incomplete results.
-        const killTimeout = setTimeout(() => {
+        killTimeout = setTimeout(() => {
           acc.truncated = true
           child?.kill()
+          resolveOnce()
         }, SEARCH_TIMEOUT_MS)
       })
     }
@@ -823,8 +855,8 @@ export function registerFilesystemHandlers(
         return generateCommitMessageFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
-          execute: (plan, cwd, timeoutMs) =>
-            provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          execute: (plan, cwd, timeoutMs, operation) =>
+            provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
           missingBinaryLocation: 'remote PATH'
         })
       }
@@ -865,7 +897,7 @@ export function registerFilesystemHandlers(
         if (!provider) {
           return
         }
-        await provider.cancelGenerateCommitMessage(args.worktreePath)
+        await provider.cancelGenerateCommitMessage(args.worktreePath, 'commit-message')
         return
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -967,8 +999,8 @@ export function registerFilesystemHandlers(
         return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
-          execute: (plan, cwd, timeoutMs) =>
-            provider.executeCommitMessagePlan(plan, cwd, timeoutMs),
+          execute: (plan, cwd, timeoutMs, operation) =>
+            provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
           missingBinaryLocation: 'remote PATH'
         })
       }
@@ -1017,7 +1049,7 @@ export function registerFilesystemHandlers(
         if (!provider) {
           return
         }
-        await provider.cancelGenerateCommitMessage(args.worktreePath)
+        await provider.cancelGenerateCommitMessage(args.worktreePath, 'pull-request-fields')
         return
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
@@ -1166,6 +1198,30 @@ export function registerFilesystemHandlers(
         await validateGitPushTarget(worktreePath, args.pushTarget)
       }
       await gitPull(worktreePath, args.pushTarget)
+    }
+  )
+
+  ipcMain.handle(
+    'git:fastForward',
+    async (
+      _event,
+      args: { worktreePath: string; connectionId?: string; pushTarget?: GitPushTarget }
+    ): Promise<void> => {
+      if (args.connectionId) {
+        if (args.pushTarget) {
+          assertGitPushTargetShape(args.pushTarget)
+        }
+        const provider = getSshGitProvider(args.connectionId)
+        if (!provider) {
+          throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+        }
+        return provider.fastForwardBranch(args.worktreePath, args.pushTarget)
+      }
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      if (args.pushTarget) {
+        await validateGitPushTarget(worktreePath, args.pushTarget)
+      }
+      await gitFastForward(worktreePath, args.pushTarget)
     }
   )
 

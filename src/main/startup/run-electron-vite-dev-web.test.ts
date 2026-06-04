@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const processesToCleanUp = new Set<number>()
@@ -19,6 +19,72 @@ async function waitFor(predicate: () => boolean, timeoutMs = 5000): Promise<void
       throw new Error('Timed out waiting for condition')
     }
     await sleep(50)
+  }
+}
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+    if (code === 'ESRCH') {
+      return false
+    }
+    throw error
+  }
+}
+
+function readPidFile(pidFile: string): number[] {
+  return readFileSync(pidFile, 'utf8')
+    .trim()
+    .split(/\s+/)
+    .map((pid) => Number.parseInt(pid, 10))
+    .filter((pid) => Number.isFinite(pid))
+}
+
+function trackPidFile(pidFile: string): number[] {
+  const pids = readPidFile(pidFile)
+  for (const pid of pids) {
+    processesToCleanUp.add(pid)
+  }
+  return pids
+}
+
+function waitForExit(child: ChildProcess, timeoutMs = 5000): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return Promise.resolve()
+  }
+  return new Promise((resolveExit, reject) => {
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error('Timed out waiting for dev wrapper exit'))
+    }, timeoutMs)
+    child.once('exit', () => {
+      clearTimeout(timer)
+      resolveExit()
+    })
+  })
+}
+
+async function stopWrapper(wrapper: ChildProcess): Promise<void> {
+  if (wrapper.pid) {
+    processesToCleanUp.add(wrapper.pid)
+  }
+  if (wrapper.exitCode === null && wrapper.signalCode === null) {
+    wrapper.kill('SIGINT')
+  }
+  await waitForExit(wrapper)
+  if (wrapper.pid) {
+    processesToCleanUp.delete(wrapper.pid)
+  }
+}
+
+async function stopWrapperAndTrackedPids(wrapper: ChildProcess, pids: number[]): Promise<void> {
+  await stopWrapper(wrapper)
+  await waitFor(() => pids.every((pid) => !processExists(pid)))
+  for (const pid of pids) {
+    processesToCleanUp.delete(pid)
   }
 }
 
@@ -42,10 +108,23 @@ function stashWebBuild(): () => void {
 }
 
 describe('run-electron-vite-dev web client prepare', () => {
-  afterEach(() => {
+  afterEach(async () => {
     for (const pid of processesToCleanUp) {
       try {
-        process.kill(pid, 'SIGKILL')
+        process.kill(pid, 'SIGTERM')
+      } catch (error) {
+        const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+        if (code !== 'ESRCH') {
+          throw error
+        }
+      }
+    }
+    await sleep(100)
+    for (const pid of processesToCleanUp) {
+      try {
+        if (processExists(pid)) {
+          process.kill(pid, 'SIGKILL')
+        }
       } catch (error) {
         const code = error && typeof error === 'object' && 'code' in error ? error.code : null
         if (code !== 'ESRCH') {
@@ -100,12 +179,9 @@ describe('run-electron-vite-dev web client prepare', () => {
       expect(existsSync(viteFile)).toBe(false)
       expect(stderr).toContain('Web client bundle missing; skipping pairing web build.')
 
-      const grandchildPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
-      if (Number.isFinite(grandchildPid)) {
-        processesToCleanUp.add(grandchildPid)
-      }
+      const trackedPids = trackPidFile(pidFile)
 
-      wrapper.kill('SIGINT')
+      await stopWrapperAndTrackedPids(wrapper, trackedPids)
     } finally {
       restoreWebBuild()
     }
@@ -151,12 +227,9 @@ describe('run-electron-vite-dev web client prepare', () => {
 
       expect(readFileSync(viteFile, 'utf8')).toContain('build')
 
-      const grandchildPid = Number.parseInt(readFileSync(pidFile, 'utf8').trim(), 10)
-      if (Number.isFinite(grandchildPid)) {
-        processesToCleanUp.add(grandchildPid)
-      }
+      const trackedPids = trackPidFile(pidFile)
 
-      wrapper.kill('SIGINT')
+      await stopWrapperAndTrackedPids(wrapper, trackedPids)
     } finally {
       restoreWebBuild()
     }

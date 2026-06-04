@@ -245,7 +245,11 @@ function getRuntimeFeatureInteractionId(
   if (method === 'computer.permissions') {
     return 'computer-use-setup'
   }
-  if (method.startsWith('computer.') && method !== 'computer.capabilities') {
+  if (
+    method.startsWith('computer.') &&
+    method !== 'computer.capabilities' &&
+    method !== 'computer.permissionsStatus'
+  ) {
     return 'computer-use'
   }
   if (method.startsWith('orchestration.')) {

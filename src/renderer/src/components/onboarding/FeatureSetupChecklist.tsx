@@ -31,14 +31,14 @@ const FEATURE_SETUP_ROWS: readonly FeatureSetupRow[] = [
     id: 'computerUse',
     title: 'Computer Use',
     description: 'Agents can inspect app windows and operate local apps when you ask.',
-    setupSummary: 'Registers `orca`, opens permissions, and prepares the skill.',
+    setupSummary: 'Registers the Orca CLI, opens permissions, and prepares the skill.',
     icon: <MonitorCog className="size-4" />
   },
   {
     id: 'orchestration',
     title: 'Agent Orchestration',
     description: 'Agents can message each other, take tasks, and coordinate handoffs.',
-    setupSummary: 'Registers `orca`, enables orchestration, and prepares the skill.',
+    setupSummary: 'Registers the Orca CLI, enables orchestration, and prepares the skill.',
     icon: <Workflow className="size-4" />
   }
 ]

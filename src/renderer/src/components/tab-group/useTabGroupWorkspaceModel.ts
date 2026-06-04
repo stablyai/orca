@@ -10,6 +10,7 @@ import type {
   TabGroup,
   TerminalTab
 } from '../../../../shared/types'
+import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
 import { useAppStore } from '../../store'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
 import { requestEditorFileClose } from '../editor/editor-autosave'
@@ -22,6 +23,14 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '../../runtime/web-runtime-session'
+import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
+
+export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
+  if (!createdTerminal) {
+    return
+  }
+  useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+}
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
@@ -52,7 +61,8 @@ export function useTabGroupWorkspaceModel({
       terminalTabs: state.tabsByWorktree[worktreeId] ?? EMPTY_TERMINAL_TABS,
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
-      expandedPaneByTabId: state.expandedPaneByTabId
+      expandedPaneByTabId: state.expandedPaneByTabId,
+      generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true
     }))
   )
 
@@ -113,18 +123,31 @@ export function useTabGroupWorkspaceModel({
             unifiedTabId: item.id,
             ptyId: terminalTab?.ptyId ?? null,
             worktreeId,
-            title: item.label,
+            title: resolveUnifiedTabLabel(
+              {
+                ...item,
+                generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle
+              },
+              worktreeState.generatedTabTitlesEnabled,
+              item.label
+            ),
             defaultTitle: terminalTab?.defaultTitle,
+            generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
             customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
             color: item.color ?? terminalTab?.color ?? null,
             sortOrder: item.sortOrder,
             createdAt: item.createdAt,
             generation: terminalTab?.generation,
             shellOverride: terminalTab?.shellOverride,
+            // Why: carry the launched agent through the rebuilt tab so the tab
+            // bar can show the provider icon before the agent's first hook —
+            // this object is reconstructed from the unified-tab model, so any
+            // store-only field (like launchAgent) is dropped unless copied here.
+            launchAgent: terminalTab?.launchAgent,
             pendingActivationSpawn: terminalTab?.pendingActivationSpawn
           }
         }),
-    [groupTabs, terminalTabById, worktreeId]
+    [groupTabs, terminalTabById, worktreeId, worktreeState.generatedTabTitlesEnabled]
   )
 
   const editorItems = useMemo<GroupEditorItem[]>(
@@ -204,6 +227,9 @@ export function useTabGroupWorkspaceModel({
       if (!item) {
         return
       }
+      if (item.isPinned) {
+        return
+      }
       const runtimeEnvironmentId = useAppStore
         .getState()
         .settings?.activeRuntimeEnvironmentId?.trim()
@@ -251,7 +277,7 @@ export function useTabGroupWorkspaceModel({
     (itemIds: string[]) => {
       for (const itemId of itemIds) {
         const item = groupTabs.find((candidate) => candidate.id === itemId)
-        if (!item) {
+        if (!item || item.isPinned) {
           continue
         }
         const runtimeEnvironmentId = useAppStore
@@ -401,6 +427,7 @@ export function useTabGroupWorkspaceModel({
           return
         }
         const terminal = createTab(worktreeId, newGroupId)
+        recordTerminalTabGroupSplit(terminal)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
         return
@@ -532,6 +559,9 @@ export function useTabGroupWorkspaceModel({
       createSplitGroup,
       newBrowserTab: () => {
         void openNewBrowserTabInActiveWorkspace(groupId)
+      },
+      openEntry: async (args: TabCreateEntryArgs) => {
+        await openTabBarEntry(args)
       },
       duplicateBrowserTab: (browserTabId: string) => {
         void (async () => {

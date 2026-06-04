@@ -278,9 +278,18 @@ describe('GitHub issue source split', () => {
     const item = await getWorkItem('/repo-root', 42, 'pr')
 
     expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
-    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(['api', 'repos/fork/orca/pulls/42'], {
-      cwd: '/repo-root'
-    })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      [
+        'pr',
+        'view',
+        '42',
+        '--repo',
+        'fork/orca',
+        '--json',
+        expect.stringContaining('reviewDecision')
+      ],
+      { cwd: '/repo-root' }
+    )
     expect(item?.type).toBe('pr')
   })
 
@@ -311,9 +320,19 @@ describe('GitHub issue source split', () => {
       ['api', 'repos/stablyai/orca/issues/42'],
       { cwd: '/repo-root' }
     )
-    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['api', 'repos/fork/orca/pulls/42'], {
-      cwd: '/repo-root'
-    })
+    expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      [
+        'pr',
+        'view',
+        '42',
+        '--repo',
+        'fork/orca',
+        '--json',
+        expect.stringContaining('reviewDecision')
+      ],
+      { cwd: '/repo-root' }
+    )
     expect(item?.type).toBe('pr')
   })
 

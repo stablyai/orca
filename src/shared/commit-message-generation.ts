@@ -33,7 +33,7 @@ function limitSection(value: string, maxChars: number): string {
 
 export function buildCommitMessagePrompt(
   context: CommitMessageDraftContext,
-  customInstructions: string
+  customPrompt: string
 ): string {
   const patch = truncateDiffForPrompt(context.stagedPatch)
   const base = [
@@ -58,16 +58,11 @@ export function buildCommitMessagePrompt(
     '```'
   ].join('\n')
 
-  const trimmedInstructions = customInstructions.trim()
-  if (!trimmedInstructions) {
+  const trimmedPrompt = customPrompt.trim()
+  if (!trimmedPrompt) {
     return base
   }
-  return [
-    base,
-    '',
-    'Additional instructions from user:',
-    limitSection(trimmedInstructions, 4_000)
-  ].join('\n')
+  return [base, '', 'Additional user prompt:', limitSection(trimmedPrompt, 4_000)].join('\n')
 }
 
 export function splitGeneratedCommitMessage(message: string): GeneratedCommitMessage {

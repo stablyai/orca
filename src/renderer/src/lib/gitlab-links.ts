@@ -4,8 +4,8 @@
 // than locking to gitlab.com. Anything matching `/<path>/-/(issues|
 // merge_requests)/<digits>` is treated as a GitLab item URL regardless
 // of host.
-const GL_ITEM_PATH_RE = /\/(?:issues|merge_requests)\/(\d+)(?:\/)?$/i
-const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|merge_requests)\/(\d+)(?:\/)?$/i
+const GL_ITEM_PATH_RE = /\/(?:issues|merge_requests)\/(\d+)(?:\/.*)?$/i
+const GL_ITEM_PATH_FULL_RE = /^\/(.+)\/-\/(issues|merge_requests)\/(\d+)(?:\/.*)?$/i
 
 export type ProjectSlug = {
   /** Full GitLab project path including any nested groups. */

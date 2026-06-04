@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: run rows are fetched from the external automation store; the loading state tracks that async request lifecycle. */
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, ChevronLeft, ChevronRight, FileText, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -10,6 +11,12 @@ import type {
   ExternalAutomationRun
 } from '../../../../shared/automations-types'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import {
+  createExternalAutomationRunTableState,
+  resolveExternalAutomationFetchedRuns,
+  resolveExternalAutomationRunTableState,
+  updateExternalAutomationRunTablePage
+} from './external-automation-run-table-state'
 
 const PAGE_SIZE = 8
 
@@ -88,25 +95,21 @@ export function ExternalAutomationRunTable({
   onFetchRuns,
   onOpenRun
 }: ExternalAutomationRunTableProps): React.JSX.Element {
-  const [page, setPage] = useState(0)
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(job.runs[0]?.id ?? null)
-  const [fetchedRuns, setFetchedRuns] = useState<ExternalAutomationRun[] | null>(null)
-  const [fetchedTotalCount, setFetchedTotalCount] = useState<number | null>(null)
+  const [tableState, setTableState] = useState(() => createExternalAutomationRunTableState(job))
   const [isLoading, setIsLoading] = useState(false)
-  const [fetchError, setFetchError] = useState<string | null>(null)
   const managerRef = useRef(manager)
   const jobRef = useRef(job)
 
   managerRef.current = manager
   jobRef.current = job
 
-  useEffect(() => {
-    setPage(0)
-    setSelectedRunId(job.runs[0]?.id ?? null)
-    setFetchedRuns(null)
-    setFetchedTotalCount(null)
-    setFetchError(null)
-  }, [job.id, job.runs])
+  const resolvedTableState = resolveExternalAutomationRunTableState(tableState, job)
+  if (resolvedTableState !== tableState) {
+    // Why: manager rows can switch jobs while the table stays mounted; reset
+    // before paint so stale fetched rows/selection never flash for the new job.
+    setTableState(resolvedTableState)
+  }
+  const { page, selectedRunId, fetchedRuns, fetchedTotalCount, fetchError } = resolvedTableState
 
   useEffect(() => {
     if (!onFetchRuns) {
@@ -114,7 +117,10 @@ export function ExternalAutomationRunTable({
     }
     let cancelled = false
     setIsLoading(true)
-    setFetchError(null)
+    setTableState((current) => ({
+      ...resolveExternalAutomationRunTableState(current, jobRef.current),
+      fetchError: null
+    }))
     void onFetchRuns({
       manager: managerRef.current,
       job: jobRef.current,
@@ -126,20 +132,18 @@ export function ExternalAutomationRunTable({
           return
         }
         const nextPage = normalizeRunPage(result)
-        setFetchedRuns(nextPage.runs)
-        setFetchedTotalCount(nextPage.totalCount ?? null)
-        setSelectedRunId((current) => {
-          if (current && nextPage.runs.some((run) => run.id === current)) {
-            return current
-          }
-          return nextPage.runs[0]?.id ?? null
-        })
+        setTableState((current) =>
+          resolveExternalAutomationFetchedRuns(current, jobRef.current, nextPage)
+        )
       })
       .catch((error) => {
         if (!cancelled) {
-          setFetchedRuns(null)
-          setFetchedTotalCount(null)
-          setFetchError(error instanceof Error ? error.message : 'Failed to load runs.')
+          setTableState((current) => ({
+            ...resolveExternalAutomationRunTableState(current, jobRef.current),
+            fetchedRuns: null,
+            fetchedTotalCount: null,
+            fetchError: error instanceof Error ? error.message : 'Failed to load runs.'
+          }))
         }
       })
       .finally(() => {
@@ -170,12 +174,9 @@ export function ExternalAutomationRunTable({
   const pageStart = totalCount === 0 || !hasVisibleRuns ? 0 : page * PAGE_SIZE + 1
   const pageEnd = Math.min(totalCount, page * PAGE_SIZE + visibleRuns.length)
 
-  useEffect(() => {
-    if (selectedRunId && visibleRuns.some((run) => run.id === selectedRunId)) {
-      return
-    }
-    setSelectedRunId(visibleRuns[0]?.id ?? null)
-  }, [selectedRunId, visibleRuns])
+  const handlePageChange = (nextPage: number): void => {
+    setTableState((current) => updateExternalAutomationRunTablePage(current, job, nextPage))
+  }
 
   return (
     <div className="mt-2 rounded-md border border-border/50 bg-background/50">
@@ -214,7 +215,10 @@ export function ExternalAutomationRunTable({
                   type="button"
                   data-current={selectedRun?.id === run.id}
                   onClick={() => {
-                    setSelectedRunId(run.id)
+                    setTableState((current) => ({
+                      ...resolveExternalAutomationRunTableState(current, job),
+                      selectedRunId: run.id
+                    }))
                     onOpenRun?.(run)
                   }}
                   className={cn(
@@ -261,7 +265,7 @@ export function ExternalAutomationRunTable({
             size="icon-xs"
             aria-label="Previous run page"
             disabled={page === 0 || isLoading}
-            onClick={() => setPage((current) => Math.max(0, current - 1))}
+            onClick={() => handlePageChange(Math.max(0, page - 1))}
           >
             <ChevronLeft className="size-3.5" />
           </Button>
@@ -274,7 +278,7 @@ export function ExternalAutomationRunTable({
             size="icon-xs"
             aria-label="Next run page"
             disabled={page >= totalPages - 1 || isLoading}
-            onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
+            onClick={() => handlePageChange(Math.min(totalPages - 1, page + 1))}
           >
             <ChevronRight className="size-3.5" />
           </Button>

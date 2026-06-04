@@ -23,8 +23,12 @@ type Props = {
 }
 
 function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon): LucideIcon {
-  if (icon) return icon
-  if (destructive || /delete|remove/i.test(label)) return Trash2
+  if (icon) {
+    return icon
+  }
+  if (destructive || /delete|remove/i.test(label)) {
+    return Trash2
+  }
   return Edit3
 }
 

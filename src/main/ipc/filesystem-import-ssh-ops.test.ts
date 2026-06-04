@@ -12,6 +12,7 @@ const {
   sftpExistsMock,
   uploadFileMock,
   uploadDirMock,
+  removeDirectorySftpMock,
   mkdirSftpMock,
   getConnMgrMock
 } = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ const {
   sftpExistsMock: vi.fn(),
   uploadFileMock: vi.fn(),
   uploadDirMock: vi.fn(),
+  removeDirectorySftpMock: vi.fn(),
   mkdirSftpMock: vi.fn(),
   getConnMgrMock: vi.fn()
 }))
@@ -42,6 +44,7 @@ vi.mock('../ssh/sftp-upload', () => ({
   sftpPathExists: sftpExistsMock,
   uploadFile: uploadFileMock,
   uploadDirectory: uploadDirMock,
+  removeDirectorySftp: removeDirectorySftpMock,
   mkdirSftp: mkdirSftpMock
 }))
 vi.mock('./ssh', () => ({ getSshConnectionManager: getConnMgrMock }))
@@ -96,6 +99,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
       sftpExistsMock,
       uploadFileMock,
       uploadDirMock,
+      removeDirectorySftpMock,
       mkdirSftpMock,
       getConnMgrMock
     ].forEach((m) => m.mockReset())
@@ -108,6 +112,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
     sftpExistsMock.mockResolvedValue(false)
     uploadFileMock.mockResolvedValue(undefined)
     uploadDirMock.mockResolvedValue(undefined)
+    removeDirectorySftpMock.mockResolvedValue(undefined)
     mkdirSftpMock.mockResolvedValue(undefined)
     getConnMgrMock.mockReturnValue({ getConnection: () => makeConn() })
     registerFilesystemMutationHandlers(store as never)
@@ -218,6 +223,24 @@ describe('fs:importExternalPaths — SSH operations', () => {
       connectionId: connId
     })
     expect(results[0]).toMatchObject({ status: 'failed', reason: 'permission denied' })
+  })
+
+  it('removes a created SSH directory import root when uploadDirectory fails', async () => {
+    mockDir('/tmp/dropped/assets')
+    readdirMock.mockResolvedValue([])
+    uploadDirMock.mockRejectedValue(new Error('disk full'))
+
+    const { results } = await invoke({
+      sourcePaths: ['/tmp/dropped/assets'],
+      destDir,
+      connectionId: connId
+    })
+
+    expect(results[0]).toMatchObject({ status: 'failed', reason: 'disk full' })
+    expect(mkdirSftpMock).toHaveBeenCalledWith(mockSftp, `${destDir}/assets`, {
+      allowExisting: false
+    })
+    expect(removeDirectorySftpMock).toHaveBeenCalledWith(mockSftp, `${destDir}/assets`)
   })
 
   it('deconflicts directory names via SFTP lstat', async () => {

@@ -89,6 +89,17 @@ describe('worktree-palette-create-action', () => {
     ).toBe('')
   })
 
+  it('falls back to the first row when render-time selection state is empty', () => {
+    expect(
+      getNextWorktreePaletteSelection({
+        currentSelectedItemId: '',
+        queryChanged: false,
+        selectableItemIds: ['worktree:first', 'browser-page:second'],
+        showCreateAction: true
+      })
+    ).toBe('worktree:first')
+  })
+
   it('does not keep create selected after the create row disappears', () => {
     expect(
       getNextWorktreePaletteSelection({

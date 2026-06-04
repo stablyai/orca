@@ -1,6 +1,16 @@
 /* eslint-disable max-lines -- Why: SSH connection utility tests share mocked filesystem and environment setup across auth, proxy, and retry helpers. */
+import { EventEmitter } from 'events'
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
+import { join } from 'path'
 import { BaseAgent, utils, type ParsedKey } from 'ssh2'
+
+const { spawnMock } = vi.hoisted(() => ({
+  spawnMock: vi.fn()
+}))
+
+vi.mock('child_process', () => ({
+  spawn: spawnMock
+}))
 
 vi.mock('os', () => ({
   homedir: () => '/home/testuser'
@@ -8,6 +18,11 @@ vi.mock('os', () => ({
 
 const mockExistsSync = vi.fn().mockReturnValue(false)
 const mockReadFileSync = vi.fn()
+const TEST_HOME = '/home/testuser'
+
+function testHomePath(...parts: string[]): string {
+  return join(TEST_HOME, ...parts)
+}
 
 vi.mock('fs', () => ({
   existsSync: (...args: unknown[]) => mockExistsSync(...args),
@@ -27,10 +42,27 @@ import {
   CONNECT_TIMEOUT_MS,
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
-  RECONNECT_BACKOFF_MS
+  RECONNECT_BACKOFF_MS,
+  spawnProxyCommand
 } from './ssh-connection-utils'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './ssh-config-parser'
+
+type MockProxyProcess = EventEmitter & {
+  stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
+  stdout: EventEmitter
+  stderr: EventEmitter
+}
+
+function createMockProxyProcess(): MockProxyProcess {
+  const proc = new EventEmitter() as MockProxyProcess
+  proc.stdin = Object.assign(new EventEmitter(), {
+    write: vi.fn((_chunk, cb?: (error?: Error | null) => void) => cb?.())
+  })
+  proc.stdout = new EventEmitter()
+  proc.stderr = new EventEmitter()
+  return proc
+}
 
 // ── Constants ────────────────────────────────────────────────────────
 
@@ -205,7 +237,7 @@ describe('findDefaultKeyFile', () => {
 
   it('returns the first existing key file', () => {
     mockExistsSync.mockImplementation((path: unknown) => {
-      return path === '/home/testuser/.ssh/id_ed25519'
+      return path === testHomePath('.ssh', 'id_ed25519')
     })
     mockReadFileSync.mockReturnValue(Buffer.from('key-contents'))
 
@@ -225,20 +257,20 @@ describe('findDefaultKeyFile', () => {
     findDefaultKeyFile()
 
     expect(checkedPaths).toEqual([
-      '/home/testuser/.ssh/id_ed25519',
-      '/home/testuser/.ssh/id_rsa',
-      '/home/testuser/.ssh/id_ecdsa',
-      '/home/testuser/.ssh/id_dsa',
-      '/home/testuser/.ssh/id_xmss'
+      testHomePath('.ssh', 'id_ed25519'),
+      testHomePath('.ssh', 'id_rsa'),
+      testHomePath('.ssh', 'id_ecdsa'),
+      testHomePath('.ssh', 'id_dsa'),
+      testHomePath('.ssh', 'id_xmss')
     ])
   })
 
   it('skips unreadable key files and tries next', () => {
     mockExistsSync.mockImplementation((path: unknown) => {
-      return path === '/home/testuser/.ssh/id_ed25519' || path === '/home/testuser/.ssh/id_rsa'
+      return path === testHomePath('.ssh', 'id_ed25519') || path === testHomePath('.ssh', 'id_rsa')
     })
     mockReadFileSync.mockImplementation((path: unknown) => {
-      if (String(path) === '/home/testuser/.ssh/id_ed25519') {
+      if (String(path) === testHomePath('.ssh', 'id_ed25519')) {
         throw new Error('permission denied')
       }
       return Buffer.from('rsa-key')
@@ -311,6 +343,33 @@ describe('buildConnectConfig', () => {
     expect(config.username).toBe('admin')
   })
 
+  it('uses ssh -G HostName when a config-host target still points at its alias', () => {
+    const config = buildConnectConfig(
+      makeTarget({ label: 'workbox', configHost: 'workbox', host: 'workbox' }),
+      makeResolved({ hostname: 'workbox.internal' })
+    )
+
+    expect(config.host).toBe('workbox.internal')
+  })
+
+  it('uses ssh -G Port when a config-host target still has the default port', () => {
+    const config = buildConnectConfig(
+      makeTarget({ configHost: 'workbox', host: 'workbox', port: 22 }),
+      makeResolved({ port: 2202 })
+    )
+
+    expect(config.port).toBe(2202)
+  })
+
+  it('keeps explicit non-default target ports ahead of ssh -G Port', () => {
+    const config = buildConnectConfig(
+      makeTarget({ configHost: 'workbox', host: 'workbox', port: 2022 }),
+      makeResolved({ port: 2202 })
+    )
+
+    expect(config.port).toBe(2022)
+  })
+
   it('sets readyTimeout to CONNECT_TIMEOUT_MS', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.readyTimeout).toBe(30_000)
@@ -326,6 +385,26 @@ describe('buildConnectConfig', () => {
     expect(config.agent).toBe('/tmp/agent.sock')
   })
 
+  it('enables agent forwarding when OpenSSH config requests it and an agent is available', () => {
+    const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: true }))
+
+    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(config.agentForward).toBe(true)
+  })
+
+  it('does not enable agent forwarding without a usable agent', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    delete process.env.SSH_AUTH_SOCK
+
+    try {
+      const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: true }))
+      expect(config.agent).toBeUndefined()
+      expect(config.agentForward).toBeUndefined()
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
   it('uses configured IdentityAgent before SSH_AUTH_SOCK', () => {
     const config = buildConnectConfig(
       makeTarget(),
@@ -337,9 +416,9 @@ describe('buildConnectConfig', () => {
   it('prefers ssh -G resolved IdentityAgent for config-host targets', () => {
     const config = buildConnectConfig(
       makeTarget({ configHost: 'work', identityAgent: '%d/.1password/agent.sock' }),
-      makeResolved({ identityAgent: '/home/testuser/.1password/agent.sock' })
+      makeResolved({ identityAgent: testHomePath('.1password', 'agent.sock') })
     )
-    expect(config.agent).toBe('/home/testuser/.1password/agent.sock')
+    expect(config.agent).toBe(testHomePath('.1password', 'agent.sock'))
   })
 
   it('allows IdentityAgent none to disable agent auth', () => {
@@ -419,11 +498,29 @@ describe('buildConnectConfig', () => {
   })
 
   it('uses keyFile auth when target.identityFile is set and no agent is available', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     delete process.env.SSH_AUTH_SOCK
     mockReadFileSync.mockReturnValue(Buffer.from('key'))
-    const config = buildConnectConfig(makeTarget({ identityFile: '/home/user/.ssh/custom' }), null)
+    try {
+      const config = buildConnectConfig(
+        makeTarget({ identityFile: '/home/user/.ssh/custom' }),
+        null
+      )
+      expect(config.privateKey).toEqual(Buffer.from('key'))
+      expect(config.agent).toBeUndefined()
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it('expands Windows-style target.identityFile before reading private key', () => {
+    mockReadFileSync.mockReturnValue(Buffer.from('key'))
+    const config = buildConnectConfig(makeTarget({ identityFile: '~\\.ssh\\custom' }), null, {
+      includeAgent: false,
+      includePrivateKey: true
+    })
     expect(config.privateKey).toEqual(Buffer.from('key'))
-    expect(config.agent).toBeUndefined()
+    expect(mockReadFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'custom'))
   })
 
   it('includes unencrypted resolved identityFile auth when an agent is available', () => {
@@ -442,7 +539,7 @@ describe('buildConnectConfig', () => {
   it('uses agent auth without probing when resolved identityFile is a default path (expanded)', () => {
     const config = buildConnectConfig(
       makeTarget(),
-      makeResolved({ identityFile: ['/home/testuser/.ssh/id_ed25519'] })
+      makeResolved({ identityFile: [testHomePath('.ssh', 'id_ed25519')] })
     )
     expect(config.agent).toBe('/tmp/agent.sock')
     expect(config.privateKey).toBeUndefined()
@@ -451,7 +548,7 @@ describe('buildConnectConfig', () => {
 
   it('does not probe default key files before agent auth', () => {
     mockExistsSync.mockImplementation(
-      (p: unknown) => String(p) === '/home/testuser/.ssh/id_ed25519'
+      (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
@@ -460,14 +557,19 @@ describe('buildConnectConfig', () => {
   })
 
   it('provides fallback key when no agent is available', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
     delete process.env.SSH_AUTH_SOCK
     mockExistsSync.mockImplementation(
-      (p: unknown) => String(p) === '/home/testuser/.ssh/id_ed25519'
+      (p: unknown) => String(p) === testHomePath('.ssh', 'id_ed25519')
     )
     mockReadFileSync.mockReturnValue(Buffer.from('fallback'))
-    const config = buildConnectConfig(makeTarget(), null)
-    expect(config.agent).toBeUndefined()
-    expect(config.privateKey).toEqual(Buffer.from('fallback'))
+    try {
+      const config = buildConnectConfig(makeTarget(), null)
+      expect(config.agent).toBeUndefined()
+      expect(config.privateKey).toEqual(Buffer.from('fallback'))
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('can force private key inclusion for the post-agent fallback path', () => {
@@ -520,5 +622,37 @@ describe('resolveEffectiveProxy', () => {
 
   it('returns undefined when no proxy is configured', () => {
     expect(resolveEffectiveProxy(makeTarget(), null)).toBeUndefined()
+  })
+})
+
+// ── spawnProxyCommand ───────────────────────────────────────────────
+
+describe('spawnProxyCommand', () => {
+  beforeEach(() => {
+    spawnMock.mockReset()
+  })
+
+  it('removes proxy process listeners when the socket is destroyed', () => {
+    const proc = createMockProxyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    const { sock } = spawnProxyCommand(
+      { kind: 'jump-host', jumpHost: 'bastion.example.com' },
+      'target.example.com',
+      22,
+      'deploy'
+    )
+
+    expect(proc.stdout.listenerCount('data')).toBe(1)
+    expect(proc.stdout.listenerCount('end')).toBe(1)
+    expect(proc.stdin.listenerCount('error')).toBe(1)
+    expect(proc.listenerCount('error')).toBe(1)
+
+    sock.destroy()
+
+    expect(proc.stdout.listenerCount('data')).toBe(0)
+    expect(proc.stdout.listenerCount('end')).toBe(0)
+    expect(proc.stdin.listenerCount('error')).toBe(0)
+    expect(proc.listenerCount('error')).toBe(0)
   })
 })

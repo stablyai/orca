@@ -60,6 +60,7 @@ let backgroundCheckLaunchPending = false
 // Why: a manually promoted background check can emit an error event before the
 // paired promise catch runs; keep the promotion attached to that launch.
 let backgroundCheckPromotedToUserInitiated = false
+let pendingPrereleaseUserInitiatedCheckAfterInFlight = false
 let activeUpdateNudgeId: string | null = null
 let awaitingNudgeCheckOutcome = false
 let nudgeCheckInFlight = false
@@ -210,6 +211,12 @@ function rebroadcastUpdaterStatus(): void {
 }
 
 function sendStatus(status: UpdateStatus): void {
+  const shouldLaunchPendingPrereleaseCheck =
+    pendingPrereleaseUserInitiatedCheckAfterInFlight &&
+    (status.state === 'idle' ||
+      status.state === 'not-available' ||
+      status.state === 'available' ||
+      status.state === 'error')
   const shouldPreserveNudgeForPublishingWindow =
     publishingWindowLastGoodCheck !== null &&
     (status.state === 'idle' ||
@@ -269,6 +276,10 @@ function sendStatus(status: UpdateStatus): void {
   ) {
     downloadInFlight = false
   }
+  if (shouldLaunchPendingPrereleaseCheck) {
+    launchPendingPrereleaseUserInitiatedCheckAfterInFlight()
+    return
+  }
   if (statusesEqual(currentStatus, decoratedStatus)) {
     return
   }
@@ -277,6 +288,19 @@ function sendStatus(status: UpdateStatus): void {
   // Why: runs after currentStatus is committed so the controller reads up-to-date
   // state; its decoration changes re-enter via rebroadcastUpdaterStatus, not here.
   idleInstallController.handleUpdaterStatus(decoratedStatus)
+}
+
+function launchPendingPrereleaseUserInitiatedCheckAfterInFlight(): void {
+  pendingPrereleaseUserInitiatedCheckAfterInFlight = false
+  setTimeout(() => {
+    // Why: electron-updater clears its in-flight promise after emitting the
+    // terminal event. Deferring one tick lets the queued RC check start fresh
+    // instead of being deduped into the just-finished stable check.
+    if (currentStatus.state === 'checking') {
+      currentStatus = { state: 'idle' }
+    }
+    checkForUpdatesFromMenu({ includePrerelease: true })
+  }, 0)
 }
 
 function clearBackgroundCheckLaunchPending(): void {
@@ -765,6 +789,11 @@ export function checkForUpdatesFromMenu(options?: { includePrerelease?: boolean 
   sendStatus({ state: 'checking', userInitiated: true })
   if (checkAlreadyInFlight) {
     backgroundCheckPromotedToUserInitiated = true
+    if (options?.includePrerelease) {
+      // Why: the in-flight check may have already pinned the stable feed.
+      // Queue a fresh RC check so Shift-click doesn't inherit a stable result.
+      pendingPrereleaseUserInitiatedCheckAfterInFlight = true
+    }
     return
   }
 

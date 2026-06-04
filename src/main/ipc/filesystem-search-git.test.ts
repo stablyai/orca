@@ -43,9 +43,12 @@ describe('filesystem-search-git', () => {
     setTimeout(() => {
       ;(proc.stdout as unknown as EventEmitter).emit(
         'data',
-        'src/index.ts\x005:  console.log("hello world")\n'
+        'src/index.ts\x005\x00  console.log("hello world")\n'
       )
-      ;(proc.stdout as unknown as EventEmitter).emit('data', 'src/main.ts\x0012:  return "hello"\n')
+      ;(proc.stdout as unknown as EventEmitter).emit(
+        'data',
+        'src/main.ts\x0012\x00  return "hello"\n'
+      )
       proc.emit('close')
     }, 10)
 
@@ -74,7 +77,7 @@ describe('filesystem-search-git', () => {
     const promise = searchWithGitGrep('/mock/root', { query: 'ab', rootPath: '/mock/root' }, 100)
 
     setTimeout(() => {
-      ;(proc.stdout as unknown as EventEmitter).emit('data', 'file.txt\x001:ab cd ab ef ab\n')
+      ;(proc.stdout as unknown as EventEmitter).emit('data', 'file.txt\x001\x00ab cd ab ef ab\n')
       proc.emit('close')
     }, 10)
 
@@ -98,7 +101,7 @@ describe('filesystem-search-git', () => {
     setTimeout(() => {
       ;(proc.stdout as unknown as EventEmitter).emit(
         'data',
-        'a.ts\x001:x\n' + 'b.ts\x001:x\n' + 'c.ts\x001:x\n'
+        'a.ts\x001\x00x\n' + 'b.ts\x001\x00x\n' + 'c.ts\x001\x00x\n'
       )
       proc.emit('close')
     }, 10)
@@ -168,6 +171,32 @@ describe('filesystem-search-git', () => {
     expect(result.totalMatches).toBe(0)
   })
 
+  it('settles and detaches when git grep ignores the timeout kill', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const proc = createMockProcess()
+      spawnMock.mockReturnValue(proc)
+
+      const promise = searchWithGitGrep('/mock/root', { query: 'ok', rootPath: '/mock/root' }, 100)
+
+      ;(proc.stdout as unknown as EventEmitter).emit('data', 'valid.ts\x001\x00ok\npartial')
+
+      await vi.runOnlyPendingTimersAsync()
+
+      const result = await promise
+      expect(result.truncated).toBe(true)
+      expect(result.files).toHaveLength(1)
+      expect(proc.kill).toHaveBeenCalled()
+      expect((proc.stdout as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect((proc.stderr as unknown as EventEmitter).listenerCount('data')).toBe(0)
+      expect(proc.listenerCount('error')).toBe(0)
+      expect(proc.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('skips lines without null separator', async () => {
     const proc = createMockProcess()
     spawnMock.mockReturnValue(proc)
@@ -177,7 +206,7 @@ describe('filesystem-search-git', () => {
     setTimeout(() => {
       // A line without \0 should be skipped (e.g. git header output)
       ;(proc.stdout as unknown as EventEmitter).emit('data', 'no-null-here:1:ok\n')
-      ;(proc.stdout as unknown as EventEmitter).emit('data', 'valid.ts\x003:ok\n')
+      ;(proc.stdout as unknown as EventEmitter).emit('data', 'valid.ts\x003\x00ok\n')
       proc.emit('close')
     }, 10)
 

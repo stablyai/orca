@@ -18,13 +18,19 @@ import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
-import { getTerminalQuickCommandScope } from '../../../../shared/terminal-quick-commands'
+import {
+  getTerminalQuickCommandBody,
+  getTerminalQuickCommandScope,
+  isTerminalAgentQuickCommand,
+  isTerminalQuickCommandComplete
+} from '../../../../shared/terminal-quick-commands'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
@@ -56,7 +62,7 @@ export function TabBarQuickCommandsButton({
     const repoList: TerminalQuickCommand[] = []
     const globalList: TerminalQuickCommand[] = []
     for (const command of allCommands ?? []) {
-      if (!command.label.trim() || !command.command.trimEnd()) {
+      if (!isTerminalQuickCommandComplete(command)) {
         continue
       }
       const scope = getTerminalQuickCommandScope(command)
@@ -187,11 +193,23 @@ export function TabBarQuickCommandsButton({
       onSelect={() => handleRun(command)}
       className="group/qc mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 data-[selected=true]:bg-black/8 dark:data-[selected=true]:bg-white/14"
     >
-      <Play className="size-3 shrink-0 text-muted-foreground" fill="currentColor" strokeWidth={0} />
+      {isTerminalAgentQuickCommand(command) ? (
+        <span className="shrink-0 text-muted-foreground">
+          <AgentIcon agent={command.agent} size={12} />
+        </span>
+      ) : (
+        <Play
+          className="size-3 shrink-0 text-muted-foreground"
+          fill="currentColor"
+          strokeWidth={0}
+        />
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium text-foreground">{command.label}</span>
         <span className="block truncate font-mono text-[11px] text-muted-foreground">
-          {command.command}
+          {isTerminalAgentQuickCommand(command)
+            ? `${getAgentLabel(command.agent)}: ${command.prompt}`
+            : command.command}
         </span>
       </span>
       <span className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/qc:opacity-100 group-data-[selected=true]/qc:opacity-100">
@@ -243,7 +261,11 @@ export function TabBarQuickCommandsButton({
             </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {mostRecent ? `Run: ${mostRecent.command}` : 'Run quick command'}
+            {mostRecent
+              ? isTerminalAgentQuickCommand(mostRecent)
+                ? `Start ${getAgentLabel(mostRecent.agent)}: ${getTerminalQuickCommandBody(mostRecent)}`
+                : `Run: ${getTerminalQuickCommandBody(mostRecent)}`
+              : 'Run quick command'}
           </TooltipContent>
         </Tooltip>
         <DropdownMenu modal={false} open={menuOpen} onOpenChange={handleOpenChange}>

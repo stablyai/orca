@@ -14,6 +14,7 @@ import {
   ExternalAutomationRunTable,
   type FetchExternalAutomationRuns
 } from './ExternalAutomationRunTable'
+import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 
 type ExternalAutomationManagersProps = {
   managers: ExternalAutomationManager[]
@@ -136,102 +137,109 @@ export function ExternalAutomationManagers({
               </Badge>
             </div>
             <div className="divide-y divide-border/40">
-              {manager.jobs.map((job) => (
-                <div
-                  key={job.id}
-                  className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,auto)_auto] items-center gap-3 px-3 py-2 text-sm"
-                >
-                  <div className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="truncate font-medium">{job.name}</span>
-                      <Badge variant={job.enabled ? 'secondary' : 'outline'}>
-                        {job.enabled ? 'Active' : 'Paused'}
-                      </Badge>
-                    </div>
-                    <div className="mt-1 truncate text-xs text-muted-foreground">
-                      {job.schedule} · next {formatExternalDate(job.nextRunAt, now)}
-                    </div>
-                    {manager.provider === 'hermes' ? (
-                      <div className="mt-1 truncate text-xs text-muted-foreground">
-                        {job.runCount} {job.runCount === 1 ? 'run' : 'runs'} found
+              {manager.jobs.map((job) => {
+                const scheduleDisplay = getExternalAutomationScheduleDisplay(manager, job)
+                return (
+                  <div
+                    key={job.id}
+                    className="grid grid-cols-[minmax(0,1fr)_minmax(8rem,auto)_auto] items-center gap-3 px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="truncate font-medium">{job.name}</span>
+                        <Badge variant={job.enabled ? 'secondary' : 'outline'}>
+                          {job.enabled ? 'Active' : 'Paused'}
+                        </Badge>
                       </div>
-                    ) : null}
-                    {job.promptPreview || job.lastError ? (
-                      <div className="mt-1 truncate text-xs text-muted-foreground">
-                        {job.lastError ?? job.promptPreview}
+                      <div className="mt-1 truncate text-xs font-medium text-foreground/80">
+                        {scheduleDisplay.label}
                       </div>
-                    ) : null}
-                  </div>
-                  <div className="hidden min-w-0 text-xs text-muted-foreground md:block">
-                    Last {formatExternalDate(job.lastRunAt, now)}
-                    {job.lastStatus ? ` · ${job.lastStatus}` : null}
-                  </div>
-                  <div className="flex items-center justify-end gap-1">
-                    <ExternalActionButton
-                      label="Run external automation"
-                      disabled={!manager.canManage || runningActionKey !== null}
-                      onClick={() => onAction(manager, job, 'run')}
-                    >
-                      {runningActionKey === actionKey(manager, job, 'run') ? (
-                        <RefreshCw className="size-3.5 animate-spin" />
-                      ) : (
-                        <Play className="size-3.5" />
-                      )}
-                    </ExternalActionButton>
-                    {manager.provider === 'hermes' ? (
+                      <div className="mt-1 truncate text-xs text-muted-foreground">
+                        next {formatExternalDate(job.nextRunAt, now)} · {getProviderLabel(manager)}{' '}
+                        / {manager.targetLabel}
+                      </div>
+                      {manager.provider === 'hermes' ? (
+                        <div className="mt-1 truncate text-xs text-muted-foreground">
+                          {job.runCount} {job.runCount === 1 ? 'run' : 'runs'} found
+                        </div>
+                      ) : null}
+                      {job.promptPreview || job.lastError ? (
+                        <div className="mt-1 truncate text-xs text-muted-foreground">
+                          {job.lastError ?? job.promptPreview}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="hidden min-w-0 text-xs text-muted-foreground md:block">
+                      Last {formatExternalDate(job.lastRunAt, now)}
+                      {job.lastStatus ? ` · ${job.lastStatus}` : null}
+                    </div>
+                    <div className="flex items-center justify-end gap-1">
                       <ExternalActionButton
-                        label="Edit external automation"
+                        label="Run external automation"
                         disabled={!manager.canManage || runningActionKey !== null}
-                        onClick={() => onEdit?.(manager, job)}
+                        onClick={() => onAction(manager, job, 'run')}
                       >
-                        <Pencil className="size-3.5" />
+                        {runningActionKey === actionKey(manager, job, 'run') ? (
+                          <RefreshCw className="size-3.5 animate-spin" />
+                        ) : (
+                          <Play className="size-3.5" />
+                        )}
                       </ExternalActionButton>
-                    ) : null}
-                    <ExternalActionButton
-                      label={
-                        job.enabled ? 'Pause external automation' : 'Resume external automation'
-                      }
-                      disabled={!manager.canManage || runningActionKey !== null}
-                      onClick={() => onAction(manager, job, job.enabled ? 'pause' : 'resume')}
-                    >
-                      {runningActionKey ===
-                      actionKey(manager, job, job.enabled ? 'pause' : 'resume') ? (
-                        <RefreshCw className="size-3.5 animate-spin" />
-                      ) : job.enabled ? (
-                        <Pause className="size-3.5" />
-                      ) : (
-                        <Play className="size-3.5" />
-                      )}
-                    </ExternalActionButton>
-                    <ExternalActionButton
-                      label="Delete external automation"
-                      className="text-destructive hover:text-destructive"
-                      disabled={!manager.canManage || runningActionKey !== null}
-                      onClick={() => onAction(manager, job, 'delete')}
-                    >
-                      {runningActionKey === actionKey(manager, job, 'delete') ? (
-                        <RefreshCw className="size-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-3.5" />
-                      )}
-                    </ExternalActionButton>
-                  </div>
-                  {manager.provider === 'hermes' ? (
-                    <div className="col-span-3">
-                      <ExternalAutomationRunTable
-                        manager={manager}
-                        job={job}
-                        now={now}
-                        onFetchRuns={onFetchRuns}
-                        onOpenRun={(run) => onOpenRun?.(manager, job, run)}
-                      />
+                      {manager.provider === 'hermes' ? (
+                        <ExternalActionButton
+                          label="Edit external automation"
+                          disabled={!manager.canManage || runningActionKey !== null}
+                          onClick={() => onEdit?.(manager, job)}
+                        >
+                          <Pencil className="size-3.5" />
+                        </ExternalActionButton>
+                      ) : null}
+                      <ExternalActionButton
+                        label={
+                          job.enabled ? 'Pause external automation' : 'Resume external automation'
+                        }
+                        disabled={!manager.canManage || runningActionKey !== null}
+                        onClick={() => onAction(manager, job, job.enabled ? 'pause' : 'resume')}
+                      >
+                        {runningActionKey ===
+                        actionKey(manager, job, job.enabled ? 'pause' : 'resume') ? (
+                          <RefreshCw className="size-3.5 animate-spin" />
+                        ) : job.enabled ? (
+                          <Pause className="size-3.5" />
+                        ) : (
+                          <Play className="size-3.5" />
+                        )}
+                      </ExternalActionButton>
+                      <ExternalActionButton
+                        label="Delete external automation"
+                        className="text-destructive hover:text-destructive"
+                        disabled={!manager.canManage || runningActionKey !== null}
+                        onClick={() => onAction(manager, job, 'delete')}
+                      >
+                        {runningActionKey === actionKey(manager, job, 'delete') ? (
+                          <RefreshCw className="size-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3.5" />
+                        )}
+                      </ExternalActionButton>
                     </div>
-                  ) : null}
-                </div>
-              ))}
+                    {manager.provider === 'hermes' ? (
+                      <div className="col-span-3">
+                        <ExternalAutomationRunTable
+                          manager={manager}
+                          job={job}
+                          now={now}
+                          onFetchRuns={onFetchRuns}
+                          onOpenRun={(run) => onOpenRun?.(manager, job, run)}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )
+              })}
               {manager.jobs.length === 0 ? (
                 <div className="px-3 py-4 text-sm text-muted-foreground">
-                  No {manager.provider === 'hermes' ? 'Hermes' : 'OpenClaw'} jobs found.
+                  No {manager.provider === 'hermes' ? 'Hermes' : 'OpenClaw'} automations found.
                 </div>
               ) : null}
             </div>

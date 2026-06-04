@@ -1,5 +1,6 @@
 export type FeatureInteractionId =
   | 'workspace-board'
+  | 'workspace-agent-sessions'
   | 'workspace-board-actions'
   | 'browser'
   | 'tasks'
@@ -28,6 +29,7 @@ export type FeatureInteractionId =
   | 'resource-manager'
   | 'review-notes'
   | 'ssh'
+  | 'terminal-pane-split'
   | 'terminal-panes'
   | 'terminal-tabs'
   | 'tab-splits'
@@ -58,6 +60,10 @@ export const FEATURE_INTERACTIONS = [
   {
     id: 'workspace-board',
     interaction: 'workspace board opened'
+  },
+  {
+    id: 'workspace-agent-sessions',
+    interaction: 'workspace agent-session surface opened'
   },
   {
     id: 'workspace-board-actions',
@@ -170,6 +176,10 @@ export const FEATURE_INTERACTIONS = [
   {
     id: 'ssh',
     interaction: 'SSH target added, imported, tested, connected, disconnected, or configured'
+  },
+  {
+    id: 'terminal-pane-split',
+    interaction: 'terminal pane split from the split-pane command'
   },
   {
     id: 'terminal-panes',

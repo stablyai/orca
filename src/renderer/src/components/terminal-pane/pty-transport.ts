@@ -101,6 +101,7 @@ export function createPtyOutputProcessor({
   let sideEffectDrainTimer: ReturnType<typeof setTimeout> | null = null
   let pendingSideEffects: PendingPtySideEffect[] = []
   let pendingSideEffectIndex = 0
+  let pendingWorkingTitleSideEffects = 0
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -111,6 +112,20 @@ export function createPtyOutputProcessor({
           onAgentExited
         )
       : null
+
+  function isWorkingTitle(title: string | null): boolean {
+    return title !== null && detectAgentStatusFromTitle(title) === 'working'
+  }
+
+  function countWorkingTitles(titles: string[]): number {
+    let count = 0
+    for (const title of titles) {
+      if (isWorkingTitle(normalizeTerminalTitle(title))) {
+        count += 1
+      }
+    }
+    return count
+  }
 
   function applyObservedTerminalTitle(title: string, suppressAgentTracker = false): void {
     // Why: cursor-agent's native OSC title is the literal string "Cursor Agent"
@@ -152,6 +167,7 @@ export function createPtyOutputProcessor({
   }
 
   function enqueuePtySideEffect(next: PendingPtySideEffect): void {
+    const workingTitleCount = countWorkingTitles(next.titles)
     const prior = pendingSideEffects.at(-1)
     if (
       prior &&
@@ -164,9 +180,11 @@ export function createPtyOutputProcessor({
       !next.containsBell
     ) {
       prior.scannedForTitles ||= next.scannedForTitles
+      pendingWorkingTitleSideEffects += workingTitleCount
       return
     }
     pendingSideEffects.push(next)
+    pendingWorkingTitleSideEffects += workingTitleCount
   }
 
   function schedulePtySideEffects(
@@ -174,14 +192,22 @@ export function createPtyOutputProcessor({
     payloads: ReturnType<typeof processAgentStatusChunk>['payloads'],
     suppressAttentionEvents: boolean
   ): void {
-    const scannedForTitles = Boolean(onTitleChange && data.length > 0)
+    const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
     const titles = scannedForTitles ? extractAllOscTitles(data) : []
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
     const containsBell = Boolean(
       onBell && !suppressAttentionEvents && bellDetector.chunkContainsBell(data)
     )
-    if (!scannedForTitles && deliveredPayloads.length === 0 && !containsBell) {
+    const needsStaleTitleProbe = Boolean(
+      onTitleChange &&
+      data.length > 0 &&
+      titles.length === 0 &&
+      !suppressAttentionEvents &&
+      (isWorkingTitle(lastEmittedTitle) || pendingWorkingTitleSideEffects > 0)
+    )
+    const shouldEmitEmptyTitleScan = scannedForTitles || needsStaleTitleProbe
+    if (!shouldEmitEmptyTitleScan && deliveredPayloads.length === 0 && !containsBell) {
       return
     }
 
@@ -192,7 +218,7 @@ export function createPtyOutputProcessor({
       enqueuePtySideEffect({
         payloads: [],
         titles: [],
-        scannedForTitles,
+        scannedForTitles: shouldEmitEmptyTitleScan,
         containsBell,
         suppressAttentionEvents
       })
@@ -206,11 +232,11 @@ export function createPtyOutputProcessor({
           suppressAttentionEvents
         })
       }
-      if (titles.length === 0 && scannedForTitles) {
+      if (titles.length === 0 && shouldEmitEmptyTitleScan) {
         enqueuePtySideEffect({
           payloads: [],
           titles: [],
-          scannedForTitles: true,
+          scannedForTitles: shouldEmitEmptyTitleScan,
           containsBell: false,
           suppressAttentionEvents
         })
@@ -260,6 +286,10 @@ export function createPtyOutputProcessor({
   }
 
   function applyPtySideEffect(next: PendingPtySideEffect): void {
+    pendingWorkingTitleSideEffects -= countWorkingTitles(next.titles)
+    if (pendingWorkingTitleSideEffects < 0) {
+      pendingWorkingTitleSideEffects = 0
+    }
     if (onAgentStatus) {
       for (const payload of next.payloads) {
         onAgentStatus(payload)
@@ -367,6 +397,7 @@ export function createPtyOutputProcessor({
     clearSideEffectDrainTimer()
     pendingSideEffects.length = 0
     pendingSideEffectIndex = 0
+    pendingWorkingTitleSideEffects = 0
     clearStaleTitleTimer()
     agentTracker?.reset()
     bellDetector.reset()

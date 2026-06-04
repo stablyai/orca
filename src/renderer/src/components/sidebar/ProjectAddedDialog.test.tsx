@@ -1,23 +1,21 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/types'
 
 const mocks = vi.hoisted(() => ({
   state: {
     activeModal: 'project-added',
     modalData: {} as Record<string, unknown>,
     closeModal: vi.fn(),
-    openModal: vi.fn(),
-    openSettingsPage: vi.fn(),
-    openSettingsTarget: vi.fn(),
     repos: [] as Repo[],
-    updateRepo: vi.fn(),
+    worktreesByRepo: {} as Record<string, unknown[]>,
+    fetchRepos: vi.fn(),
     fetchWorktrees: vi.fn(),
-    detectedWorktreesByRepo: {},
-    worktreesByRepo: {} as Record<string, Worktree[]>,
     setHideDefaultBranchWorkspace: vi.fn()
-  }
+  },
+  activateAndRevealWorktree: vi.fn(),
+  finishProjectAddWithDefaultCheckout: vi.fn()
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -31,33 +29,20 @@ vi.mock('react', async (importOriginal) => {
 })
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state)
+  useAppStore: Object.assign(
+    (selector: (state: typeof mocks.state) => unknown) => selector(mocks.state),
+    {
+      getState: () => mocks.state
+    }
+  )
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
+  activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
-vi.mock('@/components/ui/dialog', () => ({
-  Dialog: ({ open, children }: { open: boolean; children: ReactModule.ReactNode }) =>
-    open ? <div>{children}</div> : null,
-  DialogContent: ({ children }: { children: ReactModule.ReactNode }) => <div>{children}</div>
-}))
-
-vi.mock('./AddRepoSetupStep', () => ({
-  ProjectAddedContent: ({
-    repoName,
-    primaryBranchName
-  }: {
-    repoName: string
-    primaryBranchName?: string
-  }) => (
-    <div>
-      setup:{repoName}:{primaryBranchName ?? ''}
-    </div>
-  ),
-  getProjectAddedPrimaryBranchName: (worktree: Pick<Worktree, 'branch'> | null | undefined) =>
-    worktree?.branch.replace(/^refs\/heads\//, '').trim() ?? ''
+vi.mock('./project-added-default-checkout', () => ({
+  finishProjectAddWithDefaultCheckout: mocks.finishProjectAddWithDefaultCheckout
 }))
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -71,63 +56,140 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   }
 }
 
+async function flushPromises(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 describe('ProjectAddedDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.activeModal = 'project-added'
     mocks.state.modalData = { repoId: 'repo-1' }
     mocks.state.repos = [makeRepo()]
-    mocks.state.detectedWorktreesByRepo = {}
     mocks.state.worktreesByRepo = {}
+    mocks.state.fetchRepos.mockResolvedValue(undefined)
+    mocks.state.fetchWorktrees.mockResolvedValue(true)
   })
 
-  it('renders the Git setup step for Git repos', async () => {
+  it('fetches worktrees and finishes by opening the default checkout for Git repos', async () => {
     const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
 
     const markup = renderToStaticMarkup(<ProjectAddedDialog />)
+    await flushPromises()
 
-    expect(markup).toContain('setup:orca')
-    expect(mocks.state.closeModal).not.toHaveBeenCalled()
+    expect(markup).toBe('')
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith('repo-1')
+    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      source: 'project_added_compat',
+      closeModal: mocks.state.closeModal,
+      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+    })
   })
 
-  it('passes the primary branch name to the setup step', async () => {
-    mocks.state.worktreesByRepo = {
-      'repo-1': [
-        {
-          id: 'repo-1::/repo',
-          repoId: 'repo-1',
-          path: '/repo',
-          displayName: 'main',
-          comment: '',
-          linkedIssue: null,
-          linkedPR: null,
-          linkedLinearIssue: null,
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 0,
-          lastActivityAt: 0,
-          head: 'abc',
-          branch: 'refs/heads/main',
-          isBare: false,
-          isMainWorktree: true
+  it('does not block the compatibility handoff during StrictMode effect replay', async () => {
+    const cleanupFns: (() => void)[] = []
+    vi.doMock('react', async (importOriginal) => {
+      const actual = await importOriginal<typeof ReactModule>()
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          const cleanup = effect()
+          if (cleanup) {
+            cleanupFns.push(cleanup)
+          }
         }
-      ]
+      }
+    })
+    vi.resetModules()
+    const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
+
+    renderToStaticMarkup(<ProjectAddedDialog />)
+    cleanupFns.pop()?.()
+    renderToStaticMarkup(<ProjectAddedDialog />)
+    await flushPromises()
+
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledTimes(2)
+    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledTimes(1)
+    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      source: 'project_added_compat',
+      closeModal: mocks.state.closeModal,
+      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+    })
+  })
+
+  it('accepts older onboarding modal data that uses projectId', async () => {
+    mocks.state.modalData = { projectId: 'repo-1' }
+    const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
+
+    renderToStaticMarkup(<ProjectAddedDialog />)
+    await flushPromises()
+
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith('repo-1')
+    expect(mocks.finishProjectAddWithDefaultCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ repoId: 'repo-1' })
+    )
+  })
+
+  it('activates the synthetic folder workspace for folder repos', async () => {
+    mocks.state.repos = [makeRepo({ kind: 'folder' })]
+    mocks.state.worktreesByRepo = {
+      'repo-1': [{ id: 'repo-1::folder' }]
     }
     const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
 
     const markup = renderToStaticMarkup(<ProjectAddedDialog />)
+    await flushPromises()
 
-    expect(markup).toContain('setup:orca:main')
+    expect(markup).toBe('')
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith('repo-1')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::folder', {
+      sidebarRevealBehavior: 'auto'
+    })
+    expect(mocks.state.closeModal).toHaveBeenCalledTimes(1)
+    expect(mocks.finishProjectAddWithDefaultCheckout).not.toHaveBeenCalled()
   })
 
-  it('closes without rendering Git setup for folder repos', async () => {
-    mocks.state.repos = [makeRepo({ kind: 'folder' })]
+  it('closes malformed modal data without blocking the app invisibly', async () => {
+    mocks.state.modalData = {}
     const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
 
     const markup = renderToStaticMarkup(<ProjectAddedDialog />)
+    await flushPromises()
 
     expect(markup).toBe('')
     expect(mocks.state.closeModal).toHaveBeenCalledTimes(1)
+    expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
+  })
+
+  it('refreshes repos before closing a stale repo id', async () => {
+    mocks.state.repos = []
+    mocks.state.fetchRepos.mockImplementation(async () => {
+      mocks.state.repos = []
+    })
+    const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
+
+    renderToStaticMarkup(<ProjectAddedDialog />)
+    await flushPromises()
+
+    expect(mocks.state.fetchRepos).toHaveBeenCalledTimes(1)
+    expect(mocks.state.closeModal).toHaveBeenCalledTimes(1)
+  })
+
+  it('waits for repo hydration and does not close when fetchRepos supplies the repo', async () => {
+    mocks.state.repos = []
+    mocks.state.fetchRepos.mockImplementation(async () => {
+      mocks.state.repos = [makeRepo()]
+    })
+    const { default: ProjectAddedDialog } = await import('./ProjectAddedDialog')
+
+    renderToStaticMarkup(<ProjectAddedDialog />)
+    await flushPromises()
+
+    expect(mocks.state.fetchRepos).toHaveBeenCalledTimes(1)
+    expect(mocks.state.closeModal).not.toHaveBeenCalled()
+    expect(mocks.finishProjectAddWithDefaultCheckout).not.toHaveBeenCalled()
   })
 })

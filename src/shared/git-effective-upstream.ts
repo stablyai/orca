@@ -31,6 +31,37 @@ export function splitRemoteBranchName(refName: string): {
   }
 }
 
+function hasMultipleSlashSegments(refName: string): boolean {
+  return refName.includes('/') && refName.indexOf('/') !== refName.lastIndexOf('/')
+}
+
+async function splitRemoteBranchNameByKnownRemote(
+  runGit: GitCommandRunner,
+  refName: string
+): Promise<{ remoteName: string; branchName: string } | null> {
+  try {
+    const { stdout } = await runGit(['remote'])
+    const remotes = stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+    return (
+      remotes
+        .map((remoteName) => {
+          if (refName === remoteName || !refName.startsWith(`${remoteName}/`)) {
+            return null
+          }
+          const branchName = refName.slice(remoteName.length + 1)
+          return branchName ? { remoteName, branchName } : null
+        })
+        .find((parsed) => parsed !== null) ?? null
+    )
+  } catch {
+    return null
+  }
+}
+
 async function getCurrentBranchName(runGit: GitCommandRunner): Promise<string | null> {
   try {
     const { stdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
@@ -90,9 +121,21 @@ export async function resolveEffectiveGitUpstream(
   runGit: GitCommandRunner
 ): Promise<EffectiveGitUpstream | null> {
   const currentBranchName = await getCurrentBranchName(runGit)
-  const configured = await getConfiguredUpstream(runGit)
+  let configured = await getConfiguredUpstream(runGit)
 
   if (configured) {
+    if (
+      currentBranchName &&
+      configured.remoteName === 'origin' &&
+      configured.branchName !== currentBranchName &&
+      hasMultipleSlashSegments(configured.upstreamName)
+    ) {
+      const parsed = await splitRemoteBranchNameByKnownRemote(runGit, configured.upstreamName)
+      if (parsed) {
+        configured = { ...configured, ...parsed }
+      }
+    }
+
     if (!currentBranchName || configured.branchName === currentBranchName) {
       return configured
     }

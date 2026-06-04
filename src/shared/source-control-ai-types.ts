@@ -31,6 +31,10 @@ export type SourceControlAiSettings = {
   prCreationDefaults?: SourceControlAiPrCreationDefaults
 }
 
+export type SourceControlAiSettingsPatch =
+  | Partial<SourceControlAiSettings>
+  | ((current: SourceControlAiSettings) => Partial<SourceControlAiSettings>)
+
 export type RepoSourceControlAiOverrides = {
   modelOverridesByOperation?: Partial<Record<SourceControlAiOperation, SourceControlAiModelChoice>>
   instructionsByOperation?: Partial<Record<SourceControlAiOperation, string | null>>
