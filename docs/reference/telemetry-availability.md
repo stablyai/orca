@@ -38,6 +38,9 @@ D1+/D3+/D7+ retention means the user fired `app_opened` at least once after 24/7
 - Current `onboarding_step_skipped` means an optional preference/setup step was skipped toward required project setup. It does not mean the user abandoned repo setup.
 - `source = 'unknown'` is not a real product surface. It means the caller omitted a source or the value failed schema validation.
 - `workspace_created` means create-worktree IPC succeeded. It is not a general "usable workspace exists" or "workspace revealed" marker.
+- `add_repo_setup_step_action` is a historical post-add choice-screen event. Current Add Project flows auto-open the default checkout or reveal the project row, so absence of this event after the default-checkout handoff rollout is expected and should not be read as setup abandonment.
+- `add_repo_existing_workspaces_detected` is a detection signal for migration opportunity, not proof that a user chose an existing workspace. Current Add Project flows may emit it before automatically opening the default checkout.
+- `add_repo_default_checkout_handoff.result = 'revealed_project'` means Orca could not confidently open the default checkout and instead revealed the newly added project row. It is the direct fallback metric for the 2026-06-03 Add Project handoff rollout.
 - `agent_started` means PTY spawn succeeded with agent telemetry attached. It is not first-repo activation and does not prove the user sent a prompt.
 - `agent_prompt_sent` means a live agent hook observed an explicit non-empty user prompt. It excludes hydrated/replayed status, agent auto-start, bare shells, draft prefill, and hookless sessions; missing rows mean no hook-confirmed interaction was observed, not proof the user never typed.
 - Workspace-outcome joins are native Electron coverage unless the query explicitly proves remote/web instrumentation. Remote runtime and web paths can bypass native repo/worktree telemetry, so do not interpret missing workspace outcome rows as product drop-off for SSH, remote, or web users.
@@ -46,7 +49,7 @@ D1+/D3+/D7+ retention means the user fired `app_opened` at least once after 24/7
 
 ### 2026-05-08 - Repo Cohort Property
 
-Scope: `nth_repo_added` on repo/activation/retention events. Current schemas declare it on `app_opened`, `repo_added`, `add_repo_setup_step_action`, `add_repo_existing_workspaces_detected`, `workspace_created`, `workspace_create_failed`, `setup_script_prompt_shown`, `setup_script_prompt_action`, `agent_started`, `agent_prompt_sent`, and `agent_error`. The original rollout covered `app_opened`, `repo_added`, `add_repo_setup_step_action`, `workspace_created`, `workspace_create_failed`, `agent_started`, and `agent_error`; later events have their own first-seen timestamps below.
+Scope: `nth_repo_added` on repo/activation/retention events. Current schemas declare it on `app_opened`, `repo_added`, `add_repo_setup_step_action`, `add_repo_existing_workspaces_detected`, `add_repo_default_checkout_handoff`, `workspace_created`, `workspace_create_failed`, `setup_script_prompt_shown`, `setup_script_prompt_action`, `agent_started`, `agent_prompt_sent`, and `agent_error`. The original rollout covered `app_opened`, `repo_added`, `add_repo_setup_step_action`, `workspace_created`, `workspace_create_failed`, `agent_started`, and `agent_error`; later events have their own first-seen timestamps below.
 
 | Field                        | Value                                                                                                                                                                                    |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -72,6 +75,7 @@ PostHog evidence checked at `2026-05-23T23:34:32Z`:
 | `workspace_create_failed`               | `2026-05-08T23:04:32.315Z`                 |
 | `agent_error`                           | `2026-05-13T14:13:16.096Z`                 |
 | `add_repo_existing_workspaces_detected` | `2026-05-20T05:33:20.160Z`                 |
+| `add_repo_default_checkout_handoff`     | `TBD`                                      |
 | `setup_script_prompt_shown`             | `2026-05-21T04:09:04.231Z`                 |
 | `setup_script_prompt_action`            | `2026-05-21T04:10:31.616Z`                 |
 
@@ -80,6 +84,7 @@ Dashboard caveats:
 - Earlier rows do not have `nth_repo_added`; show them as pre-rollout or exclude them from repo-count cohorts.
 - A dashboard that depends on a specific event must use that event's first-seen timestamp, not the earliest `app_opened` timestamp.
 - `repo_added nth_repo_added = 1` is the first-repo activation marker.
+- `add_repo_setup_step_action` is only representative of the old post-add choice-screen funnel. After the 2026-06-03 default-checkout handoff change below, Add Project no longer shows that choice screen during the normal Git add/clone/create/onboarding paths.
 
 ### 2026-05-09 - Onboarding Cohort Injection
 
@@ -274,6 +279,30 @@ Dashboard caveats:
 - Do not use absence of new `agent_setup` or `tour` onboarding rows as a drop-off signal; those steps no longer exist in active onboarding.
 - Segment numeric onboarding step analysis across this boundary. The active final step changed from seven-step onboarding to `ONBOARDING_FINAL_STEP = 5`.
 - Continue using `contextual_tour_shown` and `contextual_tour_outcome` from PR #2734 for current feature-education exposure and outcome analysis.
+
+### 2026-06-03 - Add Project Default Checkout Handoff
+
+Scope: Add Project handoff telemetry and interpretation change. The Git add/clone/create/onboarding flows no longer show the post-add setup-choice screen; they close the add modal and open the project/default checkout when available. If no default checkout is available, they reveal the project row instead.
+
+`repo_added` remains the add/import marker. `add_repo_existing_workspaces_detected` remains a low-cardinality detection event for pre-existing non-main workspaces on local folder, runtime server path, and SSH server path adds. `add_repo_default_checkout_handoff` is the direct rollout-health event for the automatic handoff decision.
+
+| Field                    | Value                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| PR                       | `#4530`                                                                               |
+| Merge commit             | `TBD`                                                                                 |
+| `code_merged_at_utc`     | `TBD`                                                                                 |
+| First release            | `TBD`                                                                                 |
+| First release commit     | `TBD`                                                                                 |
+| `first_released_at_utc`  | `TBD`                                                                                 |
+| `first_seen_at_utc`      | `TBD` on `add_repo_default_checkout_handoff`                                          |
+| `dashboard_ready_at_utc` | Use the first release boundary once known for charts that compare setup-choice usage. |
+
+Dashboard caveats:
+
+- Treat `add_repo_setup_step_action` rows after this rollout as historical compatibility or stale modal cleanup only, not the normal Add Project funnel.
+- Do not build current-flow conversion funnels that require `repo_added -> add_repo_setup_step_action`; the normal next step is an automatic workspace reveal/open, not a tracked user choice.
+- Use `add_repo_existing_workspaces_detected` to estimate how often added projects had non-main existing workspaces, but do not infer the user selected "use existing worktrees" because that choice no longer exists in the normal flow.
+- Use `add_repo_default_checkout_handoff` for the current handoff outcome. `result = 'opened_default_checkout'` is the expected path; `result = 'revealed_project'` is the graceful fallback. Break down fallback rows by `source` and `reason`.
 
 ## Updating This File
 

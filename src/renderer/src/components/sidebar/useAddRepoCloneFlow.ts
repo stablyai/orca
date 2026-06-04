@@ -12,17 +12,16 @@ export function useAddRepoCloneFlow({
   activeRuntimeEnvironmentId,
   workspaceDir,
   fetchWorktrees,
-  setStep,
-  setAddedRepo,
-  setExistingWorkspaceSource
+  onGitRepoReady
 }: {
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
   workspaceDir: string | null | undefined
-  fetchWorktrees: (repoId: string) => Promise<unknown>
-  setStep: (step: AddRepoDialogStep) => void
-  setAddedRepo: (repo: Repo | null) => void
-  setExistingWorkspaceSource: (source: AddRepoExistingWorkspaceSource | null) => void
+  fetchWorktrees: (
+    repoId: string,
+    options?: { requireAuthoritative?: boolean }
+  ) => Promise<unknown>
+  onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
 }): {
   cloneUrl: string
   cloneDestination: string
@@ -138,13 +137,13 @@ export function useAddRepoCloneFlow({
         updated[existingIdx] = repo
         useAppStore.setState({ repos: updated })
       }
-      setAddedRepo(repo)
-      setExistingWorkspaceSource('clone_url')
-      await fetchWorktrees(repo.id)
+      // Why: once the repo exists, a transient non-authoritative refresh
+      // should fall through to project reveal instead of leaving the add flow open.
+      await fetchWorktrees(repo.id, { requireAuthoritative: true })
       if (gen !== cloneGenRef.current) {
         return
       }
-      setStep('setup')
+      await onGitRepoReady(repo.id, 'clone_url')
     } catch (err) {
       if (gen !== cloneGenRef.current) {
         return
@@ -156,14 +155,7 @@ export function useAddRepoCloneFlow({
         setIsCloning(false)
       }
     }
-  }, [
-    cloneUrl,
-    cloneDestination,
-    fetchWorktrees,
-    setAddedRepo,
-    setExistingWorkspaceSource,
-    setStep
-  ])
+  }, [cloneUrl, cloneDestination, fetchWorktrees, onGitRepoReady])
 
   return {
     cloneUrl,

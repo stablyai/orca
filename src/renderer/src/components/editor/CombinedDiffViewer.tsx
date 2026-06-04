@@ -3,6 +3,7 @@ component-level state machine that coordinates lazy loading, inline editing,
 restore-on-remount caching, and scroll preservation. Splitting those pieces
 across smaller files would make the lifecycle edges harder to reason about and
 more error-prone than keeping the whole viewer flow together. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: diff entry changes must reset virtualizer measurement and generation state in lockstep with external scroll restoration. */
 import React, { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'

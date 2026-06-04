@@ -64,19 +64,6 @@ function makeAgentStatus(paneKey: string): AgentStatusEntry {
   }
 }
 
-function stubDocumentFocus({
-  visibilityState,
-  focused
-}: {
-  visibilityState: DocumentVisibilityState
-  focused: boolean
-}): void {
-  vi.stubGlobal('document', {
-    visibilityState,
-    hasFocus: vi.fn(() => focused)
-  })
-}
-
 describe('dispatchTerminalNotification', () => {
   const liveLeafId = '11111111-1111-4111-8111-111111111111'
   const staleLeafId = '22222222-2222-4222-8222-222222222222'
@@ -231,27 +218,9 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
 
-  it('does not mark the visible focused worktree unread when terminal attention is disabled', () => {
+  it('marks the visible focused worktree unread when terminal attention is disabled', () => {
     mockState.settings.experimentalTerminalAttention = false
     mockState.activeWorktreeId = 'wt-primary'
-    stubDocumentFocus({ visibilityState: 'visible', focused: true })
-
-    dispatchTerminalNotification('wt-primary', {
-      source: 'agent-task-complete',
-      terminalTitle: 'codex',
-      paneKey
-    })
-
-    expect(window.api.notifications.dispatch).toHaveBeenCalled()
-    expect(mockState.markWorktreeUnread).not.toHaveBeenCalled()
-    expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
-    expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
-  })
-
-  it('marks the selected worktree unread when the app is not focused', () => {
-    mockState.settings.experimentalTerminalAttention = false
-    mockState.activeWorktreeId = 'wt-primary'
-    stubDocumentFocus({ visibilityState: 'visible', focused: false })
 
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',

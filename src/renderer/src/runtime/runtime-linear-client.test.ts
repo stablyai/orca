@@ -132,6 +132,14 @@ describe('runtime linear client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('wraps legacy local Linear issue list arrays as collection results', async () => {
+    linearListIssuesLocal.mockResolvedValue([{ id: 'legacy-issue' }])
+
+    await expect(
+      linearListIssues({ activeRuntimeEnvironmentId: null }, 'assigned', 20)
+    ).resolves.toEqual({ items: [{ id: 'legacy-issue' }] })
+  })
+
   it('does not throw when an older local preload lacks project listing', async () => {
     delete (window.api.linear as { listProjects?: unknown }).listProjects
 
@@ -283,6 +291,39 @@ describe('runtime linear client', () => {
     expect(linearStatusLocal).not.toHaveBeenCalled()
     expect(linearSearchIssuesLocal).not.toHaveBeenCalled()
     expect(linearListIssuesLocal).not.toHaveBeenCalled()
+  })
+
+  it('wraps legacy remote Linear issue list arrays as collection results', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-list',
+      ok: true,
+      result: [{ id: 'legacy-issue' }],
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    await expect(
+      linearListIssues({ activeRuntimeEnvironmentId: 'env-1' }, 'assigned', 20)
+    ).resolves.toEqual({ items: [{ id: 'legacy-issue' }] })
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'linear.listIssues',
+      params: { filter: 'assigned', limit: 20, workspaceId: undefined },
+      timeoutMs: 30_000
+    })
+  })
+
+  it('falls back to an empty Linear issue collection for malformed list responses', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-list',
+      ok: true,
+      result: { items: { id: 'not-an-array' }, hasMore: true },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+
+    await expect(
+      linearListIssues({ activeRuntimeEnvironmentId: 'env-1' }, 'assigned', 20)
+    ).resolves.toEqual({ items: [] })
   })
 
   it('routes Linear mutations and metadata through the selected runtime environment', async () => {

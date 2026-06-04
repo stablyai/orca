@@ -2,7 +2,6 @@ import type { Dispatch, SetStateAction } from 'react'
 import { CloneStep } from './AddRepoSteps'
 import { RemoteStep } from './AddRepoRemoteStep'
 import { CreateStep } from './AddRepoCreateStep'
-import { SetupStep } from './AddRepoSetupStep'
 import { AddRepoLocalStartStep, AddRepoServerPathStartStep } from './AddRepoStartSteps'
 import { AddRepoNestedImportStep } from './AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
@@ -38,9 +37,6 @@ type AddRepoDialogStepContentProps = {
   createKind: 'git' | 'folder'
   createError: string | null
   isCreating: boolean
-  addedRepoName: string
-  hiddenWorktreeCount: number
-  primaryBranchName: string | null
   onBrowse: () => void
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
@@ -67,10 +63,6 @@ type AddRepoDialogStepContentProps = {
   onCreateKindChange: (kind: 'git' | 'folder') => void
   onPickCreateParent: () => void
   onCreate: () => void
-  onStartPrimaryWorktree: () => void
-  onUseExistingWorktrees: () => void
-  onCreateWorktree: (name?: string) => void
-  onConfigureRepo: () => void
 }
 
 export function AddRepoDialogStepContent({
@@ -102,9 +94,6 @@ export function AddRepoDialogStepContent({
   createKind,
   createError,
   isCreating,
-  addedRepoName,
-  hiddenWorktreeCount,
-  primaryBranchName,
   onBrowse,
   onOpenCloneStep,
   onOpenCreateStep,
@@ -130,12 +119,8 @@ export function AddRepoDialogStepContent({
   onCreateParentChange,
   onCreateKindChange,
   onPickCreateParent,
-  onCreate,
-  onStartPrimaryWorktree,
-  onUseExistingWorktrees,
-  onCreateWorktree,
-  onConfigureRepo
-}: AddRepoDialogStepContentProps): React.JSX.Element {
+  onCreate
+}: AddRepoDialogStepContentProps): React.JSX.Element | null {
   if (step === 'add' && isRuntimeEnvironmentActive) {
     return (
       <AddRepoServerPathStartStep
@@ -238,15 +223,5 @@ export function AddRepoDialogStepContent({
     )
   }
 
-  return (
-    <SetupStep
-      repoName={addedRepoName}
-      hiddenWorktreeCount={hiddenWorktreeCount}
-      primaryBranchName={primaryBranchName ?? undefined}
-      onStartPrimaryWorktree={onStartPrimaryWorktree}
-      onUseExistingWorktrees={onUseExistingWorktrees}
-      onCreateWorktree={onCreateWorktree}
-      onConfigureRepo={onConfigureRepo}
-    />
-  )
+  return null
 }

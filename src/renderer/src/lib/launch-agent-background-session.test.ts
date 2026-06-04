@@ -323,7 +323,7 @@ describe('launchAgentBackgroundSession', () => {
       selector: 'env-1',
       method: 'terminal.create',
       params: expect.objectContaining({
-        worktree: 'wt-1',
+        worktree: 'id:wt-1',
         command: "claude 'run the automation'",
         env: expect.objectContaining({
           ORCA_PANE_KEY: `tab-1:${leafId}`,

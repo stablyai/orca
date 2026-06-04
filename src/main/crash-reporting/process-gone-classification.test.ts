@@ -250,6 +250,18 @@ describe('shouldRecordProcessGoneCrash', () => {
     ).toBe(true)
   })
 
+  it('still records renderer launch failures for diagnostics', () => {
+    expect(
+      shouldRecordProcessGoneCrash({
+        source: 'renderer',
+        processType: 'renderer',
+        reason: 'launch-failed',
+        exitCode: 18,
+        expectedTeardown: 'none'
+      })
+    ).toBe(true)
+  })
+
   it('records non-SIGTERM killed process exits outside expected lifecycle teardown', () => {
     expect(
       shouldRecordProcessGoneCrash({
@@ -300,6 +312,27 @@ describe('shouldRecoverRendererAfterProcessGone', () => {
       shouldRecoverRendererAfterProcessGone({
         reason: 'crashed',
         expectedTeardown: 'app-shutdown'
+      })
+    ).toBe(false)
+  })
+
+  it('does not recover renderer startup and security launch failures', () => {
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'launch-failed',
+        expectedTeardown: 'none'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'launch-failed',
+        expectedTeardown: 'renderer-reload'
+      })
+    ).toBe(false)
+    expect(
+      shouldRecoverRendererAfterProcessGone({
+        reason: 'integrity-failure',
+        expectedTeardown: 'none'
       })
     ).toBe(false)
   })

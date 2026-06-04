@@ -15,6 +15,7 @@ import {
 } from '@/components/terminal-pane/pty-dispatcher'
 import { createAgentStatusOscProcessor } from '@/components/terminal-pane/agent-status-osc'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import {
   getRemoteRuntimeTerminalHandle,
@@ -151,7 +152,7 @@ export async function launchAgentBackgroundSession(
         runtimeTarget,
         'terminal.create',
         {
-          worktree: worktreeId,
+          worktree: toRuntimeWorktreeSelector(worktreeId),
           command: startupPlan.launchCommand,
           env: paneEnv,
           title,

@@ -3,7 +3,6 @@ import { useEffect, useRef } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { trackTerminalPaneSplit } from '@/lib/feature-education-telemetry'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -23,6 +22,7 @@ import type {
   TerminalTab,
   TerminalLayoutSnapshot
 } from '../../../../shared/types'
+import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
@@ -74,6 +74,18 @@ import {
   type CloseTerminalPaneDetail
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
+import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+
+export function recordRuntimeCreatedTerminalPaneSplit(
+  createdPane: unknown,
+  args: {
+    source: TerminalPaneSplitSource
+    direction: 'vertical' | 'horizontal'
+    telemetrySuppressed?: boolean
+  }
+): boolean {
+  return recordCreatedTerminalPaneSplit(createdPane, args)
+}
 
 function extractUncHost(value: string | undefined): string | null {
   const match = /^(?:\\\\|\/\/)([^\\/]+)/.exec(value ?? '')
@@ -1043,6 +1055,8 @@ export function useTerminalPaneLifecycle({
     // than relying on getPanes()[0] which returns insertion order, not visual order.
     const initialPane = manager.getActivePane() ?? manager.getPanes()[0]
 
+    // Why: setup/issue automation panes are internal workspace bootstrap flows,
+    // not the user-visible split-terminal milestone recorded below.
     if (setupSplit) {
       if (initialPane) {
         const setupPane = splitPaneWithOneShotStartup(
@@ -1124,23 +1138,20 @@ export function useTerminalPaneLifecycle({
         const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
           mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
-        if (createdPane) {
-          trackTerminalPaneSplit({
-            source: detail.telemetrySource ?? 'command',
-            direction: detail.direction
-          })
-        }
+        recordRuntimeCreatedTerminalPaneSplit(createdPane, {
+          source: detail.telemetrySource ?? 'command',
+          direction: detail.direction
+        })
       } else {
         const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
-        if (
-          createdPane &&
-          !consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
-        ) {
-          trackTerminalPaneSplit({
-            source: detail.telemetrySource ?? 'command',
-            direction: detail.direction
-          })
-        }
+        const telemetrySuppressed = createdPane
+          ? consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
+          : false
+        recordRuntimeCreatedTerminalPaneSplit(createdPane, {
+          source: detail.telemetrySource ?? 'command',
+          direction: detail.direction,
+          telemetrySuppressed
+        })
       }
     }
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)

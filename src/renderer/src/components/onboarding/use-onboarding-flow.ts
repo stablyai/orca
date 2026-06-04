@@ -30,6 +30,7 @@ import { persistStep, useCloseWith, usePersistCurrentStep } from './use-onboardi
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { buildOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { resolveOnboardingSettingsHydration } from './onboarding-settings-hydration'
+import { openProjectDefaultCheckout } from '../sidebar/project-added-default-checkout'
 
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
@@ -196,11 +197,11 @@ export function useOnboardingFlow(
   const pathFailureReason = useAppStore((s) => s.pathFailureReason)
   const fetchRepos = useAppStore((s) => s.fetchRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
-  const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
@@ -502,13 +503,24 @@ export function useOnboardingFlow(
   const completeRepo = useCallback(
     async (projectId: string, isGit: boolean, path: 'open_folder' | 'clone_url') => {
       await fetchRepos()
-      await fetchWorktrees(projectId)
-      const worktree = useAppStore.getState().worktreesByRepo[projectId]?.[0]
-      if (worktree) {
-        // Why: onboarding asks for a default agent immediately before this step.
-        // Non-git folders skip the composer, so seed their first terminal here.
-        const startup = isGit ? undefined : buildOnboardingFolderAgentStartup(settings)
-        activateAndRevealWorktree(worktree.id, startup ? { startup } : undefined)
+      // Why: once the project is persisted, a non-authoritative Git refresh
+      // should still complete onboarding onto the project row as a fallback.
+      await fetchWorktrees(projectId, isGit ? { requireAuthoritative: true } : undefined)
+      const worktrees = useAppStore.getState().worktreesByRepo[projectId] ?? []
+      if (isGit) {
+        await openProjectDefaultCheckout({
+          repoId: projectId,
+          source: path === 'clone_url' ? 'onboarding_clone_url' : 'onboarding_open_folder',
+          setHideDefaultBranchWorkspace
+        })
+      } else {
+        const worktree = worktrees[0] ?? null
+        if (worktree) {
+          // Why: onboarding asks for a default agent immediately before this step.
+          // Non-git folders skip the composer, so seed their first terminal here.
+          const startup = buildOnboardingFolderAgentStartup(settings)
+          activateAndRevealWorktree(worktree.id, { startup })
+        }
       }
       // Why: next() short-circuits the repo step, so emit step_completed here
       // once the repo is successfully added to keep the funnel consistent.
@@ -532,15 +544,15 @@ export function useOnboardingFlow(
         value_kind: 'repo',
         duration_ms: consumeStepDurationMs()
       })
-      if (isGit) {
-        openModal('project-added', {
-          repoId: projectId,
-          defaultWorktreeName: 'orca-worktree-1',
-          telemetrySource: 'onboarding'
-        })
-      }
     },
-    [closeWith, consumeStepDurationMs, fetchRepos, fetchWorktrees, openModal, settings]
+    [
+      closeWith,
+      consumeStepDurationMs,
+      fetchRepos,
+      fetchWorktrees,
+      setHideDefaultBranchWorkspace,
+      settings
+    ]
   )
 
   const persistCurrentStep = usePersistCurrentStep({
@@ -829,7 +841,9 @@ export function useOnboardingFlow(
           )
         }
         for (const importedRepoId of importedRepoIds) {
-          await fetchWorktrees(importedRepoId)
+          // Why: imported repos are already persisted; non-authoritative SSH
+          // refreshes should not block onboarding from revealing the first project.
+          await fetchWorktrees(importedRepoId, { requireAuthoritative: true })
         }
         await completeRepo(projectId, true, 'open_folder')
       } catch (err) {

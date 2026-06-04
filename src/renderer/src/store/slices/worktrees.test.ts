@@ -1955,6 +1955,73 @@ describe('worktree remote runtime mutations', () => {
     )
   })
 
+  it('passes startup commands through local worktree creation IPC', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/local-agent-startup',
+      repoId: 'repo1',
+      path: '/path/local-agent-startup'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      startupTerminal: { spawned: true, surface: 'visible' }
+    })
+    store.setState({
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+
+    await store
+      .getState()
+      .createWorktree(
+        'repo1',
+        'local-agent-startup',
+        undefined,
+        'skip',
+        undefined,
+        'sidebar',
+        'Launch local agent',
+        undefined,
+        undefined,
+        undefined,
+        'claude',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          command: "claude --prefill 'summarize repo'",
+          env: { ORCA_AGENT_MODE: 'direct' },
+          telemetry: {
+            agent_kind: 'claude-code',
+            launch_source: 'new_workspace_composer',
+            request_kind: 'new'
+          }
+        }
+      )
+
+    expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoId: 'repo1',
+        name: 'local-agent-startup',
+        setupDecision: 'skip',
+        telemetrySource: 'sidebar',
+        displayName: 'Launch local agent',
+        createdWithAgent: 'claude',
+        startup: {
+          command: "claude --prefill 'summarize repo'",
+          env: { ORCA_AGENT_MODE: 'direct' },
+          telemetry: {
+            agent_kind: 'claude-code',
+            launch_source: 'new_workspace_composer',
+            request_kind: 'new'
+          }
+        }
+      })
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('does not suffix branchNameOverride when runtime create reports a branch conflict', async () => {
     const store = createTestStore()
     runtimeEnvironmentCall.mockRejectedValueOnce(new Error('Branch already exists on a remote'))
@@ -2014,7 +2081,7 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'worktree.rm',
-      params: { worktree: wt.id, force: undefined, runHooks: true },
+      params: { worktree: `id:${wt.id}`, force: undefined, runHooks: true },
       timeoutMs: 60_000
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
@@ -3047,6 +3114,20 @@ describe('markWorktreeVisited', () => {
     store.getState().pruneLastVisitedTimestamps()
 
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ 'repo1::/hidden': 100 })
+  })
+})
+
+describe('setRenamingWorktreeId', () => {
+  it('sets and clears the workspace rename signal', () => {
+    const store = createTestStore()
+
+    expect(store.getState().renamingWorktreeId).toBeNull()
+
+    store.getState().setRenamingWorktreeId('repo1::/feature')
+    expect(store.getState().renamingWorktreeId).toBe('repo1::/feature')
+
+    store.getState().setRenamingWorktreeId(null)
+    expect(store.getState().renamingWorktreeId).toBeNull()
   })
 })
 

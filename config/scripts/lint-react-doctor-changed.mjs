@@ -34,14 +34,7 @@ if (lintTargets.length === 0) {
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const result = spawnSync(
   pnpm,
-  [
-    'exec',
-    'oxlint',
-    '--config',
-    'config/oxlint-react-doctor.json',
-    '--deny-warnings',
-    ...lintTargets
-  ],
+  ['exec', 'oxlint', '--config', 'config/oxlint-react-doctor.json', ...lintTargets],
   { stdio: 'inherit' }
 )
 

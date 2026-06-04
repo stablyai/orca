@@ -32,8 +32,9 @@ import WorktreeCard from './WorktreeCard'
 import WorktreeCardAgents, {
   SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT
 } from './WorktreeCardAgents'
+import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
-import { WorktreeActivityStatusIndicator } from './WorktreeActivityStatusIndicator'
+import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -119,7 +120,10 @@ import {
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT } from '@/lib/scroll-to-current-workspace-status'
+import {
+  SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
+  type ScrollToCurrentWorkspaceRevealRequestDetail
+} from '@/lib/scroll-to-current-workspace-status'
 import { useRepoHeaderDrag } from './project-header-drag'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import {
@@ -382,6 +386,7 @@ type VirtualizedWorktreeViewportProps = {
   selectedWorktrees: readonly Worktree[]
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onImmediateWorktreeActivate: (worktreeId: string) => void
+  onToggleWorktreeUnread: (worktree: Worktree) => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -725,6 +730,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   selectedWorktrees,
   onSelectionGesture,
   onImmediateWorktreeActivate,
+  onToggleWorktreeUnread,
   onContextMenuSelect,
   repoMap,
   worktreeMap,
@@ -763,6 +769,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const [highlightedRevealWorktreeId, setHighlightedRevealWorktreeId] = useState<string | null>(
     null
   )
+  const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
+  const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
+  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
@@ -1263,6 +1272,9 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           if (pendingRevealWorktree.highlight) {
             flashRevealedWorktree(pendingRevealWorktree.worktreeId)
           }
+          if (pendingRevealWorktree.beginRename) {
+            setRenamingWorktreeId(pendingRevealWorktree.worktreeId)
+          }
           pendingRevealRetryRef.current = null
           clearPendingRevealWorktreeId()
           return
@@ -1318,6 +1330,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     projectGroups,
     pendingRevealRetryTick,
     flashRevealedWorktree,
+    setRenamingWorktreeId,
     schedulePendingRevealFrame,
     cancelPendingRevealFrames
   ])
@@ -3169,6 +3182,19 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const isDeleting = deleteStateByWorktreeId[child.worktree.id]?.isDeleting ?? false
               const revealHighlightTone =
                 agentSendTargetWorktreeId === child.worktree.id ? 'ai' : 'default'
+              const showStatus = cardProps.includes('status')
+              const showUnreadQuickAction = cardProps.includes('unread')
+              const unreadTooltip = child.worktree.isUnread ? 'Mark read' : 'Mark unread'
+              const stopQuickActionPointerPropagation = (
+                event: React.PointerEvent<HTMLButtonElement>
+              ) => {
+                event.stopPropagation()
+              }
+              const handleToggleUnreadQuick = (event: React.MouseEvent<HTMLButtonElement>) => {
+                event.preventDefault()
+                event.stopPropagation()
+                onToggleWorktreeUnread(child.worktree)
+              }
               const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
                 event.preventDefault()
                 event.stopPropagation()
@@ -3248,12 +3274,26 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         }
                       >
                         <span className="mt-[2px] flex w-4 shrink-0 justify-center pt-[2px]">
-                          <WorktreeActivityStatusIndicator worktreeId={child.worktree.id} />
+                          <WorktreeCardStatusSlot
+                            worktreeId={child.worktree.id}
+                            showStatus={showStatus}
+                            showUnreadAction={showUnreadQuickAction}
+                            isUnread={child.worktree.isUnread}
+                            unreadTooltip={unreadTooltip}
+                            onPointerDown={stopQuickActionPointerPropagation}
+                            onToggleUnread={handleToggleUnreadQuick}
+                          />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-[12px] leading-tight text-foreground">
-                            {child.worktree.displayName}
-                          </div>
+                          <WorktreeTitleInlineRename
+                            displayName={child.worktree.displayName}
+                            className="text-[12px]"
+                            onRename={(displayName) =>
+                              updateWorktreeMeta(child.worktree.id, { displayName })
+                            }
+                            beginEditing={renamingWorktreeId === child.worktree.id}
+                            onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
+                          />
                           <div className="mt-1 flex min-w-0 items-center gap-1.5">
                             {child.repo && groupBy !== 'repo' ? (
                               <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
@@ -4310,6 +4350,13 @@ const WorktreeList = React.memo(function WorktreeList({
     [updateWorktreeMeta, worktreeMap, workspaceStatuses]
   )
 
+  const toggleWorktreeUnread = useCallback(
+    (worktree: Worktree) => {
+      void updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
+    },
+    [updateWorktreeMeta]
+  )
+
   const moveWorktreesToStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
@@ -4502,21 +4549,32 @@ const WorktreeList = React.memo(function WorktreeList({
     }
   }, [setShowSleepingWorkspaces, setFilterRepoIds, setHideDefaultBranchWorkspace, filterState])
 
-  const handleRevealCurrentWorkspaceRequest = useCallback(() => {
-    if (!activeWorktreeId) {
-      return
-    }
-    const activeWorktree = worktreeMap.get(activeWorktreeId)
-    if (!activeWorktree || activeWorktree.isArchived) {
-      return
-    }
-    if (!worktrees.some((worktree) => worktree.id === activeWorktreeId)) {
-      // Why: the toolbar action promises to reveal the current workspace; when
-      // sidebar filters hide it, relax those filters before queuing the reveal.
-      clearFilters()
-    }
-    revealWorktreeInSidebar(activeWorktreeId, { behavior: 'smooth', highlight: true })
-  }, [activeWorktreeId, clearFilters, revealWorktreeInSidebar, worktreeMap, worktrees])
+  const handleRevealCurrentWorkspaceRequest = useCallback(
+    (event: Event) => {
+      const detail =
+        event instanceof CustomEvent
+          ? (event.detail as ScrollToCurrentWorkspaceRevealRequestDetail | undefined)
+          : undefined
+      if (!activeWorktreeId) {
+        return
+      }
+      const activeWorktree = worktreeMap.get(activeWorktreeId)
+      if (!activeWorktree || activeWorktree.isArchived) {
+        return
+      }
+      if (!worktrees.some((worktree) => worktree.id === activeWorktreeId)) {
+        // Why: the toolbar action promises to reveal the current workspace; when
+        // sidebar filters hide it, relax those filters before queuing the reveal.
+        clearFilters()
+      }
+      revealWorktreeInSidebar(activeWorktreeId, {
+        behavior: 'smooth',
+        highlight: true,
+        beginRename: detail?.beginRename === true
+      })
+    },
+    [activeWorktreeId, clearFilters, revealWorktreeInSidebar, worktreeMap, worktrees]
+  )
 
   useEffect(() => {
     window.addEventListener(
@@ -4630,6 +4688,7 @@ const WorktreeList = React.memo(function WorktreeList({
         selectedWorktrees={selectedWorktrees}
         onSelectionGesture={updateSelectionForGesture}
         onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
+        onToggleWorktreeUnread={toggleWorktreeUnread}
         onContextMenuSelect={selectForContextMenu}
         repoMap={repoMap}
         worktreeMap={worktreeMap}

@@ -1,4 +1,5 @@
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
+import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 import {
   FEATURE_WALL_SETUP_STEPS,
   type FeatureWallSetupStepId
@@ -6,7 +7,6 @@ import {
 import type {
   GlobalSettings,
   TerminalLayoutSnapshot,
-  TerminalPaneLayoutNode,
   TerminalTab,
   Worktree
 } from '../../../../shared/types'
@@ -33,30 +33,6 @@ export type FeatureWallSetupProgress = {
   stepDone: Record<FeatureWallSetupStepId, boolean>
   coreDoneCount: number
   coreTotal: number
-}
-
-function isSplitLayout(node: TerminalPaneLayoutNode | null | undefined): boolean {
-  // A split node means the tab holds 2+ panes, regardless of what runs in them.
-  return Boolean(node) && node!.type === 'split'
-}
-
-function hasSplitTerminalInAnyWorktree(input: FeatureWallSetupProgressInput): boolean {
-  const validWorktreeIds = new Set(
-    Object.values(input.worktreesByRepo)
-      .flat()
-      .map((worktree) => worktree.id)
-  )
-  for (const [worktreeId, tabs] of Object.entries(input.tabsByWorktree)) {
-    if (!validWorktreeIds.has(worktreeId)) {
-      continue
-    }
-    for (const tab of tabs) {
-      if (isSplitLayout(input.terminalLayoutsByTabId[tab.id]?.root)) {
-        return true
-      }
-    }
-  }
-  return false
 }
 
 function countAvailableNonMainWorktrees(worktreesByRepo: Record<string, Worktree[]>): number {
@@ -87,7 +63,7 @@ export function getFeatureWallSetupProgress(
     notifications:
       input.settings?.notifications.enabled === true &&
       input.settings.notifications.agentTaskComplete === true,
-    'split-terminal': hasSplitTerminalInAnyWorktree(input),
+    'split-terminal': hasFeatureInteraction(input.featureInteractions, 'terminal-pane-split'),
     'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
     'task-sources': input.hasConnectedTaskSource,
     'agent-capabilities': agentCapabilitiesDone,

@@ -4,6 +4,7 @@
    components would make the close/reopen/merge state coupling
    non-obvious. The GitHub-side equivalent (GitHubItemDialog) carries
    the same disable for the same reason. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: GitLab item dialogs reset draft/provider state and hydrate details from GitLab IPC when the selected item identity changes. */
 /* Why: GitLab counterpart to GitHubItemDialog. Side sheet with three
    tabs (Description / Conversation / Pipeline) and footer actions —
    close/reopen, merge, and a top-level comment composer. Files /

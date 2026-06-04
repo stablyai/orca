@@ -58,6 +58,7 @@ type ClaudeSystemDefaultSnapshot = {
 }
 
 type ClaudeAuthIdentity = {
+  accountUuid: string | null
   email: string | null
   organizationUuid: string | null
 }
@@ -75,6 +76,10 @@ type ClaudeKeychainSnapshotValue =
   | { status: 'captured'; credentialsJson: string | null }
   | { status: 'unknown' }
 type ClaudeRefreshTokenComparison = 'same' | 'different' | 'missing'
+type ClaudeRuntimeCredentialCandidate = {
+  credentialsJson: string
+  runtimeOauthAccount: unknown
+}
 
 const RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR = Symbol('runtime-oauth-account-parse-error')
 
@@ -417,7 +422,9 @@ export class ClaudeRuntimeAuthService {
       const changedCandidates =
         this.lastWrittenCredentialsJson === null
           ? candidates
-          : candidates.filter((candidate) => candidate !== this.lastWrittenCredentialsJson)
+          : candidates.filter(
+              (candidate) => candidate.credentialsJson !== this.lastWrittenCredentialsJson
+            )
       if (changedCandidates.length === 0) {
         return { status: 'unchanged' }
       }
@@ -429,13 +436,16 @@ export class ClaudeRuntimeAuthService {
       const ambiguousCandidates: string[] = []
       let sawAmbiguousCandidate = false
       for (const runtimeContents of changedCandidates) {
-        if (!this.isValidCredentialsJsonObject(runtimeContents)) {
+        if (!this.isValidCredentialsJsonObject(runtimeContents.credentialsJson)) {
           continue
         }
-        const match = await this.findManagedAccountForRuntimeCredentials(runtimeContents)
+        const match = await this.findManagedAccountForRuntimeCredentials(
+          runtimeContents.credentialsJson,
+          runtimeContents.runtimeOauthAccount
+        )
         if (match.kind === 'ambiguous') {
           sawAmbiguousCandidate = true
-          ambiguousCandidates.push(runtimeContents)
+          ambiguousCandidates.push(runtimeContents.credentialsJson)
           continue
         }
         if (match.kind !== 'matched') {
@@ -445,13 +455,23 @@ export class ClaudeRuntimeAuthService {
         // credentials are a fresh CLI refresh or stale state unless token
         // metadata proves runtime is newer than managed storage.
         if (this.lastWrittenCredentialsJson === null) {
-          if (!this.runtimeCredentialsAreFresher(runtimeContents, match.managedCredentialsJson)) {
+          if (
+            !this.runtimeCredentialsAreFresher(
+              runtimeContents.credentialsJson,
+              match.managedCredentialsJson
+            )
+          ) {
             continue
           }
-        } else if (this.runtimeCredentialsAreOlder(runtimeContents, match.managedCredentialsJson)) {
+        } else if (
+          this.runtimeCredentialsAreOlder(
+            runtimeContents.credentialsJson,
+            match.managedCredentialsJson
+          )
+        ) {
           continue
         }
-        acceptedCandidates.push({ credentialsJson: runtimeContents, match })
+        acceptedCandidates.push({ credentialsJson: runtimeContents.credentialsJson, match })
       }
       if (acceptedCandidates.length === 0) {
         if (sawAmbiguousCandidate) {
@@ -492,15 +512,19 @@ export class ClaudeRuntimeAuthService {
 
   private async readRuntimeCredentialCandidatesForReadBack(
     baselineCredentialsJson: string
-  ): Promise<string[]> {
+  ): Promise<ClaudeRuntimeCredentialCandidate[]> {
     const paths = this.pathResolver.getRuntimePaths()
     const fileCredentials = existsSync(paths.credentialsPath)
       ? readFileSync(paths.credentialsPath, 'utf-8')
       : null
-    const candidates: string[] = []
+    const runtimeOauthAccount = this.readRuntimeOauthAccount()
+    const candidates: ClaudeRuntimeCredentialCandidate[] = []
     const pushCandidate = (credentialsJson: string | null): void => {
-      if (credentialsJson && !candidates.includes(credentialsJson)) {
-        candidates.push(credentialsJson)
+      if (
+        credentialsJson &&
+        !candidates.some((candidate) => candidate.credentialsJson === credentialsJson)
+      ) {
+        candidates.push({ credentialsJson, runtimeOauthAccount })
       }
     }
     if (process.platform === 'darwin') {
@@ -512,7 +536,9 @@ export class ClaudeRuntimeAuthService {
         pushCandidate(scopedKeychainCredentials)
         pushCandidate(legacyKeychainCredentials)
         pushCandidate(fileCredentials)
-        return candidates.filter((candidate) => candidate !== baselineCredentialsJson)
+        return candidates.filter(
+          (candidate) => candidate.credentialsJson !== baselineCredentialsJson
+        )
       }
       pushCandidate(scopedKeychainCredentials)
       pushCandidate(legacyKeychainCredentials)
@@ -613,7 +639,8 @@ export class ClaudeRuntimeAuthService {
   }
 
   private async findManagedAccountForRuntimeCredentials(
-    runtimeCredentialsJson: string
+    runtimeCredentialsJson: string,
+    runtimeOauthAccount: unknown
   ): Promise<ClaudeReadBackMatch> {
     const matches: { account: ClaudeManagedAccount; managedCredentialsJson: string }[] = []
     let unverifiableCount = 0
@@ -624,6 +651,7 @@ export class ClaudeRuntimeAuthService {
       }
       const match = this.runtimeCredentialsMatchAccount(
         runtimeCredentialsJson,
+        runtimeOauthAccount,
         account,
         managedCredentialsJson,
         this.readManagedOauthAccount(account)
@@ -643,6 +671,7 @@ export class ClaudeRuntimeAuthService {
 
   private runtimeCredentialsMatchAccount(
     runtimeCredentialsJson: string,
+    runtimeOauthAccount: unknown,
     account: ClaudeManagedAccount,
     managedCredentialsJson: string,
     managedOauthAccount: unknown
@@ -653,6 +682,20 @@ export class ClaudeRuntimeAuthService {
     }
     const managedIdentity = this.readIdentityFromCredentials(managedCredentialsJson)
     const managedOauthIdentity = this.readIdentityFromOauthAccount(managedOauthAccount)
+    const runtimeOauthIdentity = this.readIdentityFromOauthAccount(runtimeOauthAccount)
+    const credentialOauthConflict =
+      (identity.accountUuid &&
+        runtimeOauthIdentity.accountUuid &&
+        identity.accountUuid !== runtimeOauthIdentity.accountUuid) ||
+      (identity.email &&
+        runtimeOauthIdentity.email &&
+        identity.email !== runtimeOauthIdentity.email) ||
+      (identity.organizationUuid &&
+        runtimeOauthIdentity.organizationUuid &&
+        identity.organizationUuid !== runtimeOauthIdentity.organizationUuid)
+    if (credentialOauthConflict) {
+      return 'mismatch'
+    }
 
     // Why: this mirrors the Codex runtime-home guard. If another Claude login
     // or missed live process rewrites shared runtime credentials, do not
@@ -662,33 +705,49 @@ export class ClaudeRuntimeAuthService {
         managedIdentity?.organizationUuid ??
         managedOauthIdentity.organizationUuid
     )
+    const oauthAccountMatches =
+      Boolean(managedOauthIdentity.accountUuid) &&
+      managedOauthIdentity.accountUuid === runtimeOauthIdentity.accountUuid &&
+      Boolean(runtimeOauthIdentity.email || runtimeOauthIdentity.organizationUuid)
+    const runtimeEmail = identity.email ?? runtimeOauthIdentity.email
+    const runtimeOrganizationUuid =
+      identity.organizationUuid ?? runtimeOauthIdentity.organizationUuid
     const refreshTokenComparison = this.compareRefreshTokens(
       runtimeCredentialsJson,
       managedCredentialsJson
     )
-    if (!identity.email) {
+    if (!runtimeEmail) {
       if (refreshTokenComparison === 'same') {
         return 'match'
       }
-      if (!identity.organizationUuid && refreshTokenComparison === 'different') {
+      if (identity.organizationUuid) {
+        if (selectedOrganizationUuid && selectedOrganizationUuid !== identity.organizationUuid) {
+          return 'mismatch'
+        }
+        return 'unverifiable'
+      }
+      if (oauthAccountMatches) {
+        return 'match'
+      }
+      if (!runtimeOrganizationUuid && refreshTokenComparison === 'different') {
         return 'mismatch'
       }
       return 'unverifiable'
     }
-    if (account.email && this.normalizeField(account.email) !== identity.email) {
+    if (account.email && this.normalizeField(account.email) !== runtimeEmail) {
       return 'mismatch'
     }
-    if (selectedOrganizationUuid && !identity.organizationUuid) {
-      return refreshTokenComparison === 'same' ? 'match' : 'unverifiable'
+    if (selectedOrganizationUuid && !runtimeOrganizationUuid) {
+      return refreshTokenComparison === 'same' || oauthAccountMatches ? 'match' : 'unverifiable'
     }
     if (
       selectedOrganizationUuid &&
-      identity.organizationUuid &&
-      selectedOrganizationUuid !== identity.organizationUuid
+      runtimeOrganizationUuid &&
+      selectedOrganizationUuid !== runtimeOrganizationUuid
     ) {
       return 'mismatch'
     }
-    if (!selectedOrganizationUuid && identity.organizationUuid) {
+    if (!selectedOrganizationUuid && runtimeOrganizationUuid) {
       return refreshTokenComparison === 'same' ? 'match' : 'unverifiable'
     }
 
@@ -703,6 +762,7 @@ export class ClaudeRuntimeAuthService {
   ): boolean {
     const match = this.runtimeCredentialsMatchAccount(
       runtimeCredentialsJson,
+      this.readRuntimeOauthAccount(),
       account,
       managedCredentialsJson,
       managedOauthAccount
@@ -713,6 +773,7 @@ export class ClaudeRuntimeAuthService {
     const identity = this.readIdentityFromCredentials(runtimeCredentialsJson)
     const managedIdentity = this.readIdentityFromCredentials(managedCredentialsJson)
     const managedOauthIdentity = this.readIdentityFromOauthAccount(managedOauthAccount)
+    const runtimeOauthIdentity = this.readIdentityFromOauthAccount(this.readRuntimeOauthAccount())
     const selectedOrganizationUuid = this.normalizeField(
       account.organizationUuid ??
         managedIdentity?.organizationUuid ??
@@ -721,7 +782,8 @@ export class ClaudeRuntimeAuthService {
     return (
       match === 'unverifiable' &&
       Boolean(selectedOrganizationUuid) &&
-      identity?.organizationUuid === selectedOrganizationUuid
+      (identity?.organizationUuid ?? runtimeOauthIdentity.organizationUuid) ===
+        selectedOrganizationUuid
     )
   }
 
@@ -734,6 +796,9 @@ export class ClaudeRuntimeAuthService {
     }
     const oauth = this.asRecord(parsed.claudeAiOauth)
     return {
+      accountUuid: this.normalizeField(
+        this.readString(oauth, 'accountUuid') ?? this.readString(oauth, 'accountId')
+      ),
       email: this.normalizeField(this.readString(oauth, 'email')),
       organizationUuid: this.normalizeField(
         this.readString(oauth, 'organizationUuid') ?? this.readString(oauth, 'organizationId')
@@ -836,6 +901,9 @@ export class ClaudeRuntimeAuthService {
   private readIdentityFromOauthAccount(oauthAccount: unknown): ClaudeAuthIdentity {
     const oauth = this.asRecord(oauthAccount)
     return {
+      accountUuid: this.normalizeField(
+        this.readString(oauth, 'accountUuid') ?? this.readString(oauth, 'accountId')
+      ),
       email: this.normalizeField(
         this.readString(oauth, 'emailAddress') ?? this.readString(oauth, 'email')
       ),

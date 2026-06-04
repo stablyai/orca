@@ -113,6 +113,14 @@ describe('TabsSlice', () => {
     store = createTestStore()
   })
 
+  it('setRenamingTabId sets and clears the tab rename signal', () => {
+    expect(store.getState().renamingTabId).toBeNull()
+    store.getState().setRenamingTabId('terminal-tab-1')
+    expect(store.getState().renamingTabId).toBe('terminal-tab-1')
+    store.getState().setRenamingTabId(null)
+    expect(store.getState().renamingTabId).toBeNull()
+  })
+
   // ─── createUnifiedTab ───────────────────────────────────────────────
 
   describe('createUnifiedTab', () => {
@@ -384,7 +392,7 @@ describe('TabsSlice', () => {
       expect(sourceGroup?.activeTabId).toBe(t1.id)
     })
 
-    it('records the split-pane command interaction when creating an empty split group', () => {
+    it('records generic pane interaction when creating an empty split group', () => {
       const setMock = vi.mocked(window.api.ui.set)
       store.getState().hydratePersistedUI(getDefaultUIState())
       setMock.mockClear()
@@ -393,9 +401,7 @@ describe('TabsSlice', () => {
 
       store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
 
-      expect(store.getState().featureInteractions['terminal-pane-split']).toMatchObject({
-        interactionCount: 1
-      })
+      expect(store.getState().featureInteractions['terminal-pane-split']).toBeUndefined()
       expect(store.getState().featureInteractions['terminal-panes']).toMatchObject({
         interactionCount: 1
       })

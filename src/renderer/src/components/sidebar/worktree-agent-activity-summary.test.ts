@@ -12,6 +12,8 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 function makeAgentStatusEntry(args: {
   paneKey: string
   state: AgentStatusEntry['state']
+  worktreeId?: string
+  parentPaneKey?: string
 }): AgentStatusEntry {
   return {
     paneKey: args.paneKey,
@@ -19,7 +21,15 @@ function makeAgentStatusEntry(args: {
     prompt: '',
     updatedAt: 1_000,
     stateStartedAt: 1_000,
-    stateHistory: []
+    stateHistory: [],
+    worktreeId: args.worktreeId,
+    orchestration: args.parentPaneKey
+      ? {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          parentPaneKey: args.parentPaneKey
+        }
+      : undefined
   }
 }
 
@@ -55,6 +65,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
         [firstPaneKey]: makeAgentStatusEntry({ paneKey: firstPaneKey, state: 'working' })
       },
       migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
       retainedAgentsByPaneKey: {
         'tab-2:0': {
           entry: makeAgentStatusEntry({ paneKey: 'tab-2:0', state: 'done' }),
@@ -93,6 +104,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
         [paneKey]: entry
       },
       migrationUnsupportedByPtyId,
+      runtimeAgentOrchestrationByPaneKey: {},
       retainedAgentsByPaneKey
     }
     const sameStatePing = {
@@ -130,6 +142,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
         [paneKey]: makeAgentStatusEntry({ paneKey, state: 'working' })
       },
       migrationUnsupportedByPtyId,
+      runtimeAgentOrchestrationByPaneKey: {},
       retainedAgentsByPaneKey
     }
     const changedState = {
@@ -149,5 +162,87 @@ describe('selectWorktreeAgentActivitySummary', () => {
       hasLiveDone: true
     })
     expect(nowSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('summarizes worktree-attributed rows missing from the tab list', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const childPaneKey = makePaneKey('tab-child', '22222222-2222-4222-8222-222222222222')
+    const state: AgentActivityInput = {
+      tabsByWorktree: {
+        'repo::/wt-1': [makeTab('tab-parent', 'repo::/wt-1')]
+      },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [childPaneKey]: makeAgentStatusEntry({
+          paneKey: childPaneKey,
+          state: 'done',
+          worktreeId: 'repo::/wt-1'
+        })
+      },
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    expect(selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')).toMatchObject({
+      hasLiveDone: true
+    })
+  })
+
+  it('uses completed worker orchestration to suppress a stale parent pane title', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const parentPaneKey = makePaneKey('tab-parent', LEAF_ID)
+    const childPaneKey = makePaneKey('tab-child', '22222222-2222-4222-8222-222222222222')
+    const state: AgentActivityInput = {
+      tabsByWorktree: {
+        'repo::/wt-1': [makeTab('tab-parent', 'repo::/wt-1')]
+      },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [childPaneKey]: makeAgentStatusEntry({
+          paneKey: childPaneKey,
+          state: 'done',
+          worktreeId: 'repo::/wt-1',
+          parentPaneKey
+        })
+      },
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    const summary = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')
+    expect(summary.agentStatusPaneIdsByTabId['tab-parent']).toEqual(new Set([LEAF_ID]))
+  })
+
+  it('uses runtime orchestration metadata for completed worker parent-pane suppression', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(2_000)
+    const parentPaneKey = makePaneKey('tab-parent', LEAF_ID)
+    const childPaneKey = makePaneKey('tab-child', '22222222-2222-4222-8222-222222222222')
+    const state: AgentActivityInput = {
+      tabsByWorktree: {
+        'repo::/wt-1': [makeTab('tab-parent', 'repo::/wt-1')]
+      },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {
+        [childPaneKey]: makeAgentStatusEntry({
+          paneKey: childPaneKey,
+          state: 'done',
+          worktreeId: 'repo::/wt-1'
+        })
+      },
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {
+        [childPaneKey]: {
+          taskId: 'task-1',
+          dispatchId: 'dispatch-1',
+          parentPaneKey
+        }
+      },
+      retainedAgentsByPaneKey: {}
+    }
+
+    const summary = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')
+    expect(summary.agentStatusPaneIdsByTabId['tab-parent']).toEqual(new Set([LEAF_ID]))
   })
 })

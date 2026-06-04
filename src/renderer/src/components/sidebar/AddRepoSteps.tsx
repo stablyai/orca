@@ -6,19 +6,20 @@ import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
+import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
 
 // ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
-  fetchWorktrees: (repoId: string) => Promise<unknown>,
-  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup') => void,
-  setAddedRepo: (repo: Repo | null) => void,
+  fetchWorktrees: (
+    repoId: string,
+    options?: { requireAuthoritative?: boolean }
+  ) => Promise<unknown>,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested') => void,
   closeModal: () => void,
-  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void,
+  onGitRepoReady?: (repoId: string) => void | Promise<void>,
   scanNestedRepos?: (
     path: string,
     connectionId?: string,
@@ -187,13 +188,13 @@ export function useRemoteRepo(
         return
       }
       toast.success('Remote project added', { description: repo.displayName })
-      setAddedRepo(repo)
-      setExistingWorkspaceSource?.('ssh_remote_path')
-      await fetchWorktrees(repo.id)
+      // Why: the repo is already persisted here; if SSH refresh is temporarily
+      // non-authoritative, finish onto the project row instead of stranding the dialog.
+      await fetchWorktrees(repo.id, { requireAuthoritative: true })
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
-      setStep('setup')
+      await onGitRepoReady?.(repo.id)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes('Not a valid git repository')) {
@@ -224,10 +225,8 @@ export function useRemoteRepo(
     onNestedScanResult,
     fetchWorktrees,
     mountedRef,
-    setStep,
-    setAddedRepo,
     closeModal,
-    setExistingWorkspaceSource
+    onGitRepoReady
   ])
 
   return {

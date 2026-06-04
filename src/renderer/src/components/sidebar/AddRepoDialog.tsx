@@ -6,7 +6,6 @@ import { useRemoteRepo } from './AddRepoSteps'
 import { useCreateRepo } from './AddRepoCreateStep'
 import { buildNestedRepoScanTelemetry } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { Repo } from '../../../../shared/types'
 import { AddRepoStepIndicator } from './AddRepoStepIndicator'
 import { AddRepoDialogStepContent } from './AddRepoDialogStepContent'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
@@ -15,7 +14,11 @@ import { useAddRepoCloneFlow } from './useAddRepoCloneFlow'
 import { useAddRepoLocalFolderFlow } from './useAddRepoLocalFolderFlow'
 import { useAddRepoServerPathFlow } from './useAddRepoServerPathFlow'
 import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
-import { useAddRepoSetupActions } from './useAddRepoSetupActions'
+import {
+  buildAddRepoExistingWorkspacesTelemetry,
+  shouldTrackAddRepoExistingWorkspacesDetected
+} from './add-repo-existing-workspaces-telemetry'
+import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -27,17 +30,15 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
   const repos = useAppStore((s) => s.repos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
 
   const [step, setStep] = useState<AddRepoDialogStep>('add')
-  const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
-  const [existingWorkspaceSource, setExistingWorkspaceSource] =
-    useState<AddRepoExistingWorkspaceSource | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
+  const detectedTelemetryTrackedRef = useRef<Set<string>>(new Set())
   const {
     nestedScan,
     nestedSelectedPaths,
@@ -62,9 +63,36 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setStep
   })
 
-  // Why: setup actions can await settings/worktree refreshes; resetState
-  // cancels stale continuations when the setup step is dismissed.
-  const setupActionGenRef = useRef(0)
+  const completeGitRepoAdd = useCallback(
+    async (repoId: string, source: AddRepoExistingWorkspaceSource): Promise<void> => {
+      const worktrees = useAppStore.getState().worktreesByRepo[repoId] ?? []
+      const sortedWorktrees = [...worktrees].sort((a, b) => {
+        if (a.lastActivityAt !== b.lastActivityAt) {
+          return b.lastActivityAt - a.lastActivityAt
+        }
+        return a.displayName.localeCompare(b.displayName)
+      })
+      const existingWorkspaceTelemetry = buildAddRepoExistingWorkspacesTelemetry(
+        source,
+        sortedWorktrees
+      )
+      if (
+        existingWorkspaceTelemetry &&
+        shouldTrackAddRepoExistingWorkspacesDetected(existingWorkspaceTelemetry) &&
+        !detectedTelemetryTrackedRef.current.has(repoId)
+      ) {
+        detectedTelemetryTrackedRef.current.add(repoId)
+        track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
+      }
+      await finishProjectAddWithDefaultCheckout({
+        repoId,
+        source,
+        closeModal,
+        setHideDefaultBranchWorkspace
+      })
+    },
+    [closeModal, setHideDefaultBranchWorkspace]
+  )
 
   const {
     sshTargets,
@@ -84,9 +112,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   } = useRemoteRepo(
     fetchWorktrees,
     setStep,
-    setAddedRepo,
     closeModal,
-    setExistingWorkspaceSource,
+    (repoId) => completeGitRepoAdd(repoId, 'ssh_remote_path'),
     scanNestedRepos,
     (scan, selectedPath, connectionId, attemptId, inProgress, scanId) => {
       setActiveNestedScanId(inProgress ? scanId : null)
@@ -126,7 +153,9 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     resetCreateState,
     handlePickParent,
     handleCreate
-  } = useCreateRepo(fetchWorktrees, setStep, setAddedRepo, closeModal, setExistingWorkspaceSource)
+  } = useCreateRepo(fetchWorktrees, closeModal, (repoId) =>
+    completeGitRepoAdd(repoId, 'create_project')
+  )
 
   const {
     cloneUrl,
@@ -145,15 +174,12 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
     workspaceDir: settings?.workspaceDir,
     fetchWorktrees,
-    setStep,
-    setAddedRepo,
-    setExistingWorkspaceSource
+    onGitRepoReady: completeGitRepoAdd
   })
 
   const isOpen = activeModal === 'add-repo'
   const droppedLocalPath =
     typeof modalData.droppedLocalPath === 'string' ? modalData.droppedLocalPath : ''
-  const projectId = addedRepo?.id ?? ''
   const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
 
   const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
@@ -167,9 +193,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setActiveNestedScanId,
     setNestedScanInProgress,
     showNestedRepoReview,
-    setStep,
-    setAddedRepo,
-    setExistingWorkspaceSource,
+    onGitRepoReady: completeGitRepoAdd,
     setIsAdding,
     setAddProjectBusyLabel
   })
@@ -188,9 +212,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     setActiveNestedScanId,
     setNestedScanInProgress,
     showNestedRepoReview,
-    setStep,
-    setAddedRepo,
-    setExistingWorkspaceSource,
+    onGitRepoReady: completeGitRepoAdd,
     setAddProjectBusyLabel
   })
   const { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction } =
@@ -206,21 +228,16 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
       fetchWorktrees,
       importNestedRepos,
       getNestedRepoRuntimeKind,
-      setAddedRepo,
-      setExistingWorkspaceSource,
-      setStep,
+      onGitRepoReady: completeGitRepoAdd,
       setIsAdding
     })
 
   const resetState = useCallback(() => {
-    setupActionGenRef.current++
     // Why: kill the git clone process if one is running, so backing out
     // or closing the dialog doesn't leave a clone running on disk.
     void window.api.repos.cloneAbort()
     resetLocalFolderFlow()
     setStep('add')
-    setAddedRepo(null)
-    setExistingWorkspaceSource(null)
     setIsAdding(false)
     setAddProjectBusyLabel(null)
     resetServerPathFlow()
@@ -253,30 +270,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     step === 'create' ||
     step === 'nested'
 
-  const {
-    hiddenWorktreeCount,
-    primaryBranchName,
-    trackSetupAction,
-    finishImportedRepoWithoutOpening,
-    handleCreateWorktree,
-    handleStartPrimaryWorktree,
-    handleConfigureRepo,
-    handleUseExistingWorktrees
-  } = useAddRepoSetupActions({
-    addedRepo,
-    existingWorkspaceSource,
-    isSetupStep: step === 'setup',
-    projectId,
-    closeModal,
-    openModal,
-    openSettingsPage,
-    openSettingsTarget,
-    fetchWorktrees,
-    resetState,
-    setupActionGenRef,
-    setAddedRepo
-  })
-
   // Why: handleBack reuses resetState which already aborts clones and resets all fields.
   const handleBack = useCallback(() => {
     if (step === 'nested') {
@@ -285,29 +278,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     resetState()
   }, [resetState, step, trackNestedBackAction])
 
-  // Why: only the Setup step's "Add another project" back arrow counts as a
-  // funnel event — the in-flight Back arrows on clone/remote/create are not
-  // a Setup-step affordance. Keeping the emit scoped to this handler avoids
-  // also tagging mid-clone backs.
-  const handleSetupStepBack = useCallback(() => {
-    trackSetupAction('back')
-    handleBack()
-  }, [handleBack, trackSetupAction])
-
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
-          // Why: Radix only fires onOpenChange for internal triggers (X icon, ESC,
-          // outside-click), so this branch only runs for implicit closes — explicit
-          // Skip is handled on its own renderer-side click handler. Implicit closes
-          // on the Setup step are funnel-equivalent to Skip.
-          if (step === 'setup') {
-            trackSetupAction('skip')
-            void finishImportedRepoWithoutOpening()
-            return
-          }
           if (step === 'nested' && !isAdding) {
             trackNestedBackAction()
           }
@@ -326,7 +301,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           isInputStep={isInputStep}
           isAdding={isAdding}
           onBack={handleBack}
-          onSetupBack={handleSetupStepBack}
         />
         <AddRepoDialogStepContent
           step={step}
@@ -357,9 +331,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           createKind={createKind}
           createError={createError}
           isCreating={isCreating}
-          addedRepoName={addedRepo?.displayName ?? ''}
-          hiddenWorktreeCount={hiddenWorktreeCount}
-          primaryBranchName={primaryBranchName}
           onBrowse={handleBrowse}
           onOpenCloneStep={() => {
             setCloneError(null)
@@ -417,10 +388,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           }}
           onPickCreateParent={handlePickParent}
           onCreate={handleCreate}
-          onStartPrimaryWorktree={handleStartPrimaryWorktree}
-          onUseExistingWorktrees={() => void handleUseExistingWorktrees()}
-          onCreateWorktree={handleCreateWorktree}
-          onConfigureRepo={handleConfigureRepo}
         />
       </DialogContent>
     </Dialog>

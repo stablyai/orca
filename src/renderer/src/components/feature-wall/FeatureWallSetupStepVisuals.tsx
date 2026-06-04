@@ -458,7 +458,9 @@ function ModalField(props: {
     <div>
       <div className="text-[11px] font-medium text-muted-foreground">{props.label}</div>
       <div className="mt-1 flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2 text-xs font-medium text-foreground">
-        {props.icon ? <span className="flex size-3.5 shrink-0 items-center">{props.icon}</span> : null}
+        {props.icon ? (
+          <span className="flex size-3.5 shrink-0 items-center">{props.icon}</span>
+        ) : null}
         <span className="truncate">{props.value}</span>
         {props.typing ? (
           <span className="ml-px inline-block h-[10px] w-[5px] animate-pulse bg-foreground" />

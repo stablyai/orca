@@ -388,7 +388,6 @@ export default function TerminalPane({
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
   const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
-  const recordFeatureInteraction = useAppStore((store) => store.recordFeatureInteraction)
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
@@ -408,10 +407,6 @@ export default function TerminalPane({
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
   const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
-  const handleSplitPaneCommand = useCallback(() => {
-    recordFeatureInteraction('terminal-pane-split')
-  }, [recordFeatureInteraction])
-
   useEffect(() => {
     if (startup) {
       consumeTabStartupCommand(tabId)
@@ -1063,7 +1058,6 @@ export default function TerminalPane({
     setSearchOpen,
     onSearchSelectedText: handleSearchSelectedText,
     onRequestClosePane: handleRequestClosePane,
-    onSplitPaneCommand: handleSplitPaneCommand,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
@@ -1588,7 +1582,6 @@ export default function TerminalPane({
     fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
-    onSplitPaneCommand: handleSplitPaneCommand,
     onSetTitle: handleStartRename,
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,

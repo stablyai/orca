@@ -6,15 +6,13 @@ type AddRepoStepIndicatorProps = {
   isInputStep: boolean
   isAdding: boolean
   onBack: () => void
-  onSetupBack: () => void
 }
 
 export function AddRepoStepIndicator({
   step,
   isInputStep,
   isAdding,
-  onBack,
-  onSetupBack
+  onBack
 }: AddRepoStepIndicatorProps): React.JSX.Element {
   return (
     <div className="flex items-center justify-center -mt-1">
@@ -37,21 +35,9 @@ export function AddRepoStepIndicator({
           Back
         </button>
       )}
-      {step === 'setup' && (
-        <button
-          className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          onClick={onSetupBack}
-        >
-          <ArrowLeft className="size-3" />
-          Add another project
-        </button>
-      )}
       <div className="flex items-center gap-1.5">
         <div
           className={`size-1.5 rounded-full transition-colors ${isInputStep ? 'bg-foreground' : 'bg-muted-foreground/30'}`}
-        />
-        <div
-          className={`size-1.5 rounded-full transition-colors ${step === 'setup' ? 'bg-foreground' : 'bg-muted-foreground/30'}`}
         />
       </div>
     </div>

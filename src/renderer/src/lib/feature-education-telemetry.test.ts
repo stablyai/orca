@@ -132,30 +132,18 @@ describe('feature education telemetry helpers', () => {
     trackTerminalPaneSplit({ source: 'context_menu', direction: 'horizontal' })
 
     expect(trackMock).toHaveBeenCalledTimes(3)
-    expect(trackMock).toHaveBeenNthCalledWith(
-      1,
-      'terminal_pane_split',
-      {
-        source: 'keyboard',
-        direction: 'horizontal'
-      }
-    )
-    expect(trackMock).toHaveBeenNthCalledWith(
-      2,
-      'terminal_pane_split',
-      {
-        source: 'keyboard',
-        direction: 'vertical'
-      }
-    )
-    expect(trackMock).toHaveBeenNthCalledWith(
-      3,
-      'terminal_pane_split',
-      {
-        source: 'context_menu',
-        direction: 'horizontal'
-      }
-    )
+    expect(trackMock).toHaveBeenNthCalledWith(1, 'terminal_pane_split', {
+      source: 'keyboard',
+      direction: 'horizontal'
+    })
+    expect(trackMock).toHaveBeenNthCalledWith(2, 'terminal_pane_split', {
+      source: 'keyboard',
+      direction: 'vertical'
+    })
+    expect(trackMock).toHaveBeenNthCalledWith(3, 'terminal_pane_split', {
+      source: 'context_menu',
+      direction: 'horizontal'
+    })
 
     vi.setSystemTime(new Date('2026-06-03T00:00:00.000Z'))
     trackTerminalPaneSplit({ source: 'keyboard', direction: 'horizontal' })
@@ -164,7 +152,10 @@ describe('feature education telemetry helpers', () => {
   })
 })
 
-function expectTrackedFeatureEducationTelemetry(name: string, props: Record<string, unknown>): void {
+function expectTrackedFeatureEducationTelemetry(
+  name: string,
+  props: Record<string, unknown>
+): void {
   expect(trackMock).toHaveBeenCalledWith(name, props)
 }
 

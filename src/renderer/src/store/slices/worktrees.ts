@@ -29,6 +29,7 @@ import {
   getActiveRuntimeTarget,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
@@ -231,10 +232,6 @@ function areDetectedWorktreeResultsEqual(
 
 function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
   return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
-}
-
-function toRuntimeWorktreeIdSelector(worktreeId: string): string {
-  return `id:${worktreeId}`
 }
 
 const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
@@ -522,7 +519,7 @@ async function persistWorktreeMeta(
   await callRuntimeRpc(
     target,
     'worktree.set',
-    { worktree: toRuntimeWorktreeIdSelector(worktreeId), ...updates },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), ...updates },
     { timeoutMs: 15_000 }
   )
 }
@@ -693,6 +690,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   detectedWorktreesByRepo: {},
   worktreeLineageById: {},
   activeWorktreeId: null,
+  renamingWorktreeId: null,
   deleteStateByWorktreeId: {},
   baseStatusByWorktreeId: {},
   remoteBranchConflictByWorktreeId: {},
@@ -878,8 +876,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               target,
               'worktree.set',
               {
-                worktree: toRuntimeWorktreeIdSelector(worktreeId),
-                ...(args.parentWorktreeId ? { parentWorktree: `id:${args.parentWorktreeId}` } : {}),
+                worktree: toRuntimeWorktreeSelector(worktreeId),
+                ...(args.parentWorktreeId
+                  ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
+                  : {}),
                 ...(args.noParent === true ? { noParent: true } : {})
               },
               { timeoutMs: 15_000 }
@@ -1063,7 +1063,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
+            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+            ...(startup ? { startup } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -1175,7 +1176,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         : callRuntimeRpc<RemoveWorktreeResult>(
             target,
             'worktree.rm',
-            { worktree: worktreeId, force, runHooks: !skipArchive },
+            { worktree: toRuntimeWorktreeSelector(worktreeId), force, runHooks: !skipArchive },
             { timeoutMs: 60_000 }
           ))
 
@@ -1457,7 +1458,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         : callRuntimeRpc<ForceDeleteWorktreeBranchResult>(
             target,
             'worktree.forceDeleteBranch',
-            { worktree: worktreeId, branchName, expectedHead },
+            { worktree: toRuntimeWorktreeSelector(worktreeId), branchName, expectedHead },
             { timeoutMs: 15_000 }
           ))
       toast.success('Local branch deleted', {
@@ -2012,6 +2013,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       }
     })
+  },
+
+  setRenamingWorktreeId: (worktreeId) => {
+    set({ renamingWorktreeId: worktreeId })
   },
 
   setActiveWorktree: (worktreeId) => {

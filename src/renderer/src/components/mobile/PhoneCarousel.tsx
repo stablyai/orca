@@ -67,6 +67,7 @@ export function PhoneCarousel(): React.JSX.Element {
       }, DWELL_MS)
     }
 
+    // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: the first tap pulse is intentionally delayed until after the initial dwell.
     schedule(0)
 
     return () => {

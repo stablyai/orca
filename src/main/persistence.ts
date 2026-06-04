@@ -90,6 +90,7 @@ import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-command
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
+import { normalizeAppIconId } from '../shared/app-icon'
 import {
   normalizeFeatureInteractions,
   type FeatureInteractionId
@@ -581,6 +582,60 @@ export function sanitizeOnboardingUpdate(
     out.flowVersion = ONBOARDING_FLOW_VERSION
   }
   return out
+}
+
+function normalizeLoadedOnboardingState(
+  input: unknown,
+  defaults: OnboardingState
+): OnboardingState {
+  // Why: if we successfully parsed an existing orca-data.json that lacks an
+  // onboarding block, this is an upgrade-cohort user — backfill as completed
+  // (not dismissed) so they don't get dropped into the wizard regardless of
+  // whether they currently have repos, SSH targets, or just non-default
+  // settings. Analytics still distinguish this from users who explicitly
+  // bailed mid-funnel.
+  if (!input) {
+    return {
+      ...defaults,
+      closedAt: Date.now(),
+      outcome: 'completed',
+      lastCompletedStep: ONBOARDING_FINAL_STEP
+    }
+  }
+  // Why: validate every persisted onboarding key explicitly via the shared
+  // sanitizer instead of spreading raw values. A type-flipped field on disk
+  // (string where number expected, unknown checklist key) is dropped or
+  // coerced to the default rather than poisoning in-memory state.
+  const sanitized = sanitizeOnboardingUpdate(input, {
+    migrateLegacyProgress: true
+  })
+  // Why: a persisted completed/dismissed outcome means the user left
+  // onboarding. Recover from a bad/missing/null closedAt instead of reopening
+  // the new-user sidebar checklist.
+  const recoveredClosedAt =
+    typeof sanitized.closedAt === 'number'
+      ? sanitized.closedAt
+      : sanitized.outcome !== null && sanitized.outcome !== undefined
+        ? Date.now()
+        : sanitized.closedAt
+  return {
+    ...defaults,
+    ...sanitized,
+    closedAt: recoveredClosedAt ?? defaults.closedAt,
+    checklist: {
+      ...defaults.checklist,
+      ...sanitized.checklist
+    }
+  }
+}
+
+function resolveSetupGuideSidebarDismissedOnLoad(
+  persistedDismissed: unknown,
+  onboarding: OnboardingState
+): boolean {
+  // Why: the sidebar checklist is a new-user prompt. Once onboarding is
+  // closed, persisted false is just the old default value, not a user opt-in.
+  return onboarding.closedAt !== null || persistedDismissed === true
 }
 
 // Why: read a settings field that was removed from the GlobalSettings type
@@ -1755,6 +1810,13 @@ export class Store {
         if (!visibleTaskProvidersDefaultedForJira) {
           this.loadNeedsSave = true
         }
+        const normalizedOnboarding = normalizeLoadedOnboardingState(
+          parsed.onboarding,
+          defaults.onboarding
+        )
+        if (!parsed.onboarding) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -1791,6 +1853,7 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
+            appIcon: normalizeAppIconId(parsed.settings?.appIcon),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
@@ -1935,6 +1998,16 @@ export class Store {
             ) {
               this.loadNeedsSave = true
             }
+            const setupGuideSidebarDismissed = resolveSetupGuideSidebarDismissedOnLoad(
+              parsed.ui?.setupGuideSidebarDismissed,
+              normalizedOnboarding
+            )
+            if (
+              parsed.ui?.setupGuideSidebarDismissed !== setupGuideSidebarDismissed &&
+              (setupGuideSidebarDismissed || parsed.ui?.setupGuideSidebarDismissed !== undefined)
+            ) {
+              this.loadNeedsSave = true
+            }
             return {
               ...defaults.ui,
               ...parsed.ui,
@@ -1942,6 +2015,7 @@ export class Store {
               // when no explicit persisted chrome preference exists yet.
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
+              setupGuideSidebarDismissed,
               sortBy: migrate ? ('smart' as const) : sort,
               showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
                 parsed.ui?.showDotfilesByWorktree
@@ -1995,38 +2069,7 @@ export class Store {
           ),
           automations: Array.isArray(parsed.automations) ? parsed.automations : [],
           automationRuns: Array.isArray(parsed.automationRuns) ? parsed.automationRuns : [],
-          onboarding: (() => {
-            // Why: if we successfully parsed an existing orca-data.json that
-            // lacks an onboarding block, this is an upgrade-cohort user —
-            // backfill as completed (not dismissed) so they don't get dropped
-            // into the wizard regardless of whether they currently have repos,
-            // SSH targets, or just non-default settings. Analytics still
-            // distinguish this from users who explicitly bailed mid-funnel.
-            if (!parsed.onboarding) {
-              return {
-                ...defaults.onboarding,
-                closedAt: Date.now(),
-                outcome: 'completed' as const,
-                lastCompletedStep: ONBOARDING_FINAL_STEP
-              }
-            }
-            // Why: validate every persisted onboarding key explicitly via the
-            // shared sanitizer instead of spreading raw values. A type-flipped
-            // field on disk (string where number expected, unknown checklist
-            // key) is dropped or coerced to the default rather than poisoning
-            // in-memory state.
-            const sanitized = sanitizeOnboardingUpdate(parsed.onboarding, {
-              migrateLegacyProgress: true
-            })
-            return {
-              ...defaults.onboarding,
-              ...sanitized,
-              checklist: {
-                ...defaults.onboarding.checklist,
-                ...sanitized.checklist
-              }
-            }
-          })()
+          onboarding: normalizedOnboarding
         }
       }
     } catch (err) {
@@ -2941,6 +2984,9 @@ export class Store {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
       )
+    }
+    if ('appIcon' in updates) {
+      sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,

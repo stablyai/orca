@@ -18,6 +18,7 @@ import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
+import { DEFAULT_APP_ICON_ID } from './app-icon'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -173,6 +174,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
     theme: 'system',
+    appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,

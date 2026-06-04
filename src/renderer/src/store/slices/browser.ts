@@ -27,6 +27,7 @@ import {
   getActiveRuntimeTarget,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   BrowserDetectProfilesResult,
   BrowserProfileClearDefaultCookiesResult,
@@ -231,7 +232,7 @@ function closeRemoteBrowserPageInOwningEnvironment(
   void callRuntimeRpc(
     target,
     'browser.tabClose',
-    { worktree: `id:${worktreeId}`, page: handle.remotePageId },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), page: handle.remotePageId },
     { timeoutMs: 15_000 }
   ).catch(() => {})
 }

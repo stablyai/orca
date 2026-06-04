@@ -49,6 +49,7 @@ import {
   bulkStageFiles,
   bulkDiscardChanges,
   bulkUnstageFiles,
+  clearEffectiveUpstreamStatusCacheForTests,
   detectConflictOperation,
   discardChanges,
   getBranchCompare,
@@ -362,6 +363,7 @@ describe('getDiff', () => {
 
 describe('getStatus', () => {
   beforeEach(() => {
+    clearEffectiveUpstreamStatusCacheForTests()
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncBufferMock.mockReset()
     lstatMock.mockReset()

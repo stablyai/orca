@@ -37,6 +37,7 @@ import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/term
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
@@ -1649,7 +1650,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       await callRuntimeRpc(
         target,
         'terminal.stop',
-        { worktree: worktreeId },
+        { worktree: toRuntimeWorktreeSelector(worktreeId) },
         { timeoutMs: 15_000 }
       ).catch(() => null)
     }

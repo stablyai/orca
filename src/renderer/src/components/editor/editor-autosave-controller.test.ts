@@ -232,7 +232,7 @@ describe('attachEditorAutosaveController', () => {
       expect(runtimeCall).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'files.write',
-        params: { worktree: 'wt-1', relativePath: 'file.ts', content: 'edited' },
+        params: { worktree: 'id:wt-1', relativePath: 'file.ts', content: 'edited' },
         timeoutMs: 15_000
       })
       expect(writeFile).not.toHaveBeenCalled()
