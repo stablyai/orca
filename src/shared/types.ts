@@ -18,6 +18,7 @@ import type { FeatureInteractionState } from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
+import type { AppIconId } from './app-icon'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
@@ -1952,6 +1953,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number

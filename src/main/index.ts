@@ -6,11 +6,11 @@ import { grantDirAcl } from './win32-utils'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import os from 'node:os'
-import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron'
+import { app, BrowserWindow, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
-import devIcon from '../../resources/icon-dev.png?asset'
 import { Store, initDataPath } from './persistence'
+import { applyAppIcon } from './app-icon'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
@@ -1052,12 +1052,8 @@ app.whenReady().then(async () => {
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
   app.setName(devInstanceIdentity.name)
 
-  if (process.platform === 'darwin' && is.dev) {
-    const dockIcon = nativeImage.createFromPath(devIcon)
-    app.dock?.setIcon(dockIcon)
-  }
-
   store = new Store()
+  applyAppIcon(store.getSettings().appIcon)
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
   }

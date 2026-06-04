@@ -257,6 +257,7 @@ describe('Store', () => {
     expect(settings.branchPrefix).toBe('git-username')
     expect(settings.refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(settings.theme).toBe('system')
+    expect(settings.appIcon).toBe('classic')
     expect(settings.appFontFamily).toBe('Geist')
     expect(settings.editorAutoSave).toBe(false)
     expect(settings.editorAutoSaveDelayMs).toBe(1000)
@@ -2100,6 +2101,24 @@ describe('Store', () => {
       disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
     })
     expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
+  })
+
+  it('normalizes app icon on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          appIcon: 'not-real'
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().appIcon).toBe('classic')
+
+    expect(store.updateSettings({ appIcon: 'watercolor' }).appIcon).toBe('watercolor')
+    expect(store.updateSettings({ appIcon: 'blue' }).appIcon).toBe('blue')
+    expect(store.updateSettings({ appIcon: 'not-real' as never }).appIcon).toBe('classic')
   })
 
   it('updateSettings keeps the legacy commit-message AI projection in sync', async () => {

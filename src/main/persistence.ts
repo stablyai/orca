@@ -90,6 +90,7 @@ import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-command
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
+import { normalizeAppIconId } from '../shared/app-icon'
 import {
   normalizeFeatureInteractions,
   type FeatureInteractionId
@@ -1791,6 +1792,7 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
+            appIcon: normalizeAppIconId(parsed.settings?.appIcon),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
@@ -2941,6 +2943,9 @@ export class Store {
       sanitizedUpdates.terminalShortcutPolicy = normalizeTerminalShortcutPolicy(
         updates.terminalShortcutPolicy
       )
+    }
+    if ('appIcon' in updates) {
+      sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,
