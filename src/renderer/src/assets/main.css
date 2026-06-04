@@ -345,8 +345,9 @@
 
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
-  /* Why: the scrollbar itself owns the gutter; avoid adding a second visual gap beside cards. */
-  padding-right: 0;
+  /* Why: the scrollbar gutter is paint-only in Chromium; this keeps card
+     surfaces clear of Orca's resize handle and right-edge sidebar chrome. */
+  padding-right: 4px;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
