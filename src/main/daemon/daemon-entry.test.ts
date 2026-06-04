@@ -6,7 +6,8 @@ describe('daemon-entry parseArgs', () => {
     const result = parseArgs(['--socket', '/tmp/test.sock', '--token', '/tmp/test.token'])
     expect(result).toEqual({
       socketPath: '/tmp/test.sock',
-      tokenPath: '/tmp/test.token'
+      tokenPath: '/tmp/test.token',
+      parentPid: null
     })
   })
 
@@ -14,8 +15,23 @@ describe('daemon-entry parseArgs', () => {
     const result = parseArgs(['--token', '/tmp/t.token', '--socket', '/tmp/t.sock'])
     expect(result).toEqual({
       socketPath: '/tmp/t.sock',
-      tokenPath: '/tmp/t.token'
+      tokenPath: '/tmp/t.token',
+      parentPid: null
     })
+  })
+
+  it('parses --parent-pid flag', () => {
+    const result = parseArgs(['--socket', '/tmp/t.sock', '--token', '/tmp/t.token', '--parent-pid', '12345'])
+    expect(result).toEqual({
+      socketPath: '/tmp/t.sock',
+      tokenPath: '/tmp/t.token',
+      parentPid: 12345
+    })
+  })
+
+  it('ignores invalid --parent-pid value', () => {
+    const result = parseArgs(['--socket', '/tmp/t.sock', '--token', '/tmp/t.token', '--parent-pid', 'bad'])
+    expect(result.parentPid).toBeNull()
   })
 
   it('throws when --socket is missing', () => {

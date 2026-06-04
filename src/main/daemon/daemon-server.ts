@@ -30,6 +30,7 @@ export type DaemonServerOptions = {
     command?: string
     shellOverride?: string
   }) => SubprocessHandle
+  onClientConnected?: () => void
 }
 
 type ConnectedClient = {
@@ -44,6 +45,7 @@ export class DaemonServer {
   private host: TerminalHost
   private socketPath: string
   private tokenPath: string
+  private onClientConnected: (() => void) | undefined
 
   private clients = new Map<string, ConnectedClient>()
   private streamDataBatcher = new DaemonStreamDataBatcher((clientId) => this.clients.get(clientId))
@@ -61,6 +63,7 @@ export class DaemonServer {
     this.tokenPath = opts.tokenPath
     this.token = randomUUID()
     this.host = new TerminalHost({ spawnSubprocess: opts.spawnSubprocess })
+    this.onClientConnected = opts.onClientConnected
   }
 
   async start(): Promise<void> {
@@ -159,6 +162,7 @@ export class DaemonServer {
       }
       this.clients.set(hello.clientId, client)
       this.setupControlSocket(socket, hello.clientId)
+      this.onClientConnected?.()
       if (previous) {
         // Why: a reconnect can reuse a clientId before the old sockets notice
         // their close. Tear them down after installing the new owner so stale

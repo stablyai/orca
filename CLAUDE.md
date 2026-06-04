@@ -31,6 +31,7 @@
 - `src/` — source code
 - `tests/` — test files
 - `docs/` — documentation
+- `product/` — specs, planning, runtime (DevOS managed)
 <!-- /DevOS:section:directory-structure -->
 
 <!-- DevOS:section:compatibility-posture -->
