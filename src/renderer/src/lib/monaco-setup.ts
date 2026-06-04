@@ -11,6 +11,10 @@ import { registerAstroLanguage } from './monaco-languages/register-astro'
 import { registerSvelteLanguage } from './monaco-languages/register-svelte'
 import { registerVueLanguage } from './monaco-languages/register-vue'
 import { installMonacoDiffEditorDisposalGuard } from './monaco-diff-editor-disposal'
+import { registerCodeIntelProviders } from './monaco-code-intel-providers'
+import { resolveCodeIntelWorktree, isCodeIntelEnabled } from './code-intel-editor-context'
+import { installCodeIntelStoreBinding } from './code-intel-store-binding'
+import { setTypeScriptNavigationMode } from './monaco-typescript-navigation-mode'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -54,6 +58,10 @@ const diagnosticsOptions = {
 monacoTS.typescriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 monacoTS.javascriptDefaults.setDiagnosticsOptions(diagnosticsOptions)
 
+// Why: the code-intel experiment defaults off. Keep Monaco's built-in TS/JS
+// navigation alive until the store binding disables it while the sidecar is on.
+setTypeScriptNavigationMode(false)
+
 // Why: .tsx/.jsx files share the base 'typescript'/'javascript' language ids
 // in Monaco's registry (there is no separate 'typescriptreact' id), so the
 // compiler options on those defaults apply to both. Without jsx enabled, the
@@ -72,10 +80,19 @@ monacoTS.javascriptDefaults.setCompilerOptions({
 registerVueLanguage(monaco)
 registerSvelteLanguage(monaco)
 registerAstroLanguage(monaco)
+registerCodeIntelProviders(resolveCodeIntelWorktree, isCodeIntelEnabled)
+installCodeIntelStoreBinding()
 installMonacoDiffEditorDisposalGuard(monaco)
 
 // Configure Monaco to use the locally bundled editor instead of CDN
 loader.config({ monaco })
+
+// Why: mirrors window.__store — lets e2e preview specs drive Monaco via its public
+// API (trigger commands, add decorations) without fighting synthetic event routing.
+// Safe in Electron: the renderer has no external web context to worry about.
+if (typeof window !== 'undefined') {
+  ;(window as unknown as Record<string, unknown>).__monaco = monaco
+}
 
 // Re-export for convenience
 export { monaco }

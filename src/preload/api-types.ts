@@ -193,6 +193,7 @@ import type {
   CrashReportSubmitArgs,
   CrashReportSubmitResult
 } from '../shared/crash-reporting'
+import type { CodeIntelResult } from '../shared/code-intel-contract'
 
 export type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 
@@ -616,6 +617,24 @@ export type AppApi = {
   /** Opens a native directory picker and authorizes the selected directory
    *  for Floating Workspace markdown file creation. */
   pickFloatingWorkspaceDirectory: () => Promise<string | null>
+}
+
+export type CodeIntelQueryArgs = {
+  filePath: string
+  relativePath: string
+  position: { line: number; character: number }
+  bufferVersion: number
+  bufferText?: string
+  connectionId?: string
+  /** Renderer-generated id used to cancel this request. AbortSignal cannot
+   *  cross IPC, so cancellation is keyed by this id instead. */
+  requestId?: number
+}
+
+export type CodeIntelApi = {
+  definition: (args: CodeIntelQueryArgs) => Promise<CodeIntelResult>
+  references: (args: CodeIntelQueryArgs) => Promise<CodeIntelResult>
+  cancel: (requestId: number) => void
 }
 
 export type PreloadApi = {
@@ -1527,6 +1546,7 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  codeIntel: CodeIntelApi
   fs: {
     readDir: (args: { dirPath: string; connectionId?: string }) => Promise<DirEntry[]>
     readFile: (args: {

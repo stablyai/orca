@@ -38,8 +38,8 @@ module.exports = {
   // from out/shared/ and local hook mutators from out/main/. These paths must be
   // unpacked so that Node's require() can resolve the cross-directory imports
   // when the CLI runs outside the asar archive.
-  // Why: daemon-entry.js is forked as a separate Node.js process and must be
-  // accessible on disk (not inside the asar archive) for child_process.fork().
+  // Why: daemon-entry.js and sidecar entries are forked as separate Node.js
+  // processes and must be accessible on disk for child_process.fork().
   // Why: the CLI is compiled by tsc (not bundled), so its runtime imports
   // resolve at runtime via Node's normal module lookup. The shim launches
   // the CLI with ELECTRON_RUN_AS_NODE, which bypasses Electron's asar
@@ -67,8 +67,10 @@ module.exports = {
     'out/main/win32-utils.js',
     'out/main/daemon-entry.js',
     'out/main/computer-sidecar.js',
+    'out/main/code-intel-sidecar.js',
     'out/main/chunks/**',
     'resources/**',
+    'node_modules/typescript/**',
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',

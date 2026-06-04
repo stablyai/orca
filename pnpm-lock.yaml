@@ -238,6 +238,9 @@ importers:
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
       unified:
         specifier: ^11.0.5
         version: 11.0.5
@@ -329,9 +332,6 @@ importers:
       tailwindcss:
         specifier: ^4.2.4
         version: 4.2.4
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
       vite:
         specifier: ^7.3.2
         version: 7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4)

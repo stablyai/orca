@@ -1278,6 +1278,14 @@
   text-underline-offset: 2px;
 }
 
+/* Why: Clickable affordance for code-intel "go to definition"
+   while Ctrl/Cmd is held over a navigable symbol (see monaco-code-intel-hover-link). */
+.monaco-editor .code-intel-definition-link {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 /* ── Git conflict decorations ───────────────────────────────────── */
 
 .monaco-editor .orca-conflict-marker-line {

@@ -13,6 +13,7 @@ import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-select
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
+import { installCodeIntelHoverLink } from '@/lib/monaco-code-intel-hover-link'
 import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
 import {
   beginProgrammaticContentSync,
@@ -416,12 +417,15 @@ export default function MonacoEditor({
         }
       })
 
+      const codeIntelHoverLink = installCodeIntelHoverLink(editorInstance)
+
       editorInstance.onDidDispose(() => {
         // Why: keep editor-owned UI subscriptions symmetrical with the
         // shortcut/decorator cleanup when Monaco tears this instance down.
         cursorPositionSub.dispose()
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()
+        codeIntelHoverLink.dispose()
         cleanupSaveShortcut()
         autoHeightSub?.dispose()
         if (autoHeightFrame !== null) {

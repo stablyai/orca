@@ -118,7 +118,7 @@ import type {
   SpeechTranscriptEvent
 } from '../shared/speech-types'
 import type { TelemetryConsentState } from '../shared/telemetry-consent-types'
-import type { RefreshAgentsResult } from './api-types'
+import type { CodeIntelQueryArgs, RefreshAgentsResult } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type {
@@ -2191,6 +2191,12 @@ const api = {
       ipcRenderer.on('fs:changed', listener)
       return () => ipcRenderer.removeListener('fs:changed', listener)
     }
+  },
+
+  codeIntel: {
+    definition: (args: CodeIntelQueryArgs) => ipcRenderer.invoke('codeIntel:definition', args),
+    references: (args: CodeIntelQueryArgs) => ipcRenderer.invoke('codeIntel:references', args),
+    cancel: (requestId: number) => ipcRenderer.send('codeIntel:cancel', requestId)
   },
 
   git: {

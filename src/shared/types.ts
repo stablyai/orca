@@ -1988,6 +1988,11 @@ export type GlobalSettings = {
   /** Experimental: replaces the New Tab menu's static preview row with a
    *  command-style launcher for terminals, detected agents, URLs, and files. */
   experimentalUnifiedNewTabLauncher: boolean
+  /** Experimental: TypeScript/JavaScript Code Intelligence — Go to Definition
+   *  and Find References in the editor, resolved by an embedded language
+   *  service. Local desktop only in this slice; remote/SSH returns an explicit
+   *  unsupported state. Off by default while the engine is being trialed. */
+  experimentalCodeIntelligence: boolean
   /** Active non-local runtime environment for client-routed RPC. `null`
    *  preserves the current local desktop behavior. */
   activeRuntimeEnvironmentId?: string | null

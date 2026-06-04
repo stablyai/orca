@@ -3,7 +3,11 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { joinPath } from '@/lib/path'
 import { toast } from 'sonner'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  relativePathInsideRoot,
+  getRuntimePathBasename
+} from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import { openHttpLink } from '@/lib/http-link-routing'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
@@ -336,6 +340,17 @@ export type EditorSlice = {
       runtimeEnvironmentId?: string | null
     }
   ) => Promise<void>
+  // Why: code-intel "go to definition" targets a different file than the one
+  // clicked. Monaco's standalone editor cannot open another file on its own, so
+  // the registered editor opener routes the navigation through here — opening
+  // the target as a preview tab in the source file's worktree and revealing the
+  // definition line, mirroring the markdown-link open+reveal sequence.
+  openCodeIntelDefinition: (args: {
+    sourceFilePath: string
+    targetFilePath: string
+    line: number
+    column: number
+  }) => void
   openMarkdownPreview: (
     file: Pick<
       OpenFile,
@@ -3312,6 +3327,42 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       get().setMarkdownViewMode(fileId, 'source')
       scheduleEditorLineReveal(get, absolutePath, line, column, fileId)
     }
+  },
+
+  openCodeIntelDefinition: ({ sourceFilePath, targetFilePath, line, column }) => {
+    const state = get()
+    const sourceFile = state.openFiles.find((file) => file.filePath === sourceFilePath)
+    if (!sourceFile) {
+      return
+    }
+    const { worktreeId, runtimeEnvironmentId } = sourceFile
+    const worktree = findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)
+    const worktreeRoot = worktree?.path
+    // Why: definition targets outside the worktree (node_modules, generated
+    // files) have no worktree-relative path; fall back to the basename so the
+    // tab still gets a sensible label.
+    const relativePath =
+      (worktreeRoot ? relativePathInsideRoot(worktreeRoot, targetFilePath) : null) ??
+      getRuntimePathBasename(targetFilePath)
+
+    get().openFile(
+      {
+        filePath: targetFilePath,
+        relativePath,
+        worktreeId,
+        runtimeEnvironmentId,
+        language: detectLanguage(targetFilePath),
+        mode: 'edit'
+      },
+      {
+        preview: true,
+        targetGroupId: get().activeGroupIdByWorktree?.[worktreeId],
+        recordReplacedPreview: true
+      }
+    )
+
+    const fileId = getOpenedEditFileIdAfterOpen(get(), targetFilePath, worktreeId)
+    scheduleEditorLineReveal(get, targetFilePath, line, column, fileId)
   },
 
   // Why: only edit-mode files are restored — diffs and conflict views depend on

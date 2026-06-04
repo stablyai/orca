@@ -1,9 +1,17 @@
 export function isWindowsAbsolutePathLike(value: string): boolean {
-  return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//')
+  return (
+    /^[A-Za-z]:[\\/]/.test(value) ||
+    /^\/[A-Za-z]:[\\/]/.test(value) ||
+    value.startsWith('\\\\') ||
+    value.startsWith('//')
+  )
 }
 
 export function normalizeRuntimePathSeparators(value: string): string {
   const normalized = value.replace(/\\/g, '/').replace(/\/+/g, '/')
+  if (/^\/[A-Za-z]:\//.test(normalized)) {
+    return normalized.slice(1)
+  }
   if (value.startsWith('\\\\') || value.startsWith('//')) {
     return `//${normalized.replace(/^\/+/, '')}`
   }

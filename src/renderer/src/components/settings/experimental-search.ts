@@ -99,6 +99,23 @@ export const EXPERIMENTAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'url',
       'file'
     ]
+  },
+  {
+    title: 'Code intelligence',
+    description:
+      'Go to Definition and Find References for TypeScript and JavaScript in the editor.',
+    keywords: [
+      'experimental',
+      'code',
+      'intelligence',
+      'lsp',
+      'references',
+      'definition',
+      'navigation',
+      'typescript',
+      'javascript',
+      'symbols'
+    ]
   }
 ]
 
@@ -119,5 +136,6 @@ export const EXPERIMENTAL_SEARCH_ENTRY = {
   terminalAttention: findEntry('Terminal attention'),
   compactWorktreeCards: findEntry('Compact worktree cards'),
   symlinks: findEntry('Symlinks on worktrees'),
-  unifiedNewTabLauncher: findEntry('Smart New Tab menu')
+  unifiedNewTabLauncher: findEntry('Smart New Tab menu'),
+  codeIntelligence: findEntry('Code intelligence')
 } as const

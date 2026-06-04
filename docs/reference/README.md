@@ -9,6 +9,7 @@ single design or implementation pass.
 - Public-facing docs that are not part of the root README.
 - Docs that other checked-in files link to.
 - Telemetry availability notes that dashboard authors need after the original design or implementation branch is gone. See [Telemetry Availability](./telemetry-availability.md).
+- [Code Intelligence IPC](./code-intel-ipc.md) — `codeIntel:definition` and `codeIntel:references` IPC channels and their request/response shapes.
 
 ## What Stays Out
 
