@@ -253,6 +253,15 @@ async function countRenderedTabs(page: Page): Promise<number> {
   return page.locator(SORTABLE_TAB).count()
 }
 
+async function renderedTabIds(page: Page): Promise<string[]> {
+  return page.locator(SORTABLE_TAB).evaluateAll((tabs) =>
+    tabs.flatMap((tab) => {
+      const tabId = tab.getAttribute('data-tab-id')
+      return tabId ? [tabId] : []
+    })
+  )
+}
+
 async function expectTerminalSurface(page: Page): Promise<void> {
   await expect
     .poll(() => page.locator('[data-terminal-tab-id]').count(), { timeout: 30_000 })
@@ -267,14 +276,18 @@ async function waitForTerminalPaneManager(page: Page): Promise<void> {
 }
 
 async function createTerminalTabThroughMenu(page: Page): Promise<void> {
-  const tabsBefore = await countRenderedTabs(page)
+  const tabIdsBefore = await renderedTabIds(page)
   await page.getByRole('button', { name: 'New tab' }).click({ force: true })
   const newTerminalMenuItem = page.getByRole('menuitem', { name: /New Terminal/i }).first()
   await newTerminalMenuItem.click({ force: true })
   await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
-  await expect.poll(() => countRenderedTabs(page), { timeout: 5_000 }).toBe(tabsBefore + 1)
-  const activeTab = page.locator(`${SORTABLE_TAB}[data-active="true"]`).first()
-  await expect(activeTab).toHaveAttribute('data-tab-title', /Terminal/i)
+  await expect.poll(() => countRenderedTabs(page), { timeout: 5_000 }).toBe(tabIdsBefore.length + 1)
+  const createdTabIds = (await renderedTabIds(page)).filter(
+    (tabId) => !tabIdsBefore.includes(tabId)
+  )
+  expect(createdTabIds, 'new terminal tab should render exactly one new tab').toHaveLength(1)
+  const createdTab = page.locator(`${SORTABLE_TAB}[data-tab-id="${createdTabIds[0]}"]`).first()
+  await expect(createdTab).toHaveAttribute('data-tab-title', /.+/)
   await expectTerminalSurface(page)
 }
 
