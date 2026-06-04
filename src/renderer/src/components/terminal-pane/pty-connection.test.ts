@@ -4037,8 +4037,11 @@ describe('connectPanePty', () => {
       expect.objectContaining({ source: 'terminal-bell' })
     )
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
-    expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'agent-task-complete' })
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        suppressOsNotification: true
+      })
     )
   })
 
@@ -4075,11 +4078,12 @@ describe('connectPanePty', () => {
     idleHandler('* Codex done')
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
 
-    expect(deps.markWorktreeUnread).toHaveBeenCalledWith('wt-1')
-    expect(deps.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
-    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
-    expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'agent-task-complete' })
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        suppressOsNotification: true
+      })
     )
   })
 

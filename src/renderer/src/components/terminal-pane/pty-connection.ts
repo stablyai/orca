@@ -1061,15 +1061,6 @@ export function connectPanePty(
     return enabled
   }
 
-  const raiseAgentTaskCompleteAttention = (): void => {
-    if (!isTerminalAttentionEnabledFromState(useAppStore.getState())) {
-      return
-    }
-    deps.markWorktreeUnread(deps.worktreeId)
-    deps.markTerminalTabUnread(deps.tabId)
-    deps.markTerminalPaneUnread(cacheKey)
-  }
-
   const scheduleAgentTaskCompleteNotification = (
     title: string,
     options: {
@@ -1096,17 +1087,16 @@ export function connectPanePty(
         return
       }
       // Why: terminal attention is a visual pane affordance, not an OS
-      // notification. Keep it working when the user disables OS banners.
-      raiseAgentTaskCompleteAttention()
-      if (!isAgentTaskCompleteNotificationEnabled()) {
-        return
-      }
+      // notification. Route through dispatch so stale pane completions are
+      // rejected before unread attention is marked.
+      const shouldDispatchOsNotification = isAgentTaskCompleteNotificationEnabled()
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
       deps.dispatchNotification({
         source: 'agent-task-complete',
         terminalTitle: title,
         paneKey: cacheKey,
+        ...(shouldDispatchOsNotification ? {} : { suppressOsNotification: true }),
         ...(options.agentStatusSnapshot ? { agentStatusSnapshot: options.agentStatusSnapshot } : {})
       })
     }
