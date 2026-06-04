@@ -372,7 +372,7 @@ export function normalizeSourceControlViewMode(value: unknown): SourceControlVie
 }
 
 export function normalizeSourceControlDefaultTab(value: unknown): SourceControlScope {
-  return value === 'all' || value === 'uncommitted' ? value : 'uncommitted'
+  return value === 'all' || value === 'uncommitted' ? value : 'all'
 }
 
 type GitStatusSourceControlTreeNode = SourceControlTreeNode<

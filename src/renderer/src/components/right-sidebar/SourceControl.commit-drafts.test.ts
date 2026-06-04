@@ -146,10 +146,10 @@ describe('SourceControl view mode preference', () => {
 })
 
 describe('SourceControl default tab preference', () => {
-  it('normalizes missing and unknown persisted values to uncommitted', () => {
-    expect(normalizeSourceControlDefaultTab(undefined)).toBe('uncommitted')
-    expect(normalizeSourceControlDefaultTab(null)).toBe('uncommitted')
-    expect(normalizeSourceControlDefaultTab('branch')).toBe('uncommitted')
+  it('normalizes missing and unknown persisted values to all', () => {
+    expect(normalizeSourceControlDefaultTab(undefined)).toBe('all')
+    expect(normalizeSourceControlDefaultTab(null)).toBe('all')
+    expect(normalizeSourceControlDefaultTab('branch')).toBe('all')
   })
 
   it('preserves valid persisted default tabs', () => {
