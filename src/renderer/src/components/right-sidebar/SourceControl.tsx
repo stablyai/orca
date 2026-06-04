@@ -1033,7 +1033,11 @@ export function HostedReviewHeaderLink({
   )
 }
 
-function SourceControlInner(): React.JSX.Element {
+type SourceControlProps = {
+  activationKey: number
+}
+
+function SourceControlInner({ activationKey }: SourceControlProps): React.JSX.Element {
   const sourceControlRef = useRef<HTMLDivElement | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const pendingCommentEditorRevealFrameIdsRef = useRef<number[]>([])
@@ -1049,6 +1053,7 @@ function SourceControlInner(): React.JSX.Element {
   )
   const worktreeMap = useWorktreeMap()
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const entries = useAppStore((s) =>
     activeWorktreeId
@@ -1236,6 +1241,13 @@ function SourceControlInner(): React.JSX.Element {
     defaultSourceControlTabRef.current = defaultSourceControlTab
     setScope(defaultSourceControlTab)
   }, [defaultSourceControlTab])
+  useEffect(() => {
+    if (rightSidebarOpen && rightSidebarTab === 'source-control') {
+      // Why: selecting Source Control is an explicit open; use the configured
+      // default instead of preserving the last manually selected sub-tab.
+      setScope(defaultSourceControlTabRef.current)
+    }
+  }, [activationKey, rightSidebarOpen, rightSidebarTab])
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     createDefaultCollapsedSections
   )
@@ -1400,7 +1412,6 @@ function SourceControlInner(): React.JSX.Element {
     activePullRequestGenerationRecordCandidate.context.branch === branchName
       ? activePullRequestGenerationRecordCandidate
       : null
-  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   // Why: gate polling on both the active tab AND the sidebar being open.
   // The sidebar now stays mounted when closed (for performance), so without
   // this guard the branchCompare interval and PR fetch would keep running

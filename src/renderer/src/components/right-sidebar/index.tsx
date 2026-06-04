@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
-import type { ActivityBarPosition } from '@/store/slices/editor'
+import type { ActivityBarPosition, RightSidebarTab } from '@/store/slices/editor'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import {
@@ -68,6 +68,13 @@ function RightSidebarInner(): React.JSX.Element {
   const checksStatus = useAppStore((s) => (s.rightSidebarOpen ? getActiveChecksStatus(s) : null))
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
+  const [sourceControlActivationKey, setSourceControlActivationKey] = useState(0)
+  const selectRightSidebarTab = (tab: RightSidebarTab): void => {
+    if (tab === 'source-control') {
+      setSourceControlActivationKey((key) => key + 1)
+    }
+    setRightSidebarTab(tab)
+  }
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
@@ -154,7 +161,9 @@ function RightSidebarInner(): React.JSX.Element {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {effectiveTab === 'explorer' && <FileExplorer />}
         {effectiveTab === 'search' && <SearchPanel />}
-        {effectiveTab === 'source-control' && <SourceControl />}
+        {effectiveTab === 'source-control' && (
+          <SourceControl activationKey={sourceControlActivationKey} />
+        )}
         {effectiveTab === 'checks' && <ChecksPanel />}
         {/* Why: SSH port forwarding still depends on the raw ports.detect data,
             which the workspace-scoped status bar popover intentionally does not
@@ -176,7 +185,7 @@ function RightSidebarInner(): React.JSX.Element {
       key={item.id}
       item={item}
       active={effectiveTab === item.id}
-      onClick={() => setRightSidebarTab(item.id)}
+      onClick={() => selectRightSidebarTab(item.id)}
       layout="side"
       statusIndicator={item.id === 'checks' ? checksStatus : null}
     />
@@ -246,7 +255,7 @@ function RightSidebarInner(): React.JSX.Element {
                               key={item.id}
                               item={item}
                               active={effectiveTab === item.id}
-                              onClick={() => setRightSidebarTab(item.id)}
+                              onClick={() => selectRightSidebarTab(item.id)}
                               layout="top"
                               statusIndicator={item.id === 'checks' ? checksStatus : null}
                             />
@@ -256,7 +265,7 @@ function RightSidebarInner(): React.JSX.Element {
                           <TopActivityOverflowMenu
                             items={topActivityLayout.overflowItems}
                             activeTab={effectiveTab}
-                            onSelect={setRightSidebarTab}
+                            onSelect={selectRightSidebarTab}
                             checksStatus={checksStatus}
                           />
                         )}
@@ -302,7 +311,7 @@ function RightSidebarInner(): React.JSX.Element {
                           key={item.id}
                           item={item}
                           active={effectiveTab === item.id}
-                          onClick={() => setRightSidebarTab(item.id)}
+                          onClick={() => selectRightSidebarTab(item.id)}
                           layout="top"
                           statusIndicator={item.id === 'checks' ? checksStatus : null}
                         />
@@ -312,7 +321,7 @@ function RightSidebarInner(): React.JSX.Element {
                       <TopActivityOverflowMenu
                         items={topActivityLayout.overflowItems}
                         activeTab={effectiveTab}
-                        onSelect={setRightSidebarTab}
+                        onSelect={selectRightSidebarTab}
                         checksStatus={checksStatus}
                       />
                     )}
