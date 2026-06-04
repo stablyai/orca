@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { Plug, Files, Search, GitBranch, ListChecks, PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
@@ -15,11 +15,6 @@ import {
   ContextMenuRadioGroup,
   ContextMenuRadioItem
 } from '@/components/ui/context-menu'
-import FileExplorer from './FileExplorer'
-import SourceControl from './SourceControl'
-import SearchPanel from './Search'
-import ChecksPanel from './ChecksPanel'
-import PortsPanel from './PortsPanel'
 import { getTopActivityBarLayout } from './activity-bar-overflow'
 import {
   ActivityBarButton,
@@ -45,6 +40,11 @@ const MIN_NON_SIDEBAR_AREA = 320
 const ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
+const FileExplorer = lazy(() => import('./FileExplorer'))
+const SearchPanel = lazy(() => import('./Search'))
+const SourceControl = lazy(() => import('./SourceControl'))
+const ChecksPanel = lazy(() => import('./ChecksPanel'))
+const PortsPanel = lazy(() => import('./PortsPanel'))
 
 const isWindows = typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
 function RightSidebarInner(): React.JSX.Element {
@@ -152,16 +152,18 @@ function RightSidebarInner(): React.JSX.Element {
           competed with file Explorer/Search for vertical space. The right
           sidebar is back to tab-only content. */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {effectiveTab === 'explorer' && <FileExplorer />}
-        {effectiveTab === 'search' && <SearchPanel />}
-        {effectiveTab === 'source-control' && <SourceControl />}
-        {effectiveTab === 'checks' && <ChecksPanel />}
-        {/* Why: SSH port forwarding still depends on the raw ports.detect data,
-            which the workspace-scoped status bar popover intentionally does not
-            expose. Keep this panel reachable only for SSH worktrees. */}
-        {effectiveTab === 'ports' && (
-          <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
-        )}
+        <Suspense fallback={null}>
+          {effectiveTab === 'explorer' && <FileExplorer />}
+          {effectiveTab === 'search' && <SearchPanel />}
+          {effectiveTab === 'source-control' && <SourceControl />}
+          {effectiveTab === 'checks' && <ChecksPanel />}
+          {/* Why: SSH port forwarding still depends on the raw ports.detect data,
+              which the workspace-scoped status bar popover intentionally does not
+              expose. Keep this panel reachable only for SSH worktrees. */}
+          {effectiveTab === 'ports' && (
+            <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
+          )}
+        </Suspense>
       </div>
     </div>
   ) : null

@@ -12,7 +12,8 @@ import { shouldPollActiveGitStatus } from '@/lib/passive-macos-app-data-access'
 
 const POLL_INTERVAL_MS = 3000
 
-export function useGitStatusPolling(): void {
+export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
+  const enabled = options.enabled ?? true
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useWorktreeById(activeWorktreeId)
   const allWorktrees = useAllWorktrees()
@@ -66,6 +67,9 @@ export function useGitStatusPolling(): void {
   }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
 
   const runFetchStatus = useCallback(async () => {
+    if (!enabled) {
+      return
+    }
     if (!activeWorktreeId || !worktreePath) {
       return
     }
@@ -107,6 +111,7 @@ export function useGitStatusPolling(): void {
     activeConnectionId,
     activePushTarget,
     activeWorktreeId,
+    enabled,
     fetchUpstreamStatus,
     isConnectionReady,
     openFiles,
@@ -138,15 +143,21 @@ export function useGitStatusPolling(): void {
   fetchStatusRef.current = fetchStatus
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     // Why: this root-level poll should pause while hidden, but visible
     // unfocused windows still need fresh status for second-display workflows.
     return installWindowVisibilityInterval({ run: fetchStatus, intervalMs: POLL_INTERVAL_MS })
-  }, [fetchStatus])
+  }, [enabled, fetchStatus])
 
   // Why: poll conflict operation for non-active worktrees that have a stale
   // non-unknown operation. This is a lightweight fs-only check (no git status)
   // so it won't cause performance issues even with many worktrees.
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     if (staleConflictWorktrees.length === 0) {
       return
     }
@@ -187,5 +198,5 @@ export function useGitStatusPolling(): void {
       pollRunner.dispose()
       stopVisiblePoll()
     }
-  }, [staleConflictWorktrees, setConflictOperation, isConnectionReady])
+  }, [enabled, staleConflictWorktrees, setConflictOperation, isConnectionReady])
 }

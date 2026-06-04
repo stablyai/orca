@@ -56,6 +56,7 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
   }
 ): void {
@@ -69,7 +70,10 @@ export function attachMainWindowServices(
     getSelectedCodexHomePath,
     () => store.getSettings(),
     prepareClaudeAuth,
-    store
+    store,
+    {
+      awaitLocalPtyStartup: options?.awaitLocalPtyStartup
+    }
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live

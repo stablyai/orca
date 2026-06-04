@@ -39,14 +39,10 @@ import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
-import { SshStatusSegment } from './SshStatusSegment'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
-import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
-import { PortsStatusSegment } from './PortsStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { isProviderConfigured } from './status-bar-provider-visibility'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
-import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
@@ -60,6 +56,21 @@ import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 type StatusBarProps = {
   floatingTerminalOpen: boolean
 }
+
+const PetStatusSegment = React.lazy(() =>
+  import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
+)
+const ResourceUsageStatusSegment = React.lazy(() =>
+  import('./ResourceUsageStatusSegment').then((module) => ({
+    default: module.ResourceUsageStatusSegment
+  }))
+)
+const PortsStatusSegment = React.lazy(() =>
+  import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
+)
+const SshStatusSegment = React.lazy(() =>
+  import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+)
 
 export type CodexStatusRuntimeTarget = {
   runtime: 'host' | 'wsl'
@@ -604,10 +615,7 @@ function ClaudeSwitcherMenu({
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget(settings),
-    [settings?.activeRuntimeEnvironmentId]
-  )
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
@@ -1100,10 +1108,7 @@ function CodexSwitcherMenu({
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget(settings),
-    [settings?.activeRuntimeEnvironmentId]
-  )
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
@@ -1672,10 +1677,14 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
 
       <div className="flex items-center gap-3">
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
-        {petEnabled && <PetStatusSegment />}
-        {showResourceUsage && <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />}
-        {showPorts && <PortsStatusSegment compact={compact} iconOnly={iconOnly} />}
-        {showSsh && <SshStatusSegment compact={compact} iconOnly={iconOnly} />}
+        <React.Suspense fallback={null}>
+          {petEnabled ? <PetStatusSegment /> : null}
+          {showResourceUsage ? (
+            <ResourceUsageStatusSegment compact={compact} iconOnly={iconOnly} />
+          ) : null}
+          {showPorts ? <PortsStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
+          {showSsh ? <SshStatusSegment compact={compact} iconOnly={iconOnly} /> : null}
+        </React.Suspense>
         {showFloatingTerminalToggle && (
           <FloatingTerminalIconContextMenu currentLocation="status-bar" className="relative">
             <Tooltip>

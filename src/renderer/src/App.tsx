@@ -39,23 +39,15 @@ import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
-import Terminal from './components/Terminal'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import RightSidebar from './components/right-sidebar'
-import { StatusBar } from './components/status-bar/StatusBar'
-import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
-import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
-import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
-import {
-  FloatingTerminalPanel,
-  FloatingTerminalToggleButton
-} from './components/floating-terminal/FloatingTerminalPanel'
+import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
@@ -64,7 +56,6 @@ import {
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
-import { DictationController } from './components/dictation/DictationController'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -117,9 +108,7 @@ import {
 import { selectFloatingVisibleTabCount } from './store/selectors'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
-import type { OnboardingState } from '../../shared/types'
-import { ContextualTourOverlay } from './components/contextual-tours/ContextualTourOverlay'
-import { SetupGuideTelemetryObserver } from './components/setup-guide/SetupGuideTelemetryObserver'
+import type { OnboardingState, UpdateStatus } from '../../shared/types'
 import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted
@@ -224,9 +213,42 @@ const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceCo
 const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
+const Terminal = lazy(() => import('./components/Terminal'))
+const StatusBar = lazy(() =>
+  import('./components/status-bar/StatusBar').then((module) => ({ default: module.StatusBar }))
+)
 const SetupGuideModal = lazy(() => import('./components/setup-guide/SetupGuideModal'))
 const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
 const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
+const DeleteWorktreeDialog = lazy(() => import('./components/sidebar/DeleteWorktreeDialog'))
+const DictationController = lazy(() =>
+  import('./components/dictation/DictationController').then((module) => ({
+    default: module.DictationController
+  }))
+)
+const SshPassphraseDialog = lazy(() =>
+  import('./components/settings/SshPassphraseDialog').then((module) => ({
+    default: module.SshPassphraseDialog
+  }))
+)
+const UpdateCard = lazy(() =>
+  import('./components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
+)
+const ContextualTourOverlay = lazy(() =>
+  import('./components/contextual-tours/ContextualTourOverlay').then((module) => ({
+    default: module.ContextualTourOverlay
+  }))
+)
+const SetupGuideTelemetryObserver = lazy(() =>
+  import('./components/setup-guide/SetupGuideTelemetryObserver').then((module) => ({
+    default: module.SetupGuideTelemetryObserver
+  }))
+)
+const FloatingTerminalPanel = lazy(() =>
+  import('./components/floating-terminal/FloatingTerminalPanel').then((module) => ({
+    default: module.FloatingTerminalPanel
+  }))
+)
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
@@ -263,6 +285,16 @@ function applyRemoteWorkspacePatchStatus(
         ? 'Workspace changed on another device'
         : 'Remote workspace sync unavailable')
   })
+}
+
+function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
+  if (status.state === 'idle') {
+    return false
+  }
+  if (status.state === 'checking' || status.state === 'not-available') {
+    return status.userInitiated === true
+  }
+  return true
 }
 
 function App(): React.JSX.Element {
@@ -334,6 +366,8 @@ function App(): React.JSX.Element {
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const keybindings = useAppStore((s) => s.keybindings)
+  const updateStatus = useAppStore((s) => s.updateStatus)
+  const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
   const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
@@ -346,6 +380,20 @@ function App(): React.JSX.Element {
   const showFloatingTerminalButton =
     floatingTerminalEnabled &&
     (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
+  const hasMountedTerminalWorkbenchRef = useRef(false)
+  if (activeWorktreeId !== null) {
+    hasMountedTerminalWorkbenchRef.current = true
+  }
+  // Why: skip the terminal bundle on the no-workspace landing path, but once a
+  // workspace has mounted, keep Terminal-owned hidden panes alive through sleep
+  // and shutdown transitions where activeWorktreeId can briefly become null.
+  const shouldMountTerminalWorkbench =
+    activeWorktreeId !== null || hasMountedTerminalWorkbenchRef.current
+  // Why: a closed empty floating workspace is not startup-critical. Once it owns
+  // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
+  // retain their local state.
+  const shouldMountFloatingTerminalPanel =
+    floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
   // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -443,11 +491,18 @@ function App(): React.JSX.Element {
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  const shouldMountContextualTourOverlay = activeContextualTourId !== null
+  const shouldMountSetupGuideTelemetryObserver = persistedUIReady && activeModal === 'setup-guide'
+  const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const dictationState = useAppStore((s) => s.dictationState)
+  const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
+  const shouldMountDictationController =
+    settings?.voice?.enabled === true || dictationState !== 'idle'
   const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
     settings?.primarySelectionMiddleClickPaste
   )
@@ -494,7 +549,10 @@ function App(): React.JSX.Element {
   // cannot live under RightSidebar because App unmounts that subtree when the
   // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
   // until some unrelated view remount happens to refresh them.
-  useGitStatusPolling()
+  // Why: visible-window polling runs immediately on mount. Wait until the
+  // workspace session has hydrated so git status work cannot compete with the
+  // first window becoming usable.
+  useGitStatusPolling({ enabled: workspaceSessionReady })
   // Why: the editor must hear external filesystem changes regardless of
   // which right-sidebar panel is visible (Explorer unmounts when the user
   // switches to Source Control or Checks). Wiring this at App level mirrors
@@ -756,6 +814,10 @@ function App(): React.JSX.Element {
             }
           }
 
+          // Why: main overlaps daemon/hook startup with renderer hydration for
+          // first paint, but restored terminals still need those services ready
+          // before they mount and spawn/reconnect PTYs.
+          await window.api.app.awaitFirstWindowStartupServices()
           reconnectStarted = true
           await actions.reconnectPersistedTerminals(abortController.signal)
           syncZoomCSSVar()
@@ -817,6 +879,7 @@ function App(): React.JSX.Element {
           // on-disk file we failed to load.
           if (!reconnectStarted) {
             try {
+              await window.api.app.awaitFirstWindowStartupServices()
               await actions.reconnectPersistedTerminals(abortController.signal)
             } catch (reconnectErr) {
               console.error(
@@ -1619,7 +1682,7 @@ function App(): React.JSX.Element {
     >
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
-          <WorkspacePortScanner />
+          <WorkspacePortScanner enabled={workspaceSessionReady} />
           {/* Why: leaf-mounted retention sync keeps agent-status retention
             subscriptions from re-rendering the App tree. */}
           <RetainedAgentsSyncGate />
@@ -1787,23 +1850,27 @@ function App(): React.JSX.Element {
                       </div>
                     )}
                     <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-                      <div
-                        className={
-                          activeView !== 'terminal' || !activeWorktreeId
-                            ? 'hidden flex-1 min-w-0 min-h-0'
-                            : 'flex flex-1 min-w-0 min-h-0'
-                        }
-                      >
-                        <RecoverableRenderErrorBoundary
-                          boundaryId="terminal.workbench"
-                          surface="terminal-workbench"
-                          resetKey="terminal"
-                          title="The workspace workbench hit an error."
-                          description="Terminal, browser, or editor rendering failed in this workspace. Retry to remount it."
+                      {shouldMountTerminalWorkbench ? (
+                        <div
+                          className={
+                            activeView !== 'terminal' || !activeWorktreeId
+                              ? 'hidden flex-1 min-w-0 min-h-0'
+                              : 'flex flex-1 min-w-0 min-h-0'
+                          }
                         >
-                          <Terminal />
-                        </RecoverableRenderErrorBoundary>
-                      </div>
+                          <Suspense fallback={null}>
+                            <RecoverableRenderErrorBoundary
+                              boundaryId="terminal.workbench"
+                              surface="terminal-workbench"
+                              resetKey="terminal"
+                              title="The workspace workbench hit an error."
+                              description="Terminal, browser, or editor rendering failed in this workspace. Retry to remount it."
+                            >
+                              <Terminal />
+                            </RecoverableRenderErrorBoundary>
+                          </Suspense>
+                        </div>
+                      ) : null}
                       <Suspense fallback={null}>
                         <RecoverableRenderErrorBoundary
                           boundaryId={`page.${activeView}`}
@@ -1849,31 +1916,41 @@ function App(): React.JSX.Element {
               ) : null}
             </div>
           </RecoverableRenderErrorBoundary>
-          {floatingTerminalEnabled ? (
-            <RecoverableRenderErrorBoundary
-              boundaryId="overlay.floating-workspace"
-              surface="overlay"
-              resetKey={floatingTerminalOpen}
-              compact
-              title="The floating workspace hit an error."
-              description="Retry the floating workspace or close and reopen it."
-            >
-              <FloatingTerminalPanel
-                open={floatingTerminalOpen}
-                onOpenChange={setFloatingTerminalOpenWithFocus}
-              />
-            </RecoverableRenderErrorBoundary>
+          {shouldMountFloatingTerminalPanel ? (
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.floating-workspace"
+                surface="overlay"
+                resetKey={floatingTerminalOpen}
+                compact
+                title="The floating workspace hit an error."
+                description="Retry the floating workspace or close and reopen it."
+              >
+                <FloatingTerminalPanel
+                  open={floatingTerminalOpen}
+                  onOpenChange={setFloatingTerminalOpenWithFocus}
+                />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
           ) : null}
-          <RecoverableRenderErrorBoundary
-            boundaryId="overlay.status-bar"
-            surface="overlay"
-            resetKey={activeView}
-            compact
-            title="The status bar hit an error."
-            description="Retry the status bar to remount its controls."
-          >
-            <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
-          </RecoverableRenderErrorBoundary>
+          {statusBarVisible ? (
+            <Suspense
+              fallback={
+                <div className="h-6 min-h-[24px] shrink-0 border-t border-border bg-[var(--bg-titlebar,var(--card))]" />
+              }
+            >
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.status-bar"
+                surface="overlay"
+                resetKey={activeView}
+                compact
+                title="The status bar hit an error."
+                description="Retry the status bar to remount its controls."
+              >
+                <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
+          ) : null}
           {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
             the shared provider so lazy surfaces mount safely from any entry point. */}
           <Suspense fallback={null}>
@@ -1950,8 +2027,16 @@ function App(): React.JSX.Element {
               </RecoverableRenderErrorBoundary>
             ) : null}
           </Suspense>
-          {persistedUIReady ? <SetupGuideTelemetryObserver /> : null}
-          <ContextualTourOverlay />
+          {shouldMountSetupGuideTelemetryObserver ? (
+            <Suspense fallback={null}>
+              <SetupGuideTelemetryObserver />
+            </Suspense>
+          ) : null}
+          {shouldMountContextualTourOverlay ? (
+            <Suspense fallback={null}>
+              <ContextualTourOverlay />
+            </Suspense>
+          ) : null}
           {/* Why: mount PetOverlay only after persisted UI hydration, with
           both independent pet toggles allowing it; otherwise a hidden pet
           flashes while the store still has default visibility. */}
@@ -1967,14 +2052,18 @@ function App(): React.JSX.Element {
               </RecoverableRenderErrorBoundary>
             </Suspense>
           ) : null}
-          <RecoverableRenderErrorBoundary
-            boundaryId="overlay.update-card"
-            surface="overlay"
-            resetKey={activeView}
-            compact
-          >
-            <UpdateCard />
-          </RecoverableRenderErrorBoundary>
+          {shouldMountUpdateCard ? (
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.update-card"
+                surface="overlay"
+                resetKey={activeView}
+                compact
+              >
+                <UpdateCard />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
+          ) : null}
           <RecoverableRenderErrorBoundary
             boundaryId="overlay.star-nag"
             surface="overlay"
@@ -2006,22 +2095,30 @@ function App(): React.JSX.Element {
           >
             <ZoomOverlay />
           </RecoverableRenderErrorBoundary>
-          <RecoverableRenderErrorBoundary
-            boundaryId="modal.ssh-passphrase"
-            surface="modal"
-            resetKey={activeModal}
-            compact
-          >
-            <SshPassphraseDialog />
-          </RecoverableRenderErrorBoundary>
-          <RecoverableRenderErrorBoundary
-            boundaryId="modal.delete-worktree"
-            surface="modal"
-            resetKey={activeModal === 'delete-worktree'}
-            compact
-          >
-            <DeleteWorktreeDialog />
-          </RecoverableRenderErrorBoundary>
+          <Suspense fallback={null}>
+            {activeModal === 'delete-worktree' ? (
+              <RecoverableRenderErrorBoundary
+                boundaryId="modal.delete-worktree"
+                surface="modal"
+                resetKey
+                compact
+              >
+                <DeleteWorktreeDialog />
+              </RecoverableRenderErrorBoundary>
+            ) : null}
+          </Suspense>
+          {hasSshCredentialRequest ? (
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="modal.ssh-passphrase"
+                surface="modal"
+                resetKey={activeModal}
+                compact
+              >
+                <SshPassphraseDialog />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
+          ) : null}
           <RecoverableRenderErrorBoundary
             boundaryId="modal.markdown-template-picker"
             surface="modal"
@@ -2058,14 +2155,18 @@ function App(): React.JSX.Element {
               </RecoverableRenderErrorBoundary>
             </Suspense>
           ) : null}
-          <RecoverableRenderErrorBoundary
-            boundaryId="overlay.dictation"
-            surface="overlay"
-            resetKey={activeView}
-            compact
-          >
-            <DictationController />
-          </RecoverableRenderErrorBoundary>
+          {shouldMountDictationController ? (
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.dictation"
+                surface="overlay"
+                resetKey={activeView}
+                compact
+              >
+                <DictationController />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
+          ) : null}
           <RecoverableRenderErrorBoundary
             boundaryId="overlay.recent-tab-switcher"
             surface="overlay"

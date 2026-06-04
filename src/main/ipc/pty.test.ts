@@ -174,6 +174,14 @@ function makeDisposable() {
   return { dispose: vi.fn() }
 }
 
+function makeDeferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
 describe('registerPtyHandlers', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
   const mainWindow = {
@@ -374,6 +382,36 @@ describe('registerPtyHandlers', () => {
       throw new Error('missing pty:write listener')
     }
     return writeCall[1] as (event: unknown, args: { id: string; data: string }) => void
+  }
+
+  function installDaemonTestProvider() {
+    const spawn = vi.fn(async (options: { sessionId?: string }) => ({
+      id: options.sessionId ?? 'daemon-pty'
+    }))
+    setLocalPtyProvider({
+      spawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    return spawn
   }
 
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
@@ -2032,6 +2070,126 @@ describe('registerPtyHandlers', () => {
     await expect(handlers.get('pty:kill')!(null, { id: 'local-pty' })).rejects.toThrow(
       'daemon unavailable'
     )
+  })
+
+  it('waits for the desktop startup barrier before renderer local spawns resolve the provider', async () => {
+    const barrier = makeDeferred()
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyStartup: () => barrier.promise
+      }
+    )
+
+    const pendingSpawn = handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    }) as Promise<{ id: string }>
+
+    await Promise.resolve()
+    expect(spawnMock).not.toHaveBeenCalled()
+
+    const daemonSpawn = installDaemonTestProvider()
+    barrier.resolve()
+    const result = await pendingSpawn
+
+    expect(daemonSpawn).toHaveBeenCalledTimes(1)
+    expect(result.id).toBe(daemonSpawn.mock.calls[0]?.[0].sessionId)
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('waits for the desktop startup barrier before runtime local spawns resolve the provider', async () => {
+    const barrier = makeDeferred()
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyStartup: () => barrier.promise
+      }
+    )
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      spawn: (args: { cols: number; rows: number; env?: Record<string, string> }) => Promise<{
+        id: string
+      }>
+    }
+
+    const pendingSpawn = controller.spawn({ cols: 80, rows: 24, env: {} })
+
+    await Promise.resolve()
+    expect(spawnMock).not.toHaveBeenCalled()
+
+    const daemonSpawn = installDaemonTestProvider()
+    barrier.resolve()
+    const result = await pendingSpawn
+
+    expect(daemonSpawn).toHaveBeenCalledTimes(1)
+    expect(result.id).toBe(daemonSpawn.mock.calls[0]?.[0].sessionId)
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('does not wait on the desktop startup barrier for SSH spawns', async () => {
+    const barrier = makeDeferred()
+    const awaitLocalPtyStartup = vi.fn(() => barrier.promise)
+    const sshSpawn = vi.fn(async () => ({ id: 'remote-pty' }))
+    registerSshPtyProvider('ssh-1', {
+      spawn: sshSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { awaitLocalPtyStartup }
+    )
+
+    await expect(
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        connectionId: 'ssh-1',
+        env: {}
+      })
+    ).resolves.toEqual(expect.objectContaining({ id: 'remote-pty' }))
+
+    expect(awaitLocalPtyStartup).not.toHaveBeenCalled()
+    expect(sshSpawn).toHaveBeenCalledTimes(1)
   })
 
   it('lists sessions from both local and SSH providers', async () => {
