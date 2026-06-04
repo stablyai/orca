@@ -58,9 +58,6 @@ export class PaneManager {
     this.root = root
     this.options = options
     this.renderingSuspended = options.initialRenderingSuspended === true
-    // Why: terminal split-boundary CSS needs a stable owner marker without
-    // activating older dormant `.pane-manager-root` xterm layout rules.
-    this.root.dataset.terminalPaneManagerRoot = 'true'
   }
 
   createInitialPane(opts?: { focus?: boolean; leafId?: string }): ManagedPane {

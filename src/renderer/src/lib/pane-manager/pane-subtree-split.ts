@@ -6,7 +6,6 @@ import type {
 } from './pane-manager-types'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { splitManagedPane } from './pane-split-close'
-import { updateTerminalSplitEdgeState } from './pane-tree-ops'
 
 export type SplitPaneAroundLeafIdsOptions = {
   ratio?: number
@@ -69,8 +68,8 @@ export function splitPaneAroundMountedSubtree(
   }
 
   const createdInternal = args.panes.get(createdPane.id)
-  if (createdInternal && placeCreatedPaneBeforeSource(sourceContainer, createdInternal.container)) {
-    updateTerminalSplitEdgeState(args.root)
+  if (createdInternal) {
+    placeCreatedPaneBeforeSource(sourceContainer, createdInternal.container)
   }
   return createdPane
 }

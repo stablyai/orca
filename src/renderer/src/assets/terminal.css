@@ -68,42 +68,19 @@
   transition: background 100ms ease;
 }
 
-[data-terminal-pane-manager-root] .pane-divider {
-  --divider-extension-block-start: var(--divider-extension, 5px);
-  --divider-extension-block-end: var(--divider-extension, 5px);
-  --divider-extension-inline-start: var(--divider-extension, 5px);
-  --divider-extension-inline-end: var(--divider-extension, 5px);
-}
-
-[data-terminal-pane-manager-root] .pane-split[data-terminal-edge-block-start] > .pane-divider {
-  --divider-extension-block-start: 0px;
-}
-
-[data-terminal-pane-manager-root] .pane-split[data-terminal-edge-block-end] > .pane-divider {
-  --divider-extension-block-end: 0px;
-}
-
-[data-terminal-pane-manager-root] .pane-split[data-terminal-edge-inline-start] > .pane-divider {
-  --divider-extension-inline-start: 0px;
-}
-
-[data-terminal-pane-manager-root] .pane-split[data-terminal-edge-inline-end] > .pane-divider {
-  --divider-extension-inline-end: 0px;
-}
-
 .pane-divider.is-vertical::after {
   /* Negative insets on the cross axis extend the line into perpendicular
-     divider hit zones; edge variables clamp only terminal-body boundaries. */
-  top: calc(-1 * var(--divider-extension-block-start, var(--divider-extension, 5px)));
-  bottom: calc(-1 * var(--divider-extension-block-end, var(--divider-extension, 5px)));
+     divider hit zones so that intersecting splits visually connect (├ not |-). */
+  top: calc(-1 * var(--divider-extension, 5px));
+  bottom: calc(-1 * var(--divider-extension, 5px));
   left: 50%;
   width: var(--divider-thickness);
   transform: translateX(-50%);
 }
 
 .pane-divider.is-horizontal::after {
-  left: calc(-1 * var(--divider-extension-inline-start, var(--divider-extension, 5px)));
-  right: calc(-1 * var(--divider-extension-inline-end, var(--divider-extension, 5px)));
+  left: calc(-1 * var(--divider-extension, 5px));
+  right: calc(-1 * var(--divider-extension, 5px));
   top: 50%;
   height: var(--divider-thickness);
   transform: translateY(-50%);
