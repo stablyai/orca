@@ -255,6 +255,14 @@ export function setupGuestShortcutForwarding(args: {
     // which rejects Alt. Every other chord handled further down can reuse
     // the same `action` rather than re-running the full predicate chain.
     const action = resolveWindowShortcutAction(input, process.platform, keybindings)
+    if (action?.type === 'zoom') {
+      // Why: browser page zoom must consume repeats and teardown races before
+      // Chromium or the guest page can apply its own shortcut behavior.
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:zoomBrowserPage', action.direction)
+      return
+    }
     if (input.isAutoRepeat) {
       if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
         event.preventDefault()

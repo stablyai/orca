@@ -623,10 +623,17 @@ export function createMainWindow(
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
-    if (opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false) {
+    // Why: macOS can report BrowserWindow teardown as renderer `killed`/SIGKILL
+    // after a confirmed close; that is window lifecycle noise, not a crash.
+    if (
+      !windowClosing &&
+      opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false
+    ) {
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
-    console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    if (!windowClosing) {
+      console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    }
     scheduleRendererRecovery(details)
   })
   mainWindow.webContents.on('destroyed', () => {

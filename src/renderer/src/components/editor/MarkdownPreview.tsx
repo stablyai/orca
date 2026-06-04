@@ -466,6 +466,7 @@ export default function MarkdownPreview({
   const activateMarkdownLink = useAppStore((s) => s.activateMarkdownLink)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
+  const frontmatterVisibleByFile = useAppStore((s) => s.markdownFrontmatterVisible)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
@@ -559,6 +560,13 @@ export default function MarkdownPreview({
       .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
       .trim()
   }, [frontMatter])
+  // Why: front matter is hidden by default (#4468) and controlled from the
+  // markdown preview actions menu, keeping metadata out of the reading surface
+  // unless the user explicitly asks for it.
+  const toggleableSourceFileId: string | null = sourceFileId ?? null
+  const frontmatterVisible = toggleableSourceFileId
+    ? (frontmatterVisibleByFile[toggleableSourceFileId] ?? false)
+    : true
   const [activeAnnotationBlockKey, setActiveAnnotationBlockKey] = useState<string | null>(null)
   const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
   const [copiedReviewNoteId, setCopiedReviewNoteId] = useState<string | null>(null)
@@ -1737,10 +1745,10 @@ export default function MarkdownPreview({
           </div>
         ) : null}
         <div ref={bodyRef} className="markdown-body">
-          {/* Why: remarkFrontmatter silently strips front-matter from rendered
-        output. We extract it ourselves and render it as a styled code block so
-        the user can see the metadata in preview mode. */}
-          {frontMatter && (
+          {/* Why: remarkFrontmatter strips front matter from normal markdown
+        output. When the user opts in from the preview actions menu, render the
+        raw metadata as a compact read-only block above the document body. */}
+          {frontMatter && frontmatterVisible ? (
             <div className="mb-4 rounded border border-border/60 bg-muted/40 px-3 py-2">
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                 Front Matter
@@ -1749,7 +1757,7 @@ export default function MarkdownPreview({
                 {frontMatterInner}
               </pre>
             </div>
-          )}
+          ) : null}
           <Markdown
             components={components}
             // Why: react-markdown filters file:// after rehype-sanitize; preview

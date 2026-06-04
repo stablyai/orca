@@ -482,14 +482,17 @@ export function buildRows(
     }
     grouped.get(key)!.items.push(w)
   }
-  if (groupBy === 'repo' && projectGroups.length > 0) {
+  if (groupBy === 'repo') {
     for (const repoId of placeholderRepoIds) {
       const repo = repoMap.get(repoId)
+      if (!repo) {
+        continue
+      }
       const key = `repo:${repoId}`
       if (!grouped.has(key)) {
-        // Why: nested repo imports can persist repos before their worktree rows
-        // are available, but filters must not resurrect hidden repo headers.
-        grouped.set(key, { label: repo?.displayName ?? 'Unknown', items: [], repo })
+        // Why: repos can arrive before worktree scans, but stale IDs passed by
+        // older snapshots must not render an "Unknown" project header.
+        grouped.set(key, { label: repo.displayName, items: [], repo })
       }
     }
   }

@@ -114,6 +114,12 @@ import {
   type BrowserFocusRequestDetail
 } from './browser-focus'
 import {
+  addBrowserPageZoomEventListener,
+  applyBrowserPageZoom,
+  browserPageZoomLevelToPercent,
+  type BrowserPageZoomDirection
+} from './browser-page-zoom'
+import {
   isRemoteRuntimeFileOperation,
   statRuntimePath,
   type RuntimeFileOperationArgs
@@ -181,6 +187,7 @@ const BROWSER_ANNOTATION_INTENT_OPTIONS = [
 // Why: priority remains in the persisted annotation shape for backwards
 // compatibility, but the annotation UI no longer exposes urgency choices.
 const DEFAULT_BROWSER_ANNOTATION_PRIORITY: BrowserAnnotationPriority = 'important'
+const BROWSER_PAGE_ZOOM_FEEDBACK_MS = 1400
 
 type BrowserOverlayViewport = {
   scrollX: number
@@ -2493,6 +2500,7 @@ function BrowserPagePane({
   const containerRef = useRef<HTMLDivElement | null>(null)
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const browserZoomFeedbackTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const setContainerRef = useCallback((node: HTMLDivElement | null): void => {
     containerRef.current = node
     if (node !== null) {
@@ -2502,6 +2510,7 @@ function BrowserPagePane({
     // after the DOM owner is detached.
     clearTimeout(grabToastTimerRef.current)
     clearTimeout(annotationCopyTimerRef.current)
+    clearTimeout(browserZoomFeedbackTimerRef.current)
   }, [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
@@ -2537,6 +2546,8 @@ function BrowserPagePane({
   const [resourceNotice, setResourceNotice] = useState<string | null>(null)
   const [downloadState, setDownloadState] = useState<BrowserDownloadState | null>(null)
   const downloadStateRef = useRef<BrowserDownloadState | null>(null)
+  const [browserZoomPercent, setBrowserZoomPercent] = useState(100)
+  const [browserZoomFeedbackVisible, setBrowserZoomFeedbackVisible] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -2599,6 +2610,14 @@ function BrowserPagePane({
   const webviewPartition = sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
+  const showBrowserZoomFeedback = useCallback((level: number): void => {
+    setBrowserZoomPercent(browserPageZoomLevelToPercent(level))
+    setBrowserZoomFeedbackVisible(true)
+    clearTimeout(browserZoomFeedbackTimerRef.current)
+    browserZoomFeedbackTimerRef.current = setTimeout(() => {
+      setBrowserZoomFeedbackVisible(false)
+    }, BROWSER_PAGE_ZOOM_FEEDBACK_MS)
+  }, [])
 
   useEffect(() => {
     if (!browserSessionImportState) {
@@ -3178,6 +3197,32 @@ function BrowserPagePane({
       webviewRef.current?.reload()
     })
   }, [isActive])
+
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
+    const applyActivePageZoom = (direction: BrowserPageZoomDirection): void => {
+      if (!isActiveRef.current) {
+        return
+      }
+      const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
+      if (nextLevel !== null) {
+        showBrowserZoomFeedback(nextLevel)
+      }
+    }
+    const removeGuestListener = window.api.ui.onZoomBrowserPage(applyActivePageZoom)
+    const removeLocalListener = addBrowserPageZoomEventListener((detail) => {
+      if (detail.browserPageId !== browserTabIdRef.current) {
+        return
+      }
+      applyActivePageZoom(detail.direction)
+    })
+    return () => {
+      removeGuestListener()
+      removeLocalListener()
+    }
+  }, [isActive, showBrowserZoomFeedback])
 
   useEffect(() => {
     if (!isActive) {
@@ -4193,6 +4238,7 @@ function BrowserPagePane({
     }
     return received
   })()
+  const showBrowserZoomIndicator = browserZoomFeedbackVisible || browserZoomPercent !== 100
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -4717,6 +4763,21 @@ function BrowserPagePane({
         onDragOver={handleInternalFileDragOver}
         onDrop={handleInternalFileDrop}
       >
+        <div
+          role="status"
+          aria-live="polite"
+          aria-hidden={!showBrowserZoomIndicator}
+          className={cn(
+            'pointer-events-none absolute top-3 right-3 z-30 rounded-md border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-xs transition-opacity duration-300 ease-out',
+            browserZoomFeedbackVisible
+              ? 'opacity-100'
+              : browserZoomPercent === 100
+                ? 'opacity-0'
+                : 'opacity-80'
+          )}
+        >
+          {browserZoomPercent}%
+        </div>
         <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
         {showFailureOverlay ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">

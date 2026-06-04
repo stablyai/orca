@@ -124,14 +124,25 @@ export function remapOpenOnboardingLastCompletedStep({
   if (outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
     return ONBOARDING_FINAL_STEP
   }
+  // Why: v2 was the five-step flow; missing/older versions were seven-step
+  // data where step 4 was removed agent setup, not completed integrations.
+  if (flowVersion === 2) {
+    if (lastCompletedStep === 3) {
+      return 2
+    }
+    if (lastCompletedStep >= 4) {
+      return 3
+    }
+    return lastCompletedStep
+  }
+  if (lastCompletedStep === 3) {
+    return 2
+  }
   if (lastCompletedStep === 4) {
+    return 2
+  }
+  if (lastCompletedStep >= 5) {
     return 3
-  }
-  if (lastCompletedStep === 5 || lastCompletedStep === 6) {
-    return 4
-  }
-  if (lastCompletedStep > 6) {
-    return 4
   }
   return lastCompletedStep
 }
@@ -202,6 +213,7 @@ export function useOnboardingFlow(
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
+  const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
@@ -595,7 +607,7 @@ export function useOnboardingFlow(
   )
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
-      if (nextInFlightRef.current || busyLabel || currentStep.id === 'repo') {
+      if (nextInFlightRef.current || busyLabel) {
         return
       }
       nextInFlightRef.current = true
@@ -603,27 +615,49 @@ export function useOnboardingFlow(
         const result = await persistCurrentStep()
         if (result.ok) {
           trackCurrentStepCompleted(advancedVia)
+          if (currentStep.id === 'notifications') {
+            setBusyLabel('Opening Add Project...')
+            const closed = await closeWith(
+              'completed',
+              {},
+              ONBOARDING_FINAL_STEP,
+              'add_project_modal'
+            )
+            if (closed) {
+              openModal('add-repo')
+            }
+            return
+          }
           const nextIndex = getNextStepIndex(stepIndex)
           if (
-            currentStep.id === 'notifications' &&
+            currentStep.id === 'theme' &&
             skipIntegrations &&
-            STEPS[nextIndex]?.id === 'repo'
+            STEPS[nextIndex]?.id === 'notifications'
           ) {
-            // Why: users with gh already installed never see integrations, but
-            // repo resume state still needs that skipped setup step recorded.
-            onOnboardingChange(await persistStep(STEPS[nextIndex].stepNumber - 1))
+            // Why: resolveStepIndex skips integrations before it can render, but
+            // progress must still resume at notifications after a reload.
+            try {
+              onOnboardingChange(await persistStep(STEPS[nextIndex].stepNumber - 1))
+            } catch (err) {
+              toast.error('Could not save progress', {
+                description: err instanceof Error ? err.message : String(err)
+              })
+            }
           }
           setStepIndex(nextIndex)
         }
       } finally {
+        setBusyLabel(null)
         nextInFlightRef.current = false
       }
     },
     [
       busyLabel,
+      closeWith,
       currentStep.id,
       getNextStepIndex,
       onOnboardingChange,
+      openModal,
       persistCurrentStep,
       skipIntegrations,
       stepIndex,
@@ -987,7 +1021,7 @@ export function useOnboardingFlow(
 
   const continueWithExistingProject = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
-      if (busyLabel !== null || currentStep.id !== 'repo' || repos.length === 0) {
+      if (busyLabel !== null || repos.length === 0) {
         return
       }
       setError(null)
@@ -1010,7 +1044,7 @@ export function useOnboardingFlow(
         setBusyLabel(null)
       }
     },
-    [busyLabel, closeWith, consumeStepDurationMs, currentStep.id, repos]
+    [busyLabel, closeWith, consumeStepDurationMs, repos]
   )
 
   const skipToRepo = useCallback(async () => {
@@ -1018,9 +1052,7 @@ export function useOnboardingFlow(
       return
     }
     setError(null)
-    const repoStepIndex = STEPS.findIndex((step) => step.id === 'repo')
-    const repoStep = STEPS[repoStepIndex]
-    if (currentStep.id === 'repo' || !repoStep) {
+    if (currentStep.id === 'notifications') {
       return
     }
     const durationMs = consumeStepDurationMs()
@@ -1040,38 +1072,35 @@ export function useOnboardingFlow(
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
     const valueKind = currentStep.valueKind
-    setStepIndex(repoStepIndex)
-    // Why: progress persist is bookkeeping — advance the UI immediately and
-    // run the IPC + telemetry in the background.
-    void persistStep(repoStep.stepNumber - 1).then(
-      (nextState) => {
-        onOnboardingChange(nextState)
-        // Why: users can skip optional preferences, but onboarding remains
-        // open because Orca needs a project before the app has a useful
-        // first state.
-        track('onboarding_step_skipped', {
-          step: stepNumber,
-          value_kind: valueKind,
-          duration_ms: durationMs,
-          advanced_via: 'button'
-        })
-        if (stepId === 'integrations') {
-          trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
-        }
-      },
-      (err) => {
-        toast.error('Could not save progress', {
-          description: err instanceof Error ? err.message : String(err)
-        })
+    setBusyLabel('Opening Add Project...')
+    try {
+      const closed = await closeWith('completed', {}, ONBOARDING_FINAL_STEP, 'add_project_modal')
+      if (!closed) {
+        return
       }
-    )
+      // Why: the repo picker moved to the Add Project dialog, so skipping
+      // optional setup now closes onboarding and hands off to that modal.
+      track('onboarding_step_skipped', {
+        step: stepNumber,
+        value_kind: valueKind,
+        duration_ms: durationMs,
+        advanced_via: 'button'
+      })
+      if (stepId === 'integrations') {
+        trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
+      }
+      openModal('add-repo')
+    } finally {
+      setBusyLabel(null)
+    }
   }, [
     busyLabel,
+    closeWith,
     consumeStepDurationMs,
     currentStep.id,
     currentStep.stepNumber,
     currentStep.valueKind,
-    onOnboardingChange,
+    openModal,
     selectedAgent,
     settings,
     trackTaskSourcesSnapshot,
@@ -1106,7 +1135,7 @@ export function useOnboardingFlow(
   )
 
   const openSshSettings = useCallback(async () => {
-    if (busyLabel || currentStep.id !== 'repo') {
+    if (busyLabel) {
       return
     }
     setError(null)
@@ -1128,7 +1157,6 @@ export function useOnboardingFlow(
     openSettingsPage()
   }, [
     busyLabel,
-    currentStep.id,
     currentStep.stepNumber,
     onOnboardingChange,
     onSettingsDetourStart,

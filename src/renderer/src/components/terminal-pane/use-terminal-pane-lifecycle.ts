@@ -205,6 +205,37 @@ function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
   return cellEstimate > PRIMARY_SELECTION_MAX_LENGTH
 }
 
+function hydrateTerminalScrollbackRefs(layout: TerminalLayoutSnapshot): {
+  layout: TerminalLayoutSnapshot
+  hydrated: boolean
+} {
+  const refs = layout.scrollbackRefsByLeafId
+  if (!refs || Object.keys(refs).length === 0) {
+    return { layout, hydrated: false }
+  }
+
+  const buffers = { ...layout.buffersByLeafId }
+  let hydrated = false
+  for (const [leafId, ref] of Object.entries(refs)) {
+    if (buffers[leafId] !== undefined) {
+      continue
+    }
+    try {
+      const buffer = window.api.session.readTerminalScrollback({ ref })
+      if (buffer) {
+        buffers[leafId] = buffer
+        hydrated = true
+      }
+    } catch {
+      // Best-effort restore; failed snapshot reads should not block terminal mount.
+    }
+  }
+
+  return hydrated
+    ? { layout: { ...layout, buffersByLeafId: buffers }, hydrated }
+    : { layout, hydrated }
+}
+
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
@@ -457,6 +488,11 @@ export function useTerminalPaneLifecycle({
     if (normalizedInitialLayout.changed) {
       initialLayoutRef.current = normalizedInitialLayout.snapshot
       useAppStore.getState().setTabLayout(tabId, normalizedInitialLayout.snapshot)
+    }
+    const initialLayoutHadBuffers = Boolean(initialLayoutRef.current.buffersByLeafId)
+    const hydratedInitialScrollback = hydrateTerminalScrollbackRefs(initialLayoutRef.current)
+    if (hydratedInitialScrollback.hydrated) {
+      initialLayoutRef.current = hydratedInitialScrollback.layout
     }
     let shouldPersistLayout = false
     const ptyDeps = {
@@ -989,12 +1025,18 @@ export function useTerminalPaneLifecycle({
     }
     const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
 
-    restoreScrollbackBuffers(
-      manager,
-      initialLayoutRef.current.buffersByLeafId,
-      restoredPaneByLeafId,
-      replayingPanesRef
-    )
+    const restoredBuffers = initialLayoutRef.current.buffersByLeafId
+    restoreScrollbackBuffers(manager, restoredBuffers, restoredPaneByLeafId, replayingPanesRef)
+    if (restoredBuffers && initialLayoutRef.current.scrollbackRefsByLeafId) {
+      const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
+      delete layoutWithoutRestoredBuffers.buffersByLeafId
+      initialLayoutRef.current = layoutWithoutRestoredBuffers
+      if (initialLayoutHadBuffers) {
+        // Why: raw replay bytes belong only to this mount. Drop legacy hydrated
+        // copies from Zustand so normal session writes stay ref-only.
+        useAppStore.getState().setTabLayout(tabId, layoutWithoutRestoredBuffers)
+      }
+    }
 
     // Seed pane titles from the persisted snapshot using the same
     // old-leafId → new-paneId mapping used for buffer restore.

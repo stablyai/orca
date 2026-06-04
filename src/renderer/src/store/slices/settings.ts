@@ -98,6 +98,7 @@ function runtimeScopedStateReset(): Partial<AppState> {
     editorDrafts: {},
     markdownViewMode: {},
     editorViewMode: {},
+    markdownFrontmatterVisible: {},
     editorCursorLine: {},
     gitIgnoredPathsByWorktree: {},
     activeFileId: null,

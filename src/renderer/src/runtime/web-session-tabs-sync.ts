@@ -1118,6 +1118,7 @@ function terminalLayoutEqual(
     (a?.expandedLeafId ?? null) === b.expandedLeafId &&
     sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
     sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
+    sameStringRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&
     sameStringRecord(a?.titlesByLeafId, b.titlesByLeafId)
   )
 }

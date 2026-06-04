@@ -250,6 +250,14 @@
   --annotation-highlight: #fbbf24;
 }
 
+.linear-priority-bars {
+  --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 34%, transparent);
+}
+
+.dark .linear-priority-bars {
+  --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
+}
+
 /* ── Base Layer ──────────────────────────────────────── */
 
 @layer base {

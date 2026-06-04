@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getDefaultOnboardingState } from '../../../../shared/constants'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
 import {
   finishProjectAddWithDefaultCheckout,
@@ -22,6 +23,8 @@ const mocks = vi.hoisted(() => ({
     fetchWorktrees: vi.fn()
   },
   activateAndRevealWorktree: vi.fn(),
+  onboardingGet: vi.fn(),
+  onboardingUpdate: vi.fn(),
   track: vi.fn()
 }))
 
@@ -105,6 +108,10 @@ describe('getProjectDefaultCheckout', () => {
 
     expect(getProjectDefaultCheckout([feature, main])).toBe(main)
   })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
 })
 
 describe('finishProjectAddWithDefaultCheckout', () => {
@@ -118,6 +125,16 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     mocks.state.detectedWorktreesByRepo = {}
     mocks.state.updateRepo.mockResolvedValue(true)
     mocks.state.fetchWorktrees.mockResolvedValue(true)
+    mocks.onboardingGet.mockResolvedValue(getDefaultOnboardingState())
+    mocks.onboardingUpdate.mockResolvedValue(getDefaultOnboardingState())
+    vi.stubGlobal('window', {
+      api: {
+        onboarding: {
+          get: mocks.onboardingGet,
+          update: mocks.onboardingUpdate
+        }
+      }
+    })
   })
 
   it('closes the modal and activates the default checkout', async () => {
@@ -136,7 +153,14 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
 
     expect(closeModal).toHaveBeenCalledTimes(1)
+    expect(mocks.onboardingUpdate).toHaveBeenCalledWith({
+      checklist: { addedRepo: true }
+    })
     expect(setHideDefaultBranchWorkspace).toHaveBeenCalledWith(false)
+    expect(mocks.track).toHaveBeenCalledWith('activation_checklist_item_completed', {
+      item: 'addedRepo',
+      time_since_completed_ms: 0
+    })
     expect(mocks.track).toHaveBeenCalledWith('add_repo_default_checkout_handoff', {
       source: 'clone_url',
       result: 'opened_default_checkout',

@@ -623,7 +623,7 @@ const agentHookUnattributedSchema = z
 // unless a future versioned event replaces the historical schema.
 const ONBOARDING_TELEMETRY_LEGACY_MAX_STEP = 7
 const onboardingStepSchema = z.number().int().min(1).max(ONBOARDING_TELEMETRY_LEGACY_MAX_STEP)
-const onboardingPathSchema = z.enum(['open_folder', 'clone_url'])
+const onboardingPathSchema = z.enum(['open_folder', 'clone_url', 'add_project_modal'])
 const onboardingFailureReasonSchema = z.enum([
   'invalid_path',
   'clone_failed',

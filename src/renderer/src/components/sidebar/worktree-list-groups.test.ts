@@ -341,6 +341,56 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('emits an empty ungrouped repo placeholder before imported cards are merged', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      repoMap,
+      null,
+      new Set(),
+      new Map([[repo.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set([repo.id]),
+      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-1', label: 'orca', count: 0 },
+      {
+        type: 'imported-worktrees-card',
+        key: 'imported-worktrees-card:repo-group:repo-1',
+        placement: 'repo-group'
+      }
+    ])
+  })
+
+  it('skips stale empty placeholder repo ids that are absent from repoMap', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set([repo.id])
+    )
+
+    expect(rows).toEqual([])
+  })
+
   it('does not emit unpinned imported worktree cards outside repo grouping', () => {
     const rows = buildRows(
       'workspace-status',
@@ -791,6 +841,12 @@ describe('project groups', () => {
       type: 'header',
       key: 'project-group:group-1',
       count: 1
+    })
+    expect(rows[1]).toMatchObject({
+      type: 'header',
+      key: 'repo:repo-1',
+      projectGroupDepth: 1,
+      count: 0
     })
   })
 

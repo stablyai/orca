@@ -24,6 +24,7 @@ import type {
   WorkspaceSessionState
 } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
+import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../shared/constants'
 
@@ -457,12 +458,13 @@ describe('Store', () => {
   })
 
   it.each([
-    [4, 3],
-    [5, 4],
-    [6, 4],
-    [9, 4]
+    [3, 2],
+    [4, 2],
+    [5, 3],
+    [6, 3],
+    [9, 3]
   ])(
-    'migrates legacy open onboarding progress %i before applying the current step bound',
+    'migrates unversioned seven-step onboarding progress %i before applying the current step bound',
     async (legacyStep, expectedStep) => {
       writeDataFile({
         onboarding: {
@@ -483,13 +485,41 @@ describe('Store', () => {
     }
   )
 
-  it('keeps current onboarding progress marked as the five-step flow', async () => {
+  it.each([
+    [3, 2],
+    [4, 3],
+    [5, 3],
+    [9, 3]
+  ])(
+    'migrates versioned five-step onboarding progress %i before applying the current step bound',
+    async (legacyStep, expectedStep) => {
+      writeDataFile({
+        onboarding: {
+          flowVersion: 2,
+          closedAt: null,
+          outcome: null,
+          lastCompletedStep: legacyStep,
+          checklist: {}
+        }
+      })
+
+      const store = await createStore()
+      const onboarding = store.getOnboarding()
+
+      expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
+      expect(onboarding.lastCompletedStep).toBe(expectedStep)
+      expect(onboarding.closedAt).toBeNull()
+      expect(onboarding.outcome).toBeNull()
+    }
+  )
+
+  it('keeps current onboarding progress marked as the four-step flow', async () => {
     writeDataFile({
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
         closedAt: null,
         outcome: null,
-        lastCompletedStep: 4,
+        lastCompletedStep: 3,
         checklist: {}
       }
     })
@@ -498,7 +528,7 @@ describe('Store', () => {
     const onboarding = store.getOnboarding()
 
     expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
-    expect(onboarding.lastCompletedStep).toBe(4)
+    expect(onboarding.lastCompletedStep).toBe(3)
   })
 
   it('migrates legacy completed onboarding progress to the current final step', async () => {
@@ -516,8 +546,31 @@ describe('Store', () => {
 
     expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
     expect(onboarding.outcome).toBe('completed')
-    expect(onboarding.lastCompletedStep).toBe(5)
+    expect(onboarding.lastCompletedStep).toBe(4)
   })
+
+  it.each([
+    [{ outcome: 'completed', lastCompletedStep: 7 }, 'completed', 4],
+    [{ closedAt: null, outcome: 'dismissed', lastCompletedStep: 2 }, 'dismissed', 2],
+    [{ closedAt: 'invalid', outcome: 'completed', lastCompletedStep: 7 }, 'completed', 4]
+  ] as const)(
+    'keeps closed onboarding closed when closedAt is missing or malformed',
+    async (onboardingInput, expectedOutcome, expectedStep) => {
+      writeDataFile({
+        onboarding: {
+          checklist: {},
+          ...onboardingInput
+        }
+      })
+
+      const store = await createStore()
+      const onboarding = store.getOnboarding()
+
+      expect(onboarding.closedAt).toEqual(expect.any(Number))
+      expect(onboarding.outcome).toBe(expectedOutcome)
+      expect(onboarding.lastCompletedStep).toBe(expectedStep)
+    }
+  )
 
   it('preserves legacy none grouping as ungrouped workspaces', async () => {
     writeDataFile({
@@ -3452,7 +3505,7 @@ describe('Store', () => {
     ).toBeUndefined()
   })
 
-  it('strips local terminal scrollback buffers when setting workspace session', async () => {
+  it('stores remote terminal scrollback out of workspace session JSON', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
     store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
@@ -3464,9 +3517,12 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId).toEqual({
       [TEST_LEAF_1]: 'local-pty'
     })
-    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
-      [TEST_LEAF_2]: 'remote-scrollback'
+    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toBeUndefined()
+    expect(session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId).toEqual({
+      [TEST_LEAF_2]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
     })
+    const ref = session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[TEST_LEAF_2]
+    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('remote-scrollback')
   })
 
   it('caps oversized browser history when setting workspace session', async () => {
@@ -3483,7 +3539,7 @@ describe('Store', () => {
     expect(prunedBytes).toBeLessThan(oversizedBytes / 2)
   })
 
-  it('keeps terminal scrollback buffers when the repo catalog is not hydrated yet', async () => {
+  it('stores maybe-remote terminal scrollback out of workspace session JSON', async () => {
     const store = await createStore()
 
     store.setWorkspaceSession({
@@ -3511,9 +3567,65 @@ describe('Store', () => {
 
     expect(
       store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].buffersByLeafId
+    ).toBeUndefined()
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId
     ).toEqual({
-      [TEST_LEAF_2]: 'maybe-remote-scrollback'
+      [TEST_LEAF_2]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
     })
+    const ref =
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
+        TEST_LEAF_2
+      ]
+    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('maybe-remote-scrollback')
+  })
+
+  it('deletes terminal scrollback snapshot files when refs leave the workspace session', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
+    const session = makeSessionWithTerminalBuffers()
+    store.setWorkspaceSession({
+      ...session,
+      tabsByWorktree: { 'remote-repo::/remote': session.tabsByWorktree['remote-repo::/remote'] },
+      terminalLayoutsByTabId: { 'remote-tab': session.terminalLayoutsByTabId['remote-tab'] }
+    })
+    const ref =
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
+        TEST_LEAF_2
+      ]
+    expect(ref).toEqual(expect.stringMatching(/^v1-[0-9a-f]{32}$/))
+    if (!ref) {
+      throw new Error('expected scrollback snapshot ref')
+    }
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
+
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
+  })
+
+  it('reads only the replay tail from oversized terminal scrollback snapshots', async () => {
+    const store = await createStore()
+    const ref = 'v1-00000000000000000000000000000000'
+    const snapshotDir = join(testState.dir, 'terminal-scrollback')
+    mkdirSync(snapshotDir, { recursive: true })
+    writeFileSync(
+      join(snapshotDir, `${ref}.bin`),
+      `stale-prefix-${'x'.repeat(TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)}tail`,
+      'utf-8'
+    )
+
+    const buffer = store.readTerminalScrollbackSnapshot(ref)
+
+    expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
+    expect(buffer?.startsWith('stale-prefix')).toBe(false)
+    expect(buffer?.endsWith('tail')).toBe(true)
   })
 
   it('strips legacy local terminal scrollback buffers when loading workspace session', async () => {
@@ -3533,9 +3645,12 @@ describe('Store', () => {
     const store = await createStore()
     const session = store.getWorkspaceSession()
     expect(session.terminalLayoutsByTabId['local-tab'].buffersByLeafId).toBeUndefined()
-    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
-      [TEST_LEAF_2]: 'remote-scrollback'
+    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toBeUndefined()
+    expect(session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId).toEqual({
+      [TEST_LEAF_2]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
     })
+    const ref = session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[TEST_LEAF_2]
+    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('remote-scrollback')
   })
 
   it('caps oversized legacy browser history when loading workspace session', async () => {
@@ -4594,7 +4709,12 @@ describe('Store', () => {
     expect(layout.activeLeafId).toBe(TEST_LEAF_1)
     expect(layout.expandedLeafId).toBeNull()
     expect(layout.ptyIdsByLeafId).toEqual({ [TEST_LEAF_1]: 'daemon-pty' })
-    expect(layout.buffersByLeafId).toEqual({ [TEST_LEAF_1]: 'Current buffer' })
+    expect(layout.buffersByLeafId).toBeUndefined()
+    expect(layout.scrollbackRefsByLeafId).toEqual({
+      [TEST_LEAF_1]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
+    })
+    const ref = layout.scrollbackRefsByLeafId?.[TEST_LEAF_1]
+    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('Current buffer')
     expect(layout.titlesByLeafId).toEqual({ [TEST_LEAF_1]: 'Current' })
     expect(session.tabsByWorktree.wt1[0].ptyId).toBe('daemon-pty')
   })

@@ -385,6 +385,65 @@ function setProjectGroupWithoutWorktreeRowsState(filterRepoIds: string[] = []): 
   }
 }
 
+function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
+  const repo: Repo = {
+    ...makeRepo(),
+    displayName: 'empty-project'
+  }
+
+  mockStore.state = {
+    activeModal: '',
+    activeView: 'terminal',
+    activeWorktreeId: null,
+    agentStatusEpoch: 0,
+    agentStatusByPaneKey: {},
+    browserTabsByWorktree: {},
+    clearPendingRevealWorktreeId: vi.fn(),
+    collapsedGroups: new Set<string>(),
+    deleteStateByWorktreeId: {},
+    filterRepoIds,
+    groupBy: 'repo',
+    hideDefaultBranchWorkspace: false,
+    issueCache: {},
+    migrationUnsupportedByPtyId: {},
+    openModal: vi.fn(),
+    pendingRevealWorktree: null,
+    prCache: {},
+    prVisibleRefreshGeneration: 0,
+    projectGroups: [],
+    ptyIdsByTabId: {},
+    reorderRepos: vi.fn(),
+    reportVisibleGitHubPRRefreshCandidates: vi.fn(),
+    retainedAgentsByPaneKey: {},
+    repos: [repo],
+    runtimePaneTitlesByTabId: {},
+    setFilterRepoIds: vi.fn(),
+    setHideDefaultBranchWorkspace: vi.fn(),
+    setRenamingWorktreeId: vi.fn(),
+    setShowSleepingWorkspaces: vi.fn(),
+    setSortBy: vi.fn(),
+    settings: null,
+    renamingWorktreeId: null,
+    showSleepingWorkspaces: true,
+    sortBy: 'recent',
+    sortEpoch: 0,
+    sshConnectedGeneration: 0,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    tabsByWorktree: {},
+    terminalLayoutsByTabId: {},
+    toggleCollapsedGroup: vi.fn(),
+    updateWorktreeMeta: vi.fn(),
+    updateWorktreesMeta: vi.fn(),
+    workspaceStatuses: [],
+    worktreeCardProperties: ['status', 'inline-agents'],
+    worktreeLineageById: {},
+    worktreesByRepo: {
+      [repo.id]: []
+    }
+  }
+}
+
 async function renderWorktreeListMarkup(): Promise<string> {
   return renderToStaticMarkup(
     React.createElement(WorktreeList, {
@@ -414,6 +473,23 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).toContain('No workspaces found')
     expect(markup).toContain('Clear Filters')
     expect(markup).not.toContain('Imported Services')
+  })
+
+  it('renders an empty ungrouped project instead of the empty workspace state', async () => {
+    setEmptyUngroupedProjectState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('empty-project')
+    expect(markup).not.toContain('No workspaces found')
+  })
+
+  it('shows Clear Filters when repo filters exclude an empty ungrouped project', async () => {
+    setEmptyUngroupedProjectState(['another-repo'])
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('No workspaces found')
+    expect(markup).toContain('Clear Filters')
+    expect(markup).not.toContain('empty-project')
   })
 
   it('renders nested inline agent rows before the nested child-count toggle', async () => {
@@ -506,7 +582,7 @@ describe('WorktreeList lineage child card renderer', () => {
 
     expect(parentRow).not.toContain('padding-left')
     expect(markup).toContain(
-      '<section data-worktree-card-id="parent" data-content-indent="18" data-flush-surface="true">'
+      '<section data-worktree-card-id="parent" data-content-indent="20" data-flush-surface="true">'
     )
   })
 
@@ -518,7 +594,7 @@ describe('WorktreeList lineage child card renderer', () => {
 
     expect(parentRow).not.toContain('padding-left')
     expect(markup).toContain(
-      '<section data-worktree-card-id="parent" data-content-indent="36" data-flush-surface="true">'
+      '<section data-worktree-card-id="parent" data-content-indent="38" data-flush-surface="true">'
     )
   })
 })

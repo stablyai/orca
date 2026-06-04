@@ -23,8 +23,10 @@ function createSnapshot(
     },
     activeTabIdByWorktree: { 'wt-1': 'tab-1', 'wt-2': 'tab-2' },
     editorDrafts: {},
+    markdownFrontmatterVisible: {},
     openFiles: [
       {
+        id: '/tmp/demo.ts',
         filePath: '/tmp/demo.ts',
         relativePath: 'demo.ts',
         worktreeId: 'wt-1',
@@ -36,6 +38,7 @@ function createSnapshot(
         originalContent: ''
       },
       {
+        id: '/tmp/demo.diff',
         filePath: '/tmp/demo.diff',
         relativePath: 'demo.diff',
         worktreeId: 'wt-1',
@@ -90,7 +93,12 @@ describe('buildWorkspaceSessionPatch', () => {
     const patch = buildWorkspaceSessionPatch(createSnapshot(), ['openFiles'])
 
     expect(Object.keys(patch).sort()).toEqual(
-      ['activeFileIdByWorktree', 'activeTabTypeByWorktree', 'openFilesByWorktree'].sort()
+      [
+        'activeFileIdByWorktree',
+        'activeTabTypeByWorktree',
+        'markdownFrontmatterVisible',
+        'openFilesByWorktree'
+      ].sort()
     )
     expect(patch.openFilesByWorktree).toEqual({
       'wt-1': [
@@ -125,7 +133,12 @@ describe('buildWorkspaceSessionPatch', () => {
     )
 
     expect(Object.keys(patch).sort()).toEqual(
-      ['activeFileIdByWorktree', 'activeTabTypeByWorktree', 'openFilesByWorktree'].sort()
+      [
+        'activeFileIdByWorktree',
+        'activeTabTypeByWorktree',
+        'markdownFrontmatterVisible',
+        'openFilesByWorktree'
+      ].sort()
     )
     expect(patch.openFilesByWorktree?.['wt-1'][0]).toEqual(
       expect.objectContaining({
@@ -133,6 +146,28 @@ describe('buildWorkspaceSessionPatch', () => {
         dirtyDraftContent: 'edited'
       })
     )
+  })
+
+  it('derives editor session keys when markdown front-matter visibility changes', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({
+        markdownFrontmatterVisible: {
+          '/tmp/demo.ts': true,
+          '/tmp/demo.diff': true
+        }
+      }),
+      ['markdownFrontmatterVisible']
+    )
+
+    expect(Object.keys(patch).sort()).toEqual(
+      [
+        'activeFileIdByWorktree',
+        'activeTabTypeByWorktree',
+        'markdownFrontmatterVisible',
+        'openFilesByWorktree'
+      ].sort()
+    )
+    expect(patch.markdownFrontmatterVisible).toEqual({ '/tmp/demo.ts': true })
   })
 
   it('sanitizes terminal tabs and prunes local buffers when tab topology changes', () => {
@@ -159,6 +194,7 @@ describe('buildWorkspaceSessionPatch', () => {
             activeLeafId: null,
             expandedLeafId: null,
             buffersByLeafId: { 'pane:1': 'serialized-local-scrollback' },
+            scrollbackRefsByLeafId: { 'pane:1': 'v1-local' },
             ptyIdsByLeafId: { 'pane:1': 'pty-1' }
           }
         },
@@ -177,6 +213,7 @@ describe('buildWorkspaceSessionPatch', () => {
     )
     expect('pendingActivationSpawn' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
     expect(patch.terminalLayoutsByTabId?.['tab-local'].buffersByLeafId).toBeUndefined()
+    expect(patch.terminalLayoutsByTabId?.['tab-local'].scrollbackRefsByLeafId).toBeUndefined()
   })
 
   it('keeps optional clearing keys in patches', () => {
