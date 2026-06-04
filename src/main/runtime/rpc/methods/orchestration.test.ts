@@ -179,6 +179,23 @@ describe('orchestration RPC methods', () => {
       expect(result.messages[0].to_handle).toBe('term_b')
     })
 
+    it('fans out @droid by title match', async () => {
+      setupWithTerminals([
+        makeSummary('term_a', { title: 'Codex' }),
+        makeSummary('term_b', { title: 'Droid ready' }),
+        makeSummary('term_c', { title: 'Android build' })
+      ])
+
+      const result = (await call('orchestration.send', {
+        from: 'term_a',
+        to: '@droid',
+        subject: 'droid only'
+      })) as { messages: { to_handle: string }[]; recipients: number }
+
+      expect(result.recipients).toBe(1)
+      expect(result.messages[0].to_handle).toBe('term_b')
+    })
+
     it('fans out @worktree:<id> to matching worktree', async () => {
       setupWithTerminals([
         makeSummary('term_a', { worktreeId: 'wt_1' }),

@@ -65,7 +65,7 @@ Rules:
 - While supervising workers manually, use `check --wait --types worker_done,escalation,decision_gate --timeout-ms <n>` instead of sleep/poll loops. Reply to `decision_gate` messages with `orca orchestration reply --id <msg_id> --body <answer> --json`, then keep waiting.
 - Use `ask` when a worker needs a blocking answer from the coordinator; it waits for the reply and returns the answer directly.
 - `check --wait` returns one message at a time. If N workers may finish together, loop N times and dispatch newly ready tasks after each completion.
-- Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, and `@worktree:<id>`.
+- Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, and `@worktree:<id>`.
 - Message types include `status`, `dispatch`, `worker_done`, `merge_ready`, `escalation`, `handoff`, `decision_gate`, and `heartbeat`.
 
 ## Tasks And Dispatch

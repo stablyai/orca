@@ -431,7 +431,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (!hasAgent) {
           throw new Error(
             `Cannot dispatch --inject to terminal ${to}: no recognized agent detected. ` +
-              'Start an agent CLI (e.g. claude, codex, gemini) in the terminal first, ' +
+              'Start an agent CLI (e.g. claude, codex, gemini, droid) in the terminal first, ' +
               'or dispatch without --inject and send the prompt manually.'
           )
         }

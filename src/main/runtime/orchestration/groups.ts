@@ -4,7 +4,7 @@ import type { RuntimeTerminalSummary } from '../../../shared/runtime-types'
 // Resolution is done at send-time: one message record per recipient, same thread_id,
 // so each recipient gets their own read-tracking (Section 4.5).
 
-const AGENT_NAME_GROUPS = ['claude', 'openclaude', 'codex', 'opencode', 'gemini'] as const
+const AGENT_NAME_GROUPS = ['claude', 'openclaude', 'codex', 'opencode', 'gemini', 'droid'] as const
 
 export type GroupAddress =
   | '@all'
@@ -58,7 +58,7 @@ export function resolveGroupAddress(
       .map((t) => t.handle)
   }
 
-  // Why: agent-name groups (@claude, @codex, etc.) match by terminal title so
+  // Why: agent-name groups (@claude, @droid, etc.) match by terminal title so
   // the sender can address all instances of a particular agent type without
   // knowing their handles.
   const agentName = group.slice(1) // remove @
