@@ -81,6 +81,7 @@ import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browse
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
+import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileRichMarkdownEditor } from '../../../../src/components/MobileRichMarkdownEditor'
@@ -3740,8 +3741,7 @@ export default function SessionScreen() {
       : createTabAgentOptions.length > 0
         ? createTabAgentOptions.map((option) => ({
             label: option.label,
-            hint: 'Agent preset',
-            icon: Bot,
+            renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
             onPress: () => {
               setShowCreateTabDrawer(false)
               void handleCreateTerminal(option.agent)
