@@ -15,6 +15,12 @@ import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/gith
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { ExternalLink, LoaderCircle } from 'lucide-react'
 import type { WorktreeMeta } from '../../../../shared/types'
+import { useMountedRef } from '@/hooks/useMountedRef'
+
+type WorktreeMetaSavedPayload = {
+  worktreeId: string
+  updates: Partial<WorktreeMeta>
+}
 
 function parseExplicitGitHubIssueUrl(input: string): string | null {
   const trimmed = input.trim()
@@ -51,6 +57,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const currentComment =
     typeof modalData.currentComment === 'string' ? modalData.currentComment : ''
   const focusField = typeof modalData.focus === 'string' ? modalData.focus : 'comment'
+  const afterSave =
+    typeof modalData.afterSave === 'function'
+      ? (modalData.afterSave as (payload: WorktreeMetaSavedPayload) => void | Promise<void>)
+      : null
 
   const [displayNameInput, setDisplayNameInput] = useState('')
   const [issueInput, setIssueInput] = useState('')
@@ -64,6 +74,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const prevIsOpenRef = useRef(false)
   const displayNameInputRef = useRef<HTMLInputElement>(null)
+  const mountedRef = useMountedRef()
   if (isOpen && !prevIsOpenRef.current) {
     setDisplayNameInput(currentDisplayName)
     setIssueInput(currentIssue)
@@ -165,8 +176,17 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
       await updateWorktreeMeta(worktreeId, updates)
       closeModal()
+      // Why: follow-up refreshes should not turn a successful metadata save
+      // into a failed dialog.
+      try {
+        void Promise.resolve(afterSave?.({ worktreeId, updates })).catch(console.error)
+      } catch (error) {
+        console.error(error)
+      }
     } finally {
-      setSaving(false)
+      if (mountedRef.current) {
+        setSaving(false)
+      }
     }
   }, [
     worktreeId,
@@ -177,7 +197,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     prInput,
     commentInput,
     updateWorktreeMeta,
-    closeModal
+    closeModal,
+    afterSave,
+    mountedRef
   ])
 
   const handleCommentKeyDown = useCallback(
@@ -232,7 +254,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         void window.api.shell.openUrl(issue.url)
       }
     } finally {
-      setOpeningIssue(false)
+      if (mountedRef.current) {
+        setOpeningIssue(false)
+      }
     }
   }, [
     cachedIssueUrl,
@@ -241,6 +265,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     issueNumber,
     issueRepo,
     issueUrlFromInput,
+    mountedRef,
     openingIssue
   ])
 

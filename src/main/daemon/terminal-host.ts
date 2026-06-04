@@ -185,6 +185,16 @@ export class TerminalHost {
     return resolved || null
   }
 
+  // Why: returns null (not throws) for a dead/missing session — this is fetched
+  // for the tab-bar icon, so a vanished pane should quietly yield "no agent".
+  getForegroundProcess(sessionId: string): string | null {
+    const session = this.sessions.get(sessionId)
+    if (!session || !session.isAlive) {
+      return null
+    }
+    return session.getForegroundProcess()
+  }
+
   clearScrollback(sessionId: string): void {
     this.getAliveSession(sessionId).clearScrollback()
   }

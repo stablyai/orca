@@ -1,7 +1,11 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, Clipboard, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
+import {
+  REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT,
+  takePendingReactErrorBoundaryReport
+} from '@/lib/react-error-boundary-reporting'
 import {
   Dialog,
   DialogContent,
@@ -10,23 +14,54 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { formatCrashReportText, type CrashReportRecord } from '../../../../shared/crash-reporting'
+import { useMountedRef } from '@/hooks/useMountedRef'
+import {
+  formatCrashReportText,
+  isReactErrorBoundaryReport,
+  type CrashReportRecord
+} from '../../../../shared/crash-reporting'
 import type { GitHubViewer } from '../../../../shared/types'
 
 function formatSummary(report: CrashReportRecord): string {
+  if (isReactErrorBoundaryReport(report)) {
+    const surface = typeof report.details.surface === 'string' ? report.details.surface : null
+    return surface ? `React render error in ${surface}` : 'React render error'
+  }
   return `${report.processType} ${report.reason}${
     report.exitCode === null ? '' : ` (exit ${report.exitCode})`
   }`
 }
 
+function getDialogTitle(report: CrashReportRecord | null): string {
+  return report && isReactErrorBoundaryReport(report)
+    ? 'Orca hit a recoverable UI error'
+    : 'Orca closed unexpectedly'
+}
+
+function getDialogDescription(report: CrashReportRecord | null): string {
+  return report && isReactErrorBoundaryReport(report)
+    ? 'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
+    : 'Send a privacy-safe diagnostic report to help us understand what happened.'
+}
+
+function getNotesPlaceholder(report: CrashReportRecord | null): string {
+  return report && isReactErrorBoundaryReport(report)
+    ? 'Optional: what were you doing before this UI error?'
+    : 'Optional: what were you doing before Orca closed?'
+}
+
 export function CrashReportDialog(): React.JSX.Element {
   const promptedThisLaunch = useRef(false)
+  const mountedRef = useMountedRef()
   const [open, setOpen] = useState(false)
   const [report, setReport] = useState<CrashReportRecord | null>(null)
   const [notes, setNotes] = useState('')
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
+  // Why: account lookup can resolve after the dialog closes or reopens.
+  // Sequence the request so a stale viewer is never used for submission.
+  const viewerRequestIdRef = useRef(0)
   const deferredNotes = useDeferredValue(notes)
   const diagnosticText = useMemo(
     // Why: formatting applies redaction and truncation over the full crash
@@ -35,34 +70,83 @@ export function CrashReportDialog(): React.JSX.Element {
     [deferredNotes, report]
   )
 
-  const loadCrashReport = async (promptIfPresent: boolean): Promise<void> => {
-    setLoading(true)
-    try {
-      const nextReport = promptIfPresent
-        ? await window.api.crashReports.getLatestPending()
-        : await window.api.crashReports.getLatestReport()
-      let displayedReport = nextReport
-      if (nextReport?.status === 'pending' && promptIfPresent) {
-        try {
-          // Why: startup crash prompts are one-shot. The open dialog keeps the
-          // report data locally if the user chooses to send immediately, while
-          // Help > Report Crash can still reopen dismissed unsent reports.
-          await window.api.crashReports.dismiss({ reportId: nextReport.id })
-          displayedReport = { ...nextReport, status: 'dismissed' as const }
-        } catch (error) {
-          console.error('Failed to dismiss crash report after startup prompt:', error)
+  const clearViewer = useCallback((): void => {
+    viewerRequestIdRef.current += 1
+    setViewer(null)
+  }, [])
+
+  const loadViewerForOpenDialog = useCallback((): void => {
+    const requestId = ++viewerRequestIdRef.current
+    setViewer(null)
+    void window.api.gh
+      .viewer()
+      .then((nextViewer) => {
+        if (mountedRef.current && requestId === viewerRequestIdRef.current) {
+          setViewer(nextViewer)
+        }
+      })
+      .catch((error) => {
+        if (mountedRef.current && requestId === viewerRequestIdRef.current) {
+          setViewer(null)
+          console.error('Failed to load GitHub viewer for crash report:', error)
+        }
+      })
+  }, [mountedRef])
+
+  const openDialog = useCallback((): void => {
+    setOpen(true)
+    loadViewerForOpenDialog()
+  }, [loadViewerForOpenDialog])
+
+  const closeDialog = useCallback((): void => {
+    clearViewer()
+    setOpen(false)
+  }, [clearViewer])
+
+  const openCrashReport = useCallback(
+    (nextReport: CrashReportRecord): void => {
+      setReport(nextReport)
+      openDialog()
+    },
+    [openDialog]
+  )
+
+  const loadCrashReport = useCallback(
+    async (promptIfPresent: boolean): Promise<void> => {
+      setLoading(true)
+      try {
+        const nextReport = promptIfPresent
+          ? await window.api.crashReports.getLatestPending()
+          : await window.api.crashReports.getLatestReport()
+        let displayedReport = nextReport
+        if (nextReport?.status === 'pending' && promptIfPresent) {
+          try {
+            // Why: startup crash prompts are one-shot. The open dialog keeps the
+            // report data locally if the user chooses to send immediately, while
+            // Help > Report Crash can still reopen dismissed unsent reports.
+            await window.api.crashReports.dismiss({ reportId: nextReport.id })
+            displayedReport = { ...nextReport, status: 'dismissed' as const }
+          } catch (error) {
+            console.error('Failed to dismiss crash report after startup prompt:', error)
+          }
+        }
+        if (!mountedRef.current) {
+          return
+        }
+        setReport(displayedReport)
+        if (nextReport && promptIfPresent) {
+          openDialog()
+        }
+      } catch (error) {
+        console.error('Failed to load crash report:', error)
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false)
         }
       }
-      setReport(displayedReport)
-      if (nextReport && promptIfPresent) {
-        setOpen(true)
-      }
-    } catch (error) {
-      console.error('Failed to load crash report:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [mountedRef, openDialog]
+  )
 
   useEffect(() => {
     if (promptedThisLaunch.current) {
@@ -70,39 +154,39 @@ export function CrashReportDialog(): React.JSX.Element {
     }
     promptedThisLaunch.current = true
     void loadCrashReport(true)
-  }, [])
+  }, [loadCrashReport])
 
   useEffect(() => {
     return window.api.ui.onOpenCrashReport(() => {
-      void loadCrashReport(false).then(() => setOpen(true))
+      void loadCrashReport(false).then(() => {
+        if (mountedRef.current) {
+          openDialog()
+        }
+      })
     })
-  }, [])
+  }, [loadCrashReport, mountedRef, openDialog])
 
   useEffect(() => {
-    if (!open) {
-      setViewer(null)
-      return
+    const pendingReport = takePendingReactErrorBoundaryReport()
+    if (pendingReport) {
+      openCrashReport(pendingReport)
     }
 
-    let cancelled = false
-    void window.api.gh
-      .viewer()
-      .then((nextViewer) => {
-        if (!cancelled) {
-          setViewer(nextViewer)
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setViewer(null)
-          console.error('Failed to load GitHub viewer for crash report:', error)
-        }
-      })
+    const onReactErrorBoundaryReport = (): void => {
+      const nextReport = takePendingReactErrorBoundaryReport()
+      if (nextReport) {
+        openCrashReport(nextReport)
+      }
+    }
 
+    window.addEventListener(REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT, onReactErrorBoundaryReport)
     return () => {
-      cancelled = true
+      window.removeEventListener(
+        REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT,
+        onReactErrorBoundaryReport
+      )
     }
-  }, [open])
+  }, [openCrashReport])
 
   const handleCopy = async (): Promise<void> => {
     const result = await window.api.crashReports.copyLatestDiagnostics(
@@ -118,13 +202,17 @@ export function CrashReportDialog(): React.JSX.Element {
   const dismissReportIfNeeded = async (): Promise<void> => {
     if (report?.status === 'pending') {
       await window.api.crashReports.dismiss({ reportId: report.id })
-      setReport({ ...report, status: 'dismissed' })
+      if (mountedRef.current) {
+        setReport({ ...report, status: 'dismissed' })
+      }
     }
   }
 
   const handleDismiss = async (): Promise<void> => {
     await dismissReportIfNeeded()
-    setOpen(false)
+    if (mountedRef.current) {
+      closeDialog()
+    }
   }
 
   const handleSubmit = async (): Promise<void> => {
@@ -145,15 +233,20 @@ export function CrashReportDialog(): React.JSX.Element {
       if (!result.ok) {
         throw new Error(result.error)
       }
+      if (!mountedRef.current) {
+        return
+      }
       setReport(result.report)
       setNotes('')
       toast.success('Crash report sent.')
-      setOpen(false)
+      closeDialog()
     } catch (error) {
       toast.error('Failed to send crash report.')
       console.error('Failed to submit crash report:', error)
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }
 
@@ -165,21 +258,24 @@ export function CrashReportDialog(): React.JSX.Element {
           return
         }
         if (!nextOpen) {
-          void dismissReportIfNeeded().finally(() => setOpen(false))
+          clearViewer()
+          void dismissReportIfNeeded().finally(() => {
+            if (mountedRef.current) {
+              setOpen(false)
+            }
+          })
           return
         }
-        setOpen(true)
+        openDialog()
       }}
     >
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
             <AlertTriangle className="size-4 text-destructive" />
-            Orca closed unexpectedly
+            {getDialogTitle(report)}
           </DialogTitle>
-          <DialogDescription className="text-xs">
-            Send a privacy-safe diagnostic report to help us understand what happened.
-          </DialogDescription>
+          <DialogDescription className="text-xs">{getDialogDescription(report)}</DialogDescription>
         </DialogHeader>
 
         {report ? (
@@ -195,7 +291,7 @@ export function CrashReportDialog(): React.JSX.Element {
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={4}
-              placeholder="Optional: what were you doing before Orca closed?"
+              placeholder={getNotesPlaceholder(report)}
               className="min-h-24 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
             <div className="space-y-1.5">

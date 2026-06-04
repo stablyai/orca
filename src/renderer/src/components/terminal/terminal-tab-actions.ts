@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import type { TabContentType } from '../../../../shared/types'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'
 import { reconcileTabOrder } from '../tab-bar/reconcile-order'
 import {
@@ -7,6 +8,22 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+
+const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>(['editor', 'diff', 'conflict-review'])
+
+type TerminalTabActionState = ReturnType<typeof useAppStore.getState>
+
+function isPinnedVisibleTab(
+  state: TerminalTabActionState,
+  worktreeId: string,
+  visibleId: string
+): boolean {
+  return (
+    (state.unifiedTabsByWorktree?.[worktreeId] ?? []).some(
+      (tab) => (tab.id === visibleId || tab.entityId === visibleId) && tab.isPinned
+    ) ?? false
+  )
+}
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -58,6 +75,9 @@ export function closeTerminalTab(tabId: string): void {
   const owningWorktreeId = owningWorktreeEntry?.[0] ?? null
 
   if (!owningWorktreeId) {
+    return
+  }
+  if (isPinnedVisibleTab(state, owningWorktreeId, tabId)) {
     return
   }
 
@@ -113,6 +133,9 @@ export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string |
   const closeHostTerminalTabs = isWebRuntimeSessionActive(runtimeEnvironmentId)
   for (const tab of currentTabs) {
     if (tab.id !== tabId) {
+      if (isPinnedVisibleTab(state, activeWorktreeId, tab.id)) {
+        continue
+      }
       if (closeHostTerminalTabs) {
         // Why: paired web tabs are host-owned; local-only bulk close leaves
         // the host to re-publish the supposedly closed terminal tabs.
@@ -152,6 +175,9 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
   }
   const rightIds = orderedIds.slice(index + 1)
   for (const id of rightIds) {
+    if (isPinnedVisibleTab(state, activeWorktreeId, id)) {
+      continue
+    }
     if (terminalIdSet.has(id)) {
       if (closeHostTerminalTabs) {
         // Why: paired web tabs are host-owned; local-only bulk close leaves
@@ -165,7 +191,12 @@ export function closeTerminalTabsToRight(tabId: string, activeWorktreeId: string
         state.closeTab(id)
       }
     } else {
-      useAppStore.getState().closeFile(id)
+      const unifiedTab = (state.unifiedTabsByWorktree?.[activeWorktreeId] ?? []).find(
+        (tab) => tab.entityId === id && EDITOR_TAB_CONTENT_TYPES.has(tab.contentType)
+      )
+      if (!unifiedTab?.isPinned) {
+        useAppStore.getState().closeFile(id)
+      }
     }
   }
 }
@@ -188,12 +219,6 @@ export function activateTerminalTab(tabId: string): void {
   }
   s.setActiveTab(tabId)
   s.setActiveTabType('terminal')
-}
-
-export function activateEditorFile(fileId: string): void {
-  const s = useAppStore.getState()
-  s.setActiveFile(fileId)
-  s.setActiveTabType('editor')
 }
 
 export function toggleTerminalPaneExpand(tabId: string): void {

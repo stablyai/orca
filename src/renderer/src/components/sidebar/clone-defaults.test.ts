@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultCloneParent } from './clone-defaults'
+import { getCloneDestinationAutoFill, getDefaultCloneParent } from './clone-defaults'
 
 describe('getDefaultCloneParent', () => {
   it('strips a POSIX workspaces suffix', () => {
@@ -44,5 +44,64 @@ describe('getDefaultCloneParent', () => {
     expect(getDefaultCloneParent('/Users/mvanhorn/orca/project-workspaces')).toBe(
       '/Users/mvanhorn/orca/project-workspaces'
     )
+  })
+})
+
+describe('getCloneDestinationAutoFill', () => {
+  it('fills the local clone destination from the workspace directory', () => {
+    expect(
+      getCloneDestinationAutoFill({
+        step: 'clone',
+        cloneDestination: '',
+        activeRuntimeEnvironmentId: null,
+        workspaceDir: '/Users/mvanhorn/orca/workspaces',
+        cloneStepAutoFilled: false
+      })
+    ).toEqual({ destination: '/Users/mvanhorn/orca' })
+  })
+
+  it('waits for a workspace directory before filling', () => {
+    expect(
+      getCloneDestinationAutoFill({
+        step: 'clone',
+        cloneDestination: '',
+        activeRuntimeEnvironmentId: null,
+        workspaceDir: null,
+        cloneStepAutoFilled: false
+      })
+    ).toBeNull()
+  })
+
+  it('does not overwrite typed destinations or repeat an auto-fill', () => {
+    expect(
+      getCloneDestinationAutoFill({
+        step: 'clone',
+        cloneDestination: '/tmp/project',
+        activeRuntimeEnvironmentId: null,
+        workspaceDir: '/Users/mvanhorn/orca/workspaces',
+        cloneStepAutoFilled: false
+      })
+    ).toBeNull()
+    expect(
+      getCloneDestinationAutoFill({
+        step: 'clone',
+        cloneDestination: '',
+        activeRuntimeEnvironmentId: null,
+        workspaceDir: '/Users/mvanhorn/orca/workspaces',
+        cloneStepAutoFilled: true
+      })
+    ).toBeNull()
+  })
+
+  it('does not fill server clone destinations for runtime environments', () => {
+    expect(
+      getCloneDestinationAutoFill({
+        step: 'clone',
+        cloneDestination: '',
+        activeRuntimeEnvironmentId: 'env-local-linux',
+        workspaceDir: '/Users/mvanhorn/orca/workspaces',
+        cloneStepAutoFilled: false
+      })
+    ).toBeNull()
   })
 })

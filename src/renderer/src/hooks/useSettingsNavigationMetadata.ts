@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { useMemo } from 'react'
+import { createElement, useMemo } from 'react'
 // Why: this registry mirrors the Settings sidebar in one neutral module so
 // Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
 // imports; the boundary is enforced by a focused architecture test.
@@ -28,8 +28,11 @@ import {
   Smartphone,
   SquareTerminal,
   TextCursorInput,
-  UserCog
+  UserCog,
+  Wrench
 } from 'lucide-react'
+import type { LucideProps } from 'lucide-react'
+import logo from '../../../../resources/logo.svg'
 import type { Repo } from '../../../shared/types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import { useAppStore } from '@/store'
@@ -61,10 +64,25 @@ import { COMPUTER_USE_PANE_SEARCH_ENTRIES } from '@/components/settings/computer
 import { VOICE_PANE_SEARCH_ENTRIES } from '@/components/settings/voice-pane-search'
 import { DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES } from '@/components/settings/developer-permissions-search'
 import { PRIVACY_PANE_SEARCH_ENTRIES } from '@/components/settings/privacy-search'
+import { ADVANCED_PANE_SEARCH_ENTRIES } from '@/components/settings/advanced-search'
 import { SHORTCUTS_PANE_SEARCH_ENTRIES } from '@/components/settings/shortcuts-search'
 import { STATS_PANE_SEARCH_ENTRIES } from '@/components/stats/stats-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
+import { cn } from '@/lib/utils'
+import {
+  getCachedWindowsTerminalCapabilities,
+  getWindowsTerminalCapabilityOwnerKey
+} from '@/lib/windows-terminal-capabilities'
+
+function OrcaLogoSettingsIcon({ className }: LucideProps) {
+  return createElement('img', {
+    src: logo,
+    alt: '',
+    'aria-hidden': true,
+    className: cn('object-contain invert dark:invert-0', className)
+  })
+}
 
 export function isWebClientLocation(): boolean {
   return (
@@ -76,17 +94,19 @@ export function isWebClientLocation(): boolean {
 export function buildSettingsNavigationMetadata({
   isMac,
   isWindows,
+  isWindowsTerminalHost = isWindows,
   isWebClient,
   repos
 }: {
   isMac: boolean
   isWindows: boolean
+  isWindowsTerminalHost?: boolean
   isWebClient: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
-    isWindows,
+    isWindows: isWindowsTerminalHost,
     isMac
   })
   const runtimeEnvironmentsSearchEntry = isWebClient
@@ -94,21 +114,16 @@ export function buildSettingsNavigationMetadata({
     : RUNTIME_ENVIRONMENTS_SEARCH_ENTRY
 
   return [
-    {
-      id: 'general',
-      title: 'General',
-      description: 'Workspace defaults, app setup, and maintenance.',
-      icon: SlidersHorizontal,
-      searchEntries: GENERAL_PANE_SEARCH_ENTRIES,
-      group: 'setup'
-    },
+    // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
+    // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
+    // order — keep each new entry beside its group's siblings.
     {
       id: 'agents',
       title: 'Agents',
       description: 'Manage AI agents, set a default, and customize commands.',
       icon: Bot,
       searchEntries: AGENTS_PANE_SEARCH_ENTRIES,
-      group: 'setup'
+      group: 'capabilities'
     },
     {
       id: 'accounts',
@@ -116,8 +131,58 @@ export function buildSettingsNavigationMetadata({
       description: 'Optional account switching for Claude, Codex, Gemini, and OpenCode Go.',
       icon: UserCog,
       searchEntries: ACCOUNTS_PANE_SEARCH_ENTRIES,
-      group: 'setup',
+      group: 'capabilities',
       badge: 'Optional'
+    },
+    {
+      id: 'orchestration',
+      title: 'Orchestration',
+      description: 'Coordinate multiple coding agents through Orca.',
+      icon: Network,
+      searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES,
+      group: 'capabilities'
+    },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'computer-use',
+            title: 'Computer Use',
+            description: 'Enable agents to control any app on your computer.',
+            icon: MousePointerClick,
+            searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
+            group: 'capabilities'
+          },
+          {
+            id: 'voice',
+            title: 'Voice',
+            description: 'Local speech-to-text dictation with on-device models.',
+            icon: Mic,
+            searchEntries: VOICE_PANE_SEARCH_ENTRIES,
+            group: 'capabilities'
+          }
+        ]
+      : []),
+    {
+      id: 'setup-guide',
+      title: 'Onboarding checklist',
+      description: 'Finish the onboarding checklist for core Orca workflows.',
+      icon: OrcaLogoSettingsIcon,
+      searchEntries: [
+        {
+          title: 'Onboarding checklist',
+          description: 'Open the onboarding checklist for setup and milestone steps.',
+          keywords: ['setup guide', 'get started with Orca', 'getting started']
+        }
+      ],
+      group: 'setup'
+    },
+    {
+      id: 'general',
+      title: 'General',
+      description: 'Workspace defaults, app setup, and maintenance.',
+      icon: SlidersHorizontal,
+      searchEntries: GENERAL_PANE_SEARCH_ENTRIES,
+      group: 'setup'
     },
     {
       id: 'integrations',
@@ -146,33 +211,9 @@ export function buildSettingsNavigationMetadata({
       group: 'workflows'
     },
     {
-      id: 'floating-workspace',
-      title: 'Floating Workspace',
-      description: 'Global terminal, browser, and markdown tabs.',
-      icon: PanelsTopLeft,
-      searchEntries: FLOATING_WORKSPACE_SEARCH_ENTRIES,
-      group: 'workflows'
-    },
-    {
-      id: 'appearance',
-      title: 'Appearance',
-      description: 'Theme, zoom, app font, sidebars, and status bar.',
-      icon: Palette,
-      searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES,
-      group: 'interface'
-    },
-    {
-      id: 'input',
-      title: 'Input & Editing',
-      description: 'Selection and editing behavior.',
-      icon: TextCursorInput,
-      searchEntries: INPUT_PANE_SEARCH_ENTRIES,
-      group: 'interface'
-    },
-    {
       id: 'terminal',
       title: 'Terminal',
-      description: 'Shells, terminal appearance, and pane behavior.',
+      description: 'Shells, renderer, sessions, and terminal behavior.',
       icon: SquareTerminal,
       searchEntries: terminalPaneSearchEntries,
       group: 'workflows'
@@ -206,7 +247,35 @@ export function buildSettingsNavigationMetadata({
             icon: Globe,
             searchEntries: BROWSER_PANE_SEARCH_ENTRIES,
             group: 'workflows'
-          },
+          }
+        ]
+      : []),
+    {
+      id: 'floating-workspace',
+      title: 'Floating Workspace',
+      description: 'Global terminal, browser, and markdown tabs.',
+      icon: PanelsTopLeft,
+      searchEntries: FLOATING_WORKSPACE_SEARCH_ENTRIES,
+      group: 'workflows'
+    },
+    {
+      id: 'appearance',
+      title: 'Appearance',
+      description: 'Theme, zoom, app and terminal appearance, sidebars, and status bar.',
+      icon: Palette,
+      searchEntries: APPEARANCE_PANE_SEARCH_ENTRIES,
+      group: 'interface'
+    },
+    {
+      id: 'input',
+      title: 'Input & Editing',
+      description: 'Selection and editing behavior.',
+      icon: TextCursorInput,
+      searchEntries: INPUT_PANE_SEARCH_ENTRIES,
+      group: 'interface'
+    },
+    ...(showDesktopOnlySettings
+      ? [
           {
             id: 'notifications',
             title: 'Notifications',
@@ -218,12 +287,20 @@ export function buildSettingsNavigationMetadata({
         ]
       : []),
     {
-      id: 'orchestration',
-      title: 'Orchestration',
-      description: 'Coordinate multiple coding agents through Orca.',
-      icon: Network,
-      searchEntries: ORCHESTRATION_PANE_SEARCH_ENTRIES,
-      group: 'capabilities'
+      id: 'shortcuts',
+      title: 'Shortcuts',
+      description: 'Keyboard shortcuts for common actions.',
+      icon: Keyboard,
+      searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES,
+      group: 'interface'
+    },
+    {
+      id: 'stats',
+      title: 'Stats & Usage',
+      description: 'Orca stats plus Claude, Codex, and OpenCode usage analytics.',
+      icon: BarChart3,
+      searchEntries: STATS_PANE_SEARCH_ENTRIES,
+      group: 'interface'
     },
     {
       id: 'servers',
@@ -253,24 +330,6 @@ export function buildSettingsNavigationMetadata({
             icon: Smartphone,
             searchEntries: MOBILE_SETTINGS_PANE_SEARCH_ENTRIES,
             group: 'remote'
-          },
-          {
-            id: 'computer-use',
-            title: 'Computer Use',
-            description: 'Enable agents to control any app on your computer.',
-            icon: MousePointerClick,
-            searchEntries: COMPUTER_USE_PANE_SEARCH_ENTRIES,
-            group: 'capabilities',
-            badge: 'Beta'
-          },
-          {
-            id: 'voice',
-            title: 'Voice',
-            description: 'Local speech-to-text dictation with on-device models.',
-            icon: Mic,
-            searchEntries: VOICE_PANE_SEARCH_ENTRIES,
-            group: 'capabilities',
-            badge: 'Beta'
           }
         ]
       : []),
@@ -282,7 +341,7 @@ export function buildSettingsNavigationMetadata({
             description: 'macOS privacy access for terminal-launched developer tools.',
             icon: ShieldCheck,
             searchEntries: DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES,
-            group: 'safety'
+            group: 'security'
           }
         ]
       : []),
@@ -292,24 +351,20 @@ export function buildSettingsNavigationMetadata({
       description: 'Anonymous usage data and telemetry controls.',
       icon: Lock,
       searchEntries: PRIVACY_PANE_SEARCH_ENTRIES,
-      group: 'safety'
+      group: 'security'
     },
-    {
-      id: 'shortcuts',
-      title: 'Shortcuts',
-      description: 'Keyboard shortcuts for common actions.',
-      icon: Keyboard,
-      searchEntries: SHORTCUTS_PANE_SEARCH_ENTRIES,
-      group: 'interface'
-    },
-    {
-      id: 'stats',
-      title: 'Stats & Usage',
-      description: 'Orca stats plus Claude, Codex, and OpenCode usage analytics.',
-      icon: BarChart3,
-      searchEntries: STATS_PANE_SEARCH_ENTRIES,
-      group: 'interface'
-    },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'advanced',
+            title: 'Advanced',
+            description: 'Low-level compatibility settings for troubleshooting.',
+            icon: Wrench,
+            searchEntries: ADVANCED_PANE_SEARCH_ENTRIES,
+            group: 'advanced'
+          }
+        ]
+      : []),
     {
       id: 'experimental',
       title: 'Experimental',
@@ -331,15 +386,31 @@ export function buildSettingsNavigationMetadata({
 
 export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const repos = useAppStore((state) => state.repos)
+  const activeRuntimeEnvironmentId = useAppStore(
+    (state) => state.settings?.activeRuntimeEnvironmentId
+  )
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
+  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+    activeRuntimeEnvironmentId
+  )
+  const isWindowsTerminalHost =
+    isWindows ||
+    getCachedWindowsTerminalCapabilities(windowsTerminalCapabilityOwnerKey).hostPlatform === 'win32'
 
   // Why: Settings and Cmd+J share this metadata so platform/runtime visibility
   // and search entries cannot drift. Keep this hook free of Settings pane UI
   // imports; see docs/reference/cmd-j-settings-actions-plan.md.
   return useMemo(
-    () => buildSettingsNavigationMetadata({ isMac, isWindows, isWebClient, repos }),
-    [isMac, isWindows, isWebClient, repos]
+    () =>
+      buildSettingsNavigationMetadata({
+        isMac,
+        isWindows,
+        isWindowsTerminalHost,
+        isWebClient,
+        repos
+      }),
+    [isMac, isWindows, isWindowsTerminalHost, isWebClient, repos]
   )
 }

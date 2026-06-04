@@ -26,6 +26,49 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
 }
 
 describe('terminal mobile session layout publication', () => {
+  it('publishes large tab groups without using argument-list spreads', () => {
+    const tabCount = 130_000
+    const openFiles = Array.from({ length: tabCount }, (_, index) => ({
+      id: `/repo/file-${index}.ts`,
+      filePath: `/repo/file-${index}.ts`,
+      relativePath: `file-${index}.ts`,
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit',
+      isDirty: false
+    }))
+    const unifiedTabs = openFiles.map((file, index) => ({
+      id: `editor-tab-${index}`,
+      groupId: 'group-1',
+      contentType: 'editor',
+      entityId: file.id,
+      title: `file-${index}.ts`
+    }))
+    const state = makeState({
+      activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+      activeFileIdByWorktree: { 'wt-1': openFiles[0].id },
+      groupsByWorktree: {
+        'wt-1': [
+          {
+            id: 'group-1',
+            activeTabId: unifiedTabs[0].id,
+            tabOrder: unifiedTabs.map((tab) => tab.id)
+          }
+        ]
+      } as unknown as AppState['groupsByWorktree'],
+      unifiedTabsByWorktree: {
+        'wt-1': unifiedTabs
+      } as unknown as AppState['unifiedTabsByWorktree'],
+      openFiles: openFiles as AppState['openFiles']
+    })
+
+    const snapshot = buildMobileSessionTabSnapshots(state)[0]
+
+    expect(snapshot?.tabs).toHaveLength(tabCount)
+    expect(snapshot?.tabs[0]?.id).toBe('editor-tab-0')
+    expect(snapshot?.tabs.at(-1)?.id).toBe(`editor-tab-${tabCount - 1}`)
+  })
+
   it('publishes terminal parent layout so remote clients can keep split panes grouped', () => {
     const firstLeaf = '11111111-1111-4111-8111-111111111111'
     const secondLeaf = '22222222-2222-4222-8222-222222222222'

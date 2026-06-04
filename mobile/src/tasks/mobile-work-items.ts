@@ -3,7 +3,7 @@
 export const PER_REPO_FETCH_LIMIT = 36
 export const CROSS_REPO_DISPLAY_LIMIT = 100
 
-export const GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE =
+const GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE =
   'GitHub work items require a GitHub remote for SSH repositories'
 
 export function isGitHubWorkItemsSshRemoteRequiredError(error: unknown): boolean {

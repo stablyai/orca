@@ -1,4 +1,5 @@
 import { win32 as pathWin32 } from 'path'
+import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
   encodePowerShellCommand,
@@ -32,7 +33,14 @@ export type WindowsShellWslContext = {
 
 function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   const escapedLinuxCwd = linuxCwd.replace(/'/g, "'\\''")
-  const shellArgs = ['--', 'bash', '-c', `cd '${escapedLinuxCwd}' && exec bash -l`]
+  // Why: Orca's WSL bridge is installed under ~/.local/bin, but distro login
+  // files do not consistently include that directory before agent commands run.
+  const shellArgs = [
+    '--',
+    'bash',
+    '-c',
+    `cd '${escapedLinuxCwd}' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l`
+  ]
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
 
@@ -71,6 +79,14 @@ export function resolveWindowsShellLaunchArgs(
         '-EncodedCommand',
         encodePowerShellCommand(getPowerShellOsc133Bootstrap())
       ],
+      effectiveCwd: cwd,
+      validationCwd: cwd
+    }
+  }
+
+  if (isWindowsGitBashShellPath(shellPath)) {
+    return {
+      shellArgs: ['--login', '-i'],
       effectiveCwd: cwd,
       validationCwd: cwd
     }

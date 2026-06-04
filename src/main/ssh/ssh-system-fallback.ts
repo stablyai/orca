@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: system-ssh process wrapping and fallback file operations share cleanup contracts. */
 import { spawn, type ChildProcess } from 'child_process'
 import { existsSync } from 'fs'
 import { Duplex } from 'stream'
@@ -108,25 +109,25 @@ export async function uploadDirectoryViaSystemSsh(
     }
   )
 
-  const abort = (): void => {
-    killProcess(tarCreate)
-    killProcess(sshExtract)
-  }
-  options?.signal?.addEventListener('abort', abort, { once: true })
   let tarResult: ProcessResult | null = null
   let sshResult: ProcessResult | null = null
   try {
-    ;[tarResult, sshResult] = await Promise.all([
-      waitForProcess(tarCreate, 'local tar relay upload'),
-      waitForProcess(sshExtract, 'system ssh relay upload'),
-      pipeline(tarCreate.stdout!, sshExtract.stdin!)
-    ]).then(([tar, ssh]) => [tar, ssh])
+    ;[tarResult, sshResult] = await awaitWithSystemSshAbort(
+      options?.signal,
+      () => {
+        killProcess(tarCreate)
+        killProcess(sshExtract)
+      },
+      Promise.all([
+        waitForProcess(tarCreate, 'local tar relay upload'),
+        waitForProcess(sshExtract, 'system ssh relay upload'),
+        pipeline(tarCreate.stdout!, sshExtract.stdin!)
+      ]).then(([tar, ssh]) => [tar, ssh] as const)
+    )
   } catch (err) {
     killProcess(tarCreate)
     killProcess(sshExtract)
     throw err
-  } finally {
-    options?.signal?.removeEventListener('abort', abort)
   }
 
   if (tarResult?.stderr.trim()) {
@@ -145,17 +146,15 @@ export async function writeFileViaSystemSsh(
 ): Promise<void> {
   throwIfAborted(options?.signal)
   const channel = spawnSystemSshCommand(target, `cat > ${shellEscape(remotePath)}`)
-  const abort = (): void => {
-    channel.close()
+  const closePromise = awaitWithSystemSshAbort(
+    options?.signal,
+    () => channel.close(),
+    waitForChannelClose(channel, `write ${remotePath}`)
+  )
+  if (!options?.signal?.aborted) {
+    channel.stdin.end(contents)
   }
-  options?.signal?.addEventListener('abort', abort, { once: true })
-  const closePromise = waitForChannelClose(channel, `write ${remotePath}`)
-  channel.stdin.end(contents)
-  try {
-    await closePromise
-  } finally {
-    options?.signal?.removeEventListener('abort', abort)
-  }
+  await closePromise
 }
 
 export function buildSshArgs(target: SshTarget): string[] {
@@ -245,13 +244,46 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
     }
   }
 
-  proc.stdout!.on('data', (data) => duplex.push(data))
-  proc.stdout!.on('end', () => duplex.push(null))
-  proc.on('exit', (code, signal) => channel.emit('exit', code, signal))
-  proc.on('close', (code, signal) => channel.emit('close', code, signal))
-  proc.on('error', (err) => duplex.destroy(err))
-  proc.stdin!.on('error', (err) => duplex.destroy(err))
-  proc.stdout!.on('error', (err) => duplex.destroy(err))
+  const cleanupProcessListeners = (): void => {
+    proc.stdout!.off('data', onStdoutData)
+    proc.stdout!.off('end', onStdoutEnd)
+    proc.off('exit', onExit)
+    proc.off('close', onClose)
+    proc.off('error', onProcessError)
+    proc.stdin!.off('error', onStreamError)
+    proc.stdout!.off('error', onStreamError)
+  }
+  const fail = (err: Error): void => {
+    cleanupProcessListeners()
+    duplex.destroy(err)
+  }
+  const onStdoutData = (data: Buffer): void => {
+    duplex.push(data)
+  }
+  const onStdoutEnd = (): void => {
+    duplex.push(null)
+  }
+  const onExit = (code: number | null, signal?: NodeJS.Signals | null): void => {
+    channel.emit('exit', code, signal)
+  }
+  const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
+    cleanupProcessListeners()
+    channel.emit('close', code, signal)
+  }
+  const onProcessError = (err: Error): void => {
+    fail(err)
+  }
+  const onStreamError = (err: Error): void => {
+    fail(err)
+  }
+
+  proc.stdout!.on('data', onStdoutData)
+  proc.stdout!.on('end', onStdoutEnd)
+  proc.on('exit', onExit)
+  proc.on('close', onClose)
+  proc.on('error', onProcessError)
+  proc.stdin!.on('error', onStreamError)
+  proc.stdout!.on('error', onStreamError)
 
   return channel
 }
@@ -259,18 +291,33 @@ function wrapCommandProcess(proc: ChildProcess): SystemSshCommandChannel {
 function waitForChannelClose(channel: SystemSshCommandChannel, label: string): Promise<void> {
   return new Promise((resolve, reject) => {
     let stderr = ''
-    channel.stderr.on('data', (data: Buffer) => {
+    const cleanup = (): void => {
+      channel.stderr.off('data', onStderrData)
+      channel.off('error', onError)
+      channel.off('close', onClose)
+    }
+    const settle = (fn: typeof resolve | typeof reject, val?: unknown): void => {
+      cleanup()
+      fn(val as never)
+    }
+    const onStderrData = (data: Buffer): void => {
       stderr += data.toString('utf-8')
-    })
-    channel.on('error', reject)
-    channel.on('close', (code: number | null, signal?: NodeJS.Signals | null) => {
+    }
+    const onError = (err: Error): void => {
+      settle(reject, err)
+    }
+    const onClose = (code: number | null, signal?: NodeJS.Signals | null): void => {
       if (code !== 0) {
         const detail = code === null ? `signal ${signal ?? 'unknown'}` : `exit ${code}`
-        reject(new Error(`${label} failed (${detail}): ${stderr.trim()}`))
+        settle(reject, new Error(`${label} failed (${detail}): ${stderr.trim()}`))
         return
       }
-      resolve()
-    })
+      settle(resolve)
+    }
+
+    channel.stderr.on('data', onStderrData)
+    channel.on('error', onError)
+    channel.on('close', onClose)
   })
 }
 
@@ -279,17 +326,32 @@ type ProcessResult = { label: string; stderr: string }
 function waitForProcess(proc: ChildProcess, label: string): Promise<ProcessResult> {
   return new Promise((resolve, reject) => {
     let stderr = ''
-    proc.stderr?.on('data', (data: Buffer) => {
+    const cleanup = (): void => {
+      proc.stderr?.off('data', onStderrData)
+      proc.off('error', onError)
+      proc.off('close', onClose)
+    }
+    const settle = (fn: typeof resolve | typeof reject, val: ProcessResult | Error): void => {
+      cleanup()
+      fn(val as never)
+    }
+    const onStderrData = (data: Buffer): void => {
       stderr += data.toString('utf-8')
-    })
-    proc.on('error', reject)
-    proc.on('close', (code) => {
+    }
+    const onError = (err: Error): void => {
+      settle(reject, err)
+    }
+    const onClose = (code: number | null): void => {
       if (code !== 0) {
-        reject(new Error(`${label} failed (exit ${code}): ${stderr.trim()}`))
+        settle(reject, new Error(`${label} failed (exit ${code}): ${stderr.trim()}`))
         return
       }
-      resolve({ label, stderr })
-    })
+      settle(resolve, { label, stderr })
+    }
+
+    proc.stderr?.on('data', onStderrData)
+    proc.on('error', onError)
+    proc.on('close', onClose)
   })
 }
 
@@ -304,11 +366,54 @@ function killProcess(proc: ChildProcess): void {
   }
 }
 
+async function awaitWithSystemSshAbort<T>(
+  signal: AbortSignal | undefined,
+  abortChildren: () => void,
+  operation: Promise<T>
+): Promise<T> {
+  if (!signal) {
+    return operation
+  }
+  let abortReject: ((error: Error) => void) | null = null
+  let suppressLateOperationError = false
+  const abortPromise = new Promise<never>((_resolve, reject) => {
+    abortReject = reject
+  })
+  const abort = (): void => {
+    // Why: abort is connection teardown; do not wait for stubborn system ssh/tar
+    // children to emit close after we've already signaled them.
+    abortChildren()
+    suppressLateOperationError = true
+    abortReject?.(createAbortError())
+  }
+  signal.addEventListener('abort', abort, { once: true })
+  if (signal.aborted) {
+    abort()
+  }
+  try {
+    return await Promise.race([
+      operation.catch((error: unknown) => {
+        if (suppressLateOperationError) {
+          return new Promise<never>(() => {})
+        }
+        throw error
+      }),
+      abortPromise
+    ])
+  } finally {
+    signal.removeEventListener('abort', abort)
+  }
+}
+
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (!signal?.aborted) {
     return
   }
+  throw createAbortError()
+}
+
+function createAbortError(): Error & { name: string } {
   const error = new Error('System SSH operation was cancelled') as Error & { name: string }
   error.name = 'AbortError'
-  throw error
+  return error
 }

@@ -5,9 +5,12 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
+import { toast } from 'sonner'
 
 // Mock sonner (imported by repos.ts)
-vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+vi.mock('sonner', () => ({
+  toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
+}))
 
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
@@ -24,6 +27,7 @@ const mockApi = {
     list: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({}),
     remove: vi.fn().mockResolvedValue(undefined),
+    forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
     updateMeta: vi.fn().mockResolvedValue({})
   },
   repos: {
@@ -75,6 +79,7 @@ describe('removeWorktree cascade', () => {
     vi.clearAllMocks()
     clearRuntimeCompatibilityCacheForTests()
     mockApi.worktrees.remove.mockResolvedValue(undefined)
+    mockApi.worktrees.forceDeletePreservedBranch.mockResolvedValue({ deleted: true })
     mockApi.runtimeEnvironments.call.mockReset()
     mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) =>
       Promise.resolve(
@@ -156,6 +161,57 @@ describe('removeWorktree cascade', () => {
     expect(s.activeTabTypeByWorktree[worktreeId]).toBeUndefined()
   })
 
+  it('warns when workspace removal keeps the local branch', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/path/wt1'
+    mockApi.worktrees.remove.mockResolvedValueOnce({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo1',
+            path: '/path/wt1',
+            displayName: 'Review cleanup'
+          })
+        ]
+      }
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({
+      ok: true,
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
+    expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
+      description:
+        'Git could not safely delete branch "feature/test" after deleting worktree "Review cleanup", so Orca kept it to avoid losing local commits.',
+      action: {
+        label: 'Force Delete Branch',
+        onClick: expect.any(Function)
+      }
+    })
+
+    const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as
+      | { onClick?: () => void }
+      | undefined
+    action?.onClick?.()
+    await vi.waitFor(() => {
+      expect(mockApi.worktrees.forceDeletePreservedBranch).toHaveBeenCalledWith({
+        worktreeId,
+        branchName: 'feature/test',
+        expectedHead: 'def456'
+      })
+    })
+    expect(toast.success).toHaveBeenCalledWith('Local branch deleted', {
+      description: 'Deleted "feature/test".'
+    })
+  })
+
   it('sets delete state with dirty/untracked error and canForceDelete=true on failure', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
@@ -189,6 +245,25 @@ describe('removeWorktree cascade', () => {
     expect(s.ptyIdsByTabId['tab1']).toEqual(['pty1'])
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
     expect(s.activeWorktreeId).toBe(worktreeId)
+  })
+
+  it('marks multiple worktrees deleting in one optimistic state update', () => {
+    const store = createTestStore()
+    const first = 'repo1::/path/wt1'
+    const second = 'repo1::/path/wt2'
+
+    seedStore(store, {
+      deleteStateByWorktreeId: {
+        [first]: { isDeleting: false, error: 'old failure', canForceDelete: true }
+      }
+    })
+
+    store.getState().markWorktreesDeleting([first, second, first])
+
+    expect(store.getState().deleteStateByWorktreeId).toMatchObject({
+      [first]: { isDeleting: true, error: null, canForceDelete: false },
+      [second]: { isDeleting: true, error: null, canForceDelete: false }
+    })
   })
 
   it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
@@ -686,6 +761,62 @@ describe('setActiveWorktree', () => {
     expect(store.getState().rightSidebarTab).toBe('checks')
   })
 
+  it('does not notify subscribers when reselecting the already-active reconciled worktree', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const tabId = 'terminal-1'
+    const groupId = 'group-1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      activeWorktreeId: wt,
+      activeTabId: tabId,
+      activeTabType: 'terminal',
+      activeTabTypeByWorktree: { [wt]: 'terminal' },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: tabId, worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { [tabId]: ['pty-1'] },
+      unifiedTabsByWorktree: {
+        [wt]: [
+          makeUnifiedTab({
+            id: tabId,
+            entityId: tabId,
+            worktreeId: wt,
+            groupId,
+            contentType: 'terminal'
+          })
+        ]
+      },
+      groupsByWorktree: {
+        [wt]: [
+          makeTabGroup({
+            id: groupId,
+            worktreeId: wt,
+            activeTabId: tabId,
+            tabOrder: [tabId]
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [wt]: groupId },
+      everActivatedWorktreeIds: new Set([wt]),
+      refreshGitHubForWorktree: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn()
+    })
+
+    const before = store.getState()
+    const listener = vi.fn()
+    const unsubscribe = store.subscribe(listener)
+
+    store.getState().setActiveWorktree(wt)
+
+    unsubscribe()
+    expect(listener).not.toHaveBeenCalled()
+    expect(store.getState()).toBe(before)
+  })
+
   it('does not clobber the current right sidebar tab when clearing the active worktree', () => {
     const store = createTestStore()
 
@@ -1012,6 +1143,43 @@ describe('setActiveWorktree', () => {
       })
 
       const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
+      expect(terminal.shellOverride).toBeUndefined()
+    } finally {
+      Object.defineProperty(globalThis, 'navigator', {
+        value: originalNavigator,
+        configurable: true
+      })
+    }
+  })
+
+  it('does not offer Git Bash as a local shell override for SSH terminal tabs', () => {
+    const originalNavigator = globalThis.navigator
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+      configurable: true
+    })
+    try {
+      const store = createTestStore()
+      const wt = 'remote-repo::/path/wt1'
+
+      seedStore(store, {
+        repos: [
+          {
+            id: 'remote-repo',
+            path: '/remote/repo',
+            displayName: 'Remote Repo',
+            badgeColor: '#000',
+            addedAt: 0,
+            connectionId: 'ssh-1'
+          }
+        ],
+        settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'git-bash' },
+        worktreesByRepo: {
+          'remote-repo': [makeWorktree({ id: wt, repoId: 'remote-repo', path: '/path/wt1' })]
+        }
+      })
+
+      const terminal = store.getState().createTab(wt, undefined, 'git-bash')
       expect(terminal.shellOverride).toBeUndefined()
     } finally {
       Object.defineProperty(globalThis, 'navigator', {

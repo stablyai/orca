@@ -90,8 +90,40 @@ const DISCOVERY_MAX_ORGS = 20
 const DISCOVERY_ORG_PAGE_SIZE = 20
 const DISCOVERY_PROJECTS_PER_ORG = 20
 const FIELD_VALUES_PAGE_SIZE = 100
+export const PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES = 512
 
 // ─── Module-scope caches (reset on HMR — intentional) ──────────────────
+
+// Why: pasted and discovered GitHub owners are user-controlled across a long
+// main-process session; keep capability probes bounded to avoid unbounded
+// retention while preserving the hot-owner fast path.
+function rememberProjectViewCacheEntry<K, V>(
+  cache: Map<K, V>,
+  key: K,
+  value: V,
+  maxEntries = PROJECT_VIEW_OWNER_CACHE_MAX_ENTRIES
+): void {
+  if (cache.has(key)) {
+    cache.delete(key)
+  }
+  cache.set(key, value)
+  while (cache.size > maxEntries) {
+    const oldest = cache.keys().next()
+    if (oldest.done) {
+      break
+    }
+    cache.delete(oldest.value)
+  }
+}
+
+function getProjectViewCacheEntry<K, V>(cache: Map<K, V>, key: K): V | undefined {
+  if (!cache.has(key)) {
+    return undefined
+  }
+  const value = cache.get(key) as V
+  rememberProjectViewCacheEntry(cache, key, value)
+  return value
+}
 
 // Why: HMR reloading should re-probe capability. Both caches live as plain
 // module locals so a dev-time code swap naturally re-runs capability probes
@@ -101,8 +133,8 @@ const ownerTypeCache = new Map<string, GitHubProjectOwnerType | null>()
 // a single owner's capability gap (e.g. token without scope on org A) doesn't
 // poison every subsequent fetch for unrelated owners that DO support
 // Issue.parent. See bug-scan finding 2.
-const parentFieldRetriedByOwner = new Set<string>()
-const parentFieldWarningLoggedByOwner = new Set<string>()
+const parentFieldRetriedByOwner = new Map<string, true>()
+const parentFieldWarningLoggedByOwner = new Map<string, true>()
 // Why: concurrent fetchAllItems calls for the same owner all observe the
 // same "not-yet-retried" state, each issuing a duplicate first-page probe
 // and racing to set the flag. Use an in-flight promise per owner so only
@@ -113,12 +145,84 @@ function ownerScopeKey(owner: string, ownerType: GitHubProjectOwnerType): string
   return `${owner}\u0000${ownerType}`
 }
 
-/** @internal — test-only */
-export function _resetProjectViewModuleState(): void {
+function rememberOwnerType(owner: string, ownerType: GitHubProjectOwnerType | null): void {
+  rememberProjectViewCacheEntry(ownerTypeCache, owner, ownerType)
+}
+
+function getCachedOwnerType(owner: string): GitHubProjectOwnerType | null | undefined {
+  return getProjectViewCacheEntry(ownerTypeCache, owner)
+}
+
+function markParentFieldRetried(scopeKey: string): void {
+  rememberProjectViewCacheEntry(parentFieldRetriedByOwner, scopeKey, true)
+}
+
+function hasParentFieldRetried(scopeKey: string): boolean {
+  return getProjectViewCacheEntry(parentFieldRetriedByOwner, scopeKey) === true
+}
+
+function markParentFieldWarningLogged(scopeKey: string): void {
+  rememberProjectViewCacheEntry(parentFieldWarningLoggedByOwner, scopeKey, true)
+}
+
+function hasParentFieldWarningLogged(scopeKey: string): boolean {
+  return getProjectViewCacheEntry(parentFieldWarningLoggedByOwner, scopeKey) === true
+}
+
+export function _resetProjectViewCachesForTests(): void {
   ownerTypeCache.clear()
   parentFieldRetriedByOwner.clear()
   parentFieldWarningLoggedByOwner.clear()
   parentFieldProbeInFlight.clear()
+}
+
+export function _getProjectViewCacheSizesForTests(): {
+  ownerTypes: number
+  parentFieldRetries: number
+  parentFieldWarnings: number
+  parentFieldProbes: number
+} {
+  return {
+    ownerTypes: ownerTypeCache.size,
+    parentFieldRetries: parentFieldRetriedByOwner.size,
+    parentFieldWarnings: parentFieldWarningLoggedByOwner.size,
+    parentFieldProbes: parentFieldProbeInFlight.size
+  }
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _rememberProjectViewOwnerTypeForTests(
+  owner: string,
+  ownerType: GitHubProjectOwnerType | null
+): void {
+  rememberOwnerType(owner, ownerType)
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _getProjectViewOwnerTypeForTests(
+  owner: string
+): GitHubProjectOwnerType | null | undefined {
+  return getCachedOwnerType(owner)
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _markProjectViewParentFieldRetriedForTests(scopeKey: string): void {
+  markParentFieldRetried(scopeKey)
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _hasProjectViewParentFieldRetriedForTests(scopeKey: string): boolean {
+  return hasParentFieldRetried(scopeKey)
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _markProjectViewParentFieldWarningLoggedForTests(scopeKey: string): void {
+  markParentFieldWarningLogged(scopeKey)
+}
+
+/** @internal - exposed for cache-bound tests only. */
+export function _hasProjectViewParentFieldWarningLoggedForTests(scopeKey: string): boolean {
+  return hasParentFieldWarningLogged(scopeKey)
 }
 
 // ─── Normalizers ───────────────────────────────────────────────────────
@@ -282,6 +386,7 @@ export function normalizeFieldValue(
         .filter((u): u is GitHubProjectUser => u !== null)
       return { kind: 'users', fieldId, users }
     }
+    case undefined:
     default:
       // Unknown __typename → forward-compat: drop silently, do not throw,
       // do not classify as drift (see design §Error Handling).
@@ -890,7 +995,7 @@ async function fetchAllItems(args: {
   if (inFlight) {
     await inFlight.catch(() => {})
   }
-  let includeParent = !parentFieldRetriedByOwner.has(scopeKey)
+  let includeParent = !hasParentFieldRetried(scopeKey)
   let parentFieldDropped = !includeParent
   // First page — single-flight the with-parent attempt PER OWNER so
   // concurrent callers for the same owner observe one probe result instead
@@ -924,7 +1029,7 @@ async function fetchAllItems(args: {
         // parentFieldProbeInFlight=null and parentFieldRetriedByOwner without
         // the scopeKey, then issue duplicate with-parent probes.
         if (!result.ok && errorsIndicateParentField(result.rawErrors, result.stderr)) {
-          parentFieldRetriedByOwner.add(scopeKey)
+          markParentFieldRetried(scopeKey)
         }
         return result
       } finally {
@@ -948,14 +1053,14 @@ async function fetchAllItems(args: {
     // Retry the whole table without parent. Mark this owner as retried so
     // subsequent fetches against the same owner skip the probe — but other
     // owners are unaffected.
-    parentFieldRetriedByOwner.add(scopeKey)
+    markParentFieldRetried(scopeKey)
     includeParent = false
     parentFieldDropped = true
-    if (!parentFieldWarningLoggedByOwner.has(scopeKey)) {
+    if (!hasParentFieldWarningLogged(scopeKey)) {
       console.warn(
         `[project-view] Issue.parent is not available for ${args.owner} on this token — retrying without the parent selection.`
       )
-      parentFieldWarningLoggedByOwner.add(scopeKey)
+      markParentFieldWarningLogged(scopeKey)
     }
     first = await fetchItemsPageWithRaw({
       owner: args.owner,
@@ -1410,7 +1515,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
       // Cache owner → ownerType for downstream paste/resolve even when the
       // nested projects query was empty or partially failed — paste-to-add
       // uses this to disambiguate /orgs/ vs /users/ URLs.
-      ownerTypeCache.set(login, 'organization')
+      rememberOwnerType(login, 'organization')
       const nodes = org.projectsV2?.nodes ?? []
       let ownerCount = 0
       for (const n of nodes) {
@@ -1438,7 +1543,7 @@ export async function listAccessibleProjects(): Promise<ListAccessibleProjectsRe
   }
 
   if (viewerLogin) {
-    ownerTypeCache.set(viewerLogin, 'user')
+    rememberOwnerType(viewerLogin, 'user')
   }
 
   return {
@@ -1544,7 +1649,7 @@ async function resolveOwnerType(
     return { ok: true, title: '' }
   }
 
-  const cached = ownerTypeCache.get(owner)
+  const cached = getCachedOwnerType(owner)
   const candidates: GitHubProjectOwnerType[] = preferred
     ? [preferred]
     : cached
@@ -1562,7 +1667,7 @@ async function resolveOwnerType(
   for (const ot of ordered) {
     const r = await tryOne(ot, null)
     if (r.ok) {
-      ownerTypeCache.set(owner, ot)
+      rememberOwnerType(owner, ot)
       return { ok: true, ownerType: ot, title: r.title }
     }
     lastError = r.error
@@ -1571,7 +1676,7 @@ async function resolveOwnerType(
       return { ok: false, error: r.error }
     }
   }
-  ownerTypeCache.set(owner, null)
+  rememberOwnerType(owner, null)
   return {
     ok: false,
     error: lastError ?? { type: 'not_found', message: 'Owner not found.' }

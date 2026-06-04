@@ -84,21 +84,31 @@ async function launchExternalEditor(pathValue: string, command?: string): Promis
       windowsHide: true
     })
     let settled = false
-    const settle = (callback: () => void): void => {
+
+    function cleanup(): void {
+      child.off('error', onError)
+      child.off('spawn', onSpawn)
+    }
+
+    function settle(callback: () => void): void {
       if (settled) {
         return
       }
       settled = true
+      cleanup()
       callback()
     }
 
-    child.once('error', (error) => {
+    function onError(error: Error): void {
       settle(() => rejectPromise(error))
-    })
-    child.once('spawn', () => {
+    }
+
+    function onSpawn(): void {
       child.unref()
       settle(resolvePromise)
-    })
+    }
+    child.once('error', onError)
+    child.once('spawn', onSpawn)
   })
 }
 
@@ -115,6 +125,19 @@ async function openInExternalEditor(
     return { ok: true }
   } catch {
     return { ok: false, reason: 'launch-failed' }
+  }
+}
+
+async function openWithSystemDefault(pathValue: string): Promise<boolean> {
+  const target = await validateLocalPathTarget(pathValue)
+  if (!target.ok) {
+    return false
+  }
+  try {
+    const errorMessage = await shell.openPath(target.path)
+    return errorMessage.length === 0
+  } catch {
+    return false
   }
 }
 
@@ -149,16 +172,8 @@ export function registerShellHandlers(): void {
     return shell.openExternal(parsed.toString())
   })
 
-  ipcMain.handle('shell:openFilePath', async (_event, filePath: string) => {
-    const target = await validateLocalPathTarget(filePath)
-    if (!target.ok) {
-      return
-    }
-    try {
-      await shell.openPath(target.path)
-    } catch {
-      // Why: legacy file-open IPC is best-effort; callers already treat failure as a no-op.
-    }
+  ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
+    return openWithSystemDefault(filePath)
   })
 
   ipcMain.handle('shell:openFileUri', async (_event, rawUri: string) => {
@@ -190,11 +205,7 @@ export function registerShellHandlers(): void {
       return
     }
 
-    try {
-      await shell.openPath(target.path)
-    } catch {
-      // Why: legacy file-open IPC is best-effort; callers already treat failure as a no-op.
-    }
+    await openWithSystemDefault(target.path)
   })
 
   ipcMain.handle('shell:pathExists', async (_event, filePath: string): Promise<boolean> => {

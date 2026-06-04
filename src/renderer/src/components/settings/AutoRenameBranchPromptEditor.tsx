@@ -1,0 +1,89 @@
+import { buildBranchNamePrompt } from '../../../../shared/branch-name-from-work'
+import { Button } from '../ui/button'
+import { Label } from '../ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+
+const BUILT_IN_BRANCH_NAME_PROMPT = buildBranchNamePrompt({
+  firstPrompt: '{first agent prompt}',
+  assistantMessage: '{agent initial response, when available}'
+})
+
+type AutoRenameBranchPromptEditorProps = {
+  draft: string
+  dirty: boolean
+  saving: boolean
+  onDraftChange: (value: string) => void
+  onDiscard: () => void
+  onSave: () => void | Promise<void>
+}
+
+export function AutoRenameBranchPromptEditor({
+  draft,
+  dirty,
+  saving,
+  onDraftChange,
+  onDiscard,
+  onSave
+}: AutoRenameBranchPromptEditorProps): React.JSX.Element {
+  return (
+    <div className="space-y-2">
+      <div className="space-y-0.5">
+        <Label htmlFor="git-auto-rename-branch-name-prompt">Branch name prompt</Label>
+        <p className="text-xs text-muted-foreground">
+          Appended to Orca&apos;s{' '}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="inline rounded-sm font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                built-in branch-name prompt
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="bottom"
+              className="w-[520px] max-w-[calc(100vw-2rem)] p-3"
+            >
+              <div>
+                <pre className="scrollbar-sleek max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                  {BUILT_IN_BRANCH_NAME_PROMPT}
+                </pre>
+              </div>
+            </PopoverContent>
+          </Popover>
+          . Orca generates only the final segment, like{' '}
+          <code className="font-mono">fix-login-flow</code>; your branch prefix setting still
+          applies.
+        </p>
+      </div>
+      <textarea
+        id="git-auto-rename-branch-name-prompt"
+        rows={4}
+        value={draft}
+        onChange={(event) => onDraftChange(event.target.value)}
+        placeholder="Prefer domain nouns from the task, avoid ticket IDs, and keep names reviewer-friendly."
+        className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+      />
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] text-muted-foreground">{dirty ? 'Unsaved changes' : 'Saved'}</p>
+        <div className="flex items-center gap-2">
+          {dirty ? (
+            <Button type="button" variant="ghost" size="xs" onClick={onDiscard} disabled={saving}>
+              Discard
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            onClick={() => void onSave()}
+            disabled={!dirty || saving}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -11,6 +11,10 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
+import {
+  AGENT_GENERATED_TAB_TITLES_DESCRIPTION,
+  AGENT_GENERATED_TAB_TITLES_TITLE
+} from './agent-generated-tab-title-copy'
 import { AgentLocationSetting } from './AgentLocationSetting'
 import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
 import {
@@ -26,9 +30,12 @@ import {
 
 export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
@@ -353,8 +360,9 @@ function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps):
 export function AgentsPane({
   settings,
   updateSettings,
+  wslSupportedPlatform = false,
   wslAvailable = false,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false
 }: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
@@ -424,6 +432,7 @@ export function AgentsPane({
         settings={settings}
         updateSettings={updateSettings}
         refresh={refresh}
+        wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslDistros={wslDistros}
         wslCapabilitiesLoading={wslCapabilitiesLoading}
@@ -469,6 +478,8 @@ export function AgentsPane({
       </section>
 
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
+
+      <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
 
       <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
 
@@ -576,6 +587,28 @@ export function AgentStatusHooksSetting({
           })
         }
         ariaLabel={AGENT_STATUS_HOOKS_TITLE}
+      />
+    </section>
+  )
+}
+
+export function AgentGeneratedTabTitlesSetting({
+  settings,
+  updateSettings
+}: AgentsPaneProps): React.JSX.Element {
+  const enabled = settings.tabAutoGenerateTitle === true
+  return (
+    <section className="space-y-3">
+      <SettingsSwitchRow
+        label={AGENT_GENERATED_TAB_TITLES_TITLE}
+        description={AGENT_GENERATED_TAB_TITLES_DESCRIPTION}
+        checked={enabled}
+        onChange={() =>
+          updateSettings({
+            tabAutoGenerateTitle: !enabled
+          })
+        }
+        ariaLabel={AGENT_GENERATED_TAB_TITLES_TITLE}
       />
     </section>
   )

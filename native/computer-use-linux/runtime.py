@@ -23,14 +23,20 @@ import gi
 gi.require_version("Atspi", "2.0")
 try:
     gi.require_version("Gdk", "3.0")
-    from gi.repository import Gdk
+    gi.require_version("GdkPixbuf", "2.0")
+    from gi.repository import Gdk, GdkPixbuf
 except (ImportError, ValueError):
     Gdk = None
+    GdkPixbuf = None
 from gi.repository import Atspi
 
 MAX_NODES = 1200
 MAX_DEPTH = 64
 TEXT_LIMIT = 500
+MAX_SCREENSHOT_PNG_BYTES = 900_000
+MAX_SCREENSHOT_EDGE = 1280
+MIN_SCREENSHOT_SCALE = 0.25
+SCREENSHOT_SCALE_STEP = 0.85
 BLOCKED_APP_FRAGMENTS = (
     "1password",
     "bitwarden",
@@ -400,7 +406,7 @@ def render_accessibility_tree(root, window_rect, root_path):
 
 
 def capture_png(rect):
-    if Gdk is None or rect is None or os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
+    if Gdk is None or GdkPixbuf is None or rect is None or os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland":
         return None
     screen = Gdk.Screen.get_default()
     root = screen.get_root_window() if screen else None
@@ -409,8 +415,59 @@ def capture_png(rect):
     pixbuf = Gdk.pixbuf_get_from_window(root, round(rect.x), round(rect.y), max(1, round(rect.width)), max(1, round(rect.height)))
     if pixbuf is None:
         return None
+    return bounded_png_payload(pixbuf)
+
+
+def png_bytes(pixbuf):
     ok, data = pixbuf.save_to_bufferv("png", [], [])
-    return base64.b64encode(bytes(data)).decode("ascii") if ok else None
+    return bytes(data) if ok else None
+
+
+def screenshot_payload(data, width, height, original_width):
+    return {
+        "base64": base64.b64encode(data).decode("ascii"),
+        "width": width,
+        "height": height,
+        "scale": width / max(1, original_width),
+    }
+
+
+def bounded_png_payload(pixbuf):
+    original_width = max(1, pixbuf.get_width())
+    original_height = max(1, pixbuf.get_height())
+    data = png_bytes(pixbuf)
+    if data is None:
+        return None
+    if len(data) <= MAX_SCREENSHOT_PNG_BYTES:
+        return screenshot_payload(data, original_width, original_height, original_width)
+
+    # Why: screenshots are sent through JSON/stdout; matching macOS bounds keeps
+    # large or high-DPI windows from multiplying native, base64, and Node memory.
+    best_data = data
+    best_width = original_width
+    best_height = original_height
+    scale = min(1.0, MAX_SCREENSHOT_EDGE / max(original_width, original_height))
+    while scale >= MIN_SCREENSHOT_SCALE:
+        width = max(1, round(original_width * scale))
+        height = max(1, round(original_height * scale))
+        if width == best_width and height == best_height:
+            scale *= SCREENSHOT_SCALE_STEP
+            continue
+        scaled = pixbuf.scale_simple(width, height, GdkPixbuf.InterpType.BILINEAR)
+        if scaled is None:
+            scale *= SCREENSHOT_SCALE_STEP
+            continue
+        candidate = png_bytes(scaled)
+        if candidate is not None:
+            if len(candidate) <= MAX_SCREENSHOT_PNG_BYTES:
+                return screenshot_payload(candidate, width, height, original_width)
+            if len(candidate) < len(best_data):
+                best_data = candidate
+                best_width = width
+                best_height = height
+        scale *= SCREENSHOT_SCALE_STEP
+
+    return screenshot_payload(best_data, best_width, best_height, original_width)
 
 
 def first_descendant(root, predicate):
@@ -470,13 +527,17 @@ def make_snapshot(query, include_screenshot, window_id=None, window_index=None, 
     window_index, window = choose_window(app, window_id, window_index)
     bounds = screen_rect(window)
     records, lines, truncation = render_accessibility_tree(window, bounds, [window_index])
+    screenshot = capture_png(bounds) if include_screenshot else None
     return {
         "snapshotId": str(uuid.uuid4()),
         "app": app_json(app),
         "windowTitle": name_of(window),
         "windowId": window_index,
         "windowBounds": bounds.to_json() if bounds else None,
-        "screenshotPngBase64": capture_png(bounds) if include_screenshot else None,
+        "screenshotPngBase64": screenshot["base64"] if screenshot else None,
+        "screenshotWidth": screenshot["width"] if screenshot else None,
+        "screenshotHeight": screenshot["height"] if screenshot else None,
+        "screenshotScale": screenshot["scale"] if screenshot else None,
         "coordinateSpace": "window",
         "truncation": truncation,
         "treeLines": lines,
@@ -503,7 +564,7 @@ def handshake_response():
     is_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
     has_hotkey = shutil.which("xdotool") is not None and not is_wayland
     has_clipboard = any(shutil.which(command) for command in ("wl-copy", "xclip", "xsel"))
-    has_screenshot = Gdk is not None and not is_wayland
+    has_screenshot = Gdk is not None and GdkPixbuf is not None and not is_wayland
     return {
         "platform": "linux",
         "provider": "orca-computer-use-linux",

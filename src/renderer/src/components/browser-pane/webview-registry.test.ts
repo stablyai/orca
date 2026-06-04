@@ -124,6 +124,20 @@ describe('webview registry drag listeners', () => {
     expect(addedListeners).toHaveLength(3)
   })
 
+  it('profiles live webviews and registered browser guests for memory breadcrumbs', async () => {
+    const { getBrowserWebviewMemoryProfile, registeredWebContentsIds, registerPersistentWebview } =
+      await import('./webview-registry')
+
+    registerPersistentWebview('page-1', createWebview())
+    registerPersistentWebview('page-2', createWebview())
+    registeredWebContentsIds.set('page-1', 101)
+
+    expect(getBrowserWebviewMemoryProfile()).toEqual({
+      browserWebviewCount: 2,
+      registeredBrowserGuestCount: 1
+    })
+  })
+
   it('keeps webviews in passthrough until every renderer drag releases', async () => {
     const { acquireWebviewsDragPassthrough, registerPersistentWebview } =
       await import('./webview-registry')

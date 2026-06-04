@@ -102,6 +102,47 @@ describe('Branch source results', () => {
     ])
   })
 
+  it('uses Linear rows from a paginated collection shape', () => {
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'smart',
+      value: '',
+      branches: [],
+      githubItems: [],
+      gitlabItems: [],
+      linearIssues: {
+        items: [{ id: 'linear-1', identifier: 'ENG-1', title: 'Fix composer crash' } as never],
+        hasMore: true
+      },
+      gitlabAvailable: false,
+      linearAvailable: true,
+      resultLimit: 12
+    })
+
+    expect(rows).toEqual([
+      {
+        kind: 'linear',
+        value: 'linear-linear-1',
+        issue: { id: 'linear-1', identifier: 'ENG-1', title: 'Fix composer crash' }
+      }
+    ])
+  })
+
+  it('ignores malformed Linear collection rows instead of throwing during render', () => {
+    expect(() =>
+      buildSmartWorkspaceSourceRows({
+        mode: 'smart',
+        value: '',
+        branches: [],
+        githubItems: [],
+        gitlabItems: [],
+        linearIssues: { items: { id: 'not-an-array' } } as never,
+        gitlabAvailable: false,
+        linearAvailable: true,
+        resultLimit: 12
+      })
+    ).not.toThrow()
+  })
+
   it('describes empty Branch results after the empty-query search runs', () => {
     expect(getSmartWorkspaceEmptyHint('branches')).toBe('No matching branches.')
   })

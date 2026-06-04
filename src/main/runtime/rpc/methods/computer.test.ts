@@ -9,7 +9,8 @@ const computerMocks = vi.hoisted(() => ({
   callComputerSidecarListWindows: vi.fn(),
   callComputerSidecarSnapshot: vi.fn(),
   resetComputerSidecarForTest: vi.fn(),
-  openComputerUsePermissions: vi.fn()
+  openComputerUsePermissions: vi.fn(),
+  getComputerUsePermissionStatus: vi.fn()
 }))
 
 vi.mock('../../../computer/sidecar-client', () => ({
@@ -22,7 +23,8 @@ vi.mock('../../../computer/sidecar-client', () => ({
 }))
 
 vi.mock('../../../computer/macos-computer-use-permissions', () => ({
-  openComputerUsePermissions: computerMocks.openComputerUsePermissions
+  openComputerUsePermissions: computerMocks.openComputerUsePermissions,
+  getComputerUsePermissionStatus: computerMocks.getComputerUsePermissionStatus
 }))
 
 import { COMPUTER_METHODS, resetComputerSessionsForTest } from './computer'
@@ -36,6 +38,7 @@ describe('computer RPC methods', () => {
     computerMocks.callComputerSidecarSnapshot.mockReset()
     computerMocks.resetComputerSidecarForTest.mockReset()
     computerMocks.openComputerUsePermissions.mockReset()
+    computerMocks.getComputerUsePermissionStatus.mockReset()
     resetComputerSessionsForTest()
     computerMocks.resetComputerSidecarForTest.mockClear()
   })
@@ -54,6 +57,7 @@ describe('computer RPC methods', () => {
       'computer.pasteText',
       'computer.performSecondaryAction',
       'computer.permissions',
+      'computer.permissionsStatus',
       'computer.pressKey',
       'computer.scroll',
       'computer.setValue',
@@ -94,8 +98,21 @@ describe('computer RPC methods', () => {
     }
     computerMocks.openComputerUsePermissions.mockReturnValue(result)
 
-    await expect(call('computer.permissions', {})).resolves.toBe(result)
-    expect(computerMocks.openComputerUsePermissions).toHaveBeenCalledWith()
+    await expect(call('computer.permissions', { id: 'accessibility' })).resolves.toBe(result)
+    expect(computerMocks.openComputerUsePermissions).toHaveBeenCalledWith('accessibility')
+  })
+
+  it('returns computer-use permission status', async () => {
+    const result = {
+      platform: 'darwin',
+      helperAppPath: '/Applications/Orca Computer Use.app',
+      helperUnavailableReason: null,
+      permissions: [{ id: 'accessibility', status: 'granted' }]
+    }
+    computerMocks.getComputerUsePermissionStatus.mockReturnValue(result)
+
+    await expect(call('computer.permissionsStatus', {})).resolves.toBe(result)
+    expect(computerMocks.getComputerUsePermissionStatus).toHaveBeenCalledWith()
   })
 
   it('lists windows through the sidecar', async () => {

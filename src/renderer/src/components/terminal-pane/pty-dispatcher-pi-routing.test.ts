@@ -217,4 +217,22 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
 
     transport.disconnect()
   })
+
+  it('surfaces synthesized "Codex ready" idle titles after Codex spinner titles', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const onTitleChange = vi.fn()
+
+    const transport = createIpcPtyTransport({ onTitleChange })
+    await transport.connect({ url: '', callbacks: {} })
+
+    dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;\u280b Codex${BEL}` })
+    dispatcherCallback?.({ id: 'pty-pi', data: `${ESC}]0;Codex ready${BEL}` })
+    await flushPtySideEffects()
+
+    const seenTitles = onTitleChange.mock.calls.map((c) => c[0])
+    expect(seenTitles).toContain('\u280b Codex')
+    expect(seenTitles).toContain('Codex ready')
+
+    transport.disconnect()
+  })
 })

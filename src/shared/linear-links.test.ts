@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildLinearTeamUrl, getLinearOrganizationUrlKeyFromIssueUrl } from './linear-links'
+import {
+  buildLinearPersonalApiKeySettingsUrl,
+  buildLinearTeamUrl,
+  buildLinearWorkspaceApiSettingsUrl,
+  getLinearOrganizationUrlKeyFromIssueUrl
+} from './linear-links'
 
 describe('linear links', () => {
   it('builds team URLs from workspace and team keys', () => {
@@ -19,5 +24,21 @@ describe('linear links', () => {
     expect(getLinearOrganizationUrlKeyFromIssueUrl('https://linear.app/acme/issue/ENG-1')).toBe(
       'acme'
     )
+  })
+
+  it('builds organization-scoped API key settings URLs', () => {
+    expect(buildLinearPersonalApiKeySettingsUrl('acme inc')).toBe(
+      'https://linear.app/acme%20inc/settings/account/security'
+    )
+    expect(buildLinearWorkspaceApiSettingsUrl('acme/inc')).toBe(
+      'https://linear.app/acme%2Finc/settings/api'
+    )
+  })
+
+  it('falls back to global API settings URLs when no organization slug is available', () => {
+    expect(buildLinearPersonalApiKeySettingsUrl()).toBe(
+      'https://linear.app/settings/account/security'
+    )
+    expect(buildLinearWorkspaceApiSettingsUrl('   ')).toBe('https://linear.app/settings/api')
   })
 })

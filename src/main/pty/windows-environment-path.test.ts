@@ -1,5 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
+
+const { defaultExecFileSyncMock } = vi.hoisted(() => ({
+  defaultExecFileSyncMock: vi.fn()
+}))
+
+vi.mock('node:child_process', () => ({
+  execFileSync: defaultExecFileSyncMock
+}))
+
 import {
+  __resetPersistedWindowsPathCacheForTests,
   mergePersistedWindowsPath,
   readPersistedWindowsPathSegments
 } from './windows-environment-path'
@@ -37,6 +47,25 @@ describe('readPersistedWindowsPathSegments', () => {
     expect(readPersistedWindowsPathSegments({ platform: 'linux', execFileSync })).toEqual([])
     expect(execFileSync).not.toHaveBeenCalled()
   })
+
+  it('caches production registry reads briefly', () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    defaultExecFileSyncMock
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
+      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+    __resetPersistedWindowsPathCacheForTests()
+
+    try {
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
+      expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
+      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(2)
+    } finally {
+      __resetPersistedWindowsPathCacheForTests()
+      defaultExecFileSyncMock.mockReset()
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
 })
 
 describe('mergePersistedWindowsPath', () => {
@@ -55,7 +84,7 @@ describe('mergePersistedWindowsPath', () => {
         [
           '',
           'HKEY_CURRENT_USER\\Environment',
-          '    Path    REG_EXPAND_SZ    C:\\Users\\me\\AppData\\Local\\agy\\bin;C:\\Existing',
+          '    Path    REG_EXPAND_SZ    C:\\Users\\me\\AppData\\Local\\Orca\\bin;C:\\Existing',
           ''
         ].join('\r\n')
       )
@@ -64,7 +93,7 @@ describe('mergePersistedWindowsPath', () => {
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
 
     expect(env.Path).toBe(
-      'C:\\Existing;C:\\Windows\\System32;C:\\Users\\me\\AppData\\Local\\agy\\bin'
+      'C:\\Existing;C:\\Windows\\System32;C:\\Users\\me\\AppData\\Local\\Orca\\bin'
     )
   })
 

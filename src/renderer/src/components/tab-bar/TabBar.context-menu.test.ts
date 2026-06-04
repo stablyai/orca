@@ -1,12 +1,20 @@
+/* oxlint-disable max-lines -- Why: keeping these mocked TabBar wiring cases
+ * together avoids duplicating the lightweight renderer harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const appStoreSnapshot: {
   activeTabId: string | null
   activeTabType: 'terminal' | 'editor' | 'browser' | null
+  unifiedTabsByWorktree: Record<string, unknown[]>
+  activeGroupIdByWorktree: Record<string, string>
 } = {
   activeTabId: 'old-terminal',
-  activeTabType: 'terminal'
+  activeTabType: 'terminal',
+  unifiedTabsByWorktree: {},
+  activeGroupIdByWorktree: {}
 }
+const pinTabMock: (tabId: string) => void = vi.fn()
+const unpinTabMock: (tabId: string) => void = vi.fn()
 
 const useAppStoreMock = vi.fn(
   (
@@ -14,8 +22,12 @@ const useAppStoreMock = vi.fn(
       activeTabId: string | null
       activeTabType: 'terminal' | 'editor' | 'browser' | null
       gitStatusByWorktree: Record<string, never[]>
+      unifiedTabsByWorktree: Record<string, unknown[]>
+      activeGroupIdByWorktree: Record<string, string>
+      pinTab: typeof pinTabMock
+      unpinTab: typeof unpinTabMock
       settings: {
-        terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe'
+        terminalWindowsShell: 'powershell.exe' | 'cmd.exe' | 'wsl.exe' | 'git-bash'
         terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
       }
     }) => unknown
@@ -24,6 +36,10 @@ const useAppStoreMock = vi.fn(
       activeTabId: appStoreSnapshot.activeTabId,
       activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
+      unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
+      activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
+      pinTab: pinTabMock,
+      unpinTab: unpinTabMock,
       settings: {
         terminalWindowsShell: 'powershell.exe',
         terminalWindowsPowerShellImplementation: 'auto'
@@ -46,6 +62,9 @@ vi.mock('react', async () => {
 
 vi.mock('lucide-react', () => ({
   FilePlus: function FilePlus() {
+    return null
+  },
+  FileText: function FileText() {
     return null
   },
   Globe: function Globe() {
@@ -71,6 +90,10 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeTabId: appStoreSnapshot.activeTabId,
   activeTabType: appStoreSnapshot.activeTabType,
   gitStatusByWorktree: {},
+  unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
+  activeGroupIdByWorktree: appStoreSnapshot.activeGroupIdByWorktree,
+  pinTab: pinTabMock,
+  unpinTab: unpinTabMock,
   settings: {
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'auto'
@@ -155,6 +178,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>
+  ref?: unknown
 }
 
 function findChildrenByType(node: unknown, typeName: string): ReactElementLike[] {
@@ -184,6 +208,20 @@ function findChildrenByType(node: unknown, typeName: string): ReactElementLike[]
   }
   visit(node)
   return results
+}
+
+function extractText(node: unknown): string {
+  if (node == null) {
+    return ''
+  }
+  if (typeof node === 'string' || typeof node === 'number') {
+    return String(node)
+  }
+  if (Array.isArray(node)) {
+    return node.map(extractText).join('')
+  }
+  const el = node as ReactElementLike
+  return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
 async function renderTabBar(props: Record<string, unknown>): Promise<unknown> {
@@ -236,11 +274,14 @@ describe('TabBar context menu wiring', () => {
     vi.useRealTimers()
     appStoreSnapshot.activeTabId = 'old-terminal'
     appStoreSnapshot.activeTabType = 'terminal'
+    appStoreSnapshot.unifiedTabsByWorktree = {}
+    appStoreSnapshot.activeGroupIdByWorktree = {}
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
       return 1
     })
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
     vi.stubGlobal('window', {
       setTimeout,
       clearTimeout,
@@ -290,6 +331,42 @@ describe('TabBar context menu wiring', () => {
     expect(onCloseToRight).toHaveBeenCalledWith('unified-editor-1')
   })
 
+  it('passes pinned state and toggles unpin through the unified tab id', async () => {
+    appStoreSnapshot.unifiedTabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'unified-term-1',
+          entityId: 'term-1',
+          groupId: 'wt-1',
+          worktreeId: 'wt-1',
+          contentType: 'terminal',
+          label: 'Terminal',
+          customLabel: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 0,
+          isPinned: true
+        }
+      ]
+    }
+
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      editorFiles: [],
+      browserTabs: [],
+      tabBarOrder: ['term-1']
+    })
+
+    const sortable = findChildrenByType(element, 'SortableTab')
+    expect(sortable).toHaveLength(1)
+    expect(sortable[0].props.isPinned).toBe(true)
+
+    ;(sortable[0].props.onTogglePin as () => void)()
+
+    expect(unpinTabMock).toHaveBeenCalledWith('unified-term-1')
+    expect(pinTabMock).not.toHaveBeenCalled()
+  })
+
   it('waits for async menu-created terminals before focusing xterm', async () => {
     vi.useFakeTimers()
     Object.assign(window, { setTimeout, clearTimeout })
@@ -323,5 +400,54 @@ describe('TabBar context menu wiring', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(focusTerminalTabSurface).toHaveBeenCalledWith('new-terminal')
     expect(focusTerminalTabSurface).not.toHaveBeenCalledWith('old-terminal')
+  })
+
+  it('can put markdown actions before terminal actions in the new-tab menu', async () => {
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      onNewFileTab: () => {},
+      onOpenFileTab: () => {},
+      newTabMenuOrder: 'markdown-first'
+    })
+
+    const menuLabels = findChildrenByType(element, 'DropdownMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(menuLabels[0]).toContain('New Markdown')
+    expect(menuLabels[1]).toBe('Open Markdown...')
+    expect(menuLabels[2]).toContain('New Terminal')
+    expect(menuLabels[3]).toContain('New Browser Tab')
+  })
+
+  it('cancels delayed menu focus when the tab bar root unmounts', async () => {
+    vi.useFakeTimers()
+    Object.assign(window, { setTimeout, clearTimeout })
+    const { focusTerminalTabSurface } = await import('@/lib/focus-terminal-tab-surface')
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      activeTabId: 'old-terminal',
+      activeTabType: 'terminal',
+      onNewTerminalTab: () => {
+        window.setTimeout(() => {
+          appStoreSnapshot.activeTabId = 'new-terminal'
+          appStoreSnapshot.activeTabType = 'terminal'
+        }, 100)
+      }
+    })
+
+    const newTerminalItem = findChildrenByType(element, 'DropdownMenuItem')[0]
+    const menuContent = findChildrenByType(element, 'DropdownMenuContent')[0]
+    ;(newTerminalItem.props.onSelect as () => void)()
+    ;(menuContent.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
+      preventDefault: vi.fn()
+    })
+
+    const root = findChildrenByType(element, 'div')[0]
+    const rootRef = (root.props.ref ?? root.ref) as (node: HTMLDivElement | null) => void
+    rootRef(null)
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(focusTerminalTabSurface).not.toHaveBeenCalled()
   })
 })

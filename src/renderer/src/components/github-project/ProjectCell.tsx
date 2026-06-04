@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: ProjectCell dispatches on field.dataType for every supported ProjectV2 field type; keeping the dispatch table and renderers colocated keeps the type-to-renderer mapping easy to audit. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Project field details are fetched from provider metadata IPC after the concrete field/value identity is known. */
 // Why: one cell per visible column. Dispatch on `field.dataType` first (so
 // built-in ASSIGNEES/LABELS cells render their dedicated content) and fall
 // through to `fieldValuesByFieldId[field.id].kind` as a safety net so a
@@ -654,10 +655,16 @@ function DateCell({
   // Why: a date <input> fires onChange on every digit/spinner adjustment.
   // Committing on each fires a GraphQL mutation per keystroke. Buffer the
   // edit locally and commit on blur or Enter — same UX as TextCell.
-  const [draft, setDraft] = React.useState(value ?? '')
-  React.useEffect(() => {
-    setDraft(value ?? '')
-  }, [value])
+  const sourceValue = value ?? ''
+  const [draftState, setDraftState] = React.useState(() => ({
+    sourceValue,
+    draft: sourceValue
+  }))
+  if (draftState.sourceValue !== sourceValue) {
+    setDraftState({ sourceValue, draft: sourceValue })
+  }
+  const draft = draftState.sourceValue === sourceValue ? draftState.draft : sourceValue
+  const setDraft = (nextDraft: string): void => setDraftState({ sourceValue, draft: nextDraft })
   if (!editable) {
     return <span className="text-xs">{value}</span>
   }
@@ -667,7 +674,7 @@ function DateCell({
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
-        if (draft !== (value ?? '')) {
+        if (draft !== sourceValue) {
           onCommit(draft)
         }
       }}
@@ -677,7 +684,7 @@ function DateCell({
           ;(e.target as HTMLInputElement).blur()
         } else if (e.key === 'Escape') {
           e.preventDefault()
-          setDraft(value ?? '')
+          setDraft(sourceValue)
           ;(e.target as HTMLInputElement).blur()
         }
       }}

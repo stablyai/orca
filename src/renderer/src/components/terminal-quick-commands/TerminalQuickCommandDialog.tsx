@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import type {
   Repo,
   TerminalQuickCommand,
@@ -19,6 +20,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import {
   Select,
   SelectContent,
@@ -26,8 +28,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import type { TuiAgent } from '../../../../shared/types'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
@@ -38,6 +40,8 @@ import {
   createTerminalQuickCommandDialogDraftMemory,
   switchTerminalQuickCommandDialogAction
 } from './terminal-quick-command-dialog-draft'
+import { cn } from '@/lib/utils'
+import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
 
@@ -49,6 +53,9 @@ type TerminalQuickCommandDialogProps = {
   onOpenChange: (open: boolean) => void
   onSave: (command: TerminalQuickCommand) => void
 }
+
+const EMPTY_REPOS: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[] = []
+const QUICK_COMMAND_AGENT_OPTIONS = getTerminalQuickCommandAgentOptions()
 
 export function createTerminalQuickCommandDraft(
   scope: TerminalQuickCommandScope = { type: 'global' }
@@ -66,7 +73,7 @@ export function TerminalQuickCommandDialog({
   open,
   mode,
   command,
-  repos = [],
+  repos = EMPTY_REPOS,
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
@@ -76,6 +83,11 @@ export function TerminalQuickCommandDialog({
   const wasOpenRef = useRef(open)
   const syncedCommandRef = useRef(command)
   const draftMemoryRef = useRef(createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent))
+  const initialScope = getTerminalQuickCommandScope(command)
+  const lastRepoScopeIdRef = useRef<string | null>(
+    initialScope.type === 'repo' ? initialScope.repoId : null
+  )
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   const selectedAction = getTerminalQuickCommandAction(draft)
   const selectedScope = getTerminalQuickCommandScope(draft)
   // Why: repo-scoped commands can outlive the current repo list; only an
@@ -95,6 +107,9 @@ export function TerminalQuickCommandDialog({
     // Why: opening or retargeting the dialog should render the new command
     // draft immediately instead of repairing it in a follow-up Effect.
     draftMemoryRef.current = createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent)
+    const commandScope = getTerminalQuickCommandScope(command)
+    lastRepoScopeIdRef.current = commandScope.type === 'repo' ? commandScope.repoId : null
+    setAdvancedOpen(false)
     setDraft({ ...command })
   }
 
@@ -161,8 +176,7 @@ export function TerminalQuickCommandDialog({
     (isTerminalAgentQuickCommand(draft)
       ? draft.prompt.trimEnd().length > 0 && supportsTerminalAgentQuickCommand(draft.agent)
       : draft.command.trimEnd().length > 0)
-  const isMac = isMacUserAgent()
-  const submitShortcutLabel = isMac ? '⌘↵' : 'Ctrl+Enter'
+  const submitShortcutLabel = getScreenSubmitShortcutLabel()
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -179,11 +193,7 @@ export function TerminalQuickCommandDialog({
         <div
           className="space-y-4"
           onKeyDown={(event) => {
-            // Why: cross-platform submit shortcut — Cmd+Enter on Mac, Ctrl+Enter
-            // elsewhere. Falls through to native textarea/Input newline insertion
-            // when the platform modifier isn't held.
-            const platformSubmit = isMac ? event.metaKey : event.ctrlKey
-            if (event.key === 'Enter' && platformSubmit && canSave) {
+            if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
               saveDraft()
             }
@@ -228,7 +238,7 @@ export function TerminalQuickCommandDialog({
                     sideOffset={4}
                     className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-[--radix-select-trigger-width]"
                   >
-                    {AGENT_CATALOG.map((entry) => {
+                    {QUICK_COMMAND_AGENT_OPTIONS.map((entry) => {
                       const supported = supportsTerminalAgentQuickCommand(entry.id)
                       return (
                         <SelectItem key={entry.id} value={entry.id} disabled={!supported}>
@@ -268,6 +278,10 @@ export function TerminalQuickCommandDialog({
                   rows={4}
                   className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Supports skills, file paths, and built-in commands like{' '}
+                  <code className="rounded bg-muted px-1 font-mono text-[11px]">/goal</code>.
+                </p>
               </div>
             </>
           ) : (
@@ -292,20 +306,57 @@ export function TerminalQuickCommandDialog({
             </div>
           )}
 
-          <TerminalQuickCommandScopeField
-            repos={repos}
-            selectedScope={selectedScope}
-            selectedRepoId={selectedRepoId}
-            selectedRepoMissing={selectedRepoMissing}
-            setDraft={setDraft}
-          />
+          <div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setAdvancedOpen((current) => !current)}
+              className="-ml-2 text-xs"
+            >
+              Advanced
+              <ChevronDown
+                className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
+              />
+            </Button>
+          </div>
 
-          {!isTerminalAgentQuickCommand(draft) ? (
-            <TerminalQuickCommandAppendEnterSwitch
-              appendEnter={draft.appendEnter}
-              onToggle={toggleAppendEnter}
-            />
-          ) : null}
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+            )}
+            aria-hidden={!advancedOpen}
+          >
+            <div className="min-h-0">
+              <div
+                className={cn(
+                  'space-y-4 px-1 pt-1 pb-1 transition-[opacity,transform] duration-150 ease-out',
+                  advancedOpen
+                    ? 'translate-y-0 opacity-100 delay-200'
+                    : '-translate-y-1 opacity-0 delay-0'
+                )}
+              >
+                {!isTerminalAgentQuickCommand(draft) ? (
+                  <TerminalQuickCommandAppendEnterSwitch
+                    appendEnter={draft.appendEnter}
+                    onToggle={toggleAppendEnter}
+                  />
+                ) : null}
+                <TerminalQuickCommandScopeField
+                  repos={repos}
+                  selectedScope={selectedScope}
+                  selectedRepoId={selectedRepoId}
+                  selectedRepoMissing={selectedRepoMissing}
+                  lastRepoScopeId={lastRepoScopeIdRef.current}
+                  rememberRepoScopeId={(repoId) => {
+                    lastRepoScopeIdRef.current = repoId
+                  }}
+                  setDraft={setDraft}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         <TerminalQuickCommandDialogFooter

@@ -24,6 +24,9 @@ import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { parseWslPath } from '../wsl'
 import { addWslEnvKeys } from '../wsl-env'
 import { getWslContextFromSessionId } from './wsl-session-context'
+import { addOrcaWslInteropEnv } from '../pty/wsl-orca-env'
+import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../git-bash'
+import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
 
@@ -106,23 +109,62 @@ function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): Dae
   )
 }
 
+function isExistingDirectory(path: string | undefined): path is string {
+  if (!path) {
+    return false
+  }
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function repairDaemonCwd(): string | null {
+  const candidates = [
+    process.env.ORCA_USER_DATA_PATH,
+    getDefaultCwd(),
+    process.platform === 'win32' ? 'C:\\' : '/'
+  ]
+  for (const candidate of candidates) {
+    if (isExistingDirectory(candidate)) {
+      try {
+        process.chdir(candidate)
+        return candidate
+      } catch {
+        // Try the next stable cwd candidate.
+      }
+    }
+  }
+  return null
+}
+
+function preflightDaemonCwd(): void {
+  let daemonCwd = '<unavailable>'
+  try {
+    daemonCwd = process.cwd()
+    if (isExistingDirectory(daemonCwd)) {
+      return
+    }
+  } catch {
+    // Recover below; process.cwd() throws after the original cwd is deleted.
+  }
+
+  // Why: older detached daemons were launched from the repo cwd. If that
+  // worktree disappears, node-pty's macOS spawn-helper can fail even when the
+  // requested terminal cwd is valid.
+  if (repairDaemonCwd()) {
+    return
+  }
+  throw formatMissingDaemonPathError('cwd', daemonCwd)
+}
+
 function preflightMacNodePtySpawnEnvironment(): void {
   if (process.platform !== 'darwin') {
     return
   }
 
-  let daemonCwd: string
-  try {
-    daemonCwd = process.cwd()
-    if (!statSync(daemonCwd).isDirectory()) {
-      throw formatMissingDaemonPathError('cwd', daemonCwd)
-    }
-  } catch (error) {
-    if (error instanceof DaemonProtocolError) {
-      throw error
-    }
-    throw formatMissingDaemonPathError('cwd', '<unavailable>')
-  }
+  preflightDaemonCwd()
 
   let candidates: string[]
   try {
@@ -172,6 +214,14 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
     formatted.stack = err.stack
   }
   return formatted
+}
+
+function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
+  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+  if (!trimmed || trimmed === 'xterm-256color') {
+    return null
+  }
+  return trimmed.split(/[\\/]/).pop() || null
 }
 
 export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
@@ -230,6 +280,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   if (process.platform === 'win32') {
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
+    const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
     // Why: daemon spawn requests can carry either a canonical shell family
     // (`powershell.exe`) or a concrete PowerShell executable path from a
     // one-off override. Normalize both forms back to the PowerShell family so
@@ -238,18 +289,24 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     const shouldResolvePowerShellFamily =
       opts.terminalWindowsPowerShellImplementation !== undefined ||
       pathWin32.basename(shellPath) === shellPath
-    shellPath = shouldResolvePowerShellFamily
-      ? (resolveEffectiveWindowsPowerShell({
-          shellFamily:
-            normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
-              ? 'powershell.exe'
-              : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
-                ? normalizedShellFamily
-                : undefined,
-          implementation: opts.terminalWindowsPowerShellImplementation,
-          pwshAvailable: isPwshAvailable()
-        }) ?? shellPath)
-      : shellPath
+    if (resolvedGitBashPath) {
+      shellPath = resolvedGitBashPath
+    } else if (shellPath === WINDOWS_GIT_BASH_SHELL) {
+      shellPath = 'powershell.exe'
+    } else {
+      shellPath = shouldResolvePowerShellFamily
+        ? (resolveEffectiveWindowsPowerShell({
+            shellFamily:
+              normalizedShellFamily === 'powershell.exe' || normalizedShellFamily === 'pwsh.exe'
+                ? 'powershell.exe'
+                : normalizedShellFamily === 'cmd.exe' || normalizedShellFamily === 'wsl.exe'
+                  ? normalizedShellFamily
+                  : undefined,
+            implementation: opts.terminalWindowsPowerShellImplementation,
+            pwshAvailable: isPwshAvailable()
+          }) ?? shellPath)
+        : shellPath
+    }
     // Why: matches LocalPtyProvider — CMD needs chcp 65001, PowerShell needs
     // $PROFILE dot-sourcing, WSL needs a --bash entry with a translated cwd.
     // Reuse the same shared launch-args helper after resolving the effective
@@ -264,6 +321,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     shellArgs = resolved.shellArgs
     spawnCwd = resolved.effectiveCwd
     validationCwd = resolved.validationCwd
+    if (isWindowsGitBashShellPath(shellPath)) {
+      // Why: Git for Windows login startup files otherwise cd to $HOME,
+      // ignoring node-pty's cwd for repo-scoped terminals.
+      env.CHERE_INVOKING ??= '1'
+    }
     const codexHomeWslInfo = env.CODEX_HOME ? parseWslPath(env.CODEX_HOME) : null
     if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
       if (codexHomeWslInfo) {
@@ -310,6 +372,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // CODEX_HOME from it after user profiles run.
       delete env.CODEX_HOME
       delete env.ORCA_CODEX_HOME
+    }
+    if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
+      addOrcaWslInteropEnv(env)
     }
   } else {
     // Why: any Orca-injected overlay env that user rc files can clobber
@@ -368,6 +433,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // propagates to std::terminate, killing the entire daemon process.
   let dead = false
   let disposed = false
+  let nodePtyKillIssued = false
   proc.onExit(() => {
     dead = true
     // Why: UnixTerminal.destroy() registers `_socket.once('close', () => this.kill('SIGHUP'))`
@@ -386,6 +452,20 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
 
   return {
     pid: proc.pid,
+    getForegroundProcess: () => {
+      // Why: node-pty's `.process` getter reports the PTY's live foreground
+      // process name (the agent running in the shell, or the shell itself) and
+      // updates as it changes. Null once the child is gone — `.process` on a
+      // reaped pty can read a recycled pid.
+      if (dead) {
+        return null
+      }
+      try {
+        return normalizeForegroundProcessName(proc.process)
+      } catch {
+        return null
+      }
+    },
     write: (data) => {
       if (dead) {
         return
@@ -414,6 +494,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         return
       }
       try {
+        nodePtyKillIssued = true
         proc.kill()
       } catch {
         dead = true
@@ -431,6 +512,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         process.kill(proc.pid, 'SIGKILL')
       } catch {
         try {
+          nodePtyKillIssued = true
           proc.kill()
         } catch {
           // Process may already be dead
@@ -477,6 +559,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       // ConPTY agent. The SIGHUP hazard is POSIX-only, so the guard is too.
       if (process.platform !== 'win32') {
         ;(proc as unknown as { kill: (sig?: string) => void }).kill = () => {}
+      } else if (nodePtyKillIssued) {
+        // Why: WindowsTerminal.destroy() calls kill() internally. If this
+        // daemon handle already used node-pty's kill(), destroying here can
+        // close the same ConPTY handle twice and trip Windows heap corruption.
+        return
       }
       try {
         ;(proc as unknown as { destroy?: () => void }).destroy?.()

@@ -111,8 +111,10 @@ export class RuntimeClient {
         id: response.id,
         ok: true,
         result: {
+          // Why: remote status proves the paired runtime is reachable, not
+          // that this client machine has a local Orca desktop process.
           app: {
-            running: true,
+            running: false,
             pid: null
           },
           runtime: {

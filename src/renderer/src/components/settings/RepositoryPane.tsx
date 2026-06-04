@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -53,20 +53,34 @@ export function RepositoryPane({
   const isFolder = isFolderRepo(repo)
   const supportsLocalDockerIsolation = !isFolder && !repo.connectionId
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const symlinksEnabled = useAppStore((state) => state.settings?.experimentalWorktreeSymlinks)
+  const settings = useAppStore((state) => state.settings)
+  const symlinksEnabled = settings?.experimentalWorktreeSymlinks
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after settings navigation; avoid starting
+  // a reset timer that will outlive this pane.
+  const isMountedRef = useRef(false)
   // Why: searching a project name is navigation to that project, not a
   // request to hide every child row that does not repeat the project name.
   const forceFullPaneForRepoMatch = matchesRepositoryIdentitySearch(searchQuery, repo)
 
-  const clearCopiedTemplateResetTimer = (): void => {
+  const clearCopiedTemplateResetTimer = useCallback((): void => {
     if (copiedTemplateResetTimerRef.current !== null) {
       window.clearTimeout(copiedTemplateResetTimerRef.current)
       copiedTemplateResetTimerRef.current = null
     }
-  }
+  }, [])
+
+  const setRepositoryPaneRootRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedTemplateResetTimer()
+      }
+    },
+    [clearCopiedTemplateResetTimer]
+  )
 
   const handleRemoveProject = (repoId: string) => {
     if (confirmingRemove === repoId) {
@@ -92,6 +106,9 @@ export function RepositoryPane({
     pnpm worktree:setup
   archive: |
     echo "Cleaning up before archive"`)
+    if (!isMountedRef.current) {
+      return
+    }
     clearCopiedTemplateResetTimer()
     setCopiedTemplate(true)
     copiedTemplateResetTimerRef.current = window.setTimeout(() => {
@@ -107,6 +124,7 @@ export function RepositoryPane({
       'Project Icon',
       'Default Worktree Base',
       'Default Isolation',
+      'Worktree Location',
       'Remove Project'
     ].includes(entry.title)
   )
@@ -295,6 +313,47 @@ export function RepositoryPane({
                 </div>
               </SearchableSetting>
             ) : null}
+            <SearchableSetting
+              title="Worktree Location"
+              description="Project-specific directory for new worktrees."
+              keywords={[
+                repo.displayName,
+                'worktree path',
+                'workspace path',
+                'directory',
+                'relative',
+                '../worktrees'
+              ]}
+              className="space-y-2"
+              forceVisible={forceFullPaneForRepoMatch}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-sm font-semibold">Worktree Location</Label>
+                {repo.worktreeBasePath ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateRepo(repo.id, { worktreeBasePath: undefined })}
+                  >
+                    Use Global
+                  </Button>
+                ) : null}
+              </div>
+              <Input
+                value={repo.worktreeBasePath ?? ''}
+                placeholder={settings?.workspaceDir ?? ''}
+                onChange={(e) =>
+                  updateRepo(repo.id, {
+                    worktreeBasePath: e.target.value.trim() ? e.target.value : undefined
+                  })
+                }
+                className="h-9 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Relative paths resolve from this project root.
+              </p>
+            </SearchableSetting>
           </>
         ) : null}
       </section>
@@ -324,7 +383,7 @@ export function RepositoryPane({
   ].filter(Boolean)
 
   return (
-    <div className="space-y-8">
+    <div ref={setRepositoryPaneRootRef} className="space-y-8">
       {visibleSections.map((section, index) => (
         <div key={index} className="space-y-8">
           {index > 0 ? <Separator /> : null}

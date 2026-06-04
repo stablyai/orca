@@ -11,12 +11,15 @@ export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
 
 // ── Sentinel detection ────────────────────────────────────────────────
 
+const MAX_RELAY_STARTUP_BUFFER_BYTES = 64 * 1024
+const RELAY_SENTINEL_BUFFER = Buffer.from(RELAY_SENTINEL, 'utf-8')
+
 export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTransport> {
   return new Promise<MultiplexerTransport>((resolve, reject) => {
     let sentinelReceived = false
     let settled = false
     let stderrOutput = ''
-    let bufferedStdout = Buffer.alloc(0)
+    let bufferedStdout: Buffer = Buffer.alloc(0)
     let closedAfterSentinel = false
     // Why: ssh2 fires 'exit' BEFORE 'close' with the remote exit code.
     // Capturing it here lets us translate exit-42 (relay handshake mismatch)
@@ -65,11 +68,10 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
       }
     })
 
-    const MAX_BUFFER_CAP = 64 * 1024
     channel.stderr.on('data', (data: Buffer) => {
       stderrOutput += data.toString('utf-8')
-      if (stderrOutput.length > MAX_BUFFER_CAP) {
-        stderrOutput = stderrOutput.slice(-MAX_BUFFER_CAP)
+      if (stderrOutput.length > MAX_RELAY_STARTUP_BUFFER_BYTES) {
+        stderrOutput = stderrOutput.slice(-MAX_RELAY_STARTUP_BUFFER_BYTES)
       }
     })
 
@@ -96,6 +98,13 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
         return
       }
       notifyClosed()
+    }
+
+    const failStartupOutputCap = (): void => {
+      // Why: before the sentinel, stdout is untrusted startup noise; cap it
+      // like stderr so a broken remote cannot grow memory until timeout.
+      failOrClose(new Error('Relay startup output exceeded 64 KiB before ready sentinel'))
+      channel.close()
     }
 
     // Why: SSH channel streams emit `error` when the remote host disappears.
@@ -157,17 +166,31 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
         return
       }
 
-      bufferedStdout = Buffer.concat([bufferedStdout, data])
-      const text = bufferedStdout.toString('utf-8')
-      const sentinelIdx = text.indexOf(RELAY_SENTINEL)
+      const searchableDataLength = Math.max(
+        0,
+        MAX_RELAY_STARTUP_BUFFER_BYTES - bufferedStdout.length + RELAY_SENTINEL_BUFFER.length
+      )
+      const searchableData = data.subarray(0, searchableDataLength)
+      // Why: search only far enough to accept a sentinel at the cap boundary;
+      // bytes after the sentinel are framed relay data and may be large.
+      const startupStdout =
+        bufferedStdout.length === 0
+          ? searchableData
+          : Buffer.concat([bufferedStdout, searchableData])
+      const sentinelIdx = startupStdout.indexOf(RELAY_SENTINEL_BUFFER)
+
+      if (sentinelIdx > MAX_RELAY_STARTUP_BUFFER_BYTES) {
+        failStartupOutputCap()
+        return
+      }
 
       if (sentinelIdx !== -1) {
         sentinelReceived = true
         cancelTimers()
 
-        const afterSentinel = bufferedStdout.subarray(
-          Buffer.byteLength(text.substring(0, sentinelIdx + RELAY_SENTINEL.length), 'utf-8')
-        )
+        const afterSentinelOffset =
+          sentinelIdx + RELAY_SENTINEL_BUFFER.length - bufferedStdout.length
+        const afterSentinel = data.subarray(Math.max(0, afterSentinelOffset))
 
         if (afterSentinel.length > 0) {
           pendingAfterSentinel = afterSentinel
@@ -200,7 +223,15 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
         }
 
         resolve(transport)
+        return
       }
+
+      if (bufferedStdout.length + data.length > MAX_RELAY_STARTUP_BUFFER_BYTES) {
+        failStartupOutputCap()
+        return
+      }
+
+      bufferedStdout = bufferedStdout.length === 0 ? data : Buffer.concat([bufferedStdout, data])
     })
   })
 }
@@ -216,45 +247,50 @@ export async function execCommand(conn: SshConnection, command: string): Promise
     let stderr = ''
     let settled = false
 
-    const timeout = setTimeout(() => {
-      if (!settled) {
-        settled = true
-        channel.close()
-        reject(new Error(`Command "${command}" timed out after ${EXEC_TIMEOUT_MS / 1000}s`))
-      }
-    }, EXEC_TIMEOUT_MS)
-
-    const fail = (err: Error): void => {
+    const cleanup = (): void => {
+      clearTimeout(timeout)
+      channel.off('error', fail)
+      channel.stderr.off('error', fail)
+      channel.off('data', onStdoutData)
+      channel.stderr.off('data', onStderrData)
+      channel.off('close', onClose)
+    }
+    const settle = (fn: typeof resolve | typeof reject, val: string | Error): void => {
       if (settled) {
         return
       }
       settled = true
-      clearTimeout(timeout)
-      reject(err)
+      cleanup()
+      fn(val as never)
     }
+    const fail = (err: Error): void => {
+      settle(reject, err)
+    }
+    const onStdoutData = (data: Buffer): void => {
+      stdout += data.toString('utf-8')
+    }
+    const onStderrData = (data: Buffer): void => {
+      stderr += data.toString('utf-8')
+    }
+    const onClose = (code: number): void => {
+      if (code !== 0) {
+        settle(reject, new Error(`Command "${command}" failed (exit ${code}): ${stderr.trim()}`))
+      } else {
+        settle(resolve, stdout)
+      }
+    }
+    const timeout = setTimeout(() => {
+      channel.close()
+      settle(reject, new Error(`Command "${command}" timed out after ${EXEC_TIMEOUT_MS / 1000}s`))
+    }, EXEC_TIMEOUT_MS)
 
     // Why: remote reboot tears down exec channels with stream errors. Without
     // scoped listeners, Node treats those as uncaught exceptions.
     channel.on('error', fail)
     channel.stderr.on('error', fail)
-    channel.on('data', (data: Buffer) => {
-      stdout += data.toString('utf-8')
-    })
-    channel.stderr.on('data', (data: Buffer) => {
-      stderr += data.toString('utf-8')
-    })
-    channel.on('close', (code: number) => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      if (code !== 0) {
-        reject(new Error(`Command "${command}" failed (exit ${code}): ${stderr.trim()}`))
-      } else {
-        resolve(stdout)
-      }
-    })
+    channel.on('data', onStdoutData)
+    channel.stderr.on('data', onStderrData)
+    channel.on('close', onClose)
   })
 }
 

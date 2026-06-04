@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createNestedProjectGroupResolver, resolveNestedRepoSelection } from './nested-repo-import'
+import {
+  createNestedProjectGroupResolver,
+  resolveNestedRepoImportPaths,
+  resolveNestedRepoSelection
+} from './nested-repo-import'
 import type { ProjectGroup } from '../../shared/types'
 
 describe('createNestedProjectGroupResolver', () => {
@@ -127,13 +131,78 @@ describe('createNestedProjectGroupResolver', () => {
         ],
         truncated: false,
         timedOut: false,
+        stopped: false,
         durationMs: 1,
-        maxDepth: 3
+        maxDepth: 3,
+        maxRepos: 100,
+        timeoutMs: null
       },
       projectPaths: ['c:/workspace/services/api', 'C:/workspace/services/api', 'D:/other/repo']
     })
 
     expect(selection.selectedPaths).toEqual(['C:\\workspace\\Services\\API'])
     expect(selection.rejectedPaths).toEqual(['D:/other/repo'])
+  })
+
+  it('accepts stopped-scan import paths inside the selected parent without rescanning', () => {
+    const selection = resolveNestedRepoImportPaths({
+      parentPath: '/workspace/platform',
+      projectPaths: [
+        '/workspace/platform/api',
+        '/workspace/platform/api',
+        '/workspace/platform/apps/web',
+        '/workspace/other/repo'
+      ]
+    })
+
+    expect(selection.selectedPaths).toEqual([
+      '/workspace/platform/api',
+      '/workspace/platform/apps/web'
+    ])
+    expect(selection.rejectedPaths).toEqual(['/workspace/other/repo'])
+  })
+
+  it('rejects stopped-scan import paths that escape the selected parent with dot segments', () => {
+    const selection = resolveNestedRepoImportPaths({
+      parentPath: '/workspace/platform',
+      projectPaths: [
+        '/workspace/platform/api',
+        '/workspace/platform/../outside-repo',
+        '/workspace/platform/apps/../../other-outside-repo'
+      ]
+    })
+
+    expect(selection.selectedPaths).toEqual(['/workspace/platform/api'])
+    expect(selection.rejectedPaths).toEqual([
+      '/workspace/platform/../outside-repo',
+      '/workspace/platform/apps/../../other-outside-repo'
+    ])
+  })
+
+  it('rejects stopped-scan import requests with a relative parent path', () => {
+    const selection = resolveNestedRepoImportPaths({
+      parentPath: 'workspace/platform',
+      projectPaths: ['workspace/platform/api', '/workspace/platform/api']
+    })
+
+    expect(selection.selectedPaths).toEqual([])
+    expect(selection.rejectedPaths).toEqual(['workspace/platform/api', '/workspace/platform/api'])
+  })
+
+  it('normalizes accepted stopped-scan import paths before importing', () => {
+    const selection = resolveNestedRepoImportPaths({
+      parentPath: 'C:\\workspace\\platform',
+      projectPaths: [
+        'C:\\workspace\\platform\\api',
+        'C:\\workspace\\platform\\apps\\..\\tools',
+        'C:\\workspace\\outside'
+      ]
+    })
+
+    expect(selection.selectedPaths).toEqual([
+      'C:/workspace/platform/api',
+      'C:/workspace/platform/tools'
+    ])
+    expect(selection.rejectedPaths).toEqual(['C:\\workspace\\outside'])
   })
 })

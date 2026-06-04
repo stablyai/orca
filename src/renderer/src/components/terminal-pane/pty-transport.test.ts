@@ -93,6 +93,26 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('does not schedule PTY side-effect drains for ordinary output with no working title', async () => {
+    vi.useFakeTimers()
+    try {
+      const { createPtyOutputProcessor } = await import('./pty-transport')
+      const onTitleChange = vi.fn()
+      const onBell = vi.fn()
+      const processor = createPtyOutputProcessor({ onTitleChange, onBell })
+      const callbacks = { onData: vi.fn() }
+
+      processor.processData('plain command output\r\n'.repeat(50), callbacks)
+
+      expect(callbacks.onData).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(0)
+      expect(onTitleChange).not.toHaveBeenCalled()
+      expect(onBell).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves stale-title detection after compacting deferred side effects', async () => {
     vi.useFakeTimers()
     try {
@@ -1030,7 +1050,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       selector: 'env-1',
       method: 'terminal.create',
       params: {
-        worktree: 'repo1::/remote/wt',
+        worktree: 'id:repo1::/remote/wt',
         command: 'claude',
         env: { ORCA_TAB_ID: 'tab-1' },
         tabId: 'tab-1',

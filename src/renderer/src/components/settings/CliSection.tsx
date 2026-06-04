@@ -1,19 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
+import type { SkillDiscoveryTarget } from '../../../../shared/skills'
+import type { GlobalSettings } from '../../../../shared/types'
 import {
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
+  ensureOrcaCliAvailableForAgentSkillTerminal,
+  isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import {
   Dialog,
@@ -26,10 +30,22 @@ import {
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
+import {
+  buildSkillInstallCommandForRuntime,
+  CliSkillRuntimeControl,
+  ensureWslCliAvailableForAgentSkillTerminal,
+  getAgentSkillTerminalShellOverride,
+  getSelectedAgentRuntime
+} from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
 
 type CliSectionProps = {
   currentPlatform: string
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+  wslSupportedPlatform?: boolean
+  wslAvailable?: boolean
+  wslCapabilitiesLoading?: boolean
 }
 
 function getRevealLabel(platform: string): string {
@@ -59,34 +75,81 @@ function getFallbackCommandName(platform: string): string {
   return platform === 'linux' ? 'orca-ide' : 'orca'
 }
 
-export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Element {
+export function CliSection({
+  currentPlatform,
+  settings,
+  updateSettings,
+  wslSupportedPlatform = false,
+  wslAvailable = false,
+  wslCapabilitiesLoading = false
+}: CliSectionProps): React.JSX.Element {
   const [status, setStatus] = useState<CliInstallStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [busyAction, setBusyAction] = useState<'install' | 'remove' | null>(null)
+  const mountedRef = useMountedRef()
+  const agentRuntime = useMemo(
+    () =>
+      getSelectedAgentRuntime(settings, wslSupportedPlatform, wslAvailable, wslCapabilitiesLoading),
+    [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
+  )
+  const cliSkillDiscoveryTarget = useMemo<SkillDiscoveryTarget | undefined>(
+    () => (agentRuntime.runtime === 'wsl' ? { runtime: 'wsl' } : undefined),
+    [agentRuntime.runtime]
+  )
   const {
     installed: cliSkillDetected,
     loading: cliSkillLoading,
     error: cliSkillError,
     refresh: refreshCliSkill
   } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    discoveryTarget: cliSkillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+  const cliSkillInstallCommand = buildSkillInstallCommandForRuntime(
+    ORCA_CLI_SKILL_INSTALL_COMMAND,
+    agentRuntime
+  )
+  const cliSkillTerminalShellOverride = getAgentSkillTerminalShellOverride(
+    currentPlatform,
+    settings,
+    agentRuntime
+  )
+  const getCliSkillPrerequisiteStatus = useCallback(
+    () =>
+      agentRuntime.runtime === 'wsl'
+        ? window.api.cli.getWslInstallStatus()
+        : window.api.cli.getInstallStatus(),
+    [agentRuntime.runtime]
+  )
 
-  const refreshStatus = async (): Promise<void> => {
+  const handleStatusChange = useCallback(
+    (nextStatus: CliInstallStatus): void => {
+      if (mountedRef.current) {
+        setStatus(nextStatus)
+      }
+    },
+    [mountedRef]
+  )
+
+  const refreshStatus = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      setStatus(await window.api.cli.getInstallStatus())
+      handleStatusChange(await window.api.cli.getInstallStatus())
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+      if (mountedRef.current) {
+        toast.error(error instanceof Error ? error.message : 'Failed to load CLI status.')
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
-  }
+  }, [handleStatusChange, mountedRef])
 
   useEffect(() => {
     void refreshStatus()
-  }, [])
+  }, [refreshStatus])
 
   const isEnabled = status?.state === 'installed'
   const isSupported = status?.supported ?? false
@@ -100,15 +163,21 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
     setBusyAction('install')
     try {
       const next = await window.api.cli.install()
-      setStatus(next)
-      setDialogOpen(false)
-      toast.success(`Registered \`${next.commandName}\` in PATH.`)
+      if (mountedRef.current) {
+        setStatus(next)
+        setDialogOpen(false)
+        toast.success(`Registered \`${next.commandName}\` in PATH.`)
+      }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : `Failed to register \`${commandName}\` in PATH.`
-      )
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : `Failed to register \`${commandName}\` in PATH.`
+        )
+      }
     } finally {
-      setBusyAction(null)
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
     }
   }
 
@@ -116,15 +185,21 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
     setBusyAction('remove')
     try {
       const next = await window.api.cli.remove()
-      setStatus(next)
-      setDialogOpen(false)
-      toast.success(`Removed \`${next.commandName}\` from PATH.`)
+      if (mountedRef.current) {
+        setStatus(next)
+        setDialogOpen(false)
+        toast.success(`Removed \`${next.commandName}\` from PATH.`)
+      }
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from PATH.`
-      )
+      if (mountedRef.current) {
+        toast.error(
+          error instanceof Error ? error.message : `Failed to remove \`${commandName}\` from PATH.`
+        )
+      }
     } finally {
-      setBusyAction(null)
+      if (mountedRef.current) {
+        setBusyAction(null)
+      }
     }
   }
 
@@ -234,21 +309,36 @@ export function CliSection({ currentPlatform }: CliSectionProps): React.JSX.Elem
               </p>
             </div>
 
+            <CliSkillRuntimeControl
+              runtime={agentRuntime}
+              updateSettings={updateSettings}
+              wslSupportedPlatform={wslSupportedPlatform}
+              wslAvailable={wslAvailable}
+              wslCapabilitiesLoading={wslCapabilitiesLoading}
+            />
+
             <AgentSkillSetupPanel
               className="mt-3"
               variant="inline"
               title="CLI skill"
               description="Enables agents to use Orca workspace, terminal, and progress commands."
-              command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+              command={cliSkillInstallCommand}
               terminalTitle="CLI skill setup"
               terminalAriaLabel="CLI skill install terminal"
-              terminalWorktreeId="settings-cli-skill-terminal"
+              terminalWorktreeId={`settings-cli-skill-terminal-${agentRuntime.runtime}`}
+              terminalShellOverride={cliSkillTerminalShellOverride}
               installed={cliSkillDetected}
               loading={cliSkillLoading}
               error={cliSkillError}
               preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+              getPrerequisiteStatus={getCliSkillPrerequisiteStatus}
+              isPrerequisiteAvailable={isOrcaCliAvailableOnPath}
               onBeforeOpenTerminal={async () => {
-                await ensureOrcaCliAvailableForAgentSkillTerminal({ onStatusChange: setStatus })
+                await (agentRuntime.runtime === 'wsl'
+                  ? ensureWslCliAvailableForAgentSkillTerminal()
+                  : ensureOrcaCliAvailableForAgentSkillTerminal({
+                      onStatusChange: handleStatusChange
+                    }))
               }}
               onRecheck={refreshCliSkill}
             />

@@ -20,6 +20,7 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
       'tab-1': { root: null, activeLeafId: null, expandedLeafId: null }
     },
     activeTabIdByWorktree: { 'wt-1': 'tab-1', 'wt-2': 'tab-2' },
+    editorDrafts: {},
     openFiles: [
       {
         filePath: '/tmp/demo.ts',
@@ -103,6 +104,16 @@ describe('buildWorkspaceSessionPayload', () => {
     const payload = buildWorkspaceSessionPayload(createSnapshot())
 
     expect(payload.activeWorktreeIdsOnShutdown).toEqual(['wt-1'])
+  })
+
+  it('persists the default-tab idempotency marker when present', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        defaultTerminalTabsAppliedByWorktreeId: { 'wt-1': true }
+      })
+    )
+
+    expect(payload.defaultTerminalTabsAppliedByWorktreeId).toEqual({ 'wt-1': true })
   })
 
   it('persists floating terminal tabs for daemon reattach after restart', () => {

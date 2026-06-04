@@ -21,16 +21,27 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: asyncStorageMock
 }))
 
+function oldBuiltInIdsBeforeSpace(): string[] {
+  return getDefaultTerminalAccessoryBuiltInIds().filter((id) => id !== 'space')
+}
+
 describe('terminal accessory layout', () => {
   beforeEach(() => {
     asyncStorageMock.getItem.mockReset()
     asyncStorageMock.setItem.mockReset()
   })
 
-  it('defaults include enter', () => {
-    expect(getDefaultTerminalAccessoryBuiltInIds()).toContain('enter')
-    expect(getVisibleTerminalAccessoryKeys(getDefaultTerminalAccessoryBuiltInIds())).toContainEqual(
-      expect.objectContaining({ id: 'enter', bytes: '\r' })
+  it('defaults include Space near Enter, Tab, and Shift+Tab', () => {
+    const ids = getDefaultTerminalAccessoryBuiltInIds()
+
+    expect(ids).toContain('enter')
+    expect(ids).toContain('space')
+    expect(ids.indexOf('space')).toBeGreaterThan(ids.indexOf('shiftTab'))
+    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('backspace'))
+    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('delete'))
+    expect(ids.indexOf('space')).toBeLessThan(ids.indexOf('arrowUp'))
+    expect(getVisibleTerminalAccessoryKeys(ids)).toContainEqual(
+      expect.objectContaining({ id: 'space', bytes: ' ', accessibilityLabel: 'Space' })
     )
   })
 
@@ -92,6 +103,40 @@ describe('terminal accessory layout', () => {
         current
       ).visibleBuiltInIds
     ).toEqual(['escape'])
+  })
+
+  it('migrates Space into old personalized layouts using current built-in order', () => {
+    const oldBuiltInIds = oldBuiltInIdsBeforeSpace()
+
+    expect(
+      normalizeTerminalAccessoryLayoutPreference({
+        version: 1,
+        visibleBuiltInIds: ['escape', 'tab', 'enter', 'shiftTab', 'backspace', 'delete'],
+        knownBuiltInIds: oldBuiltInIds
+      }).visibleBuiltInIds
+    ).toEqual(['escape', 'tab', 'enter', 'shiftTab', 'space', 'backspace', 'delete'])
+  })
+
+  it('shows Space once for an all-hidden old layout', () => {
+    const oldBuiltInIds = oldBuiltInIdsBeforeSpace()
+
+    expect(
+      normalizeTerminalAccessoryLayoutPreference({
+        version: 1,
+        visibleBuiltInIds: [],
+        knownBuiltInIds: oldBuiltInIds
+      }).visibleBuiltInIds
+    ).toEqual(['space'])
+  })
+
+  it('keeps Space hidden after that choice is persisted with current known ids', () => {
+    const visibleBuiltInIds = getDefaultTerminalAccessoryBuiltInIds().filter((id) => id !== 'space')
+    const persisted = createTerminalAccessoryLayoutPreference(visibleBuiltInIds)
+
+    expect(persisted.knownBuiltInIds).toContain('space')
+    expect(normalizeTerminalAccessoryLayoutPreference(persisted).visibleBuiltInIds).not.toContain(
+      'space'
+    )
   })
 
   it('keeps hidden known defaults hidden, including an all-hidden layout', () => {

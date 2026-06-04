@@ -10,6 +10,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -39,6 +40,7 @@ vi.mock('node:os', async () => {
 function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   const appFontFamily = overrides.appFontFamily ?? 'Geist'
   const agentStatusHooksEnabled = overrides.agentStatusHooksEnabled ?? true
+  const tabAutoGenerateTitle = overrides.tabAutoGenerateTitle ?? false
   return {
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
@@ -47,6 +49,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
+    appIcon: overrides.appIcon ?? 'classic',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
     editorMinimapEnabled: false,
@@ -108,7 +111,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     skipDeleteAutomationConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
-    visibleTaskProviders: ['github', 'gitlab', 'linear'],
+    visibleTaskProviders: ['github', 'gitlab', 'linear', 'jira'],
+    visibleTaskProvidersDefaultedForJira: true,
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
@@ -132,7 +136,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     enableGitHubAttribution: true,
     ...overrides,
     appFontFamily,
-    agentStatusHooksEnabled
+    agentStatusHooksEnabled,
+    tabAutoGenerateTitle
   }
 }
 
@@ -150,6 +155,10 @@ function getRuntimeCodexHomePath(): string {
 
 function getRuntimeCodexAuthPath(): string {
   return join(getRuntimeCodexHomePath(), 'auth.json')
+}
+
+function getLegacyActiveHostCodexHomePath(): string {
+  return join(testState.userDataDir, 'codex-runtime-home', 'active', 'host', 'home')
 }
 
 function normalizeLinkTarget(linkTarget: string): string {
@@ -298,6 +307,166 @@ describe('CodexRuntimeHomeService', () => {
     expect(
       existsSync(join(testState.userDataDir, 'codex-runtime-home', 'system-default-auth.json'))
     ).toBe(false)
+  })
+
+  it('repoints legacy active host CODEX_HOME to the shared runtime home on startup', async () => {
+    const legacyLaunchHomePath = join(
+      testState.userDataDir,
+      'codex-runtime-home',
+      'launch',
+      'host',
+      'account-old',
+      'home'
+    )
+    const legacyActiveHomePath = getLegacyActiveHostCodexHomePath()
+    mkdirSync(legacyLaunchHomePath, { recursive: true })
+    mkdirSync(join(legacyActiveHomePath, '..'), { recursive: true })
+    symlinkSync(
+      legacyLaunchHomePath,
+      legacyActiveHomePath,
+      process.platform === 'win32' ? 'junction' : undefined
+    )
+    writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+    const managedHomePath = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      '{"account":"managed"}\n'
+    )
+    const store = createStore(
+      createSettings({
+        codexManagedAccounts: [
+          {
+            id: 'account-1',
+            email: 'user@example.com',
+            managedHomePath,
+            providerAccountId: null,
+            workspaceLabel: null,
+            workspaceAccountId: null,
+            createdAt: 1,
+            updatedAt: 1,
+            lastAuthenticatedAt: 1
+          }
+        ],
+        activeCodexManagedAccountId: 'account-1'
+      })
+    )
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).toBe(
+      normalizeLinkTarget(getRuntimeCodexHomePath())
+    )
+    expect(readFileSync(join(legacyActiveHomePath, 'auth.json'), 'utf-8')).toBe(
+      '{"account":"managed"}\n'
+    )
+  })
+
+  it('uses the canonical Electron userData for legacy active host migration', async () => {
+    const staleUserDataDir = mkdtempSync(join(tmpdir(), 'orca-stale-runtime-home-'))
+    const staleRuntimeHomePath = join(staleUserDataDir, 'codex-runtime-home', 'home')
+    try {
+      mkdirSync(staleRuntimeHomePath, { recursive: true })
+      process.env.ORCA_USER_DATA_PATH = staleUserDataDir
+      const legacyLaunchHomePath = join(
+        testState.userDataDir,
+        'codex-runtime-home',
+        'launch',
+        'host',
+        'account-old',
+        'home'
+      )
+      const legacyActiveHomePath = getLegacyActiveHostCodexHomePath()
+      mkdirSync(legacyLaunchHomePath, { recursive: true })
+      mkdirSync(join(legacyActiveHomePath, '..'), { recursive: true })
+      symlinkSync(
+        legacyLaunchHomePath,
+        legacyActiveHomePath,
+        process.platform === 'win32' ? 'junction' : undefined
+      )
+      writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+      const store = createStore(createSettings())
+
+      const { configureOrcaUserDataPathEnv } = await import('../startup/configure-process')
+      configureOrcaUserDataPathEnv()
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      new CodexRuntimeHomeService(store as never)
+
+      expect(process.env.ORCA_USER_DATA_PATH).toBe(testState.userDataDir)
+      expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).toBe(
+        normalizeLinkTarget(getRuntimeCodexHomePath())
+      )
+      expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).not.toBe(
+        normalizeLinkTarget(staleRuntimeHomePath)
+      )
+    } finally {
+      rmSync(staleUserDataDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not create a legacy active host pointer for fresh shared-home users', async () => {
+    writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+    const store = createStore(createSettings())
+
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    new CodexRuntimeHomeService(store as never)
+
+    expect(existsSync(getLegacyActiveHostCodexHomePath())).toBe(false)
+  })
+
+  it('builds a valid WSL legacy active-home migration shell command', async () => {
+    const execFileSyncMock = vi.fn()
+    vi.doMock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
+    try {
+      const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+      const service = new CodexRuntimeHomeService(
+        createStore(createSettings()) as never
+      ) as unknown as {
+        migrateLegacyWslActiveHomePointer(distro: string, runtimeHomePath: string): void
+      }
+
+      service.migrateLegacyWslActiveHomePointer(
+        'Ubuntu',
+        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
+      )
+
+      expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+      const firstCall = execFileSyncMock.mock.calls[0]
+      expect(firstCall).toBeDefined()
+      const [command, args] = firstCall as [string, string[]]
+      expect(command).toBe('wsl.exe')
+      expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'bash', '-lc'])
+      expect(args).toHaveLength(6)
+
+      const shellCommand = args[5]
+      expect(shellCommand).toContain(
+        "if [ ! -e '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ] && [ ! -L '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ]; then :"
+      )
+      expect(shellCommand).toContain(
+        "elif [ -e '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ] && [ ! -L '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ]; then :"
+      )
+      expect(shellCommand).toContain(
+        "mkdir -p '/home/alice/.local/share/orca/codex-runtime-home/active/wsl'"
+      )
+      expect(shellCommand).toContain(
+        "ln -s -- '/home/alice/.local/share/orca/codex-runtime-home/home' '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home.next-"
+      )
+      expect(shellCommand).toContain(
+        "mv -Tf -- '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home.next-"
+      )
+      expect(shellCommand).toContain(
+        "' '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home'"
+      )
+      expect(shellCommand).not.toContain('[! -L')
+      expect(shellCommand).not.toContain('mv -Tf--')
+      expect(shellCommand).not.toContain('$1')
+      expect(shellCommand).not.toContain('$2')
+      expect(shellCommand).not.toContain('$3')
+      expect(shellCommand).not.toContain('exit 0')
+    } finally {
+      vi.doUnmock('node:child_process')
+    }
   })
 
   it('restores the system-default snapshot when no managed account is selected', async () => {
@@ -2769,6 +2938,8 @@ describe('CodexRuntimeHomeService', () => {
     const runtimeSessionsDir = join(getRuntimeCodexHomePath(), 'sessions')
     mkdirSync(runtimeSessionsDir, { recursive: true })
     writeFileSync(join(runtimeSessionsDir, 'session.json'), '{"turns":[1]}', 'utf-8')
+    mkdirSync(join(runtimeSessionsDir, 'nested'), { recursive: true })
+    writeFileSync(join(runtimeSessionsDir, 'nested', 'session.json'), '{"turns":[2]}', 'utf-8')
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
@@ -2777,6 +2948,8 @@ describe('CodexRuntimeHomeService', () => {
     const legacySessionsDir = join(managedHomePath, 'sessions')
     mkdirSync(legacySessionsDir, { recursive: true })
     writeFileSync(join(legacySessionsDir, 'session.json'), '{"turns":[1,2]}', 'utf-8')
+    mkdirSync(join(legacySessionsDir, 'nested'), { recursive: true })
+    writeFileSync(join(legacySessionsDir, 'nested', 'session.json'), '{"turns":[2,3]}', 'utf-8')
     const store = createStore(createSettings())
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -2788,9 +2961,17 @@ describe('CodexRuntimeHomeService', () => {
     ).toBe('{"turns":[1,2]}')
     expect(
       readFileSync(
-        join(testState.userDataDir, 'codex-runtime-home', 'migration-diagnostics.jsonl'),
+        join(runtimeSessionsDir, 'nested', 'session.orca-legacy-account-1.json'),
         'utf-8'
       )
-    ).toContain('"type":"session-conflict"')
+    ).toBe('{"turns":[2,3]}')
+    const diagnostics = readFileSync(
+      join(testState.userDataDir, 'codex-runtime-home', 'migration-diagnostics.jsonl'),
+      'utf-8'
+    )
+      .trim()
+      .split('\n')
+    expect(diagnostics).toHaveLength(2)
+    expect(diagnostics[0]).toContain('"type":"session-conflict"')
   })
 })

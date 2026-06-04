@@ -5,6 +5,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { parseSparsePresetDirectories } from '@/lib/sparse-preset-draft'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import type { SparsePreset } from '../../../../shared/types'
 
 type SparseCheckoutPresetSelectProps = {
@@ -41,6 +42,7 @@ export default function SparseCheckoutPresetSelect({
   const [submitting, setSubmitting] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const nameInputFocusFrameRef = useRef<number | null>(null)
+  const mountedRef = useMountedRef()
 
   const visiblePresets = presetsForRepo ?? presets
   const presetsLoaded = presetsForRepo !== undefined
@@ -147,7 +149,7 @@ export default function SparseCheckoutPresetSelect({
         name: trimmedName,
         directories: parsedDirectories.directories
       })
-      if (saved) {
+      if (saved && mountedRef.current) {
         if (draft.mode === 'new' || selectedPresetId === saved.id) {
           onSelectPreset(saved)
         }
@@ -155,11 +157,14 @@ export default function SparseCheckoutPresetSelect({
         setOpen(false)
       }
     } finally {
-      setSubmitting(false)
+      if (mountedRef.current) {
+        setSubmitting(false)
+      }
     }
   }, [
     canSave,
     draft,
+    mountedRef,
     onSelectPreset,
     parsedDirectories,
     repoId,

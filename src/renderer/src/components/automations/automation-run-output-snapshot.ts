@@ -65,14 +65,20 @@ export function createAutomationRunOutputSnapshotBuffer(): AutomationRunOutputSn
       }
       chunks.push(chunk)
       totalChars += chunk.length
-      while (totalChars > MAX_OUTPUT_SNAPSHOT_CHARS && chunks.length > 1) {
-        totalChars -= chunks.shift()!.length
+      let overflowChars = totalChars - MAX_OUTPUT_SNAPSHOT_CHARS
+      while (overflowChars > 0 && chunks.length > 0) {
+        const firstChunk = chunks[0]
+        if (firstChunk.length <= overflowChars) {
+          chunks.shift()
+          totalChars -= firstChunk.length
+          overflowChars -= firstChunk.length
+          truncated = true
+          continue
+        }
+        chunks[0] = firstChunk.slice(overflowChars)
+        totalChars -= overflowChars
         truncated = true
-      }
-      if (totalChars > MAX_OUTPUT_SNAPSHOT_CHARS && chunks.length === 1) {
-        chunks[0] = chunks[0].slice(-MAX_OUTPUT_SNAPSHOT_CHARS)
-        totalChars = chunks[0].length
-        truncated = true
+        overflowChars = 0
       }
     },
     snapshot() {

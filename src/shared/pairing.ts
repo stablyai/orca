@@ -34,23 +34,25 @@ export function decodePairingOffer(url: string): PairingOffer {
 }
 
 function extractPairingCodeFromUrl(url: string): string | null {
-  if (!url.startsWith('orca://pair')) {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
     return null
   }
-  const queryIndex = url.indexOf('?')
-  if (queryIndex !== -1) {
-    const query = url.slice(queryIndex + 1).split('#')[0] ?? ''
-    const params = new URLSearchParams(query)
-    const code = params.get('code')
-    if (code) {
-      return code
-    }
+  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
+  // pairing deep-link host may carry runtime auth material.
+  if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
+    return null
   }
-  const hashIndex = url.indexOf('#')
-  if (hashIndex !== -1) {
-    return url.slice(hashIndex + 1) || null
+  if (parsed.pathname !== '' && parsed.pathname !== '/') {
+    return null
   }
-  return null
+  const code = parsed.searchParams.get('code')
+  if (code) {
+    return code
+  }
+  return parsed.hash ? parsed.hash.slice(1) || null : null
 }
 
 // Why: accept either an `orca://pair?...` URL or the bare base64
@@ -62,7 +64,7 @@ export function parsePairingCode(input: string): PairingOffer | null {
     return null
   }
   try {
-    if (trimmed.startsWith('orca://pair')) {
+    if (trimmed.toLowerCase().startsWith('orca://')) {
       return decodePairingOffer(trimmed)
     }
     return decodePairingBase64(trimmed)

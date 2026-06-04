@@ -2,6 +2,7 @@
 import { useEffect, useRef } from 'react'
 import type { JSX, ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 
 // Why: the visual leans on direct DOM mutation (typing into a node, swapping
 // classes, anchoring a floating menu by measured rect) so the loop reads
@@ -273,6 +274,9 @@ function SlashRow(props: {
 
 export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
   const { reducedMotion } = props
+  const editorShortcutPrefix = getShortcutPlatform() === 'darwin' ? '⌘' : 'Ctrl+'
+  const boldShortcutLabel = `${editorShortcutPrefix}B`
+  const italicShortcutLabel = `${editorShortcutPrefix}I`
 
   const docRef = useRef<HTMLDivElement | null>(null)
   const activeLineRef = useRef<HTMLDivElement | null>(null)
@@ -714,8 +718,8 @@ export function EditorAnimatedVisual(props: { reducedMotion: boolean }): JSX.Ele
           shape. */}
       <div className="border-t border-border bg-card px-3 py-2 text-[11px] text-muted-foreground">
         Type <kbd className={KBD_CLASS_DOC}>/</kbd> for blocks ·{' '}
-        <kbd className={KBD_CLASS_DOC}>⌘B</kbd> bold · <kbd className={KBD_CLASS_DOC}>⌘I</kbd>{' '}
-        italic
+        <kbd className={KBD_CLASS_DOC}>{boldShortcutLabel}</kbd> bold ·{' '}
+        <kbd className={KBD_CLASS_DOC}>{italicShortcutLabel}</kbd> italic
       </div>
 
       {/* Why: the imperative loop adds .slash-active and toggles

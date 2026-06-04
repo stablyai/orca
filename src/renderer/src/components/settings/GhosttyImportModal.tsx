@@ -39,6 +39,8 @@ export function GhosttyImportModal({
   applyError = null
 }: GhosttyImportModalProps): React.JSX.Element {
   const hasChanges = preview?.found === true && Object.keys(preview.diff).length > 0
+  const configPaths =
+    preview?.configPaths ?? (preview?.configPath !== undefined ? [preview.configPath] : [])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -54,9 +56,9 @@ export function GhosttyImportModal({
           <p className="text-xs text-muted-foreground">Loading preview…</p>
         ) : preview == null ? null : preview.found ? (
           <div className="space-y-3">
-            {preview.configPath && !applied && (
+            {configPaths.length > 0 && !applied && (
               <p className="text-xs text-muted-foreground break-all">
-                Config: {preview.configPath}
+                {configPaths.length === 1 ? 'Config' : 'Configs'}: {configPaths.join(', ')}
               </p>
             )}
             {applied ? (

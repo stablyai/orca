@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   WorktreeTitleInlineRename,
-  getWorktreeTitleRenameCommit
+  getWorktreeTitleRenameCommit,
+  isWorktreeTitleTruncated
 } from './WorktreeTitleInlineRename'
 
 describe('getWorktreeTitleRenameCommit', () => {
@@ -24,6 +25,12 @@ describe('getWorktreeTitleRenameCommit', () => {
 })
 
 describe('WorktreeTitleInlineRename', () => {
+  it('treats only actual text overflow as truncation', () => {
+    expect(isWorktreeTitleTruncated({ clientWidth: 120, scrollWidth: 120 })).toBe(false)
+    expect(isWorktreeTitleTruncated({ clientWidth: 120, scrollWidth: 119 })).toBe(false)
+    expect(isWorktreeTitleTruncated({ clientWidth: 120, scrollWidth: 121 })).toBe(true)
+  })
+
   it('renders the title as the double-click inline rename target', () => {
     const markup = renderToStaticMarkup(
       <TooltipProvider>

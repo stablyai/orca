@@ -65,6 +65,30 @@ describe('resolveWindowsShellLaunchArgs', () => {
     ])
   })
 
+  it('starts Git Bash as an interactive login shell without changing cwd', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'C:\\Users\\alice\\code',
+      'C:\\Users\\alice'
+    )
+
+    expect(result.shellArgs).toEqual(['--login', '-i'])
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
+  })
+
+  it('does not apply Git Bash launch args to unrelated bash.exe paths', () => {
+    const result = resolveWindowsShellLaunchArgs(
+      'C:\\msys64\\usr\\bin\\bash.exe',
+      'C:\\Users\\alice\\code',
+      'C:\\Users\\alice'
+    )
+
+    expect(result.shellArgs).toEqual([])
+    expect(result.effectiveCwd).toBe('C:\\Users\\alice\\code')
+    expect(result.validationCwd).toBe('C:\\Users\\alice\\code')
+  })
+
   it('translates Windows cwd to /mnt/<drive>/... for wsl.exe', () => {
     const result = resolveWindowsShellLaunchArgs(
       'wsl.exe',
@@ -75,7 +99,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       '--',
       'bash',
       '-c',
-      "cd '/mnt/c/Users/alice/code' && exec bash -l"
+      'cd \'/mnt/c/Users/alice/code\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
     ])
     // Why: WSL cannot cd into a Windows path, so node-pty must start from the
     // user's Windows home and we inject the Linux cd into the shellArgs above.
@@ -87,12 +111,16 @@ describe('resolveWindowsShellLaunchArgs', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', "C:\\weird'path", 'C:\\Users\\alice')
     // The injected bash cmd must not break out of the surrounding single
     // quotes when the path contains a ' character.
-    expect(result.shellArgs[3]).toBe("cd '/mnt/c/weird'\\''path' && exec bash -l")
+    expect(result.shellArgs[3]).toBe(
+      "cd '/mnt/c/weird'\\''path' && export PATH=\"$HOME/.local/bin:$PATH\" && exec bash -l"
+    )
   })
 
   it('falls back to /mnt/c when cwd is not a drive-letter path', () => {
     const result = resolveWindowsShellLaunchArgs('wsl.exe', '\\\\server\\share', 'C:\\Users\\alice')
-    expect(result.shellArgs[3]).toBe("cd '/mnt/c' && exec bash -l")
+    expect(result.shellArgs[3]).toBe(
+      'cd \'/mnt/c\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+    )
   })
 
   it('keeps WSL UNC worktree cwd inside the matching distro', () => {
@@ -114,7 +142,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
         '--',
         'bash',
         '-c',
-        "cd '/home/alice/repo' && exec bash -l"
+        'cd \'/home/alice/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
       ])
       expect(result.effectiveCwd).toBe('C:\\Users\\alice')
       expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo')
@@ -140,7 +168,7 @@ describe('resolveWindowsShellLaunchArgs', () => {
       '--',
       'bash',
       '-c',
-      "cd '/home/alice/repo/subdir' && exec bash -l"
+      'cd \'/home/alice/repo/subdir\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
     ])
     expect(result.effectiveCwd).toBe('C:\\Users\\alice')
     expect(result.validationCwd).toBe('\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo\\subdir')

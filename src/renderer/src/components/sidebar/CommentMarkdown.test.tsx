@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import CommentMarkdown from './CommentMarkdown'
+import CommentMarkdown, { remarkGitHubReferences } from './CommentMarkdown'
 
 describe('CommentMarkdown', () => {
   it('autolinks same-repo GitHub issue references when repo context is provided', () => {
@@ -40,6 +40,53 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('href="https://example.com/already-linked"')
     expect(markup).not.toContain('href="https://github.com/stablyai/orca/issues/2316"')
     expect(markup).not.toContain('href="https://github.com/stablyai/orca/issues/2317"')
+  })
+
+  it('keeps remote compact markdown images as links', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content="See this: ![Image #1](https://example.com/screenshot.png)" />
+    )
+
+    expect(markup).not.toContain('<img')
+    expect(markup).toContain('href="https://example.com/screenshot.png"')
+    expect(markup).toContain('>Image #1</a>')
+  })
+
+  it('renders trusted compact markdown images inline', () => {
+    const markup = renderToStaticMarkup(
+      <CommentMarkdown content="See this: ![Image #1](data:image/png;base64,abc123)" />
+    )
+
+    expect(markup).toContain('<img')
+    expect(markup).toContain('alt="Image #1"')
+    expect(markup).toContain('src="data:image/png;base64,abc123"')
+  })
+
+  it('autolinks very large generated GitHub reference comments', () => {
+    const referenceCount = 130_000
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'paragraph',
+          children: [
+            {
+              type: 'text',
+              value: Array.from({ length: referenceCount }, (_, index) => `#${index + 1}`).join(' ')
+            }
+          ]
+        }
+      ]
+    }
+
+    const transform = remarkGitHubReferences({ owner: 'stablyai', repo: 'orca' })()
+
+    expect(() => transform(tree)).not.toThrow()
+    expect(tree.children[0]?.children).toHaveLength(referenceCount * 2 - 1)
+    expect(tree.children[0]?.children[0]).toMatchObject({
+      type: 'link',
+      url: 'https://github.com/stablyai/orca/issues/1'
+    })
   })
 
   it('contains long PR body markdown inside its available width', () => {

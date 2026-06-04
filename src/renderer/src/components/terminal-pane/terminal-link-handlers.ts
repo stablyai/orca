@@ -14,7 +14,8 @@ import {
 import {
   getTerminalFileContext,
   isHtmlFilePath,
-  openDetectedFilePath
+  openDetectedFilePath,
+  shouldOpenTerminalFileWithSystemDefault
 } from './terminal-file-open-routing'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -22,6 +23,11 @@ import {
   rangeForParsedFileLink,
   type WrappedLogicalLine
 } from './wrapped-terminal-link-ranges'
+import {
+  getTerminalPathExistsCacheKey,
+  readTerminalPathExistsCache,
+  writeTerminalPathExistsCache
+} from './terminal-path-exists-cache'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
@@ -75,15 +81,21 @@ function isMacPlatform(): boolean {
 }
 
 export function getTerminalFileOpenHint(): string {
-  return isMacPlatform() ? '⌘+click to open' : 'Ctrl+click to open'
+  return isMacPlatform()
+    ? '⌘+click to open or ⇧⌘+click for default app'
+    : 'Ctrl+click to open or Shift+Ctrl+click for default app'
 }
 
-// Why: .html/.htm files are routed straight into Orca's embedded browser rather
-// than the Monaco editor (which would just show the source), matching the
-// standalone "Open Preview to the Side" entry point. Advertise the different
-// behavior in the hover tooltip so users know a click will render the page.
+export function getTerminalOrcaFileOpenHint(): string {
+  return isMacPlatform() ? '⌘+click to open in Orca' : 'Ctrl+click to open in Orca'
+}
+
+// Why: local .html/.htm links keep the ordinary Orca browser route, with the
+// same Shift+modifier escape hatch to the system default browser as URL links.
 export function getTerminalHtmlFileOpenHint(): string {
-  return isMacPlatform() ? '⌘+click to open in browser' : 'Ctrl+click to open in browser'
+  return isMacPlatform()
+    ? '⌘+click to open or ⇧⌘+click for default browser'
+    : 'Ctrl+click to open or Shift+Ctrl+click for default browser'
 }
 
 export function getTerminalUrlOpenHint(): string {
@@ -142,20 +154,28 @@ export function createFilePathLinkProvider(
 
               const runtimeEnvironmentId =
                 deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
-              const cacheKey = `${runtimeEnvironmentId ?? 'active'}\0${resolved.absolutePath}`
-              const cachedExists = pathExistsCache.get(cacheKey)
               const fileContext = getTerminalFileContext(
                 worktreeId,
                 worktreePath,
                 runtimeEnvironmentId
               )
+              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(
+                fileContext,
+                resolved.absolutePath
+              )
+              const cacheKey = getTerminalPathExistsCacheKey({
+                absolutePath: resolved.absolutePath,
+                connectionId: fileContext.connectionId,
+                isRemoteRuntimePath,
+                runtimeEnvironmentId
+              })
+              const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
               const exists =
                 cachedExists ??
-                (fileContext.connectionId ||
-                isRemoteRuntimeFileOperation(fileContext, resolved.absolutePath)
+                (fileContext.connectionId || isRemoteRuntimePath
                   ? await runtimePathExists(fileContext, resolved.absolutePath)
                   : await window.api.shell.pathExists(resolved.absolutePath))
-              pathExistsCache.set(cacheKey, exists)
+              writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
               if (!exists) {
                 return null
               }
@@ -172,17 +192,22 @@ export function createFilePathLinkProvider(
                     openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
                       worktreeId,
                       worktreePath,
-                      runtimeEnvironmentId
+                      runtimeEnvironmentId,
+                      openWithSystemDefault: Boolean(event.shiftKey)
                     })
                   },
                   hover: () => {
-                    // Why: HTML files get a distinct hint because ⌘/Ctrl+click opens
-                    // them rendered in the embedded browser, not as source in the
-                    // editor — parallels the "open in system browser" affordance
-                    // shown for http URLs.
-                    const hint = isHtmlFilePath(resolved.absolutePath)
-                      ? getTerminalHtmlFileOpenHint()
-                      : openLinkHint
+                    // Why: only local paths can offer the Shift+modifier system
+                    // default escape hatch; remote paths may not exist locally.
+                    const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
+                      fileContext,
+                      resolved.absolutePath
+                    )
+                    const hint = canOpenWithSystemDefault
+                      ? isHtmlFilePath(resolved.absolutePath)
+                        ? getTerminalHtmlFileOpenHint()
+                        : openLinkHint
+                      : getTerminalOrcaFileOpenHint()
                     linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
                     linkTooltip.style.display = ''
                   },
@@ -277,7 +302,8 @@ export function installFilePathLinkClickFallback(
         worktreeId: deps.worktreeId,
         worktreePath: deps.worktreePath,
         runtimeEnvironmentId,
-        pathExistsCache: deps.pathExistsCache
+        pathExistsCache: deps.pathExistsCache,
+        openWithSystemDefault: Boolean(event.shiftKey)
       }
     )
     if (opened) {

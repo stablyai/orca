@@ -474,11 +474,17 @@ export async function listAssignableUsers(
         '--paginate',
         `projects/${encodedProject(projectRef.path)}/members/all?per_page=100`,
         '--jq',
-        '.[] | {username, name, avatar_url}'
+        '.[] | {id, username, name, avatar_url, state}'
       ],
       glabRepoExecOptions(repoPath, connectionId)
     )
-    type RESTMember = { username?: string; name?: string | null; avatar_url?: string | null }
+    type RESTMember = {
+      id?: number
+      username?: string
+      name?: string | null
+      avatar_url?: string | null
+      state?: string | null
+    }
     const users: GitLabAssignableUser[] = []
     for (const line of stdout.split('\n')) {
       const trimmed = line.trim()
@@ -489,9 +495,11 @@ export async function listAssignableUsers(
         const user = JSON.parse(trimmed) as RESTMember
         if (user.username) {
           users.push({
+            ...(typeof user.id === 'number' ? { id: user.id } : {}),
             username: user.username,
             name: user.name ?? null,
-            avatarUrl: user.avatar_url ?? ''
+            avatarUrl: user.avatar_url ?? '',
+            ...(user.state !== undefined ? { state: user.state } : {})
           })
         }
       } catch {

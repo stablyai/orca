@@ -1,8 +1,10 @@
 /* eslint-disable max-lines -- test suite covers Claude capture and rollback edge cases */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { PassThrough } from 'node:stream'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
   readActiveClaudeKeychainCredentials,
@@ -802,5 +804,57 @@ describe('ClaudeAccountService credential capture', () => {
       runtime: 'wsl',
       wslDistro: 'Ubuntu'
     })
+  })
+
+  it('removes command listeners when Claude sign-in times out', async () => {
+    vi.resetModules()
+    vi.useFakeTimers()
+    const child = new EventEmitter() as EventEmitter & {
+      stdout: PassThrough
+      stderr: PassThrough
+      kill: () => void
+    }
+    child.stdout = new PassThrough()
+    child.stderr = new PassThrough()
+    child.kill = vi.fn()
+    const spawnMock = vi.fn(() => child)
+    vi.doMock('node:child_process', () => ({ spawn: spawnMock }))
+
+    try {
+      const { ClaudeAccountService } = await import('./service')
+      const service = new ClaudeAccountService(
+        createService() as never,
+        createService() as never,
+        createService() as never
+      )
+      const commandPromise = (
+        service as unknown as {
+          runClaudeCommand(
+            args: string[],
+            configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
+            timeoutMs: number
+          ): Promise<string>
+        }
+      ).runClaudeCommand(
+        ['login'],
+        { windowsPath: '/tmp/claude-auth', linuxPath: null, wslDistro: null },
+        1000
+      )
+      const rejection = expect(commandPromise).rejects.toThrow(
+        'Claude sign-in took too long to finish.'
+      )
+
+      await vi.advanceTimersByTimeAsync(1000)
+
+      await rejection
+      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(child.stdout.listenerCount('data')).toBe(0)
+      expect(child.stderr.listenerCount('data')).toBe(0)
+      expect(child.listenerCount('error')).toBe(0)
+      expect(child.listenerCount('close')).toBe(0)
+    } finally {
+      vi.useRealTimers()
+      vi.doUnmock('node:child_process')
+    }
   })
 })

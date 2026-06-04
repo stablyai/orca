@@ -2,11 +2,16 @@
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationPrecheck,
   AutomationRun,
   AutomationSchedulePreset,
   AutomationUpdateInput
 } from '../../shared/automations-types'
 import type { TuiAgent } from '../../shared/types'
+import {
+  DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS,
+  MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
+} from '../../shared/automation-precheck'
 import { buildAutomationRrule, isValidAutomationSchedule } from '../../shared/automation-schedules'
 import { isTuiAgent } from '../../shared/tui-agent-config'
 import type { CommandHandler } from '../dispatch'
@@ -234,6 +239,37 @@ function getReuseSessionFlag(flags: Map<string, string | boolean>): boolean | un
   return undefined
 }
 
+function getPrecheckFlag(
+  flags: Map<string, string | boolean>
+): AutomationPrecheck | null | undefined {
+  const hasPrecheck = flags.has('precheck')
+  const timeoutSeconds = getOptionalPositiveIntegerFlag(flags, 'precheck-timeout')
+  if (!hasPrecheck) {
+    if (timeoutSeconds !== undefined) {
+      throw new RuntimeClientError('invalid_argument', '--precheck-timeout requires --precheck')
+    }
+    return undefined
+  }
+  const value = flags.get('precheck')
+  if (typeof value !== 'string') {
+    throw new RuntimeClientError('invalid_argument', '--precheck requires a command')
+  }
+  const command = value.trim()
+  if (!command) {
+    return null
+  }
+  if (timeoutSeconds !== undefined && timeoutSeconds > MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--precheck-timeout must be at most ${MAX_AUTOMATION_PRECHECK_TIMEOUT_SECONDS} seconds`
+    )
+  }
+  return {
+    command,
+    timeoutSeconds: timeoutSeconds ?? DEFAULT_AUTOMATION_PRECHECK_TIMEOUT_SECONDS
+  }
+}
+
 function getWorkspaceModeFlag(
   flags: Map<string, string | boolean>
 ): 'existing' | 'new_per_run' | undefined {
@@ -311,6 +347,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{ automation: Automation }>('automation.create', {
       name: getRequiredStringFlag(flags, 'name'),
       prompt: getRequiredStringFlag(flags, 'prompt'),
+      precheck: getPrecheckFlag(flags),
       agentId: getProviderFlag(flags),
       repo: target.repo,
       workspace: target.workspace,
@@ -332,6 +369,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       updates: {
         name: getOptionalStringFlag(flags, 'name'),
         prompt: getOptionalStringFlag(flags, 'prompt'),
+        precheck: getPrecheckFlag(flags),
         agentId: getOptionalProviderFlag(flags),
         repo: target.repo,
         workspace: target.workspace,

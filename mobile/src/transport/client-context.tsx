@@ -74,17 +74,25 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
 
   function notifyHostState(hostId: string, state: ConnectionState) {
     const set = stateListenersRef.current.get(hostId)
-    if (!set) return
-    for (const listener of set) listener(state)
+    if (!set) {
+      return
+    }
+    for (const listener of set) {
+      listener(state)
+    }
   }
 
   function notifyAllHosts() {
-    for (const listener of allHostsListenersRef.current) listener()
+    for (const listener of allHostsListenersRef.current) {
+      listener()
+    }
   }
 
   const closeEntry = useCallback((hostId: string) => {
     const entry = storeRef.current.get(hostId)
-    if (!entry) return
+    if (!entry) {
+      return
+    }
     entry.unsubState()
     entry.client.close()
     storeRef.current.delete(hostId)
@@ -123,12 +131,16 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
           notifyAllHosts()
           return null
         }
-        if (!host) return null
+        if (!host) {
+          return null
+        }
       }
 
       // Re-check after any await — another acquire() may have completed.
       const after = storeRef.current.get(hostId)
-      if (after) return after
+      if (after) {
+        return after
+      }
 
       let client: RpcClient
       try {
@@ -143,7 +155,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       }
       const unsubState = client.onStateChange((state) => {
         const cur = storeRef.current.get(hostId)
-        if (!cur) return
+        if (!cur) {
+          return
+        }
         cur.state = state
         notifyHostState(hostId, state)
       })
@@ -171,7 +185,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // pass inside openEntry.
   const acquire = useCallback(
     (hostId: string, host?: HostProfile): RpcClient | null => {
-      if (host) primedHostsRef.current.set(hostId, host)
+      if (host) {
+        primedHostsRef.current.set(hostId, host)
+      }
       const existing = storeRef.current.get(hostId)
       if (existing) {
         existing.refCount += 1
@@ -181,7 +197,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       // try again once the state listener fires; consumers are expected to
       // call acquire() inside an effect that re-runs on state changes.
       void openEntry(hostId).then((entry) => {
-        if (!entry) return
+        if (!entry) {
+          return
+        }
         entry.refCount += 1
       })
       return null
@@ -190,7 +208,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   )
 
   const primeHosts = useCallback((hosts: HostProfile[]) => {
-    for (const host of hosts) primedHostsRef.current.set(host.id, host)
+    for (const host of hosts) {
+      primedHostsRef.current.set(host.id, host)
+    }
   }, [])
 
   // Why: refcount dropping to 0 no longer triggers an idle-close. The
@@ -203,7 +223,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   // unmount (app shutdown).
   const release = useCallback((hostId: string) => {
     const entry = storeRef.current.get(hostId)
-    if (!entry) return
+    if (!entry) {
+      return
+    }
     entry.refCount = Math.max(0, entry.refCount - 1)
   }, [])
 
@@ -222,7 +244,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
         storeRef.current.delete(hostId)
       }
       const fresh = await openEntry(hostId)
-      if (fresh) fresh.refCount = savedRefCount
+      if (fresh) {
+        fresh.refCount = savedRefCount
+      }
     },
     [openEntry]
   )
@@ -249,9 +273,13 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       set.add(listener)
       return () => {
         const s = stateListenersRef.current.get(hostId)
-        if (!s) return
+        if (!s) {
+          return
+        }
         s.delete(listener)
-        if (s.size === 0) stateListenersRef.current.delete(hostId)
+        if (s.size === 0) {
+          stateListenersRef.current.delete(hostId)
+        }
       }
     },
     []
@@ -286,7 +314,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const store = storeRef.current
     return () => {
-      for (const [hostId] of store) closeEntry(hostId)
+      for (const [hostId] of store) {
+        closeEntry(hostId)
+      }
     }
   }, [])
 
@@ -324,7 +354,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
 
 function useCtx(): ContextValue {
   const ctx = useContext(Ctx)
-  if (!ctx) throw new Error('useHostClient must be used inside <RpcClientProvider>')
+  if (!ctx) {
+    throw new Error('useHostClient must be used inside <RpcClientProvider>')
+  }
   return ctx
 }
 
@@ -351,7 +383,9 @@ export function useHostClient(hostId: string | undefined): {
     let cancelled = false
     // Subscribe before acquire so any state change during open is captured.
     const unsub = ctx.subscribeHostState(hostId, (next) => {
-      if (cancelled) return
+      if (cancelled) {
+        return
+      }
       setState(next)
       // Why: if the client was null at first acquire (async open), the
       // first state change ('connecting'/'handshaking'/'connected') is our
@@ -395,16 +429,24 @@ export function useAllHostClients(hostIds: string[]): Array<{
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    if (hostIds.length === 0) return
-    for (const id of hostIds) ctx.acquire(id)
+    if (hostIds.length === 0) {
+      return
+    }
+    for (const id of hostIds) {
+      ctx.acquire(id)
+    }
     const unsubs: Array<() => void> = []
     for (const id of hostIds) {
       unsubs.push(ctx.subscribeHostState(id, () => setTick((n) => n + 1)))
     }
     unsubs.push(ctx.subscribeAllHosts(() => setTick((n) => n + 1)))
     return () => {
-      for (const u of unsubs) u()
-      for (const id of hostIds) ctx.release(id)
+      for (const u of unsubs) {
+        u()
+      }
+      for (const id of hostIds) {
+        ctx.release(id)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
@@ -454,7 +496,9 @@ export function useReconnectAttempt(hostId: string | undefined): number {
   const ctx = useCtx()
   const [, force] = useState(0)
   useEffect(() => {
-    if (!hostId) return
+    if (!hostId) {
+      return
+    }
     return ctx.subscribeHostState(hostId, () => force((n) => n + 1))
   }, [ctx, hostId])
   return hostId ? ctx.getReconnectAttempt(hostId) : 0
@@ -469,7 +513,9 @@ export function useLastConnectedAt(hostId: string | undefined): number | null {
   const ctx = useCtx()
   const [, force] = useState(0)
   useEffect(() => {
-    if (!hostId) return
+    if (!hostId) {
+      return
+    }
     return ctx.subscribeHostState(hostId, () => force((n) => n + 1))
   }, [ctx, hostId])
   return hostId ? ctx.getLastConnectedAt(hostId) : null

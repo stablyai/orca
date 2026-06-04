@@ -9,7 +9,6 @@ import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared
 import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
-  hookDefinitionHasManagedCommand,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
@@ -88,6 +87,23 @@ function definitionHasCurrentCommand(definition: HookDefinition, command: string
     definition.bash === command ||
     definition.powershell === command ||
     (Array.isArray(definition.hooks) && definition.hooks.some((hook) => hook.command === command))
+  )
+}
+
+function definitionHasStaleManagedCommand(
+  definition: HookDefinition,
+  currentCommand: string | null,
+  isManagedCommand: (command: string | undefined) => boolean
+): boolean {
+  const commands = [definition.command, definition.bash, definition.powershell]
+  if (commands.some((command) => isManagedCommand(command) && command !== currentCommand)) {
+    return true
+  }
+  return (
+    Array.isArray(definition.hooks) &&
+    definition.hooks.some(
+      (hook) => isManagedCommand(hook.command) && hook.command !== currentCommand
+    )
   )
 }
 
@@ -184,6 +200,7 @@ export class CopilotHookService {
     const missing: string[] = []
     let presentCount = 0
     let staleManagedPresent = false
+    const managedEvents = new Set<string>(COPILOT_EVENTS)
     for (const eventName of COPILOT_EVENTS) {
       const command = getManagedCommand(scriptPath, eventName)
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
@@ -194,12 +211,20 @@ export class CopilotHookService {
         presentCount += 1
       } else {
         missing.push(eventName)
-        staleManagedPresent =
-          staleManagedPresent ||
-          definitions.some((definition) =>
-            hookDefinitionHasManagedCommand(definition, isManagedCommand)
-          )
       }
+    }
+    for (const [eventName, definitions] of Object.entries(config.hooks ?? {})) {
+      if (!Array.isArray(definitions)) {
+        continue
+      }
+      const currentCommand = managedEvents.has(eventName)
+        ? getManagedCommand(scriptPath, eventName)
+        : null
+      staleManagedPresent =
+        staleManagedPresent ||
+        definitions.some((definition) =>
+          definitionHasStaleManagedCommand(definition, currentCommand, isManagedCommand)
+        )
     }
 
     const managedHooksPresent = presentCount > 0 || staleManagedPresent
@@ -208,6 +233,9 @@ export class CopilotHookService {
     if (config.disableAllHooks === true && managedHooksPresent) {
       state = 'partial'
       detail = 'Managed Copilot hook file is disabled'
+    } else if (staleManagedPresent) {
+      state = 'partial'
+      detail = 'Managed Copilot hook file contains stale entries'
     } else if (missing.length === 0) {
       state = 'installed'
       detail = null

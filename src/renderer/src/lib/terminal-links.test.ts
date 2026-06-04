@@ -13,6 +13,22 @@ describe('terminal path helpers', () => {
     expect(toWorktreeRelativePath('C:\\repo\\src\\file.ts', 'C:\\repo')).toBe('src/file.ts')
   })
 
+  it('keeps worktree-relative paths for forward-slash Windows UNC paths', () => {
+    expect(isPathInsideWorktree('//server/share/repo/src/file.ts', '\\\\server\\share\\repo')).toBe(
+      true
+    )
+    expect(
+      toWorktreeRelativePath('//server/share/repo/src/file.ts', '\\\\server\\share\\repo')
+    ).toBe('src/file.ts')
+
+    expect(isPathInsideWorktree('//server/share/repo/src/file.ts', '//Server/Share/Repo')).toBe(
+      true
+    )
+    expect(toWorktreeRelativePath('//server/share/repo/src/file.ts', '//Server/Share/Repo')).toBe(
+      'src/file.ts'
+    )
+  })
+
   describe('extractTerminalFileLinks bare-filename tokens', () => {
     it('does not treat regular URL hosts as local file paths', () => {
       expect(
@@ -109,6 +125,28 @@ describe('terminal path helpers', () => {
         displayText: './My Folder'
       })
     })
+
+    it('detects framework route paths with bracket and paren segments', () => {
+      const links = extractTerminalFileLinks(
+        'Error in app/(shop)/products/[productId]/page.tsx:42:7'
+      )
+      expect(links).toHaveLength(1)
+      expect(links[0]).toMatchObject({
+        pathText: 'app/(shop)/products/[productId]/page.tsx',
+        line: 42,
+        column: 7,
+        displayText: 'app/(shop)/products/[productId]/page.tsx:42:7'
+      })
+    })
+
+    it('handles large spaced path lists without quadratic overlap scans', () => {
+      const line = Array.from({ length: 20_000 }, () => '/tmp/Foo Bar/file').join(', ')
+
+      const links = extractTerminalFileLinks(line)
+
+      expect(links).toHaveLength(20_000)
+      expect(links[0].pathText).toBe('/tmp/Foo Bar/file')
+    }, 5_000)
   })
 
   it('supports Windows cwd resolution for terminal file links', () => {

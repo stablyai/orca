@@ -22,7 +22,7 @@ export const FEATURE_TOUR_PREVIEW_COPY: readonly FeatureTourPreviewFrameCopy[] =
     id: 1,
     title: 'Isolated workspaces',
     caption:
-      'Ship several things at once. Each task runs in its own branch, terminal, and agent — no cross-talk.'
+      'Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.'
   },
   {
     id: 2,
@@ -39,7 +39,7 @@ export const FEATURE_TOUR_PREVIEW_COPY: readonly FeatureTourPreviewFrameCopy[] =
     id: 4,
     title: 'Splittable terminal',
     caption:
-      'Run tests, dev servers, and agents side by side — your shell and profile in every workspace.'
+      'Open any workspace to return to its terminal, then split panes for tests, logs, and agents.'
   }
 ]
 
@@ -401,7 +401,23 @@ export function FeatureTourPreview(props: { className?: string }): JSX.Element {
       <div className="feature-tour-frame" data-frame="4">
         <TerminalFrame />
       </div>
-      <div className="absolute inset-x-0 bottom-1.5 z-[5] flex items-center justify-center gap-1.5">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[6] h-[66px] border-t border-border/70 bg-card/95">
+        {FEATURE_TOUR_PREVIEW_COPY.map((frame) => (
+          <div
+            key={frame.id}
+            className="feature-tour-copy-slide justify-center px-4 py-2.5 pr-20"
+            data-frame={frame.id}
+          >
+            <div className="truncate text-[13px] font-semibold leading-tight text-foreground">
+              {frame.title}
+            </div>
+            <div className="line-clamp-2 text-[12px] leading-snug text-muted-foreground">
+              {frame.caption}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="absolute bottom-3 right-4 z-[7] flex items-center justify-center gap-1.5">
         <span className="feature-tour-dot" data-frame="1" />
         <span className="feature-tour-dot" data-frame="2" />
         <span className="feature-tour-dot" data-frame="3" />

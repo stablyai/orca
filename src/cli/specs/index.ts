@@ -8,6 +8,7 @@ import { ORCHESTRATION_COMMAND_SPECS } from './orchestration'
 import { COMPUTER_COMMAND_SPECS } from './computer'
 import { ENVIRONMENT_COMMAND_SPECS } from './environment'
 import { AGENT_HOOK_COMMAND_SPECS } from './agent-hooks'
+import { DIAGNOSTICS_COMMAND_SPECS } from './diagnostics'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -18,5 +19,6 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...ORCHESTRATION_COMMAND_SPECS,
   ...COMPUTER_COMMAND_SPECS,
   ...AGENT_HOOK_COMMAND_SPECS,
+  ...DIAGNOSTICS_COMMAND_SPECS,
   ...ENVIRONMENT_COMMAND_SPECS
 ]

@@ -49,6 +49,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   // the provider is torn down on disconnect, routing events to stale state.
   private unsubscribeNotifications: (() => void) | null = null
   private tempDirPromise: Promise<string> | null = null
+  private disposed = false
   // Why: relays from a previous build may not implement fs.readFileStream.
   // We log the fallback once per session at warn level so users on stale
   // relays get diagnosed quickly without per-read log spam.
@@ -78,9 +79,16 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return
+    }
+    this.disposed = true
     if (this.unsubscribeNotifications) {
       this.unsubscribeNotifications()
       this.unsubscribeNotifications = null
+    }
+    for (const rootPath of this.watchListeners.keys()) {
+      this.notifyUnwatch(rootPath)
     }
     this.watchListeners.clear()
   }
@@ -251,10 +259,16 @@ export class SshFilesystemProvider implements IFilesystemProvider {
   }
 
   async watch(rootPath: string, callback: (events: FsChangeEvent[]) => void): Promise<() => void> {
+    if (this.disposed) {
+      throw new Error('SSH filesystem provider disposed')
+    }
     let registration = this.watchListeners.get(rootPath)
     if (registration) {
       registration.callbacks.add(callback)
       await registration.setupPromise
+      if (this.disposed || this.watchListeners.get(rootPath) !== registration) {
+        throw new Error('SSH filesystem provider disposed')
+      }
       return this.createWatchUnsubscribe(rootPath, registration, callback)
     }
 
@@ -271,8 +285,20 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     registration = { callbacks, setupPromise }
     this.watchListeners.set(rootPath, registration)
     await setupPromise
+    if (this.disposed || this.watchListeners.get(rootPath) !== registration) {
+      this.notifyUnwatch(rootPath)
+      throw new Error('SSH filesystem provider disposed')
+    }
 
     return this.createWatchUnsubscribe(rootPath, registration, callback)
+  }
+
+  private notifyUnwatch(rootPath: string): void {
+    try {
+      this.mux.notify('fs.unwatch', { rootPath })
+    } catch {
+      // Connection teardown may already have closed the mux; disposal must continue.
+    }
   }
 
   private createWatchUnsubscribe(
@@ -284,7 +310,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       registration.callbacks.delete(callback)
       if (registration.callbacks.size === 0 && this.watchListeners.get(rootPath) === registration) {
         this.watchListeners.delete(rootPath)
-        this.mux.notify('fs.unwatch', { rootPath })
+        this.notifyUnwatch(rootPath)
       }
     }
   }

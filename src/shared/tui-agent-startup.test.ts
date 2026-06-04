@@ -59,6 +59,38 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).not.toContain('--settings')
   })
 
+  it('launches OpenClaude as a distinct argv agent', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'openclaude',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'openclaude',
+      launchCommand: "openclaude 'fix it'",
+      expectedProcess: 'openclaude',
+      followupPrompt: null
+    })
+  })
+
+  it('launches Mistral Vibe through the installed vibe executable', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'mistral-vibe',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'mistral-vibe',
+      launchCommand: 'vibe',
+      expectedProcess: 'vibe',
+      followupPrompt: 'fix it'
+    })
+  })
+
   it('leaves Claude command overrides untouched', () => {
     const plan = buildAgentStartupPlan({
       agent: 'claude',

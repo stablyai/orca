@@ -77,6 +77,7 @@ async function openOrchestrationSettings(page: Page): Promise<void> {
     }
   )
   await expect(page.getByPlaceholder('Search settings')).toBeVisible({ timeout: 10_000 })
+  await page.getByRole('button', { name: /^Orchestration\b/ }).click()
   await expect(
     page
       .locator('[data-settings-section="orchestration"]')
@@ -103,7 +104,7 @@ test.describe('Settings skill detection', () => {
 
     await openOrchestrationSettings(orcaPage)
     const section = orcaPage.locator('[data-settings-section="orchestration"]')
-    await section.getByRole('switch').click()
+    await section.getByRole('button', { name: 'Re-check' }).click()
 
     await expect(section.getByText('Not installed', { exact: true })).toBeVisible()
     await expect(

@@ -4,7 +4,7 @@ import {
   isContextWorktreeDeletable,
   shouldUseNativeContextMenu,
   shouldIgnoreNestedWorktreeContextMenuScope,
-  shouldRemoveFolderProjectFromContextMenu,
+  shouldRemoveProjectFromContextMenu,
   shouldSuppressContextMenuFollowUpClick,
   shouldContinueDeleteSiblingPositionRestore
 } from './WorktreeContextMenu'
@@ -128,11 +128,15 @@ describe('hasSleepableWorkspaceActivity', () => {
   })
 })
 
-describe('folder workspace context deletes', () => {
-  it('routes only the folder root row to project removal', () => {
-    expect(shouldRemoveFolderProjectFromContextMenu(true, { isMainWorktree: true })).toBe(true)
-    expect(shouldRemoveFolderProjectFromContextMenu(true, { isMainWorktree: false })).toBe(false)
-    expect(shouldRemoveFolderProjectFromContextMenu(false, { isMainWorktree: true })).toBe(false)
+describe('project removal from workspace context menus', () => {
+  it('routes primary workspace rows to project removal in non-repo grouped views', () => {
+    const gitRepo = { id: 'repo-1' }
+    const folderRepo = { id: 'folder-1' }
+
+    expect(shouldRemoveProjectFromContextMenu(gitRepo, { isMainWorktree: true })).toBe(true)
+    expect(shouldRemoveProjectFromContextMenu(folderRepo, { isMainWorktree: true })).toBe(true)
+    expect(shouldRemoveProjectFromContextMenu(gitRepo, { isMainWorktree: false })).toBe(false)
+    expect(shouldRemoveProjectFromContextMenu(null, { isMainWorktree: true })).toBe(false)
   })
 
   it('treats additional folder workspace rows as deletable workspace rows', () => {

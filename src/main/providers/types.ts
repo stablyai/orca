@@ -9,6 +9,7 @@ import type {
   GitPushTarget,
   GitUpstreamStatus,
   GitWorktreeInfo,
+  RemoveWorktreeResult,
   SearchOptions,
   SearchResult
 } from '../../shared/types'
@@ -188,6 +189,7 @@ export type IGitProvider = {
     options?: { forceWithLease?: boolean }
   ): Promise<void>
   pullBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
+  fastForwardBranch(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
   rebaseFromBase(worktreePath: string, baseRef: string): Promise<void>
   fetchRemote(worktreePath: string, pushTarget?: GitPushTarget): Promise<void>
   getBranchDiff(
@@ -210,7 +212,7 @@ export type IGitProvider = {
     worktreePath: string,
     force?: boolean,
     options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
-  ): Promise<void>
+  ): Promise<RemoveWorktreeResult>
   renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
   isGitRepo(path: string): boolean
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>

@@ -3,16 +3,33 @@ contract for Codex inside Orca. Keeping path resolution, system-default
 snapshots, auth materialization, and recovery together prevents account-switch
 semantics from drifting across PTY launch, login, and quota fetch paths. */
 import {
+  appendFileSync,
   copyFileSync,
   existsSync,
   chmodSync,
+  lstatSync,
   mkdirSync,
+  readlinkSync,
   readdirSync,
   readFileSync,
+  renameSync,
+  rmdirSync,
   rmSync,
-  statSync
+  statSync,
+  symlinkSync,
+  unlinkSync
 } from 'node:fs'
-import { dirname, extname, join, parse, relative, win32 as pathWin32 } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  join,
+  parse,
+  relative,
+  resolve,
+  win32 as pathWin32
+} from 'node:path'
 import { app } from 'electron'
 import type { CodexManagedAccount } from '../../shared/types'
 import type { Store } from '../persistence'
@@ -84,6 +101,7 @@ export class CodexRuntimeHomeService {
 
   constructor(private readonly store: Store) {
     this.safeMigrateLegacyManagedState()
+    this.safeMigrateLegacyActiveHomePointer()
     this.initializeLastSyncedState()
     this.safeSyncForCurrentSelection()
   }
@@ -418,6 +436,7 @@ export class CodexRuntimeHomeService {
     }
 
     mkdirSync(runtimeHomePath, { recursive: true })
+    this.safeMigrateLegacyWslActiveHomePointer(distro, runtimeHomePath)
     this.seedWslRuntimeHome(runtimeHomePath, activeAccount, distro)
 
     const runtimeAuthPath = join(runtimeHomePath, 'auth.json')
@@ -505,6 +524,60 @@ export class CodexRuntimeHomeService {
     return home
       ? this.joinWslPath(home, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
       : null
+  }
+
+  private safeMigrateLegacyWslActiveHomePointer(distro: string, runtimeHomePath: string): void {
+    try {
+      this.migrateLegacyWslActiveHomePointer(distro, runtimeHomePath)
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to migrate legacy WSL active Codex home:', error)
+    }
+  }
+
+  private migrateLegacyWslActiveHomePointer(distro: string, runtimeHomePath: string): void {
+    const runtimeWsl = parseWslUncPath(runtimeHomePath)
+    if (!runtimeWsl?.linuxPath.endsWith('/codex-runtime-home/home')) {
+      return
+    }
+    const activeLinuxPath = runtimeWsl.linuxPath.replace(
+      /\/codex-runtime-home\/home$/,
+      '/codex-runtime-home/active/wsl/home'
+    )
+    const nextLinuxPath = `${activeLinuxPath}.next-${process.pid}-${Date.now()}`
+    const activeLinuxParentPath = this.dirnameLinuxPath(activeLinuxPath)
+    // Why: WSL drops bash argv here and login-shell cleanup can turn explicit
+    // `exit 0` into status 1, so keep this script literal and fall-through.
+    execFileSync(
+      'wsl.exe',
+      [
+        '-d',
+        distro,
+        '--',
+        'bash',
+        '-lc',
+        [
+          'set -e',
+          `if [ ! -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
+          `elif [ -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
+          'else',
+          `mkdir -p ${this.quoteBashString(activeLinuxParentPath)}`,
+          `rm -rf -- ${this.quoteBashString(nextLinuxPath)}`,
+          `ln -s -- ${this.quoteBashString(runtimeWsl.linuxPath)} ${this.quoteBashString(nextLinuxPath)}`,
+          `mv -Tf -- ${this.quoteBashString(nextLinuxPath)} ${this.quoteBashString(activeLinuxPath)}`,
+          'fi'
+        ].join('\n')
+      ],
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 }
+    )
+  }
+
+  private dirnameLinuxPath(value: string): string {
+    const index = value.lastIndexOf('/')
+    return index > 0 ? value.slice(0, index) : '/'
+  }
+
+  private quoteBashString(value: string): string {
+    return `'${value.replace(/'/g, `'\\''`)}'`
   }
 
   private joinWslPath(basePath: string, ...segments: string[]): string {
@@ -819,6 +892,18 @@ export class CodexRuntimeHomeService {
     }
   }
 
+  private safeMigrateLegacyActiveHomePointer(): void {
+    try {
+      const activeHomePath = this.getLegacyHostActiveHomePath()
+      if (!this.legacyActiveHomePathExists(activeHomePath)) {
+        return
+      }
+      this.repointLegacyActiveHomePointer(activeHomePath, this.getRuntimeHomePath())
+    } catch (error) {
+      console.warn('[codex-runtime-home] Failed to migrate legacy active Codex home:', error)
+    }
+  }
+
   private getRuntimeHomePath(): string {
     return getOrcaManagedCodexHomePath()
   }
@@ -841,6 +926,10 @@ export class CodexRuntimeHomeService {
     return metadataDir
   }
 
+  private getLegacyHostActiveHomePath(): string {
+    return join(this.getRuntimeMetadataDir(), 'active', 'host', 'home')
+  }
+
   private getMigrationMarkerPath(): string {
     return join(this.getRuntimeMetadataDir(), 'migration-v1.json')
   }
@@ -851,6 +940,105 @@ export class CodexRuntimeHomeService {
 
   private getManagedAccountsRoot(): string {
     return join(app.getPath('userData'), 'codex-accounts')
+  }
+
+  private repointLegacyActiveHomePointer(activeHomePath: string, runtimeHomePath: string): void {
+    if (this.activeHomeAlreadyPointsToRuntimeHome(activeHomePath, runtimeHomePath)) {
+      return
+    }
+    if (!this.legacyActiveHomeLinkIsReplaceable(activeHomePath)) {
+      return
+    }
+
+    mkdirSync(runtimeHomePath, { recursive: true })
+    mkdirSync(dirname(activeHomePath), { recursive: true })
+    const nextLinkPath = `${activeHomePath}.next-${process.pid}-${Date.now()}`
+    this.removeLegacyActiveHomeLinkIfOwned(nextLinkPath)
+    try {
+      symlinkSync(
+        runtimeHomePath,
+        nextLinkPath,
+        process.platform === 'win32' && lstatSync(runtimeHomePath).isDirectory()
+          ? 'junction'
+          : undefined
+      )
+      try {
+        renameSync(nextLinkPath, activeHomePath)
+      } catch (error) {
+        if (!this.legacyActiveHomeLinkIsReplaceable(activeHomePath)) {
+          throw error
+        }
+        this.removeLegacyActiveHomeLinkIfOwned(activeHomePath)
+        renameSync(nextLinkPath, activeHomePath)
+      }
+    } finally {
+      this.removeLegacyActiveHomeLinkIfOwned(nextLinkPath)
+    }
+  }
+
+  private activeHomeAlreadyPointsToRuntimeHome(
+    activeHomePath: string,
+    runtimeHomePath: string
+  ): boolean {
+    try {
+      return this.linkTargetsMatch(readlinkSync(activeHomePath), activeHomePath, runtimeHomePath)
+    } catch {
+      return false
+    }
+  }
+
+  private linkTargetsMatch(
+    linkTarget: string,
+    linkPath: string,
+    expectedTargetPath: string
+  ): boolean {
+    const resolvedLinkTarget = isAbsolute(linkTarget)
+      ? resolve(linkTarget)
+      : resolve(dirname(linkPath), linkTarget)
+    return resolvedLinkTarget === resolve(expectedTargetPath)
+  }
+
+  private legacyActiveHomeLinkIsReplaceable(activeHomePath: string): boolean {
+    try {
+      const stat = lstatSync(activeHomePath)
+      return stat.isSymbolicLink() || this.isWindowsReadableLink(activeHomePath)
+    } catch {
+      return true
+    }
+  }
+
+  private legacyActiveHomePathExists(activeHomePath: string): boolean {
+    try {
+      lstatSync(activeHomePath)
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  private removeLegacyActiveHomeLinkIfOwned(activeHomePath: string): void {
+    try {
+      const stat = lstatSync(activeHomePath)
+      if (stat.isSymbolicLink()) {
+        unlinkSync(activeHomePath)
+      } else if (this.isWindowsReadableLink(activeHomePath)) {
+        rmdirSync(activeHomePath)
+      }
+    } catch {
+      // Missing or inaccessible temporary links are handled by the caller.
+    }
+  }
+
+  private isWindowsReadableLink(targetPath: string): boolean {
+    if (process.platform !== 'win32') {
+      return false
+    }
+    try {
+      readlinkSync(targetPath)
+      return true
+    } catch {
+      return false
+    }
   }
 
   private migrateLegacyManagedStateIfNeeded(): void {
@@ -969,7 +1157,7 @@ export class CodexRuntimeHomeService {
     for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
       const childPath = join(rootPath, entry.name)
       if (entry.isDirectory()) {
-        files.push(...this.listFilesRecursively(childPath))
+        this.appendListedFiles(files, this.listFilesRecursively(childPath))
         continue
       }
       if (entry.isFile()) {
@@ -977,6 +1165,14 @@ export class CodexRuntimeHomeService {
       }
     }
     return files.sort()
+  }
+
+  private appendListedFiles(target: string[], source: readonly string[]): void {
+    // Why: migrating legacy session trees must tolerate directories larger than
+    // V8's argument limit for spread calls.
+    for (const filePath of source) {
+      target.push(filePath)
+    }
   }
 
   private getPreservedLegacySessionPath(runtimeFilePath: string, accountId: string): string {
@@ -987,10 +1183,13 @@ export class CodexRuntimeHomeService {
 
   private appendMigrationDiagnostic(record: Record<string, string>): void {
     const diagnosticsPath = this.getMigrationDiagnosticsPath()
-    const existingContents = existsSync(diagnosticsPath)
-      ? readFileSync(diagnosticsPath, 'utf-8')
-      : ''
-    writeFileAtomically(diagnosticsPath, `${existingContents}${JSON.stringify(record)}\n`)
+    try {
+      appendFileSync(diagnosticsPath, `${JSON.stringify(record)}\n`, { encoding: 'utf-8' })
+    } catch (error) {
+      // Why: conflict diagnostics are useful, but must not make the one-shot
+      // migration fail after the session file has already been preserved.
+      console.warn('[codex-runtime-home] Failed to append migration diagnostic:', error)
+    }
   }
 
   private captureSystemDefaultSnapshot(options: { force: boolean }): void {

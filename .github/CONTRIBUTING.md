@@ -88,7 +88,7 @@ The workflow resolves the next version from GitHub Releases, bumps `package.json
 
 **How the next version is chosen:**
 
-All stable kinds (`patch`, `minor`, `major`) are computed off the latest *stable* release, ignoring any RCs in between.
+All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable_ release, ignoring any RCs in between.
 
 - `kind=rc` + last tag was stable (e.g. `v1.3.14`) → `v1.3.15-rc.0`.
 - `kind=rc` + active RC series (e.g. `v1.3.15-rc.2`) → `v1.3.15-rc.3`.
@@ -99,8 +99,9 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest *stable
 **Safety guarantees:**
 
 - Stable releases are refused if the new version isn't strictly greater than the latest published stable. This is the only rule `electron-updater` actually needs — it compares semver within the `latest` channel, so a regressing stable is the one thing that breaks auto-update for fresh installs.
-- Complete RC draft releases created by the release workflow are published before cutting a new tag, so a GitHub queue failure in the final publish job can be resumed safely.
-- If the latest RC tag exists but is still draft-only or missing its GitHub Release, the workflow resumes that tag before cutting the next RC. This keeps retries from leaving multiple unpublished draft releases behind.
+- Complete RC draft releases created by the release workflow are published before cutting a new tag only when the draft tag was built from the current release ref. Stale drafts are skipped so fixes cut a fresh RC instead of exposing old artifacts.
+- If the latest RC tag exists but is still draft-only or missing its GitHub Release, the workflow resumes that tag only when it was built from the current release ref. Otherwise the next RC number is cut.
+- RC numbering also considers release commits on `main`, so deleting a stale tag does not let a later cut reuse the same RC number.
 - Off-main releases (when `ref` is not the tip of `main`) only push the tag. `main` is never mutated from a non-main ref, so you can safely release an older commit without polluting history.
 - When `ref` is the tip of `main`, the version-bump commit is fast-forwarded onto `main` so local `package.json` stays in sync with what's shipped.
 
@@ -112,3 +113,22 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest *stable
 - **Minor or major bump:** `kind=minor` or `kind=major`.
 
 The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
+
+
+## Release Channels
+
+The public Homebrew cask tracks stable desktop releases:
+
+```bash
+brew install --cask stablyai/orca/orca
+```
+
+Release candidates use a separate cask token:
+
+```bash
+brew install --cask stablyai/orca/orca@rc
+```
+
+The two casks conflict because both install `Orca.app`. Switch channels with a
+normal `brew uninstall --cask` followed by the install for the other channel.
+Do not use `--zap` unless you intentionally want to remove local Orca state.

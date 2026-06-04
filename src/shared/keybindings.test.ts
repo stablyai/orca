@@ -152,6 +152,62 @@ describe('keybindings', () => {
     })
   })
 
+  it('defines macOS-only rename shortcuts that stay conflict-free', () => {
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'darwin')).toEqual(['Mod+R'])
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'linux')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('tab.rename', 'win32')).toEqual([])
+    expect(getEffectiveKeybindingsForAction('workspace.rename', 'darwin')).toEqual(['Mod+Alt+R'])
+    expect(getEffectiveKeybindingsForAction('workspace.rename', 'linux')).toEqual([])
+    expect(formatKeybindingList(['Mod+Alt+R'], 'darwin')).toBe('⌘⌥R')
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        {
+          key: 'r',
+          code: 'KeyR',
+          meta: true,
+          control: false,
+          alt: false,
+          shift: false
+        },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'tab.rename',
+        {
+          key: 'r',
+          code: 'KeyR',
+          meta: false,
+          control: true,
+          alt: false,
+          shift: false
+        },
+        'linux'
+      )
+    ).toBe(false)
+
+    // Why: tab.rename (Mod+R) intentionally shares its binding with
+    // browser.reload, but the two live in different scopes (tabs vs browser),
+    // so customizing tab.rename to its default must not flag a conflict.
+    expect(findKeybindingConflicts('darwin', { 'tab.rename': ['Mod+R'] })).toEqual([])
+    // Why: tab/workspace rename share the same active workspace keydown path,
+    // so Settings must reject user overrides that make one shadow the other.
+    expect(findKeybindingConflicts('darwin', { 'workspace.rename': ['Mod+R'] })).toEqual([
+      {
+        binding: 'Mod+R',
+        actionIds: ['workspace.rename', 'tab.rename']
+      }
+    ])
+    expect(findKeybindingConflicts('darwin', { 'tab.rename': ['Mod+Alt+R'] })).toEqual([
+      {
+        binding: 'Mod+Alt+R',
+        actionIds: ['workspace.rename', 'tab.rename']
+      }
+    ])
+  })
+
   it('keeps equalize pane sizes unassigned until users customize it', () => {
     expect(getEffectiveKeybindingsForAction('terminal.equalizePaneSizes', 'darwin')).toEqual([])
     expect(
@@ -168,6 +224,25 @@ describe('keybindings', () => {
         'darwin',
         { 'terminal.equalizePaneSizes': ['Mod+Equal'] }
       )
+    ).toBe(true)
+  })
+
+  it('keeps workspace delete unassigned until users customize it', () => {
+    const binding = {
+      key: 'Backspace',
+      code: 'Backspace',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
+    expect(getEffectiveKeybindingsForAction('workspace.delete', 'linux')).toEqual([])
+    expect(keybindingMatchesAction('workspace.delete', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('workspace.delete', binding, 'linux', {
+        'workspace.delete': ['Mod+Shift+Backspace']
+      })
     ).toBe(true)
   })
 
@@ -223,6 +298,15 @@ describe('keybindings', () => {
   })
 
   it('keeps terminal-allowed app shortcuts active in terminal-first mode', () => {
+    const deleteBinding = {
+      key: 'Backspace',
+      code: 'Backspace',
+      control: true,
+      meta: false,
+      alt: false,
+      shift: true
+    }
+
     expect(
       keybindingMatchesAction(
         'floatingTerminal.toggle',
@@ -238,6 +322,15 @@ describe('keybindings', () => {
         { key: 'Tab', code: 'Tab', control: true, meta: false, alt: false, shift: false },
         'linux',
         undefined,
+        { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'workspace.delete',
+        deleteBinding,
+        'linux',
+        { 'workspace.delete': ['Mod+Shift+Backspace'] },
         { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
       )
     ).toBe(true)
@@ -515,5 +608,33 @@ describe('keybindings', () => {
         'linux'
       )
     ).toBe(true)
+  })
+
+  it('matches macOS Option-composed bracket shortcuts for all-type tab switching', () => {
+    const macOptionLeftBracket = {
+      key: '\u201c',
+      code: 'BracketLeft',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+    const macOptionRightBracket = {
+      key: '\u2018',
+      code: 'BracketRight',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+
+    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionLeftBracket, 'darwin')).toBe(
+      true
+    )
+    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionLeftBracket, 'darwin')).toBe(false)
+    expect(keybindingMatchesAction('tab.nextAllTypes', macOptionRightBracket, 'darwin')).toBe(true)
+    expect(keybindingMatchesAction('tab.previousAllTypes', macOptionRightBracket, 'darwin')).toBe(
+      false
+    )
   })
 })

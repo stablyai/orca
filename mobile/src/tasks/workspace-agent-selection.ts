@@ -15,6 +15,17 @@ type WorkspaceAgentSettings = {
   disabledTuiAgents?: unknown
 }
 
+export type WorkspaceAgentSelectionState = {
+  agent: WorkspaceAgentChoice | null
+  overridden: boolean
+}
+
+type ResolveWorkspaceAgentSelectionArgs = WorkspaceAgentSelectionState & {
+  selectionActive: boolean
+  settings: WorkspaceAgentSettings
+  detectedAgentIds: Set<string> | null
+}
+
 export function workspaceAgentLabel(agent: WorkspaceAgentChoice): string {
   return agent === 'blank' ? 'Blank Terminal' : MOBILE_TUI_AGENT_LABELS[agent]
 }
@@ -54,4 +65,33 @@ export function filterWorkspaceAgents(agents: readonly TuiAgent[], disabled?: un
 
 export function isWorkspaceAgentEnabled(agent: TuiAgent, disabled?: unknown): boolean {
   return isMobileTuiAgentEnabled(agent, disabled)
+}
+
+export function resolveWorkspaceAgentSelection({
+  selectionActive,
+  settings,
+  detectedAgentIds,
+  agent,
+  overridden
+}: ResolveWorkspaceAgentSelectionArgs): WorkspaceAgentSelectionState {
+  const current = { agent, overridden }
+  if (!selectionActive) {
+    return current
+  }
+
+  const pickedAgent = pickWorkspaceAgent(settings, detectedAgentIds)
+  if (!overridden) {
+    return agent === pickedAgent ? current : { agent: pickedAgent, overridden: false }
+  }
+
+  if (
+    detectedAgentIds === null ||
+    !agent ||
+    agent === 'blank' ||
+    (detectedAgentIds.has(agent) && isWorkspaceAgentEnabled(agent, settings.disabledTuiAgents))
+  ) {
+    return current
+  }
+
+  return { agent: pickedAgent, overridden: false }
 }

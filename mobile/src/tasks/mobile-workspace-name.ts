@@ -5,7 +5,7 @@ export function resolveMobileWorkspaceCreateName(args: {
   return args.draft?.trim() || args.fallback
 }
 
-export function slugifyForWorkspaceName(input: string): string {
+function slugifyForWorkspaceName(input: string): string {
   return input
     .trim()
     .toLowerCase()

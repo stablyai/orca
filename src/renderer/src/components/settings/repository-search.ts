@@ -20,6 +20,8 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
         'color',
         'hex',
         'badge',
+        'avatar',
+        'github',
         'emoji',
         'favicon'
       ]
@@ -41,6 +43,18 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
                 }
               ]
             : []),
+          {
+            title: 'Worktree Location',
+            description: 'Project-specific directory for new worktrees.',
+            keywords: [
+              repo.displayName,
+              'worktree path',
+              'workspace path',
+              'directory',
+              'relative',
+              '../worktrees'
+            ]
+          },
           {
             title: 'Sparse Checkout Presets',
             description: 'Saved directory sets for sparse worktree creation.',
@@ -77,8 +91,7 @@ export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[
               'branch name',
               'rename',
               'model',
-              'prompt',
-              'instructions'
+              'prompt'
             ]
           },
           {

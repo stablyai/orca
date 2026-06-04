@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: WSL CLI status/install/remove share one state machine;
    splitting the installer would separate conflict checks from the operations they guard. */
 import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import type { CliInstallStatus } from '../../shared/cli-install-types'
 import { getDefaultWslDistro } from '../wsl'
 import { CliInstaller } from './cli-installer'
@@ -18,11 +17,19 @@ import {
   quoteShell
 } from './wsl-cli-scripts'
 
-const execFileAsync = promisify(execFile)
 const MANAGED_MARKER = getWslLauncherMarker()
 const BRIDGE_MANAGED_MARKER = getWslBridgeMarker()
 const WSL_COMMAND_NAME = 'orca-ide'
 const LEGACY_WSL_COMMAND_NAME = 'orca'
+const WSL_COMMAND_TIMEOUT_MS = 10_000
+
+function normalizeManagedScriptContent(content: string): string {
+  return content.replace(/\n+$/u, '\n')
+}
+
+function managedScriptMatches(content: string, expected: string, managed: boolean): boolean {
+  return content === expected || (managed && normalizeManagedScriptContent(content) === expected)
+}
 
 type WslCliInstallerOptions = {
   platform?: NodeJS.Platform
@@ -78,10 +85,15 @@ export class WslCliInstaller {
     const expected = buildWslLauncher(ready.launcherPath, ready.bridgePath)
     const managed = content.includes(MANAGED_MARKER)
     const currentTarget = managed ? parseManagedLauncherTarget(content) : null
-    if (content === expected) {
+    if (managedScriptMatches(content, expected, managed)) {
       const bridgeContent = await this.readCommandFile(ready.distro, ready.bridgePath)
       const expectedBridge = buildWslBridgeScript()
-      if (bridgeContent === expectedBridge) {
+      const bridgeManaged =
+        typeof bridgeContent === 'string' && bridgeContent.includes(BRIDGE_MANAGED_MARKER)
+      if (
+        typeof bridgeContent === 'string' &&
+        managedScriptMatches(bridgeContent, expectedBridge, bridgeManaged)
+      ) {
         return this.buildStatus({
           distro: ready.distro,
           commandPath: ready.commandPath,
@@ -93,8 +105,6 @@ export class WslCliInstaller {
         })
       }
 
-      const bridgeManaged =
-        typeof bridgeContent === 'string' && bridgeContent.includes(BRIDGE_MANAGED_MARKER)
       return this.buildStatus({
         distro: ready.distro,
         commandPath: ready.commandPath,
@@ -235,7 +245,7 @@ export class WslCliInstaller {
       (
         await this.run(
           this.distro,
-          'command -v powershell.exe >/dev/null 2>&1 && command -v wslpath >/dev/null 2>&1 && printf yes || printf no'
+          '{ command -v powershell.exe >/dev/null 2>&1 || [ -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe ]; } && command -v wslpath >/dev/null 2>&1 && printf yes || printf no'
         )
       ).trim() === 'yes'
     if (!interopReady) {
@@ -348,15 +358,46 @@ export class WslCliInstaller {
 }
 
 async function runWslCommand(distro: string, command: string): Promise<string> {
-  const { stdout } = (await execFileAsync(
-    'wsl.exe',
-    ['-d', distro, '--', 'bash', '-lc', buildEncodedWslBashCommand(command)],
-    {
-      encoding: 'utf8',
-      timeout: 10000
+  return new Promise((resolve, reject) => {
+    let child: ReturnType<typeof execFile> | null = null
+    let settled = false
+
+    const finish = (error: Error | null, stdout = ''): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve(stdout)
     }
-  )) as { stdout: string }
-  return stdout
+
+    // Why: WSL CLI status/install/remove backs Settings UI; a wedged wsl.exe
+    // process must not leave the command registration flow pending forever.
+    const timeout = setTimeout(() => {
+      child?.kill()
+      finish(new Error(`WSL command timed out after ${WSL_COMMAND_TIMEOUT_MS}ms.`))
+    }, WSL_COMMAND_TIMEOUT_MS)
+
+    try {
+      child = execFile(
+        'wsl.exe',
+        ['-d', distro, '--', 'bash', '-lc', buildEncodedWslBashCommand(command)],
+        {
+          encoding: 'utf8',
+          timeout: WSL_COMMAND_TIMEOUT_MS
+        },
+        (error, stdout) => {
+          finish(error ?? null, stdout)
+        }
+      )
+    } catch (error) {
+      finish(error instanceof Error ? error : new Error(String(error)))
+    }
+  })
 }
 
 function buildEncodedWslBashCommand(command: string): string {

@@ -47,6 +47,33 @@ function getHeadSha(dir: string): string {
   return git(dir, ['rev-parse', 'HEAD']).trim()
 }
 
+describe('buildSearchBaseRefsArgv', () => {
+  it('caps broad local ref searches before parsing results', () => {
+    const argv = buildSearchBaseRefsArgv('feature', 25)
+
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=100')
+    expect(argv).toContain('refs/heads/**/*feature*')
+    expect(argv).toContain('refs/remotes/**/*feature*/**')
+  })
+
+  it('keeps segmented display-format searches bounded', () => {
+    const argv = buildSearchBaseRefsArgv('upstream/main', 10)
+
+    expect(argv).toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=40')
+    expect(argv).toContain('refs/remotes/*upstream*/*main*')
+    expect(argv).toContain('refs/heads/*upstream*/*main*')
+  })
+
+  it('adds fallback headroom when remote HEAD cannot be excluded by git', () => {
+    const argv = buildSearchBaseRefsArgv('feature', 25, { excludeRemoteHead: false })
+
+    expect(argv).not.toContain('--exclude=refs/remotes/**/HEAD')
+    expect(argv).toContain('--count=200')
+  })
+})
+
 describe('searchBaseRefs (widened glob)', () => {
   let tmpDir: string
 
@@ -188,6 +215,16 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
     createRemoteRef(tmpDir, 'upstream/feature/something', sha)
+
+    expect(
+      await getBranchConflictKind(tmpDir, 'feature/something', 'origin/feature/something')
+    ).toBe('remote')
+  })
+
+  it('reports remote conflicts when the remote name contains a slash', async () => {
+    const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'foo/bar', 'https://example.invalid/repo.git'])
+    createRemoteRef(tmpDir, 'foo/bar/feature/something', sha)
 
     const result = await getBranchConflictKind(
       tmpDir,

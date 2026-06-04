@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import type { BrowserViewportPresetId } from '../../../../shared/types'
 import {
@@ -71,6 +72,7 @@ export function BrowserToolbarMenu({
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
+  const mountedRef = useMountedRef()
 
   const effectiveProfileId = currentProfileId ?? 'default'
 
@@ -114,7 +116,13 @@ export function BrowserToolbarMenu({
     try {
       const profile = await createBrowserSessionProfile('isolated', trimmed)
       if (!profile) {
-        toast.error('Failed to create profile.')
+        if (mountedRef.current) {
+          toast.error('Failed to create profile.')
+        }
+        return
+      }
+
+      if (!mountedRef.current) {
         return
       }
 
@@ -125,7 +133,9 @@ export function BrowserToolbarMenu({
       switchBrowserTabProfile(workspaceId, profile.id)
       toast.success(`Created and switched to ${profile.label} profile`)
     } finally {
-      setIsCreatingProfile(false)
+      if (mountedRef.current) {
+        setIsCreatingProfile(false)
+      }
     }
   }
 

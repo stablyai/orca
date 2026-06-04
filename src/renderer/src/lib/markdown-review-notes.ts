@@ -2,6 +2,7 @@ import type { DiffComment } from '../../../shared/types'
 import { getDiffCommentLineLabel } from './diff-comment-compat'
 
 const MAX_EXCERPT_LINES = 8
+const MAX_CARD_QUOTE_LENGTH = 96
 
 export type MarkdownReviewNote = DiffComment & { source: 'markdown' }
 
@@ -63,6 +64,24 @@ export function getMarkdownReviewHighlightedText(
     .map((line) => line.replace(/^> ?/, ''))
     .join('\n')
     .trim()
+}
+
+export function formatMarkdownReviewCardQuote(text: string | null | undefined): string | undefined {
+  const normalized = text?.replace(/\s+/g, ' ').trim()
+  if (!normalized) {
+    return undefined
+  }
+  if (normalized.length <= MAX_CARD_QUOTE_LENGTH) {
+    return normalized
+  }
+  return `${normalized.slice(0, MAX_CARD_QUOTE_LENGTH - 3).trimEnd()}...`
+}
+
+export function getMarkdownReviewCardQuote(
+  content: string,
+  note: Pick<DiffComment, 'lineNumber' | 'selectedText' | 'startLine'>
+): string | undefined {
+  return formatMarkdownReviewCardQuote(getMarkdownReviewHighlightedText(content, note))
 }
 
 export function formatMarkdownReviewNotes(

@@ -15,6 +15,7 @@ import type { Store } from '../persistence'
 import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationDismissResult,
   NotificationPermissionStatusResult,
   NotificationSettings,
   NotificationSoundDataResult
@@ -25,6 +26,7 @@ import { buildNotificationOptions } from './notification-options'
 import { parsePaneKey } from '../../shared/stable-pane-id'
 
 const NOTIFICATION_COOLDOWN_MS = 5000
+const MAX_RECENT_NOTIFICATION_KEYS = 50
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
 const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
@@ -58,6 +60,10 @@ type NotificationSoundId = NotificationSettings['customSoundId']
 // the notification in macOS Notification Center. Prevent this by keeping a
 // strong reference until the notification is clicked or closed.
 const activeNotifications = new Set<Notification>()
+const activeNotificationsById = new Map<
+  string,
+  { notification: Notification; release: () => void }
+>()
 
 function retainNotificationUntilRelease(
   notification: Notification,
@@ -136,21 +142,63 @@ function waitForNotificationDisplay(notification: Notification): Promise<boolean
   return new Promise((resolve) => {
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
-    const settle = (displayed: boolean): void => {
+
+    function cleanup(): void {
+      notification.removeListener('show', onShow)
+      notification.removeListener('failed', onFailed)
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+    }
+
+    function settle(displayed: boolean): void {
       if (settled) {
         return
       }
       settled = true
-      if (timer) {
-        clearTimeout(timer)
-      }
+      cleanup()
       resolve(displayed)
     }
 
-    notification.once('show', () => settle(true))
-    notification.once('failed', () => settle(false))
+    function onShow(): void {
+      settle(true)
+    }
+
+    function onFailed(): void {
+      settle(false)
+    }
+
+    notification.once('show', onShow)
+    notification.once('failed', onFailed)
     timer = setTimeout(() => settle(false), NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS)
   })
+}
+
+function logNativeNotificationFailure(context: string, error?: string): void {
+  console.warn(
+    `[notifications] ${context} notification failed to show${error ? `: ${error}` : '.'}`
+  )
+}
+
+function pruneRecentNotifications(recentNotifications: Map<string, number>, now: number): void {
+  if (recentNotifications.size <= MAX_RECENT_NOTIFICATION_KEYS) {
+    return
+  }
+
+  for (const [key, ts] of recentNotifications) {
+    if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
+      recentNotifications.delete(key)
+    }
+  }
+
+  while (recentNotifications.size > MAX_RECENT_NOTIFICATION_KEYS) {
+    const oldest = recentNotifications.keys().next()
+    if (oldest.done) {
+      break
+    }
+    recentNotifications.delete(oldest.value)
+  }
 }
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
@@ -180,6 +228,24 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.handle('notifications:requestPermission', (): NotificationPermissionStatusResult => {
     triggerStartupNotificationRegistration(store)
     return getPermissionStatus()
+  })
+
+  ipcMain.removeHandler('notifications:dismiss')
+  ipcMain.handle('notifications:dismiss', (_event, ids: string[]): NotificationDismissResult => {
+    const uniqueIds = Array.from(
+      new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
+    )
+    let dismissed = 0
+    for (const id of uniqueIds) {
+      const entry = activeNotificationsById.get(id)
+      if (entry) {
+        entry.notification.close()
+        entry.release()
+        dismissed += 1
+      }
+      runtime?.dismissMobileNotification(id)
+    }
+    return { dismissed }
   })
 
   ipcMain.removeHandler('notifications:dispatch')
@@ -223,16 +289,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         if (now - lastSentAt < NOTIFICATION_COOLDOWN_MS) {
           return { delivered: false, reason: 'cooldown' }
         }
+        recentNotifications.delete(dedupeKey)
         recentNotifications.set(dedupeKey, now)
 
-        // Evict stale entries so the map doesn't grow unbounded.
-        if (recentNotifications.size > 50) {
-          for (const [key, ts] of recentNotifications) {
-            if (now - ts >= NOTIFICATION_COOLDOWN_MS) {
-              recentNotifications.delete(key)
-            }
-          }
-        }
+        // Why: a storm across many worktrees should not make every
+        // notification dispatch scan an ever-growing cooldown table.
+        pruneRecentNotifications(recentNotifications, now)
       }
 
       const notificationOptions = buildNotificationOptions(args)
@@ -242,10 +304,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       // where Electron native notifications are unavailable.
       if (runtime && args.source !== 'test') {
         runtime.dispatchMobileNotification({
+          type: 'notification',
           source: args.source,
           title: notificationOptions.title,
           body: notificationOptions.body,
-          worktreeId: args.worktreeId
+          worktreeId: args.worktreeId,
+          ...(args.notificationId ? { notificationId: args.notificationId } : {})
         })
       }
 
@@ -261,16 +325,49 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         notificationOptions.sound = 'default'
       }
       const notification = new Notification(notificationOptions)
+      if (args.notificationId) {
+        const previous = activeNotificationsById.get(args.notificationId)
+        if (previous) {
+          previous.notification.close()
+          previous.release()
+        }
+      }
 
       // Why: prevent GC from collecting the notification (and its click
       // handler) while it's still visible in macOS Notification Center.
       let clickHandler: (() => void) | null = null
+      let failedHandler: ((_event: unknown, error?: string) => void) | null = null
+      const entryForId: { notification: Notification; release: () => void } | null =
+        args.notificationId ? { notification, release: () => {} } : null
       const release = retainNotificationUntilRelease(notification, () => {
         if (clickHandler) {
           notification.removeListener('click', clickHandler)
           clickHandler = null
         }
+        if (failedHandler) {
+          notification.removeListener('failed', failedHandler)
+          failedHandler = null
+        }
+        if (
+          args.notificationId &&
+          activeNotificationsById.get(args.notificationId) === entryForId
+        ) {
+          activeNotificationsById.delete(args.notificationId)
+        }
       })
+      if (entryForId && args.notificationId) {
+        entryForId.release = release
+        activeNotificationsById.set(args.notificationId, entryForId)
+      }
+
+      failedHandler = (_event, error) => {
+        // Why: Electron 42's macOS UNNotification backend reports unsigned
+        // apps and native delivery errors here; release immediately instead
+        // of retaining a dead notification until the fallback timer.
+        logNativeNotificationFailure(args.source, error)
+        release()
+      }
+      notification.on('failed', failedHandler)
 
       // Why: clicking a notification should bring Orca to the foreground and
       // switch to the worktree/pane that triggered it. Worktree activation owns
@@ -440,6 +537,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     activeNotifications.delete(notification)
     notification.removeListener('click', onClick)
     notification.removeListener('show', onShow)
+    notification.removeListener('failed', onFailed)
     notification.close()
   }
 
@@ -462,8 +560,16 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     }
   }
 
+  function onFailed(_event: unknown, error?: string): void {
+    // Why: Electron 42 requires code-signed macOS apps for UNNotification
+    // delivery. Unsigned builds fail here instead of producing the permission UI.
+    logNativeNotificationFailure('startup registration', error)
+    cleanup()
+  }
+
   notification.on('click', onClick)
   notification.on('show', onShow)
+  notification.on('failed', onFailed)
 
   // Fallback in case macOS doesn't fire the 'show' event (e.g. user denies).
   fallbackTimer = setTimeout(cleanup, 10_000)

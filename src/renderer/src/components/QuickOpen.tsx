@@ -67,6 +67,9 @@ function InstallRgGuidance({
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
   const copiedResetTimerRef = useRef<number | null>(null)
+  // Why: clipboard IPC can resolve after this guidance unmounts; avoid
+  // starting a reset timer that will outlive the component.
+  const isMountedRef = useRef(false)
 
   const clearCopiedResetTimer = useCallback((): void => {
     if (copiedResetTimerRef.current !== null) {
@@ -74,6 +77,16 @@ function InstallRgGuidance({
       copiedResetTimerRef.current = null
     }
   }, [])
+
+  const setCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      isMountedRef.current = node !== null
+      if (node === null) {
+        clearCopiedResetTimer()
+      }
+    },
+    [clearCopiedResetTimer]
+  )
 
   const handleCopy = useCallback(() => {
     if (!command) {
@@ -86,6 +99,9 @@ function InstallRgGuidance({
     void window.api.ui
       .writeClipboardText(command)
       .then(() => {
+        if (!isMountedRef.current) {
+          return
+        }
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {
@@ -116,6 +132,7 @@ function InstallRgGuidance({
         <div className="flex items-center gap-2 rounded border border-border bg-muted/50 px-3 py-2 font-mono text-xs text-foreground">
           <span className="flex-1 truncate">{command}</span>
           <button
+            ref={setCopyButtonRef}
             type="button"
             onClick={handleCopy}
             className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"

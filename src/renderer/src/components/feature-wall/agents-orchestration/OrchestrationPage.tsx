@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; row state resets are part of replaying the animation when the active step changes. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ChevronDown, Workflow } from 'lucide-react'
@@ -35,6 +36,7 @@ const FIRST_DISPATCH_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[2]
 export function OrchestrationPage(props: {
   active: boolean
   reducedMotion: boolean
+  onCycleComplete?: () => void
   controlledCreatedChildCount?: number
   loopMs?: number
   showResponseBeats?: boolean
@@ -42,6 +44,7 @@ export function OrchestrationPage(props: {
   const {
     active,
     reducedMotion,
+    onCycleComplete,
     controlledCreatedChildCount,
     loopMs,
     showResponseBeats = true
@@ -96,8 +99,10 @@ export function OrchestrationPage(props: {
 
   useEffect(() => {
     if (active && displayedChildCount >= 2) {
-      requestAnimationFrame(() => drawArrow())
+      const frameId = requestAnimationFrame(() => drawArrow())
+      return () => cancelAnimationFrame(frameId)
     }
+    return undefined
   }, [active, displayedChildCount, drawArrow])
 
   useEffect(() => {
@@ -129,14 +134,24 @@ export function OrchestrationPage(props: {
       setRowPending({})
       setCreatedChildCount(2)
       pendingMirror.current = {}
-      requestAnimationFrame(() => drawArrow())
-      return
+      const frameId = requestAnimationFrame(() => drawArrow())
+      return () => cancelAnimationFrame(frameId)
     }
 
     let cancelled = false
     const timeouts: number[] = []
+    const frames = new Set<number>()
     const later = (fn: () => void, ms: number): void => {
       timeouts.push(window.setTimeout(() => !cancelled && fn(), ms))
+    }
+    const nextFrame = (fn: () => void): void => {
+      const frameId = requestAnimationFrame(() => {
+        frames.delete(frameId)
+        if (!cancelled) {
+          fn()
+        }
+      })
+      frames.add(frameId)
     }
 
     const clearArrows = (): void => {
@@ -178,7 +193,7 @@ export function OrchestrationPage(props: {
         '<path d="M3 7l9 6 9-6"/></svg>'
       layer.appendChild(bubble)
       void bubble.offsetWidth
-      requestAnimationFrame(() => bubble.classList.add('in-flight'))
+      nextFrame(() => bubble.classList.add('in-flight'))
 
       later(() => {
         // Reveal the recipient agent on landing — that's the moment work
@@ -234,6 +249,7 @@ export function OrchestrationPage(props: {
 
     const loop = (): void => {
       runOnce(() => {
+        onCycleComplete?.()
         const beatCount = showResponseBeats ? PHASE1_BEATS.length : 2
         const elapsedMs = FIRST_DISPATCH_MS + beatCount * BUBBLE_GAP_MS + 800
         later(loop, loopMs ? Math.max(0, loopMs - elapsedMs) : 1400)
@@ -249,12 +265,14 @@ export function OrchestrationPage(props: {
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
+      frames.forEach((id) => cancelAnimationFrame(id))
+      frames.clear()
       window.removeEventListener('resize', onResize)
       if (cleanupLayer) {
         cleanupLayer.innerHTML = ''
       }
     }
-  }, [active, reducedMotion, drawArrow, loopMs, showResponseBeats])
+  }, [active, onCycleComplete, reducedMotion, drawArrow, loopMs, showResponseBeats])
 
   return (
     <div

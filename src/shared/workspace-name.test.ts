@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
   resolveWorkspaceCreateName,
   slugifyForWorkspaceName
@@ -21,6 +22,35 @@ describe('getLinkedWorkItemSuggestedName', () => {
     expect(getLinkedWorkItemSuggestedName({ title: 'Add mobile drawer (#812)' })).toBe(
       'add-mobile-drawer'
     )
+  })
+})
+
+describe('getLinearIssueWorkspaceName', () => {
+  it('keeps the Linear identifier in the workspace seed', () => {
+    expect(
+      getLinearIssueWorkspaceName({
+        identifier: 'ENG-42',
+        title: 'Ship Linear parity'
+      })
+    ).toBe('eng-42-ship-linear-parity')
+  })
+
+  it('does not duplicate an identifier already present in the Linear title', () => {
+    expect(
+      getLinearIssueWorkspaceName({
+        identifier: 'ENG-42',
+        title: 'ENG-42 Ship Linear parity'
+      })
+    ).toBe('eng-42-ship-linear-parity')
+  })
+
+  it('keeps the combined Linear seed within the workspace-name limit', () => {
+    const seed = getLinearIssueWorkspaceName({
+      identifier: 'ENG-42',
+      title: 'Implement a very long Linear issue title that should be truncated'
+    })
+    expect(seed.length).toBeLessThanOrEqual(48)
+    expect(seed).toMatch(/^eng-42-/)
   })
 })
 

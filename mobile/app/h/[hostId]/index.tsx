@@ -9,7 +9,7 @@ import {
   TextInput
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import {
   Search,
   X,
@@ -62,6 +62,11 @@ import {
   loadPreferences,
   savePreferences
 } from '../../../src/storage/preferences'
+import {
+  createInitialHostRouteActionState,
+  resolveHostRouteActionState,
+  setHostRouteNewWorktreeVisible
+} from '../../../src/host-route-action-state'
 
 // Why: locally-typed subset of the desktop's RuntimeStatus we read from
 // `status.get`. Only the version fields matter to mobile today; everything
@@ -125,8 +130,12 @@ const GROUP_OPTIONS: PickerOption<GroupMode>[] = [
 ]
 
 function getWorktreeStatus(w: Worktree): 'working' | 'active' | 'permission' | 'done' | 'inactive' {
-  if (w.status) return w.status
-  if (w.liveTerminalCount > 0) return 'active'
+  if (w.status) {
+    return w.status
+  }
+  if (w.liveTerminalCount > 0) {
+    return 'active'
+  }
   return 'inactive'
 }
 
@@ -134,9 +143,15 @@ function getWorktreeStatus(w: Worktree): 'working' | 'active' | 'permission' | '
 // worktrees with idle terminal prompts had no recent output and were excluded.
 // Any worktree with live terminals or unread output counts as "active".
 function isWorktreeActive(w: Worktree): boolean {
-  if (w.unread) return true
-  if (w.status) return w.status !== 'inactive'
-  if (w.liveTerminalCount > 0) return true
+  if (w.unread) {
+    return true
+  }
+  if (w.status) {
+    return w.status !== 'inactive'
+  }
+  if (w.liveTerminalCount > 0) {
+    return true
+  }
   return false
 }
 
@@ -158,21 +173,29 @@ const WORKSPACE_STATUS_ORDER: ReturnType<typeof getWorktreeStatus>[] = [
 
 function sortWorktrees(worktrees: Worktree[], mode: SortMode): Worktree[] {
   return [...worktrees].sort((a, b) => {
-    if (mode === 'name') return (a.displayName || a.repo).localeCompare(b.displayName || b.repo)
-    if (mode === 'recent') return (b.lastOutputAt ?? 0) - (a.lastOutputAt ?? 0)
+    if (mode === 'name') {
+      return (a.displayName || a.repo).localeCompare(b.displayName || b.repo)
+    }
+    if (mode === 'recent') {
+      return (b.lastOutputAt ?? 0) - (a.lastOutputAt ?? 0)
+    }
     if (mode === 'repo') {
       const repoComparison = a.repo.localeCompare(b.repo, undefined, { sensitivity: 'base' })
       return repoComparison || (a.displayName || a.repo).localeCompare(b.displayName || b.repo)
     }
     // 'smart' — attention-first
-    if (a.unread !== b.unread) return a.unread ? -1 : 1
+    if (a.unread !== b.unread) {
+      return a.unread ? -1 : 1
+    }
     const aStatus = getWorktreeStatus(a)
     const bStatus = getWorktreeStatus(b)
     const statusOrder = { permission: 0, working: 1, done: 2, active: 3, inactive: 4 }
-    if (statusOrder[aStatus] !== statusOrder[bStatus])
+    if (statusOrder[aStatus] !== statusOrder[bStatus]) {
       return statusOrder[aStatus] - statusOrder[bStatus]
-    if ((a.lastOutputAt ?? 0) !== (b.lastOutputAt ?? 0))
+    }
+    if ((a.lastOutputAt ?? 0) !== (b.lastOutputAt ?? 0)) {
       return (b.lastOutputAt ?? 0) - (a.lastOutputAt ?? 0)
+    }
     return (a.displayName || a.repo).localeCompare(b.displayName || b.repo)
   })
 }
@@ -213,11 +236,19 @@ const PR_GROUP_LABELS: Record<PRGroupKey, string> = {
 const PR_GROUP_ORDER: PRGroupKey[] = ['done', 'in-review', 'in-progress', 'closed']
 
 function getPRGroupKey(w: Worktree): PRGroupKey {
-  if (!w.linkedPR) return 'in-progress'
+  if (!w.linkedPR) {
+    return 'in-progress'
+  }
   const s = w.linkedPR.state.toLowerCase()
-  if (s === 'merged') return 'done'
-  if (s === 'closed') return 'closed'
-  if (s === 'draft') return 'in-progress'
+  if (s === 'merged') {
+    return 'done'
+  }
+  if (s === 'closed') {
+    return 'closed'
+  }
+  if (s === 'draft') {
+    return 'in-progress'
+  }
   return 'in-review'
 }
 
@@ -260,8 +291,11 @@ function buildSections(
     for (const w of unpinned) {
       const key = w.repo || 'Unknown'
       const list = byRepo.get(key)
-      if (list) list.push(w)
-      else byRepo.set(key, [w])
+      if (list) {
+        list.push(w)
+      } else {
+        byRepo.set(key, [w])
+      }
     }
     for (const [repo, items] of byRepo) {
       sections.push({ title: repo, data: items })
@@ -271,8 +305,11 @@ function buildSections(
     for (const w of unpinned) {
       const key = getWorktreeStatus(w)
       const list = byStatus.get(key)
-      if (list) list.push(w)
-      else byStatus.set(key, [w])
+      if (list) {
+        list.push(w)
+      } else {
+        byStatus.set(key, [w])
+      }
     }
     for (const status of WORKSPACE_STATUS_ORDER) {
       const items = byStatus.get(status)
@@ -285,8 +322,11 @@ function buildSections(
     for (const w of unpinned) {
       const key = getPRGroupKey(w)
       const list = byGroup.get(key)
-      if (list) list.push(w)
-      else byGroup.set(key, [w])
+      if (list) {
+        list.push(w)
+      } else {
+        byGroup.set(key, [w])
+      }
     }
     for (const groupKey of PR_GROUP_ORDER) {
       const items = byGroup.get(groupKey)
@@ -340,7 +380,9 @@ export default function HostScreen() {
   const [actionTarget, setActionTarget] = useState<Worktree | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
-  const [showNewWorktree, setShowNewWorktree] = useState(false)
+  const [routeActionState, setRouteActionState] = useState(() =>
+    createInitialHostRouteActionState(action)
+  )
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
 
   // Persisted pin state
@@ -348,17 +390,28 @@ export default function HostScreen() {
   const [_prefsLoaded, setPrefsLoaded] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    if (action === 'newWorktree') setShowNewWorktree(true)
-  }, [action])
+  const resolvedRouteActionState = resolveHostRouteActionState(routeActionState, action)
+  // Why: `action=newWorktree` is a route-derived open edge. Resolve it before
+  // commit, but don't reopen after the user closes while the same URL remains.
+  if (resolvedRouteActionState !== routeActionState) {
+    setRouteActionState(resolvedRouteActionState)
+  }
+  const showNewWorktree = resolvedRouteActionState.showNewWorktree
+  const setShowNewWorktreeVisible = useCallback((visible: boolean) => {
+    setRouteActionState((current) => setHostRouteNewWorktreeVisible(current, visible))
+  }, [])
 
   // Load persisted pins and preferences
   useEffect(() => {
-    if (!hostId) return
+    if (!hostId) {
+      return
+    }
     let stale = false
     void (async () => {
       const [pins, prefs] = await Promise.all([loadPinnedIds(hostId), loadPreferences(hostId)])
-      if (stale) return
+      if (stale) {
+        return
+      }
       setPinnedIds(pins)
       setSortMode(prefs.sortMode as SortMode)
       setFilters({
@@ -399,10 +452,14 @@ export default function HostScreen() {
       setWorktrees([])
       setLastKnownWorktrees([])
     }
-    if (!hostId) return
+    if (!hostId) {
+      return
+    }
     let stale = false
     void loadHosts().then((hosts) => {
-      if (stale) return
+      if (stale) {
+        return
+      }
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
         setError('Host not found')
@@ -417,13 +474,17 @@ export default function HostScreen() {
   }, [hostId])
 
   const fetchWorktrees = useCallback(async () => {
-    if (!client || connState !== 'connected') return
+    if (!client || connState !== 'connected') {
+      return
+    }
     const requestClient = client
     const requestHostId = hostId
 
     try {
       const response = await requestClient.sendRequest('worktree.ps')
-      if (clientRef.current !== requestClient || hostId !== requestHostId) return
+      if (clientRef.current !== requestClient || hostId !== requestHostId) {
+        return
+      }
       if (response.ok) {
         const result = (response as RpcSuccess).result as { worktrees: Worktree[] }
         setWorktrees(result.worktrees)
@@ -433,8 +494,12 @@ export default function HostScreen() {
         void requestClient
           .sendRequest('repo.list')
           .then((repoResponse) => {
-            if (clientRef.current !== requestClient || hostId !== requestHostId) return
-            if (!repoResponse.ok) return
+            if (clientRef.current !== requestClient || hostId !== requestHostId) {
+              return
+            }
+            if (!repoResponse.ok) {
+              return
+            }
             const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
             setRepoColorsByName(
               new Map(
@@ -472,7 +537,9 @@ export default function HostScreen() {
           if (serverPinned.size === prev.size && [...serverPinned].every((id) => prev.has(id))) {
             return prev
           }
-          if (hostId) void savePinnedIds(hostId, serverPinned)
+          if (hostId) {
+            void savePinnedIds(hostId, serverPinned)
+          }
           return serverPinned
         })
       }
@@ -481,12 +548,6 @@ export default function HostScreen() {
     }
   }, [client, connState, hostId])
 
-  useEffect(() => {
-    if (connState === 'connected') {
-      void fetchWorktrees()
-    }
-  }, [connState, fetchWorktrees])
-
   // Why: read desktop's protocol version from status.get on every connect
   // and re-evaluate compatibility. If the desktop declares this mobile
   // build too old (or vice versa via the local minimum), the host detail
@@ -494,14 +555,20 @@ export default function HostScreen() {
   // Today's compat constants are wide-open so this never blocks; the wire
   // format is in place to flip a switch in a future release.
   useEffect(() => {
-    if (connState !== 'connected' || !client) return
+    if (connState !== 'connected' || !client) {
+      return
+    }
     let cancelled = false
     const requestClient = client
     void (async () => {
       try {
         const response = await requestClient.sendRequest('status.get')
-        if (cancelled || clientRef.current !== requestClient) return
-        if (!response.ok) return
+        if (cancelled || clientRef.current !== requestClient) {
+          return
+        }
+        if (!response.ok) {
+          return
+        }
         const status = (response as RpcSuccess).result as DesktopStatus
         const verdict = evaluateCompat({
           desktopProtocolVersion: status.protocolVersion,
@@ -528,21 +595,33 @@ export default function HostScreen() {
     }
   }, [connState, client])
 
-  useEffect(() => {
-    if (connState !== 'connected') return
-    const interval = setInterval(() => {
+  useFocusEffect(
+    useCallback(() => {
+      if (connState !== 'connected') {
+        return
+      }
       void fetchWorktrees()
-    }, 3000)
-    return () => clearInterval(interval)
-  }, [connState, fetchWorktrees])
+      // Why: React Navigation keeps previous stack screens mounted; only
+      // poll the host list while this route is visible.
+      const interval = setInterval(() => {
+        void fetchWorktrees()
+      }, 3000)
+      return () => clearInterval(interval)
+    }, [connState, fetchWorktrees])
+  )
 
   const updateLocalPins = useCallback(
     (worktreeId: string, pinned: boolean) => {
       setPinnedIds((prev) => {
         const next = new Set(prev)
-        if (pinned) next.add(worktreeId)
-        else next.delete(worktreeId)
-        if (hostId) void savePinnedIds(hostId, next)
+        if (pinned) {
+          next.add(worktreeId)
+        } else {
+          next.delete(worktreeId)
+        }
+        if (hostId) {
+          void savePinnedIds(hostId, next)
+        }
         return next
       })
     },
@@ -580,7 +659,9 @@ export default function HostScreen() {
 
   const handleDeleteWorktree = useCallback(
     async (item: Worktree) => {
-      if (!client) return
+      if (!client) {
+        return
+      }
 
       const removeFromList = (list: Worktree[]) =>
         list.filter((w) => w.worktreeId !== item.worktreeId)
@@ -606,7 +687,9 @@ export default function HostScreen() {
   )
 
   const handleRemoveHost = useCallback(async () => {
-    if (!hostId) return
+    if (!hostId) {
+      return
+    }
     // Why: close the shared client first so its WebSocket is gone before
     // the host record disappears; otherwise the next loadHosts() the
     // provider does (e.g. on remount) wouldn't find this host but the
@@ -635,7 +718,9 @@ export default function HostScreen() {
   const handleSortChange = useCallback(
     (value: SortMode) => {
       setSortMode(value)
-      if (hostId) void savePreferences(hostId, { sortMode: value })
+      if (hostId) {
+        void savePreferences(hostId, { sortMode: value })
+      }
     },
     [hostId]
   )
@@ -643,10 +728,11 @@ export default function HostScreen() {
   const toggleActiveFilter = useCallback(() => {
     setFilters((prev) => {
       const next = { ...prev, activeOnly: !prev.activeOnly }
-      if (hostId)
+      if (hostId) {
         void savePreferences(hostId, {
           filterMode: next.activeOnly ? 'active' : 'all'
         })
+      }
       return next
     })
   }, [hostId])
@@ -655,10 +741,15 @@ export default function HostScreen() {
     (repo: string) => {
       setFilters((prev) => {
         const next = new Set(prev.selectedRepos)
-        if (next.has(repo)) next.delete(repo)
-        else next.add(repo)
+        if (next.has(repo)) {
+          next.delete(repo)
+        } else {
+          next.add(repo)
+        }
         const updated = { ...prev, selectedRepos: next }
-        if (hostId) void savePreferences(hostId, { selectedRepos: [...next] })
+        if (hostId) {
+          void savePreferences(hostId, { selectedRepos: [...next] })
+        }
         return updated
       })
     },
@@ -667,12 +758,16 @@ export default function HostScreen() {
 
   const clearFilters = useCallback(() => {
     setFilters({ activeOnly: false, selectedRepos: new Set() })
-    if (hostId) void savePreferences(hostId, { filterMode: 'all', selectedRepos: [] })
+    if (hostId) {
+      void savePreferences(hostId, { filterMode: 'all', selectedRepos: [] })
+    }
   }, [hostId])
 
   const activeFilterCount = useMemo(() => {
     let count = 0
-    if (filters.activeOnly) count++
+    if (filters.activeOnly) {
+      count++
+    }
     count += filters.selectedRepos.size
     return count
   }, [filters])
@@ -680,7 +775,9 @@ export default function HostScreen() {
   const handleGroupChange = useCallback(
     (value: GroupMode) => {
       setGroupMode(value)
-      if (hostId) void savePreferences(hostId, { groupMode: value })
+      if (hostId) {
+        void savePreferences(hostId, { groupMode: value })
+      }
     },
     [hostId]
   )
@@ -703,7 +800,9 @@ export default function HostScreen() {
   const uniqueRepos = useMemo(() => {
     const repos = new Map<string, string>()
     for (const w of displayWorktrees) {
-      if (!repos.has(w.repo)) repos.set(w.repo, repoColorsByName.get(w.repo) ?? repoColor(w.repo))
+      if (!repos.has(w.repo)) {
+        repos.set(w.repo, repoColorsByName.get(w.repo) ?? repoColor(w.repo))
+      }
     }
     return [...repos.entries()].map(([name, color]) => ({ name, color }))
   }, [displayWorktrees, repoColorsByName])
@@ -717,9 +816,14 @@ export default function HostScreen() {
     (title: string) => {
       setCollapsedGroups((prev) => {
         const next = new Set(prev)
-        if (next.has(title)) next.delete(title)
-        else next.add(title)
-        if (hostId) void savePreferences(hostId, { collapsedGroups: [...next] })
+        if (next.has(title)) {
+          next.delete(title)
+        } else {
+          next.add(title)
+        }
+        if (hostId) {
+          void savePreferences(hostId, { collapsedGroups: [...next] })
+        }
         return next
       })
     },
@@ -786,7 +890,9 @@ export default function HostScreen() {
                     const verdict = headerVerdict
                     const isError = isErrorVerdict(verdict)
                     const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
-                    if (!showReconnectButton) return null
+                    if (!showReconnectButton) {
+                      return null
+                    }
                     return (
                       <Pressable
                         style={styles.reconnectButton}
@@ -871,7 +977,7 @@ export default function HostScreen() {
 
           <Pressable
             style={styles.newButton}
-            onPress={() => setShowNewWorktree(true)}
+            onPress={() => setShowNewWorktreeVisible(true)}
             disabled={connState !== 'connected'}
           >
             <Plus
@@ -966,7 +1072,9 @@ export default function HostScreen() {
             isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
           renderSectionHeader={({ section }) => {
-            if (!section.title) return null
+            if (!section.title) {
+              return null
+            }
             const isCollapsed = collapsedGroups.has(section.title)
             const rawSection = rawSections.find((s) => s.title === section.title)
             const count = rawSection?.data.length ?? 0
@@ -1246,7 +1354,7 @@ export default function HostScreen() {
           const params = new URLSearchParams({ name: worktreeName, created: '1' })
           router.push(`/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`)
         }}
-        onClose={() => setShowNewWorktree(false)}
+        onClose={() => setShowNewWorktreeVisible(false)}
       />
     </SafeAreaView>
   )
@@ -1259,7 +1367,9 @@ function ListSeparator() {
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
   let hash = 0
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0
+  }
   return palette[Math.abs(hash) % palette.length]!
 }
 

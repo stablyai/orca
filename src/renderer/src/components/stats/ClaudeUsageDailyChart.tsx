@@ -11,18 +11,26 @@ function formatTokens(value: number): string {
   return value.toLocaleString()
 }
 
+function getDailyTotal(entry: ClaudeUsageDailyPoint): number {
+  return entry.inputTokens + entry.outputTokens + entry.cacheReadTokens + entry.cacheWriteTokens
+}
+
+function getMaxDailyTotal(daily: ClaudeUsageDailyPoint[]): number {
+  let max = 1
+  // Why: all-time usage histories can exceed V8's argument limit if spread
+  // into Math.max, even though the chart only renders the last 10 days.
+  for (const entry of daily) {
+    max = Math.max(max, getDailyTotal(entry))
+  }
+  return max
+}
+
 type ClaudeUsageDailyChartProps = {
   daily: ClaudeUsageDailyPoint[]
 }
 
 export function ClaudeUsageDailyChart({ daily }: ClaudeUsageDailyChartProps): React.JSX.Element {
-  const maxDailyTotal = Math.max(
-    1,
-    ...daily.map(
-      (entry) =>
-        entry.inputTokens + entry.outputTokens + entry.cacheReadTokens + entry.cacheWriteTokens
-    )
-  )
+  const maxDailyTotal = getMaxDailyTotal(daily)
 
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
@@ -34,8 +42,7 @@ export function ClaudeUsageDailyChart({ daily }: ClaudeUsageDailyChartProps): Re
       </div>
       <div className="grid h-56 grid-cols-10 items-end gap-3">
         {daily.slice(-10).map((entry) => {
-          const total =
-            entry.inputTokens + entry.outputTokens + entry.cacheReadTokens + entry.cacheWriteTokens
+          const total = getDailyTotal(entry)
           const segments = [
             {
               key: 'cache-write',

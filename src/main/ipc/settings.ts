@@ -9,6 +9,10 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { applyElectronProxySettings } from '../network/proxy-settings'
+import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
+import { normalizeAppIconId } from '../../shared/app-icon'
+import { applyAppIcon } from '../app-icon'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -54,6 +58,16 @@ export function registerSettingsHandlers(
         args.floatingTerminalCwd
       )
     }
+    if ('httpProxyUrl' in args) {
+      const proxyUrl = normalizeProxyUrl(args.httpProxyUrl)
+      sanitizedArgs.httpProxyUrl = proxyUrl.ok ? proxyUrl.value : ''
+    }
+    if ('httpProxyBypassRules' in args) {
+      sanitizedArgs.httpProxyBypassRules = normalizeProxyBypassRules(args.httpProxyBypassRules)
+    }
+    if ('appIcon' in args) {
+      sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
+    }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
@@ -81,6 +95,16 @@ export function registerSettingsHandlers(
     }
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()
+    }
+    if ('httpProxyUrl' in sanitizedArgs || 'httpProxyBypassRules' in sanitizedArgs) {
+      try {
+        await applyElectronProxySettings(result)
+      } catch {
+        console.warn('[settings] failed to apply network proxy settings')
+      }
+    }
+    if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
+      applyAppIcon(result.appIcon)
     }
 
     // Why: telemetry-plan.md§Settings — fire `settings_changed` only for

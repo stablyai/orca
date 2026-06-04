@@ -45,6 +45,7 @@ export function useFeatureWallTaskSourcePresentation(
 
   const hasConnectedTaskSource =
     (preflightStatus?.gh.installed === true && preflightStatus.gh.authenticated === true) ||
+    (preflightStatus?.glab?.installed === true && preflightStatus.glab.authenticated === true) ||
     linearStatus.connected === true
   const isCheckingTaskSources =
     preflightStatusLoading || !preflightStatusChecked || !linearStatusChecked

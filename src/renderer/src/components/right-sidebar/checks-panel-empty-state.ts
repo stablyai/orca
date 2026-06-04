@@ -7,6 +7,8 @@ type ChecksPanelEmptyStateInput = {
   prRefreshStatus: PRRefreshStatus
   hostedReviewBlockedReason: HostedReviewCreationBlockedReason | undefined
   hasUpstream: boolean | undefined
+  reviewLabel?: 'pull request' | 'merge request'
+  reviewShortLabel?: 'PR' | 'MR'
 }
 
 type ChecksPanelEmptyStateCopy = {
@@ -17,10 +19,12 @@ type ChecksPanelEmptyStateCopy = {
 export function getChecksPanelEmptyStateCopy(
   input: ChecksPanelEmptyStateInput
 ): ChecksPanelEmptyStateCopy {
+  const reviewLabel = input.reviewLabel ?? 'pull request'
+  const reviewShortLabel = input.reviewShortLabel ?? 'PR'
   if (input.operationLabel) {
     return {
       title: `${input.operationLabel} in progress`,
-      description: 'PR checks will be available after the operation completes'
+      description: `${reviewShortLabel} checks will be available after the operation completes`
     }
   }
 
@@ -35,14 +39,14 @@ export function getChecksPanelEmptyStateCopy(
     // refresh error here makes a normal pre-publish state look broken.
     return {
       title: 'Branch not published',
-      description: 'Publish this branch before creating a pull request.'
+      description: `Publish this branch before creating a ${reviewLabel}.`
     }
   }
 
   if (blockedReason === 'needs_push') {
     return {
       title: 'Branch has unpushed commits',
-      description: 'Push your branch before creating a pull request.'
+      description: `Push your branch before creating a ${reviewLabel}.`
     }
   }
 
@@ -67,10 +71,11 @@ export function getChecksPanelEmptyStateCopy(
         title: 'No pull request found',
         description: 'GitHub refresh is paused by the current rate-limit budget'
       }
-    default:
+    case 'skipped':
+    case undefined:
       return {
-        title: 'No pull request found',
-        description: 'Create a pull request to start checks and review.'
+        title: `No ${reviewLabel} found`,
+        description: `Create a ${reviewLabel} to start checks and review.`
       }
   }
 }

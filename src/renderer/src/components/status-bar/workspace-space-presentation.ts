@@ -7,7 +7,10 @@ import {
 } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/types'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import type {
+  WorkspaceSpaceItem,
+  WorkspaceSpaceWorktree
+} from '../../../../shared/workspace-space-types'
 
 export type WorkspaceSpaceSortKey = 'size' | 'name' | 'repo' | 'activity'
 export type WorkspaceSpaceSortDirection = 'asc' | 'desc'
@@ -140,6 +143,30 @@ export function getWorkspaceSpaceSearchText(worktree: WorkspaceSpaceWorktree): s
     .toLowerCase()
 }
 
+export function getLargestWorkspaceSpaceItemSize(
+  items: readonly Pick<WorkspaceSpaceItem, 'sizeBytes'>[]
+): number {
+  let maxSize = 0
+  for (const item of items) {
+    if (item.sizeBytes > maxSize) {
+      maxSize = item.sizeBytes
+    }
+  }
+  return maxSize
+}
+
+export function getLargestWorkspaceSpaceRowSize(
+  rows: readonly Pick<WorkspaceSpaceWorktree, 'sizeBytes'>[]
+): number {
+  let maxSize = 0
+  for (const row of rows) {
+    if (row.sizeBytes > maxSize) {
+      maxSize = row.sizeBytes
+    }
+  }
+  return maxSize
+}
+
 function compareRows(
   left: WorkspaceSpaceWorktree,
   right: WorkspaceSpaceWorktree,
@@ -245,4 +272,45 @@ export function getVisibleDeletableWorkspaceIds(
   return rows
     .filter((row) => row.canDelete && row.status === 'ok' && !isWorktreeDeleting(row.worktreeId))
     .map((row) => row.worktreeId)
+}
+
+export function resolveWorkspaceSpaceInspectedWorktreeId(
+  rows: readonly WorkspaceSpaceWorktree[],
+  currentWorktreeId: string | null
+): string | null {
+  if (currentWorktreeId && rows.some((row) => row.worktreeId === currentWorktreeId)) {
+    return currentWorktreeId
+  }
+  return rows.find((row) => row.status === 'ok')?.worktreeId ?? null
+}
+
+export function resolveWorkspaceSpaceTreemapZoomWorktreeId(
+  rows: readonly WorkspaceSpaceWorktree[],
+  currentWorktreeId: string | null
+): string | null {
+  return currentWorktreeId &&
+    rows.some((row) => row.worktreeId === currentWorktreeId && row.status === 'ok')
+    ? currentWorktreeId
+    : null
+}
+
+export function pruneWorkspaceSpaceSelectedIds(
+  rows: readonly WorkspaceSpaceWorktree[],
+  selectedIds: Set<string>
+): Set<string> {
+  if (selectedIds.size === 0) {
+    return selectedIds
+  }
+
+  const validIds = new Set(rows.map((row) => row.worktreeId))
+  let changed = false
+  const nextIds = new Set<string>()
+  for (const id of selectedIds) {
+    if (validIds.has(id)) {
+      nextIds.add(id)
+    } else {
+      changed = true
+    }
+  }
+  return changed ? nextIds : selectedIds
 }

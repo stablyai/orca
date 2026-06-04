@@ -71,6 +71,10 @@ describe('notebook IPC', () => {
       exitCode: null,
       error: 'Python cell timed out.'
     })
+    expect(proc.stdout.listenerCount('data')).toBe(0)
+    expect(proc.stderr.listenerCount('data')).toBe(0)
+    expect(proc.listenerCount('error')).toBe(0)
+    expect(proc.listenerCount('close')).toBe(0)
 
     if (process.platform !== 'win32') {
       expect(spawnMock).toHaveBeenCalledWith(

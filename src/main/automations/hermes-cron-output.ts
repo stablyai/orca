@@ -3,8 +3,8 @@
 import { existsSync } from 'fs'
 import { open, readdir, readFile, realpath, stat } from 'fs/promises'
 import { homedir } from 'os'
-import { isAbsolute, join, relative, resolve } from 'path'
-import Database from 'better-sqlite3'
+import { isAbsolute, join, relative, resolve, sep } from 'path'
+import Database from '../sqlite/sync-database'
 
 const HERMES_HOME = process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
 const HERMES_OUTPUT_DIR = join(HERMES_HOME, 'cron', 'output')
@@ -162,7 +162,11 @@ async function readReferencedLogFile(content: string): Promise<{
     const relativeToHermesHome = relative(resolve(homeRealPath), resolve(logRealPath))
     // Why: the output body can contain agent-authored text, so only hydrate
     // referenced files that resolve inside Hermes' own data directory.
-    if (relativeToHermesHome.startsWith('..') || isAbsolute(relativeToHermesHome)) {
+    if (
+      relativeToHermesHome === '..' ||
+      relativeToHermesHome.startsWith(`..${sep}`) ||
+      isAbsolute(relativeToHermesHome)
+    ) {
       return null
     }
     const logStat = await stat(logPath)
@@ -406,6 +410,7 @@ async function readHermesCronOutputRunRefs(jobId: string): Promise<HermesMergedR
 // cache this performs N readdir + N sqlite open/query on every list call,
 // which scales linearly with job and run-history size on the main process.
 const HERMES_RUN_COUNT_CACHE_TTL_MS = 2000
+const HERMES_RUN_COUNT_CACHE_MAX_ENTRIES = 200
 type HermesRunCountCacheEntry = {
   promise: Promise<number>
   expiresAt: number
@@ -420,12 +425,33 @@ export function clearHermesCronOutputRunCountCache(jobId?: string): void {
   hermesRunCountCache.clear()
 }
 
+function pruneHermesRunCountCache(now: number): void {
+  for (const [jobId, entry] of hermesRunCountCache) {
+    if (entry.expiresAt <= now) {
+      hermesRunCountCache.delete(jobId)
+    }
+  }
+  while (hermesRunCountCache.size >= HERMES_RUN_COUNT_CACHE_MAX_ENTRIES) {
+    const oldestJobId = hermesRunCountCache.keys().next().value
+    if (oldestJobId === undefined) {
+      return
+    }
+    hermesRunCountCache.delete(oldestJobId)
+  }
+}
+
 async function readHermesCronOutputRunCount(jobId: string): Promise<number> {
   const now = Date.now()
   const cached = hermesRunCountCache.get(jobId)
   if (cached && cached.expiresAt > now) {
     return cached.promise
   }
+  if (cached) {
+    hermesRunCountCache.delete(jobId)
+  }
+  // Why: external Hermes jobs can be created/removed outside Orca; without a
+  // size bound and expired sweep, a long session can pin stale job ids forever.
+  pruneHermesRunCountCache(now)
   const entry: HermesRunCountCacheEntry = {
     promise: readHermesCronOutputRunRefs(jobId).then((refs) => refs.length),
     expiresAt: Number.POSITIVE_INFINITY

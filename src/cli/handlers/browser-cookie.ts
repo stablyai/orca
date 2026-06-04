@@ -6,7 +6,23 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
+
+function getOptionalCookieExpiry(flags: Map<string, string | boolean>): number | undefined {
+  if (!flags.has('expires')) {
+    return undefined
+  }
+  const rawExpires = flags.get('expires')
+  if (typeof rawExpires !== 'string' || rawExpires.length === 0) {
+    throw new RuntimeClientError('invalid_argument', 'Missing value for --expires.')
+  }
+  const expires = Number(rawExpires)
+  if (!Number.isFinite(expires) || expires < 0) {
+    throw new RuntimeClientError('invalid_argument', `Invalid --expires value: ${rawExpires}`)
+  }
+  return expires
+}
 
 export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
   'cookie get': async ({ flags, client, cwd, json }) => {
@@ -30,7 +46,7 @@ export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
     const domain = getOptionalStringFlag(flags, 'domain')
     const path = getOptionalStringFlag(flags, 'path')
     const sameSite = getOptionalStringFlag(flags, 'sameSite')
-    const expires = getOptionalStringFlag(flags, 'expires')
+    const expires = getOptionalCookieExpiry(flags)
     if (domain) {
       params.domain = domain
     }
@@ -46,8 +62,8 @@ export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
     if (sameSite) {
       params.sameSite = sameSite
     }
-    if (expires) {
-      params.expires = Number(expires)
+    if (expires !== undefined) {
+      params.expires = expires
     }
     Object.assign(params, await getBrowserCommandTarget(flags, cwd, client))
     const result = await client.call<BrowserCookieSetResult>('browser.cookie.set', params)

@@ -170,8 +170,9 @@ export class CodexAccountService {
 
   private async doReauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
-    const managedHomePath = this.assertManagedHomePath(account.managedHomePath)
+    const managedHomePath = this.ensureManagedHomeForReauthentication(account)
 
+    this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath)
     await this.runCodexLogin(managedHomePath)
     const identity = this.readIdentityFromHome(managedHomePath)
     if (!identity.email) {
@@ -495,13 +496,109 @@ export class CodexAccountService {
   }
 
   private writeManagedConfig(managedHomePath: string, contents: string): void {
-    writeFileAtomically(join(managedHomePath, 'config.toml'), contents)
+    const configPath = join(managedHomePath, 'config.toml')
+    try {
+      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === contents) {
+        return
+      }
+    } catch {
+      // Why: read errors should not make a stale config look current; the
+      // atomic write path owns Windows ACL repair and persistent error surfacing.
+    }
+    writeFileAtomically(configPath, contents)
   }
 
   private getManagedAccountsRoot(): string {
     const root = join(app.getPath('userData'), 'codex-accounts')
     mkdirSync(root, { recursive: true })
     return root
+  }
+
+  private ensureManagedHomeForReauthentication(account: CodexManagedAccount): string {
+    const wslInfo = parseWslUncPath(account.managedHomePath)
+    if (wslInfo && process.platform === 'win32') {
+      this.ensureExpectedWslManagedHomeForReauthentication(account, wslInfo)
+      return this.assertManagedHomePath(account.managedHomePath)
+    }
+
+    try {
+      return this.assertManagedHomePath(account.managedHomePath)
+    } catch (error) {
+      if (!this.isMissingManagedHomeError(error)) {
+        throw error
+      }
+      return this.recreateExpectedHostManagedHomeForReauthentication(account, error)
+    }
+  }
+
+  private recreateExpectedHostManagedHomeForReauthentication(
+    account: CodexManagedAccount,
+    originalError: unknown
+  ): string {
+    const expectedManagedHomePath = join(this.getManagedAccountsRoot(), account.id, 'home')
+    if (!this.pathsEqual(account.managedHomePath, expectedManagedHomePath)) {
+      throw originalError
+    }
+
+    // Why: explicit re-auth is allowed to recover from a lost empty container,
+    // but only at the exact Orca-owned account path persisted for this account.
+    mkdirSync(expectedManagedHomePath, { recursive: true })
+    writeFileSync(join(expectedManagedHomePath, '.orca-managed-home'), `${account.id}\n`, 'utf-8')
+    return this.assertManagedHomePath(expectedManagedHomePath)
+  }
+
+  private ensureExpectedWslManagedHomeForReauthentication(
+    account: CodexManagedAccount,
+    wslInfo: { distro: string; linuxPath: string }
+  ): void {
+    if (
+      account.managedHomeRuntime !== 'wsl' ||
+      account.wslDistro !== wslInfo.distro ||
+      account.wslLinuxHomePath !== wslInfo.linuxPath ||
+      !wslInfo.linuxPath.endsWith(`/.local/share/orca/codex-accounts/${account.id}/home`)
+    ) {
+      return
+    }
+
+    execFileSync(
+      'wsl.exe',
+      [
+        '-d',
+        wslInfo.distro,
+        '--',
+        'bash',
+        '-lc',
+        buildEncodedWslBashCommand(
+          [
+            'set -euo pipefail',
+            `candidate=${shellQuote(wslInfo.linuxPath)}`,
+            `expected_marker=${shellQuote(account.id)}`,
+            'marker="$candidate/.orca-managed-home"',
+            'if [ -e "$candidate" ] && [ ! -f "$marker" ]; then exit 41; fi',
+            'if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected_marker" ]; then exit 42; fi',
+            'mkdir -p -- "$candidate"',
+            'printf "%s\\n" "$expected_marker" > "$marker"'
+          ].join('\n')
+        )
+      ],
+      { encoding: 'utf-8', timeout: 5000 }
+    )
+  }
+
+  private isMissingManagedHomeError(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      error.message === 'Managed Codex home directory does not exist on disk.'
+    )
+  }
+
+  private pathsEqual(left: string, right: string): boolean {
+    const resolvedLeft = resolve(left)
+    const resolvedRight = resolve(right)
+    if (process.platform === 'win32') {
+      return resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
+    }
+    return resolvedLeft === resolvedRight
   }
 
   private assertManagedHomePath(candidatePath: string): string {
@@ -683,8 +780,12 @@ export class CodexAccountService {
   }
 
   private async runCodexLogin(managedHomePath: string): Promise<void> {
+    const wslInfo = parseWslUncPath(managedHomePath)
+    if (wslInfo) {
+      this.assertWslCodexCliAvailable(wslInfo)
+    }
+
     await new Promise<void>((resolvePromise, rejectPromise) => {
-      const wslInfo = parseWslUncPath(managedHomePath)
       const spawnConfig = wslInfo
         ? {
             command: 'wsl.exe',
@@ -734,26 +835,36 @@ export class CodexAccountService {
         }
       }
 
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      const cleanupListeners = (): void => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        child.stdout.off('data', appendOutput)
+        child.stderr.off('data', appendOutput)
+        child.off('error', onError)
+        child.off('close', onClose)
+      }
+
       const settle = (callback: () => void): void => {
         if (settled) {
           return
         }
         settled = true
-        clearTimeout(timeout)
+        cleanupListeners()
         callback()
       }
 
-      const timeout = setTimeout(() => {
+      const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
+      timeout = setTimeout(() => {
         child.kill()
         settle(() => {
-          rejectPromise(new Error('Codex sign-in took too long to finish. Please try again.'))
+          rejectPromise(timeoutError)
         })
       }, LOGIN_TIMEOUT_MS)
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
-
-      child.on('error', (error) => {
+      const onError = (error: Error): void => {
         settle(() => {
           const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
           // Why: ENOENT can mean either the codex binary doesn't exist OR the
@@ -767,9 +878,9 @@ export class CodexAccountService {
             : error.message
           rejectPromise(new Error(message))
         })
-      })
+      }
 
-      child.on('close', (code) => {
+      const onClose = (code: number | null): void => {
         settle(() => {
           if (code === 0) {
             resolvePromise()
@@ -784,8 +895,35 @@ export class CodexAccountService {
             )
           )
         })
-      })
+      }
+
+      child.stdout.on('data', appendOutput)
+      child.stderr.on('data', appendOutput)
+      child.on('error', onError)
+      child.on('close', onClose)
     })
+  }
+
+  private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {
+    try {
+      execFileSync(
+        'wsl.exe',
+        [
+          '-d',
+          wslInfo.distro,
+          '--',
+          'bash',
+          '-lc',
+          buildEncodedWslBashCommand('command -v codex >/dev/null 2>&1')
+        ],
+        { encoding: 'utf-8', timeout: 5000 }
+      )
+    } catch (error) {
+      throw new Error(
+        `Codex CLI is not available in WSL ${wslInfo.distro}. Install Codex in that distro or switch Account location to Windows.`,
+        { cause: error }
+      )
+    }
   }
 
   private readIdentityFromHome(managedHomePath: string): ResolvedCodexIdentity {

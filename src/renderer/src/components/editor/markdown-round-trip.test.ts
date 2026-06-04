@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import type { SlashCommandId } from './rich-markdown-commands'
-import { slashCommands } from './rich-markdown-commands'
+import type { SlashCommandId } from './rich-markdown-slash-commands'
+import { slashCommands } from './rich-markdown-slash-commands'
 
 function roundTripMarkdown(content: string): string {
   const editor = new Editor({
@@ -168,10 +168,16 @@ describe('rich markdown round trip', () => {
     )
   })
 
+  it('preserves aliased doc links', () => {
+    expect(roundTripMarkdown('Link to [[docs/setup-guide.md|Setup Guide]]\n')).toBe(
+      'Link to [[docs/setup-guide.md|Setup Guide]]'
+    )
+  })
+
   it('does not encode invalid doc links', () => {
-    const result = roundTripMarkdown('Empty [[]] and piped [[a|b]]\n')
+    const result = roundTripMarkdown('Empty [[]] and blank alias [[a|]]\n')
     expect(result).toContain('[[]]')
-    expect(result).toContain('[[a|b]]')
+    expect(result).toContain('[[a|]]')
   })
 
   it('preserves doc links inside fenced code blocks as plain text', () => {

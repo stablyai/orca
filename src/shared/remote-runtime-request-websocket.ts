@@ -15,6 +15,7 @@ import {
 export type RemoteRuntimeWebSocket = {
   ws: WebSocket
   sharedKey: Uint8Array
+  cleanup: () => void
 }
 
 export type RemoteRuntimeWebSocketCallbacks = {
@@ -35,22 +36,23 @@ export function openRemoteRuntimeWebSocket(
   const serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
   const sharedKey = deriveSharedKey(keyPair.secretKey, serverPublicKey)
 
-  ws.once('open', () => {
+  let cleanedUp = false
+  const onOpen = (): void => {
     ws.send(
       JSON.stringify({
         type: 'e2ee_hello',
         publicKeyB64: publicKeyToBase64(keyPair.publicKey)
       })
     )
-  })
-  ws.on('error', () => {
+  }
+  const onError = (): void => {
     callbacks.onError(
       ws,
       remoteRuntimeUnavailableError('Could not connect to the remote Orca runtime.')
     )
-  })
-  ws.on('close', () => callbacks.onClose(ws))
-  ws.on('message', (data, isBinary) => {
+  }
+  const onClose = (): void => callbacks.onClose(ws)
+  const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
     if (isBinary) {
       callbacks.onError(
         ws,
@@ -61,9 +63,31 @@ export function openRemoteRuntimeWebSocket(
       return
     }
     callbacks.onTextFrame(ws, data.toString())
-  })
-  return { ok: true, socket: { ws, sharedKey } }
+  }
+  const cleanup = (): void => {
+    if (cleanedUp) {
+      return
+    }
+    cleanedUp = true
+    ws.off('open', onOpen)
+    ws.off('error', onError)
+    ws.off('close', onClose)
+    ws.off('message', onMessage)
+    // Why: a manually closed ws can still emit a late transport error; keep
+    // that from becoming an unhandled EventEmitter error after detaching Orca.
+    if (ws.readyState !== WebSocket.CLOSED) {
+      ws.on('error', ignoreLateSocketError)
+    }
+  }
+
+  ws.once('open', onOpen)
+  ws.on('error', onError)
+  ws.on('close', onClose)
+  ws.on('message', onMessage)
+  return { ok: true, socket: { ws, sharedKey, cleanup } }
 }
+
+function ignoreLateSocketError(): void {}
 
 function createSocket(
   pairing: PairingOffer

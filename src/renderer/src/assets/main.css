@@ -76,6 +76,10 @@
   );
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
+  --color-ai-action-accent: var(--ai-action-accent);
+  --color-status-success: var(--status-success);
+  --color-status-success-background: var(--status-success-background);
+  --color-status-success-border: var(--status-success-border);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -124,6 +128,10 @@
   --input: #e5e5e5;
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
+  --ai-action-accent: var(--color-violet-500);
+  --status-success: #15803d;
+  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -193,6 +201,10 @@
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
+  --ai-action-accent: var(--color-violet-400);
+  --status-success: #86efac;
+  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -333,10 +345,15 @@
 
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
-  /* Why: the scrollbar itself owns the gutter; padding is only the card-to-gutter gap. */
-  padding-right: 2px;
+  /* Why: the scrollbar gutter is paint-only in Chromium; this keeps card
+     surfaces clear of Orca's resize handle and right-edge sidebar chrome. */
+  padding-right: 4px;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
+}
+
+.worktree-sidebar-scrollbar::-webkit-scrollbar {
+  width: 8px;
 }
 
 .worktree-sidebar-scrollbar::-webkit-scrollbar-thumb {
@@ -404,6 +421,16 @@
   background: rgba(121, 121, 121, 0.7);
   border: 3px solid transparent;
   background-clip: padding-box;
+}
+
+.combined-diff-scroll-container {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.combined-diff-scroll-container::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* Hide tab-strip scrollbars to prevent drag-time scrollbar flashes */
@@ -813,12 +840,26 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
+[data-worktree-card-surface][data-worktree-card-active='true'] {
+  border-color: color-mix(in srgb, var(--sidebar-border) 40%, transparent);
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 4%, transparent);
+}
+
+.dark [data-worktree-card-surface][data-worktree-card-active='true'] {
+  background: color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--sidebar-foreground) 3%, transparent);
+}
+
 .worktree-agent-row-hover:hover {
   background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
 }
 
 .worktree-agent-row-hover[data-focused-agent-pane='true'] {
-  background: color-mix(in srgb, var(--sidebar-foreground) 6%, transparent);
+  /* Why: a borderless fill. --sidebar-accent ≈ --sidebar in light mode, so the
+     selection wash mixes sidebar-foreground into the accent to stay legible
+     without going so dark that muted text (timestamp) drops out. */
+  background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar-accent));
 }
 
 .dark .worktree-agent-row-hover:hover {
@@ -826,7 +867,175 @@
 }
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
-  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+/* Why: sidebar-accent sits too close to sidebar for this persistent prompt;
+   a foreground mix creates the requested light/dark separation without a new token. */
+.setup-script-prompt-card {
+  background: color-mix(in srgb, var(--sidebar-foreground) 5%, var(--sidebar));
+}
+
+.dark .setup-script-prompt-card {
+  background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar));
+}
+
+/* Why: the detected command is editable, but a pure app-background fill reads
+   like a black box in dark mode and overpowers the prompt card. */
+.setup-script-prompt-command {
+  background: color-mix(in srgb, var(--sidebar-foreground) 2%, var(--sidebar));
+}
+
+.dark .setup-script-prompt-command {
+  background: color-mix(in srgb, var(--sidebar-foreground) 8%, var(--sidebar));
+}
+
+.worktree-agent-lineage-parent-row {
+  /* Why: inline orchestration trees have two chevron levels; the manager row
+     needs a structural cue that is quieter than the workspace card chrome. */
+  background: color-mix(in srgb, var(--sidebar-foreground) 3%, var(--sidebar));
+  box-shadow:
+    inset 2px 0 0 color-mix(in srgb, var(--sidebar-foreground) 38%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--sidebar-foreground) 10%, transparent);
+}
+
+.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 6%, var(--sidebar));
+}
+
+.dark .worktree-agent-lineage-parent-row {
+  background: color-mix(in srgb, var(--accent) 22%, var(--sidebar));
+  box-shadow:
+    inset 2px 0 0 color-mix(in srgb, var(--accent) 58%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.dark .worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--accent) 30%, var(--sidebar));
+}
+
+.worktree-agent-lineage-child-row {
+  position: relative;
+  background: color-mix(in srgb, var(--sidebar) 74%, var(--background));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sidebar-foreground) 7%, transparent);
+}
+
+.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 4%, var(--sidebar));
+}
+
+.worktree-agent-lineage-child-row::before {
+  content: '';
+  position: absolute;
+  left: 0.15rem;
+  top: 50%;
+  width: 0.35rem;
+  border-top: 1px solid color-mix(in srgb, var(--sidebar-foreground) 20%, transparent);
+}
+
+.dark .worktree-agent-lineage-child-row {
+  background: color-mix(in srgb, var(--accent) 10%, var(--sidebar));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+.dark .worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--accent) 18%, var(--sidebar));
+}
+
+.dark .worktree-agent-lineage-child-row::before {
+  border-top-color: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.worktree-agent-lineage-children {
+  margin-left: 0.75rem;
+  padding-left: 0.25rem;
+  border-left: 1px solid color-mix(in srgb, var(--sidebar-foreground) 22%, transparent);
+}
+
+.dark .worktree-agent-lineage-children {
+  border-left-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.worktree-agent-send-target-button {
+  /* Why: the row remains an ordinary agent row during send-target mode; the
+     action itself carries the AI target outline so the clickable affordance
+     is explicit without boxing the whole session. */
+  border-color: color-mix(in srgb, var(--ai-action-accent) 72%, transparent);
+  background: color-mix(in srgb, var(--ai-action-accent) 12%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 22%, transparent);
+  color: var(--foreground);
+}
+
+.worktree-agent-send-target-button:hover {
+  border-color: color-mix(in srgb, var(--ai-action-accent) 88%, transparent);
+  background: color-mix(in srgb, var(--ai-action-accent) 18%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 34%, transparent);
+}
+
+.worktree-agent-send-target-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 50%, transparent);
+}
+
+/* Why: the virtualized card row is height-measured; animate the grid track
+   instead of explicit height so the reveal stays CSS-owned and interruptible. */
+.compact-agent-expansion-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.compact-agent-expansion-grid-expanded {
+  grid-template-rows: 1fr;
+}
+
+/* Why: keyframes run when the content mounts already in its final state. */
+@keyframes compact-agent-expansion-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
+  animation: compact-agent-expansion-reveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Why: the expanded summary becomes one enclosed panel. Keep the box model
+   stable across states (padding always reserved, border drawn as a non-layout
+   box-shadow) and fade only the chrome, so toggling doesn't snap the header and
+   rows while the content height animates. */
+.compact-agent-summary-panel {
+  padding: 2px;
+  border-radius: var(--radius-sm, 0.25rem);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition:
+    background 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.compact-agent-summary-panel-expanded {
+  background: color-mix(in srgb, var(--sidebar-accent) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compact-agent-expansion-grid {
+    transition-duration: 0ms;
+  }
+
+  .compact-agent-expansion-grid-expanded .compact-agent-expansion-content {
+    animation-duration: 0ms;
+  }
+
+  .compact-agent-summary-panel {
+    transition-duration: 0ms;
+  }
 }
 
 .scroll-to-current-workspace-reveal-highlight {
@@ -838,15 +1047,22 @@
 .scroll-to-current-workspace-reveal-highlight::before {
   content: '';
   position: absolute;
-  inset: -2px;
+  inset: 0;
   z-index: 30;
   pointer-events: none;
   border: 1.5px solid color-mix(in srgb, var(--terminal-pane-locate) 68%, transparent);
-  border-radius: calc(var(--radius-md) + 2px);
+  border-radius: inherit;
   box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
-    0 0 18px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
+    0 0 0 1px color-mix(in srgb, var(--terminal-pane-locate) 34%, transparent),
+    0 0 14px color-mix(in srgb, var(--terminal-pane-locate) 36%, transparent);
   animation: scroll-to-current-workspace-reveal-glow 1.5s ease-out forwards;
+}
+
+.scroll-to-current-workspace-reveal-highlight--ai::before {
+  border-color: color-mix(in srgb, var(--ai-action-accent) 68%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ai-action-accent) 34%, transparent),
+    0 0 14px color-mix(in srgb, var(--ai-action-accent) 36%, transparent);
 }
 
 @keyframes scroll-to-current-workspace-reveal-glow {
@@ -1793,6 +2009,43 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   }
 }
 
+.orca-contextual-tour-target-rings {
+  border-radius: 9999px;
+  pointer-events: none;
+}
+
+.orca-contextual-tour-target-rings::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border: 1px solid color-mix(in srgb, var(--ring) 72%, transparent);
+  border-radius: inherit;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ring) 18%, transparent);
+  opacity: 0;
+  transform-origin: center;
+  animation: contextual-tour-target-ring 1.8s ease-out infinite;
+}
+
+@keyframes contextual-tour-target-ring {
+  0% {
+    opacity: 0.72;
+    transform: scale(0.68);
+  }
+  72%,
+  100% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orca-contextual-tour-target-rings::before {
+    animation: none;
+    opacity: 0.72;
+    transform: scale(1.28);
+  }
+}
+
 .feature-tour-copy-slide {
   position: absolute;
   inset: 0;
@@ -2385,194 +2638,187 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
      overlay first and never reach our buttons. Lifting the whole card creates
      a stacking context that keeps every nested control clickable. */
   z-index: 1;
-  border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--foreground) 55%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--foreground) 5%, var(--editor-surface));
-  padding: 6px 8px 6px 10px;
-  font-family: var(--font-sans, system-ui, sans-serif);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 15%, transparent);
+  display: flex;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
+  border-radius: 8px;
+  background: var(--background);
+  padding: 12px 14px;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease,
+    background-color 150ms ease;
 }
 
 .dark .orca-diff-comment-card {
-  background: color-mix(in srgb, var(--foreground) 6%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--foreground) 12%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.2),
+    0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
+/* Content Column */
+.orca-diff-comment-content-col {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Header Row */
 .orca-diff-comment-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 12px;
+  min-width: 0;
 }
 
-.orca-diff-comment-meta {
-  font-size: 11px;
-  color: var(--foreground);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.orca-diff-comment-author-row {
+/* Meta Group (Name, line, timestamp) */
+.orca-diff-comment-meta-group {
   display: flex;
-  min-width: 0;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  margin: 0 0 6px;
-  color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.2;
-}
-
-.orca-diff-comment-avatar {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--foreground) 15%, transparent);
-  background: var(--muted);
-}
-
-.orca-diff-comment-avatar-fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--muted-foreground);
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.orca-diff-comment-author {
   min-width: 0;
-  overflow: hidden;
-  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.4;
   font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.orca-diff-comment-created-at {
-  flex: 0 0 auto;
-}
-
-.orca-diff-comment-link {
-  margin-left: auto;
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-  color: var(--muted-foreground);
-  font: inherit;
-  cursor: pointer;
-}
-
-.orca-diff-comment-link:hover {
   color: var(--foreground);
-  text-decoration: underline;
 }
 
-/* Why: keep edit + delete close together but visually distinct from the meta
-   label. Both share the same subtle button styling; only delete recolours on
-   hover (destructive intent). */
-.orca-diff-comment-actions {
+/* Action button pill: segmented control like Notion's Resolve / ... */
+.orca-diff-comment-actions-pill {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  padding: 0 2px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
+  border-radius: 6px;
+  background: var(--background);
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.dark .orca-diff-comment-actions-pill {
+  border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
+}
+
+.orca-diff-comment-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  padding: 4px 7px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  height: 24px;
+  transition:
+    background-color 100ms ease,
+    color 100ms ease;
 }
 
 .orca-diff-comment-edit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
+  min-width: 28px;
+  height: 24px;
+  padding: 4px 7px;
   border-radius: 4px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  pointer-events: auto;
-  position: relative;
-  z-index: 1;
 }
 
-.orca-diff-comment-edit:hover {
-  color: var(--foreground);
-  border-color: color-mix(in srgb, var(--foreground) 20%, transparent);
+.orca-diff-comment-pill-btn:hover {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  color: var(--foreground);
 }
 
-/* Why: the trash button is always visible (not hover-only) because the saved
-   note is a persistent, action-bearing card — users should be able to see and
-   target the delete affordance without guessing that hovering reveals it.
-   Pointer-events are explicit since the card lives inside a Monaco view zone
-   where stray handlers higher in the tree have swallowed pointer events in
-   the past. z-index keeps it above the note body for click reliability. */
-.orca-diff-comment-delete {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted-foreground);
-  cursor: pointer;
-  pointer-events: auto;
-  position: relative;
-  z-index: 1;
-}
-
-.orca-diff-comment-delete:hover {
-  color: var(--destructive);
-  border-color: color-mix(in srgb, var(--destructive) 40%, transparent);
+.orca-diff-comment-pill-btn-danger:hover {
   background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  color: var(--destructive);
 }
 
-.orca-diff-comment-body {
-  font-size: 12px;
+.orca-diff-comment-pill-divider {
+  width: 1px;
+  height: 12px;
+  background: color-mix(in srgb, var(--foreground) 12%, var(--border));
+  flex-shrink: 0;
+}
+
+/* Quote/Reference block: Warm, gorgeous Notion-like callout */
+.orca-diff-comment-quote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 6px 0;
+  padding-left: 8px;
+  border-left: 2px solid color-mix(in srgb, #e7b10a 35%, transparent);
+  color: var(--muted-foreground);
+  font-size: 12.5px;
   line-height: 1.4;
+}
+
+.orca-diff-comment-quote-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-all;
+}
+
+/* Comment Body */
+.orca-diff-comment-body {
+  font-size: 13.5px;
+  line-height: 1.5;
   color: var(--foreground);
   white-space: pre-wrap;
   word-break: break-word;
+  margin-top: 2px;
 }
 
-.orca-diff-comment-review-body {
-  padding-left: 24px;
-}
-
-/* Why: mirror the saved-note card treatment so the "entering" and "saved"
-   states read as the same object at two stages of the same flow. Same
-   foreground-tinted fill over --editor-surface, same border + left accent
-   bar, same shadow. Kept one level stronger on the shadow because the
-   popover floats above the editor instead of being laid into a view zone. */
+/* Popover for adding new comment */
 .orca-diff-comment-popover {
   position: absolute;
   left: 56px;
   right: 24px;
   max-width: 420px;
   z-index: 1000;
-  padding: 8px 8px 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
-  border-left: 3px solid color-mix(in srgb, var(--foreground) 55%, transparent);
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--foreground) 5%, var(--editor-surface));
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 10%, var(--border));
+  border-radius: 8px;
+  background: var(--background);
   color: var(--foreground);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.12),
+    0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .dark .orca-diff-comment-popover {
-  background: color-mix(in srgb, var(--foreground) 6%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
+  box-shadow:
+    0 10px 32px rgba(0, 0, 0, 0.3),
+    0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
 .orca-diff-comment-popover-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted-foreground);
+  margin-bottom: 2px;
 }
 
 .orca-diff-comment-popover-textarea {
@@ -2581,19 +2827,33 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   max-height: 240px;
   overflow-y: auto;
   resize: none;
-  padding: 6px 8px;
-  border: 1px solid color-mix(in srgb, var(--foreground) 18%, transparent);
-  border-radius: 4px;
-  /* Why: match the editor surface so the input reads as embedded in the card
-     rather than a pure-white/pure-black cutout pasted on top. */
-  background: var(--editor-surface);
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 12%, var(--border));
+  border-radius: 6px;
+  background: var(--background);
   color: var(--foreground);
   font-family: inherit;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
   outline: none;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.dark .orca-diff-comment-popover-textarea {
+  border-color: color-mix(in srgb, var(--foreground) 10%, var(--border));
+  background: color-mix(in srgb, var(--foreground) 3%, var(--editor-surface));
+}
+
+.orca-diff-comment-popover-textarea:focus {
+  border-color: color-mix(in srgb, var(--ring) 70%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.dark .orca-diff-comment-popover-textarea:focus {
+  border-color: color-mix(in srgb, var(--ring) 70%, var(--border));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 12%, transparent);
 }
 
 .orca-diff-comment-popover-textarea::-webkit-scrollbar {
@@ -2610,13 +2870,60 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   background-clip: padding-box;
 }
 
-.orca-diff-comment-popover-textarea:focus {
-  border-color: color-mix(in srgb, var(--primary) 60%, var(--border));
-}
-
 .orca-diff-comment-popover-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Why: a tour panel must read as elevated above the chrome it is teaching about
+   without resorting to color. A 1px inner top highlight plus the documented
+   floating shadow keeps it above the surface in both light and dark modes. */
+.orca-contextual-tour-panel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
+    var(--popover) 12%
+  );
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 10%, transparent),
+    0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.dark .orca-contextual-tour-panel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
+    var(--popover) 14%
+  );
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
+    0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+/* Why: a tour panel must read as elevated above the chrome it is teaching about
+   without resorting to color. A 1px inner top highlight plus the documented
+   floating shadow keeps it above the surface in both light and dark modes. */
+.orca-contextual-tour-panel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
+    var(--popover) 12%
+  );
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 10%, transparent),
+    0 10px 24px rgba(0, 0, 0, 0.18);
+}
+
+.dark .orca-contextual-tour-panel {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--foreground) 4%, var(--popover)) 0%,
+    var(--popover) 14%
+  );
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in srgb, var(--foreground) 5%, transparent),
+    0 10px 24px rgba(0, 0, 0, 0.18);
 }

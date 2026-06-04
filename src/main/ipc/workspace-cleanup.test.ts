@@ -3,7 +3,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type { DiffComment, GitStatusResult, Repo } from '../../shared/types'
+import type {
+  DiffComment,
+  GitStatusResult,
+  GitWorktreeInfo,
+  Repo,
+  WorktreeMeta
+} from '../../shared/types'
 
 const {
   listRepoWorktreesMock,
@@ -62,6 +68,29 @@ const REPO: Repo = {
   displayName: 'Repo',
   badgeColor: '#000',
   addedAt: NOW
+}
+const LARGE_WORKTREE_COUNT = 150_000
+
+function buildGitWorktrees(count: number): GitWorktreeInfo[] {
+  const worktrees: GitWorktreeInfo[] = []
+  for (let index = 0; index < count; index += 1) {
+    worktrees.push({
+      path: `/repo-feature-${index}`,
+      head: `abc${index}`,
+      branch: `refs/heads/feature-${index}`,
+      isBare: false,
+      isMainWorktree: false
+    })
+  }
+  return worktrees
+}
+
+function buildWorktreeIds(repoId: string, count: number): string[] {
+  const worktreeIds: string[] = []
+  for (let index = 0; index < count; index += 1) {
+    worktreeIds.push(`${repoId}::/repo-feature-${index}`)
+  }
+  return worktreeIds
 }
 
 function makeStore(
@@ -165,6 +194,48 @@ describe('workspace cleanup scan', () => {
 
     expect(result.errors).toEqual([])
     expect(result.candidates).toEqual([])
+  })
+
+  it('uses direct metadata lookup for focused disconnected remote preflight', async () => {
+    const targetWorktreeId = 'repo-1::/remote/repo-feature'
+    const targetMeta: WorktreeMeta = {
+      displayName: 'Remote Feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
+    }
+    const getWorktreeMeta = vi.fn((worktreeId: string) =>
+      worktreeId === targetWorktreeId ? targetMeta : undefined
+    )
+    const getAllWorktreeMeta = vi.fn(() => {
+      throw new Error('focused disconnected SSH preflight should not enumerate all metadata')
+    })
+    const store = {
+      getRepos: () => [{ ...REPO, connectionId: 'ssh-1' }],
+      getWorktreeMeta,
+      getAllWorktreeMeta
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store, { worktreeId: targetWorktreeId })
+
+    expect(getWorktreeMeta).toHaveBeenCalledWith(targetWorktreeId)
+    expect(getAllWorktreeMeta).not.toHaveBeenCalled()
+    expect(result.errors).toEqual([])
+    expect(result.candidates[0]).toMatchObject({
+      worktreeId: targetWorktreeId,
+      path: '/remote/repo-feature',
+      blockers: ['ssh-disconnected'],
+      git: {
+        clean: null,
+        checkedAt: null
+      }
+    })
   })
 
   it('scans connected remote workspaces through the SSH git provider', async () => {
@@ -341,6 +412,60 @@ describe('workspace cleanup scan', () => {
         diffCommentCount: 1,
         newestDiffCommentAt: NOW - 1_000
       }
+    })
+  })
+
+  it('summarizes large diff-note lists without hitting argument limits', async () => {
+    const diffComments = Array.from(
+      { length: 150_000 },
+      (_, index): DiffComment => ({
+        id: `comment-${index}`,
+        worktreeId: 'repo-1::/repo-feature',
+        filePath: 'src/file.ts',
+        lineNumber: 12,
+        body: 'Follow up before deleting',
+        createdAt: NOW - index,
+        side: 'modified'
+      })
+    )
+
+    const result = await scanWorkspaceCleanup(
+      makeStore({
+        baseRef: undefined,
+        diffComments
+      })
+    )
+
+    expect(result.candidates[0]?.localContext).toMatchObject({
+      diffCommentCount: 150_000,
+      newestDiffCommentAt: NOW
+    })
+  })
+
+  it('aggregates large cleanup candidate batches without hitting argument limits', async () => {
+    listRepoWorktreesMock.mockResolvedValue(buildGitWorktrees(LARGE_WORKTREE_COUNT))
+
+    const result = await scanWorkspaceCleanup(makeStore(), {
+      skipGitWorktreeIds: buildWorktreeIds(REPO.id, LARGE_WORKTREE_COUNT)
+    })
+
+    expect(getStatusMock).not.toHaveBeenCalled()
+    expect(result.errors).toEqual([])
+    expect(result.candidates).toHaveLength(LARGE_WORKTREE_COUNT)
+    expect(result.candidates[0]).toMatchObject({
+      worktreeId: 'repo-1::/repo-feature-0',
+      path: '/repo-feature-0',
+      branch: 'feature-0',
+      tier: 'review',
+      git: {
+        clean: null,
+        checkedAt: null
+      }
+    })
+    expect(result.candidates[LARGE_WORKTREE_COUNT - 1]).toMatchObject({
+      worktreeId: `repo-1::/repo-feature-${LARGE_WORKTREE_COUNT - 1}`,
+      path: `/repo-feature-${LARGE_WORKTREE_COUNT - 1}`,
+      branch: `feature-${LARGE_WORKTREE_COUNT - 1}`
     })
   })
 

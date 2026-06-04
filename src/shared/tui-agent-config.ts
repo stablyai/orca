@@ -11,6 +11,8 @@ export type DraftPasteReadySignal = 'render-quiet-after-bracketed-paste' | 'code
 
 export type TuiAgentConfig = {
   detectCmd: string
+  /** Additional executable names that identify the same agent on PATH. */
+  detectCmdAliases?: readonly string[]
   launchCmd: string
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
@@ -65,6 +67,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // input box, nothing submitted. Strictly better than the paste-after-
     // ready fallback because it eliminates the readiness race entirely.
     // See PR https://github.com/stablyai/orca/pull/926 for context.
+    draftPromptFlag: '--prefill'
+  },
+  openclaude: {
+    detectCmd: 'openclaude',
+    launchCmd: 'openclaude',
+    expectedProcess: 'openclaude',
+    promptInjectionMode: 'argv',
     draftPromptFlag: '--prefill'
   },
   codex: {
@@ -241,9 +250,13 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     promptInjectionMode: 'stdin-after-start'
   },
   'mistral-vibe': {
-    detectCmd: 'mistral-vibe',
-    launchCmd: 'mistral-vibe',
-    expectedProcess: 'mistral-vibe',
+    // Why: Mistral's installer and PyPI package expose `vibe` even though the
+    // package/project name is mistral-vibe. Keep the old name as an alias for
+    // manually wrapped installs.
+    detectCmd: 'vibe',
+    detectCmdAliases: ['mistral-vibe'],
+    launchCmd: 'vibe',
+    expectedProcess: 'vibe',
     promptInjectionMode: 'stdin-after-start'
   },
   'qwen-code': {
@@ -298,4 +311,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
   return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
+}
+
+export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
+  return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
 }

@@ -2,6 +2,7 @@ import type {
   BaseRefSearchResult,
   GitHubWorkItem,
   GitLabWorkItem,
+  LinearCollectionResult,
   LinearIssue
 } from '../../../../shared/types'
 
@@ -14,6 +15,8 @@ export type SmartWorkspaceSourceRow =
   | { kind: 'gitlab'; value: string; item: GitLabWorkItem }
   | { kind: 'branch'; value: string; refName: string; localBranchName: string }
   | { kind: 'linear'; value: string; issue: LinearIssue }
+
+type LinearIssueSourceInput = LinearIssue[] | LinearCollectionResult<LinearIssue> | null | undefined
 
 const EMPTY_HINT_BY_MODE: Record<SmartNameMode, string> = {
   smart: 'Start typing to create a name or find a source.',
@@ -92,7 +95,7 @@ export function buildSmartWorkspaceSourceRows({
   gitlabAvailable: boolean
   gitlabItems: GitLabWorkItem[]
   linearAvailable: boolean
-  linearIssues: LinearIssue[]
+  linearIssues: LinearIssueSourceInput
   mode: SmartNameMode
   resultLimit: number
   value: string
@@ -141,8 +144,15 @@ export function buildSmartWorkspaceSourceRows({
     )
   }
   if (linearAvailable && (mode === 'smart' || mode === 'linear')) {
+    // Why: mixed-version runtime responses may briefly carry the paginated
+    // collection shape into this render path; rendering must stay recoverable.
+    const resolvedLinearIssues = Array.isArray(linearIssues)
+      ? linearIssues
+      : Array.isArray(linearIssues?.items)
+        ? linearIssues.items
+        : []
     nextRows.push(
-      ...linearIssues.map((issue) => ({
+      ...resolvedLinearIssues.map((issue) => ({
         kind: 'linear' as const,
         value: `linear-${issue.id}`,
         issue

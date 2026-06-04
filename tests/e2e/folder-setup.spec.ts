@@ -9,6 +9,19 @@ import type { ElectronApplication } from '@stablyai/playwright-test'
 
 const tempRoots: string[] = []
 
+function initializeGitRepo(repoPath: string): void {
+  mkdirSync(repoPath, { recursive: true })
+  execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
+  execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
+    cwd: repoPath,
+    stdio: 'pipe'
+  })
+  execFileSync('git', ['config', 'user.name', 'E2E Test'], { cwd: repoPath, stdio: 'pipe' })
+  writeFileSync(path.join(repoPath, 'README.md'), `# ${path.basename(repoPath)}\n`)
+  execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
+  execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
+}
+
 async function createNestedRepoFixture(): Promise<{
   parentPath: string
   projectPaths: string[]
@@ -20,16 +33,7 @@ async function createNestedRepoFixture(): Promise<{
   const projectPaths = repoNames.map((name) => path.join(parentPath, name))
 
   for (const repoPath of projectPaths) {
-    mkdirSync(repoPath, { recursive: true })
-    execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
-    execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
-      cwd: repoPath,
-      stdio: 'pipe'
-    })
-    execFileSync('git', ['config', 'user.name', 'E2E Test'], { cwd: repoPath, stdio: 'pipe' })
-    writeFileSync(path.join(repoPath, 'README.md'), `# ${path.basename(repoPath)}\n`)
-    execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
-    execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
+    initializeGitRepo(repoPath)
   }
 
   return {
@@ -59,16 +63,7 @@ async function createLargeNestedRepoFixture(): Promise<{
   })
 
   for (const repoPath of projectPaths) {
-    mkdirSync(repoPath, { recursive: true })
-    execFileSync('git', ['init'], { cwd: repoPath, stdio: 'pipe' })
-    execFileSync('git', ['config', 'user.email', 'e2e@test.local'], {
-      cwd: repoPath,
-      stdio: 'pipe'
-    })
-    execFileSync('git', ['config', 'user.name', 'E2E Test'], { cwd: repoPath, stdio: 'pipe' })
-    writeFileSync(path.join(repoPath, 'README.md'), `# ${path.basename(repoPath)}\n`)
-    execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
-    execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
+    initializeGitRepo(repoPath)
   }
 
   return {

@@ -160,13 +160,17 @@ export function setupContextualCopy({
     editorInstance.layoutContentWidget(copyHintWidget)
   }
 
+  const isCopyHintVisible = (): boolean => copyHintNode.style.display === 'block'
+
   const startCopyHintPolling = (): void => {
-    updateCopyHint()
     if (copyHintInterval !== null) {
       return
     }
     copyHintInterval = window.setInterval(() => {
       updateCopyHint()
+      if (!isCopyHintVisible()) {
+        stopCopyHintPolling()
+      }
     }, 150)
   }
 
@@ -174,6 +178,17 @@ export function setupContextualCopy({
     if (copyHintInterval !== null) {
       window.clearInterval(copyHintInterval)
       copyHintInterval = null
+    }
+  }
+
+  const refreshCopyHintAndPolling = (): void => {
+    updateCopyHint()
+    if (editorInstance.hasTextFocus() && isCopyHintVisible()) {
+      // Why: the interval only tracks a visible content widget. Keeping it
+      // alive while the focused editor has no selection burns idle CPU.
+      startCopyHintPolling()
+    } else {
+      stopCopyHintPolling()
     }
   }
 
@@ -255,22 +270,22 @@ export function setupContextualCopy({
     return true
   }
 
-  editorInstance.onDidChangeCursorSelection((event) => {
+  const selectionListener = editorInstance.onDidChangeCursorSelection((event) => {
     if (event.source !== 'restoreState') {
       schedulePrimarySelectionBufferUpdate()
     }
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
     }
-    updateCopyHint()
+    refreshCopyHintAndPolling()
   })
-  editorInstance.onDidScrollChange(() => {
-    updateCopyHint()
+  const scrollListener = editorInstance.onDidScrollChange(() => {
+    refreshCopyHintAndPolling()
   })
-  editorInstance.onDidFocusEditorText(() => {
-    startCopyHintPolling()
+  const focusListener = editorInstance.onDidFocusEditorText(() => {
+    refreshCopyHintAndPolling()
   })
-  editorInstance.onDidBlurEditorText(() => {
+  const blurListener = editorInstance.onDidBlurEditorText(() => {
     stopCopyHintPolling()
     copyHintNode.style.display = 'none'
     copyHintWidgetPosition = null
@@ -291,21 +306,34 @@ export function setupContextualCopy({
     void copySelectionWithContext()
   }
   editorDomNode.addEventListener('keydown', handleKeyDown, true)
-  editorDomNode.addEventListener('mouseup', updateCopyHint, true)
-  editorDomNode.addEventListener('keyup', updateCopyHint, true)
+  editorDomNode.addEventListener('mouseup', refreshCopyHintAndPolling, true)
+  editorDomNode.addEventListener('keyup', refreshCopyHintAndPolling, true)
   editorInstance.onDidDispose(() => {
+    // Why: Monaco owns these emitters, but disposing explicitly keeps this
+    // feature's lifecycle symmetrical with the DOM listener cleanup below.
+    selectionListener.dispose()
+    scrollListener.dispose()
+    focusListener.dispose()
+    blurListener.dispose()
+    // Why: the confirmation toast timeout belongs to the Monaco editor that
+    // scheduled it, so editor disposal is the earliest reliable cleanup point.
+    if (copyToastTimeoutRef.current !== null) {
+      window.clearTimeout(copyToastTimeoutRef.current)
+      copyToastTimeoutRef.current = null
+      setCopyToast(null)
+    }
     if (primarySelectionTimer !== null) {
       window.clearTimeout(primarySelectionTimer)
       primarySelectionTimer = null
     }
     editorDomNode.removeEventListener('keydown', handleKeyDown, true)
-    editorDomNode.removeEventListener('mouseup', updateCopyHint, true)
-    editorDomNode.removeEventListener('keyup', updateCopyHint, true)
+    editorDomNode.removeEventListener('mouseup', refreshCopyHintAndPolling, true)
+    editorDomNode.removeEventListener('keyup', refreshCopyHintAndPolling, true)
     stopCopyHintPolling()
     editorInstance.removeContentWidget(copyHintWidget)
   })
   if (editorInstance.hasTextFocus()) {
-    startCopyHintPolling()
+    refreshCopyHintAndPolling()
   } else {
     updateCopyHint()
   }
