@@ -147,7 +147,22 @@ async function continueFromNotificationsToRepo(page: Page): Promise<void> {
   if (taskSourcesVisible) {
     await continueOnboarding(page)
   }
-  await expect(page.getByRole('heading', { name: REPO_STEP_HEADING })).toBeVisible()
+  const repoHeading = page.getByRole('heading', { name: REPO_STEP_HEADING })
+  const addProjectDialog = page.getByRole('dialog', { name: /Add a project/i })
+  await expect
+    .poll(
+      async () => {
+        if (await repoHeading.isVisible().catch(() => false)) {
+          return 'repo-step'
+        }
+        if (await addProjectDialog.isVisible().catch(() => false)) {
+          return 'add-project-dialog'
+        }
+        return 'waiting'
+      },
+      { timeout: 15_000 }
+    )
+    .not.toBe('waiting')
 }
 
 async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
@@ -409,7 +424,9 @@ test.describe('New-user golden core flow', () => {
 
     const repoPath = await createGitRepo('orca-e2e-golden-new-', 'golden-new-project')
     await chooseFolderInNativeDialog(electronApp, repoPath)
-    await orcaPage.getByRole('button', { name: /Browse for a folder|Open a folder/i }).click()
+    await orcaPage
+      .getByRole('button', { name: /Browse for a folder|Open a folder|Browse folder/i })
+      .click()
     await expect(orcaPage.getByRole('heading', { name: REPO_STEP_HEADING })).toHaveCount(0, {
       timeout: 30_000
     })
