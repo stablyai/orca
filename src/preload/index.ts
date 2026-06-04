@@ -423,6 +423,14 @@ const api = {
       ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory')
   },
 
+  platform: {
+    get: () => ({
+      platform: process.platform,
+      osRelease:
+        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ?? ''
+    })
+  } satisfies PreloadApi['platform'],
+
   wsl: {
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable'),
     listDistros: (): Promise<string[]> => ipcRenderer.invoke('wsl:listDistros')

@@ -961,8 +961,10 @@ export function useTerminalPaneLifecycle({
         const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
           (candidate) => candidate.id === tabId
         )
+        const platformInfo = window.api.platform?.get?.()
         const windowsPtyCompatibilityOptions = buildWindowsPtyCompatibilityOptions({
           userAgent: navigator.userAgent,
+          osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
           shellOverride: currentTab?.shellOverride

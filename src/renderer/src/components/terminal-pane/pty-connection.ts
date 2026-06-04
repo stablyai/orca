@@ -44,7 +44,6 @@ import {
   discardTerminalOutput,
   flushTerminalOutput,
   registerTerminalBacklogRecovery,
-  suppressTerminalCursorUntilOutputSettles,
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -77,6 +76,7 @@ import {
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
+import { installConptyDeviceAttributesHandler } from './terminal-conpty-device-attributes'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -91,6 +91,8 @@ const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS = 10_000
 const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
+const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
+const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 16 * 1024
@@ -418,6 +420,48 @@ function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
   return document.visibilityState === 'visible'
 }
 
+function containsSynchronizedOutputStart(data: string): boolean {
+  return data.includes('\x1b[?2026h')
+}
+
+function containsSynchronizedOutputEnd(data: string): boolean {
+  return data.includes('\x1b[?2026l')
+}
+
+function shouldSynchronizedOutputRemainActive(data: string, wasActive: boolean): boolean {
+  const lastStartIndex = data.lastIndexOf('\x1b[?2026h')
+  const lastEndIndex = data.lastIndexOf('\x1b[?2026l')
+  if (lastStartIndex === -1 && lastEndIndex === -1) {
+    return wasActive
+  }
+  return lastStartIndex > lastEndIndex
+}
+
+function containsCursorPositionSequence(data: string): boolean {
+  let offset = data.indexOf('\x1b[')
+  while (offset !== -1) {
+    let index = offset + 2
+    while (index < data.length) {
+      const char = data[index]
+      if (char === 'G' || char === 'H' || char === 'f') {
+        return true
+      }
+      if ((char < '0' || char > '9') && char !== ';') {
+        break
+      }
+      index += 1
+    }
+    offset = data.indexOf('\x1b[', offset + 2)
+  }
+  return false
+}
+
+function containsCursorRestore(data: string): boolean {
+  const hideIndex = data.indexOf(CURSOR_HIDE_SEQUENCE)
+  const showIndex = data.lastIndexOf(CURSOR_SHOW_SEQUENCE)
+  return hideIndex !== -1 && showIndex > hideIndex && containsCursorPositionSequence(data)
+}
+
 export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
@@ -439,6 +483,7 @@ export function connectPanePty(
   let terminalBellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
+  let synchronizedForegroundOutputActive = false
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -1204,12 +1249,14 @@ export function connectPanePty(
   const connectionId = repo?.connectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
-  const shouldSuppressForegroundCursor = isLocalNativeWindowsPty({
+  const isNativeWindowsConpty = isLocalNativeWindowsPty({
     userAgent: navigator.userAgent,
     connectionId,
     cwd: deps.cwd,
     shellOverride
   })
+  const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
+  const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
 
   const restoredPtyIdForTransport =
     deps.restoredLeafId && deps.restoredPtyIdByLeafId
@@ -1273,6 +1320,13 @@ export function connectPanePty(
     : createIpcPtyTransport(transportOptions)
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)
+  const conptyDeviceAttributesDisposable = isNativeWindowsConpty
+    ? installConptyDeviceAttributesHandler({
+        parser: pane.terminal.parser,
+        sendInput: (data) => transport.sendInput(data),
+        isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id)
+      })
+    : null
 
   const onDataDisposable = pane.terminal.onData((data) => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
@@ -1308,15 +1362,6 @@ export function connectPanePty(
     if (currentPtyId && isPtyLocked(currentPtyId)) {
       clearPendingTerminalInputIntent()
       return
-    }
-    // Why: attention dismissal is tied to DOM keyboard/pointer interaction.
-    // xterm onData can also carry terminal-generated replies or control bytes,
-    // so clearing here would hide a fresh pane highlight before the user sees it.
-    if (shouldSuppressForegroundCursor) {
-      // Why: native Windows ConPTY can leave the old visual cursor painted
-      // until the shell echoes the next frame; other PTY hosts should keep
-      // normal cursor visibility when commands intentionally produce no echo.
-      suppressTerminalCursorUntilOutputSettles(pane.terminal)
     }
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
@@ -1786,17 +1831,41 @@ export function connectPanePty(
         return true
       }
       return (
-        shouldSuppressForegroundCursor &&
+        shouldApplyNativeWindowsRewriteRefresh &&
         containsNonAsciiOutput(data) &&
         containsWindowsRewriteControl(data)
       )
     }
 
     function writePtyOutputToXterm(data: string, foreground: boolean): void {
+      if (foreground) {
+        resetHiddenOutputRestoreIfPtyChanged()
+      }
       const parseHiddenStartupOutput =
         !foreground &&
         canUseMainBufferSnapshot(transport.getPtyId()) &&
         isHiddenStartupRendererQueryWindowActive()
+      const synchronizedOutputStarted =
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        foreground &&
+        containsSynchronizedOutputStart(data)
+      const synchronizedOutputEnded =
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        foreground &&
+        containsSynchronizedOutputEnd(data)
+      const synchronizedForegroundOutput =
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        foreground &&
+        (synchronizedForegroundOutputActive || synchronizedOutputStarted || synchronizedOutputEnded)
+      const nextSynchronizedForegroundOutputActive =
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        foreground &&
+        shouldSynchronizedOutputRemainActive(data, synchronizedForegroundOutputActive)
+      // Why: xterm's DOM renderer draws the cursor as row content; Windows
+      // cursor-only restores need row invalidation even outside DEC 2026.
+      const nativeWindowsCursorRestore =
+        shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
+      synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
       if (hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
@@ -1807,7 +1876,14 @@ export function connectPanePty(
         latencySensitive:
           !foreground || parseHiddenStartupOutput ? true : isLatencySensitiveForegroundOutput(data),
         forceForegroundRefresh:
-          (foreground || parseHiddenStartupOutput) && shouldForceForegroundRenderRefresh(data)
+          (foreground || parseHiddenStartupOutput) &&
+          (synchronizedForegroundOutput ||
+            nativeWindowsCursorRestore ||
+            shouldForceForegroundRenderRefresh(data)),
+        followupForegroundRefresh: nativeWindowsCursorRestore,
+        stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
+        coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
+        holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
       })
     }
 
@@ -1942,7 +2018,10 @@ export function connectPanePty(
         return
       }
       if (transport.getPtyId() !== hiddenOutputRestorePtyId) {
+        // Why: renderer backlog is tied to the old PTY stream; after reattach,
+        // queued hidden bytes must not delay or replay before the new PTY.
         clearHiddenOutputRestoreState()
+        discardTerminalOutput(pane.terminal)
       }
     }
 
@@ -2826,6 +2905,7 @@ export function connectPanePty(
         connectFrame = null
       }
       onDataDisposable.dispose()
+      conptyDeviceAttributesDisposable?.dispose()
       onResizeDisposable.dispose()
       pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
       geometryReportObserver?.disconnect()

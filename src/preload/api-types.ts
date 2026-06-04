@@ -678,6 +678,12 @@ export type AppApi = {
 
 export type PreloadApi = {
   app: AppApi
+  platform: {
+    get: () => {
+      platform: NodeJS.Platform
+      osRelease: string
+    }
+  }
   e2e: {
     getConfig: () => E2EConfig
   }
