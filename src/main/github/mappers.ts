@@ -125,10 +125,18 @@ export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckSt
     const status = check.status?.toUpperCase()
     const state = check.state?.toUpperCase()
 
+    // Why: keep the failing-conclusion set in sync with deriveWorkItemCheckSummary
+    // (client.ts) — GitHub check runs report ACTION_REQUIRED and STARTUP_FAILURE,
+    // and commit statuses report ERROR, all of which are failing/blocking. Omitting
+    // them let a PR with such a check fall through to "success", showing a green
+    // check indicator on a PR whose checks have not actually passed.
     if (
       conclusion === 'FAILURE' ||
+      conclusion === 'ERROR' ||
       conclusion === 'TIMED_OUT' ||
       conclusion === 'CANCELLED' ||
+      conclusion === 'ACTION_REQUIRED' ||
+      conclusion === 'STARTUP_FAILURE' ||
       state === 'FAILURE' ||
       state === 'ERROR'
     ) {
