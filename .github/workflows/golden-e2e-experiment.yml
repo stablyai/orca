@@ -20,6 +20,8 @@ jobs:
     name: golden e2e ${{ matrix.platform }} experiment
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
     strategy:
       fail-fast: false
       matrix:
