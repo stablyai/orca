@@ -26,7 +26,11 @@ import type {
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
 import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
-import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../shared/constants'
+import {
+  getDefaultWorkspaceSession,
+  ONBOARDING_FINAL_STEP,
+  ONBOARDING_FLOW_VERSION
+} from '../shared/constants'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -2528,7 +2532,10 @@ describe('Store', () => {
       worktreeMeta?: Record<string, unknown>
     }
     expect(persisted.settings?.sourceControlViewMode).toBe('tree')
-    expect(persisted.workspaceSession).toEqual(workspaceSession)
+    expect(persisted.workspaceSession).toEqual({
+      ...getDefaultWorkspaceSession(),
+      ...workspaceSession
+    })
     expect(persisted.worktreeMeta).toEqual({
       'repo1::/worktree-a': { status: 'active' },
       'repo1::/worktree-b': { status: 'active' }
