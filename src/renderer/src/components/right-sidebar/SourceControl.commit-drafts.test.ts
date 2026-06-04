@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   buildResolveConflictsPrompt,
-  normalizeSourceControlDefaultTab,
   normalizeSourceControlViewMode,
   pickDefaultSourceControlAgent,
   readCommitDraftForWorktree,
@@ -142,18 +141,5 @@ describe('SourceControl view mode preference', () => {
   it('preserves valid persisted view modes', () => {
     expect(normalizeSourceControlViewMode('list')).toBe('list')
     expect(normalizeSourceControlViewMode('tree')).toBe('tree')
-  })
-})
-
-describe('SourceControl default tab preference', () => {
-  it('normalizes missing and unknown persisted values to all', () => {
-    expect(normalizeSourceControlDefaultTab(undefined)).toBe('all')
-    expect(normalizeSourceControlDefaultTab(null)).toBe('all')
-    expect(normalizeSourceControlDefaultTab('branch')).toBe('all')
-  })
-
-  it('preserves valid persisted default tabs', () => {
-    expect(normalizeSourceControlDefaultTab('all')).toBe('all')
-    expect(normalizeSourceControlDefaultTab('uncommitted')).toBe('uncommitted')
   })
 })

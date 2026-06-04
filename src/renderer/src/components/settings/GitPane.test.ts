@@ -20,18 +20,6 @@ function renderGitPane(searchQuery: string): string {
 }
 
 describe('GitPane', () => {
-  it('selects All as the default Source Control tab setting', () => {
-    const markup = renderGitPane('')
-    expect(markup).toContain('Default Source Control Tab')
-    expect(markup).toMatch(/aria-checked="true"[^>]*>All/)
-  })
-
-  it('keeps the default Source Control tab setting searchable', () => {
-    const markup = renderGitPane('uncommitted')
-    expect(markup).toContain('Default Source Control Tab')
-    expect(markup).toContain('Uncommitted')
-  })
-
   it('keeps the auto-rename branch setting visible while its prompt draft is dirty', () => {
     expect(shouldShowAutoRenameBranchSetting('zz-no-match', true)).toBe(true)
   })
