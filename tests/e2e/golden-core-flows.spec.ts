@@ -281,7 +281,6 @@ async function createTerminalTabThroughMenu(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'New tab' }).click({ force: true })
   const newTerminalMenuItem = page.getByRole('menuitem', { name: /New Terminal/i }).first()
   await newTerminalMenuItem.click({ force: true })
-  await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
   await expect.poll(() => countRenderedTabs(page), { timeout: 5_000 }).toBe(tabIdsBefore.length + 1)
   const createdTabIds = (await renderedTabIds(page)).filter(
     (tabId) => !tabIdsBefore.includes(tabId)

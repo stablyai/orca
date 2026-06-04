@@ -12,13 +12,6 @@ on:
       - 'tests/e2e/golden-core-flows.spec.ts'
       - 'tests/e2e/helpers/**'
       - 'src/renderer/src/components/sidebar/SidebarHeader.tsx'
-  pull_request:
-    paths:
-      - '.github/workflows/golden-e2e-windows-experiment.yml'
-      - 'package.json'
-      - 'tests/e2e/golden-core-flows.spec.ts'
-      - 'tests/e2e/helpers/**'
-      - 'src/renderer/src/components/sidebar/SidebarHeader.tsx'
   workflow_dispatch:
     inputs:
       ref:
