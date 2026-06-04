@@ -21,6 +21,9 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const browserTabsByWorktree = useAppStore((s) =>
     !showSleepingWorkspaces ? s.browserTabsByWorktree : null
   )
+  const runtimeTerminalActivityByWorktreeId = useAppStore((s) =>
+    !showSleepingWorkspaces ? s.runtimeTerminalActivityByWorktreeId : null
+  )
 
   return useMemo(() => {
     // Why: the board has its own status ordering, but visibility must match
@@ -33,6 +36,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         tabsByWorktree,
         ptyIdsByTabId,
         browserTabsByWorktree,
+        runtimeTerminalActivityByWorktreeId,
         hideDefaultBranchWorkspace,
         repoMap,
         // Why: the board has no nested lineage presentation. Ancestor injection
@@ -47,6 +51,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     hideDefaultBranchWorkspace,
     ptyIdsByTabId,
     repoMap,
+    runtimeTerminalActivityByWorktreeId,
     showSleepingWorkspaces,
     tabsByWorktree,
     worktreesByRepo

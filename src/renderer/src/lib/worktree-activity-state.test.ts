@@ -25,6 +25,11 @@ describe('worktree activity state', () => {
     expect(hasActiveWorkspaceActivity('wt-1', tabsByWorktree, ptyIdsByTabId, {})).toBe(true)
   })
 
+  it('treats runtime-connected terminal workspaces as active without renderer tabs', () => {
+    expect(hasActiveWorkspaceActivity('wt-1', {}, {}, {}, { 'wt-1': true })).toBe(true)
+    expect(isInactiveWorkspace('wt-1', {}, {}, {}, { 'wt-1': true })).toBe(false)
+  })
+
   it('treats browser workspaces as active', () => {
     expect(
       isInactiveWorkspace(

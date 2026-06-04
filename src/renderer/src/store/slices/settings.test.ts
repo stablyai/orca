@@ -195,6 +195,9 @@ describe('createSettingsSlice runtime switching', () => {
       activeWorktreeId: 'repo-env-1::/env-1/repo',
       openFiles: [{ id: '/env-1/repo/a.md', worktreeId: 'repo-env-1::/env-1/repo' } as never],
       ptyIdsByTabId: { tab1: ['remote:env-1@@terminal-a'] },
+      runtimeTerminalActivityByWorktreeId: { 'repo-env-1::/env-1/repo': true },
+      runtimeTerminalActivityTargetKey: 'environment:env-1',
+      runtimeTerminalActivityError: 'stale terminal list',
       terminalLayoutsByTabId: {
         tab1: {
           root: null,
@@ -275,6 +278,9 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().showDotfilesByWorktree).toEqual({})
     expect(store.getState().gitIgnoredPathsByWorktree).toEqual({})
     expect(store.getState().ptyIdsByTabId).toEqual({})
+    expect(store.getState().runtimeTerminalActivityByWorktreeId).toEqual({})
+    expect(store.getState().runtimeTerminalActivityTargetKey).toBeNull()
+    expect(store.getState().runtimeTerminalActivityError).toBeNull()
     expect(store.getState().browserTabsByWorktree).toEqual({})
     expect(store.getState().prCache).toEqual({})
     expect(store.getState().linearIssueCache).toEqual({})

@@ -74,6 +74,7 @@ import { useGitStatusPolling } from './components/right-sidebar/useGitStatusPoll
 import { useEditorExternalWatch } from './hooks/useEditorExternalWatch'
 import { useAutoAckViewedAgent } from './hooks/useAutoAckViewedAgent'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
+import { useRuntimeTerminalActivityRefresh } from './hooks/useRuntimeTerminalActivityRefresh'
 import {
   resolvePrimarySelectionMiddleClickPaste,
   usePrimarySelectionPaste
@@ -269,6 +270,7 @@ function App(): React.JSX.Element {
   const clearUnreadDockBadge = useUnreadDockBadge()
   useRadixBodyPointerEventsRecovery()
   useWebSessionTabsSync()
+  useRuntimeTerminalActivityRefresh()
   const [floatingTerminalOpen, setFloatingTerminalOpen] = useState(false)
 
   // Why: Zustand actions are referentially stable, but each individual

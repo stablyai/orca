@@ -28,6 +28,7 @@ export type WorktreeSectionActivityState = Pick<
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
+  | 'runtimeTerminalActivityByWorktreeId'
 > & {
   tabsByWorktree: Record<string, readonly Pick<TerminalTab, 'id' | 'title'>[]>
   browserTabsByWorktree: Record<string, readonly BrowserActivityTab[]>
@@ -110,6 +111,7 @@ function getSectionWorktreeStatus(
     hasPermission: agentSummary.hasPermission,
     hasLiveWorking: agentSummary.hasLiveWorking,
     hasLiveDone: agentSummary.hasLiveDone,
-    hasRetainedDone: agentSummary.hasRetainedDone
+    hasRetainedDone: agentSummary.hasRetainedDone,
+    hasRuntimeTerminal: Boolean(state.runtimeTerminalActivityByWorktreeId[worktreeId])
   })
 }

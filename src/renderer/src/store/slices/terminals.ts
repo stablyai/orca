@@ -1518,6 +1518,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         ...s.ptyIdsByTabId,
         ...Object.fromEntries(tabs.map((tab) => [tab.id, [] as string[]] as const))
       }
+      const hadRuntimeTerminalActivity = Boolean(s.runtimeTerminalActivityByWorktreeId[worktreeId])
+      const nextRuntimeTerminalActivityByWorktreeId = hadRuntimeTerminalActivity
+        ? { ...s.runtimeTerminalActivityByWorktreeId }
+        : s.runtimeTerminalActivityByWorktreeId
+      if (hadRuntimeTerminalActivity) {
+        // Why: sleeping/removing a worktree intentionally kills its PTYs; do not
+        // leave the polling cache marking it active until the next terminal.list.
+        delete nextRuntimeTerminalActivityByWorktreeId[worktreeId]
+      }
       const nextRuntimePaneTitlesByTabId = keepIdentifiers
         ? s.runtimePaneTitlesByTabId
         : { ...s.runtimePaneTitlesByTabId }
@@ -1614,6 +1623,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       return {
         tabsByWorktree: nextTabsByWorktree,
         ptyIdsByTabId: nextPtyIdsByTabId,
+        ...(hadRuntimeTerminalActivity
+          ? {
+              runtimeTerminalActivityByWorktreeId: nextRuntimeTerminalActivityByWorktreeId,
+              sortEpoch: s.sortEpoch + 1
+            }
+          : {}),
         lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
         runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId,
         suppressedPtyExitIds: nextSuppressedPtyExitIds,

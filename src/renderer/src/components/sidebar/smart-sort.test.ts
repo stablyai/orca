@@ -124,6 +124,23 @@ function sortSmart(
   return [...worktrees].sort(buildWorktreeComparator('smart', repoMap, NOW, attention))
 }
 
+function sortSmartWithRuntimeActivity(
+  worktrees: Worktree[],
+  runtimeTerminalActivityByWorktreeId: Record<string, true>
+): Worktree[] {
+  return sortWorktreesSmart(
+    worktrees,
+    {},
+    repoMap,
+    {},
+    {},
+    {},
+    undefined,
+    undefined,
+    runtimeTerminalActivityByWorktreeId
+  )
+}
+
 describe('smart sort — class invariants', () => {
   it('ranks blocked above done regardless of which stateStartedAt is newer', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked' })
@@ -503,6 +520,27 @@ describe('sortWorktreesSmart — cold start fallback', () => {
     )
     // Smart comparator wins over sortOrder because at least one PTY is live.
     expect(sorted.map((w) => w.id)).toEqual(['blocked', 'done'])
+  })
+
+  it('uses the smart comparator when only runtime terminal activity is alive', () => {
+    const activeRecent = makeWorktree({
+      id: 'active-recent',
+      displayName: 'Active Recent',
+      sortOrder: 1,
+      lastActivityAt: 10_000
+    })
+    const persistedFirst = makeWorktree({
+      id: 'persisted-first',
+      displayName: 'Persisted First',
+      sortOrder: 2,
+      lastActivityAt: 0
+    })
+
+    const sorted = sortSmartWithRuntimeActivity([persistedFirst, activeRecent], {
+      [activeRecent.id]: true
+    })
+
+    expect(sorted.map((w) => w.id)).toEqual(['active-recent', 'persisted-first'])
   })
 })
 

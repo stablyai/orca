@@ -87,6 +87,7 @@ function makeState(
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
     terminalLayoutRootsByTabId: {},
+    runtimeTerminalActivityByWorktreeId: {},
     agentStatusEpoch: 0,
     agentStatusByPaneKey: {},
     migrationUnsupportedByPtyId: {},

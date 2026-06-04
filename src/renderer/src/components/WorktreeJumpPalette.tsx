@@ -251,6 +251,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   // tab.ptyId is a wake-hint sessionId, not a liveness signal) and the jump
   // palette dot would lie green even though the sidebar dot is correctly grey.
   const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const runtimeTerminalActivityByWorktreeId = useAppStore(
+    (s) => s.runtimeTerminalActivityByWorktreeId
+  )
   const terminalLayoutsByTabId = useAppStore((s) => s.terminalLayoutsByTabId)
   const prCache = useAppStore((s) => s.prCache)
   const issueCache = useAppStore((s) => s.issueCache)
@@ -314,7 +317,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         }
         if (
           !showSleepingWorkspaces &&
-          isInactiveWorkspace(worktree.id, tabsByWorktree, ptyIdsByTabId, browserTabsByWorktree)
+          isInactiveWorkspace(
+            worktree.id,
+            tabsByWorktree,
+            ptyIdsByTabId,
+            browserTabsByWorktree,
+            runtimeTerminalActivityByWorktreeId
+          )
         ) {
           return false
         }
@@ -325,6 +334,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       browserTabsByWorktree,
       hideDefaultBranchWorkspace,
       ptyIdsByTabId,
+      runtimeTerminalActivityByWorktreeId,
       showSleepingWorkspaces,
       tabsByWorktree
     ]
@@ -370,7 +380,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             runtimePaneTitlesByTabId,
             ptyIdsByTabId,
             migrationUnsupportedByPtyId,
-            terminalLayoutsByTabId
+            terminalLayoutsByTabId,
+            runtimeTerminalActivityByWorktreeId
           )
         : searchScopeWorktrees,
     [
@@ -382,7 +393,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       runtimePaneTitlesByTabId,
       ptyIdsByTabId,
       migrationUnsupportedByPtyId,
-      terminalLayoutsByTabId
+      terminalLayoutsByTabId,
+      runtimeTerminalActivityByWorktreeId
     ]
   )
 
@@ -401,7 +413,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       runtimePaneTitlesByTabId,
       ptyIdsByTabId,
       migrationUnsupportedByPtyId,
-      terminalLayoutsByTabId
+      terminalLayoutsByTabId,
+      runtimeTerminalActivityByWorktreeId
     )
   }, [
     allWorktrees,
@@ -411,7 +424,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
     migrationUnsupportedByPtyId,
-    terminalLayoutsByTabId
+    terminalLayoutsByTabId,
+    runtimeTerminalActivityByWorktreeId
   ])
 
   // Why: browser rows need worktree lookups for repo badge colors, and browser
@@ -1257,7 +1271,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   tabsByWorktree[worktree.id] ?? [],
                   browserTabsByWorktree[worktree.id] ?? [],
                   ptyIdsByTabId,
-                  runtimePaneTitlesByTabId
+                  runtimePaneTitlesByTabId,
+                  {
+                    hasRuntimeTerminal: Boolean(runtimeTerminalActivityByWorktreeId[worktree.id])
+                  }
                 )
                 const statusLabel = getWorktreeStatusLabel(status)
                 const isCurrentWorktree = activeWorktreeId === worktree.id

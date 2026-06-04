@@ -3606,6 +3606,9 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const sectionActivityPtyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
   const sectionActivityRuntimePaneTitlesByTabId = useAppStore((s) => s.runtimePaneTitlesByTabId)
+  const runtimeTerminalActivityByWorktreeId = useAppStore(
+    (s) => s.runtimeTerminalActivityByWorktreeId
+  )
   const sectionActivityAgentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const sectionActivityMigrationUnsupportedByPtyId = useAppStore(
     (s) => s.migrationUnsupportedByPtyId
@@ -3699,12 +3702,14 @@ const WorktreeList = React.memo(function WorktreeList({
     // live PTY appears, then switch to the live class layer. See Edge case 8
     // in docs/smart-worktree-order-redesign.md.
     if (sortBy === 'smart' && !sessionHasHadPty.current) {
-      // Why: `tabHasLivePty` (over `ptyIdsByTabId`) is the source of truth for
-      // liveness — slept terminals retain `tab.ptyId` as a wake hint, so reading
-      // it directly would falsely keep cold-start ordering off after restart.
-      const hasAnyLivePty = Object.values(state.tabsByWorktree)
-        .flat()
-        .some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+      // Why: `tabHasLivePty` plus runtime terminal activity are the liveness
+      // sources. Slept terminals retain wake hints, which are ignored by the
+      // live PTY map below.
+      const hasAnyLivePty =
+        Object.keys(state.runtimeTerminalActivityByWorktreeId).length > 0 ||
+        Object.values(state.tabsByWorktree)
+          .flat()
+          .some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
       if (hasAnyLivePty) {
         sessionHasHadPty.current = true
       } else {
@@ -3860,6 +3865,7 @@ const WorktreeList = React.memo(function WorktreeList({
       tabsByWorktree,
       ptyIdsByTabId,
       browserTabsByWorktree,
+      runtimeTerminalActivityByWorktreeId,
       hideDefaultBranchWorkspace,
       repoMap,
       worktreeLineageById
@@ -3884,6 +3890,7 @@ const WorktreeList = React.memo(function WorktreeList({
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,
+    runtimeTerminalActivityByWorktreeId,
     sortedIds,
     worktreeMap,
     worktreeLineageById,
@@ -4005,6 +4012,7 @@ const WorktreeList = React.memo(function WorktreeList({
       ptyIdsByTabId: sectionActivityPtyIdsByTabId,
       runtimePaneTitlesByTabId: sectionActivityRuntimePaneTitlesByTabId,
       terminalLayoutRootsByTabId: sectionActivityTerminalLayoutRootsByTabId,
+      runtimeTerminalActivityByWorktreeId,
       agentStatusEpoch: sectionActivityAgentStatusEpoch,
       // Why: agentStatusByPaneKey can tick for same-state tool details. The
       // section counts only need structural status transitions, tracked by
@@ -4021,7 +4029,8 @@ const WorktreeList = React.memo(function WorktreeList({
     sectionActivityRetainedAgentsByPaneKey,
     sectionActivityTerminalLayoutRootsByTabId,
     sectionActivityRuntimePaneTitlesByTabId,
-    sectionActivityTabsByWorktree
+    sectionActivityTabsByWorktree,
+    runtimeTerminalActivityByWorktreeId
   ])
   const sectionActivityByGroupKey = useMemo(
     () =>

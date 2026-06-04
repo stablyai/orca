@@ -13,6 +13,7 @@ type WorktreeStatusHeuristicOptions = {
   agentStatusPaneIdsByTabId?: Record<string, ReadonlySet<string>>
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   terminalLayoutRootsByTabId?: Record<string, TerminalPaneLayoutNode | null | undefined>
+  hasRuntimeTerminal?: boolean
 }
 
 const STATUS_LABELS: Record<WorktreeStatus, string> = {
@@ -55,11 +56,13 @@ export function getWorktreeStatus(
   if (hasStatus('working')) {
     return 'working'
   }
-  if (liveTabs.length > 0 || browserTabs.length > 0) {
+  if (liveTabs.length > 0 || browserTabs.length > 0 || options.hasRuntimeTerminal) {
     // Why: browser-only worktrees are still active from the user's point of
     // view even when they have no PTY-backed terminal. The sidebar filter
     // already treats them as active, so every navigation surface must reuse
     // that rule instead of showing a misleading inactive dot.
+    // Runtime terminals are the same liveness signal when the renderer graph
+    // has lost the tab/leaf binding but the runtime still owns a connected PTY.
     return 'active'
   }
   return 'inactive'
@@ -131,6 +134,8 @@ export function getWorktreeStatusLabel(status: WorktreeStatus): string {
  *   worktree.
  * - `hasLiveDone`: any fresh hook entry in {done} for a tab in this worktree.
  * - `hasRetainedDone`: any retained-agent snapshot scoped to this worktreeId.
+ * - `hasRuntimeTerminal`: `terminal.list` reports a connected PTY for this
+ *   worktree even if the renderer tab graph no longer has a live binding.
  * - `agentStatusPaneIdsByTabId`: stable leaf ids and legacy runtime pane ids
  *   whose visible agent rows should override title-derived heuristics.
  */
@@ -146,6 +151,7 @@ export function resolveWorktreeStatus(args: {
   hasLiveWorking: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
+  hasRuntimeTerminal?: boolean
 }): WorktreeStatus {
   const heuristic = getWorktreeStatus(
     args.tabs,
@@ -155,7 +161,8 @@ export function resolveWorktreeStatus(args: {
     {
       agentStatusPaneIdsByTabId: args.agentStatusPaneIdsByTabId,
       terminalLayoutsByTabId: args.terminalLayoutsByTabId,
-      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
+      terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId,
+      hasRuntimeTerminal: args.hasRuntimeTerminal
     }
   )
   if (args.hasPermission) {

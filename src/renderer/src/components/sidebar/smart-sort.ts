@@ -7,6 +7,7 @@ import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { IDLE, buildAttentionByWorktree, type WorktreeAttention } from './smart-attention'
 
 export type SortBy = 'name' | 'smart' | 'recent' | 'repo' | 'manual'
+type RuntimeTerminalActivityByWorktreeId = Record<string, true>
 
 // Why: a newly-created worktree's lastActivityAt is stamped at the moment
 // createLocalWorktree finishes git + setup-runner prep (often several seconds
@@ -107,6 +108,19 @@ export function buildWorktreeComparator(
   }
 }
 
+export function hasAnyLiveTerminalActivity(
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  ptyIdsByTabId: Record<string, string[]>,
+  runtimeTerminalActivityByWorktreeId: RuntimeTerminalActivityByWorktreeId = {}
+): boolean {
+  if (Object.keys(runtimeTerminalActivityByWorktreeId).length > 0) {
+    return true
+  }
+  return Object.values(tabsByWorktree)
+    .flat()
+    .some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
+}
+
 /**
  * Sort worktrees by the smart-attention comparator (status class first,
  * recency-of-attention second). On cold start (no live PTYs yet), falls back
@@ -130,14 +144,17 @@ export function sortWorktreesSmart(
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
   ptyIdsByTabId: Record<string, string[]>,
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>,
-  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
+  terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>,
+  runtimeTerminalActivityByWorktreeId: RuntimeTerminalActivityByWorktreeId = {}
 ): Worktree[] {
-  // Why: `tabHasLivePty` (over `ptyIdsByTabId`) is the source of truth for
-  // liveness — slept terminals retain `tab.ptyId` as a wake hint, so reading
-  // it directly would falsely keep cold-start ordering off after restart.
-  const hasAnyLivePty = Object.values(tabsByWorktree)
-    .flat()
-    .some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
+  // Why: renderer PTY maps and runtime terminal activity are the liveness
+  // sources. Wake-hint tab.ptyId values must not disable cold-start ordering
+  // after restart.
+  const hasAnyLivePty = hasAnyLiveTerminalActivity(
+    tabsByWorktree,
+    ptyIdsByTabId,
+    runtimeTerminalActivityByWorktreeId
+  )
 
   if (!hasAnyLivePty) {
     // Cold start: use persisted sortOrder snapshot until the agent-status

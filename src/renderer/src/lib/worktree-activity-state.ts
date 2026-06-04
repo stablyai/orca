@@ -7,30 +7,35 @@ type BrowserLikeTab = { id: string }
 type TabsByWorktree = Record<string, readonly TerminalLikeTab[]>
 type PtyIdsByTabId = Record<string, string[]>
 type BrowserTabsByWorktree = Record<string, readonly BrowserLikeTab[]>
+type RuntimeTerminalActivityByWorktreeId = Record<string, true>
 
 export function hasActiveWorkspaceActivity(
   worktreeId: string,
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
-  browserTabsByWorktree: BrowserTabsByWorktree | null | undefined
+  browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
+  runtimeTerminalActivityByWorktreeId?: RuntimeTerminalActivityByWorktreeId | null
 ): boolean {
   const tabs = tabsByWorktree?.[worktreeId] ?? []
   const hasLiveTerminal =
     ptyIdsByTabId != null && tabs.some((tab) => tabHasLivePty(ptyIdsByTabId, tab.id))
   const hasBrowser = (browserTabsByWorktree?.[worktreeId] ?? []).length > 0
-  return hasLiveTerminal || hasBrowser
+  const hasRuntimeTerminal = Boolean(runtimeTerminalActivityByWorktreeId?.[worktreeId])
+  return hasLiveTerminal || hasBrowser || hasRuntimeTerminal
 }
 
 export function isInactiveWorkspace(
   worktreeId: string,
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
-  browserTabsByWorktree: BrowserTabsByWorktree | null | undefined
+  browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
+  runtimeTerminalActivityByWorktreeId?: RuntimeTerminalActivityByWorktreeId | null
 ): boolean {
   return !hasActiveWorkspaceActivity(
     worktreeId,
     tabsByWorktree,
     ptyIdsByTabId,
-    browserTabsByWorktree
+    browserTabsByWorktree,
+    runtimeTerminalActivityByWorktreeId
   )
 }

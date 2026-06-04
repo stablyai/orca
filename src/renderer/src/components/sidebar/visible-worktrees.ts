@@ -87,6 +87,7 @@ export function computeVisibleWorktreeIds(
     tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
     ptyIdsByTabId: Record<string, string[]> | null
     browserTabsByWorktree?: Record<string, { id: string }[]> | null
+    runtimeTerminalActivityByWorktreeId?: Record<string, true> | null
     // Why required: every caller (WorktreeList, getVisibleWorktreeIds
     // fallback, tests) reads the flag from the UI store. Making the field
     // required prevents a future caller from silently dropping the filter by
@@ -122,7 +123,8 @@ export function computeVisibleWorktreeIds(
           w.id,
           opts.tabsByWorktree,
           opts.ptyIdsByTabId,
-          opts.browserTabsByWorktree
+          opts.browserTabsByWorktree,
+          opts.runtimeTerminalActivityByWorktreeId
         )
     )
   }
@@ -239,7 +241,8 @@ export function getVisibleWorktreeIds(): string[] {
       state.runtimePaneTitlesByTabId,
       state.ptyIdsByTabId,
       state.migrationUnsupportedByPtyId,
-      state.terminalLayoutsByTabId
+      state.terminalLayoutsByTabId,
+      state.runtimeTerminalActivityByWorktreeId
     ).map((w) => w.id)
   } else {
     // Why empty map: non-smart branches don't read attentionByWorktree, but
@@ -256,6 +259,7 @@ export function getVisibleWorktreeIds(): string[] {
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
     browserTabsByWorktree: state.browserTabsByWorktree,
+    runtimeTerminalActivityByWorktreeId: state.runtimeTerminalActivityByWorktreeId,
     hideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     repoMap,
     worktreeLineageById: state.worktreeLineageById

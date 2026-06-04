@@ -15,6 +15,7 @@ type MockState = {
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   ptyIdsByTabId: Record<string, string[]>
+  runtimeTerminalActivityByWorktreeId: Record<string, true>
   agentStatusEpoch: number
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
@@ -109,6 +110,7 @@ describe('useWorktreeActivityStatus', () => {
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
       ptyIdsByTabId: {},
+      runtimeTerminalActivityByWorktreeId: {},
       agentStatusEpoch: 0,
       agentStatusByPaneKey: {},
       runtimeAgentOrchestrationByPaneKey: {},
@@ -139,6 +141,20 @@ describe('useWorktreeActivityStatus', () => {
 
     expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
       '<span>working</span>'
+    )
+  })
+
+  it('keeps a renderer-tabless runtime terminal active after agent rows are gone', () => {
+    const worktreeId = 'repo1::/path/wt1'
+    mockState = {
+      ...mockState,
+      runtimeTerminalActivityByWorktreeId: {
+        [worktreeId]: true
+      }
+    }
+
+    expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe(
+      '<span>active</span>'
     )
   })
 

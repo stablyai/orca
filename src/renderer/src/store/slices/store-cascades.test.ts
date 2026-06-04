@@ -2013,6 +2013,37 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(capture).toHaveBeenCalledWith({ includeLocalBuffers: false })
   })
 
+  it('clears runtime terminal activity for the slept worktree immediately', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const otherWt = 'repo1::/path/wt2'
+
+    seedStore(store, {
+      sortEpoch: 7,
+      worktreesByRepo: {
+        repo1: [
+          makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' }),
+          makeWorktree({ id: otherWt, repoId: 'repo1', path: '/path/wt2' })
+        ]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, ptyId: 'pty-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+      runtimeTerminalActivityByWorktreeId: {
+        [wt]: true,
+        [otherWt]: true
+      }
+    })
+
+    await store.getState().shutdownWorktreeTerminals(wt, { keepIdentifiers: true })
+
+    expect(store.getState().runtimeTerminalActivityByWorktreeId).toEqual({
+      [otherWt]: true
+    })
+    expect(store.getState().sortEpoch).toBe(8)
+  })
+
   it('drops live agentStatusByPaneKey entries on sleep so the working row disappears', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

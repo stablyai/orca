@@ -113,6 +113,21 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([wt.id])
   })
 
+  it('keeps runtime-terminal worktrees visible when sleeping workspaces are hidden', () => {
+    const wt = makeWorktree('wt-runtime')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({
+        showSleepingWorkspaces: false,
+        runtimeTerminalActivityByWorktreeId: { [wt.id]: true }
+      })
+    )
+
+    expect(result).toEqual([wt.id])
+  })
+
   it('hides sleeping worktrees when show sleeping is off', () => {
     const wt = makeWorktree('wt-sleeping')
 

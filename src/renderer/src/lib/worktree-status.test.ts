@@ -51,6 +51,10 @@ describe('getWorktreeStatus', () => {
     expect(getWorktreeStatus([], [], {})).toBe('inactive')
   })
 
+  it('returns active when the runtime reports a connected terminal without renderer tabs', () => {
+    expect(getWorktreeStatus([], [], {}, {}, { hasRuntimeTerminal: true })).toBe('active')
+  })
+
   it('reports working when any pane in a split-pane tab is working even if tab.title is idle', () => {
     // Regression: clicking between split panes rewrites tab.title to the
     // focused pane's title (see onActivePaneChange in
@@ -109,6 +113,21 @@ describe('resolveWorktreeStatus', () => {
     })
 
     expect(status).toBe('inactive')
+  })
+
+  it('falls back to active after a done row is dismissed while runtime terminal remains live', () => {
+    const status = resolveWorktreeStatus({
+      tabs: [{ id: 'tab-1', title: 'claude [done]' }],
+      browserTabs: [],
+      ptyIdsByTabId: { 'tab-1': [] },
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      hasRetainedDone: false,
+      hasRuntimeTerminal: true
+    })
+
+    expect(status).toBe('active')
   })
 
   it('promotes to done when a retained done row is visible, even without a live pty', () => {
