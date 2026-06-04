@@ -56,6 +56,68 @@ describe('orchestration reset CLI handler', () => {
   })
 })
 
+describe('orchestration send structured payload flags', () => {
+  beforeEach(() => {
+    callMock.mockReset().mockResolvedValue({ result: { message: { id: 'msg_1' } } })
+    delete process.env.ORCA_TERMINAL_HANDLE
+  })
+
+  const invokeSend = (flags: Map<string, string | boolean>) =>
+    ORCHESTRATION_HANDLERS['orchestration send']({
+      flags,
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+  it('serializes common worker payload fields as JSON', async () => {
+    await invokeSend(
+      new Map<string, string | boolean>([
+        ['from', 'term_worker'],
+        ['to', 'term_coord'],
+        ['subject', 'done'],
+        ['type', 'worker_done'],
+        ['task-id', 'task_1'],
+        ['dispatch-id', 'ctx_1'],
+        ['files-modified', 'src/a.ts, src/b.ts'],
+        ['report-path', 'reports/done.md']
+      ])
+    )
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.send', {
+      from: 'term_worker',
+      to: 'term_coord',
+      subject: 'done',
+      body: undefined,
+      type: 'worker_done',
+      priority: undefined,
+      threadId: undefined,
+      payload: JSON.stringify({
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        filesModified: ['src/a.ts', 'src/b.ts'],
+        reportPath: 'reports/done.md'
+      }),
+      devMode: false
+    })
+  })
+
+  it('rejects mixing raw payload with structured payload flags', async () => {
+    await expect(
+      invokeSend(
+        new Map<string, string | boolean>([
+          ['from', 'term_worker'],
+          ['to', 'term_coord'],
+          ['subject', 'done'],
+          ['payload', '{"taskId":"task_1"}'],
+          ['task-id', 'task_1']
+        ])
+      )
+    ).rejects.toThrow(/structured payload/)
+    expect(callMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('orchestration timeout flag validation', () => {
   const invalidTimeoutValues: [string, string | boolean][] = [
     ['missing', true],

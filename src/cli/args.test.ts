@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseArgs, validateCommandAndFlags } from './args'
+import { parseArgs, supportsBrowserPageFlag, validateCommandAndFlags } from './args'
 
 describe('parseArgs', () => {
   it('keeps an empty string as a flag value', () => {
@@ -36,6 +36,12 @@ describe('parseArgs', () => {
     expect(parsed.commandPath).toEqual(['tab', 'create'])
     expect(parsed.flags.get('json')).toBe(true)
     expect(parsed.flags.get('url')).toBe('https://example.com')
+  })
+})
+
+describe('supportsBrowserPageFlag', () => {
+  it('does not expose browser page targeting on orchestration commands', () => {
+    expect(supportsBrowserPageFlag(['orchestration', 'send'])).toBe(false)
   })
 })
 
