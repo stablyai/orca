@@ -6,6 +6,7 @@ import type {
   EventProps
 } from '../../../../shared/telemetry-events'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
+import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
@@ -157,6 +158,7 @@ export async function finishProjectAddWithDefaultCheckout({
   closeModal: () => void
   setHideDefaultBranchWorkspace: (value: boolean) => void
 }): Promise<void> {
+  await markOnboardingProjectAdded('addedRepo')
   closeModal()
   await openProjectDefaultCheckout({ repoId, source, setHideDefaultBranchWorkspace })
 }

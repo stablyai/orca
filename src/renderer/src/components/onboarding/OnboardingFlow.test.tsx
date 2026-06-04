@@ -41,17 +41,42 @@ describe('OnboardingFlow', () => {
 
   it.each([
     [3, 'Set up GitHub tasks'],
-    [4, 'Set up notifications'],
+    [4, 'Set up GitHub tasks'],
     [5, 'Set up notifications'],
     [9, 'Set up notifications']
   ])(
-    'resumes legacy onboarding progress %i at the matching four-step page',
+    'resumes unversioned seven-step onboarding progress %i at the matching four-step page',
     (legacyStep, title) => {
       const html = renderToStaticMarkup(
         <OnboardingFlow
           onboarding={{
             ...getDefaultOnboardingState(),
             flowVersion: 1,
+            lastCompletedStep: legacyStep
+          }}
+          onOnboardingChange={vi.fn()}
+        />
+      )
+
+      expect(html).toContain(title)
+      expect(html).not.toContain('Set up Orca for agents')
+      expect(html).not.toContain('Explore Orca')
+    }
+  )
+
+  it.each([
+    [3, 'Set up GitHub tasks'],
+    [4, 'Set up notifications'],
+    [5, 'Set up notifications'],
+    [9, 'Set up notifications']
+  ])(
+    'resumes versioned five-step onboarding progress %i at the matching four-step page',
+    (legacyStep, title) => {
+      const html = renderToStaticMarkup(
+        <OnboardingFlow
+          onboarding={{
+            ...getDefaultOnboardingState(),
+            flowVersion: 2,
             lastCompletedStep: legacyStep
           }}
           onOnboardingChange={vi.fn()}

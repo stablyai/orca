@@ -124,11 +124,22 @@ export function remapOpenOnboardingLastCompletedStep({
   if (outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
     return ONBOARDING_FINAL_STEP
   }
+  // Why: v2 was the five-step flow; missing/older versions were seven-step
+  // data where step 4 was removed agent setup, not completed integrations.
+  if (flowVersion === 2) {
+    if (lastCompletedStep === 3) {
+      return 2
+    }
+    if (lastCompletedStep >= 4) {
+      return 3
+    }
+    return lastCompletedStep
+  }
   if (lastCompletedStep === 3) {
     return 2
   }
   if (lastCompletedStep === 4) {
-    return 3
+    return 2
   }
   if (lastCompletedStep >= 5) {
     return 3
@@ -618,6 +629,21 @@ export function useOnboardingFlow(
             return
           }
           const nextIndex = getNextStepIndex(stepIndex)
+          if (
+            currentStep.id === 'theme' &&
+            skipIntegrations &&
+            STEPS[nextIndex]?.id === 'notifications'
+          ) {
+            // Why: resolveStepIndex skips integrations before it can render, but
+            // progress must still resume at notifications after a reload.
+            try {
+              onOnboardingChange(await persistStep(STEPS[nextIndex].stepNumber - 1))
+            } catch (err) {
+              toast.error('Could not save progress', {
+                description: err instanceof Error ? err.message : String(err)
+              })
+            }
+          }
           setStepIndex(nextIndex)
         }
       } finally {
@@ -630,8 +656,10 @@ export function useOnboardingFlow(
       closeWith,
       currentStep.id,
       getNextStepIndex,
+      onOnboardingChange,
       openModal,
       persistCurrentStep,
+      skipIntegrations,
       stepIndex,
       trackCurrentStepCompleted
     ]

@@ -71,8 +71,17 @@ describe('prepareSkippedOnboardingPreferences', () => {
 })
 
 describe('remapOpenOnboardingLastCompletedStep', () => {
-  it('remaps old open progress to the new four-step flow', () => {
+  it('remaps unversioned seven-step open progress to the new four-step flow', () => {
     const base = { ...getDefaultOnboardingState(), flowVersion: 1 }
+
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 3 })).toBe(2)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 4 })).toBe(2)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 5 })).toBe(3)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 9 })).toBe(3)
+  })
+
+  it('remaps versioned five-step open progress to the new four-step flow', () => {
+    const base = { ...getDefaultOnboardingState(), flowVersion: 2 }
 
     expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 3 })).toBe(2)
     expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 4 })).toBe(3)

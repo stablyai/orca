@@ -495,11 +495,22 @@ function remapLegacyOnboardingLastCompletedStep(
   if (raw.outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
     return ONBOARDING_FINAL_STEP
   }
+  // Why: v2 was the five-step flow; missing/older versions were seven-step
+  // data where step 4 was removed agent setup, not completed integrations.
+  if (raw.flowVersion === 2) {
+    if (lastCompletedStep === 3) {
+      return 2
+    }
+    if (lastCompletedStep >= 4) {
+      return 3
+    }
+    return lastCompletedStep
+  }
   if (lastCompletedStep === 3) {
     return 2
   }
   if (lastCompletedStep === 4) {
-    return 3
+    return 2
   }
   if (lastCompletedStep >= 5) {
     return 3
@@ -2018,7 +2029,7 @@ export class Store {
             const sanitized = sanitizeOnboardingUpdate(parsed.onboarding, {
               migrateLegacyProgress: true
             })
-            return {
+            const onboarding = {
               ...defaults.onboarding,
               ...sanitized,
               checklist: {
@@ -2026,6 +2037,15 @@ export class Store {
                 ...sanitized.checklist
               }
             }
+            // Why: older/corrupt profiles can preserve a closed outcome while
+            // losing closedAt; visibility keys off closedAt, so recover closure.
+            if (
+              onboarding.closedAt === null &&
+              (onboarding.outcome === 'completed' || onboarding.outcome === 'dismissed')
+            ) {
+              onboarding.closedAt = Date.now()
+            }
+            return onboarding
           })()
         }
       }

@@ -290,15 +290,43 @@ describe('Store', () => {
 
   it.each([
     [3, 2],
-    [4, 3],
+    [4, 2],
     [5, 3],
     [6, 3],
     [9, 3]
   ])(
-    'migrates legacy open onboarding progress %i before applying the current step bound',
+    'migrates unversioned seven-step onboarding progress %i before applying the current step bound',
     async (legacyStep, expectedStep) => {
       writeDataFile({
         onboarding: {
+          closedAt: null,
+          outcome: null,
+          lastCompletedStep: legacyStep,
+          checklist: {}
+        }
+      })
+
+      const store = await createStore()
+      const onboarding = store.getOnboarding()
+
+      expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
+      expect(onboarding.lastCompletedStep).toBe(expectedStep)
+      expect(onboarding.closedAt).toBeNull()
+      expect(onboarding.outcome).toBeNull()
+    }
+  )
+
+  it.each([
+    [3, 2],
+    [4, 3],
+    [5, 3],
+    [9, 3]
+  ])(
+    'migrates versioned five-step onboarding progress %i before applying the current step bound',
+    async (legacyStep, expectedStep) => {
+      writeDataFile({
+        onboarding: {
+          flowVersion: 2,
           closedAt: null,
           outcome: null,
           lastCompletedStep: legacyStep,
@@ -351,6 +379,29 @@ describe('Store', () => {
     expect(onboarding.outcome).toBe('completed')
     expect(onboarding.lastCompletedStep).toBe(4)
   })
+
+  it.each([
+    [{ outcome: 'completed', lastCompletedStep: 7 }, 'completed', 4],
+    [{ closedAt: null, outcome: 'dismissed', lastCompletedStep: 2 }, 'dismissed', 2],
+    [{ closedAt: 'invalid', outcome: 'completed', lastCompletedStep: 7 }, 'completed', 4]
+  ] as const)(
+    'keeps closed onboarding closed when closedAt is missing or malformed',
+    async (onboardingInput, expectedOutcome, expectedStep) => {
+      writeDataFile({
+        onboarding: {
+          checklist: {},
+          ...onboardingInput
+        }
+      })
+
+      const store = await createStore()
+      const onboarding = store.getOnboarding()
+
+      expect(onboarding.closedAt).toEqual(expect.any(Number))
+      expect(onboarding.outcome).toBe(expectedOutcome)
+      expect(onboarding.lastCompletedStep).toBe(expectedStep)
+    }
+  )
 
   it('preserves legacy none grouping as ungrouped workspaces', async () => {
     writeDataFile({

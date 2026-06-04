@@ -21,7 +21,7 @@ type OnboardingState = {
 }
 
 const SKIP_TO_PROJECT_SETUP_BUTTON = /^Skip to project setup$/i
-const TASK_SOURCES_HEADING = /Connect your task sources/i
+const TASK_SOURCES_HEADING = /Set up GitHub tasks/i
 const ADD_PROJECT_DIALOG_HEADING = /Add (?:a server project|a project|another project)/i
 
 async function getOnboardingState(page: Page): Promise<OnboardingState> {
@@ -102,6 +102,9 @@ async function expectAddProjectDialog(page: Page): Promise<void> {
 }
 
 async function continueFromPostNotificationsToRepo(page: Page): Promise<void> {
+  if (await page.getByRole('heading', { name: ADD_PROJECT_DIALOG_HEADING }).isVisible()) {
+    return
+  }
   const taskSourcesVisible = await page
     .getByRole('heading', { name: TASK_SOURCES_HEADING })
     .waitFor({ state: 'visible', timeout: 1_000 })
@@ -236,16 +239,22 @@ test.describe('Onboarding flow', () => {
 
     await continueOnboarding(orcaPage)
     await expect
-      .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
+      .poll(async () => [2, 3].includes((await getOnboardingState(orcaPage)).lastCompletedStep), {
         timeout: 5_000,
-        message: 'lastCompletedStep did not advance to 2 after second Continue'
+        message: 'lastCompletedStep did not advance after second Continue'
       })
-      .toBe(2)
+      .toBe(true)
     await expect
       .poll(async () => (await getSettings(orcaPage)).theme, { timeout: 5_000 })
       .toBe(oppositeTheme)
     await continueThroughOptionalTaskSourcesToNotifications(orcaPage)
     await expectOnboardingProgress(orcaPage, /^[34] of [34]$/)
+    await expect
+      .poll(async () => (await getOnboardingState(orcaPage)).lastCompletedStep, {
+        timeout: 5_000,
+        message: 'lastCompletedStep did not include optional task-source progress'
+      })
+      .toBe(3)
 
     // --- Step 3: notifications ---
     await expectOnboardingNotificationSound(orcaPage, /System Default/i)
