@@ -199,35 +199,66 @@ function isAgentTaskCompleteNotificationEnabledFromState(
   return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
 }
 
-const agentTaskCompleteNotificationEnabledListeners = new Set<() => void>()
-let agentTaskCompleteNotificationSettingsUnsubscribe: (() => void) | null = null
-let agentTaskCompleteNotificationEnabledSnapshot: boolean | null = null
+function isTerminalAttentionEnabledFromState(
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  return state.settings?.experimentalTerminalAttention === true
+}
 
-function subscribeAgentTaskCompleteNotificationEnabled(listener: () => void): () => void {
-  if (agentTaskCompleteNotificationSettingsUnsubscribe === null) {
-    agentTaskCompleteNotificationEnabledSnapshot = isAgentTaskCompleteNotificationEnabled()
-    agentTaskCompleteNotificationSettingsUnsubscribe = useAppStore.subscribe((state) => {
-      const enabled = isAgentTaskCompleteNotificationEnabledFromState(state)
-      if (enabled === agentTaskCompleteNotificationEnabledSnapshot) {
+function isAgentTaskCompleteTrackingEnabled(): boolean {
+  const state = useAppStore.getState()
+  return (
+    isAgentTaskCompleteNotificationEnabledFromState(state) ||
+    isTerminalAttentionEnabledFromState(state)
+  )
+}
+
+function isAgentTaskCompleteTrackingEnabledFromState(
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  return (
+    isAgentTaskCompleteNotificationEnabledFromState(state) ||
+    isTerminalAttentionEnabledFromState(state)
+  )
+}
+
+const agentTaskCompleteTrackingEnabledListeners = new Set<() => void>()
+let agentTaskCompleteTrackingSettingsUnsubscribe: (() => void) | null = null
+let agentTaskCompleteTrackingSettingsSnapshot: string | null = null
+
+function getAgentTaskCompleteTrackingSettingsSnapshot(
+  state: ReturnType<typeof useAppStore.getState>
+): string {
+  return `${isAgentTaskCompleteTrackingEnabledFromState(state)}:${isAgentTaskCompleteNotificationEnabledFromState(state)}`
+}
+
+function subscribeAgentTaskCompleteTrackingEnabled(listener: () => void): () => void {
+  if (agentTaskCompleteTrackingSettingsUnsubscribe === null) {
+    agentTaskCompleteTrackingSettingsSnapshot = getAgentTaskCompleteTrackingSettingsSnapshot(
+      useAppStore.getState()
+    )
+    agentTaskCompleteTrackingSettingsUnsubscribe = useAppStore.subscribe((state) => {
+      const snapshot = getAgentTaskCompleteTrackingSettingsSnapshot(state)
+      if (snapshot === agentTaskCompleteTrackingSettingsSnapshot) {
         return
       }
-      agentTaskCompleteNotificationEnabledSnapshot = enabled
-      for (const subscriber of Array.from(agentTaskCompleteNotificationEnabledListeners)) {
+      agentTaskCompleteTrackingSettingsSnapshot = snapshot
+      for (const subscriber of Array.from(agentTaskCompleteTrackingEnabledListeners)) {
         subscriber()
       }
     })
   }
 
-  agentTaskCompleteNotificationEnabledListeners.add(listener)
+  agentTaskCompleteTrackingEnabledListeners.add(listener)
   return () => {
-    agentTaskCompleteNotificationEnabledListeners.delete(listener)
+    agentTaskCompleteTrackingEnabledListeners.delete(listener)
     if (
-      agentTaskCompleteNotificationEnabledListeners.size === 0 &&
-      agentTaskCompleteNotificationSettingsUnsubscribe !== null
+      agentTaskCompleteTrackingEnabledListeners.size === 0 &&
+      agentTaskCompleteTrackingSettingsUnsubscribe !== null
     ) {
-      agentTaskCompleteNotificationSettingsUnsubscribe()
-      agentTaskCompleteNotificationSettingsUnsubscribe = null
-      agentTaskCompleteNotificationEnabledSnapshot = null
+      agentTaskCompleteTrackingSettingsUnsubscribe()
+      agentTaskCompleteTrackingSettingsUnsubscribe = null
+      agentTaskCompleteTrackingSettingsSnapshot = null
     }
   }
 }
@@ -403,7 +434,8 @@ export function connectPanePty(
   let agentTaskCompleteStatusUnsubscribe: (() => void) | null = null
   let agentTaskCompleteSettingsUnsubscribe: (() => void) | null = null
   let agentTaskCompleteNotificationGeneration = 0
-  let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
+  let wasAgentTaskCompleteTrackingEnabled = isAgentTaskCompleteTrackingEnabled()
+  let wasAgentTaskCompleteOsNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
   let terminalBellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
@@ -687,6 +719,9 @@ export function connectPanePty(
   })
   commandLifecycle.attachXtermConsumer(pane.terminal)
   const onTerminalKeyDown = (event: KeyboardEvent): void => {
+    deps.clearTerminalTabUnread(deps.tabId)
+    deps.clearTerminalPaneUnread(cacheKey)
+    deps.clearWorktreeUnread(deps.worktreeId)
     if (isPlainEscapeKeyEvent(event)) {
       setPendingTerminalInputIntent('plain-escape')
       return
@@ -731,7 +766,7 @@ export function connectPanePty(
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       }),
     shouldPollProcessCadence: () =>
-      isAgentTaskCompleteNotificationEnabled() && deps.isVisibleRef.current,
+      isAgentTaskCompleteTrackingEnabled() && deps.isVisibleRef.current,
     isLive: () => {
       if (disposed) {
         return false
@@ -788,7 +823,7 @@ export function connectPanePty(
   const onTitleChange = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
-    if (syncAgentTaskCompleteNotificationEnabled()) {
+    if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeTitle(rawTitle)
     }
     // Why: only the focused pane should drive the tab title — otherwise two
@@ -997,25 +1032,42 @@ export function connectPanePty(
     }
   }
 
-  const syncAgentTaskCompleteNotificationEnabled = (): boolean => {
-    const enabled = isAgentTaskCompleteNotificationEnabled()
-    if (!enabled && wasAgentTaskCompleteNotificationEnabled) {
-      // Why: disabling notifications is an event-time boundary. Drop pending
-      // timers and coordinator state so completions observed while off cannot
-      // replay if the user turns the setting back on.
+  const syncAgentTaskCompleteTrackingEnabled = (): boolean => {
+    const enabled = isAgentTaskCompleteTrackingEnabled()
+    const osNotificationsEnabled = isAgentTaskCompleteNotificationEnabled()
+    if (
+      !osNotificationsEnabled &&
+      wasAgentTaskCompleteOsNotificationEnabled &&
+      pendingTerminalBellNotification
+    ) {
+      scheduleTerminalBellNotification()
+    }
+    if (!enabled && wasAgentTaskCompleteTrackingEnabled) {
+      // Why: disabling every completion consumer is an event-time boundary.
+      // Drop pending timers and coordinator state so old work cannot replay.
       agentTaskCompleteNotificationGeneration += 1
       clearPendingAgentTaskCompleteNotification()
       agentCompletionCoordinator.resetCompletionState({ requireFreshWorking: true })
       if (pendingTerminalBellNotification) {
         scheduleTerminalBellNotification()
       }
-    } else if (enabled && !wasAgentTaskCompleteNotificationEnabled) {
-      // Why: a pane may have observed work while agent-complete was disabled.
-      // Re-enabling should not let the next idle event notify for that old task.
+    } else if (enabled && !wasAgentTaskCompleteTrackingEnabled) {
+      // Why: a pane may have observed work while all completion consumers were
+      // disabled. Re-enabling should not let the next idle event report old work.
       agentCompletionCoordinator.resetCompletionState({ requireFreshWorking: true })
     }
-    wasAgentTaskCompleteNotificationEnabled = enabled
+    wasAgentTaskCompleteTrackingEnabled = enabled
+    wasAgentTaskCompleteOsNotificationEnabled = osNotificationsEnabled
     return enabled
+  }
+
+  const raiseAgentTaskCompleteAttention = (): void => {
+    if (!isTerminalAttentionEnabledFromState(useAppStore.getState())) {
+      return
+    }
+    deps.markWorktreeUnread(deps.worktreeId)
+    deps.markTerminalTabUnread(deps.tabId)
+    deps.markTerminalPaneUnread(cacheKey)
   }
 
   const scheduleAgentTaskCompleteNotification = (
@@ -1025,7 +1077,7 @@ export function connectPanePty(
       agentStatusSnapshot?: ParsedAgentStatusPayload
     } = {}
   ): void => {
-    if (!syncAgentTaskCompleteNotificationEnabled()) {
+    if (!syncAgentTaskCompleteTrackingEnabled()) {
       return
     }
     clearPendingAgentTaskCompleteNotification()
@@ -1036,15 +1088,21 @@ export function connectPanePty(
       clearPendingAgentTaskCompleteNotification()
       if (
         generationAtSchedule !== agentTaskCompleteNotificationGeneration ||
-        !syncAgentTaskCompleteNotificationEnabled()
+        !syncAgentTaskCompleteTrackingEnabled()
       ) {
+        return
+      }
+      if (disposed) {
+        return
+      }
+      // Why: terminal attention is a visual pane affordance, not an OS
+      // notification. Keep it working when the user disables OS banners.
+      raiseAgentTaskCompleteAttention()
+      if (!isAgentTaskCompleteNotificationEnabled()) {
         return
       }
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
-      if (disposed) {
-        return
-      }
       deps.dispatchNotification({
         source: 'agent-task-complete',
         terminalTitle: title,
@@ -1076,8 +1134,8 @@ export function connectPanePty(
       AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
     )
   }
-  agentTaskCompleteSettingsUnsubscribe = subscribeAgentTaskCompleteNotificationEnabled(() => {
-    if (syncAgentTaskCompleteNotificationEnabled()) {
+  agentTaskCompleteSettingsUnsubscribe = subscribeAgentTaskCompleteTrackingEnabled(() => {
+    if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.startProcessTracking()
     }
   })
@@ -1109,7 +1167,7 @@ export function connectPanePty(
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
     }
-    if (syncAgentTaskCompleteNotificationEnabled()) {
+    if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
     // Why: some agent TUIs leave xterm in DECSCUSR steady-cursor mode when
@@ -1117,7 +1175,7 @@ export function connectPanePty(
     queueAgentIdleCursorReset()
   }
   const onAgentBecameWorking = (): void => {
-    if (syncAgentTaskCompleteNotificationEnabled()) {
+    if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeTitleWorking()
     }
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
@@ -1212,7 +1270,7 @@ export function connectPanePty(
       const currentState = useAppStore.getState()
       const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       currentState.setAgentStatus(cacheKey, payload, title)
-      if (syncAgentTaskCompleteNotificationEnabled()) {
+      if (syncAgentTaskCompleteTrackingEnabled()) {
         agentCompletionCoordinator.observeHookStatus(payload)
       }
       if (payload.state === 'working' && pendingTerminalBellNotification) {
@@ -1261,12 +1319,9 @@ export function connectPanePty(
       clearPendingTerminalInputIntent()
       return
     }
-    // Why: a real keystroke into the terminal is the unambiguous "user is
-    // here" signal that dismisses attention. Guarded by the replay and
-    // codex-stale checks above so synthetic xterm auto-replies never count.
-    deps.clearTerminalTabUnread(deps.tabId)
-    deps.clearTerminalPaneUnread(cacheKey)
-    deps.clearWorktreeUnread(deps.worktreeId)
+    // Why: attention dismissal is tied to DOM keyboard/pointer interaction.
+    // xterm onData can also carry terminal-generated replies or control bytes,
+    // so clearing here would hide a fresh pane highlight before the user sees it.
     if (shouldSuppressForegroundCursor) {
       // Why: native Windows ConPTY can leave the old visual cursor painted
       // until the shell echoes the next frame; other PTY hosts should keep
