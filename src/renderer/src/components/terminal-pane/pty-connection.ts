@@ -16,7 +16,7 @@ import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
 import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
-import { isPtyLocked, setDriverForPty } from '@/lib/pane-manager/mobile-driver-state'
+import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
 import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
 import {
@@ -170,37 +170,6 @@ function isCodexStartupCommand(command: string): boolean {
     ?.toLowerCase()
     .replace(STARTUP_COMMAND_EXTENSION_RE, '')
   return executable === 'codex' || executable?.startsWith('codex-') === true
-}
-
-const pendingDesktopInputReclaims = new Map<string, Promise<boolean>>()
-
-async function reclaimLockedPtyForDesktopInput(ptyId: string): Promise<boolean> {
-  if (isRemoteRuntimePtyId(ptyId)) {
-    return true
-  }
-  const pending = pendingDesktopInputReclaims.get(ptyId)
-  if (pending) {
-    return pending
-  }
-  const reclaim = reclaimLocalLockedPtyForDesktopInput(ptyId).finally(() => {
-    pendingDesktopInputReclaims.delete(ptyId)
-  })
-  pendingDesktopInputReclaims.set(ptyId, reclaim)
-  return reclaim
-}
-
-async function reclaimLocalLockedPtyForDesktopInput(ptyId: string): Promise<boolean> {
-  try {
-    const restored = (await window.api.runtime.restoreTerminalFit(ptyId)).restored === true
-    if (restored) {
-      // Why: driver-change IPC is asynchronous; unblocking locally avoids
-      // dropping rapid follow-up keystrokes during the same desktop take-back.
-      setDriverForPty(ptyId, { kind: 'desktop' })
-    }
-    return restored || !isPtyLocked(ptyId)
-  } catch {
-    return false
-  }
 }
 
 function shouldKeepHiddenStartupRendererQueriesLive(
@@ -1285,24 +1254,11 @@ export function connectPanePty(
       clearPendingTerminalInputIntent()
       return
     }
+    // Why: presence-lock input drop. While mobile is the driver for this
+    // PTY, desktop keystrokes must not reach the shell; the visible overlay's
+    // explicit Take back action owns restoring desktop input and dimensions.
     if (currentPtyId && isPtyLocked(currentPtyId)) {
       clearPendingTerminalInputIntent()
-      // Why: typing into a mobile-driven terminal is a desktop take-back.
-      // Local PTYs must restore first so main's IPC defense accepts the
-      // replay; remote PTYs let the runtime RPC reclaim at its own seam.
-      void reclaimLockedPtyForDesktopInput(currentPtyId).then((reclaimed) => {
-        if (!reclaimed || transport.getPtyId() !== currentPtyId) {
-          return
-        }
-        if (transport.sendInput(data)) {
-          markTerminalInputSent()
-          observeAcceptedTerminalInput(data)
-          observeSentTerminalInputIntent(data)
-          deps.clearTerminalTabUnread(deps.tabId)
-          deps.clearTerminalPaneUnread(cacheKey)
-          deps.clearWorktreeUnread(deps.worktreeId)
-        }
-      })
       return
     }
     // Why: a real keystroke into the terminal is the unambiguous "user is

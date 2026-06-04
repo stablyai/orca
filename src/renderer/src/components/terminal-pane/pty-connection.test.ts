@@ -1987,7 +1987,7 @@ describe('connectPanePty', () => {
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
   })
 
-  it('reclaims and replays terminal input when mobile presence lock is active', async () => {
+  it('does not infer interrupts when mobile presence lock blocks terminal input', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
@@ -2033,19 +2033,55 @@ describe('connectPanePty', () => {
       terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
       ;(onDataHandler as unknown as (data: string) => void)('x')
-      await flushAsyncTicks()
+      vi.advanceTimersByTime(500)
 
-      expect(window.api.runtime.restoreTerminalFit).toHaveBeenCalledWith(ptyId)
-      expect(window.api.runtime.restoreTerminalFit).toHaveBeenCalledTimes(1)
-      expect(transport.sendInput).toHaveBeenCalledWith('\x03')
-      expect(transport.sendInput).toHaveBeenCalledWith('x')
+      expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
+      expect(transport.sendInput).not.toHaveBeenCalled()
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     } finally {
       setDriverForPty(ptyId, { kind: 'idle' })
     }
   })
 
-  it('lets remote locked terminal input reach the runtime transport for reclaim', async () => {
+  it('drops xterm protocol replies from live TUI output while mobile presence lock is active', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+
+    const ptyId = 'pty-mobile-tui-query'
+    setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+    try {
+      const transport = createMockTransport(ptyId)
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
+        ptyIdsByTabId: { 'tab-1': [ptyId] }
+      }
+
+      const pane = createPane(1)
+      let onDataHandler: ((data: string) => void) | null = null
+      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+        onDataHandler = handler
+        return { dispose: vi.fn() }
+      }) as typeof pane.terminal.onData)
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
+      if (!onDataHandler) {
+        throw new Error('expected onData handler to be registered')
+      }
+      // Simulate xterm answering a TUI's DA1 query while the phone owns the PTY.
+      ;(onDataHandler as unknown as (data: string) => void)('\x1b[?1;2c')
+      await flushAsyncTicks()
+
+      expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
+      expect(transport.sendInput).not.toHaveBeenCalled()
+    } finally {
+      setDriverForPty(ptyId, { kind: 'idle' })
+    }
+  })
+
+  it('blocks remote locked terminal input before it reaches the runtime transport', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
 
@@ -2076,7 +2112,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
 
       expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
-      expect(transport.sendInput).toHaveBeenCalledWith('x')
+      expect(transport.sendInput).not.toHaveBeenCalled()
     } finally {
       setDriverForPty(ptyId, { kind: 'idle' })
     }
