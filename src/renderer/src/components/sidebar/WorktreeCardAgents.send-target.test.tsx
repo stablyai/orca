@@ -84,6 +84,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('./useWorktreeAgentRows', () => ({
+  useSleepingAgentSessions: vi.fn(() => []),
   useWorktreeAgentRows: vi.fn(() => mockAgents)
 }))
 
