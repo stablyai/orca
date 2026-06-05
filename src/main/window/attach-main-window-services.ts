@@ -183,7 +183,12 @@ export function attachMainWindowServices(
       )
       return
     }
-    const allowed = permission === 'fullscreen'
+    // Why: attachMainWindowServices may run after BrowserSessionRegistry and
+    // replace the default browser partition handler, so keep this allowlist in sync.
+    const allowed =
+      permission === 'fullscreen' ||
+      permission === 'clipboard-read' ||
+      permission === 'clipboard-sanitized-write'
     if (!allowed) {
       browserManager.notifyPermissionDenied({
         guestWebContentsId: webContents.id,
@@ -194,7 +199,11 @@ export function attachMainWindowServices(
     callback(allowed)
   })
   browserSession.setPermissionCheckHandler((_webContents, permission, _origin, details) => {
-    if (permission === 'fullscreen') {
+    if (
+      permission === 'fullscreen' ||
+      permission === 'clipboard-read' ||
+      permission === 'clipboard-sanitized-write'
+    ) {
       return true
     }
     if (permission === 'media') {

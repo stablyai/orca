@@ -369,7 +369,7 @@ describe('attachMainWindowServices', () => {
     }
   })
 
-  it('denies browser-session permissions, display capture, and downloads by default', async () => {
+  it('allows browser-session clipboard permissions but denies other permissions by default', async () => {
     const browserSessionOnMock = vi.fn()
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
@@ -395,12 +395,14 @@ describe('attachMainWindowServices', () => {
     const cb = vi.fn()
     const guestWc = { id: 401, getURL: vi.fn(() => 'https://example.com/account') }
     browserPermissionHandler(guestWc, 'fullscreen', cb)
+    browserPermissionHandler(guestWc, 'clipboard-read', cb)
+    browserPermissionHandler(guestWc, 'clipboard-sanitized-write', cb)
     browserPermissionHandler(guestWc, 'notifications', cb)
     // Why: `media` routes through macOS TCC instead of being denied outright,
     // so pages inside the in-app browser can use camera/mic once Orca has been
     // granted Camera/Microphone at the OS level.
     browserPermissionHandler(guestWc, 'media', cb, { mediaTypes: ['video'] })
-    await vi.waitFor(() => expect(cb.mock.calls).toEqual([[true], [false], [true]]))
+    await vi.waitFor(() => expect(cb.mock.calls).toEqual([[true], [true], [true], [false], [true]]))
     expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledTimes(1)
     expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
       guestWebContentsId: 401,
@@ -415,6 +417,8 @@ describe('attachMainWindowServices', () => {
       details?: { mediaType?: 'video' | 'audio' | 'unknown' }
     ) => boolean
     expect(browserCheckHandler(null, 'fullscreen', '')).toBe(true)
+    expect(browserCheckHandler(null, 'clipboard-read', '')).toBe(true)
+    expect(browserCheckHandler(null, 'clipboard-sanitized-write', '')).toBe(true)
     expect(browserCheckHandler(null, 'notifications', '')).toBe(false)
     expect(browserCheckHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
 
