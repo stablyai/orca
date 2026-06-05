@@ -404,7 +404,7 @@ export function AutoRenameBranchFromWorkSetting({
                 </div>
               ) : (
                 <p className="max-w-[260px] text-right text-xs text-muted-foreground">
-                  Choose a Source Control AI agent that supports model selection.
+                  Choose a Git AI Author agent that supports model selection.
                 </p>
               )}
             </div>

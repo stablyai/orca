@@ -307,8 +307,8 @@ function Settings(): React.JSX.Element {
       return true
     }
     const shouldDiscard = await confirm({
-      title: 'Discard unsaved Source Control AI prompt changes?',
-      description: 'You have unsaved Source Control AI prompt changes. Leaving will discard them.',
+      title: 'Discard unsaved Git AI Author prompt changes?',
+      description: 'You have unsaved Git AI Author prompt changes. Leaving will discard them.',
       confirmLabel: 'Discard',
       confirmVariant: 'destructive'
     })
@@ -1031,7 +1031,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="git"
                   title="Git & Source Control"
-                  description="Branch naming, base refs, attribution, and Source Control AI."
+                  description="Branch naming, base refs, attribution, and Git AI Author."
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedSourceControlAiPromptChanges}
                 >

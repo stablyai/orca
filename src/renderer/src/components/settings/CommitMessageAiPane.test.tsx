@@ -109,14 +109,14 @@ describe('CommitMessageAiPane', () => {
   it('renders only the opt-in control before the feature is enabled', () => {
     const markup = renderPane(buildSettings())
 
-    expect(markup).toContain('Source Control AI')
-    expect(markup).toContain('Enable Source Control AI')
+    expect(markup).toContain('Git AI Author')
+    expect(markup).toContain('Enable Git AI Author')
     expect(markup).toContain('aria-checked="false"')
     expect(markup).not.toContain('Orca invokes this CLI')
-    expect(markup).not.toContain('Thinking effort')
+    expect(markup).not.toContain('Thinking Effort')
   })
 
-  it('renders model, thinking, and prompt controls for enabled preset agents', () => {
+  it('renders model, thinking, and collapsed commit and PR customization for enabled preset agents', () => {
     const markup = renderPane(
       buildSettings({
         commitMessageAi: {
@@ -132,15 +132,18 @@ describe('CommitMessageAiPane', () => {
 
     expect(markup).toContain('aria-checked="true"')
     expect(markup).toContain('Orca invokes this CLI')
-    expect(markup).toContain('Default model')
-    expect(markup).toContain('Thinking effort')
-    expect(markup).toContain('Commit message model')
-    expect(markup).toContain('PR details model')
+    expect(markup).toContain('Model')
+    expect(markup).toContain('Thinking Effort')
+    expect(markup).toContain('Commit and PR customization')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).not.toContain('Commit Messages')
+    expect(markup).not.toContain('Pull Requests')
+    expect(markup).not.toContain('Use a different model for commit message generation.')
+    expect(markup).not.toContain('Creation defaults')
     expect(markup).not.toContain('Branch name model')
-    expect(markup).toContain('Higher effort produces more careful messages')
-    expect(markup).toContain('Use Conventional Commits.')
-    expect(markup).toContain('Save')
-    expect(markup).toContain('Saved')
+    expect(markup).not.toContain('Higher effort produces more careful messages')
+    expect(markup).not.toContain('Use Conventional Commits.')
+    expect(markup).not.toContain('Saved')
   })
 
   it('keeps the agent and model selectors aligned for long labels', () => {
@@ -175,7 +178,7 @@ describe('CommitMessageAiPane', () => {
       })
     )
 
-    expect(markup).toContain('Source Control AI')
+    expect(markup).toContain('Git AI Author')
     expect(markup).toContain('Custom command')
     expect(markup).toContain('ollama run llama3.1 {prompt}')
   })
@@ -199,7 +202,7 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Your default agent is Aider')
     expect(markup).toContain('Choose a supported agent or Custom')
     expect(markup).not.toContain('Which model the selected agent uses')
-    expect(markup).not.toContain('Thinking effort')
+    expect(markup).not.toContain('Thinking Effort')
   })
 
   it('shows Gemini as coming soon instead of a selectable generator', () => {
@@ -217,8 +220,8 @@ describe('CommitMessageAiPane', () => {
     )
 
     expect(markup).toContain('Gemini')
-    expect(markup).toContain('Gemini Source Control AI is coming soon')
-    expect(markup).not.toContain('Which model Source Control AI uses')
+    expect(markup).toContain('Gemini Git AI Author is coming soon')
+    expect(markup).not.toContain('Which model Git AI Author uses')
   })
 
   it('keeps custom command discoverable in settings search metadata', () => {

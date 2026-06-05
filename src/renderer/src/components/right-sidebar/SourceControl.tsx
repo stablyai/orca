@@ -2062,7 +2062,7 @@ function SourceControlInner(): React.JSX.Element {
         setGenerateErrors((prev) => ({
           ...prev,
           [activeWorktreeId]:
-            'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
+            'Custom command is empty. Add one in Settings -> Git -> Git AI Author.'
         }))
         return
       }
@@ -4881,8 +4881,8 @@ function SourceControlAiInstructionGuidanceButton({
       ? 'Add commit message instructions'
       : 'Add pull request instructions'
   const target = guidance.repoBacked
-    ? 'Repo Settings > Source Control AI'
-    : 'Settings > Git > Source Control AI'
+    ? 'Repo Settings > Git AI Author'
+    : 'Settings > Git > Git AI Author'
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -5606,7 +5606,7 @@ export function CommitArea({
   } else if (isCommitting) {
     generateDisabledReason = 'Commit in progress…'
   } else if (!aiAgentConfigured) {
-    generateDisabledReason = 'Pick an agent in Settings -> Git -> Source Control AI.'
+    generateDisabledReason = 'Pick an agent in Settings -> Git -> Git AI Author.'
   } else if (stagedCount === 0) {
     generateDisabledReason = 'Stage at least one file to generate a message.'
   } else if (hasMessage) {

@@ -760,7 +760,7 @@ export function resolveSourceControlAiForOperation(
   if (!source.enabled) {
     return {
       ok: false,
-      error: 'Enable Source Control AI in Settings -> Git.'
+      error: 'Enable Git AI Author in Settings -> Git.'
     }
   }
 
@@ -775,8 +775,8 @@ export function resolveSourceControlAiForOperation(
     return {
       ok: false,
       error:
-        `Default agent "${input.settings.defaultTuiAgent}" does not support Source Control AI. ` +
-        'Choose Claude, Codex, or Custom in Settings -> Git -> Source Control AI.'
+        `Default agent "${input.settings.defaultTuiAgent}" does not support Git AI Author. ` +
+        'Choose Claude, Codex, or Custom in Settings -> Git -> Git AI Author.'
     }
   }
 
@@ -792,7 +792,7 @@ export function resolveSourceControlAiForOperation(
     if (!customAgentCommand) {
       return {
         ok: false,
-        error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
+        error: 'Custom command is empty. Add one in Settings -> Git -> Git AI Author.'
       }
     }
     return {
@@ -815,7 +815,7 @@ export function resolveSourceControlAiForOperation(
   if (!spec) {
     return {
       ok: false,
-      error: `Agent "${agentId}" does not support Source Control AI ${OPERATION_LABEL[input.operation]}.`
+      error: `Agent "${agentId}" does not support Git AI Author ${OPERATION_LABEL[input.operation]}.`
     }
   }
 

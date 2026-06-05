@@ -195,7 +195,7 @@ export function RepositoryPane({
   )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
-  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Source Control AI')
+  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
   const removeProjectLabel =
     confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
 

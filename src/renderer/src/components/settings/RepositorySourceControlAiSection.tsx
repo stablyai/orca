@@ -239,7 +239,7 @@ export function RepositorySourceControlAiSection({
         return
       }
       if (result === false) {
-        setSaveError('Failed to save Source Control AI settings.')
+        setSaveError('Failed to save Git AI Author settings.')
         return
       }
       setDraftState((current) => {
@@ -255,7 +255,7 @@ export function RepositorySourceControlAiSection({
       })
     } catch {
       if (mountedRef.current) {
-        setSaveError('Failed to save Source Control AI settings.')
+        setSaveError('Failed to save Git AI Author settings.')
       }
     } finally {
       if (mountedRef.current) {
@@ -390,7 +390,7 @@ export function RepositorySourceControlAiSection({
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
-          <h3 className="text-sm font-semibold">Source Control AI</h3>
+          <h3 className="text-sm font-semibold">Git AI Author</h3>
           <p className="text-xs text-muted-foreground">
             Repo-specific overrides. Each field uses global settings until you set it here.
           </p>
@@ -492,8 +492,7 @@ export function RepositorySourceControlAiSection({
         </div>
       ) : (
         <p className="rounded-md border border-border px-3 py-2 text-xs text-muted-foreground">
-          Model overrides are available after a supported global Source Control AI agent is
-          selected.
+          Model overrides are available after a supported global Git AI Author agent is selected.
         </p>
       )}
 
