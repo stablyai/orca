@@ -73,10 +73,9 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
 
 function getActionTitles(isSshLikely: boolean): {
   primary: string
-  secondary: string | null
-  moreOptions: string[]
+  secondary: string[]
 } {
-  const { primaryAction, secondaryAction, moreOptions } = getAddRepoLocalStartActions({
+  const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
     isSshLikely,
     onBrowse: vi.fn(),
     onOpenCloneStep: vi.fn(),
@@ -86,8 +85,7 @@ function getActionTitles(isSshLikely: boolean): {
 
   return {
     primary: primaryAction.title,
-    secondary: secondaryAction?.title ?? null,
-    moreOptions: moreOptions.map((action) => action.title)
+    secondary: secondaryActions.map((action) => action.title)
   }
 }
 
@@ -96,45 +94,38 @@ describe('AddRepoLocalStartStep', () => {
     document.body.innerHTML = ''
   })
 
-  it('promotes browse folder and hides uncommon actions by default', () => {
+  it('promotes browse folder and keeps secondary actions always visible', () => {
     const markup = renderLocalStartStep(false)
 
     expect(markup).toContain('Browse folder')
-    expect(markup).toContain('More options')
-    expect(markup).toContain('aria-expanded="false"')
-    expect(markup).not.toContain('Clone from URL')
-    expect(markup).not.toContain('Remote project')
-    expect(markup).not.toContain('Create new project')
+    expect(markup).toContain('Clone from URL')
+    expect(markup).toContain('Remote project')
+    expect(markup).toContain('Create new project')
+    expect(markup).toContain('Or add from')
+    expect(markup).not.toContain('More options')
   })
 
-  it('keeps clone, remote, and create actions in More options for default users', () => {
+  it('orders secondary actions clone-first for default users', () => {
     const titles = getActionTitles(false)
 
     expect(titles.primary).toBe('Browse folder')
-    expect(titles.secondary).toBeNull()
-    expect(titles.moreOptions).toEqual(['Clone from URL', 'Remote project', 'Create new project'])
+    expect(titles.secondary).toEqual(['Clone from URL', 'Remote project', 'Create new project'])
   })
 
-  it('promotes remote project first for SSH-likely users', () => {
+  it('keeps Browse folder primary for SSH-likely users', () => {
     const markup = renderLocalStartStep(true)
 
-    const remoteIndex = markup.indexOf('Remote project')
-    const browseIndex = markup.indexOf('Browse folder')
-
-    expect(remoteIndex).toBeGreaterThanOrEqual(0)
-    expect(browseIndex).toBeGreaterThanOrEqual(0)
-    expect(remoteIndex).toBeLessThan(browseIndex)
-    expect(markup).toContain('More options')
-    expect(markup).not.toContain('Clone from URL')
-    expect(markup).not.toContain('Create new project')
+    expect(markup).toContain('Browse folder')
+    expect(markup).toContain('Remote project')
+    expect(markup).toContain('Clone from URL')
+    expect(markup).toContain('Create new project')
   })
 
-  it('keeps clone and create in More options for SSH-likely users', () => {
+  it('orders secondary actions remote-first for SSH-likely users', () => {
     const titles = getActionTitles(true)
 
-    expect(titles.primary).toBe('Remote project')
-    expect(titles.secondary).toBe('Browse folder')
-    expect(titles.moreOptions).toEqual(['Clone from URL', 'Create new project'])
+    expect(titles.primary).toBe('Browse folder')
+    expect(titles.secondary).toEqual(['Remote project', 'Clone from URL', 'Create new project'])
   })
 
   it('focuses Browse folder when the default Add Project step opens', async () => {
@@ -148,7 +139,7 @@ describe('AddRepoLocalStartStep', () => {
     })
   })
 
-  it('focuses Browse folder even when SSH-likely users see Remote project first', async () => {
+  it('focuses Browse folder for SSH-likely users too', async () => {
     const { container, root } = await renderLocalStartStepDom(true)
     const browseButton = findButton(container, 'Browse folder')
     const remoteButton = findButton(container, 'Remote project')
@@ -161,36 +152,12 @@ describe('AddRepoLocalStartStep', () => {
     })
   })
 
-  it('uses the shared collapsible height animation for More options', async () => {
+  it('renders secondary actions as enabled buttons without a disclosure toggle', async () => {
     const { container, root } = await renderLocalStartStepDom(false)
-    const toggle = findButton(container, 'More options')
-    const controlledId = toggle.getAttribute('aria-controls')
-    if (!controlledId) {
-      throw new Error('More options control is missing aria-controls')
-    }
 
-    const closedPanel = document.getElementById(controlledId)
-    expect(closedPanel).not.toBeNull()
-    expect(closedPanel?.classList.contains('collapsible-height-content')).toBe(true)
-    expect(closedPanel?.getAttribute('data-state')).toBe('closed')
-    expect(closedPanel?.hasAttribute('hidden')).toBe(true)
-
-    await act(async () => {
-      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    const openPanel = document.getElementById(controlledId)
-    expect(openPanel).not.toBeNull()
-    expect(toggle.getAttribute('aria-expanded')).toBe('true')
-    expect(openPanel?.classList.contains('collapsible-height-content')).toBe(true)
-    expect(openPanel?.getAttribute('data-state')).toBe('open')
     expect(findButton(container, 'Clone from URL').disabled).toBe(false)
-
-    await act(async () => {
-      toggle.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(findButton(container, 'Remote project').disabled).toBe(false)
+    expect(findButton(container, 'Create new project').disabled).toBe(false)
 
     await act(async () => {
       root.unmount()

@@ -1,12 +1,11 @@
-import { useEffect, useId, useRef, useState, type ComponentType, type Ref } from 'react'
-import { ChevronDown, CircleStop, Loader2 } from 'lucide-react'
+import { useEffect, useRef, type ComponentType, type Ref } from 'react'
+import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { getAddRepoLocalStartActions } from './add-repo-local-start-actions'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 
 type AddRepoNestedScanProgressNoticeProps = {
   busyLabel: string
@@ -170,18 +169,14 @@ export function AddRepoLocalStartStep({
   onOpenCreateStep,
   onStopNestedScan
 }: AddRepoLocalStartStepProps): React.JSX.Element {
-  const [showMoreOptions, setShowMoreOptions] = useState(false)
-  const moreOptionsId = useId()
   const browseActionRef = useRef<HTMLButtonElement | null>(null)
-  const { primaryAction, secondaryAction, moreOptions } = getAddRepoLocalStartActions({
+  const { primaryAction, secondaryActions } = getAddRepoLocalStartActions({
     isSshLikely,
     onBrowse,
     onOpenCloneStep,
     onOpenRemoteStep,
     onOpenCreateStep
   })
-  const primaryIsBrowse = primaryAction.kind === 'browse'
-  const secondaryIsBrowse = secondaryAction?.kind === 'browse'
 
   useEffect(() => {
     if (!isAdding) {
@@ -193,11 +188,9 @@ export function AddRepoLocalStartStep({
     <>
       <DialogHeader>
         <DialogTitle>Add a project</DialogTitle>
-        <DialogDescription>
-          {repoCount === 0
-            ? 'Add a project to get started with Orca.'
-            : 'Add another project to manage with Orca.'}
-        </DialogDescription>
+        {repoCount === 0 ? (
+          <DialogDescription>Add a project to get started with Orca.</DialogDescription>
+        ) : null}
       </DialogHeader>
 
       <div className="space-y-3 pt-2">
@@ -206,23 +199,30 @@ export function AddRepoLocalStartStep({
           title={primaryAction.title}
           description={primaryAction.description}
           disabled={isAdding}
-          buttonRef={primaryIsBrowse ? browseActionRef : undefined}
+          buttonRef={browseActionRef}
           onClick={primaryAction.onClick}
         />
 
-        {/* Match the primary card's size so promoted siblings (e.g. SSH's Browse folder) read as equal choices. */}
-        {secondaryAction ? (
-          <AddRepoPrimaryStartAction
-            icon={secondaryAction.icon}
-            title={secondaryAction.title}
-            description={secondaryAction.description}
-            disabled={isAdding}
-            buttonRef={secondaryIsBrowse ? browseActionRef : undefined}
-            onClick={secondaryAction.onClick}
-          />
-        ) : null}
+        {/* Keep secondary entry methods always visible so they stay discoverable without an extra click. */}
+        {/* Label clarifies the lighter-weight rows are alternate entry methods, not lesser features. */}
+        <div className="space-y-1.5">
+          <p className="text-xs font-medium text-muted-foreground">Or add from…</p>
+          {/* Match the primary card's surface (bg-background) so the group reads as the same family, not a recessed panel. */}
+          <div className="overflow-hidden rounded-md border border-border/80 bg-background">
+            {secondaryActions.map((action, index) => (
+              <AddRepoSecondaryStartAction
+                key={action.kind}
+                icon={action.icon}
+                title={action.title}
+                description={action.description}
+                disabled={isAdding}
+                onClick={action.onClick}
+                className={index === 0 ? '' : 'border-t border-border/70'}
+              />
+            ))}
+          </div>
+        </div>
 
-        {/* Keep the busy notice anchored to the action cards above, not the More options panel below. */}
         {isAdding && addProjectBusyLabel ? (
           <AddRepoNestedScanProgressNotice
             busyLabel={addProjectBusyLabel}
@@ -231,43 +231,6 @@ export function AddRepoLocalStartStep({
             onStopNestedScan={onStopNestedScan}
           />
         ) : null}
-
-        <Collapsible open={showMoreOptions} onOpenChange={setShowMoreOptions}>
-          <div className="space-y-2">
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                aria-controls={moreOptionsId}
-                disabled={isAdding}
-                className="inline-flex h-8 w-fit items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-default disabled:opacity-40"
-              >
-                More options
-                <ChevronDown
-                  className={cn(
-                    'size-3.5 transition-transform',
-                    showMoreOptions ? 'rotate-180' : 'rotate-0'
-                  )}
-                />
-              </button>
-            </CollapsibleTrigger>
-
-            <CollapsibleContent id={moreOptionsId} className="collapsible-height-content">
-              <div className="overflow-hidden rounded-md border border-border bg-muted/30">
-                {moreOptions.map((option, index) => (
-                  <AddRepoMoreOption
-                    key={option.title}
-                    icon={option.icon}
-                    title={option.title}
-                    description={option.description}
-                    disabled={isAdding}
-                    onClick={option.onClick}
-                    className={index === 0 ? '' : 'border-t border-border/70'}
-                  />
-                ))}
-              </div>
-            </CollapsibleContent>
-          </div>
-        </Collapsible>
       </div>
     </>
   )
@@ -298,7 +261,7 @@ const AddRepoPrimaryStartAction = ({
     disabled={disabled}
     className="h-auto min-h-24 w-full justify-start gap-4 whitespace-normal border-border/80 bg-background px-4 py-4 text-left"
   >
-    <span className="grid size-11 shrink-0 place-items-center rounded-md border border-border bg-muted text-foreground">
+    <span className="grid size-11 shrink-0 place-items-center rounded-md text-foreground">
       <Icon className="size-5" />
     </span>
     <span className="min-w-0">
@@ -310,7 +273,7 @@ const AddRepoPrimaryStartAction = ({
   </Button>
 )
 
-function AddRepoMoreOption({
+function AddRepoSecondaryStartAction({
   icon: Icon,
   title,
   description,
