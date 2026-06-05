@@ -214,6 +214,8 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // developer running with ORCA_E2E_FORCE_HEADFUL=1 can actually watch what
     // the test does. Defaults to 0 (no slowdown) for normal runs.
     const slowMo = ORCA_E2E_SLOWMO_MS
+    const useE2ERelay =
+      process.env.ORCA_E2E_SSH_LOCALHOST === '1' || process.env.ORCA_E2E_SSH_DOCKER === '1'
     // Why: ORCA_E2E_RECORD_VIDEO=1 captures a webm of the renderer so a
     // developer can replay the run later — Electron's Playwright trace viewer
     // does not produce DOM snapshots, so video is the only reliable replay.
@@ -244,7 +246,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...cleanEnv,
         NODE_ENV: 'development',
         ORCA_E2E_USER_DATA_DIR: userDataDir,
-        ...(process.env.ORCA_E2E_SSH_LOCALHOST === '1' && !cleanEnv.ORCA_RELAY_PATH
+        ...(useE2ERelay && !cleanEnv.ORCA_RELAY_PATH
           ? { ORCA_RELAY_PATH: path.join(process.cwd(), 'out', 'relay') }
           : {}),
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
