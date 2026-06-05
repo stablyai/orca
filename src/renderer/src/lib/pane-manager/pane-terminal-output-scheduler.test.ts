@@ -281,6 +281,35 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).not.toHaveBeenCalled()
   })
 
+  it('does not hold latency-sensitive input behind a synchronized restore fallback', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?25h\x1b[?2026l', {
+      foreground: true,
+      stripTransientCursorShows: true,
+      coalesceForeground: true
+    })
+
+    writeTerminalOutput(terminal, 'typed', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true
+    })
+
+    vi.advanceTimersByTime(31)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+
+    expect(terminal.write).toHaveBeenCalledWith(
+      '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?25h\x1b[?2026ltyped',
+      expect.any(Function)
+    )
+  })
+
   it('keeps transient cursor shows unless the caller opts into stripping', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
