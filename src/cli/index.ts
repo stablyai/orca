@@ -71,7 +71,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
       json
     })
   } catch (error) {
-    reportCliError(error, json)
+    reportCliError(error, json, { commandPath: parsed.commandPath })
     process.exitCode = 1
   }
 }

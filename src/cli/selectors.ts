@@ -17,7 +17,7 @@ export type BrowserCliTarget = {
 export type ComputerCliTarget = {
   session?: string
   worktree?: string
-  app?: ComputerAppQuery
+  app: ComputerAppQuery
 }
 
 export function buildCurrentWorktreeSelector(cwd: string): string {
@@ -198,8 +198,15 @@ export async function getComputerCommandTarget(
   cwd: string,
   client: RuntimeClient
 ): Promise<ComputerCliTarget> {
-  const app = getOptionalStringFlag(flags, 'app')
+  const app = getRequiredStringFlag(flags, 'app')
   const session = getOptionalStringFlag(flags, 'session')
+  const worktree = getOptionalStringFlag(flags, 'worktree')
+  if (session && worktree) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Computer-use targeting accepts either --session or --worktree, not both'
+    )
+  }
   if (session) {
     return { session, app }
   }

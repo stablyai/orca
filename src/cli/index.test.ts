@@ -113,6 +113,25 @@ describe('COMMAND_SPECS collision check', () => {
   })
 })
 
+describe('orca root help', () => {
+  it('advertises computer-use capabilities discovery', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer capabilities     Show computer-use provider capabilities'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer permissions      Show or open computer-use permission setup'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer press-key        Press a single key such as Return or Escape'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('orca cli worktree awareness', () => {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
   const originalUserDataPath = process.env.ORCA_USER_DATA_PATH

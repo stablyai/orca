@@ -3,6 +3,7 @@
 // format human-facing messages. Centralizing this mapping keeps the allowlist
 // auditable in one place instead of spread across per-method branches.
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
+import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
@@ -57,7 +58,8 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     typeof (error as { code: unknown }).code === 'string' &&
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
-    return errorResponse(id, meta, (error as { code: string }).code, message)
+    const code = (error as { code: string }).code
+    return errorResponse(id, meta, code, message, computerErrorData(code))
   }
   if (
     error instanceof Error &&
@@ -81,6 +83,8 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   }
   return errorResponse(id, meta, 'runtime_error', message)
 }
+
+export const computerErrorData = computerUseErrorRecoveryData
 
 // Why: browser errors carry a structured .code property (BrowserError from
 // cdp-bridge.ts) that maps directly to agent-facing error codes. We forward

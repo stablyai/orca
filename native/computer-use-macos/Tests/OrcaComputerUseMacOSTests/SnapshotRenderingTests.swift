@@ -82,4 +82,89 @@ final class SnapshotRenderingTests: XCTestCase {
 
         XCTAssertEqual(SnapshotRenderHeuristics.line(index: 9, node: node), "9 row General Settings Enabled")
     }
+
+    func testCompactsLargeBrowserTabStripsToSelectedTab() {
+        let parent = SnapshotRenderNode(role: "AXScrollArea", roleDescription: "tab bar")
+        let children = (0..<12).map { index in
+            SnapshotRenderNode(
+                role: "AXRadioButton",
+                roleDescription: "tab",
+                title: "Tab \(index)",
+                traits: index == 7 ? ["selected"] : []
+            )
+        }
+
+        let compaction = SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: children)
+
+        XCTAssertEqual(compaction, SnapshotTabStripCompaction(retainedIndexes: [7], omittedCount: 11))
+    }
+
+    func testInfersLargeBrowserTabStripFromScrollAreaChildren() {
+        let parent = SnapshotRenderNode(role: "AXScrollArea", roleDescription: "scroll area")
+        let children = (0..<12).map { index in
+            SnapshotRenderNode(
+                role: "AXRadioButton",
+                roleDescription: "tab",
+                title: "Tab \(index)",
+                traits: index == 11 ? ["selected"] : []
+            )
+        }
+
+        let compaction = SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: children)
+
+        XCTAssertEqual(compaction, SnapshotTabStripCompaction(retainedIndexes: [11], omittedCount: 11))
+    }
+
+    func testUsesOneValueAsSelectedBrowserTabFallback() {
+        let parent = SnapshotRenderNode(role: "AXScrollArea", roleDescription: "scroll area")
+        let children = (0..<12).map { index in
+            SnapshotRenderNode(
+                role: "AXRadioButton",
+                roleDescription: "tab",
+                title: "Tab \(index)",
+                value: index == 4 ? "1" : "0"
+            )
+        }
+
+        let compaction = SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: children)
+
+        XCTAssertEqual(compaction, SnapshotTabStripCompaction(retainedIndexes: [4], omittedCount: 11))
+    }
+
+    func testKeepsLargeTabCollectionsWithoutActiveTabExpanded() {
+        let parent = SnapshotRenderNode(role: "AXGroup")
+        let children = (0..<12).map { index in
+            SnapshotRenderNode(role: "AXTab", title: "Tab \(index)", value: "0")
+        }
+
+        XCTAssertNil(SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: children))
+    }
+
+    func testKeepsLargeNonBrowserTabCollectionsExpanded() {
+        let parent = SnapshotRenderNode(role: "AXGroup")
+        let children = (0..<12).map { index in
+            SnapshotRenderNode(
+                role: "AXRadioButton",
+                roleDescription: "tab",
+                title: "Pane \(index)",
+                traits: index == 2 ? ["selected"] : []
+            )
+        }
+
+        XCTAssertNil(SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: children))
+    }
+
+    func testKeepsSmallTabGroupsExpanded() {
+        let parent = SnapshotRenderNode(role: "AXTabGroup", roleDescription: "tab group")
+        let children = (0..<3).map { index in
+            SnapshotRenderNode(
+                role: "AXRadioButton",
+                roleDescription: "tab",
+                title: "Pane \(index)",
+                traits: index == 1 ? ["selected"] : []
+            )
+        }
+
+        XCTAssertNil(SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: children))
+    }
 }
