@@ -15,6 +15,11 @@ export function registerCodexUsageHandlers(codexUsage: CodexUsageStore): void {
     codexUsage.refresh(args?.force ?? false)
   )
   ipcMain.handle(
+    'codexUsage:getSnapshot',
+    (_event, args: { scope: CodexUsageScope; range: CodexUsageRange; limit?: number }) =>
+      codexUsage.getSnapshot(args.scope, args.range, args.limit)
+  )
+  ipcMain.handle(
     'codexUsage:getSummary',
     (_event, args: { scope: CodexUsageScope; range: CodexUsageRange }) =>
       codexUsage.getSummary(args.scope, args.range)

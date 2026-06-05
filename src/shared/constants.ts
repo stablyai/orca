@@ -18,6 +18,8 @@ import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
+import { DEFAULT_APP_ICON_ID } from './app-icon'
+import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -37,8 +39,8 @@ export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivity
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
-export const ONBOARDING_FINAL_STEP = 5
-export const ONBOARDING_FLOW_VERSION = 2
+export const ONBOARDING_FINAL_STEP = 4
+export const ONBOARDING_FLOW_VERSION = 3
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -173,6 +175,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
     theme: 'system',
+    appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -231,13 +234,15 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalScrollbackBytes: 10_000_000,
     httpProxyUrl: '',
     httpProxyBypassRules: '',
+    electronHttp1CompatibilityMode: false,
     openLinksInApp: true,
-    openInApplications: [],
+    openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
     showTitlebarAppName: true,
     showTasksButton: true,
+    showAutomationsButton: true,
     showMobileButton: true,
     ctrlTabOrderMode: 'mru',
     // Why: switching worktrees and opening command surfaces from a focused
@@ -428,6 +433,7 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     openFilesByWorktree: {},
+    markdownFrontmatterVisible: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
     activeBrowserTabIdByWorktree: {},

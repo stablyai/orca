@@ -1,84 +1,25 @@
-/* eslint-disable max-lines -- Why: this component co-locates the rich markdown editor surface, toolbar, search, and slash menu so tightly coupled editor state stays in one place. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
-import type { JSONContent } from '@tiptap/core'
 import type { DiffComment, MarkdownDocument } from '../../../../shared/types'
-import { RichMarkdownSlashMenu } from './RichMarkdownSlashMenu'
-import { RichMarkdownDocLinkMenu } from './RichMarkdownDocLinkMenu'
-import { RichMarkdownEmojiMenu } from './RichMarkdownEmojiMenu'
 import { useAppStore } from '@/store'
-import { RichMarkdownToolbar } from './RichMarkdownToolbar'
-import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { useLocalImagePick } from './useLocalImagePick'
-import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import { getConnectionId } from '@/lib/connection-context'
-import { slashCommands, syncDocLinkMenu, syncSlashMenu } from './rich-markdown-commands'
-import type {
-  DocLinkMenuRow,
-  DocLinkMenuState,
-  SlashCommand,
-  SlashMenuState
-} from './rich-markdown-commands'
-import { getMarkdownDocCompletionDocuments } from './markdown-doc-completions'
-import { RichMarkdownSearchBar } from './RichMarkdownSearchBar'
 import { useRichMarkdownSearch } from './useRichMarkdownSearch'
-import {
-  getLinkBubblePosition,
-  RichMarkdownLinkBubble,
-  type LinkBubbleState
-} from './RichMarkdownLinkBubble'
+import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { registerPendingEditorFlush } from './editor-pending-flush'
-import { createRichMarkdownKeyHandler } from './rich-markdown-key-handler'
-import { normalizeSoftBreaks } from './rich-markdown-normalize'
-import { autoFocusRichEditor } from './rich-markdown-auto-focus'
-import { handleRichMarkdownCut } from './rich-markdown-cut-handler'
-import { openHttpLink } from '@/lib/http-link-routing'
-import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { toast } from 'sonner'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import { isSingleEmptyTopLevelOrderedList } from './rich-markdown-list-continuation'
-import {
-  absolutePathToFileUri as toFileUrlForOsEscape,
-  resolveMarkdownLinkTarget
-} from './markdown-internal-links'
-import { scrollToAnchorInEditor } from './markdown-anchor-scroll'
-import type {
-  RichMarkdownContextMenuCommand,
-  RichMarkdownContextMenuCommandPayload
-} from '../../../../shared/rich-markdown-context-menu'
 import { buildMarkdownTableOfContents, type MarkdownTocItem } from './markdown-table-of-contents'
-import { MarkdownTableOfContentsPanel } from './MarkdownTableOfContentsPanel'
-import { getRelativePathInsideRoot, normalizeRelativePath } from '@/lib/path'
-import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
-import { DiffCommentCard } from '../diff-comments/DiffCommentCard'
-import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
-import { isMarkdownComment } from '@/lib/diff-comment-compat'
-import { Check, Copy, MessageSquare, Plus } from 'lucide-react'
+import { RichMarkdownEditorSurface } from './RichMarkdownEditorSurface'
+import { useRichMarkdownEditorInstance } from './useRichMarkdownEditorInstance'
+import { useRichMarkdownMenuController } from './useRichMarkdownMenuController'
+import { useRichMarkdownProgrammaticSync } from './useRichMarkdownProgrammaticSync'
+import { useRichMarkdownReviewController } from './useRichMarkdownReviewController'
+import { useRichMarkdownReviewEditorEffects } from './useRichMarkdownReviewEditorEffects'
 import {
-  formatMarkdownReviewNotes,
-  getMarkdownReviewCardQuote,
-  sortMarkdownReviewNotes,
-  type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
-import { copyMarkdownReviewNotesForAgent } from '@/lib/markdown-review-note-copy'
-import {
-  richMarkdownAnnotationHighlightPluginKey,
-  type RichMarkdownAnnotationHighlightRange
-} from './rich-markdown-annotation-highlight'
-import {
-  getRichMarkdownLineRangeFromBlocks,
-  getRichMarkdownRangeBounds,
-  getRichMarkdownRangeStart
-} from './rich-markdown-range-bounds'
-import {
-  shouldExpandRichMarkdownReviewRail,
-  stackRichMarkdownReviewNotePositions,
-  type RichMarkdownReviewNotePosition
-} from './rich-markdown-review-note-layout'
+  isRichMarkdownContextCommandTarget,
+  runRichMarkdownContextCommand
+} from './rich-markdown-context-command-routing'
 
 type RichMarkdownEditorProps = {
   fileId: string
@@ -104,453 +45,8 @@ type RichMarkdownEditorProps = {
   headerSlot?: React.ReactNode
 }
 
-const richMarkdownExtensions = createRichMarkdownExtensions({
-  includePlaceholder: true
-})
-
-function clampMenuSelectionIndex(index: number, itemCount: number): number {
-  if (itemCount <= 0) {
-    return 0
-  }
-  return Math.min(Math.max(index, 0), itemCount - 1)
-}
-
-function runRichMarkdownContextCommand(
-  command: RichMarkdownContextMenuCommand,
-  editor: Editor,
-  toggleLink: () => void,
-  pickImage: () => void
-): void {
-  switch (command) {
-    case 'add-link':
-      toggleLink()
-      return
-    case 'bold':
-      editor.chain().focus().toggleBold().run()
-      return
-    case 'italic':
-      editor.chain().focus().toggleItalic().run()
-      return
-    case 'strike':
-      editor.chain().focus().toggleStrike().run()
-      return
-    case 'inline-code':
-      editor.chain().focus().toggleCode().run()
-      return
-    case 'code-block':
-      editor.chain().focus().toggleCodeBlock().run()
-      return
-    case 'blockquote':
-      editor.chain().focus().toggleBlockquote().run()
-      return
-    case 'paragraph':
-      editor.chain().focus().setParagraph().run()
-      return
-    case 'heading-1':
-      editor.chain().focus().setHeading({ level: 1 }).run()
-      return
-    case 'heading-2':
-      editor.chain().focus().setHeading({ level: 2 }).run()
-      return
-    case 'heading-3':
-      editor.chain().focus().setHeading({ level: 3 }).run()
-      return
-    case 'bullet-list':
-      editor.chain().focus().toggleBulletList().run()
-      return
-    case 'ordered-list':
-      editor.chain().focus().toggleOrderedList().run()
-      return
-    case 'task-list':
-      editor.chain().focus().toggleTaskList().run()
-      return
-    case 'image':
-      pickImage()
-      return
-    case 'divider':
-      editor.chain().focus().setHorizontalRule().run()
-  }
-}
-
-function shouldFocusEmptyEditorFromSurfaceClick(
-  event: React.MouseEvent<HTMLDivElement>,
-  editor: Editor | null
-): boolean {
-  if (!editor?.isEmpty || event.button !== 0) {
-    return false
-  }
-  const target = event.target
-  if (!(target instanceof Element)) {
-    return false
-  }
-  return !target.closest('.rich-markdown-editor-shell button, .rich-markdown-editor-shell input')
-}
-
-function isRichMarkdownReviewNoteNavigationClick(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-  return !target.closest('button,input,textarea,select,a,[contenteditable="true"]')
-}
-
-function isRichMarkdownContextCommandTarget(
-  payload: RichMarkdownContextMenuCommandPayload,
-  root: HTMLElement | null
-): boolean {
-  if (!root) {
-    return false
-  }
-  const rect = root.getBoundingClientRect()
-  return (
-    payload.x >= rect.left &&
-    payload.x <= rect.right &&
-    payload.y >= rect.top &&
-    payload.y <= rect.bottom
-  )
-}
-
 function flattenMarkdownTocItems(items: MarkdownTocItem[]): MarkdownTocItem[] {
   return items.flatMap((item) => [item, ...flattenMarkdownTocItems(item.children)])
-}
-
-type RichMarkdownCommentBlock = {
-  key: string
-  startLine: number
-  endLine: number
-  from: number
-  to: number
-}
-
-type RichMarkdownComposerState = {
-  lineNumber: number
-  startLine?: number
-}
-
-type RichMarkdownAnnotationTarget = RichMarkdownComposerState & {
-  from: number
-  to: number
-  selectedText: string
-  top: number
-  left?: number
-  buttonTop: number
-  buttonLeft: number
-}
-
-function countMarkdownLines(value: string): number {
-  if (value.length === 0) {
-    return 1
-  }
-  return value.split(/\r\n|\r|\n/).length
-}
-
-function serializeRichMarkdownJson(editor: Editor, content: JSONContent[]): string {
-  return (editor.markdown?.serialize({ type: 'doc', content }) ?? '').trimEnd()
-}
-
-function buildRichMarkdownCommentBlocks(editor: Editor): RichMarkdownCommentBlock[] {
-  const jsonContent = editor.getJSON().content ?? []
-  const blocks: RichMarkdownCommentBlock[] = []
-  let nextLine = 1
-  let previousNodeJson: JSONContent | null = null
-  let previousNodeLineCount = 0
-
-  editor.state.doc.forEach((node, nodeOffset, index) => {
-    const nodeJson = jsonContent[index]
-    if (!nodeJson) {
-      return
-    }
-    const nodeMarkdown = serializeRichMarkdownJson(editor, [nodeJson])
-    const nodeLineCount = countMarkdownLines(nodeMarkdown)
-    if (previousNodeJson) {
-      const pairMarkdown = serializeRichMarkdownJson(editor, [previousNodeJson, nodeJson])
-      const separatorLineCount = Math.max(
-        0,
-        countMarkdownLines(pairMarkdown) - previousNodeLineCount - nodeLineCount
-      )
-      nextLine += separatorLineCount
-    }
-    const startLine = nextLine
-    const endLine = Math.max(startLine, startLine + nodeLineCount - 1)
-    const from = nodeOffset + 1
-    blocks.push({
-      key: `${index}:${startLine}-${endLine}`,
-      startLine,
-      endLine,
-      from,
-      to: from + Math.max(0, node.nodeSize - 1)
-    })
-    nextLine = endLine + 1
-    previousNodeJson = nodeJson
-    previousNodeLineCount = nodeLineCount
-  })
-
-  if (blocks.length === 0) {
-    blocks.push({ key: 'empty:1-1', startLine: 1, endLine: 1, from: 1, to: 1 })
-  }
-
-  return blocks
-}
-
-function clampRichMarkdownAnnotationTarget(
-  editor: Editor,
-  target: RichMarkdownAnnotationTarget
-): RichMarkdownAnnotationTarget | null {
-  const maxPos = Math.max(1, editor.state.doc.content.size)
-  const from = Math.max(1, Math.min(target.from, maxPos))
-  const to = Math.max(1, Math.min(target.to, maxPos))
-  const clampedFrom = Math.min(from, to)
-  const clampedTo = Math.max(from, to)
-  if (clampedFrom === clampedTo) {
-    return null
-  }
-  return { ...target, from: clampedFrom, to: clampedTo }
-}
-
-function clearRichMarkdownNotePositions(
-  setNotePositions: React.Dispatch<React.SetStateAction<RichMarkdownReviewNotePosition[]>>
-): void {
-  setNotePositions((current) => (current.length === 0 ? current : []))
-}
-
-type RichMarkdownTextChar = {
-  value: string
-  pos: number | null
-}
-
-function normalizeRichMarkdownTextWithPositions(
-  chars: RichMarkdownTextChar[]
-): RichMarkdownTextChar[] {
-  const normalized: RichMarkdownTextChar[] = []
-  let previousWasWhitespace = false
-  for (const char of chars) {
-    if (/\s/.test(char.value)) {
-      if (!previousWasWhitespace) {
-        normalized.push({ value: ' ', pos: char.pos })
-      }
-      previousWasWhitespace = true
-      continue
-    }
-    normalized.push(char)
-    previousWasWhitespace = false
-  }
-  return normalized
-}
-
-function collectRichMarkdownTextChars(
-  editor: Editor,
-  from = 0,
-  to = editor.state.doc.content.size
-): RichMarkdownTextChar[] {
-  const chars: RichMarkdownTextChar[] = []
-  editor.state.doc.nodesBetween(from, to, (node, pos) => {
-    if (!node.isText || !node.text) {
-      return
-    }
-    if (chars.length > 0) {
-      chars.push({ value: ' ', pos: null })
-    }
-    for (let index = 0; index < node.text.length; index += 1) {
-      chars.push({ value: node.text[index], pos: pos + index })
-    }
-  })
-  return chars
-}
-
-function findRichMarkdownTextRanges(
-  chars: RichMarkdownTextChar[],
-  selectedText: string
-): RichMarkdownAnnotationHighlightRange[] {
-  const normalizedChars = normalizeRichMarkdownTextWithPositions(chars)
-  const haystack = normalizedChars.map((char) => char.value).join('')
-  const needle = normalizeRichMarkdownTextWithPositions(
-    Array.from(selectedText).map((value) => ({ value, pos: null }))
-  )
-    .map((char) => char.value)
-    .join('')
-  const start = haystack.indexOf(needle)
-  if (start === -1) {
-    return []
-  }
-
-  const positions = normalizedChars
-    .slice(start, start + needle.length)
-    .map((char) => char.pos)
-    .filter((pos): pos is number => pos !== null)
-    .sort((left, right) => left - right)
-  if (positions.length === 0) {
-    return []
-  }
-
-  const ranges: RichMarkdownAnnotationHighlightRange[] = []
-  let from = positions[0]
-  let to = positions[0] + 1
-  for (const pos of positions.slice(1)) {
-    if (pos === to) {
-      to += 1
-      continue
-    }
-    ranges.push({ from, to })
-    from = pos
-    to = pos + 1
-  }
-  ranges.push({ from, to })
-  return ranges
-}
-
-function getRichMarkdownAnnotationHighlightRanges(
-  editor: Editor,
-  comments: readonly DiffComment[],
-  markdownSourceLineOffset: number
-): RichMarkdownAnnotationHighlightRange[] {
-  return comments.flatMap((comment) =>
-    getRichMarkdownAnnotationHighlightRangesForComment(editor, comment, markdownSourceLineOffset)
-  )
-}
-
-function getRichMarkdownAnnotationHighlightRangesForComment(
-  editor: Editor,
-  comment: DiffComment,
-  markdownSourceLineOffset: number
-): RichMarkdownAnnotationHighlightRange[] {
-  const blocks = buildRichMarkdownCommentBlocks(editor)
-  const selectedText = comment.selectedText?.trim()
-  if (!selectedText) {
-    return []
-  }
-  const bodyLineNumber = Math.max(1, comment.lineNumber - markdownSourceLineOffset)
-  const block = blocks.find(
-    (candidate) => candidate.startLine <= bodyLineNumber && bodyLineNumber <= candidate.endLine
-  )
-  if (block) {
-    const blockRanges = findRichMarkdownTextRanges(
-      collectRichMarkdownTextChars(editor, block.from, block.to),
-      selectedText
-    )
-    if (blockRanges.length > 0) {
-      return blockRanges
-    }
-  }
-  return findRichMarkdownTextRanges(collectRichMarkdownTextChars(editor), selectedText)
-}
-
-function getRichMarkdownCommentAtPos(
-  editor: Editor,
-  comments: readonly DiffComment[],
-  markdownSourceLineOffset: number,
-  pos: number
-): DiffComment | null {
-  return (
-    comments.find((comment) =>
-      getRichMarkdownAnnotationHighlightRangesForComment(
-        editor,
-        comment,
-        markdownSourceLineOffset
-      ).some((range) => range.from <= pos && pos <= range.to)
-    ) ?? null
-  )
-}
-
-function getRichMarkdownCommentAnchorTop(
-  editor: Editor,
-  comment: DiffComment,
-  block: RichMarkdownCommentBlock,
-  containerRect: DOMRect,
-  containerScrollTop: number,
-  markdownSourceLineOffset: number
-): number | null {
-  try {
-    const ranges = getRichMarkdownAnnotationHighlightRangesForComment(
-      editor,
-      comment,
-      markdownSourceLineOffset
-    )
-    // Why: range notes should sort by the start of the selected text. Anchoring
-    // to the end puts overlapping ranges with the same final line in creation
-    // order, so a 43-45 card can render above a 41-45 card.
-    const anchorPos = getRichMarkdownRangeStart(ranges) ?? block.from
-    const coords = editor.view.coordsAtPos(
-      Math.max(1, Math.min(anchorPos, editor.state.doc.content.size))
-    )
-    return coords.top - containerRect.top + containerScrollTop
-  } catch {
-    return null
-  }
-}
-
-function getRichMarkdownSelectionRange(editor: Editor): RichMarkdownComposerState {
-  const blocks = buildRichMarkdownCommentBlocks(editor)
-  const { from, to, empty } = editor.state.selection
-  const selectedBlocks = empty
-    ? blocks.filter((block) => block.from <= from && from <= block.to)
-    : blocks.filter((block) => from <= block.to && to >= block.from)
-  const targetBlocks = selectedBlocks.length > 0 ? selectedBlocks : [blocks[0]!]
-  return getRichMarkdownLineRangeFromBlocks(targetBlocks) ?? { lineNumber: 1 }
-}
-
-function hasRichMarkdownCommentForRange(
-  comments: readonly DiffComment[],
-  target: Pick<RichMarkdownAnnotationTarget, 'lineNumber' | 'selectedText' | 'startLine'>,
-  markdownSourceLineOffset: number
-): boolean {
-  const startLine = (target.startLine ?? target.lineNumber) + markdownSourceLineOffset
-  const endLine = target.lineNumber + markdownSourceLineOffset
-  const selectedText = target.selectedText.trim()
-  return comments.some((comment) => {
-    const commentStartLine = comment.startLine ?? comment.lineNumber
-    return (
-      commentStartLine === startLine &&
-      comment.lineNumber === endLine &&
-      (comment.selectedText?.trim() ?? '') === selectedText
-    )
-  })
-}
-
-function getCurrentRichMarkdownSelectionRect(root: HTMLElement): DOMRect | null {
-  const selection = window.getSelection()
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-    return null
-  }
-  const range = selection.getRangeAt(0)
-  if (!root.contains(range.commonAncestorContainer)) {
-    return null
-  }
-  const rect = range.getBoundingClientRect()
-  if (rect.width > 0 || rect.height > 0) {
-    return rect
-  }
-  return Array.from(range.getClientRects()).find((candidate) => candidate.width > 0) ?? null
-}
-
-function getRichMarkdownAnnotationTarget(
-  editor: Editor,
-  root: HTMLElement
-): RichMarkdownAnnotationTarget | null {
-  if (editor.state.selection.empty) {
-    return null
-  }
-  const rect = getCurrentRichMarkdownSelectionRect(root)
-  if (!rect) {
-    return null
-  }
-  const selectedText = window.getSelection()?.toString().trim() ?? ''
-  if (!selectedText) {
-    return null
-  }
-  const rootRect = root.getBoundingClientRect()
-  const popoverWidth = 420
-  const left = Math.max(56, rootRect.width - popoverWidth - 24)
-  const buttonTop = Math.max(8, rect.bottom - rootRect.top + 6)
-  const popoverTop = Math.max(8, Math.min(buttonTop + 28, rootRect.height - 220))
-  return {
-    ...getRichMarkdownSelectionRange(editor),
-    from: editor.state.selection.from,
-    to: editor.state.selection.to,
-    selectedText,
-    top: popoverTop,
-    left,
-    buttonTop,
-    buttonLeft: Math.max(56, rootRect.width - 42)
-  }
 }
 
 export default function RichMarkdownEditor({
@@ -600,33 +96,14 @@ export default function RichMarkdownEditor({
     return null
   })
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
-  const [slashMenu, setSlashMenu] = useState<SlashMenuState | null>(null)
-  const [slashSelection, setSlashSelection] = useState<{ query: string | null; index: number }>({
-    query: null,
-    index: 0
-  })
-  const [docLinkMenu, setDocLinkMenu] = useState<DocLinkMenuState | null>(null)
-  const [emojiMenu, setEmojiMenu] = useState<{ left: number; top: number } | null>(null)
-  const [docLinkSelection, setDocLinkSelection] = useState<{ query: string | null; index: number }>(
-    {
-      query: null,
-      index: 0
-    }
-  )
+  const menu = useRichMarkdownMenuController({ markdownDocuments })
   const isMac = navigator.userAgent.includes('Mac')
   const lastCommittedMarkdownRef = useRef(content)
-  const slashMenuRef = useRef<SlashMenuState | null>(null)
-  const filteredSlashCommandsRef = useRef<SlashCommand[]>(slashCommands)
-  const selectedCommandIndexRef = useRef(0)
-  const docLinkMenuRef = useRef<DocLinkMenuState | null>(null)
-  const filteredDocLinkRowsRef = useRef<DocLinkMenuRow[]>([])
-  const selectedDocLinkIndexRef = useRef(0)
   const onContentChangeRef = useRef(onContentChange)
   const onDirtyStateHintRef = useRef(onDirtyStateHint)
   const onSaveRef = useRef(onSave)
   const onOpenDocLinkRef = useRef(onOpenDocLink)
   const handleLocalImagePickRef = useRef<() => void>(() => {})
-  const handleEmojiPickRef = useRef<(menu: SlashMenuState) => void>(() => {})
   const openSearchRef = useRef<() => void>(() => {})
   // Why: ProseMirror keeps the initial handleKeyDown closure, so `editor` stays
   // stuck at the first-render null value unless we read the live instance here.
@@ -644,75 +121,22 @@ export default function RichMarkdownEditor({
   const isApplyingProgrammaticUpdateRef = useRef(false)
   const [linkBubble, setLinkBubble] = useState<LinkBubbleState | null>(null)
   const [isEditingLink, setIsEditingLink] = useState(false)
-  const [annotationTarget, setAnnotationTarget] = useState<RichMarkdownAnnotationTarget | null>(
-    null
-  )
-  const [annotationPopover, setAnnotationPopover] = useState<RichMarkdownAnnotationTarget | null>(
-    null
-  )
-  const [reviewRailOpen, setReviewRailOpen] = useState(false)
-  const [reviewNotesCopied, setReviewNotesCopied] = useState(false)
-  const [copiedReviewNoteId, setCopiedReviewNoteId] = useState<string | null>(null)
-  const [activeReviewCommentId, setActiveReviewCommentId] = useState<string | null>(null)
-  const [attentionReviewCommentId, setAttentionReviewCommentId] = useState<string | null>(null)
-  const [notePositions, setNotePositions] = useState<RichMarkdownReviewNotePosition[]>([])
-  const annotationPopoverRef = useRef<RichMarkdownAnnotationTarget | null>(null)
-  const canAnnotateRichMarkdownRef = useRef(false)
-  const markdownCommentsRef = useRef<DiffComment[]>([])
-  const notePositionsRef = useRef<RichMarkdownReviewNotePosition[]>([])
-  const markdownSourceLineOffsetRef = useRef(markdownSourceLineOffset)
-  const attentionReviewCommentTimeoutRef = useRef<number | null>(null)
-  const sourceAttentionTimeoutRef = useRef<number | null>(null)
-  const reviewNotesCopiedResetTimerRef = useRef<number | null>(null)
-  const copiedReviewNoteResetTimerRef = useRef<number | null>(null)
-  const annotationTargetFrameRef = useRef<number | null>(null)
-  const notePositionsFrameRef = useRef<number | null>(null)
   const isEditingLinkRef = useRef(false)
   const typedEmptyOrderedListMarkerRef = useRef(false)
-  const sourceRelativePath = useMemo(
-    () =>
-      markdownAnnotationFilePath
-        ? normalizeRelativePath(markdownAnnotationFilePath)
-        : getRelativePathInsideRoot(filePath, worktreeRoot),
-    [filePath, markdownAnnotationFilePath, worktreeRoot]
-  )
-  const canAnnotateRichMarkdown = Boolean(markdownAnnotationsEnabled && sourceRelativePath !== null)
-  const markdownComments = useMemo(
-    () =>
-      (allDiffComments ?? []).filter(
-        (comment) => comment.filePath === sourceRelativePath && isMarkdownComment(comment)
-      ),
-    [allDiffComments, sourceRelativePath]
-  )
-  const markdownReviewNotes = useMemo(
-    () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
-    [markdownComments]
-  )
-  const unsentMarkdownReviewNotes = useMemo(
-    () => markdownReviewNotes.filter((note) => !note.sentAt),
-    [markdownReviewNotes]
-  )
-  const unsentMarkdownReviewPrompt = useMemo(
-    () => formatMarkdownReviewNotes(unsentMarkdownReviewNotes, markdownReviewContent),
-    [markdownReviewContent, unsentMarkdownReviewNotes]
-  )
-  const unsentMarkdownReviewScope = useMemo<NotesSendMenuScope<MarkdownReviewNote>[]>(
-    () => [
-      {
-        id: 'all',
-        label: 'All unsent notes',
-        notes: unsentMarkdownReviewNotes,
-        prompt: unsentMarkdownReviewPrompt
-      }
-    ],
-    [unsentMarkdownReviewNotes, unsentMarkdownReviewPrompt]
-  )
-  const hasMarkdownComments = markdownComments.length > 0
-  const reviewRailVisible = hasMarkdownComments && reviewRailOpen
-  const reviewRailExpanded = shouldExpandRichMarkdownReviewRail({
-    hasReviewNotes: hasMarkdownComments,
-    reviewRailOpen,
-    hasDraftNote: annotationPopover !== null
+  const review = useRichMarkdownReviewController({
+    addDiffComment,
+    allDiffComments,
+    content,
+    editorRef,
+    filePath,
+    markdownAnnotationFilePath,
+    markdownAnnotationsEnabled,
+    markdownReviewContent,
+    markdownSourceLineOffset,
+    rootRef,
+    scrollContainerRef,
+    worktreeId,
+    worktreeRoot
   })
   const tableOfContentsItems = useMemo(() => buildMarkdownTableOfContents(content), [content])
   const flatTableOfContentsItems = useMemo(
@@ -728,49 +152,6 @@ export default function RichMarkdownEditor({
   onSaveRef.current = onSave
   onOpenDocLinkRef.current = onOpenDocLink
   isEditingLinkRef.current = isEditingLink
-  annotationPopoverRef.current = annotationPopover
-  canAnnotateRichMarkdownRef.current = canAnnotateRichMarkdown
-  slashMenuRef.current = slashMenu
-  docLinkMenuRef.current = docLinkMenu
-  markdownCommentsRef.current = markdownComments
-  notePositionsRef.current = notePositions
-  markdownSourceLineOffsetRef.current = markdownSourceLineOffset
-
-  // Why: selection belongs to the active menu query so query changes can reset
-  // and clamp during render without a post-render repair Effect.
-  const setSelectedCommandIndex = useCallback<React.Dispatch<React.SetStateAction<number>>>(
-    (nextIndex) => {
-      setSlashSelection((current) => {
-        const query = slashMenuRef.current?.query ?? null
-        const optionCount = filteredSlashCommandsRef.current.length
-        const currentIndex =
-          current.query === query ? clampMenuSelectionIndex(current.index, optionCount) : 0
-        const resolvedIndex = typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
-        return {
-          query,
-          index: clampMenuSelectionIndex(resolvedIndex, optionCount)
-        }
-      })
-    },
-    []
-  )
-
-  const setSelectedDocLinkIndex = useCallback<React.Dispatch<React.SetStateAction<number>>>(
-    (nextIndex) => {
-      setDocLinkSelection((current) => {
-        const query = docLinkMenuRef.current?.query ?? null
-        const rowCount = filteredDocLinkRowsRef.current.length
-        const currentIndex =
-          current.query === query ? clampMenuSelectionIndex(current.index, rowCount) : 0
-        const resolvedIndex = typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
-        return {
-          query,
-          index: clampMenuSelectionIndex(resolvedIndex, rowCount)
-        }
-      })
-    },
-    []
-  )
 
   const flushPendingSerialization = useCallback(() => {
     if (serializeTimerRef.current === null) {
@@ -797,642 +178,66 @@ export default function RichMarkdownEditor({
     return registerPendingEditorFlush(fileId, flushPendingSerialization)
   }, [fileId, flushPendingSerialization])
 
-  const clearAttentionTimers = useCallback(() => {
-    if (attentionReviewCommentTimeoutRef.current !== null) {
-      window.clearTimeout(attentionReviewCommentTimeoutRef.current)
-      attentionReviewCommentTimeoutRef.current = null
-    }
-    if (sourceAttentionTimeoutRef.current !== null) {
-      window.clearTimeout(sourceAttentionTimeoutRef.current)
-      sourceAttentionTimeoutRef.current = null
-    }
-  }, [])
-
-  const clearReviewCopyTimers = useCallback(() => {
-    if (reviewNotesCopiedResetTimerRef.current !== null) {
-      window.clearTimeout(reviewNotesCopiedResetTimerRef.current)
-      reviewNotesCopiedResetTimerRef.current = null
-    }
-    if (copiedReviewNoteResetTimerRef.current !== null) {
-      window.clearTimeout(copiedReviewNoteResetTimerRef.current)
-      copiedReviewNoteResetTimerRef.current = null
-    }
-  }, [])
-
-  const clearAllAnnotationHighlights = useCallback((): void => {
-    const ed = editorRef.current
-    if (!ed) {
-      return
-    }
-    ed.view.dispatch(
-      ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-        activeRange: null,
-        noteRanges: []
-      })
-    )
-  }, [])
-
+  const { clearTransientReviewState } = review
   const setRootElement = useCallback(
     (node: HTMLDivElement | null) => {
       if (node === null) {
         // Why: these transient editor resources are owned by this root; clearing
         // them at detach keeps unmount cleanup out of passive Effects.
-        clearAttentionTimers()
-        clearReviewCopyTimers()
-        clearAllAnnotationHighlights()
-        if (annotationTargetFrameRef.current !== null) {
-          window.cancelAnimationFrame(annotationTargetFrameRef.current)
-          annotationTargetFrameRef.current = null
-        }
-        if (notePositionsFrameRef.current !== null) {
-          window.cancelAnimationFrame(notePositionsFrameRef.current)
-          notePositionsFrameRef.current = null
-        }
+        clearTransientReviewState()
         cancelAutoFocusRef.current?.()
         cancelAutoFocusRef.current = null
         window.api.ui.setMarkdownEditorFocused(false)
       }
       rootRef.current = node
     },
-    [clearAllAnnotationHighlights, clearAttentionTimers, clearReviewCopyTimers]
+    [clearTransientReviewState]
   )
 
-  const syncAnnotationTarget = useCallback((nextEditor: Editor): void => {
-    if (annotationTargetFrameRef.current !== null) {
-      window.cancelAnimationFrame(annotationTargetFrameRef.current)
-    }
-    annotationTargetFrameRef.current = window.requestAnimationFrame(() => {
-      annotationTargetFrameRef.current = null
-      const root = rootRef.current
-      if (!root || annotationPopoverRef.current || !canAnnotateRichMarkdownRef.current) {
-        setAnnotationTarget(null)
-        return
-      }
-      const target = getRichMarkdownAnnotationTarget(nextEditor, root)
-      if (
-        target &&
-        hasRichMarkdownCommentForRange(
-          markdownCommentsRef.current,
-          target,
-          markdownSourceLineOffsetRef.current
-        )
-      ) {
-        setAnnotationTarget(null)
-        return
-      }
-      setAnnotationTarget(target)
-    })
-  }, [])
-
-  const pulseRichMarkdownReviewNote = useCallback((commentId: string): void => {
-    if (attentionReviewCommentTimeoutRef.current !== null) {
-      window.clearTimeout(attentionReviewCommentTimeoutRef.current)
-    }
-    setAttentionReviewCommentId(null)
-    window.requestAnimationFrame(() => {
-      setAttentionReviewCommentId(commentId)
-      attentionReviewCommentTimeoutRef.current = window.setTimeout(() => {
-        setAttentionReviewCommentId(null)
-        attentionReviewCommentTimeoutRef.current = null
-      }, 900)
-    })
-  }, [])
-
-  const markReviewNotesCopied = useCallback((): void => {
-    clearReviewCopyTimers()
-    setCopiedReviewNoteId(null)
-    setReviewNotesCopied(true)
-    reviewNotesCopiedResetTimerRef.current = window.setTimeout(() => {
-      reviewNotesCopiedResetTimerRef.current = null
-      setReviewNotesCopied(false)
-    }, 1600)
-  }, [clearReviewCopyTimers])
-
-  const markReviewNoteCopied = useCallback((noteId: string): void => {
-    if (copiedReviewNoteResetTimerRef.current !== null) {
-      window.clearTimeout(copiedReviewNoteResetTimerRef.current)
-    }
-    setCopiedReviewNoteId(noteId)
-    copiedReviewNoteResetTimerRef.current = window.setTimeout(() => {
-      copiedReviewNoteResetTimerRef.current = null
-      setCopiedReviewNoteId(null)
-    }, 1600)
-  }, [])
-
-  const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
-    try {
-      const copied = await copyMarkdownReviewNotesForAgent({
-        notes: markdownReviewNotes,
-        content: markdownReviewContent,
-        writeClipboardText: window.api.ui.writeClipboardText
-      })
-      if (copied && rootRef.current) {
-        markReviewNotesCopied()
-      }
-    } catch {
-      // Best-effort clipboard action; failures usually mean the window is not focused.
-    }
-  }, [markdownReviewContent, markdownReviewNotes, markReviewNotesCopied])
-
-  const handleCopyMarkdownReviewNote = useCallback(
-    async (note: MarkdownReviewNote): Promise<void> => {
-      try {
-        const copied = await copyMarkdownReviewNotesForAgent({
-          notes: [note],
-          content: markdownReviewContent,
-          writeClipboardText: window.api.ui.writeClipboardText
-        })
-        if (copied && rootRef.current) {
-          markReviewNoteCopied(note.id)
-        }
-      } catch {
-        // Best-effort clipboard action; failures usually mean the window is not focused.
-      }
-    },
-    [markdownReviewContent, markReviewNoteCopied]
-  )
-
-  const syncNotePositions = useCallback((): void => {
-    const ed = editorRef.current
-    const container = scrollContainerRef.current
-    if (
-      !reviewRailVisible ||
-      !canAnnotateRichMarkdown ||
-      !ed ||
-      !container ||
-      markdownComments.length === 0
-    ) {
-      clearRichMarkdownNotePositions(setNotePositions)
-      return
-    }
-    const containerRect = container.getBoundingClientRect()
-    const blocks = buildRichMarkdownCommentBlocks(ed)
-    const nextPositions = markdownComments
-      .map((comment): RichMarkdownReviewNotePosition | null => {
-        const bodyLineNumber = Math.max(1, comment.lineNumber - markdownSourceLineOffset)
-        const block = blocks.find(
-          (candidate) =>
-            candidate.startLine <= bodyLineNumber && bodyLineNumber <= candidate.endLine
-        )
-        if (!block) {
-          return null
-        }
-        const top = getRichMarkdownCommentAnchorTop(
-          ed,
-          comment,
-          block,
-          containerRect,
-          container.scrollTop,
-          markdownSourceLineOffset
-        )
-        if (top === null) {
-          return null
-        }
-        return { comment, top }
-      })
-      .filter((position): position is RichMarkdownReviewNotePosition => position !== null)
-
-    const measuredHeights = new Map<string, number>()
-    for (const pos of nextPositions) {
-      const id = pos.comment.id
-      const el = container.querySelector(`[data-rich-markdown-review-note-id="${id}"]`)
-      if (el) {
-        measuredHeights.set(id, el.getBoundingClientRect().height)
-      }
-    }
-
-    setNotePositions(stackRichMarkdownReviewNotePositions(nextPositions, measuredHeights))
-  }, [canAnnotateRichMarkdown, markdownComments, markdownSourceLineOffset, reviewRailVisible])
-
-  const requestSyncNotePositions = useCallback((): void => {
-    if (!reviewRailVisible) {
-      clearRichMarkdownNotePositions(setNotePositions)
-      return
-    }
-    if (notePositionsFrameRef.current !== null) {
-      return
-    }
-    notePositionsFrameRef.current = window.requestAnimationFrame(() => {
-      notePositionsFrameRef.current = null
-      syncNotePositions()
-    })
-  }, [reviewRailVisible, syncNotePositions])
-
-  const scrollRichMarkdownReviewNoteCardIntoView = useCallback(
-    (commentId: string): void => {
-      setReviewRailOpen(true)
-      setActiveReviewCommentId(commentId)
-      pulseRichMarkdownReviewNote(commentId)
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          const container = scrollContainerRef.current
-          const card = container?.querySelector<HTMLElement>(
-            `[data-rich-markdown-review-note-id="${CSS.escape(commentId)}"]`
-          )
-          if (!container) {
-            return
-          }
-          const position = notePositionsRef.current.find((item) => item.comment.id === commentId)
-          const cardHeight = card?.offsetHeight ?? 72
-          const cardTop = position?.top ?? card?.offsetTop
-          if (cardTop === undefined) {
-            return
-          }
-          const targetTop = cardTop - Math.max(0, (container.clientHeight - cardHeight) / 2)
-          container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
-        })
-      })
-    },
-    [pulseRichMarkdownReviewNote]
-  )
-
-  const pulseRichMarkdownSourceRange = useCallback(
-    (range: RichMarkdownAnnotationHighlightRange): void => {
-      const ed = editorRef.current
-      if (!ed) {
-        return
-      }
-      if (sourceAttentionTimeoutRef.current !== null) {
-        window.clearTimeout(sourceAttentionTimeoutRef.current)
-      }
-      ed.view.dispatch(
-        ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-          activeRange: null
-        })
-      )
-      window.requestAnimationFrame(() => {
-        const currentEditor = editorRef.current
-        if (!currentEditor) {
-          return
-        }
-        currentEditor.view.dispatch(
-          currentEditor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-            activeRange: range
-          })
-        )
-        sourceAttentionTimeoutRef.current = window.setTimeout(() => {
-          const latestEditor = editorRef.current
-          if (latestEditor) {
-            latestEditor.view.dispatch(
-              latestEditor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-                activeRange: null
-              })
-            )
-          }
-          sourceAttentionTimeoutRef.current = null
-        }, 900)
-      })
-    },
-    []
-  )
-
-  const scrollRichMarkdownReviewNoteSourceIntoView = useCallback(
-    (comment: DiffComment): void => {
-      const ed = editorRef.current
-      const container = scrollContainerRef.current
-      if (!ed || !container) {
-        return
-      }
-      const ranges = getRichMarkdownAnnotationHighlightRangesForComment(
-        ed,
-        comment,
-        markdownSourceLineOffsetRef.current
-      )
-      if (ranges.length === 0) {
-        return
-      }
-      const bounds = getRichMarkdownRangeBounds(ranges)
-      if (!bounds) {
-        return
-      }
-      const { from, to } = bounds
-      const maxPos = ed.state.doc.content.size
-      const startCoords = ed.view.coordsAtPos(Math.max(1, Math.min(from, maxPos)))
-      const endCoords = ed.view.coordsAtPos(Math.max(1, Math.min(to, maxPos)))
-      const containerRect = container.getBoundingClientRect()
-      const sourceTop = startCoords.top - containerRect.top + container.scrollTop
-      const sourceBottom = endCoords.bottom - containerRect.top + container.scrollTop
-      const targetTop = (sourceTop + sourceBottom) / 2 - container.clientHeight / 2
-      setActiveReviewCommentId(comment.id)
-      container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' })
-      pulseRichMarkdownSourceRange({ from, to })
-    },
-    [pulseRichMarkdownSourceRange]
-  )
-
-  const editor = useEditor({
-    immediatelyRender: false,
-    extensions: richMarkdownExtensions,
-    content: encodeRawMarkdownHtmlForRichEditor(content),
-    contentType: 'markdown',
-    editorProps: {
-      attributes: {
-        class: 'rich-markdown-editor',
-        spellcheck: 'true'
-      },
-      handleDOMEvents: {
-        cut: handleRichMarkdownCut
-      },
-      handleTextInput: (view, from, to, text) => {
-        typedEmptyOrderedListMarkerRef.current = false
-        if (text !== ' ' || from !== to || !view.state.selection.empty) {
-          return false
-        }
-        const { $from } = view.state.selection
-        const beforeCursor = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0')
-        // Why: only a typed ordered-list shortcut should preserve `1.` on
-        // Enter; toolbar/slash/context-created empty lists should exit normally.
-        typedEmptyOrderedListMarkerRef.current = /^\d+\.$/.test(beforeCursor)
-        return false
-      },
-      handleKeyDown: createRichMarkdownKeyHandler({
-        isMac,
-        editorRef,
-        rootRef,
-        lastCommittedMarkdownRef,
-        onContentChangeRef,
-        onSaveRef,
-        isEditingLinkRef,
-        slashMenuRef,
-        filteredSlashCommandsRef,
-        selectedCommandIndexRef,
-        docLinkMenuRef,
-        filteredDocLinkRowsRef,
-        selectedDocLinkIndexRef,
-        handleLocalImagePickRef,
-        handleEmojiPickRef,
-        typedEmptyOrderedListMarkerRef,
-        flushPendingSerialization,
-        openSearchRef,
-        setIsEditingLink,
-        setLinkBubble,
-        setSelectedCommandIndex,
-        setSelectedDocLinkIndex,
-        setSlashMenu,
-        setDocLinkMenu
-      }),
-      // Why: Cmd/Ctrl-click activates links via the shared classifier +
-      // dispatcher, so in-worktree .md links open in an Orca tab instead of the
-      // OS default handler. Cmd/Ctrl+Shift-click is the OS escape hatch, kept
-      // symmetric with MarkdownPreview. Without a modifier the click falls
-      // through to TipTap's default cursor-positioning behavior.
-      // Why: ProseMirror fires handleClick before updating the selection, so
-      // ed.isActive('link') reads the *old* cursor position. We resolve the
-      // link mark directly at the clicked pos instead.
-      handleClick: (view, pos, event) => {
-        const ed = editorRef.current
-        const modKey = isMac ? event.metaKey : event.ctrlKey
-        if (!ed) {
-          return false
-        }
-        if (!modKey) {
-          const selectedComment = getRichMarkdownCommentAtPos(
-            ed,
-            markdownCommentsRef.current,
-            markdownSourceLineOffsetRef.current,
-            pos
-          )
-          if (!selectedComment) {
-            return false
-          }
-          scrollRichMarkdownReviewNoteCardIntoView(selectedComment.id)
-          return false
-        }
-        // Why: doc links are atom nodes (not marks), so resolve(pos).marks()
-        // won't find them. Check nodeAt(pos) first for doc link navigation.
-        const clickedNode = view.state.doc.nodeAt(pos)
-        if (clickedNode?.type.name === 'image') {
-          const src = (clickedNode.attrs.src as string | undefined) ?? ''
-          if (!src) {
-            return false
-          }
-          void activateMarkdownLink(src, {
-            sourceFilePath: filePath,
-            worktreeId,
-            worktreeRoot,
-            runtimeEnvironmentId
-          })
-          return true
-        }
-        if (clickedNode?.type.name === 'markdownDocLink') {
-          const target = clickedNode.attrs.target as string
-          if (target && onOpenDocLinkRef.current) {
-            onOpenDocLinkRef.current(target)
-          }
-          return true
-        }
-        const linkMark = view.state.doc
-          .resolve(pos)
-          .marks()
-          .find((m) => m.type.name === 'link')
-        const href = linkMark ? (linkMark.attrs.href as string) || '' : ''
-        if (!href) {
-          return false
-        }
-        if (href.startsWith('#')) {
-          scrollToAnchorInEditor(rootRef.current, href.slice(1))
-          return true
-        }
-        if (event.shiftKey) {
-          const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
-          if (!classified) {
-            return true
-          }
-          if (classified.kind === 'external') {
-            openHttpLink(classified.url, { forceSystemBrowser: true })
-            return true
-          }
-          if (
-            isLocalPathOpenBlocked(
-              settingsForRuntimeOwner(useAppStore.getState().settings, runtimeEnvironmentId),
-              { connectionId: getConnectionId(worktreeId) }
-            )
-          ) {
-            // Why: Shift-click opens through the client OS. Server-local paths
-            // from remote runtime/SSH worktrees are not meaningful on this client.
-            showLocalPathOpenBlockedToast()
-            return true
-          }
-          if (classified.kind === 'markdown') {
-            void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
-              if (!exists) {
-                toast.error(`File not found: ${classified.relativePath}`)
-                return
-              }
-              void window.api.shell.openFileUri(toFileUrlForOsEscape(classified.absolutePath))
-            })
-          } else if (classified.kind === 'file') {
-            void window.api.shell.openFileUri(classified.uri)
-          }
-          return true
-        }
-        void activateMarkdownLink(href, {
-          sourceFilePath: filePath,
-          worktreeId,
-          worktreeRoot,
-          runtimeEnvironmentId
-        })
-        return true
-      }
-    },
-    onFocus: () => {
-      // Why: mirror TipTap focus into the main process so the before-input-event
-      // Cmd+B carve-out in createMainWindow.ts lets the bold keymap run instead
-      // of intercepting the chord for sidebar toggle.
-      // See docs/markdown-cmd-b-bold-design.md.
-      window.api.ui.setMarkdownEditorFocused(true)
-    },
-    onBlur: () => {
-      window.api.ui.setMarkdownEditorFocused(false)
-      setAnnotationTarget(null)
-    },
-    onCreate: ({ editor: nextEditor }) => {
-      // Why: markdown soft line breaks produce paragraphs with embedded `\n` chars.
-      // Normalizing them into separate paragraph nodes on load ensures Cmd+X (and
-      // other block-level operations) treat each line as its own block.
-      normalizeSoftBreaks(nextEditor)
-      // Why: raw disk content is the source of truth for dirty/external-change
-      // detection. getMarkdown() may round-trip soft breaks or trailing newlines
-      // differently, which would otherwise force a spurious mount-time re-sync.
-      lastCommittedMarkdownRef.current = content
-      // Why: clear the flag *after* normalizeSoftBreaks so any onUpdate
-      // triggered by the normalization transaction is still suppressed.
-      isInitializingRef.current = false
-      // Why: MonacoEditor already auto-focuses on mount so users can start
-      // typing immediately. The rich markdown editor must do the same,
-      // otherwise opening a new markdown file (Cmd+Shift+N) or switching to
-      // an existing markdown tab leaves the cursor outside the editing
-      // surface and the user has to click before typing.
-      cancelAutoFocusRef.current?.()
-      cancelAutoFocusRef.current = autoFocusRichEditor(nextEditor, rootRef.current)
-    },
-    onUpdate: ({ editor: nextEditor }) => {
-      syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
-      syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
-      if (!isSingleEmptyTopLevelOrderedList(nextEditor)) {
-        typedEmptyOrderedListMarkerRef.current = false
-      }
-
-      // Why: bail out during normalizeSoftBreaks's onCreate transaction so the
-      // structural housekeeping doesn't mark the file dirty before the user
-      // has typed anything.
-      if (isInitializingRef.current || isApplyingProgrammaticUpdateRef.current) {
-        return
-      }
-
-      // Why: optimistically mark dirty for close-confirmation before the
-      // debounced content sync computes the exact saved-vs-draft comparison.
-      onDirtyStateHintRef.current(true)
-
-      // Why: getMarkdown() is the typing-speed bottleneck for large files;
-      // debouncing to 300ms keeps drafts current without blocking input.
-      if (serializeTimerRef.current !== null) {
-        window.clearTimeout(serializeTimerRef.current)
-      }
-      serializeTimerRef.current = window.setTimeout(() => {
-        serializeTimerRef.current = null
-        try {
-          const markdown = nextEditor.getMarkdown()
-          lastCommittedMarkdownRef.current = markdown
-          onContentChangeRef.current(markdown)
-        } catch {
-          // Why: save/restart flows should never crash the UI just because the
-          // editor was torn down between scheduling and flushing a debounced sync.
-        }
-      }, 300)
-    },
-    onSelectionUpdate: ({ editor: nextEditor }) => {
-      syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
-      syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
-      syncAnnotationTarget(nextEditor)
-
-      // Sync link bubble: show preview when cursor is on a link, hide otherwise.
-      // Any selection change in the editor cancels an in-progress link edit.
-      setIsEditingLink(false)
-      if (nextEditor.isActive('link')) {
-        const attrs = nextEditor.getAttributes('link')
-        const pos = getLinkBubblePosition(nextEditor, rootRef.current)
-        if (pos) {
-          setLinkBubble({ href: (attrs.href as string) || '', ...pos })
-        }
-      } else {
-        setLinkBubble(null)
-      }
-    }
+  const editor = useRichMarkdownEditorInstance({
+    content,
+    filePath,
+    worktreeId,
+    worktreeRoot,
+    runtimeEnvironmentId,
+    isMac,
+    settings,
+    activateMarkdownLink,
+    rootRef,
+    editorRef,
+    lastCommittedMarkdownRef,
+    onContentChangeRef,
+    onDirtyStateHintRef,
+    onSaveRef,
+    onOpenDocLinkRef,
+    isEditingLinkRef,
+    slashMenuRef: menu.slashMenuRef,
+    filteredSlashCommandsRef: menu.filteredSlashCommandsRef,
+    selectedCommandIndexRef: menu.selectedCommandIndexRef,
+    docLinkMenuRef: menu.docLinkMenuRef,
+    filteredDocLinkRowsRef: menu.filteredDocLinkRowsRef,
+    selectedDocLinkIndexRef: menu.selectedDocLinkIndexRef,
+    handleLocalImagePickRef,
+    handleEmojiPickRef: menu.handleEmojiPickRef,
+    typedEmptyOrderedListMarkerRef,
+    cancelAutoFocusRef,
+    serializeTimerRef,
+    isInitializingRef,
+    isApplyingProgrammaticUpdateRef,
+    markdownCommentsRef: review.markdownCommentsRef,
+    markdownSourceLineOffsetRef: review.markdownSourceLineOffsetRef,
+    flushPendingSerialization,
+    openSearchRef,
+    syncAnnotationTarget: review.syncAnnotationTarget,
+    clearAnnotationTarget: review.clearAnnotationTarget,
+    scrollRichMarkdownReviewNoteCardIntoView: review.scrollRichMarkdownReviewNoteCardIntoView,
+    setIsEditingLink,
+    setLinkBubble,
+    setSelectedCommandIndex: menu.setSelectedCommandIndex,
+    setSelectedDocLinkIndex: menu.setSelectedDocLinkIndex,
+    setSlashMenu: menu.setSlashMenu,
+    setDocLinkMenu: menu.setDocLinkMenu
   })
-
-  editorRef.current = editor ?? null
-
-  const clearAnnotationHighlight = useCallback((): void => {
-    const ed = editorRef.current
-    if (!ed) {
-      return
-    }
-    ed.view.dispatch(ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, null))
-  }, [])
-
-  useEffect(() => {
-    if (canAnnotateRichMarkdown) {
-      return
-    }
-    setAnnotationTarget(null)
-    setAnnotationPopover(null)
-    clearAllAnnotationHighlights()
-  }, [canAnnotateRichMarkdown, clearAllAnnotationHighlights])
-
-  useEffect(() => {
-    if (!editor || !canAnnotateRichMarkdown) {
-      return
-    }
-    const noteRanges = getRichMarkdownAnnotationHighlightRanges(
-      editor,
-      markdownComments,
-      markdownSourceLineOffset
-    )
-    editor.view.dispatch(
-      editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, { noteRanges })
-    )
-  }, [canAnnotateRichMarkdown, content, editor, markdownComments, markdownSourceLineOffset])
-
-  useEffect(() => {
-    if (!editor) {
-      return
-    }
-    const container = scrollContainerRef.current
-    if (!container) {
-      return
-    }
-    const update = (): void => syncAnnotationTarget(editor)
-    container.addEventListener('scroll', update)
-    window.addEventListener('resize', update)
-    return () => {
-      container.removeEventListener('scroll', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [editor, syncAnnotationTarget])
-
-  useEffect(() => {
-    requestSyncNotePositions()
-  }, [content, editor, markdownComments, requestSyncNotePositions])
-
-  useEffect(() => {
-    if (!reviewRailVisible) {
-      clearRichMarkdownNotePositions(setNotePositions)
-      return
-    }
-    const container = scrollContainerRef.current
-    if (!container) {
-      return
-    }
-    const update = (): void => requestSyncNotePositions()
-    container.addEventListener('scroll', update, { passive: true })
-    window.addEventListener('resize', update)
-    requestSyncNotePositions()
-    return () => {
-      container.removeEventListener('scroll', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [requestSyncNotePositions, reviewRailVisible])
 
   // Why: use useLayoutEffect (synchronous cleanup) so the pending serialization
   // flush runs before useEditor's cleanup destroys the editor instance on tab
@@ -1446,47 +251,32 @@ export default function RichMarkdownEditor({
 
   useModifierHeldClass(rootRef, isMac)
 
-  // Why: the custom Image extension reads filePath/runtimeContext from storage
-  // to resolve relative image src values. After updating storage we dispatch a
-  // no-op transaction so ProseMirror re-renders image nodes with the new source.
-  useEffect(() => {
-    if (editor) {
-      isApplyingProgrammaticUpdateRef.current = true
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(editor.storage as any).image.filePath = filePath
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(editor.storage as any).image.runtimeContext = worktreeRoot
-          ? {
-              settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
-              worktreeId,
-              worktreePath: worktreeRoot,
-              connectionId: getConnectionId(worktreeId)
-            }
-          : undefined
-        editor.view.dispatch(editor.state.tr)
-      } finally {
-        isApplyingProgrammaticUpdateRef.current = false
-      }
-    }
-  }, [editor, filePath, runtimeEnvironmentId, settings, worktreeId, worktreeRoot])
+  useRichMarkdownReviewEditorEffects({
+    canAnnotateRichMarkdown: review.canAnnotateRichMarkdown,
+    content,
+    editor,
+    markdownComments: review.markdownComments,
+    markdownSourceLineOffset,
+    scrollContainerRef,
+    syncAnnotationTarget: review.syncAnnotationTarget
+  })
 
-  // Why: the doc link NodeView reads the document list from storage to style
-  // resolved vs. missing links. The no-op transaction with meta flag triggers
-  // both nodeView `update` callbacks and the decoration plugin rebuild.
-  useEffect(() => {
-    if (editor && markdownDocuments) {
-      isApplyingProgrammaticUpdateRef.current = true
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(editor.storage as any).markdownDocLink.documents = markdownDocuments
-        const tr = editor.state.tr.setMeta('docLinksUpdated', true)
-        editor.view.dispatch(tr)
-      } finally {
-        isApplyingProgrammaticUpdateRef.current = false
-      }
-    }
-  }, [editor, markdownDocuments])
+  useRichMarkdownProgrammaticSync({
+    content,
+    docLinkMenuSetter: menu.setDocLinkMenu,
+    editor,
+    fileId,
+    filePath,
+    isApplyingProgrammaticUpdateRef,
+    lastCommittedMarkdownRef,
+    markdownDocuments,
+    rootRef,
+    runtimeEnvironmentId,
+    settings,
+    slashMenuSetter: menu.setSlashMenu,
+    worktreeId,
+    worktreeRoot
+  })
 
   const handleLocalImagePick = useLocalImagePick(editor, filePath, worktreeId, runtimeEnvironmentId)
   handleLocalImagePickRef.current = handleLocalImagePick
@@ -1511,12 +301,12 @@ export default function RichMarkdownEditor({
         return
       }
 
-      runRichMarkdownContextCommand(
-        payload.command,
-        ed,
-        toggleLinkFromToolbar,
-        handleLocalImagePick
-      )
+      runRichMarkdownContextCommand({
+        command: payload.command,
+        editor: ed,
+        toggleLink: toggleLinkFromToolbar,
+        pickImage: handleLocalImagePick
+      })
     })
   }, [handleLocalImagePick, toggleLinkFromToolbar])
 
@@ -1556,485 +346,82 @@ export default function RichMarkdownEditor({
     [flatTableOfContentsItems]
   )
 
-  const openEmojiMenu = useCallback((menu: SlashMenuState): void => {
-    setSlashMenu(null)
-    setEmojiMenu({ left: menu.left, top: menu.top })
-  }, [])
-
-  const submitAnnotation = useCallback(
-    async (body: string): Promise<void> => {
-      if (!annotationPopover || sourceRelativePath === null) {
-        return
-      }
-      const result = await addDiffComment({
-        worktreeId,
-        filePath: sourceRelativePath,
-        source: 'markdown',
-        startLine:
-          annotationPopover.startLine === undefined
-            ? undefined
-            : annotationPopover.startLine + markdownSourceLineOffset,
-        lineNumber: annotationPopover.lineNumber + markdownSourceLineOffset,
-        selectedText: annotationPopover.selectedText,
-        body,
-        side: 'modified'
-      })
-      if (result) {
-        const ed = editorRef.current
-        if (ed) {
-          const noteRanges = getRichMarkdownAnnotationHighlightRanges(
-            ed,
-            [...markdownComments, result],
-            markdownSourceLineOffset
-          )
-          const hasSubmittedRange = noteRanges.some(
-            (range) => range.from <= annotationPopover.from && annotationPopover.to <= range.to
-          )
-          ed.view.dispatch(
-            ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-              activeRange: null,
-              noteRanges: hasSubmittedRange
-                ? noteRanges
-                : [...noteRanges, { from: annotationPopover.from, to: annotationPopover.to }]
-            })
-          )
-        }
-        setAnnotationPopover(null)
-        clearAnnotationHighlight()
-        window.getSelection()?.removeAllRanges()
-      } else {
-        console.error('Failed to add markdown comment — draft preserved')
-      }
-    },
-    [
-      addDiffComment,
-      annotationPopover,
-      clearAnnotationHighlight,
-      markdownComments,
-      markdownSourceLineOffset,
-      sourceRelativePath,
-      worktreeId
-    ]
-  )
-
-  const openAnnotationPopover = useCallback((): void => {
-    if (!annotationTarget || !canAnnotateRichMarkdown) {
-      return
-    }
-    const ed = editorRef.current
-    const root = rootRef.current
-    const liveTarget = ed && root ? getRichMarkdownAnnotationTarget(ed, root) : null
-    const target = ed
-      ? clampRichMarkdownAnnotationTarget(ed, liveTarget ?? annotationTarget)
-      : annotationTarget
-    if (!target) {
-      setAnnotationTarget(null)
-      return
-    }
-    if (hasRichMarkdownCommentForRange(markdownComments, target, markdownSourceLineOffset)) {
-      setAnnotationTarget(null)
-      return
-    }
-    if (ed) {
-      ed.view.dispatch(
-        ed.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-          activeRange: {
-            from: target.from,
-            to: target.to
-          }
-        })
-      )
-    }
-    // Why: opening a draft should reserve the notes rail immediately; after
-    // submit, the saved note stays visible instead of landing behind a closed toggle.
-    setReviewRailOpen(true)
-    setAnnotationPopover(target)
-    setAnnotationTarget(null)
-  }, [annotationTarget, canAnnotateRichMarkdown, markdownComments, markdownSourceLineOffset])
-
-  handleEmojiPickRef.current = openEmojiMenu
-
-  const filteredSlashCommands = useMemo(() => {
-    const query = slashMenu?.query.trim().toLowerCase() ?? ''
-    if (!query) {
-      return slashCommands
-    }
-    return slashCommands.filter((command) => {
-      const haystack = [command.label, ...command.aliases].join(' ').toLowerCase()
-      return haystack.includes(query)
-    })
-  }, [slashMenu?.query])
-
-  const slashMenuQuery = slashMenu?.query ?? null
-  const selectedCommandIndex =
-    slashSelection.query === slashMenuQuery
-      ? clampMenuSelectionIndex(slashSelection.index, filteredSlashCommands.length)
-      : 0
-  filteredSlashCommandsRef.current = filteredSlashCommands
-  selectedCommandIndexRef.current = selectedCommandIndex
-
-  // Why: memo key is the `markdownDocuments` prop (stable reference from parent),
-  // not `editor.storage.markdownDocLink.documents`. The storage mirror is mutated
-  // in place by the extension so React would not see a new reference and the memo
-  // would stale-out. The prop is the single source of truth for filtering.
-  const DOC_LINK_MENU_MAX_ROWS = 20
-  const { docLinkRows, docLinkTotalMatches } = useMemo(() => {
-    if (!docLinkMenu || !markdownDocuments) {
-      return { docLinkRows: [] as DocLinkMenuRow[], docLinkTotalMatches: 0 }
-    }
-    const matches = getMarkdownDocCompletionDocuments(markdownDocuments, docLinkMenu.query)
-    const rows: DocLinkMenuRow[] = matches
-      .slice(0, DOC_LINK_MENU_MAX_ROWS)
-      .map((document) => ({ kind: 'document', document }))
-    return { docLinkRows: rows, docLinkTotalMatches: matches.length }
-  }, [docLinkMenu, markdownDocuments])
-
-  const docLinkMenuQuery = docLinkMenu?.query ?? null
-  const selectedDocLinkIndex =
-    docLinkSelection.query === docLinkMenuQuery
-      ? clampMenuSelectionIndex(docLinkSelection.index, docLinkRows.length)
-      : 0
-  filteredDocLinkRowsRef.current = docLinkRows
-  selectedDocLinkIndexRef.current = selectedDocLinkIndex
-
-  useEffect(() => {
-    if (!editor) {
-      return
-    }
-
-    // Why: the debounced onUpdate serializes the editor and feeds it back
-    // through onContentChange → editorDrafts → the content prop.  If the
-    // user typed between the debounce firing and this effect running, the
-    // editor already contains newer content than the prop.  Comparing
-    // against lastCommittedMarkdownRef (which is set in the same tick as
-    // onContentChange) lets us recognise our own serialization and skip the
-    // destructive setContent that would reset the cursor mid-typing.
-    if (content === lastCommittedMarkdownRef.current) {
-      return
-    }
-
-    const currentMarkdown = editor.getMarkdown()
-    if (currentMarkdown === content) {
-      return
-    }
-
-    // Why: markdown files on disk remain the source of truth for rich mode in
-    // Orca. External file changes, tab replacement, and save-after-reload must
-    // overwrite the editor state so the rich view never drifts from repo text.
-    isApplyingProgrammaticUpdateRef.current = true
-    try {
-      // Why: swallow exceptions from setContent / normalizeSoftBreaks here
-      // rather than letting them escape to the React root. Under split-pane
-      // external reload (two RichMarkdownEditor instances receiving the same
-      // Claude Code write), a throw from the TipTap/ProseMirror transaction
-      // would otherwise unmount the entire renderer and black the whole
-      // window out (issue #826). The committed-markdown ref is deliberately
-      // left pointing at the pre-failure value so the next prop change still
-      // triggers a re-sync attempt instead of being short-circuited by the
-      // `content === lastCommittedMarkdownRef.current` guard above.
-      try {
-        // Why: TipTap's setContent collapses the selection to the end of the
-        // new document by default. When the editor is focused (user is
-        // actively typing), that reads as a spontaneous cursor jump to EOF.
-        // Snapshot the current selection bounds and restore them clamped to
-        // the new doc length after the content swap so the caret stays put
-        // for any genuinely external edit that lands during a typing session.
-        // The old doc's offsets are a best-effort heuristic — for a real
-        // external rewrite they won't map to the semantically equivalent
-        // position, but this is still strictly better than jumping to EOF.
-        const hadFocus = editor.isFocused
-        const { from: prevFrom, to: prevTo } = editor.state.selection
-        editor.commands.setContent(encodeRawMarkdownHtmlForRichEditor(content), {
-          contentType: 'markdown',
-          emitUpdate: false
-        })
-        // Why: same soft-break normalization as onCreate — external content updates
-        // may re-introduce paragraphs with embedded `\n` characters.
-        normalizeSoftBreaks(editor)
-        lastCommittedMarkdownRef.current = content
-        if (hadFocus) {
-          // Why: setContent can blur the editor via ProseMirror's focus
-          // handling, so restoring selection alone would leave subsequent
-          // keystrokes going to the browser. Chain focus() after the
-          // selection restore to keep the typing session intact.
-          const docSize = editor.state.doc.content.size
-          editor
-            .chain()
-            .setTextSelection({ from: Math.min(prevFrom, docSize), to: Math.min(prevTo, docSize) })
-            .focus()
-            .run()
-        }
-      } catch (err) {
-        console.error('[RichMarkdownEditor] failed to apply external content update', err)
-      }
-    } finally {
-      isApplyingProgrammaticUpdateRef.current = false
-    }
-    syncSlashMenu(editor, rootRef.current, setSlashMenu)
-    syncDocLinkMenu(editor, rootRef.current, setDocLinkMenu)
-    // Why: fileId is part of the dep array so switching between files (where
-    // content can coincidentally match what was last committed for the prior
-    // file) still triggers the content-sync path and prevents cross-file
-    // drift from the renderer's draft cache.
-  }, [content, editor, fileId])
-
   return (
-    <div className="rich-markdown-editor-layout">
-      <div
-        ref={setRootElement}
-        className={`rich-markdown-editor-shell ${
-          reviewRailExpanded ? 'has-rich-markdown-review-notes' : ''
-        }`.trim()}
-        style={{ '--editor-font-zoom-level': editorFontZoomLevel } as React.CSSProperties}
-      >
-        <RichMarkdownToolbar
-          editor={editor}
-          onToggleLink={toggleLinkFromToolbar}
-          onImagePick={handleLocalImagePick}
-        />
-        {headerSlot}
-        {/* Why: wrap scroll area + search bar in a relative container so the
-          search bar overlays the content (Monaco-style) instead of occupying
-          layout space and shifting the document down when opened. */}
-        <div className="relative min-h-0 flex-1">
-          <div
-            ref={scrollContainerRef}
-            className="relative h-full overflow-auto scrollbar-editor"
-            onMouseDown={(event) => {
-              if (!shouldFocusEmptyEditorFromSurfaceClick(event, editorRef.current)) {
-                return
-              }
-              // Why: native contenteditable only places the caret on actual line
-              // boxes; an empty note should still focus when the user clicks any
-              // blank part of the document surface.
-              event.preventDefault()
-              editorRef.current?.commands.focus('start')
-            }}
-          >
-            <EditorContent editor={editor} />
-            {reviewRailVisible && notePositions.length > 0 ? (
-              <div className="rich-markdown-review-note-layer" aria-label="Review notes">
-                {notePositions.map(({ comment, top }) => (
-                  <div
-                    key={comment.id}
-                    data-rich-markdown-review-note-id={comment.id}
-                    className={`rich-markdown-review-note-card ${
-                      activeReviewCommentId === comment.id ? 'is-active' : ''
-                    } ${attentionReviewCommentId === comment.id ? 'is-attention' : ''}`.trim()}
-                    style={{ top }}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onClick={(event) => {
-                      if (!isRichMarkdownReviewNoteNavigationClick(event.target)) {
-                        return
-                      }
-                      scrollRichMarkdownReviewNoteSourceIntoView(comment)
-                    }}
-                  >
-                    <DiffCommentCard
-                      lineNumber={comment.lineNumber}
-                      startLine={comment.startLine}
-                      label={null}
-                      quote={getMarkdownReviewCardQuote(markdownReviewContent, comment)}
-                      body={comment.body}
-                      sentAt={comment.sentAt}
-                      onDelete={() => void deleteDiffComment(worktreeId, comment.id)}
-                      onSubmitEdit={(body) => updateDiffComment(worktreeId, comment.id, body)}
-                      onContentResize={syncNotePositions}
-                      headerActions={
-                        <>
-                          <button
-                            type="button"
-                            className="rich-markdown-review-note-action"
-                            title={
-                              copiedReviewNoteId === comment.id
-                                ? 'Copied note'
-                                : 'Copy note for agent'
-                            }
-                            aria-label={
-                              copiedReviewNoteId === comment.id
-                                ? 'Copied note'
-                                : 'Copy note for agent'
-                            }
-                            onMouseDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              void handleCopyMarkdownReviewNote(comment as MarkdownReviewNote)
-                            }}
-                          >
-                            {copiedReviewNoteId === comment.id ? (
-                              <Check className="size-3.5" />
-                            ) : (
-                              <Copy className="size-3.5" />
-                            )}
-                          </button>
-                          <NotesSendMenu
-                            worktreeId={worktreeId}
-                            groupId={worktreeId}
-                            modeIdParts={[
-                              'markdown-notes',
-                              worktreeId,
-                              filePath,
-                              'note',
-                              comment.id
-                            ]}
-                            scopes={[
-                              {
-                                id: 'note',
-                                label: 'This note',
-                                notes: comment.sentAt ? [] : [comment as MarkdownReviewNote],
-                                prompt: formatMarkdownReviewNotes(
-                                  [comment as MarkdownReviewNote],
-                                  markdownReviewContent
-                                )
-                              }
-                            ]}
-                            targetModeLabel="This note"
-                            triggerClassName="rich-markdown-review-note-action"
-                            disabledTooltip="Note already sent"
-                            onDelivered={(notes) =>
-                              void clearDeliveredDiffComments(worktreeId, notes)
-                            }
-                          />
-                        </>
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          <RichMarkdownSearchBar
-            activeMatchIndex={activeMatchIndex}
-            isOpen={isSearchOpen}
-            matchCount={matchCount}
-            onClose={closeSearch}
-            onMoveToMatch={moveToMatch}
-            onQueryChange={setSearchQuery}
-            query={searchQuery}
-            searchInputRef={searchInputRef}
-          />
-        </div>
-        {linkBubble ? (
-          <RichMarkdownLinkBubble
-            linkBubble={linkBubble}
-            isEditing={isEditingLink}
-            onSave={handleLinkSave}
-            onRemove={handleLinkRemove}
-            onEditStart={() => setIsEditingLink(true)}
-            onEditCancel={handleLinkEditCancel}
-            onOpen={handleLinkOpen}
-          />
-        ) : null}
-        {slashMenu ? (
-          <RichMarkdownSlashMenu
-            editor={editor}
-            slashMenu={slashMenu}
-            filteredCommands={filteredSlashCommands}
-            selectedIndex={selectedCommandIndex}
-            onImagePick={handleLocalImagePick}
-            onEmojiPick={() => openEmojiMenu(slashMenu)}
-          />
-        ) : null}
-        {emojiMenu ? (
-          <RichMarkdownEmojiMenu
-            editor={editor}
-            left={emojiMenu.left}
-            top={emojiMenu.top}
-            onClose={() => setEmojiMenu(null)}
-          />
-        ) : null}
-        {docLinkMenu ? (
-          <RichMarkdownDocLinkMenu
-            editor={editor}
-            menu={docLinkMenu}
-            rows={docLinkRows}
-            totalMatches={docLinkTotalMatches}
-            selectedIndex={selectedDocLinkIndex}
-          />
-        ) : null}
-        {annotationTarget ? (
-          <button
-            type="button"
-            className="orca-diff-comment-add-btn rich-markdown-comment-add-btn"
-            style={{
-              top: annotationTarget?.buttonTop ?? 56,
-              left: annotationTarget?.buttonLeft ?? 16
-            }}
-            title="Add review note"
-            aria-label="Add review note"
-            onMouseDown={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-            }}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              openAnnotationPopover()
-            }}
-          >
-            <Plus className="size-3" />
-          </button>
-        ) : null}
-        {annotationPopover ? (
-          <DiffCommentPopover
-            key={`${annotationPopover.startLine ?? annotationPopover.lineNumber}:${annotationPopover.lineNumber}`}
-            lineNumber={annotationPopover.lineNumber + markdownSourceLineOffset}
-            startLine={
-              annotationPopover.startLine === undefined
-                ? undefined
-                : annotationPopover.startLine + markdownSourceLineOffset
-            }
-            top={annotationPopover.top}
-            left={annotationPopover.left}
-            title="Selected text"
-            onCancel={() => {
-              setAnnotationPopover(null)
-              clearAnnotationHighlight()
-            }}
-            onSubmit={submitAnnotation}
-          />
-        ) : null}
-        {hasMarkdownComments ? (
-          <div className="rich-markdown-review-rail-actions">
-            <button
-              type="button"
-              className="rich-markdown-review-rail-toggle"
-              aria-label={reviewRailOpen ? 'Hide review notes' : 'Show review notes'}
-              aria-expanded={reviewRailOpen}
-              title={reviewRailOpen ? 'Hide review notes' : 'Show review notes'}
-              onClick={() => setReviewRailOpen((open) => !open)}
-            >
-              <MessageSquare className="size-3.5" />
-              <span>{markdownComments.length}</span>
-            </button>
-            <button
-              type="button"
-              className="rich-markdown-review-rail-action"
-              title={reviewNotesCopied ? 'Copied notes' : 'Copy notes for agent'}
-              aria-label={reviewNotesCopied ? 'Copied notes' : 'Copy notes for agent'}
-              onClick={() => void handleCopyMarkdownReviewNotes()}
-            >
-              {reviewNotesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            </button>
-            <NotesSendMenu
-              worktreeId={worktreeId}
-              groupId={worktreeId}
-              modeIdParts={['markdown-notes', worktreeId, filePath, 'rail']}
-              scopes={unsentMarkdownReviewScope}
-              triggerClassName="rich-markdown-review-rail-action"
-              onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
-            />
-          </div>
-        ) : null}
-      </div>
-      {showTableOfContents ? (
-        <MarkdownTableOfContentsPanel
-          items={tableOfContentsItems}
-          onClose={onCloseTableOfContents ?? (() => {})}
-          onNavigate={navigateToTableOfContentsItem}
-        />
-      ) : null}
-    </div>
+    <RichMarkdownEditorSurface
+      editor={editor}
+      editorFontZoomLevel={editorFontZoomLevel}
+      rootRef={setRootElement}
+      scrollContainerRef={scrollContainerRef}
+      headerSlot={headerSlot}
+      reviewRailExpanded={review.reviewRailExpanded}
+      reviewRailVisible={review.reviewRailVisible}
+      notePositions={review.notePositions}
+      activeReviewCommentId={review.activeReviewCommentId}
+      attentionReviewCommentId={review.attentionReviewCommentId}
+      copiedReviewNoteId={review.copiedReviewNoteId}
+      markdownReviewContent={markdownReviewContent}
+      worktreeId={worktreeId}
+      filePath={filePath}
+      markdownCommentsCount={review.markdownComments.length}
+      reviewRailOpen={review.reviewRailOpen}
+      reviewNotesCopied={review.reviewNotesCopied}
+      unsentMarkdownReviewScope={review.unsentMarkdownReviewScope}
+      linkBubble={linkBubble}
+      isEditingLink={isEditingLink}
+      slashMenu={menu.slashMenu}
+      filteredSlashCommands={menu.filteredSlashCommands}
+      selectedCommandIndex={menu.selectedCommandIndex}
+      emojiMenu={menu.emojiMenu}
+      docLinkMenu={menu.docLinkMenu}
+      docLinkRows={menu.docLinkRows}
+      docLinkTotalMatches={menu.docLinkTotalMatches}
+      selectedDocLinkIndex={menu.selectedDocLinkIndex}
+      annotationTarget={review.annotationTarget}
+      annotationPopover={review.annotationPopover}
+      markdownSourceLineOffset={markdownSourceLineOffset}
+      tableOfContentsItems={tableOfContentsItems}
+      showTableOfContents={showTableOfContents}
+      searchState={{
+        activeMatchIndex,
+        isSearchOpen,
+        matchCount,
+        searchQuery,
+        searchInputRef
+      }}
+      searchActions={{
+        closeSearch,
+        moveToMatch,
+        setSearchQuery
+      }}
+      linkBubbleActions={{
+        handleLinkSave,
+        handleLinkRemove,
+        handleLinkEditCancel,
+        handleLinkOpen,
+        setIsEditingLink
+      }}
+      onToggleLink={toggleLinkFromToolbar}
+      onImagePick={handleLocalImagePick}
+      onEmojiPick={menu.openEmojiMenu}
+      onCloseEmojiMenu={() => menu.setEmojiMenu(null)}
+      onOpenAnnotationPopover={review.openAnnotationPopover}
+      onCancelAnnotationPopover={() => {
+        review.setAnnotationPopover(null)
+        review.clearAnnotationHighlight()
+      }}
+      onSubmitAnnotation={review.submitAnnotation}
+      onCopyReviewNotes={() => void review.handleCopyMarkdownReviewNotes()}
+      onCopyReviewNote={(note) => void review.handleCopyMarkdownReviewNote(note)}
+      onToggleReviewRail={() => review.setReviewRailOpen((open) => !open)}
+      onReviewNotesDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
+      onReviewNoteSourceClick={review.scrollRichMarkdownReviewNoteSourceIntoView}
+      onDeleteReviewComment={(commentId) => void deleteDiffComment(worktreeId, commentId)}
+      onSubmitReviewCommentEdit={(commentId, body) =>
+        updateDiffComment(worktreeId, commentId, body)
+      }
+      onReviewNoteContentResize={review.syncNotePositions}
+      onNavigateTableOfContentsItem={navigateToTableOfContentsItem}
+      onCloseTableOfContents={onCloseTableOfContents}
+    />
   )
 }

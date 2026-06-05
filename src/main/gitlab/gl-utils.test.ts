@@ -178,6 +178,30 @@ describe('gitlab project ref resolution', () => {
     })
   })
 
+  it('coalesces concurrent missing remote probes for the same repo and remote', async () => {
+    gitExecFileAsyncMock.mockImplementation(async () => {
+      await Promise.resolve()
+      throw new Error("error: No such remote 'upstream'")
+    })
+
+    await expect(
+      Promise.all([
+        getProjectRefForRemote('/repo', 'upstream'),
+        getProjectRefForRemote('/repo', 'upstream'),
+        getProjectRefForRemote('/repo', 'upstream'),
+        getProjectRefForRemote('/repo', 'upstream')
+      ])
+    ).resolves.toEqual([null, null, null, null])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
+      cwd: '/repo'
+    })
+
+    await expect(getProjectRefForRemote('/repo', 'upstream')).resolves.toBeNull()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves project refs through the SSH git provider for connected repos', async () => {
     sshExecMock.mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
     registerSshGitProvider('conn-1', { exec: sshExecMock } as never)

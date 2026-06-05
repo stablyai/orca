@@ -15,6 +15,7 @@ import type { Store } from '../persistence'
 import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
+  NotificationDismissResult,
   NotificationPermissionStatusResult,
   NotificationSettings,
   NotificationSoundDataResult
@@ -59,6 +60,10 @@ type NotificationSoundId = NotificationSettings['customSoundId']
 // the notification in macOS Notification Center. Prevent this by keeping a
 // strong reference until the notification is clicked or closed.
 const activeNotifications = new Set<Notification>()
+const activeNotificationsById = new Map<
+  string,
+  { notification: Notification; release: () => void }
+>()
 
 function retainNotificationUntilRelease(
   notification: Notification,
@@ -225,6 +230,24 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     return getPermissionStatus()
   })
 
+  ipcMain.removeHandler('notifications:dismiss')
+  ipcMain.handle('notifications:dismiss', (_event, ids: string[]): NotificationDismissResult => {
+    const uniqueIds = Array.from(
+      new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
+    )
+    let dismissed = 0
+    for (const id of uniqueIds) {
+      const entry = activeNotificationsById.get(id)
+      if (entry) {
+        entry.notification.close()
+        entry.release()
+        dismissed += 1
+      }
+      runtime?.dismissMobileNotification(id)
+    }
+    return { dismissed }
+  })
+
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
     'notifications:dispatch',
@@ -281,10 +304,12 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       // where Electron native notifications are unavailable.
       if (runtime && args.source !== 'test') {
         runtime.dispatchMobileNotification({
+          type: 'notification',
           source: args.source,
           title: notificationOptions.title,
           body: notificationOptions.body,
-          worktreeId: args.worktreeId
+          worktreeId: args.worktreeId,
+          ...(args.notificationId ? { notificationId: args.notificationId } : {})
         })
       }
 
@@ -300,11 +325,20 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         notificationOptions.sound = 'default'
       }
       const notification = new Notification(notificationOptions)
+      if (args.notificationId) {
+        const previous = activeNotificationsById.get(args.notificationId)
+        if (previous) {
+          previous.notification.close()
+          previous.release()
+        }
+      }
 
       // Why: prevent GC from collecting the notification (and its click
       // handler) while it's still visible in macOS Notification Center.
       let clickHandler: (() => void) | null = null
       let failedHandler: ((_event: unknown, error?: string) => void) | null = null
+      const entryForId: { notification: Notification; release: () => void } | null =
+        args.notificationId ? { notification, release: () => {} } : null
       const release = retainNotificationUntilRelease(notification, () => {
         if (clickHandler) {
           notification.removeListener('click', clickHandler)
@@ -314,7 +348,17 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           notification.removeListener('failed', failedHandler)
           failedHandler = null
         }
+        if (
+          args.notificationId &&
+          activeNotificationsById.get(args.notificationId) === entryForId
+        ) {
+          activeNotificationsById.delete(args.notificationId)
+        }
       })
+      if (entryForId && args.notificationId) {
+        entryForId.release = release
+        activeNotificationsById.set(args.notificationId, entryForId)
+      }
 
       failedHandler = (_event, error) => {
         // Why: Electron 42's macOS UNNotification backend reports unsigned

@@ -5,50 +5,52 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { FloatingTerminalIconContextMenu } from './FloatingTerminalIconContextMenu'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
+  anchorFloatingTerminalTriggerPosition,
   clampFloatingTerminalTriggerPosition,
+  getDefaultFloatingTerminalTriggerCommittedPosition,
   getDefaultFloatingTerminalTriggerPosition,
-  parseFloatingTerminalTriggerPosition,
+  persistFloatingTerminalTriggerPosition,
+  readPersistedFloatingTerminalTriggerPosition,
+  resolveFloatingTerminalTriggerCommittedPosition,
   resolveFloatingTerminalTriggerPosition,
   shouldReconcileFloatingTerminalTriggerPosition,
+  type FloatingTerminalTriggerCommittedPosition,
   type FloatingTerminalTriggerPosition,
   type FloatingTerminalTriggerPositionSource
 } from './floating-terminal-trigger-position'
 
-// Why: v2 resets older parked positions that sat too low over bottom bars.
-const FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY = 'orca-floating-terminal-trigger-position-v2'
 const FLOATING_TERMINAL_TRIGGER_DRAG_THRESHOLD = 4
 
 type FloatingTerminalTriggerPositionState = {
+  committedPosition: FloatingTerminalTriggerCommittedPosition
   position: FloatingTerminalTriggerPosition
   source: FloatingTerminalTriggerPositionSource
 }
 
 function readInitialTriggerPosition(): FloatingTerminalTriggerPositionState {
+  const defaultCommittedPosition = getDefaultFloatingTerminalTriggerCommittedPosition()
+  const defaultPosition = getDefaultFloatingTerminalTriggerPosition()
   if (typeof window === 'undefined') {
     return {
-      position: getDefaultFloatingTerminalTriggerPosition(),
+      committedPosition: defaultCommittedPosition,
+      position: defaultPosition,
       source: 'default'
     }
   }
-  const persistedPosition = parseFloatingTerminalTriggerPosition(
-    window.localStorage.getItem(FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY)
-  )
+  const persistedPosition = readPersistedFloatingTerminalTriggerPosition()
   return persistedPosition
     ? {
-        position: persistedPosition,
+        committedPosition: persistedPosition,
+        position: shouldReconcileFloatingTerminalTriggerPosition('user')
+          ? resolveFloatingTerminalTriggerPosition(persistedPosition, 'user')
+          : resolveFloatingTerminalTriggerCommittedPosition(persistedPosition),
         source: 'user'
       }
     : {
-        position: getDefaultFloatingTerminalTriggerPosition(),
+        committedPosition: defaultCommittedPosition,
+        position: defaultPosition,
         source: 'default'
       }
-}
-
-function persistTriggerPosition(position: FloatingTerminalTriggerPosition): void {
-  window.localStorage.setItem(
-    FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY,
-    JSON.stringify(position)
-  )
 }
 
 export function FloatingTerminalToggleButton({
@@ -66,6 +68,9 @@ export function FloatingTerminalToggleButton({
   const positionSourceRef = useRef<FloatingTerminalTriggerPositionSource>(
     initialPositionState.current.source
   )
+  const committedPositionRef = useRef<FloatingTerminalTriggerCommittedPosition>(
+    initialPositionState.current.committedPosition
+  )
   const [position, setPosition] = useState(initialPositionState.current.position)
   const dragRef = useRef<{
     pointerId: number
@@ -75,13 +80,26 @@ export function FloatingTerminalToggleButton({
     top: number
     moved: boolean
   } | null>(null)
+  const stagedPositionRef = useRef<FloatingTerminalTriggerPosition | null>(null)
   const suppressClickRef = useRef(false)
 
-  const updatePosition = useCallback((nextPosition: FloatingTerminalTriggerPosition): void => {
-    positionSourceRef.current = 'user'
+  const previewPosition = useCallback((nextPosition: FloatingTerminalTriggerPosition): void => {
+    const clamped = clampFloatingTerminalTriggerPosition(nextPosition)
+    stagedPositionRef.current = clamped
+    setPosition(clamped)
+  }, [])
+
+  const commitPosition = useCallback((nextPosition: FloatingTerminalTriggerPosition): void => {
+    stagedPositionRef.current = null
     const clamped = clampFloatingTerminalTriggerPosition(nextPosition)
     setPosition(clamped)
-    persistTriggerPosition(clamped)
+    const anchoredPosition = anchorFloatingTerminalTriggerPosition(clamped)
+    if (!anchoredPosition) {
+      return
+    }
+    committedPositionRef.current = anchoredPosition
+    positionSourceRef.current = 'user'
+    persistFloatingTerminalTriggerPosition(anchoredPosition)
   }, [])
 
   const reconcilePosition = useCallback((): void => {
@@ -91,10 +109,10 @@ export function FloatingTerminalToggleButton({
         // drag position with the safety clamp before the renderer finishes sizing.
         return current
       }
-      const next = resolveFloatingTerminalTriggerPosition(current, positionSourceRef.current)
-      if (positionSourceRef.current === 'user') {
-        persistTriggerPosition(next)
-      }
+      const next = resolveFloatingTerminalTriggerPosition(
+        committedPositionRef.current,
+        positionSourceRef.current
+      )
       return next
     })
   }, [])
@@ -137,7 +155,7 @@ export function FloatingTerminalToggleButton({
       return
     }
     drag.moved = true
-    updatePosition({
+    previewPosition({
       left: drag.left + dx,
       top: drag.top + dy
     })
@@ -149,6 +167,9 @@ export function FloatingTerminalToggleButton({
       return
     }
     suppressClickRef.current = drag.moved
+    if (drag.moved && stagedPositionRef.current) {
+      commitPosition(stagedPositionRef.current)
+    }
     dragRef.current = null
   }
 

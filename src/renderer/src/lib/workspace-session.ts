@@ -37,6 +37,8 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'terminalLayoutsByTabId'
   | 'activeTabIdByWorktree'
   | 'openFiles'
+  | 'editorDrafts'
+  | 'markdownFrontmatterVisible'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
   | 'browserTabsByWorktree'
@@ -70,6 +72,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'terminalLayoutsByTabId',
   'activeTabIdByWorktree',
   'openFiles',
+  'editorDrafts',
+  'markdownFrontmatterVisible',
   'activeFileIdByWorktree',
   'activeTabTypeByWorktree',
   'browserTabsByWorktree',
@@ -99,24 +103,31 @@ void _exhaustive
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
 export function buildEditorSessionData(
   openFiles: OpenFile[],
+  editorDrafts: Record<string, string>,
+  markdownFrontmatterVisible: Record<string, boolean>,
   activeFileIdByWorktree: Record<string, string | null>,
   activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
 ): Pick<
   WorkspaceSessionState,
-  'openFilesByWorktree' | 'activeFileIdByWorktree' | 'activeTabTypeByWorktree'
+  | 'openFilesByWorktree'
+  | 'activeFileIdByWorktree'
+  | 'activeTabTypeByWorktree'
+  | 'markdownFrontmatterVisible'
 > {
   const editFiles = openFiles.filter((f) => f.mode === 'edit')
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
+    const dirtyDraftContent = f.isDirty ? editorDrafts[f.id] : undefined
     arr.push({
       filePath: f.filePath,
       relativePath: f.relativePath,
       worktreeId: f.worktreeId,
       language: f.language,
       isPreview: f.isPreview || undefined,
-      runtimeEnvironmentId: f.runtimeEnvironmentId
+      runtimeEnvironmentId: f.runtimeEnvironmentId,
+      ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {})
     })
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
@@ -155,11 +166,18 @@ export function buildEditorSessionData(
     string,
     WorkspaceVisibleTabType
   >
+  const allEditFileIds = new Set(Object.values(editFileIdsByWorktree).flatMap((ids) => [...ids]))
+  const persistedMarkdownFrontmatterVisible = Object.fromEntries(
+    Object.keys(markdownFrontmatterVisible ?? {})
+      .filter((fileId) => allEditFileIds.has(fileId))
+      .map((fileId) => [fileId, true])
+  )
 
   return {
     openFilesByWorktree: byWorktree,
     activeFileIdByWorktree: persistedActiveFileIdByWorktree,
-    activeTabTypeByWorktree: persistedActiveTabTypeByWorktree
+    activeTabTypeByWorktree: persistedActiveTabTypeByWorktree,
+    markdownFrontmatterVisible: persistedMarkdownFrontmatterVisible
   }
 }
 
@@ -329,6 +347,8 @@ export function buildWorkspaceSessionPayload(
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
     ...buildEditorSessionData(
       snapshot.openFiles,
+      snapshot.editorDrafts,
+      snapshot.markdownFrontmatterVisible,
       snapshot.activeFileIdByWorktree,
       snapshot.activeTabTypeByWorktree
     ),

@@ -799,7 +799,12 @@ export class RateLimitService {
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
     const [claudeResult, codexResult, geminiResult, opencodeGoResult] = await Promise.allSettled([
-      fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }),
+      fetchClaudeRateLimits({
+        authPreparation: claudeAuthPreparation,
+        // Why: active quota refreshes run on startup/focus/timers. They must
+        // never spawn hidden Claude Code, which can trigger macOS App Data TCC.
+        allowPtyFallback: false
+      }),
       missingWslCodexHome ??
         fetchCodexRateLimits({
           codexHomePath,
@@ -957,7 +962,12 @@ export class RateLimitService {
       claude: this.withFetchingStatus(previousState.claude, 'claude')
     })
 
-    const claude = await fetchClaudeRateLimits({ authPreparation: claudeAuthPreparation }).catch(
+    const claude = await fetchClaudeRateLimits({
+      authPreparation: claudeAuthPreparation,
+      // Why: account-change refreshes share the same automatic active quota
+      // surface as startup/timer refreshes, so keep them API-only as well.
+      allowPtyFallback: false
+    }).catch(
       (err): ProviderRateLimits => ({
         provider: 'claude',
         session: null,

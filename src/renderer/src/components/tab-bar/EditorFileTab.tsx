@@ -1,26 +1,6 @@
-/* eslint-disable max-lines -- Why: editor tab rendering, drag behavior, rename handling, and its context menu share one tightly-coupled tab surface. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import {
-  X,
-  GitCompareArrows,
-  Copy,
-  Eye,
-  ShieldAlert,
-  ExternalLink,
-  Columns2,
-  Rows2,
-  Pencil,
-  Pin,
-  PinOff
-} from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { X, GitCompareArrows, Eye, ShieldAlert, Pin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { basename, normalizeRelativePath } from '@/lib/path'
@@ -40,21 +20,11 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
+  getTabRootStateClasses,
   type DropIndicator
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
-import { showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
-import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
-
-const isMac = navigator.userAgent.includes('Mac')
-const isLinux = navigator.userAgent.includes('Linux')
-
-/** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
-const revealLabel = isMac
-  ? 'Reveal in Finder'
-  : isLinux
-    ? 'Open Containing Folder'
-    : 'Reveal in File Explorer'
+import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 
 export default function EditorFileTab({
   file,
@@ -66,7 +36,7 @@ export default function EditorFileTab({
   onClose,
   onCloseToRight,
   onCloseAll,
-  onPin,
+  onMakePermanent,
   onTogglePin,
   onSplitGroup,
   dragData,
@@ -81,7 +51,7 @@ export default function EditorFileTab({
   onClose: () => void
   onCloseToRight: () => void
   onCloseAll: () => void
-  onPin?: () => void
+  onMakePermanent?: () => void
   onTogglePin: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
@@ -230,9 +200,7 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border bg-card ${getDropIndicatorClasses(dropIndicator ?? null)} ${
-        isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-      }`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         if (e.button !== 0) {
           return
@@ -241,8 +209,8 @@ export default function EditorFileTab({
         listeners?.onPointerDown?.(e)
       }}
       onDoubleClick={() => {
-        if (file.isPreview && onPin) {
-          onPin()
+        if (file.isPreview && onMakePermanent) {
+          onMakePermanent()
         }
       }}
       onMouseDown={(e) => {
@@ -315,9 +283,14 @@ export default function EditorFileTab({
             className={`truncate max-w-[80px]${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
-              // Why: the outer tab's onDoubleClick pins preview tabs. Scope
-              // rename to the filename text only so pin-on-dblclick still
-              // works anywhere else on the tab chrome (matching VS Code).
+              if (file.isPreview && onMakePermanent) {
+                e.stopPropagation()
+                onMakePermanent()
+                return
+              }
+              // Why: preview tabs use double-click to become permanent. Scope
+              // rename to non-preview filename text so preview promotion wins on
+              // the tab label as well as the surrounding tab chrome.
               if (!canRename) {
                 return
               }
@@ -397,132 +370,28 @@ export default function EditorFileTab({
         )}
       </div>
 
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none fixed size-px opacity-0"
-            style={{ left: menuPoint.x, top: menuPoint.y }}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="w-48"
-          sideOffset={0}
-          align="start"
-          onCloseAutoFocus={(event) => {
-            if (!skipMenuFocusRestoreRef.current) {
-              return
-            }
-            skipMenuFocusRestoreRef.current = false
-            event.preventDefault()
-          }}
-        >
-          <DropdownMenuItem onSelect={() => onSplitGroup('up', file.tabId ?? file.id)}>
-            <Rows2 className="mr-1.5 size-3.5" />
-            Split Up
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('down', file.tabId ?? file.id)}>
-            <Rows2 className="mr-1.5 size-3.5" />
-            Split Down
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('left', file.tabId ?? file.id)}>
-            <Columns2 className="mr-1.5 size-3.5" />
-            Split Left
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('right', file.tabId ?? file.id)}>
-            <Columns2 className="mr-1.5 size-3.5" />
-            Split Right
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            disabled={!canRename || isRenaming}
-            onSelect={() => {
-              skipMenuFocusRestoreRef.current = true
-              onActivate()
-              openRenameInput()
-            }}
-          >
-            <Pencil className="mr-1.5 size-3.5" />
-            Rename
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onTogglePin}>
-            {isPinned ? (
-              <PinOff className="mr-1.5 size-3.5" />
-            ) : (
-              <Pin className="mr-1.5 size-3.5" />
-            )}
-            {isPinned ? 'Unpin Tab' : 'Pin Tab'}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
-            Close
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseAll}>Close All Editor Tabs</DropdownMenuItem>
-          <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
-            Close Tabs To The Right
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          {canShowMarkdownPreview && (
-            <>
-              <DropdownMenuItem
-                onSelect={() => {
-                  onActivate()
-                  openMarkdownPreview(
-                    {
-                      filePath: file.filePath,
-                      relativePath: file.relativePath,
-                      worktreeId: file.worktreeId,
-                      runtimeEnvironmentId: file.runtimeEnvironmentId,
-                      language: resolvedLanguage
-                    },
-                    { sourceFileId: file.id }
-                  )
-                }}
-              >
-                Open Markdown Preview
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
-          <DropdownMenuItem
-            onSelect={() => {
-              void window.api.ui.writeClipboardText(file.filePath)
-            }}
-          >
-            <Copy className="w-3.5 h-3.5 mr-1.5" />
-            Copy Path
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
-              void window.api.ui.writeClipboardText(file.relativePath)
-            }}
-          >
-            <Copy className="w-3.5 h-3.5 mr-1.5" />
-            Copy Relative Path
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              if (
-                shouldBlockEditorTabLocalOpen(
-                  useAppStore.getState().settings,
-                  file.runtimeEnvironmentId,
-                  repo?.connectionId ?? null
-                )
-              ) {
-                showLocalPathOpenBlockedToast()
-                return
-              }
-              window.api.shell.openPath(file.filePath)
-            }}
-          >
-            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-            {revealLabel}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <EditorFileTabContextMenu
+        open={menuOpen}
+        menuPoint={menuPoint}
+        file={file}
+        isPinned={isPinned}
+        isRenaming={isRenaming}
+        hasTabsToRight={hasTabsToRight}
+        canRename={canRename}
+        canShowMarkdownPreview={canShowMarkdownPreview}
+        resolvedLanguage={resolvedLanguage}
+        repoConnectionId={repo?.connectionId ?? null}
+        skipMenuFocusRestoreRef={skipMenuFocusRestoreRef}
+        onOpenChange={setMenuOpen}
+        onActivate={onActivate}
+        onOpenRenameInput={openRenameInput}
+        onTogglePin={onTogglePin}
+        onClose={onClose}
+        onCloseAll={onCloseAll}
+        onCloseToRight={onCloseToRight}
+        onSplitGroup={onSplitGroup}
+        onOpenMarkdownPreview={openMarkdownPreview}
+      />
     </>
   )
 }

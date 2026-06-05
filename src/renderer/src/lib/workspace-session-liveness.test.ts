@@ -13,6 +13,8 @@ function createSnapshot(
     terminalLayoutsByTabId: {},
     activeTabIdByWorktree: {},
     openFiles: [],
+    editorDrafts: {},
+    markdownFrontmatterVisible: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},

@@ -65,6 +65,7 @@ import {
   setDriverForBrowserPage
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
+import { dispatchBrowserPageZoomEvent } from '@/components/browser-pane/browser-page-zoom'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
@@ -76,7 +77,7 @@ import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-seriali
 import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { AppState } from '../store/types'
 import {
   closeWebRuntimeSessionTab,
@@ -213,6 +214,23 @@ function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): S
 
 function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<string> {
   return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
+}
+
+function resolveActiveBrowserPageId(state: AppState): string | null {
+  const worktreeId = state.activeWorktreeId
+  if (!worktreeId) {
+    return null
+  }
+  const activeWorkspaceId =
+    state.activeBrowserTabIdByWorktree[worktreeId] ?? state.activeBrowserTabId ?? null
+  const browserWorkspaces = state.browserTabsByWorktree[worktreeId] ?? []
+  const workspace =
+    browserWorkspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null
+  if (!workspace) {
+    return null
+  }
+  const pages = state.browserPagesByWorkspace[workspace.id] ?? []
+  return workspace.activePageId ?? workspace.pageIds?.[0] ?? pages[0]?.id ?? null
 }
 
 type TerminalSplitDirection = 'horizontal' | 'vertical'
@@ -609,7 +627,7 @@ export function buildNewWorkspaceShortcutModalData(
 
   return {
     telemetrySource: 'shortcut',
-    prefilledName: getLinkedWorkItemSuggestedName(linearIssue),
+    prefilledName: getLinearIssueWorkspaceName(linearIssue),
     // Why: Cmd+N from a Linear issue should behave like the issue's Start
     // workspace action; otherwise the agent launches without source context.
     linkedWorkItem: buildLinearIssueLinkedWorkItem(linearIssue)
@@ -1219,16 +1237,18 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onSplitTerminal(({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
-        const detail: SplitTerminalPaneDetail = {
-          tabId,
-          paneRuntimeId,
-          direction,
-          command,
-          telemetrySource
+      window.api.ui.onSplitTerminal(
+        ({ tabId, paneRuntimeId, direction, command, telemetrySource }) => {
+          const detail: SplitTerminalPaneDetail = {
+            tabId,
+            paneRuntimeId,
+            direction,
+            command,
+            telemetrySource
+          }
+          window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
         }
-        window.dispatchEvent(new CustomEvent(SPLIT_TERMINAL_PANE_EVENT, { detail }))
-      })
+      )
     )
 
     unsubs.push(
@@ -2142,14 +2162,24 @@ export function useIpcEvents(): void {
     // Zoom handling for menu accelerators and keyboard fallback paths.
     unsubs.push(
       window.api.ui.onTerminalZoom((direction) => {
+        const store = useAppStore.getState()
         const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
-          useAppStore.getState()
+          store
+        const activeBrowserPageId = resolveActiveBrowserPageId(store)
         const target = resolveZoomTarget({
           activeView,
           activeTabType,
+          activeBrowserPageId,
           activeElement: document.activeElement
         })
         if (target === 'terminal') {
+          return
+        }
+        if (target === 'browser') {
+          if (!activeBrowserPageId) {
+            return
+          }
+          dispatchBrowserPageZoomEvent({ browserPageId: activeBrowserPageId, direction })
           return
         }
         if (target === 'editor') {
@@ -2255,11 +2285,11 @@ export function useIpcEvents(): void {
         repoConnectionResolved,
         owningWorktreeId
       } = resolvePaneKey(store, data.paneKey)
-      if (!exists && data.worktreeId) {
+      if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
         // Why: orchestration worker hooks can carry main-side worktree
         // attribution before this renderer has a terminal tab for the pane.
-        // Accept those only when the worktree is known, then keep the normal
-        // repo connection check below for SSH/local ownership.
+        // Require runtime identity too; durable snapshots with only worktreeId
+        // can be stale cached rows from closed/remounted panes.
         const fallbackOwnership = resolveWorktreeConnection(store, data.worktreeId)
         if (fallbackOwnership.worktreeExists) {
           owningWorktreeId = data.worktreeId
@@ -2441,6 +2471,19 @@ export function useIpcEvents(): void {
         applyAgentStatus(data)
       })
     )
+    const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.((data) => {
+      if (typeof data?.paneKey !== 'string') {
+        return
+      }
+      const store = useAppStore.getState()
+      if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
+        return
+      }
+      store.removeAgentStatus(data.paneKey)
+    })
+    if (unsubscribeAgentStatusClear) {
+      unsubs.push(unsubscribeAgentStatusClear)
+    }
     const unsubscribeMigrationUnsupported = window.api.agentStatus.onMigrationUnsupported?.(
       (entry) => {
         const store = useAppStore.getState()
@@ -2608,6 +2651,13 @@ export function useIpcEvents(): void {
       resetAgentHookCompletionNotificationCoordinators()
     }
   }, [])
+}
+
+function hasRuntimeBackedWorktreeAttribution(data: AgentStatusIpcPayload): boolean {
+  return (
+    (typeof data.terminalHandle === 'string' && data.terminalHandle.length > 0) ||
+    data.orchestration !== undefined
+  )
 }
 
 function applyResolvedAgentTerminalTitleToTab(

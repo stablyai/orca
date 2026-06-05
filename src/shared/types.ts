@@ -18,10 +18,12 @@ import type { FeatureInteractionState } from './feature-interactions'
 import type { GitBranchChangeStatus } from './git-status-types'
 import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { RepoIcon } from './repo-icon'
+import type { AppIconId } from './app-icon'
 import type {
   RepoSourceControlAiOverrides,
   SourceControlAiSettings
 } from './source-control-ai-types'
+import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -83,6 +85,10 @@ export type Repo = {
   displayName: string
   badgeColor: string
   repoIcon?: RepoIcon | null
+  /** Set when the repo is a fork: the upstream/parent owner/repo. Drives the
+   *  default avatar (upstream owner, not the personal fork) and the fork
+   *  indicator. Absent = not a fork, or fork status not yet resolved. */
+  upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind
   gitUsername?: string
@@ -641,6 +647,8 @@ export type TerminalLayoutSnapshot = {
   ptyIdsByLeafId?: Record<string, string>
   /** Serialized terminal buffers per leaf for scrollback restoration on restart. */
   buffersByLeafId?: Record<string, string>
+  /** Durable scrollback snapshot refs per leaf; raw bytes live outside session JSON. */
+  scrollbackRefsByLeafId?: Record<string, string>
   /** User-assigned pane titles, keyed by stable layout leaf UUID.
    *  Persisted alongside buffers via the existing session:set flow. */
   titlesByLeafId?: Record<string, string>
@@ -656,6 +664,8 @@ export type PersistedOpenFile = {
   language: string
   isPreview?: boolean
   runtimeEnvironmentId?: string | null
+  /** Unsaved editor buffer captured for hot exit; presence restores the tab dirty. */
+  dirtyDraftContent?: string
 }
 
 export type WorkspaceSessionState = {
@@ -674,6 +684,8 @@ export type WorkspaceSessionState = {
   openFilesByWorktree?: Record<string, PersistedOpenFile[]>
   /** Per-worktree active editor file ID (filePath) at shutdown. */
   activeFileIdByWorktree?: Record<string, string | null>
+  /** Per-file markdown preview front-matter visibility. Absent entry means hidden. */
+  markdownFrontmatterVisible?: Record<string, boolean>
   /** Persisted browser workspaces, keyed by worktree ID. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
   /** Persisted browser pages, keyed by workspace ID. */
@@ -1532,11 +1544,23 @@ export type WorktreeSetupLaunch = {
 export type WorktreeStartupLaunch = {
   command: string
   env?: Record<string, string>
+  telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
 }
 
 export type WorktreeDefaultTabsLaunch = {
   tabs: OrcaDefaultTabTemplate[]
   runCommands: boolean
+}
+
+export type WorktreeCreateTimingPhase = {
+  phase: string
+  startedAtMs: number
+  durationMs: number
+}
+
+export type WorktreeCreateTiming = {
+  totalDurationMs: number
+  phases: WorktreeCreateTimingPhase[]
 }
 
 export type CreateSparseCheckoutRequest = {
@@ -1595,6 +1619,9 @@ export type CreateWorktreeArgs = {
    *  pre-date this prop default to `unknown` at the IPC boundary instead
    *  of failing typecheck. */
   telemetrySource?: WorkspaceSource
+  /** Optional startup command for callers that want the backend to spawn the
+   *  first terminal as soon as the worktree is registered. */
+  startup?: WorktreeStartupLaunch
 }
 
 export type CreateWorktreeResult = {
@@ -1611,6 +1638,11 @@ export type CreateWorktreeResult = {
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
+  startupTerminal?: {
+    spawned: boolean
+    surface?: 'visible' | 'background'
+  }
+  timing?: WorktreeCreateTiming
 }
 
 export type PreservedWorktreeBranch = {
@@ -1925,6 +1957,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
   editorAutoSaveDelayMs: number
@@ -2029,6 +2062,9 @@ export type GlobalSettings = {
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
   httpProxyBypassRules?: string
+  /** Why: corporate TLS-intercepting proxies can break Electron HTTP/2 downloads;
+   *  this opt-in compatibility mode applies Chromium's process-wide HTTP/1.1 switch. */
+  electronHttp1CompatibilityMode?: boolean
   /** Why: opening arbitrary links inside Orca uses an isolated guest browser surface.
    *  The setting stays opt-in so existing workflows continue to use the system browser
    *  until the user explicitly wants worktree-scoped in-app browsing. */
@@ -2046,6 +2082,9 @@ export type GlobalSettings = {
    *  left sidebar free of its button entirely. Hiding the button here also
    *  removes it from keyboard navigation. */
   showTasksButton: boolean
+  /** Why: Automations can be restored from Settings or the View menu, so this
+   *  only controls whether the top-level sidebar shortcut is shown. */
+  showAutomationsButton?: boolean
   /** Why: Orca Mobile remains reachable from the toolbox; this only controls
    *  whether the top-level sidebar shortcut is shown. */
   showMobileButton?: boolean
@@ -2336,6 +2375,7 @@ export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 
 
 export type NotificationDispatchRequest = {
   source: NotificationEventSource
+  notificationId?: string
   /** Why: useful for fast native failures, but macOS can still drop notifications after 'show'. */
   requireDisplayConfirmation?: boolean
   worktreeId?: string
@@ -2365,6 +2405,10 @@ export type NotificationDispatchResult = {
     | 'cooldown'
     | 'not-supported'
     | 'not-displayed'
+}
+
+export type NotificationDismissResult = {
+  dismissed: number
 }
 
 export type NotificationSoundResult = {

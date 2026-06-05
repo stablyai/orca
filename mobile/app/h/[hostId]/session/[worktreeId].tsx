@@ -64,6 +64,7 @@ import {
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
+import { useTerminalViewportRefit } from '../../../../src/terminal/terminal-viewport-refit'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
   getVisibleTerminalAccessoryKeys,
@@ -80,6 +81,7 @@ import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browse
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
+import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileRichMarkdownEditor } from '../../../../src/components/MobileRichMarkdownEditor'
@@ -2295,63 +2297,22 @@ export default function SessionScreen() {
     }
   }, [])
 
-  // Why: re-measure when non-keyboard layout-affecting state changes
-  // (e.g. tab strip toggling visibility when the terminal count crosses
-  // 0↔1 — without this, a freshly-created 2nd tab subscribes with a
-  // stale viewport that doesn't account for the now-visible tab strip,
-  // and the server phone-fits to dims a few rows too tall).
-  const refitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const scheduleViewportRefit = useCallback(() => {
-    if (refitTimerRef.current) {
-      clearTimeout(refitTimerRef.current)
-    }
-    refitTimerRef.current = setTimeout(() => {
-      const handle = activeHandleRef.current
-      if (!handle) {
-        return
-      }
-      const ref = terminalRefs.current.get(handle)
-      if (!ref) {
-        return
-      }
-      void (async () => {
-        const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
-        if (!dims) {
-          return
-        }
-        const prev = viewportRef.current
-        if (prev && prev.cols === dims.cols && prev.rows === dims.rows) {
-          return
-        }
-        viewportRef.current = dims
-        viewportMeasuredRef.current = true
-        // Why: prefer the in-place viewport update RPC over the legacy
-        // unsubscribe → subscribe cycle. This keeps the server-side
-        // mobile subscriber record alive (no driver=idle blip on the
-        // desktop banner; no false phone-fit baseline capture on the
-        // re-subscribe). See docs/mobile-presence-lock.md.
-        const rpc = clientRef.current
-        const deviceToken = deviceTokenRef.current
-        if (rpc && deviceToken) {
-          try {
-            const response = await rpc.sendRequest('terminal.updateViewport', {
-              terminal: handle,
-              client: { id: deviceToken, type: 'mobile' as const },
-              viewport: dims
-            })
-            if (response.ok) {
-              return
-            }
-          } catch {
-            // Fall through to legacy resubscribe.
-          }
-        }
-        unsubscribeTerminal(handle)
-        initializedHandlesRef.current.delete(handle)
-        subscribeToTerminal(handle)
-      })()
-    }, 150)
-  }, [subscribeToTerminal, unsubscribeTerminal])
+  // Why: viewport refits for layout changes outside the subscribe path
+  // (tab strip toggling, fold/unfold, rotation) live in a dedicated hook —
+  // see terminal-viewport-refit.ts for the full rationale.
+  useTerminalViewportRefit({
+    activeHandleRef,
+    terminalRefs,
+    terminalFrameHeightRef,
+    viewportRef,
+    viewportMeasuredRef,
+    clientRef,
+    deviceTokenRef,
+    initializedHandlesRef,
+    tabStripVisible: terminals.length > 1,
+    unsubscribeTerminal,
+    subscribeToTerminal
+  })
 
   useEffect(() => {
     const onShow = (e: KeyboardEvent) => {
@@ -2365,32 +2326,10 @@ export default function SessionScreen() {
     const showSub = Keyboard.addListener(showEvent, onShow)
     const hideSub = Keyboard.addListener(hideEvent, onHide)
     return () => {
-      if (refitTimerRef.current) {
-        clearTimeout(refitTimerRef.current)
-      }
       showSub.remove()
       hideSub.remove()
     }
   }, [])
-
-  // Why: the tab strip is hidden when only one terminal exists and shown
-  // once a second is created. Crossing the 1↔2 boundary changes the
-  // visible terminal area by ~40px, so the cached viewport dims in
-  // viewportRef become stale. Mark the viewport as un-measured so the
-  // next subscribe path's self-correcting loop (init → measure →
-  // resubscribe-with-fresh-viewport, see the !viewportMeasuredRef branch
-  // above) re-runs against the new layout. Also schedule an explicit
-  // refit to cover the case where no new subscribe is happening.
-  const tabStripVisible = terminals.length > 1
-  const prevTabStripVisibleRef = useRef(tabStripVisible)
-  useEffect(() => {
-    if (prevTabStripVisibleRef.current === tabStripVisible) {
-      return
-    }
-    prevTabStripVisibleRef.current = tabStripVisible
-    viewportMeasuredRef.current = false
-    scheduleViewportRefit()
-  }, [tabStripVisible, scheduleViewportRefit])
 
   useEffect(() => {
     if (hostId && worktreeId) {
@@ -3802,8 +3741,7 @@ export default function SessionScreen() {
       : createTabAgentOptions.length > 0
         ? createTabAgentOptions.map((option) => ({
             label: option.label,
-            hint: 'Agent preset',
-            icon: Bot,
+            renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
             onPress: () => {
               setShowCreateTabDrawer(false)
               void handleCreateTerminal(option.agent)

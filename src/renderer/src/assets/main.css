@@ -77,6 +77,9 @@
   --color-terminal-pane-title-on-light-input-bg: var(--terminal-pane-title-on-light-input-bg);
   --color-terminal-pane-title-on-light-separator: var(--terminal-pane-title-on-light-separator);
   --color-ai-action-accent: var(--ai-action-accent);
+  --color-status-success: var(--status-success);
+  --color-status-success-background: var(--status-success-background);
+  --color-status-success-border: var(--status-success-border);
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -126,6 +129,9 @@
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
+  --status-success: #15803d;
+  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -196,6 +202,9 @@
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
+  --status-success: #86efac;
+  --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
+  --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -239,6 +248,14 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #fbbf24;
+}
+
+.linear-priority-bars {
+  --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 34%, transparent);
+}
+
+.dark .linear-priority-bars {
+  --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
 /* ── Base Layer ──────────────────────────────────────── */
@@ -336,8 +353,9 @@
 
 /* Keep the sidebar gutter reserved; only the thumb fades in on hover. */
 .worktree-sidebar-scrollbar {
-  /* Why: the scrollbar itself owns the gutter; avoid adding a second visual gap beside cards. */
-  padding-right: 0;
+  /* Why: the scrollbar gutter is paint-only in Chromium; this keeps card
+     surfaces clear of Orca's resize handle and right-edge sidebar chrome. */
+  padding-right: 4px;
   scrollbar-gutter: stable;
   scrollbar-color: transparent transparent;
 }
@@ -995,10 +1013,8 @@
   animation: compact-agent-expansion-reveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Why: the expanded summary becomes one enclosed panel. Keep the box model
-   stable across states (padding always reserved, border drawn as a non-layout
-   box-shadow) and fade only the chrome, so toggling doesn't snap the header and
-   rows while the content height animates. */
+/* Why: the collapsed summary still uses pill spacing, while expanded compact
+   agents read as a quiet tree inside the existing worktree card. */
 .compact-agent-summary-panel {
   padding: 2px;
   border-radius: var(--radius-sm, 0.25rem);
@@ -1010,8 +1026,61 @@
 }
 
 .compact-agent-summary-panel-expanded {
-  background: color-mix(in srgb, var(--sidebar-accent) 20%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+[data-compact-agent-list='true'] {
+  margin-inline-start: -0.5rem;
+  width: calc(100% + 0.5rem);
+}
+
+/* Why: compact expanded agents live inside an already-framed worktree card.
+   Keep the tree legible with indentation and interaction states instead of
+   stacking row cards and shaded panels. */
+[data-compact-agent-list='true'] .compact-agent-row.worktree-agent-lineage-parent-row,
+[data-compact-agent-list='true'] .compact-agent-row.worktree-agent-lineage-child-row {
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-compact-agent-list='true'] .compact-agent-row.worktree-agent-lineage-child-row::before {
+  content: none;
+}
+
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+}
+
+.dark
+  [data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
+.dark
+  [data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar-accent));
+}
+
+.dark
+  [data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+[data-compact-agent-list='true'] .worktree-agent-lineage-children {
+  border-left-color: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
+}
+
+.dark [data-compact-agent-list='true'] .worktree-agent-lineage-children {
+  border-left-color: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

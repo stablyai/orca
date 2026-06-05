@@ -3,7 +3,7 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import { afterEach, describe, expect, it } from 'vitest'
 import { gitExecFileAsync } from './git/runner'
-import { detectRepoIcon } from './repo-icon-autodetect'
+import { detectRepoIcon, detectRepoIconAndUpstream } from './repo-icon-autodetect'
 
 const PNG_1X1_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII='
@@ -145,6 +145,36 @@ describe('detectRepoIcon', () => {
       src: 'https://github.com/stablyai.png?size=64',
       source: 'github',
       label: 'stablyai/orca'
+    })
+  })
+
+  it('stores a null upstream marker for git repos without a resolved fork parent', async () => {
+    const repoPath = await makeTempRepoDir()
+    await gitExecFileAsync(['init'], { cwd: repoPath })
+
+    await expect(detectRepoIconAndUpstream({ repoPath, kind: 'git' })).resolves.toEqual({
+      upstream: null
+    })
+  })
+
+  it('uses the resolved fork upstream for both metadata and the GitHub avatar', async () => {
+    const repoPath = await makeTempRepoDir()
+    await gitExecFileAsync(['init'], { cwd: repoPath })
+    await gitExecFileAsync(['remote', 'add', 'origin', 'git@github.com:tmchow/orca.git'], {
+      cwd: repoPath
+    })
+    await gitExecFileAsync(['remote', 'add', 'upstream', 'git@github.com:stablyai/orca.git'], {
+      cwd: repoPath
+    })
+
+    await expect(detectRepoIconAndUpstream({ repoPath, kind: 'git' })).resolves.toEqual({
+      repoIcon: {
+        type: 'image',
+        src: 'https://github.com/stablyai.png?size=64',
+        source: 'github',
+        label: 'stablyai/orca'
+      },
+      upstream: { owner: 'stablyai', repo: 'orca' }
     })
   })
 })

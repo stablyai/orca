@@ -5,6 +5,7 @@ import {
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,
@@ -80,7 +81,7 @@ export async function openWorkspacePortInBrowser(args: {
       const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
         args.runtimeTarget,
         'browser.tabCreate',
-        { worktree: `id:${worktreeId}`, url },
+        { worktree: toRuntimeWorktreeSelector(worktreeId), url },
         { timeoutMs: 30_000 }
       )
       const tab = args.createBrowserTab(worktreeId, url, { activate: true })

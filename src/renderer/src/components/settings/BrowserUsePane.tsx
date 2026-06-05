@@ -1,6 +1,5 @@
-/* eslint-disable max-lines -- Why: Browser Use setup keeps enablement, CLI registration, skill install, cookie import, examples, and interaction tracking in one pane so the three-step setup state stays coherent. */
 import { useCallback, useEffect, useState } from 'react'
-import { Import, Loader2, MousePointerClick } from 'lucide-react'
+import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
@@ -37,6 +36,8 @@ import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
 import { BrowserUseExamples } from './BrowserUseExamples'
+import { BrowserUseComputerUseNotice } from './BrowserUseComputerUseNotice'
+import { BrowserUseEnableSwitch } from './BrowserUseEnableSwitch'
 import { StepBadge } from './BrowserUseStepBadge'
 import { BrowserUseSkillStep } from './BrowserUseSkillStep'
 
@@ -188,24 +189,6 @@ export function BrowserUseSetup({
     ? `${BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ?? defaultProfile.source.browserFamily}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
     : null
 
-  const toggleSwitch = (
-    <button
-      role="switch"
-      aria-checked={browserUseEnabled}
-      aria-label="Enable Agent Browser Use"
-      onClick={() => toggleBrowserUse(!browserUseEnabled)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-        browserUseEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-      }`}
-    >
-      <span
-        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-          browserUseEnabled ? 'translate-x-4' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  )
-
   if (!browserUseEnabled) {
     return (
       <div className="flex items-center justify-between gap-4 py-2">
@@ -215,7 +198,10 @@ export function BrowserUseSetup({
             Let coding agents drive this browser with your logins.
           </p>
         </div>
-        {toggleSwitch}
+        <BrowserUseEnableSwitch
+          enabled={browserUseEnabled}
+          onToggle={() => toggleBrowserUse(!browserUseEnabled)}
+        />
       </div>
     )
   }
@@ -239,33 +225,15 @@ export function BrowserUseSetup({
           >
             {completedCount}/3
           </span>
-          {toggleSwitch}
+          <BrowserUseEnableSwitch
+            enabled={browserUseEnabled}
+            onToggle={() => toggleBrowserUse(!browserUseEnabled)}
+          />
         </div>
       </div>
 
       {onOpenComputerUse ? (
-        <div className="rounded-xl border border-border/60 bg-card/50 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className="text-sm font-medium">Use an existing browser session</p>
-              <p className="text-xs text-muted-foreground">
-                If cookie import is not the right fit, Computer Use can control local apps and may
-                use existing logged-in browser sessions where applicable. Install the Computer Use
-                skill; macOS also requires privacy permissions.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onOpenComputerUse}
-              className="shrink-0 gap-1.5 self-start"
-            >
-              <MousePointerClick className="size-3.5" />
-              Open Computer Use
-            </Button>
-          </div>
-        </div>
+        <BrowserUseComputerUseNotice onOpenComputerUse={onOpenComputerUse} />
       ) : null}
 
       {showStep1 ? (

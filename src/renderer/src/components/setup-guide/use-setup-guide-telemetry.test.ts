@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
 import {
   FEATURE_WALL_SETUP_STEP_IDS,
@@ -10,7 +10,6 @@ import {
   recordSetupGuideStepCompletionTelemetry
 } from './use-setup-guide-telemetry'
 
-const consoleInfoMock = vi.hoisted(() => vi.fn())
 const trackMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/telemetry', () => ({
@@ -18,17 +17,12 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 afterEach(() => {
-  consoleInfoMock.mockClear()
   trackMock.mockClear()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
 describe('setup guide step completion telemetry', () => {
-  beforeEach(() => {
-    vi.spyOn(console, 'info').mockImplementation(consoleInfoMock)
-  })
-
   it('seeds startup-hydrated completed steps without backfilling completion events', () => {
     vi.stubGlobal('localStorage', createMemoryStorage())
     const state = createSetupGuideStepCompletionTelemetryState()
@@ -72,18 +66,13 @@ describe('setup guide step completion telemetry', () => {
       setupGuideVisible: true
     })
 
-    expect(consoleInfoMock).toHaveBeenCalledWith(
-      '[feature-education-telemetry:test-mode]',
-      'setup_guide_step_completed',
-      {
-        step_id: 'notifications',
-        section_id: 'setup',
-        completed_count: 1,
-        total_steps: 8,
-        setup_guide_visible: true
-      }
-    )
-    expect(trackMock).not.toHaveBeenCalled()
+    expect(trackMock).toHaveBeenCalledWith('setup_guide_step_completed', {
+      step_id: 'notifications',
+      section_id: 'setup',
+      completed_count: 1,
+      total_steps: 8,
+      setup_guide_visible: true
+    })
   })
 })
 
@@ -94,6 +83,7 @@ function createProgress(
     FEATURE_WALL_SETUP_STEP_IDS.map((stepId) => [stepId, doneOverrides[stepId] === true])
   ) as Record<FeatureWallSetupStepId, boolean>
   return {
+    ready: true,
     stepDone,
     coreDoneCount: FEATURE_WALL_SETUP_STEP_IDS.filter((stepId) => stepDone[stepId]).length,
     coreTotal: FEATURE_WALL_SETUP_STEP_IDS.length

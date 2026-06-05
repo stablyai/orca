@@ -22,10 +22,20 @@ import {
   prepareAgentSessionForkFromPane,
   type PreparedAgentSessionFork
 } from './terminal-agent-session-fork'
-import { trackTerminalPaneSplit } from '@/lib/feature-education-telemetry'
+import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+
+export function recordContextMenuCreatedTerminalPaneSplit(
+  createdPane: unknown,
+  args: {
+    source: 'contextual_tour' | 'context_menu'
+    direction: 'vertical' | 'horizontal'
+  }
+): boolean {
+  return recordCreatedTerminalPaneSplit(createdPane, args)
+}
 
 type UseTerminalPaneContextMenuDeps = {
   managerRef: React.RefObject<PaneManager | null>
@@ -37,7 +47,7 @@ type UseTerminalPaneContextMenuDeps = {
   fallbackCwd: string
   toggleExpandPane: (paneId: number) => void
   onRequestClosePane: (paneId: number) => void
-  onSplitPaneCommand?: () => void
+  onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
@@ -76,7 +86,7 @@ export function useTerminalPaneContextMenu({
   fallbackCwd,
   toggleExpandPane,
   onRequestClosePane,
-  onSplitPaneCommand,
+  onClearPaneScrollback,
   onSetTitle,
   onPasteError,
   onAgentSessionForkReady,
@@ -176,7 +186,6 @@ export function useTerminalPaneContextMenu({
       if (!pane) {
         return
       }
-      onSplitPaneCommand?.()
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
       if (splitWebRuntimeTerminal(ptyId, direction, source)) {
         return
@@ -184,9 +193,7 @@ export function useTerminalPaneContextMenu({
       const cached = paneCwdRef.current.get(pane.id)
       if (cached?.confirmed && cached.cwd) {
         const createdPane = managerRef.current?.splitPane(pane.id, direction, { cwd: cached.cwd })
-        if (createdPane) {
-          trackTerminalPaneSplit({ source, direction })
-        }
+        recordContextMenuCreatedTerminalPaneSplit(createdPane, { source, direction })
         return
       }
       const paneId = pane.id
@@ -198,12 +205,10 @@ export function useTerminalPaneContextMenu({
           fallbackCwd
         })
         const createdPane = managerRef.current?.splitPane(paneId, direction, { cwd })
-        if (createdPane) {
-          trackTerminalPaneSplit({ source, direction })
-        }
+        recordContextMenuCreatedTerminalPaneSplit(createdPane, { source, direction })
       })()
     },
-    [fallbackCwd, managerRef, onSplitPaneCommand, paneCwdRef, paneTransportsRef, resolveMenuPane]
+    [fallbackCwd, managerRef, paneCwdRef, paneTransportsRef, resolveMenuPane]
   )
 
   const onSplitRight = (): void => splitWithInheritedCwd('vertical')
@@ -245,7 +250,7 @@ export function useTerminalPaneContextMenu({
   const onClearScreen = (): void => {
     const pane = resolveMenuPane()
     if (pane) {
-      pane.terminal.clear()
+      onClearPaneScrollback(pane)
     }
   }
 

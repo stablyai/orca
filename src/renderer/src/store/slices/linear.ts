@@ -18,7 +18,7 @@ import type {
   LinearWorkspaceSelection
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
-import { clampLinearPlainIssueListLimit } from '../../../../shared/linear-issue-list-limits'
+import { clampLinearIssueListLimit } from '../../../../shared/linear-issue-read-limits'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
   linearConnect,
@@ -268,6 +268,30 @@ function collectionWithWorkspaceError<T>(
       }
     ]
   }
+}
+
+function largestCachedCollectionBelowLimit<T>(
+  cache: Record<string, CacheEntry<LinearCollectionResult<T>>>,
+  workspaceId: LinearWorkspaceSelection | null | undefined,
+  mode: string,
+  scopeId: string,
+  limit: number
+): LinearCollectionResult<T> | null {
+  const keyPrefix = `${linearCollectionCacheKey(workspaceId, mode, scopeId)}::`
+  let best: { limit: number; data: LinearCollectionResult<T> } | null = null
+  for (const [key, entry] of Object.entries(cache)) {
+    if (!entry?.data || !key.startsWith(keyPrefix)) {
+      continue
+    }
+    const cachedLimit = Number(key.slice(keyPrefix.length))
+    if (!Number.isFinite(cachedLimit) || cachedLimit >= limit) {
+      continue
+    }
+    if (!best || cachedLimit > best.limit) {
+      best = { limit: cachedLimit, data: entry.data }
+    }
+  }
+  return best?.data ?? null
 }
 
 function patchLinearIssueCollectionCache(
@@ -708,7 +732,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       const cacheKey = linearSearchCacheKey(workspaceId, args.query, args.limit ?? 20)
       return get().linearSearchCache[cacheKey]?.data ?? null
     }
-    const limit = clampLinearPlainIssueListLimit(args.limit)
+    const limit = clampLinearIssueListLimit(args.limit)
     const cacheKey = linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
     return get().linearListCache[cacheKey]?.data ?? null
   },
@@ -726,7 +750,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         .catch(() => {})
       return
     }
-    const limit = clampLinearPlainIssueListLimit(args.limit)
+    const limit = clampLinearIssueListLimit(args.limit)
     const cacheKey = linearListCacheKey(workspaceId, args.filter ?? 'assigned', limit)
     if (isFresh(get().linearListCache[cacheKey]) || inflightListRequests.has(cacheKey)) {
       return
@@ -796,7 +820,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
   listLinearIssues: async (filter = 'assigned', limit = 20, options) => {
     const workspaceId = getSelectedWorkspaceId(get().linearStatus)
-    const effectiveLimit = clampLinearPlainIssueListLimit(limit)
+    const effectiveLimit = clampLinearIssueListLimit(limit)
     const cacheKey = linearListCacheKey(workspaceId, filter, effectiveLimit)
     const cached = get().linearListCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
@@ -1039,7 +1063,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearProjectIssues: async (projectId, workspaceId, limit = 20, options) => {
-    const cacheKey = linearCollectionCacheKey(workspaceId, 'project-issues', projectId, limit)
+    const effectiveLimit = clampLinearIssueListLimit(limit)
+    const cacheKey = linearCollectionCacheKey(
+      workspaceId,
+      'project-issues',
+      projectId,
+      effectiveLimit
+    )
     const cached = get().linearProjectIssueCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? emptyLinearCollection<LinearIssue>()
@@ -1052,9 +1082,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     let entry: InflightLinearCollectionRequest<LinearIssue>
     const requestCacheGeneration = linearCacheGeneration
-    const promise = linearListProjectIssues(get().settings, projectId, limit, workspaceId, {
-      force: options?.force
-    })
+    const promise = linearListProjectIssues(
+      get().settings,
+      projectId,
+      effectiveLimit,
+      workspaceId,
+      {
+        force: options?.force
+      }
+    )
       .then((result) => {
         if (
           inflightProjectIssueRequests.get(cacheKey) === entry &&
@@ -1075,7 +1111,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           set({ linearStatus: { connected: false, viewer: null } })
         }
         const fallback =
-          get().linearProjectIssueCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
+          get().linearProjectIssueCache[cacheKey]?.data ??
+          largestCachedCollectionBelowLimit(
+            get().linearProjectIssueCache,
+            workspaceId,
+            'project-issues',
+            projectId,
+            effectiveLimit
+          ) ??
+          emptyLinearCollection<LinearIssue>()
         return collectionWithWorkspaceError(fallback, workspaceId, error)
       })
       .finally(() => {
@@ -1207,7 +1251,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
   },
 
   listLinearCustomViewIssues: async (viewId, workspaceId, limit = 20, options) => {
-    const cacheKey = linearCollectionCacheKey(workspaceId, 'custom-view-issues', viewId, limit)
+    const effectiveLimit = clampLinearIssueListLimit(limit)
+    const cacheKey = linearCollectionCacheKey(
+      workspaceId,
+      'custom-view-issues',
+      viewId,
+      effectiveLimit
+    )
     const cached = get().linearCustomViewIssueCache[cacheKey]
     if (!options?.force && isFresh(cached)) {
       return cached.data ?? emptyLinearCollection<LinearIssue>()
@@ -1220,9 +1270,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
 
     let entry: InflightLinearCollectionRequest<LinearIssue>
     const requestCacheGeneration = linearCacheGeneration
-    const promise = linearListCustomViewIssues(get().settings, viewId, limit, workspaceId, {
-      force: options?.force
-    })
+    const promise = linearListCustomViewIssues(
+      get().settings,
+      viewId,
+      effectiveLimit,
+      workspaceId,
+      {
+        force: options?.force
+      }
+    )
       .then((result) => {
         if (
           inflightCustomViewIssueRequests.get(cacheKey) === entry &&
@@ -1243,7 +1299,15 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           set({ linearStatus: { connected: false, viewer: null } })
         }
         const fallback =
-          get().linearCustomViewIssueCache[cacheKey]?.data ?? emptyLinearCollection<LinearIssue>()
+          get().linearCustomViewIssueCache[cacheKey]?.data ??
+          largestCachedCollectionBelowLimit(
+            get().linearCustomViewIssueCache,
+            workspaceId,
+            'custom-view-issues',
+            viewId,
+            effectiveLimit
+          ) ??
+          emptyLinearCollection<LinearIssue>()
         return collectionWithWorkspaceError(fallback, workspaceId, error)
       })
       .finally(() => {

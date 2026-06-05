@@ -39,7 +39,7 @@ describe('relay git grep fallback', () => {
 
       const promise = searchWithGitGrep('/remote/root', 'ok', { maxResults: 100 })
 
-      ;(proc.stdout as unknown as EventEmitter).emit('data', 'valid.ts\x001:ok\npartial')
+      ;(proc.stdout as unknown as EventEmitter).emit('data', 'valid.ts\x001\x00ok\npartial')
 
       await vi.runOnlyPendingTimersAsync()
 

@@ -29,6 +29,7 @@ import {
   getActiveRuntimeTarget,
   RuntimeRpcCallError
 } from '../../runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { moveFocusToRendererBeforeFocusedWebviewHidden } from './browser-webview-cleanup'
@@ -45,6 +46,7 @@ const ACTIVE_WORKTREE_TERMINAL_PREP_DELAY_MS = 300
 const ACTIVE_WORKTREE_TERMINAL_PREP_INPUT_QUIET_MS = 450
 const ACTIVE_WORKTREE_TERMINAL_PREP_IDLE_TIMEOUT_MS = 180
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
+const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
   if (!node) {
@@ -230,10 +232,6 @@ function areDetectedWorktreeResultsEqual(
 
 function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
   return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
-}
-
-function toRuntimeWorktreeIdSelector(worktreeId: string): string {
-  return `id:${worktreeId}`
 }
 
 const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
@@ -521,7 +519,7 @@ async function persistWorktreeMeta(
   await callRuntimeRpc(
     target,
     'worktree.set',
-    { worktree: toRuntimeWorktreeIdSelector(worktreeId), ...updates },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), ...updates },
     { timeoutMs: 15_000 }
   )
 }
@@ -570,6 +568,9 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
   for (const file of s.openFiles) {
     if (worktreeIdSet.has(file.worktreeId)) {
       removedFileIds.add(file.id)
+      if (file.markdownPreviewSourceFileId) {
+        removedFileIds.add(file.markdownPreviewSourceFileId)
+      }
     }
   }
 
@@ -675,6 +676,7 @@ function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<Ap
     // Per-file editor state for removed files
     editorDrafts: omitByFileId(s.editorDrafts),
     markdownViewMode: omitByFileId(s.markdownViewMode),
+    markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
     // Top-level actives
     openFiles: nextOpenFiles,
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
@@ -692,6 +694,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   detectedWorktreesByRepo: {},
   worktreeLineageById: {},
   activeWorktreeId: null,
+  renamingWorktreeId: null,
   deleteStateByWorktreeId: {},
   baseStatusByWorktreeId: {},
   remoteBranchConflictByWorktreeId: {},
@@ -877,8 +880,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
               target,
               'worktree.set',
               {
-                worktree: toRuntimeWorktreeIdSelector(worktreeId),
-                ...(args.parentWorktreeId ? { parentWorktree: `id:${args.parentWorktreeId}` } : {}),
+                worktree: toRuntimeWorktreeSelector(worktreeId),
+                ...(args.parentWorktreeId
+                  ? { parentWorktree: toRuntimeWorktreeSelector(args.parentWorktreeId) }
+                  : {}),
                 ...(args.noParent === true ? { noParent: true } : {})
               },
               { timeoutMs: 15_000 }
@@ -922,15 +927,28 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           return worktree
         }
         const nextHead = identity.head ?? worktree.head
-        const nextBranch = identity.branch ?? worktree.branch
+        const nextBranch = identity.branch === null ? '' : (identity.branch ?? worktree.branch)
         if (nextHead === worktree.head && nextBranch === worktree.branch) {
           return worktree
         }
         changed = true
         // Why: terminal branch switches only patch branch/head here; auto-derived
         // titles need the same branch derivation that full worktree listing uses.
-        const wasAutoDerived = worktree.displayName === branchName(worktree.branch)
-        const nextDisplayName = wasAutoDerived ? branchName(nextBranch) : worktree.displayName
+        const currentBranchName = branchName(worktree.branch)
+        const wasAutoDerived = worktree.displayName === currentBranchName
+        const wasDetachedAutoDerived =
+          worktree.branch === '' &&
+          nextBranch !== '' &&
+          detachedHeadAutoDerivedDisplayNames.get(worktreeId) === worktree.displayName
+        const nextDisplayName =
+          (wasAutoDerived || wasDetachedAutoDerived) && nextBranch
+            ? branchName(nextBranch)
+            : worktree.displayName
+        if (identity.branch === null && wasAutoDerived) {
+          detachedHeadAutoDerivedDisplayNames.set(worktreeId, worktree.displayName)
+        } else if (identity.branch !== undefined) {
+          detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
+        }
         return { ...worktree, head: nextHead, branch: nextBranch, displayName: nextDisplayName }
       })
 
@@ -1049,7 +1067,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(manualOrder !== undefined ? { manualOrder } : {}),
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
-            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {})
+            ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
+            ...(startup ? { startup } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -1161,7 +1180,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         : callRuntimeRpc<RemoveWorktreeResult>(
             target,
             'worktree.rm',
-            { worktree: worktreeId, force, runHooks: !skipArchive },
+            { worktree: toRuntimeWorktreeSelector(worktreeId), force, runHooks: !skipArchive },
             { timeoutMs: 60_000 }
           ))
 
@@ -1285,19 +1304,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         delete nextGitBranchCompareRequestKeyByWorktree[worktreeId]
         // Why: clean up per-file editor state for files belonging to the removed
         // worktree so stale drafts and view modes never accumulate in memory.
-        const removedFileIds = new Set(
-          s.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
-        )
+        const removedFileIds = new Set<string>()
+        for (const file of s.openFiles) {
+          if (file.worktreeId !== worktreeId) {
+            continue
+          }
+          removedFileIds.add(file.id)
+          if (file.markdownPreviewSourceFileId) {
+            removedFileIds.add(file.markdownPreviewSourceFileId)
+          }
+        }
         const nextEditorDrafts = removedFileIds.size > 0 ? { ...s.editorDrafts } : s.editorDrafts
         const nextMarkdownViewMode =
           removedFileIds.size > 0 ? { ...s.markdownViewMode } : s.markdownViewMode
         const nextEditorViewMode =
           removedFileIds.size > 0 ? { ...s.editorViewMode } : s.editorViewMode
+        const nextMarkdownFrontmatterVisible =
+          removedFileIds.size > 0
+            ? { ...s.markdownFrontmatterVisible }
+            : s.markdownFrontmatterVisible
         if (removedFileIds.size > 0) {
           for (const fileId of removedFileIds) {
             delete nextEditorDrafts[fileId]
             delete nextMarkdownViewMode[fileId]
             delete nextEditorViewMode[fileId]
+            delete nextMarkdownFrontmatterVisible[fileId]
           }
         }
         const nextExpandedDirs = { ...s.expandedDirs }
@@ -1364,6 +1395,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           editorDrafts: nextEditorDrafts,
           markdownViewMode: nextMarkdownViewMode,
           editorViewMode: nextEditorViewMode,
+          markdownFrontmatterVisible: nextMarkdownFrontmatterVisible,
           showDotfilesByWorktree: nextShowDotfilesByWorktree,
           expandedDirs: nextExpandedDirs,
           gitStatusByWorktree: nextGitStatusByWorktree,
@@ -1443,7 +1475,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         : callRuntimeRpc<ForceDeleteWorktreeBranchResult>(
             target,
             'worktree.forceDeleteBranch',
-            { worktree: worktreeId, branchName, expectedHead },
+            { worktree: toRuntimeWorktreeSelector(worktreeId), branchName, expectedHead },
             { timeoutMs: 15_000 }
           ))
       toast.success('Local branch deleted', {
@@ -1674,6 +1706,31 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       })
     )
+  },
+
+  setWorktreesPinnedAndReveal: (worktreeIds, isPinned) => {
+    // Skip worktrees already in the target state so a no-op toggle doesn't
+    // scroll the viewport away from where the user is.
+    const updates = new Map<string, Partial<WorktreeMeta>>()
+    let revealWorktreeId: string | null = null
+    for (const worktreeId of worktreeIds) {
+      const current = get().getKnownWorktreeById(worktreeId)
+      if (!current || current.isPinned === isPinned) {
+        continue
+      }
+      updates.set(worktreeId, { isPinned })
+      if (revealWorktreeId === null) {
+        revealWorktreeId = worktreeId
+      }
+    }
+    if (revealWorktreeId === null) {
+      return
+    }
+    // updateWorktreesMeta applies its store update synchronously (only the
+    // persistence is async), so the reveal below resolves against a render
+    // where the row already sits in its new section.
+    void get().updateWorktreesMeta(updates)
+    get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
   },
 
   markWorktreeUnread: (worktreeId) => {
@@ -1973,6 +2030,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       }
     })
+  },
+
+  setRenamingWorktreeId: (worktreeId) => {
+    set({ renamingWorktreeId: worktreeId })
   },
 
   setActiveWorktree: (worktreeId) => {

@@ -341,6 +341,56 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('emits an empty ungrouped repo placeholder before imported cards are merged', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      repoMap,
+      null,
+      new Set(),
+      new Map([[repo.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set([repo.id]),
+      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-1', label: 'orca', count: 0 },
+      {
+        type: 'imported-worktrees-card',
+        key: 'imported-worktrees-card:repo-group:repo-1',
+        placement: 'repo-group'
+      }
+    ])
+  })
+
+  it('skips stale empty placeholder repo ids that are absent from repoMap', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set([repo.id])
+    )
+
+    expect(rows).toEqual([])
+  })
+
   it('does not emit unpinned imported worktree cards outside repo grouping', () => {
     const rows = buildRows(
       'workspace-status',
@@ -792,6 +842,12 @@ describe('project groups', () => {
       key: 'project-group:group-1',
       count: 1
     })
+    expect(rows[1]).toMatchObject({
+      type: 'header',
+      key: 'repo:repo-1',
+      projectGroupDepth: 1,
+      count: 0
+    })
   })
 
   it('does not resurrect filtered repos as empty Project Group headers', () => {
@@ -865,6 +921,156 @@ describe('project groups', () => {
       'project-group:group-1',
       'repo:repo-1'
     ])
+  })
+
+  it('disambiguates duplicate top-level repo basenames without renaming repos', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const paymentsApi: Repo = {
+      ...repo,
+      id: 'repo-payments-api',
+      path: '/workspace/platform/payments/api',
+      displayName: 'api'
+    }
+    const billingApi: Repo = {
+      ...repo,
+      id: 'repo-billing-api',
+      path: '/workspace/platform/billing/api',
+      displayName: 'api'
+    }
+    const webRepo: Repo = {
+      ...repo,
+      id: 'repo-web',
+      path: '/workspace/platform/web',
+      displayName: 'web'
+    }
+    const repos = new Map([
+      [paymentsApi.id, paymentsApi],
+      [billingApi.id, billingApi],
+      [webRepo.id, webRepo]
+    ])
+    const worktrees = [
+      { ...worktree, id: 'wt-payments-api', repoId: paymentsApi.id },
+      { ...worktree, id: 'wt-billing-api', repoId: billingApi.id },
+      { ...worktree, id: 'wt-web', repoId: webRepo.id }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      repos,
+      null,
+      new Set(),
+      new Map([
+        [paymentsApi.id, 0],
+        [billingApi.id, 1],
+        [webRepo.id, 2]
+      ]),
+      undefined,
+      'manual',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.label)).toEqual([
+      'Platform',
+      'payments/api',
+      'billing/api',
+      'web'
+    ])
+    expect(paymentsApi.displayName).toBe('api')
+    expect(billingApi.displayName).toBe('api')
+  })
+
+  it('disambiguates duplicate repo basenames inside each Project Group scope', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const paymentsApi: Repo = {
+      ...repo,
+      id: 'repo-payments-api',
+      path: '/workspace/platform/payments/api',
+      displayName: 'api',
+      projectGroupId: group.id,
+      projectGroupOrder: 0
+    }
+    const billingApi: Repo = {
+      ...repo,
+      id: 'repo-billing-api',
+      path: '/workspace/platform/billing/api',
+      displayName: 'api',
+      projectGroupId: group.id,
+      projectGroupOrder: 1
+    }
+    const webRepo: Repo = {
+      ...repo,
+      id: 'repo-web',
+      path: '/workspace/platform/web',
+      displayName: 'web',
+      projectGroupId: group.id,
+      projectGroupOrder: 2
+    }
+    const repos = new Map([
+      [paymentsApi.id, paymentsApi],
+      [billingApi.id, billingApi],
+      [webRepo.id, webRepo]
+    ])
+    const worktrees = [
+      { ...worktree, id: 'wt-payments-api', repoId: paymentsApi.id },
+      { ...worktree, id: 'wt-billing-api', repoId: billingApi.id },
+      { ...worktree, id: 'wt-web', repoId: webRepo.id }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      repos,
+      null,
+      new Set(),
+      new Map([
+        [paymentsApi.id, 0],
+        [billingApi.id, 1],
+        [webRepo.id, 2]
+      ]),
+      undefined,
+      'manual',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.label)).toEqual([
+      'Platform',
+      'payments/api',
+      'billing/api',
+      'web'
+    ])
+    expect(paymentsApi.displayName).toBe('api')
+    expect(billingApi.displayName).toBe('api')
   })
 
   it('orders repos inside a Project Group by projectGroupOrder in manual mode', () => {

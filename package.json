@@ -1,6 +1,6 @@
 {
   "name": "orca",
-  "version": "1.4.42-rc.0",
+  "version": "1.4.47",
   "description": "Next-gen IDE for parallel agentic development",
   "homepage": "https://github.com/stablyai/orca",
   "author": "stablyai",
@@ -127,10 +127,11 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "dompurify": "^3.4.2",
-    "electron": "^42.3.0",
+    "electron": "^42.3.3",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "emoji-picker-react": "^4.19.1",
+    "happy-dom": "^20.9.0",
     "html-to-image": "^1.11.13",
     "husky": "^9.1.7",
     "katex": "^0.16.45",
@@ -179,9 +180,9 @@
     "sherpa-onnx-win-x64": "1.12.37"
   },
   "lint-staged": {
-    "*.{ts,tsx,js,jsx,mts,cts}": [
+    "*.{ts,tsx,js,jsx,mjs,mts,cts}": [
       "oxlint",
-      "oxlint --config config/oxlint-react-doctor.json --deny-warnings",
+      "oxlint --config config/oxlint-react-doctor.json",
       "oxfmt --write"
     ],
     "*.{json,css}": [

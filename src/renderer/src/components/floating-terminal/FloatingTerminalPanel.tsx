@@ -80,14 +80,18 @@ import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
+  anchorFloatingTerminalPanelBounds,
   clampFloatingTerminalBounds,
+  getDefaultFloatingTerminalCommittedBounds,
   getDefaultFloatingTerminalBounds,
   getMaximizedFloatingTerminalBounds,
   persistFloatingTerminalPanelBounds,
   readPersistedFloatingTerminalPanelBounds,
+  resolveFloatingTerminalPanelCommittedBounds,
   resolveFloatingTerminalPanelBounds,
   shouldReconcileFloatingTerminalPanelBounds,
   type FloatingTerminalPanelBounds,
+  type FloatingTerminalPanelCommittedBounds,
   type FloatingTerminalPanelBoundsSource
 } from './floating-terminal-panel-bounds'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
@@ -108,7 +112,8 @@ const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
 const FLOATING_TERMINAL_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
 
 type FloatingTerminalPanelBoundsState = {
-  bounds: FloatingTerminalPanelBounds
+  committedBounds: FloatingTerminalPanelCommittedBounds
+  renderedBounds: FloatingTerminalPanelBounds
   source: FloatingTerminalPanelBoundsSource
 }
 
@@ -117,29 +122,29 @@ function isFloatingTerminalDragTarget(target: EventTarget): boolean {
 }
 
 function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
+  const defaultCommittedBounds = getDefaultFloatingTerminalCommittedBounds()
+  const defaultRenderedBounds = getDefaultFloatingTerminalBounds()
   const persistedBounds = readPersistedFloatingTerminalPanelBounds()
   return persistedBounds
     ? {
-        bounds: persistedBounds,
+        committedBounds: persistedBounds,
+        renderedBounds: shouldReconcileFloatingTerminalPanelBounds('user')
+          ? resolveFloatingTerminalPanelBounds(persistedBounds, 'user')
+          : resolveFloatingTerminalPanelCommittedBounds(persistedBounds),
         source: 'user'
       }
     : {
-        bounds: getDefaultFloatingTerminalBounds(),
+        committedBounds: defaultCommittedBounds,
+        renderedBounds: defaultRenderedBounds,
         source: 'default'
       }
 }
 
-function areFloatingTerminalPanelBoundsEqual(
-  left: FloatingTerminalPanelBounds | null,
-  right: FloatingTerminalPanelBounds
+function areFloatingTerminalPanelCommittedBoundsEqual(
+  left: FloatingTerminalPanelCommittedBounds | null,
+  right: FloatingTerminalPanelCommittedBounds
 ): boolean {
-  return (
-    left !== null &&
-    left.left === right.left &&
-    left.top === right.top &&
-    left.width === right.width &&
-    left.height === right.height
-  )
+  return left !== null && JSON.stringify(left) === JSON.stringify(right)
 }
 
 export function FloatingTerminalPanel({
@@ -163,6 +168,7 @@ export function FloatingTerminalPanel({
   const setTabCustomTitle = useAppStore((s) => s.setTabCustomTitle)
   const setTabColor = useAppStore((s) => s.setTabColor)
   const setTabPaneExpanded = useAppStore((s) => s.setTabPaneExpanded)
+  const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const pinFile = useAppStore((s) => s.pinFile)
   const openFile = useAppStore((s) => s.openFile)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
@@ -183,7 +189,10 @@ export function FloatingTerminalPanel({
   const boundsSourceRef = useRef<FloatingTerminalPanelBoundsSource>(
     initialBoundsStateRef.current.source
   )
-  const [bounds, setBounds] = useState(initialBoundsStateRef.current.bounds)
+  const committedBoundsRef = useRef<FloatingTerminalPanelCommittedBounds>(
+    initialBoundsStateRef.current.committedBounds
+  )
+  const [bounds, setBounds] = useState(initialBoundsStateRef.current.renderedBounds)
   const [maximized, setMaximized] = useState(false)
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
@@ -191,8 +200,10 @@ export function FloatingTerminalPanel({
   )
   const restoreBoundsRef = useRef<FloatingTerminalPanelBoundsState | null>(null)
   const stagedBoundsRef = useRef<FloatingTerminalPanelBounds | null>(null)
-  const lastPersistedBoundsRef = useRef<FloatingTerminalPanelBounds | null>(
-    initialBoundsStateRef.current.source === 'user' ? initialBoundsStateRef.current.bounds : null
+  const lastPersistedBoundsRef = useRef<FloatingTerminalPanelCommittedBounds | null>(
+    initialBoundsStateRef.current.source === 'user'
+      ? initialBoundsStateRef.current.committedBounds
+      : null
   )
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   const saveDialogFileIdRef = useRef<string | null>(null)
@@ -414,13 +425,18 @@ export function FloatingTerminalPanel({
     handleSaveDialogCancel()
   }, [handleSaveDialogCancel])
 
-  const persistUserBounds = useCallback((nextBounds: FloatingTerminalPanelBounds): void => {
-    if (areFloatingTerminalPanelBoundsEqual(lastPersistedBoundsRef.current, nextBounds)) {
-      return
-    }
-    lastPersistedBoundsRef.current = nextBounds
-    persistFloatingTerminalPanelBounds(nextBounds)
-  }, [])
+  const persistUserBounds = useCallback(
+    (nextBounds: FloatingTerminalPanelCommittedBounds): void => {
+      if (
+        areFloatingTerminalPanelCommittedBoundsEqual(lastPersistedBoundsRef.current, nextBounds)
+      ) {
+        return
+      }
+      lastPersistedBoundsRef.current = nextBounds
+      persistFloatingTerminalPanelBounds(nextBounds)
+    },
+    []
+  )
 
   const previewUserBounds = useCallback((nextBounds: FloatingTerminalPanelBounds): void => {
     const clampedBounds = clampFloatingTerminalBounds(nextBounds)
@@ -435,9 +451,14 @@ export function FloatingTerminalPanel({
       }
       const clampedBounds = clampFloatingTerminalBounds(nextBounds)
       stagedBoundsRef.current = null
-      boundsSourceRef.current = 'user'
       setBounds(clampedBounds)
-      persistUserBounds(clampedBounds)
+      const anchoredBounds = anchorFloatingTerminalPanelBounds(clampedBounds)
+      if (!anchoredBounds) {
+        return
+      }
+      committedBoundsRef.current = anchoredBounds
+      boundsSourceRef.current = 'user'
+      persistUserBounds(anchoredBounds)
     },
     [persistUserBounds]
   )
@@ -452,13 +473,10 @@ export function FloatingTerminalPanel({
       if (!shouldReconcileFloatingTerminalPanelBounds(source)) {
         return currentBounds
       }
-      const nextBounds = resolveFloatingTerminalPanelBounds(currentBounds, source)
-      if (source === 'user') {
-        persistUserBounds(nextBounds)
-      }
+      const nextBounds = resolveFloatingTerminalPanelBounds(committedBoundsRef.current, source)
       return nextBounds
     })
-  }, [maximized, persistUserBounds])
+  }, [maximized])
 
   useLayoutEffect(() => {
     // Why: Electron can mount before final renderer dimensions are known; default
@@ -1125,31 +1143,30 @@ export function FloatingTerminalPanel({
   const toggleMaximized = useCallback(() => {
     if (maximized) {
       const restoredState = restoreBoundsRef.current ?? {
-        bounds: getDefaultFloatingTerminalBounds(),
+        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
+        renderedBounds: getDefaultFloatingTerminalBounds(),
         source: 'default' as const
       }
       restoreBoundsRef.current = null
       boundsSourceRef.current = restoredState.source
+      committedBoundsRef.current = restoredState.committedBounds
       const restoredBounds = shouldReconcileFloatingTerminalPanelBounds(restoredState.source)
-        ? resolveFloatingTerminalPanelBounds(restoredState.bounds, restoredState.source)
-        : restoredState.bounds
-      if (restoredState.source === 'user') {
-        commitUserBounds(restoredBounds)
-      } else {
-        stagedBoundsRef.current = null
-        setBounds(restoredBounds)
-      }
+        ? resolveFloatingTerminalPanelBounds(restoredState.committedBounds, restoredState.source)
+        : restoredState.renderedBounds
+      stagedBoundsRef.current = null
+      setBounds(restoredBounds)
       setMaximized(false)
       return
     }
     restoreBoundsRef.current = {
-      bounds,
+      committedBounds: committedBoundsRef.current,
+      renderedBounds: bounds,
       source: boundsSourceRef.current
     }
     stagedBoundsRef.current = null
     setBounds(getMaximizedFloatingTerminalBounds())
     setMaximized(true)
-  }, [bounds, commitUserBounds, maximized])
+  }, [bounds, maximized])
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (maximized) {
@@ -1235,16 +1252,11 @@ export function FloatingTerminalPanel({
         height: bounds.height
       }}
       onMouseUp={(event) => {
-        if (maximized) {
-          return
-        }
-        if (!stagedBoundsRef.current && boundsSourceRef.current !== 'user') {
+        if (maximized || !stagedBoundsRef.current) {
           return
         }
         const rect = event.currentTarget.getBoundingClientRect()
-        const measuredBaseBounds =
-          stagedBoundsRef.current ?? lastPersistedBoundsRef.current ?? bounds
-        commitUserBounds({ ...measuredBaseBounds, width: rect.width, height: rect.height })
+        commitUserBounds({ ...stagedBoundsRef.current, width: rect.width, height: rect.height })
       }}
       onFocusCapture={(event) => setFloatingTerminalInputFocused(event.target)}
       onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
@@ -1315,6 +1327,7 @@ export function FloatingTerminalPanel({
                 })()
               }}
               onCloseAllFiles={closeAllFiles}
+              onMakePreviewFilePermanent={makePreviewFilePermanent}
               onPinFile={pinFile}
               tabBarOrder={tabBarOrder}
             />

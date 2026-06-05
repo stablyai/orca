@@ -42,6 +42,7 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 | `ring`                                   | Focus-visible outlines, active selection halos              | Persistent decoration                               |
 | `sidebar` (+ variants)                   | The worktree sidebar and its children                       | Other panels                                        |
 | `editor-surface`                         | Background of Monaco / markdown editor panes                | App chrome                                          |
+| `status-success` (+ background/border)    | Positive persistent state, such as installed/ready chips     | Primary actions; git status; decorative accents     |
 
 The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
 

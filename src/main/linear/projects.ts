@@ -13,6 +13,10 @@ import type {
   LinearWorkspaceSelection
 } from '../../shared/types'
 import {
+  LINEAR_ISSUE_API_PAGE_SIZE_MAX,
+  clampLinearIssueListLimit
+} from '../../shared/linear-issue-read-limits'
+import {
   acquire,
   clearToken,
   getClients,
@@ -25,6 +29,7 @@ type LinearRawVariables = Record<string, unknown>
 
 type PageInfoNode = {
   hasNextPage?: boolean | null
+  endCursor?: string | null
 }
 
 type LinearConnection<T> = {
@@ -312,14 +317,20 @@ const PROJECT_QUERY = `
 `
 
 const PROJECT_ISSUES_QUERY = `
-  query OrcaLinearProjectIssues($id: String!, $first: Int, $orderBy: PaginationOrderBy) {
+  query OrcaLinearProjectIssues(
+    $id: String!,
+    $first: Int,
+    $after: String,
+    $orderBy: PaginationOrderBy
+  ) {
     project(id: $id) {
-      issues(first: $first, orderBy: $orderBy) {
+      issues(first: $first, after: $after, orderBy: $orderBy) {
         nodes {
           ${ORCA_ISSUE_FIELDS}
         }
         pageInfo {
           hasNextPage
+          endCursor
         }
       }
     }
@@ -400,16 +411,22 @@ const CUSTOM_VIEW_QUERY = `
 `
 
 const CUSTOM_VIEW_ISSUES_QUERY = `
-  query OrcaLinearCustomViewIssues($id: String!, $first: Int, $orderBy: PaginationOrderBy) {
+  query OrcaLinearCustomViewIssues(
+    $id: String!,
+    $first: Int,
+    $after: String,
+    $orderBy: PaginationOrderBy
+  ) {
     customView(id: $id) {
       id
       modelName
-      issues(first: $first, orderBy: $orderBy) {
+      issues(first: $first, after: $after, orderBy: $orderBy) {
         nodes {
           ${ORCA_ISSUE_FIELDS}
         }
         pageInfo {
           hasNextPage
+          endCursor
         }
       }
     }
@@ -691,6 +708,37 @@ function mapCustomViewForWorkspace(
   }
 }
 
+async function readIssueConnectionPages(
+  entry: LinearClientForWorkspace,
+  limit: number,
+  loadConnection: (variables: {
+    first: number
+    after?: string
+  }) => Promise<LinearConnection<LinearIssueNode> | null | undefined>
+): Promise<LinearCollectionResult<LinearIssue>> {
+  const items: LinearIssue[] = []
+  let after: string | undefined
+  let hasMore = false
+
+  while (items.length < limit) {
+    // Why: Linear returns issue connections in pages of up to 50; expanded
+    // Orca reads must follow cursors to show more than one backend page.
+    const first = Math.min(LINEAR_ISSUE_API_PAGE_SIZE_MAX, limit - items.length)
+    const connection = await loadConnection(after ? { first, after } : { first })
+    const nodes = connection?.nodes ?? []
+    items.push(...nodes.map((issue) => mapIssueForWorkspace(entry, issue)))
+    hasMore = Boolean(connection?.pageInfo?.hasNextPage)
+
+    const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+    if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
+      break
+    }
+    after = nextCursor
+  }
+
+  return { items, hasMore }
+}
+
 async function readCollection<T>(
   key: string,
   workspaceId: LinearWorkspaceSelection | null | undefined,
@@ -827,25 +875,23 @@ export async function listProjectIssues(
   if (!id) {
     throw new Error('Project ID is required')
   }
-  const first = clampLimit(limit)
+  const first = clampLinearIssueListLimit(limit)
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
   return readConcreteCollection(
     `listProjectIssues:${concreteWorkspaceId}:${id}:${first}`,
     concreteWorkspaceId,
     async (entry) => {
-      const result = await entry.client.client.rawRequest<
-        ProjectIssueConnectionResponse,
-        LinearRawVariables
-      >(PROJECT_ISSUES_QUERY, { id, first, orderBy: 'updatedAt' })
-      const project = result.data?.project
-      if (!project) {
-        throw new Error('Project was not found')
-      }
-      const connection = project.issues
-      return {
-        items: (connection?.nodes ?? []).map((issue) => mapIssueForWorkspace(entry, issue)),
-        hasMore: !!connection?.pageInfo?.hasNextPage
-      }
+      return readIssueConnectionPages(entry, first, async (page) => {
+        const result = await entry.client.client.rawRequest<
+          ProjectIssueConnectionResponse,
+          LinearRawVariables
+        >(PROJECT_ISSUES_QUERY, { id, ...page, orderBy: 'updatedAt' })
+        const project = result.data?.project
+        if (!project) {
+          throw new Error('Project was not found')
+        }
+        return project.issues
+      })
     },
     force
   )
@@ -932,25 +978,23 @@ export async function listCustomViewIssues(
   if (!id) {
     throw new Error('Custom view ID is required')
   }
-  const first = clampLimit(limit)
+  const first = clampLinearIssueListLimit(limit)
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
   return readConcreteCollection(
     `listCustomViewIssues:${concreteWorkspaceId}:${id}:${first}`,
     concreteWorkspaceId,
     async (entry) => {
-      const result = await entry.client.client.rawRequest<
-        CustomViewConnectionResponse,
-        LinearRawVariables
-      >(CUSTOM_VIEW_ISSUES_QUERY, { id, first, orderBy: 'updatedAt' })
-      const view = result.data?.customView
-      if (mapCustomViewModel(view?.modelName) !== 'issue') {
-        throw new Error('Custom view does not contain issues')
-      }
-      const connection = view?.issues
-      return {
-        items: (connection?.nodes ?? []).map((issue) => mapIssueForWorkspace(entry, issue)),
-        hasMore: !!connection?.pageInfo?.hasNextPage
-      }
+      return readIssueConnectionPages(entry, first, async (page) => {
+        const result = await entry.client.client.rawRequest<
+          CustomViewConnectionResponse,
+          LinearRawVariables
+        >(CUSTOM_VIEW_ISSUES_QUERY, { id, ...page, orderBy: 'updatedAt' })
+        const view = result.data?.customView
+        if (mapCustomViewModel(view?.modelName) !== 'issue') {
+          throw new Error('Custom view does not contain issues')
+        }
+        return view?.issues
+      })
     },
     force
   )

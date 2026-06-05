@@ -2,9 +2,8 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, screen, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
-import icon from '../../../resources/icon.png?asset'
-import devIcon from '../../../resources/icon-dev.png?asset'
 import type { Store } from '../persistence'
+import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
@@ -264,7 +263,7 @@ export function createMainWindow(
           }
         }
       : {}),
-    icon: is.dev ? devIcon : icon,
+    icon: getAppIconPath(settings?.appIcon),
     ...platformBlurOptions,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -275,11 +274,11 @@ export function createMainWindow(
   const rendererWebContentsId = mainWindow.webContents.id
 
   if (process.platform === 'darwin') {
-    // Why: persistent parked webviews use separate compositor layers, and on
+    // Why: persistent browser webviews use separate compositor layers, and on
     // recent macOS releases those layers can fail to repaint after occlusion or
     // restore. Disabling main-window throttling and forcing a repaint on
-    // visibility transitions hardens Orca against the same black-surface
-    // failure mode seen during browser-tab restore and tab switching.
+    // visibility transitions hardens Orca against black-surface failures during
+    // browser-tab restore and tab switching.
     mainWindow.webContents.setBackgroundThrottling(false)
     mainWindow.on('restore', () => {
       forceRepaint(mainWindow)
@@ -624,10 +623,17 @@ export function createMainWindow(
     resetTerminalInputFocus()
     resetFloatingTerminalInputFocus()
     resetShortcutRecorderFocus()
-    if (opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false) {
+    // Why: macOS can report BrowserWindow teardown as renderer `killed`/SIGKILL
+    // after a confirmed close; that is window lifecycle noise, not a crash.
+    if (
+      !windowClosing &&
+      opts?.shouldRecordRendererCrash?.(details, rendererWebContentsId) !== false
+    ) {
       opts?.onRendererProcessGone?.(details, rendererWebContentsId)
     }
-    console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    if (!windowClosing) {
+      console.error('[window] Renderer process gone; close confirmation will be bypassed', details)
+    }
     scheduleRendererRecovery(details)
   })
   mainWindow.webContents.on('destroyed', () => {

@@ -21,7 +21,11 @@ import {
   isPowerShellExecutableName
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
-import { getZshEnvTemplate } from '../shell-templates'
+import {
+  getZshEnvTemplate,
+  getZshFinalZdotdirRestoreBlock,
+  getZshStartupFileSourceBlock
+} from '../shell-templates'
 
 let didEnsureShellReadyWrappers = false
 
@@ -259,10 +263,11 @@ trap '__orca_osc133_preexec' DEBUG
 
 export function getZshShellReadyRcfileContent(): string {
   return `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-if [[ "$_orca_home" != "$ZDOTDIR" && -o interactive && -f "$_orca_home/.zshrc" ]]; then
-  source "$_orca_home/.zshrc"
-fi
+${getZshStartupFileSourceBlock({
+  fileName: '.zshrc',
+  interactiveOnly: true,
+  skipWhenHomeIsCurrentZdotdir: true
+})}
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -299,6 +304,9 @@ __orca_osc133_preexec() {
 # Why: prepend so Orca captures $? before user prompt hooks can overwrite it.
 precmd_functions=(__orca_osc133_precmd \${precmd_functions[@]})
 preexec_functions=(__orca_osc133_preexec \${preexec_functions[@]})
+if [[ ! -o login ]]; then
+${getZshFinalZdotdirRestoreBlock()}
+fi
 `
 }
 
@@ -317,21 +325,11 @@ function ensureShellReadyWrappers(): void {
 
   const zshEnv = getZshEnvTemplate(zshDir)
   const zshProfile = `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-[[ -f "$_orca_home/.zprofile" ]] && source "$_orca_home/.zprofile"
+${getZshStartupFileSourceBlock({ fileName: '.zprofile' })}
 `
   const zshRc = getZshShellReadyRcfileContent()
   const zshLogin = `# Orca zsh shell-ready wrapper
-_orca_home="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${_orca_home%/}" in
-  */shell-ready/zsh) _orca_home="$HOME" ;;
-esac
-if [[ -o interactive && -f "$_orca_home/.zlogin" ]]; then
-  source "$_orca_home/.zlogin"
-fi
+${getZshStartupFileSourceBlock({ fileName: '.zlogin', interactiveOnly: true })}
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -358,6 +356,7 @@ if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
   zle -N __orca_prompt_mark
   add-zle-hook-widget line-init __orca_prompt_mark
 fi
+${getZshFinalZdotdirRestoreBlock()}
 `
   const bashRc = getBashShellReadyRcfileContent()
 

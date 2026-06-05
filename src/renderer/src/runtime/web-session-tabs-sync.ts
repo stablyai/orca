@@ -38,6 +38,7 @@ import {
   toWebTerminalSurfaceTabId,
   WEB_TERMINAL_SURFACE_TAB_PREFIX
 } from './web-runtime-session'
+import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -154,6 +155,23 @@ export function shouldApplyWebSessionTabsSnapshot(
     snapshotVersion: snapshot.snapshotVersion
   })
   return true
+}
+
+export function shouldBootstrapInitialWebRuntimeTerminal(args: {
+  event: SessionTabsStreamEvent
+  activeWorktreeId: string
+  requestedInitialTerminal: boolean
+  snapshotIsFresh: boolean
+  localTerminalCount: number
+}): boolean {
+  return (
+    args.snapshotIsFresh &&
+    args.event.type === 'snapshot' &&
+    args.event.tabs.length === 0 &&
+    args.localTerminalCount === 0 &&
+    !args.requestedInitialTerminal &&
+    args.activeWorktreeId === args.event.worktree
+  )
 }
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
@@ -401,7 +419,7 @@ function buildMirroredTerminalTabs(
     return {
       tab: {
         id: localTabId,
-        ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? ptyIds[0] ?? null,
+        ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? null,
         worktreeId: snapshot.worktree,
         title,
         defaultTitle: existing?.defaultTitle ?? title,
@@ -1117,6 +1135,7 @@ function terminalLayoutEqual(
     (a?.expandedLeafId ?? null) === b.expandedLeafId &&
     sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
     sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
+    sameStringRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&
     sameStringRecord(a?.titlesByLeafId, b.titlesByLeafId)
   )
 }
@@ -2159,7 +2178,7 @@ export function useWebSessionTabsSync(): void {
         {
           selector: environmentId,
           method: 'session.tabs.subscribe',
-          params: { worktree: `id:${activeWorktreeId}` },
+          params: { worktree: toRuntimeWorktreeSelector(activeWorktreeId) },
           timeoutMs: 15_000
         },
         {
@@ -2175,12 +2194,15 @@ export function useWebSessionTabsSync(): void {
             if (event.type !== 'snapshot' && event.type !== 'updated') {
               return
             }
-            const shouldBootstrapInitialTerminal =
-              event.type === 'snapshot' &&
-              event.tabs.length === 0 &&
-              !requestedInitialTerminal &&
-              activeWorktreeId === event.worktree
             const fresh = shouldApplyWebSessionTabsSnapshot(event, environmentId)
+            const shouldBootstrapInitialTerminal = shouldBootstrapInitialWebRuntimeTerminal({
+              event,
+              activeWorktreeId,
+              requestedInitialTerminal,
+              snapshotIsFresh: fresh,
+              localTerminalCount:
+                useAppStore.getState().tabsByWorktree[activeWorktreeId]?.length ?? 0
+            })
             if (fresh) {
               useAppStore.setState((state) =>
                 applyWebSessionTabsSnapshot(state, event, environmentId)

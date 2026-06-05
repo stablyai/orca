@@ -1796,7 +1796,8 @@ describe('hydrateEditorSession', () => {
         ]
       },
       activeFileIdByWorktree: { [wt]: '/path/wt1/src/index.ts' },
-      activeTabTypeByWorktree: { [wt]: 'editor' }
+      activeTabTypeByWorktree: { [wt]: 'editor' },
+      markdownFrontmatterVisible: { '/path/wt1/README.md': true }
     })
 
     const s = store.getState()
@@ -1805,6 +1806,7 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[0].mode).toBe('edit')
     expect(s.openFiles[0].isDirty).toBe(false)
     expect(s.openFiles[1].isPreview).toBe(true)
+    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': true })
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
   })
@@ -1829,7 +1831,8 @@ describe('hydrateEditorSession', () => {
             relativePath: 'note.md',
             worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
             language: 'markdown',
-            runtimeEnvironmentId: null
+            runtimeEnvironmentId: null,
+            dirtyDraftContent: ''
           }
         ]
       },
@@ -1845,10 +1848,47 @@ describe('hydrateEditorSession', () => {
         id: fileId,
         filePath,
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        runtimeEnvironmentId: null
+        runtimeEnvironmentId: null,
+        isDirty: true
       })
     ])
+    expect(s.editorDrafts).toEqual({ [fileId]: '' })
+    expect(s.markdownFrontmatterVisible).toEqual({})
     expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
+  })
+
+  it('migrates hydrated front-matter visibility to owner-qualified editor file ids', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/note.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'note.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: filePath
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      markdownFrontmatterVisible: { [filePath]: true }
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: true })
   })
 
   it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {

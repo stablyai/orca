@@ -24,8 +24,13 @@ import type {
   WorkspaceSessionState
 } from '../shared/types'
 import { isTerminalLeafId, makePaneKey } from '../shared/stable-pane-id'
+import { TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT } from '../shared/terminal-scrollback-limits'
 import { MAX_BROWSER_HISTORY_ENTRIES } from '../shared/workspace-session-browser-history'
-import { ONBOARDING_FLOW_VERSION } from '../shared/constants'
+import {
+  getDefaultWorkspaceSession,
+  ONBOARDING_FINAL_STEP,
+  ONBOARDING_FLOW_VERSION
+} from '../shared/constants'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
@@ -257,6 +262,7 @@ describe('Store', () => {
     expect(settings.branchPrefix).toBe('git-username')
     expect(settings.refreshLocalBaseRefOnWorktreeCreate).toBe(false)
     expect(settings.theme).toBe('system')
+    expect(settings.appIcon).toBe('classic')
     expect(settings.appFontFamily).toBe('Geist')
     expect(settings.editorAutoSave).toBe(false)
     expect(settings.editorAutoSaveDelayMs).toBe(1000)
@@ -265,8 +271,11 @@ describe('Store', () => {
     expect(settings.terminalUseSeparateLightTheme).toBe(true)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
+    expect(settings.showAutomationsButton).toBe(true)
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
-    expect(settings.openInApplications).toEqual([])
+    expect(settings.openInApplications).toEqual([
+      { id: 'vscode', label: 'VS Code', command: 'code' }
+    ])
     expect(settings.experimentalActivity).toBe(false)
     expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(settings.experimentalTerminalAttention).toBe(false)
@@ -286,15 +295,183 @@ describe('Store', () => {
     expect(ui.lastActiveRepoId).toBeNull()
     expect(ui.dismissedUpdateVersion).toBeNull()
     expect(ui.lastUpdateCheckAt).toBeNull()
+    expect(ui.setupGuideSidebarDismissed).toBe(false)
+  })
+
+  it('hides the setup guide sidebar entry for existing users backfilled as completed', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: {}
+    })
+
+    const store = await createStore()
+    const onboarding = store.getOnboarding()
+
+    expect(onboarding.closedAt).not.toBeNull()
+    expect(onboarding.outcome).toBe('completed')
+    expect(onboarding.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('persists the existing-user onboarding backfill back to disk', async () => {
+    // Why: the upgrade-cohort backfill is derived at load; this asserts the
+    // backfilled onboarding+gate state round-trips through a write intact (the
+    // load-time scheduleSave that triggers it without a manual flush is wired
+    // via loadNeedsSave at the no-onboarding-block branch).
+    writeDataFile({
+      schemaVersion: 1,
+      ui: {}
+    })
+
+    const store = await createStore()
+    store.flush()
+    const persisted = readDataFile() as {
+      onboarding?: { closedAt: number | null; outcome: string | null; lastCompletedStep: number }
+      ui?: { setupGuideSidebarDismissed?: boolean }
+    }
+
+    expect(persisted.onboarding?.closedAt).not.toBeNull()
+    expect(persisted.onboarding?.outcome).toBe('completed')
+    expect(persisted.onboarding?.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(persisted.ui?.setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('keeps the setup guide sidebar entry available while onboarding is open', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: null,
+        lastCompletedStep: -1,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(false)
+  })
+
+  it('treats persisted false setup guide sidebar dismissal as stale once onboarding is closed', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 123,
+        outcome: 'dismissed',
+        lastCompletedStep: 2,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: false
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('keeps malformed completed onboarding closed for the setup guide sidebar gate', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 'yesterday',
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: false
+      }
+    })
+
+    const store = await createStore()
+    const onboarding = store.getOnboarding()
+
+    expect(onboarding.closedAt).not.toBeNull()
+    expect(onboarding.outcome).toBe('completed')
+    expect(onboarding.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('does not reopen the setup guide sidebar when closed onboarding has a null timestamp', async () => {
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: null,
+        outcome: 'dismissed',
+        lastCompletedStep: 1,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).not.toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('recovers a close timestamp when closed onboarding omits the closedAt key', async () => {
+    // Why: a persisted block missing `closedAt` entirely (vs an explicit null)
+    // must still stay closed via outcome recovery, guarding the
+    // `'closedAt' in raw` sanitizer branch separately from the null case.
+    writeDataFile({
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getOnboarding().closedAt).not.toBeNull()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+  })
+
+  it('does not mutate gate fields for a consistent closed-onboarding existing user', async () => {
+    // Why: the gate must be idempotent. A user already persisted as
+    // closed+completed must round-trip unchanged — the backfill path must not
+    // fire and stomp the real closedAt with a fresh Date.now() each launch.
+    const consistent = {
+      onboarding: {
+        flowVersion: ONBOARDING_FLOW_VERSION,
+        closedAt: 123,
+        outcome: 'completed',
+        lastCompletedStep: ONBOARDING_FINAL_STEP,
+        checklist: {}
+      },
+      ui: {
+        setupGuideSidebarDismissed: true
+      }
+    }
+    writeDataFile(consistent)
+
+    const store = await createStore()
+    expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+
+    store.flush()
+    const persisted = readDataFile() as typeof consistent
+
+    // Flushing the loaded state preserves the persisted gate fields verbatim.
+    expect(persisted.onboarding.closedAt).toBe(123)
+    expect(persisted.onboarding.outcome).toBe('completed')
+    expect(persisted.ui.setupGuideSidebarDismissed).toBe(true)
   })
 
   it.each([
-    [4, 3],
-    [5, 4],
-    [6, 4],
-    [9, 4]
+    [3, 2],
+    [4, 2],
+    [5, 3],
+    [6, 3],
+    [9, 3]
   ])(
-    'migrates legacy open onboarding progress %i before applying the current step bound',
+    'migrates unversioned seven-step onboarding progress %i before applying the current step bound',
     async (legacyStep, expectedStep) => {
       writeDataFile({
         onboarding: {
@@ -315,13 +492,41 @@ describe('Store', () => {
     }
   )
 
-  it('keeps current onboarding progress marked as the five-step flow', async () => {
+  it.each([
+    [3, 2],
+    [4, 3],
+    [5, 3],
+    [9, 3]
+  ])(
+    'migrates versioned five-step onboarding progress %i before applying the current step bound',
+    async (legacyStep, expectedStep) => {
+      writeDataFile({
+        onboarding: {
+          flowVersion: 2,
+          closedAt: null,
+          outcome: null,
+          lastCompletedStep: legacyStep,
+          checklist: {}
+        }
+      })
+
+      const store = await createStore()
+      const onboarding = store.getOnboarding()
+
+      expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
+      expect(onboarding.lastCompletedStep).toBe(expectedStep)
+      expect(onboarding.closedAt).toBeNull()
+      expect(onboarding.outcome).toBeNull()
+    }
+  )
+
+  it('keeps current onboarding progress marked as the four-step flow', async () => {
     writeDataFile({
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
         closedAt: null,
         outcome: null,
-        lastCompletedStep: 4,
+        lastCompletedStep: 3,
         checklist: {}
       }
     })
@@ -330,7 +535,7 @@ describe('Store', () => {
     const onboarding = store.getOnboarding()
 
     expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
-    expect(onboarding.lastCompletedStep).toBe(4)
+    expect(onboarding.lastCompletedStep).toBe(3)
   })
 
   it('migrates legacy completed onboarding progress to the current final step', async () => {
@@ -348,8 +553,31 @@ describe('Store', () => {
 
     expect(onboarding.flowVersion).toBe(ONBOARDING_FLOW_VERSION)
     expect(onboarding.outcome).toBe('completed')
-    expect(onboarding.lastCompletedStep).toBe(5)
+    expect(onboarding.lastCompletedStep).toBe(4)
   })
+
+  it.each([
+    [{ outcome: 'completed', lastCompletedStep: 7 }, 'completed', 4],
+    [{ closedAt: null, outcome: 'dismissed', lastCompletedStep: 2 }, 'dismissed', 2],
+    [{ closedAt: 'invalid', outcome: 'completed', lastCompletedStep: 7 }, 'completed', 4]
+  ] as const)(
+    'keeps closed onboarding closed when closedAt is missing or malformed',
+    async (onboardingInput, expectedOutcome, expectedStep) => {
+      writeDataFile({
+        onboarding: {
+          checklist: {},
+          ...onboardingInput
+        }
+      })
+
+      const store = await createStore()
+      const onboarding = store.getOnboarding()
+
+      expect(onboarding.closedAt).toEqual(expect.any(Number))
+      expect(onboarding.outcome).toBe(expectedOutcome)
+      expect(onboarding.lastCompletedStep).toBe(expectedStep)
+    }
+  )
 
   it('preserves legacy none grouping as ungrouped workspaces', async () => {
     writeDataFile({
@@ -923,6 +1151,7 @@ describe('Store', () => {
     expect(store.getSettings().sourceControlViewMode).toBe('list')
     expect(store.getSettings().showGitIgnoredFiles).toBe(true)
     expect(store.getSettings().showTasksButton).toBe(true)
+    expect(store.getSettings().showAutomationsButton).toBe(true)
     expect(store.getSettings().combinedDiffFileTreeVisibleByDefault).toBe(false)
     expect(store.getSettings().visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
     expect(store.getSettings().experimentalActivity).toBe(false)
@@ -1830,6 +2059,29 @@ describe('Store', () => {
     expect(store.getRepos()[0]!.repoIcon).toBeUndefined()
   })
 
+  it('updateRepo normalizes and persists repo upstream metadata', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      upstream: { owner: ' stablyai ', repo: ' orca ' }
+    })
+    expect(updated!.upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
+
+    store.updateRepo('r1', { upstream: null })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.upstream).toBeNull()
+  })
+
+  it('getRepo does not expose invalid persisted repo upstream metadata', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: '', repo: 42 } as never }))
+
+    expect(store.getRepo('r1')!.upstream).toBeUndefined()
+    expect(store.getRepos()[0]!.upstream).toBeUndefined()
+  })
+
   it('updateRepo returns null for nonexistent id', async () => {
     const store = await createStore()
     expect(store.updateRepo('nope', { displayName: 'x' })).toBeNull()
@@ -2079,6 +2331,24 @@ describe('Store', () => {
     expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
   })
 
+  it('normalizes app icon on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          appIcon: 'not-real'
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().appIcon).toBe('classic')
+
+    expect(store.updateSettings({ appIcon: 'watercolor' }).appIcon).toBe('watercolor')
+    expect(store.updateSettings({ appIcon: 'blue' }).appIcon).toBe('blue')
+    expect(store.updateSettings({ appIcon: 'not-real' as never }).appIcon).toBe('classic')
+  })
+
   it('updateSettings keeps the legacy commit-message AI projection in sync', async () => {
     const store = await createStore()
     const current = store.getSettings().sourceControlAi!
@@ -2230,6 +2500,7 @@ describe('Store', () => {
       },
       terminalLayoutsByTabId: {},
       openFilesByWorktree: {},
+      markdownFrontmatterVisible: {},
       browserTabsByWorktree: {},
       browserPagesByWorkspace: {},
       activeBrowserTabIdByWorktree: {},
@@ -2263,7 +2534,10 @@ describe('Store', () => {
       worktreeMeta?: Record<string, unknown>
     }
     expect(persisted.settings?.sourceControlViewMode).toBe('tree')
-    expect(persisted.workspaceSession).toEqual(workspaceSession)
+    expect(persisted.workspaceSession).toEqual({
+      ...getDefaultWorkspaceSession(),
+      ...workspaceSession
+    })
     expect(persisted.worktreeMeta).toEqual({
       'repo1::/worktree-a': { status: 'active' },
       'repo1::/worktree-b': { status: 'active' }
@@ -3243,7 +3517,7 @@ describe('Store', () => {
     ).toBeUndefined()
   })
 
-  it('strips local terminal scrollback buffers when setting workspace session', async () => {
+  it('stores remote terminal scrollback out of workspace session JSON', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'local-repo', connectionId: null }))
     store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
@@ -3255,9 +3529,12 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId).toEqual({
       [TEST_LEAF_1]: 'local-pty'
     })
-    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
-      [TEST_LEAF_2]: 'remote-scrollback'
+    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toBeUndefined()
+    expect(session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId).toEqual({
+      [TEST_LEAF_2]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
     })
+    const ref = session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[TEST_LEAF_2]
+    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('remote-scrollback')
   })
 
   it('caps oversized browser history when setting workspace session', async () => {
@@ -3274,7 +3551,7 @@ describe('Store', () => {
     expect(prunedBytes).toBeLessThan(oversizedBytes / 2)
   })
 
-  it('keeps terminal scrollback buffers when the repo catalog is not hydrated yet', async () => {
+  it('stores maybe-remote terminal scrollback out of workspace session JSON', async () => {
     const store = await createStore()
 
     store.setWorkspaceSession({
@@ -3302,9 +3579,65 @@ describe('Store', () => {
 
     expect(
       store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].buffersByLeafId
+    ).toBeUndefined()
+    expect(
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId
     ).toEqual({
-      [TEST_LEAF_2]: 'maybe-remote-scrollback'
+      [TEST_LEAF_2]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
     })
+    const ref =
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
+        TEST_LEAF_2
+      ]
+    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('maybe-remote-scrollback')
+  })
+
+  it('deletes terminal scrollback snapshot files when refs leave the workspace session', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'remote-repo', connectionId: 'ssh-target-1' }))
+    const session = makeSessionWithTerminalBuffers()
+    store.setWorkspaceSession({
+      ...session,
+      tabsByWorktree: { 'remote-repo::/remote': session.tabsByWorktree['remote-repo::/remote'] },
+      terminalLayoutsByTabId: { 'remote-tab': session.terminalLayoutsByTabId['remote-tab'] }
+    })
+    const ref =
+      store.getWorkspaceSession().terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[
+        TEST_LEAF_2
+      ]
+    expect(ref).toEqual(expect.stringMatching(/^v1-[0-9a-f]{32}$/))
+    if (!ref) {
+      throw new Error('expected scrollback snapshot ref')
+    }
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(true)
+
+    store.setWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(existsSync(join(testState.dir, 'terminal-scrollback', `${ref}.bin`))).toBe(false)
+  })
+
+  it('reads only the replay tail from oversized terminal scrollback snapshots', async () => {
+    const store = await createStore()
+    const ref = 'v1-00000000000000000000000000000000'
+    const snapshotDir = join(testState.dir, 'terminal-scrollback')
+    mkdirSync(snapshotDir, { recursive: true })
+    writeFileSync(
+      join(snapshotDir, `${ref}.bin`),
+      `stale-prefix-${'x'.repeat(TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)}tail`,
+      'utf-8'
+    )
+
+    const buffer = store.readTerminalScrollbackSnapshot(ref)
+
+    expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_REPLAY_BYTE_LIMIT)
+    expect(buffer?.startsWith('stale-prefix')).toBe(false)
+    expect(buffer?.endsWith('tail')).toBe(true)
   })
 
   it('strips legacy local terminal scrollback buffers when loading workspace session', async () => {
@@ -3324,9 +3657,12 @@ describe('Store', () => {
     const store = await createStore()
     const session = store.getWorkspaceSession()
     expect(session.terminalLayoutsByTabId['local-tab'].buffersByLeafId).toBeUndefined()
-    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
-      [TEST_LEAF_2]: 'remote-scrollback'
+    expect(session.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toBeUndefined()
+    expect(session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId).toEqual({
+      [TEST_LEAF_2]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
     })
+    const ref = session.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId?.[TEST_LEAF_2]
+    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('remote-scrollback')
   })
 
   it('caps oversized legacy browser history when loading workspace session', async () => {
@@ -4385,7 +4721,12 @@ describe('Store', () => {
     expect(layout.activeLeafId).toBe(TEST_LEAF_1)
     expect(layout.expandedLeafId).toBeNull()
     expect(layout.ptyIdsByLeafId).toEqual({ [TEST_LEAF_1]: 'daemon-pty' })
-    expect(layout.buffersByLeafId).toEqual({ [TEST_LEAF_1]: 'Current buffer' })
+    expect(layout.buffersByLeafId).toBeUndefined()
+    expect(layout.scrollbackRefsByLeafId).toEqual({
+      [TEST_LEAF_1]: expect.stringMatching(/^v1-[0-9a-f]{32}$/)
+    })
+    const ref = layout.scrollbackRefsByLeafId?.[TEST_LEAF_1]
+    expect(ref ? store.readTerminalScrollbackSnapshot(ref) : null).toBe('Current buffer')
     expect(layout.titlesByLeafId).toEqual({ [TEST_LEAF_1]: 'Current' })
     expect(session.tabsByWorktree.wt1[0].ptyId).toBe('daemon-pty')
   })
@@ -5133,6 +5474,57 @@ describe('Store', () => {
     expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
 
+  it('clears workspace bindings when marking all SSH remote PTY leases for a target terminated', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'ssh:ssh-1@@remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty' }
+        }
+      }
+    })
+
+    store.markSshRemotePtyLeases('ssh-1', 'terminated')
+
+    const session = store.getWorkspaceSession()
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
+      expect.objectContaining({
+        ptyId: 'remote-pty',
+        state: 'terminated'
+      })
+    ])
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
+  })
+
   it('matches scoped SSH workspace bindings against raw relay leases', async () => {
     const store = await createStore()
     store.upsertSshRemotePtyLease({
@@ -5225,6 +5617,57 @@ describe('Store', () => {
         state: 'terminated'
       })
     ])
+  })
+
+  it('clears workspace bindings when marking an SSH remote PTY lease expired', async () => {
+    const store = await createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+    store.setWorkspaceSession({
+      activeRepoId: 'r1',
+      activeWorktreeId: 'wt1',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'tab1',
+            worktreeId: 'wt1',
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'ssh:ssh-1@@remote-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'ssh:ssh-1@@remote-pty' }
+        }
+      }
+    })
+
+    store.markSshRemotePtyLease('ssh-1', 'ssh:ssh-1@@remote-pty', 'expired')
+
+    const session = store.getWorkspaceSession()
+    expect(store.getSshRemotePtyLeases('ssh-1')).toEqual([
+      expect.objectContaining({
+        ptyId: 'remote-pty',
+        state: 'expired'
+      })
+    ])
+    expect(session.tabsByWorktree.wt1[0].ptyId).toBeNull()
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({})
   })
 
   it('removes SSH remote PTY leases when callers pass scoped app ids', async () => {

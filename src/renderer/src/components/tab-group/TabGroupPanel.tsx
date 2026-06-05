@@ -146,6 +146,16 @@ export default function TabGroupPanel({
       }}
       onDuplicateBrowserTab={commands.duplicateBrowserTab}
       onCloseAllFiles={commands.closeAllEditorTabsInGroup}
+      onMakePreviewFilePermanent={(_fileId, tabId) => {
+        if (!tabId) {
+          return
+        }
+        const item = model.groupTabs.find((candidate) => candidate.id === tabId)
+        if (!item) {
+          return
+        }
+        commands.makePreviewFilePermanent(item.entityId, item.id)
+      }}
       onPinFile={(_fileId, tabId) => {
         if (!tabId) {
           return

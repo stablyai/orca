@@ -66,8 +66,6 @@ export default function PdfFind({
       if (eventBus) {
         eventBus.dispatch('findbarclose', { source: null })
       }
-      setActiveMatch(0)
-      setTotalMatches(0)
       return
     }
     dispatchFind('')
@@ -106,7 +104,7 @@ export default function PdfFind({
 
   // Why: close hides the bar immediately; reset counters before the next commit
   // so reopening with the same query never paints stale match totals.
-  if (!isOpen && (activeMatch !== 0 || totalMatches !== 0)) {
+  if ((!isOpen || !query) && (activeMatch !== 0 || totalMatches !== 0)) {
     setActiveMatch(0)
     setTotalMatches(0)
   }

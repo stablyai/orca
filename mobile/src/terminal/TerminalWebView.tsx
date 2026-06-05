@@ -280,8 +280,7 @@ const XTERM_HTML = `<!DOCTYPE html>
   var ready = false;
   var currentScale = 1;
   var userScale = 1;
-  var panX = 0;
-  var panY = 0;
+  var panX = 0, panY = 0;
   var smoothScrollOffsetY = 0;
   var pendingNormalScrollDeltaY = 0;
   var normalScrollFrameId = null;
@@ -2219,6 +2218,9 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       javaScriptEnabled
       scrollEnabled={false}
       scalesPageToFit={false}
+      // Why: Android WebView defaults textZoom to the system font scale, inflating
+      // xterm's DOM glyphs past its canvas-measured cell grid (#4579). iOS ignores it.
+      textZoom={100}
       onLoadStart={handleLoadStart}
       onMessage={handleMessage}
     />

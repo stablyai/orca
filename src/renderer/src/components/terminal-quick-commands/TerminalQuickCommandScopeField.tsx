@@ -14,12 +14,15 @@ import {
 } from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
+import { QUICK_COMMAND_TOGGLE_ITEM_CLASS } from './terminal-quick-command-toggle-style'
 
 type TerminalQuickCommandScopeFieldProps = {
   repos: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   selectedScope: TerminalQuickCommandScope
   selectedRepoId: string
   selectedRepoMissing: boolean
+  lastRepoScopeId: string | null
+  rememberRepoScopeId: (repoId: string) => void
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
 }
 
@@ -27,11 +30,20 @@ function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
   return repo.displayName || repo.path
 }
 
+export function getQuickCommandProjectScopeRepoId(
+  repos: Pick<Repo, 'id'>[],
+  lastRepoScopeId: string | null
+): string | null {
+  return lastRepoScopeId ?? repos[0]?.id ?? null
+}
+
 export function TerminalQuickCommandScopeField({
   repos,
   selectedScope,
   selectedRepoId,
   selectedRepoMissing,
+  lastRepoScopeId,
+  rememberRepoScopeId,
   setDraft
 }: TerminalQuickCommandScopeFieldProps): React.JSX.Element {
   return (
@@ -45,17 +57,31 @@ export function TerminalQuickCommandScopeField({
             if (value === 'global') {
               setDraft((current) => ({ ...current, scope: { type: 'global' } }))
             }
-            if (value === 'repo' && repos[0] && selectedScope.type !== 'repo') {
+            if (value === 'repo' && selectedScope.type !== 'repo') {
+              const repoId = getQuickCommandProjectScopeRepoId(repos, lastRepoScopeId)
+              if (!repoId) {
+                return
+              }
+              // Why: toggling Global should not discard the command's project
+              // and silently move it to whichever repo is first in the list.
+              rememberRepoScopeId(repoId)
               setDraft((current) => ({
                 ...current,
-                scope: { type: 'repo', repoId: repos[0].id }
+                scope: { type: 'repo', repoId }
               }))
             }
           }}
           className="justify-start"
+          variant="outline"
         >
-          <ToggleGroupItem value="global">Global</ToggleGroupItem>
-          <ToggleGroupItem value="repo" disabled={repos.length === 0}>
+          <ToggleGroupItem value="global" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
+            Global
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            value="repo"
+            disabled={repos.length === 0}
+            className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}
+          >
             Project
           </ToggleGroupItem>
         </ToggleGroup>
@@ -63,9 +89,10 @@ export function TerminalQuickCommandScopeField({
           <div className="space-y-1">
             <Select
               value={selectedRepoId}
-              onValueChange={(repoId) =>
+              onValueChange={(repoId) => {
+                rememberRepoScopeId(repoId)
                 setDraft((current) => ({ ...current, scope: { type: 'repo', repoId } }))
-              }
+              }}
             >
               <SelectTrigger size="sm" className="min-w-48">
                 <SelectValue

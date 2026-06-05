@@ -30,6 +30,7 @@ import type {
   WorkspaceCreateTelemetrySource
 } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
+import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 
 export type LaunchableWorkItem = {
   title: string
@@ -214,7 +215,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     trustDecision === 'skip' ? 'skip' : setupResolution.decision
 
   const workspaceName = getWorkspaceSeedName({
-    explicitName: getLinkedWorkItemSuggestedName(item),
+    explicitName: item.linearIdentifier
+      ? getLinearIssueWorkspaceName({ identifier: item.linearIdentifier, title: item.title })
+      : getLinkedWorkItemSuggestedName(item),
     prompt: '',
     linkedIssueNumber: item.type === 'issue' ? (item.number ?? null) : null,
     linkedPR: item.type === 'pr' ? (item.number ?? null) : null

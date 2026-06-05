@@ -63,6 +63,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
+import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { DictationController } from './components/dictation/DictationController'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
@@ -113,10 +114,10 @@ import {
   canGoBackWorktreeHistory,
   canGoForwardWorktreeHistory
 } from '@/store/slices/worktree-nav-history'
+import { selectFloatingVisibleTabCount } from './store/selectors'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
 import type { OnboardingState } from '../../shared/types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { ContextualTourOverlay } from './components/contextual-tours/ContextualTourOverlay'
 import { SetupGuideTelemetryObserver } from './components/setup-guide/SetupGuideTelemetryObserver'
 import {
@@ -327,28 +328,7 @@ function App(): React.JSX.Element {
   const worktreeSidebarScrollOffsetRef = useRef(0)
   const worktreeSidebarScrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
-  const floatingVisibleTabCount = useAppStore((s) => {
-    const terminalIds = new Set(
-      (s.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
-    )
-    const browserIds = new Set(
-      (s.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).map((tab) => tab.id)
-    )
-    const editorIds = new Set(
-      s.openFiles
-        .filter((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
-        .map((file) => file.id)
-    )
-    return (s.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter((tab) => {
-      if (tab.contentType === 'terminal') {
-        return terminalIds.has(tab.entityId)
-      }
-      if (tab.contentType === 'browser') {
-        return browserIds.has(tab.entityId)
-      }
-      return editorIds.has(tab.entityId)
-    }).length
-  })
+  const floatingVisibleTabCount = useAppStore(selectFloatingVisibleTabCount)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const expandedPaneByTabId = useAppStore((s) => s.expandedPaneByTabId)
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
@@ -1304,7 +1284,8 @@ function App(): React.JSX.Element {
       // app-level mod shortcuts (B, L, Shift+E/F/G) have no panel-level
       // counterpart, so suppressing them here would silently no-op when
       // focus lives inside the floating panel.
-      if (isFloatingWorkspacePanelFocused()) {
+      const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
+      if (floatingWorkspaceFocused) {
         if (
           isFloatingWorkspacePanelShortcut(e, shortcutPlatform, null, keybindings, {
             context,
@@ -1320,6 +1301,37 @@ function App(): React.JSX.Element {
         e.preventDefault()
         notifyTerminalCapture('sidebar.left.toggle')
         actions.toggleSidebar()
+        return
+      }
+
+      // Why: rename the active terminal tab. Cmd+R is free in the app/terminal
+      // focus zone because the browser pane owns its own Cmd+R reload and that
+      // focus never reaches this renderer-window handler. Only terminal tabs
+      // have an inline title editor, so other active tab types fall through.
+      if (workspaceActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
+        const store = useAppStore.getState()
+        if (store.activeTabType === 'terminal' && store.activeTabId) {
+          e.preventDefault()
+          notifyTerminalCapture('tab.rename')
+          store.setRenamingTabId(store.activeTabId)
+          return
+        }
+      }
+
+      // Why: open the active worktree's inline title editor. Open/reveal it
+      // first so the card is mounted and visible even when sidebar filters or
+      // collapse state would otherwise hide it.
+      if (
+        workspaceActive &&
+        !floatingWorkspaceFocused &&
+        matchShortcut('workspace.rename') &&
+        activeWorktreeId
+      ) {
+        e.preventDefault()
+        notifyTerminalCapture('workspace.rename')
+        const store = useAppStore.getState()
+        store.setSidebarOpen(true)
+        requestScrollToCurrentWorkspaceRevealAndRename()
         return
       }
 
@@ -1415,7 +1427,8 @@ function App(): React.JSX.Element {
     floatingVisibleTabCount,
     keybindings,
     settings?.terminalShortcutPolicy,
-    setFloatingTerminalOpenWithFocus
+    setFloatingTerminalOpenWithFocus,
+    workspaceActive
   ])
 
   useLayoutEffect(() => {

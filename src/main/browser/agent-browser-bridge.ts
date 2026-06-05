@@ -1769,6 +1769,7 @@ export class AgentBrowserBridge {
         execute: (() =>
           this.executeWithVisibleTarget(
             sessionName,
+            worktreeId,
             target,
             execute,
             options
@@ -1782,6 +1783,7 @@ export class AgentBrowserBridge {
 
   private async executeWithVisibleTarget<T>(
     sessionName: string,
+    worktreeId: string | undefined,
     target: ResolvedBrowserCommandTarget,
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions
@@ -1794,10 +1796,48 @@ export class AgentBrowserBridge {
     // automation lease makes only this target paintable without selecting it.
     const restore = await this.browserManager.acquireAutomationVisibility(target.webContentsId)
     try {
-      return await execute(sessionName, target)
+      const visibleTarget = await this.refreshTargetAfterAutomationVisibility(
+        sessionName,
+        worktreeId,
+        target,
+        options
+      )
+      return await execute(sessionName, visibleTarget)
     } finally {
       restore()
     }
+  }
+
+  private async refreshTargetAfterAutomationVisibility(
+    sessionName: string,
+    worktreeId: string | undefined,
+    target: ResolvedBrowserCommandTarget,
+    options: EnqueueTargetedCommandOptions
+  ): Promise<ResolvedBrowserCommandTarget> {
+    const visibleTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+    if (visibleTarget.webContentsId === target.webContentsId) {
+      return visibleTarget
+    }
+
+    if (this.activeWebContentsId === target.webContentsId) {
+      this.activeWebContentsId = visibleTarget.webContentsId
+    }
+    if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === target.webContentsId) {
+      this.activeWebContentsPerWorktree.set(worktreeId, visibleTarget.webContentsId)
+    }
+
+    // Why: making a parked webview paintable can re-register the same browser
+    // page with a new guest webContents. Tear down any stale named session now;
+    // DOM commands recreate immediately, direct-CDP commands let the next DOM
+    // command recreate against the live guest.
+    await this.restartSessionForTarget(
+      sessionName,
+      visibleTarget.browserPageId,
+      visibleTarget.webContentsId,
+      { recreate: options.ensureSession !== false }
+    )
+
+    return visibleTarget
   }
 
   private async processQueue(sessionName: string): Promise<void> {
@@ -1972,6 +2012,55 @@ export class AgentBrowserBridge {
       await promise
     } finally {
       this.pendingSessionCreation.delete(sessionName)
+    }
+  }
+
+  private async restartSessionForTarget(
+    sessionName: string,
+    browserPageId: string,
+    webContentsId: number,
+    options: { recreate: boolean } = { recreate: true }
+  ): Promise<void> {
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      await pendingCreation.catch(() => {})
+    }
+
+    const session = this.sessions.get(sessionName)
+    if (session) {
+      if (session.activeInterceptPatterns.length > 0) {
+        this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+      }
+      this.sessions.delete(sessionName)
+      this.pendingSessionCreation.delete(sessionName)
+      if (session.activeProcess) {
+        this.cancelledProcesses.add(session.activeProcess)
+        try {
+          session.activeProcess.kill()
+        } catch {
+          // Process may already be exiting.
+        }
+        session.activeProcess = null
+      }
+
+      const destroy = (async (): Promise<void> => {
+        try {
+          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'])
+        } catch {
+          // Session may already be dead.
+        }
+        await session.proxy.stop()
+      })()
+      this.pendingSessionDestruction.set(sessionName, destroy)
+      try {
+        await destroy
+      } finally {
+        this.pendingSessionDestruction.delete(sessionName)
+      }
+    }
+
+    if (options.recreate) {
+      await this.ensureSession(sessionName, browserPageId, webContentsId)
     }
   }
 

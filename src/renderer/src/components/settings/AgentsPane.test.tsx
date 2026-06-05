@@ -273,7 +273,7 @@ describe('AgentsPane', () => {
     expect(matchesSettingsSearch('cursor-agent', AGENTS_PANE_SEARCH_ENTRIES)).toBe(true)
   })
 
-  it('renders per-agent availability as labeled status choices with explicit row copy', () => {
+  it('renders per-agent availability as labeled status choices without row explanation copy', () => {
     const markup = renderPane({
       ...getDefaultSettings('/tmp'),
       disabledTuiAgents: ['claude']
@@ -282,7 +282,9 @@ describe('AgentsPane', () => {
     expect(markup).toContain('aria-label="Claude availability"')
     expect(markup).toContain('Enabled')
     expect(markup).toContain('Disabled')
-    expect(markup).toContain('Hidden from launch and default choices.')
+    expect(markup).not.toContain('Shown in launch and default choices.')
+    expect(markup).not.toContain('Install to use in launch and default choices.')
+    expect(markup).not.toContain('Hidden from launch and default choices.')
     expect(markup).not.toContain('aria-label="Enable Claude"')
     expect(markup).not.toContain('aria-label="Disable Claude"')
   })

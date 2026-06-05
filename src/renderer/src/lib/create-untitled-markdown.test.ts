@@ -16,7 +16,11 @@ describe('createUntitledMarkdownFile', () => {
   })
 
   it('retries with the next untitled name when createFile loses the EEXIST race', async () => {
-    const pathExists = vi.fn()
+    const pathExists = vi
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(false)
     const stat = vi.fn(async (args: { filePath: string }) => {
       if (args.filePath.endsWith('untitled.md')) {
         return { size: 0, isDirectory: false, mtime: 1 }
@@ -30,8 +34,8 @@ describe('createUntitledMarkdownFile', () => {
 
     vi.stubGlobal('window', {
       api: {
-        shell: { pathExists },
-        fs: { createFile, stat }
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, pathExists, stat }
       }
     })
 
@@ -46,7 +50,7 @@ describe('createUntitledMarkdownFile', () => {
 
     expect(createFile).toHaveBeenNthCalledWith(1, { filePath: '/repo/untitled-2.md' })
     expect(createFile).toHaveBeenNthCalledWith(2, { filePath: '/repo/untitled-3.md' })
-    expect(pathExists).not.toHaveBeenCalled()
+    expect(pathExists).toHaveBeenCalledTimes(3)
   })
 
   it('throws a descriptive error when untitled names are exhausted', async () => {
@@ -56,8 +60,8 @@ describe('createUntitledMarkdownFile', () => {
 
     vi.stubGlobal('window', {
       api: {
-        shell: { pathExists },
-        fs: { createFile, stat }
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, pathExists, stat }
       }
     })
 
@@ -66,18 +70,18 @@ describe('createUntitledMarkdownFile', () => {
     )
 
     expect(createFile).not.toHaveBeenCalled()
-    expect(pathExists).not.toHaveBeenCalled()
+    expect(pathExists).toHaveBeenCalledTimes(100)
   })
 
-  it('passes connectionId to stat and createFile for SSH worktrees', async () => {
+  it('passes connectionId to pathExists and createFile for SSH worktrees', async () => {
     const pathExists = vi.fn(async () => false)
     const stat = vi.fn().mockRejectedValue(new Error('ENOENT: no such file'))
     const createFile = vi.fn().mockResolvedValueOnce(undefined)
 
     vi.stubGlobal('window', {
       api: {
-        shell: { pathExists },
-        fs: { createFile, stat }
+        shell: { pathExists: vi.fn() },
+        fs: { createFile, pathExists, stat }
       }
     })
 
@@ -87,11 +91,11 @@ describe('createUntitledMarkdownFile', () => {
 
     // Why: shell.pathExists is main-process local-only; SSH worktrees must
     // probe through the same filesystem API that receives the connectionId.
-    expect(pathExists).not.toHaveBeenCalled()
-    expect(stat).toHaveBeenCalledWith({
+    expect(pathExists).toHaveBeenCalledWith({
       filePath: '/repo/untitled.md',
       connectionId: 'conn-1'
     })
+    expect(stat).not.toHaveBeenCalled()
     expect(createFile).toHaveBeenCalledWith({
       filePath: '/repo/untitled.md',
       connectionId: 'conn-1'
@@ -110,7 +114,7 @@ describe('createUntitledMarkdownFile', () => {
     vi.stubGlobal('window', {
       api: {
         shell: { pathExists: vi.fn() },
-        fs: { createFile, readFile, stat, writeFile }
+        fs: { createFile, pathExists: vi.fn().mockResolvedValue(false), readFile, stat, writeFile }
       }
     })
 
@@ -158,6 +162,9 @@ describe('createUntitledMarkdownFile', () => {
       isBinary: false
     })
     const writeFile = vi.fn().mockResolvedValueOnce(undefined)
+    const pathExists = vi.fn(async ({ filePath }: { filePath: string }) =>
+      filePath.endsWith('/.orca/templates')
+    )
     const unsubscribe = subscribeMarkdownTemplatePicker((request) => {
       const template = request.templates[0]
       if (!template) {
@@ -169,7 +176,14 @@ describe('createUntitledMarkdownFile', () => {
     vi.stubGlobal('window', {
       api: {
         shell: { pathExists: vi.fn() },
-        fs: { createFile, readDir, readFile, stat, writeFile }
+        fs: {
+          createFile,
+          pathExists,
+          readDir,
+          readFile,
+          stat,
+          writeFile
+        }
       }
     })
 
@@ -235,13 +249,13 @@ describe('createUntitledMarkdownFile', () => {
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'env-1',
       method: 'files.stat',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md' },
+      params: { worktree: 'id:wt-1', relativePath: 'untitled.md' },
       timeoutMs: 15_000
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
       selector: 'env-1',
       method: 'files.createFile',
-      params: { worktree: 'wt-1', relativePath: 'untitled.md' },
+      params: { worktree: 'id:wt-1', relativePath: 'untitled.md' },
       timeoutMs: 15_000
     })
     expect(stat).not.toHaveBeenCalled()

@@ -66,7 +66,7 @@ export function useCloseWith({
       outcome: 'completed' | 'dismissed',
       checklist: Partial<OnboardingState['checklist']>,
       lastStepReached: StepNumber,
-      completedPath?: 'open_folder' | 'clone_url',
+      completedPath?: 'open_folder' | 'clone_url' | 'add_project_modal',
       dismissedExtras?: DismissedExtras
     ): Promise<boolean> => {
       let nextState: OnboardingState
@@ -184,7 +184,7 @@ export function usePersistCurrentStep({
           }
         })
         useAppStore.getState().recordFeatureInteraction('notifications')
-        onOnboardingChange(await persistStep(3))
+        onOnboardingChange(await persistStep(4))
         return { ok: true }
       }
       if (currentStepId === 'integrations') {
@@ -192,7 +192,7 @@ export function usePersistCurrentStep({
         // store slices when the user actually wires them up. The step itself
         // is a no-op for settings/onboarding state beyond marking it
         // completed.
-        onOnboardingChange(await persistStep(4))
+        onOnboardingChange(await persistStep(3))
         return { ok: true }
       }
       return { ok: false }

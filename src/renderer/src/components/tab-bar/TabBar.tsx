@@ -37,6 +37,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   type BuiltInWindowsTerminalShell,
@@ -95,6 +96,7 @@ type TabBarProps = {
   onCloseBrowserTab?: (tabId: string) => void
   onDuplicateBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void
+  onMakePreviewFilePermanent?: (fileId: string, tabId?: string) => void
   onPinFile?: (fileId: string, tabId?: string) => void
   tabBarOrder?: string[]
   onCreateSplitGroup?: (
@@ -184,6 +186,7 @@ function TabBarInner({
   onCloseBrowserTab,
   onDuplicateBrowserTab,
   onCloseAllFiles,
+  onMakePreviewFilePermanent,
   onPinFile,
   tabBarOrder,
   onCreateSplitGroup,
@@ -248,13 +251,18 @@ function TabBarInner({
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
     activeRuntimeEnvironmentId
   )
+  const runtimeTarget = useMemo(
+    () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId }),
+    [activeRuntimeEnvironmentId]
+  )
   const shouldProbeWindowsShellCapabilities =
-    (isWindows || (isWebClient && activeRuntimeEnvironmentId !== null)) &&
+    (isWindows || Boolean(activeRuntimeEnvironmentId?.trim()) || isWebClient) &&
     !worktreeHasRemoteConnection
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
-    windowsTerminalCapabilityOwnerKey
+    windowsTerminalCapabilityOwnerKey,
+    runtimeTarget
   )
   // Why: SSH-backed PTYs ignore local Windows shell overrides; showing these
   // entries there promises PowerShell/CMD/Git Bash but opens the remote shell.
@@ -808,7 +816,7 @@ function TabBarInner({
                 onClose={() => onCloseFile?.(item.id)}
                 onCloseToRight={() => onCloseToRight(item.id)}
                 onCloseAll={() => onCloseAllFiles?.()}
-                onPin={() => onPinFile?.(item.data.id, item.data.tabId)}
+                onMakePermanent={() => onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)}
                 onTogglePin={() => togglePinned(item)}
                 onSplitGroup={(direction, sourceVisibleTabId) =>
                   onCreateSplitGroup?.(direction, sourceVisibleTabId)

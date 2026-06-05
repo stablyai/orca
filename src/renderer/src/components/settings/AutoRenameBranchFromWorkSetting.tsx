@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: the setting owns one collapsed form with
-   queued writes, model selection, and prompt draft state. Splitting the
-   tiny subcontrols would make the settings write flow harder to audit. */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -9,7 +6,6 @@ import type {
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
 } from '../../../../shared/source-control-ai-types'
-import { buildBranchNamePrompt } from '../../../../shared/branch-name-from-work'
 import {
   clearSourceControlAiModelChoiceForHost,
   normalizeSourceControlAiSettings,
@@ -35,9 +31,9 @@ import { useActiveWorktree } from '../../store/selectors'
 import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Label } from '../ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AUTO_RENAME_BRANCH_ADVANCED_SEARCH_ENTRIES } from './auto-rename-branch-search'
+import { AutoRenameBranchPromptEditor } from './AutoRenameBranchPromptEditor'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 
@@ -52,10 +48,6 @@ type AutoRenameBranchFromWorkSettingProps = {
 }
 
 const INHERIT_BRANCH_MODEL_VALUE = '__inherit_branch_model__'
-const BUILT_IN_BRANCH_NAME_PROMPT = buildBranchNamePrompt({
-  firstPrompt: '{first agent prompt}',
-  assistantMessage: '{agent initial response, when available}'
-})
 export function shouldOpenAutoRenameBranchAdvanced(searchQuery: string): boolean {
   return (
     normalizeSettingsSearchQuery(searchQuery) !== '' &&
@@ -351,73 +343,14 @@ export function AutoRenameBranchFromWorkSetting({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2 space-y-3 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-            <div className="space-y-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="git-auto-rename-branch-name-prompt">Branch name prompt</Label>
-                <p className="text-xs text-muted-foreground">
-                  Appended to Orca&apos;s{' '}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline rounded-sm font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        built-in branch-name prompt
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      side="bottom"
-                      className="w-[520px] max-w-[calc(100vw-2rem)] p-3"
-                    >
-                      <div>
-                        <pre className="scrollbar-sleek max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                          {BUILT_IN_BRANCH_NAME_PROMPT}
-                        </pre>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  . Orca generates only the final segment, like{' '}
-                  <code className="font-mono">fix-login-flow</code>; your branch prefix setting
-                  still applies.
-                </p>
-              </div>
-              <textarea
-                id="git-auto-rename-branch-name-prompt"
-                rows={4}
-                value={branchNamePromptDraft}
-                onChange={(event) => setBranchNamePromptDraft(event.target.value)}
-                placeholder="Prefer domain nouns from the task, avoid ticket IDs, and keep names reviewer-friendly."
-                className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-              />
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] text-muted-foreground">
-                  {branchNamePromptDirty ? 'Unsaved changes' : 'Saved'}
-                </p>
-                <div className="flex items-center gap-2">
-                  {branchNamePromptDirty ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      onClick={onDiscardPrompt}
-                      disabled={isSavingPrompt}
-                    >
-                      Discard
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="xs"
-                    onClick={() => void onSavePrompt()}
-                    disabled={!branchNamePromptDirty || isSavingPrompt}
-                  >
-                    {isSavingPrompt ? 'Saving...' : 'Save'}
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <AutoRenameBranchPromptEditor
+              draft={branchNamePromptDraft}
+              dirty={branchNamePromptDirty}
+              saving={isSavingPrompt}
+              onDraftChange={setBranchNamePromptDraft}
+              onDiscard={onDiscardPrompt}
+              onSave={onSavePrompt}
+            />
 
             <div className="flex flex-col gap-3 border-t border-border/50 pt-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-0.5">

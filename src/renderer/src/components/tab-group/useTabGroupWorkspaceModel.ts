@@ -25,6 +25,13 @@ import {
 } from '../../runtime/web-runtime-session'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
 
+export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
+  if (!createdTerminal) {
+    return
+  }
+  useAppStore.getState().recordFeatureInteraction('terminal-pane-split')
+}
+
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
 
@@ -79,6 +86,7 @@ export function useTabGroupWorkspaceModel({
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
   const closeFile = useAppStore((state) => state.closeFile)
+  const makePreviewFilePermanent = useAppStore((state) => state.makePreviewFilePermanent)
   const pinFile = useAppStore((state) => state.pinFile)
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
@@ -420,6 +428,7 @@ export function useTabGroupWorkspaceModel({
           return
         }
         const terminal = createTab(worktreeId, newGroupId)
+        recordTerminalTabGroupSplit(terminal)
         setActiveTab(terminal.id)
         setActiveTabType('terminal')
         return
@@ -608,6 +617,7 @@ export function useTabGroupWorkspaceModel({
           focusTerminalTabSurface(terminal.id)
         })()
       },
+      makePreviewFilePermanent,
       pinFile,
       setTabColor,
       setTabCustomTitle,

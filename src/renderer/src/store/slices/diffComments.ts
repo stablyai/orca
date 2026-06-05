@@ -6,6 +6,7 @@ import type { AppState } from '../types'
 import type { DiffComment, Worktree } from '../../../../shared/types'
 import { findWorktreeById, getRepoIdFromWorktreeId } from './worktree-helpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type DiffCommentsSlice = {
@@ -109,7 +110,7 @@ async function persist(
   await callRuntimeRpc(
     target,
     'worktree.set',
-    { worktree: worktreeId, diffComments },
+    { worktree: toRuntimeWorktreeSelector(worktreeId), diffComments },
     { timeoutMs: 15_000 }
   )
 }

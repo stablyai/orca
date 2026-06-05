@@ -78,6 +78,8 @@ export function buildWorkspaceSessionPatch(
   if (
     hasAnyChangedField(changed, [
       'openFiles',
+      'editorDrafts',
+      'markdownFrontmatterVisible',
       'activeFileIdByWorktree',
       'activeTabTypeByWorktree'
     ] as const)
@@ -86,6 +88,8 @@ export function buildWorkspaceSessionPatch(
       patch,
       buildEditorSessionData(
         snapshot.openFiles,
+        snapshot.editorDrafts,
+        snapshot.markdownFrontmatterVisible,
         snapshot.activeFileIdByWorktree,
         snapshot.activeTabTypeByWorktree
       )

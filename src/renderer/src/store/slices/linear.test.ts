@@ -216,6 +216,60 @@ describe('createLinearSlice caching', () => {
     expect(linearListProjectIssues.mock.calls[0][4]).toEqual({ force: true })
   })
 
+  it('falls back to the largest smaller cached project issue limit when expansion fails', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearProjectIssueCache: {
+        'workspace-1::project-issues::project-1::20': {
+          data: { items: [issue('LIN-SMALLER')] },
+          fetchedAt: 1
+        },
+        'workspace-1::project-issues::project-1::36': {
+          data: { items: [issue('LIN-CACHED-36')] },
+          fetchedAt: 1
+        },
+        'workspace-1::project-issues::project-2::36': {
+          data: { items: [issue('LIN-OTHER-PROJECT')] },
+          fetchedAt: 1
+        },
+        'workspace-2::project-issues::project-1::36': {
+          data: { items: [issue('LIN-OTHER-WORKSPACE')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListProjectIssues.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 72, {
+        force: true
+      })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED-36' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+    expect(linearListProjectIssues.mock.calls[0][2]).toBe(72)
+  })
+
+  it('caches project issue reads by the expanded effective limit', async () => {
+    const store = createTestStore()
+    linearListProjectIssues.mockResolvedValueOnce({ items: [issue('LIN-120')], hasMore: true })
+
+    await expect(
+      store.getState().listLinearProjectIssues('project-1', 'workspace-1', 120)
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-120' }],
+      hasMore: true
+    })
+
+    expect(linearListProjectIssues).toHaveBeenCalledWith(null, 'project-1', 120, 'workspace-1', {
+      force: undefined
+    })
+    expect(
+      store.getState().linearProjectIssueCache['workspace-1::project-issues::project-1::120']?.data
+    ).toMatchObject({ items: [{ id: 'LIN-120' }] })
+  })
+
   it('surfaces scoped custom-view project failures alongside cached rows', async () => {
     const store = createTestStore()
     const rateLimitError = Object.assign(new Error('slow down'), { status: 429 })
@@ -261,6 +315,61 @@ describe('createLinearSlice caching', () => {
       errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
     })
     expect(linearListCustomViewIssues.mock.calls[0][4]).toEqual({ force: true })
+  })
+
+  it('falls back to the largest smaller cached custom-view issue limit when expansion fails', async () => {
+    const store = createTestStore()
+    store.setState({
+      linearCustomViewIssueCache: {
+        'workspace-1::custom-view-issues::view-1::20': {
+          data: { items: [issue('LIN-SMALLER')] },
+          fetchedAt: 1
+        },
+        'workspace-1::custom-view-issues::view-1::36': {
+          data: { items: [issue('LIN-CACHED-36')] },
+          fetchedAt: 1
+        },
+        'workspace-1::custom-view-issues::view-2::36': {
+          data: { items: [issue('LIN-OTHER-VIEW')] },
+          fetchedAt: 1
+        },
+        'workspace-2::custom-view-issues::view-1::36': {
+          data: { items: [issue('LIN-OTHER-WORKSPACE')] },
+          fetchedAt: 1
+        }
+      }
+    })
+    linearListCustomViewIssues.mockRejectedValueOnce(new Error('network down'))
+
+    await expect(
+      store.getState().listLinearCustomViewIssues('view-1', 'workspace-1', 72, {
+        force: true
+      })
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-CACHED-36' }],
+      errors: [{ workspaceId: 'workspace-1', type: 'unknown', message: 'network down' }]
+    })
+    expect(linearListCustomViewIssues.mock.calls[0][2]).toBe(72)
+  })
+
+  it('caches issue custom-view reads by the expanded effective limit', async () => {
+    const store = createTestStore()
+    linearListCustomViewIssues.mockResolvedValueOnce({ items: [issue('LIN-120')], hasMore: true })
+
+    await expect(
+      store.getState().listLinearCustomViewIssues('view-1', 'workspace-1', 120)
+    ).resolves.toMatchObject({
+      items: [{ id: 'LIN-120' }],
+      hasMore: true
+    })
+
+    expect(linearListCustomViewIssues).toHaveBeenCalledWith(null, 'view-1', 120, 'workspace-1', {
+      force: undefined
+    })
+    expect(
+      store.getState().linearCustomViewIssueCache['workspace-1::custom-view-issues::view-1::120']
+        ?.data
+    ).toMatchObject({ items: [{ id: 'LIN-120' }] })
   })
 
   it('surfaces top-level project list failures alongside cached rows', async () => {

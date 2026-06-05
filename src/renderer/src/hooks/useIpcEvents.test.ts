@@ -74,6 +74,196 @@ describe('resolveZoomTarget', () => {
       })
     ).toBe('ui')
   })
+
+  it('routes to browser zoom for active browser tabs before stale DOM focus', () => {
+    expect(
+      resolveZoomTarget({
+        activeView: 'terminal',
+        activeTabType: 'browser',
+        activeBrowserPageId: 'page-1',
+        activeElement: makeTarget({ editorClosest: true, hasXtermClass: true })
+      })
+    ).toBe('browser')
+  })
+
+  it('does not route to browser zoom without an active browser page', () => {
+    expect(
+      resolveZoomTarget({
+        activeView: 'terminal',
+        activeTabType: 'browser',
+        activeBrowserPageId: null,
+        activeElement: makeTarget({})
+      })
+    ).toBe('ui')
+  })
+})
+
+describe('useIpcEvents zoom routing', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.unstubAllGlobals()
+  })
+
+  it('dispatches browser page zoom without applying or persisting UI zoom', async () => {
+    const terminalZoomListenerRef: {
+      current: ((direction: 'in' | 'out' | 'reset') => void) | null
+    } = { current: null }
+    const dispatchEvent = vi.fn()
+    const setUI = vi.fn()
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => ({
+          activeView: 'terminal',
+          activeTabType: 'browser',
+          activeWorktreeId: 'wt-1',
+          activeBrowserTabId: 'workspace-1',
+          activeBrowserTabIdByWorktree: { 'wt-1': 'workspace-1' },
+          browserTabsByWorktree: {
+            'wt-1': [
+              {
+                id: 'workspace-1',
+                activePageId: 'page-1',
+                pageIds: ['page-1']
+              }
+            ]
+          },
+          browserPagesByWorkspace: {
+            'workspace-1': [{ id: 'page-1', worktreeId: 'wt-1' }]
+          },
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          settings: { terminalFontSize: 13 },
+          setUpdateStatus: vi.fn(),
+          fetchRepos: vi.fn(),
+          fetchWorktrees: vi.fn(),
+          setActiveView: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          setRateLimitsFromPush: vi.fn()
+        })
+      }
+    }))
+    vi.doMock('@/lib/ui-zoom', () => ({ applyUIZoom: vi.fn() }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({ dispatchZoomLevelChanged: vi.fn() }))
+
+    const makeEvents = (target: Record<string, unknown> = {}): Record<string, unknown> =>
+      new Proxy(target, {
+        get: (namespace, prop) => {
+          if (prop in namespace) {
+            return Reflect.get(namespace, prop)
+          }
+          return () => () => {}
+        }
+      })
+    vi.stubGlobal('document', {
+      activeElement: makeTarget({ editorClosest: true })
+    })
+
+    vi.stubGlobal('window', {
+      dispatchEvent,
+      setTimeout: vi.fn(() => 1),
+      clearTimeout: vi.fn(),
+      api: {
+        repos: makeEvents(),
+        worktrees: makeEvents(),
+        keybindings: makeEvents(),
+        settings: makeEvents(),
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: makeEvents(),
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onCredentialResolved: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {}
+        },
+        runtime: {
+          getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} },
+        ui: makeEvents({
+          onTerminalZoom: (listener: (direction: 'in' | 'out' | 'reset') => void) => {
+            terminalZoomListenerRef.current = listener
+            return () => {}
+          },
+          getZoomLevel: vi.fn(() => 0),
+          set: setUI
+        })
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    const { applyUIZoom } = await import('@/lib/ui-zoom')
+
+    useIpcEvents()
+    expect(terminalZoomListenerRef.current).toBeTypeOf('function')
+    const listener = terminalZoomListenerRef.current
+    if (!listener) {
+      throw new Error('Expected terminal zoom listener to be registered')
+    }
+    listener('reset')
+
+    expect(dispatchEvent).toHaveBeenCalledTimes(1)
+    const event = dispatchEvent.mock.calls[0]?.[0] as CustomEvent<{
+      browserPageId: string
+      direction: string
+    }>
+    expect(event.type).toBe('orca:browser-page-zoom')
+    expect(event.detail).toEqual({ browserPageId: 'page-1', direction: 'reset' })
+    expect(applyUIZoom).not.toHaveBeenCalled()
+    expect(setUI).not.toHaveBeenCalledWith(
+      expect.objectContaining({ uiZoomLevel: expect.anything() })
+    )
+  })
 })
 
 describe('resolveBrowserSessionTabTarget', () => {
@@ -148,7 +338,7 @@ describe('buildNewWorkspaceShortcutModalData', () => {
     } as never)
 
     expect(data.telemetrySource).toBe('shortcut')
-    expect(data.prefilledName).toBe('fix-linear-context-handoff')
+    expect(data.prefilledName).toBe('eng-123-fix-linear-context-handoff')
     expect(data.linkedWorkItem).toMatchObject({
       type: 'issue',
       number: 0,
@@ -1078,7 +1268,12 @@ describe('useIpcEvents updater integration', () => {
             leafId?: string
             splitFromLeafId?: string
             splitDirection?: 'horizontal' | 'vertical'
-            splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
+            splitTelemetrySource?:
+              | 'contextual_tour'
+              | 'keyboard'
+              | 'context_menu'
+              | 'command'
+              | 'unknown'
           }) => void)
         | null
     } = { current: null }
@@ -1190,7 +1385,12 @@ describe('useIpcEvents updater integration', () => {
               leafId?: string
               splitFromLeafId?: string
               splitDirection?: 'horizontal' | 'vertical'
-              splitTelemetrySource?: 'contextual_tour' | 'keyboard' | 'context_menu' | 'command' | 'unknown'
+              splitTelemetrySource?:
+                | 'contextual_tour'
+                | 'keyboard'
+                | 'context_menu'
+                | 'command'
+                | 'unknown'
             }) => void
           ) => {
             createTerminalListenerRef.current = listener
@@ -2501,6 +2701,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
     toolInput?: string
     lastAssistantMessage?: string
     interrupted?: boolean
+    terminalHandle?: string
+    orchestration?: {
+      taskId?: string
+      dispatchId?: string
+      parentTerminalHandle?: string
+      parentPaneKey?: string
+      coordinatorHandle?: string
+      orchestrationRunId?: string
+    }
     connectionId?: string | null
     receivedAt: number
     stateStartedAt: number
@@ -2572,6 +2781,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   function buildWindowApi(args: {
     onSet: (cb: (data: AgentStatusSetData) => void) => () => void
+    onClear?: (cb: (data: { paneKey: string }) => void) => () => void
     getSnapshot?: () => Promise<AgentStatusSetData[]>
     drop?: (paneKey: string) => void
     remoteWorkspace?: Record<string, unknown>
@@ -2671,6 +2881,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
         },
         agentStatus: {
           onSet: args.onSet,
+          onClear: args.onClear ?? vi.fn(() => () => {}),
           getSnapshot: args.getSnapshot ?? vi.fn(() => Promise.resolve([])),
           drop: args.drop ?? vi.fn()
         },
@@ -3092,6 +3303,157 @@ describe('useIpcEvents agent status snapshot integration', () => {
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
       expectWorktreeRouting('wt-1')
     )
+  })
+
+  it('clears a worktree-attributed live row when main reports pane teardown', async () => {
+    const setAgentStatus = vi.fn()
+    const removeAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      removeAgentStatus,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: { 'wt-1': [] },
+      terminalLayoutsByTabId: {},
+      agentStatusByPaneKey: {
+        [FUTURE_PANE_KEY]: {
+          state: 'working',
+          prompt: 'hidden worker',
+          agentType: 'codex',
+          updatedAt: 1_700_000_000_200,
+          stateStartedAt: 1_700_000_000_000,
+          paneKey: FUTURE_PANE_KEY,
+          worktreeId: 'wt-1',
+          stateHistory: []
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        },
+        onClear: (cb) => {
+          onClearListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+    if (typeof onClearListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onClear listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'hidden worker',
+      agentType: 'codex',
+      worktreeId: 'wt-1',
+      receivedAt: 1_700_000_000_200,
+      stateStartedAt: 1_700_000_000_000,
+      orchestration: {
+        parentPaneKey: 'parent-tab:11111111-1111-4111-8111-111111111111'
+      }
+    })
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({ state: 'working', prompt: 'hidden worker', agentType: 'codex' }),
+      undefined,
+      { updatedAt: 1_700_000_000_200, stateStartedAt: 1_700_000_000_000 },
+      expectWorktreeRouting('wt-1')
+    )
+
+    onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
+
+    expect(removeAgentStatus).toHaveBeenCalledTimes(1)
+    expect(removeAgentStatus).toHaveBeenCalledWith(FUTURE_PANE_KEY)
+  })
+
+  it('keeps a completed worktree-attributed row when main reports pane teardown', async () => {
+    const removeAgentStatus = vi.fn()
+    const onClearListenerRef: { current: ((data: { paneKey: string }) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      removeAgentStatus,
+      workspaceSessionReady: true,
+      agentStatusByPaneKey: {
+        [FUTURE_PANE_KEY]: {
+          state: 'done',
+          prompt: 'hidden worker',
+          agentType: 'codex',
+          updatedAt: 1_700_000_000_200,
+          stateStartedAt: 1_700_000_000_000,
+          paneKey: FUTURE_PANE_KEY,
+          worktreeId: 'wt-1',
+          stateHistory: []
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        onClear: (cb) => {
+          onClearListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onClearListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onClear listener to be registered')
+    }
+
+    onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
+
+    expect(removeAgentStatus).not.toHaveBeenCalled()
   })
 
   it('does not retain a Cursor spinner terminal title when the hook reports done', async () => {
@@ -3991,6 +4353,140 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('silently discards stale worktree-attributed snapshots for unknown panes', async () => {
+    const setAgentStatus = vi.fn()
+    const getSnapshot = vi.fn(() =>
+      Promise.resolve([
+        {
+          paneKey: ORPHAN_PANE_KEY,
+          state: 'done' as const,
+          prompt: 'old copilot turn',
+          agentType: 'copilot',
+          worktreeId: 'wt-1',
+          receivedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000
+        }
+      ])
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Copilot' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      workspaceSessionReady: true
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).not.toHaveBeenCalled()
+  })
+
+  it('applies worktree-attributed child snapshots when runtime identity is present', async () => {
+    const setAgentStatus = vi.fn()
+    const getSnapshot = vi.fn(() =>
+      Promise.resolve([
+        {
+          paneKey: ORPHAN_PANE_KEY,
+          state: 'working' as const,
+          prompt: 'child task',
+          agentType: 'codex',
+          worktreeId: 'wt-1',
+          terminalHandle: 'term-child',
+          orchestration: {
+            taskId: 'task-child',
+            dispatchId: 'dispatch-child',
+            parentTerminalHandle: 'term-parent'
+          },
+          receivedAt: 1_700_000_000_000,
+          stateStartedAt: 1_699_999_999_000
+        }
+      ])
+    )
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      repos: [{ id: 'repo-1', connectionId: null }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      workspaceSessionReady: true
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      ORPHAN_PANE_KEY,
+      expect.objectContaining({
+        state: 'working',
+        prompt: 'child task',
+        agentType: 'codex',
+        orchestration: expect.objectContaining({ taskId: 'task-child' })
+      }),
+      undefined,
+      { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
+      expect.objectContaining({ worktreeId: 'wt-1', terminalHandle: 'term-child' })
+    )
   })
 
   it('silently discards valid paneKeys whose leaf is not in the current layout', async () => {

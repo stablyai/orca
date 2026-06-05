@@ -6,6 +6,7 @@ import type {
   CodexUsageScanState,
   CodexUsageScope,
   CodexUsageSessionRow,
+  CodexUsageSnapshot,
   CodexUsageSummary
 } from '../../../../shared/codex-usage-types'
 import type { AppState } from '../types'
@@ -100,44 +101,54 @@ export const createCodexUsageSlice: StateCreator<AppState, [], [], CodexUsageSli
         return
       }
 
-      const nextScanState = (await window.api.codexUsage.refresh({
-        force: opts?.forceRefresh ?? false
-      })) as CodexUsageScanState
       const { codexUsageScope, codexUsageRange } = get()
+      const snapshot = (await window.api.codexUsage.getSnapshot({
+        scope: codexUsageScope,
+        range: codexUsageRange,
+        limit: 10
+      })) as CodexUsageSnapshot
+      const hasCachedSnapshot =
+        snapshot.scanState.lastScanCompletedAt !== null || snapshot.scanState.hasAnyCodexData
 
-      const [summary, daily, modelBreakdown, projectBreakdown, recentSessions] = await Promise.all([
-        window.api.codexUsage.getSummary({
-          scope: codexUsageScope,
-          range: codexUsageRange
-        }) as Promise<CodexUsageSummary>,
-        window.api.codexUsage.getDaily({
-          scope: codexUsageScope,
-          range: codexUsageRange
-        }) as Promise<CodexUsageDailyPoint[]>,
-        window.api.codexUsage.getBreakdown({
-          scope: codexUsageScope,
-          range: codexUsageRange,
-          kind: 'model'
-        }) as Promise<CodexUsageBreakdownRow[]>,
-        window.api.codexUsage.getBreakdown({
-          scope: codexUsageScope,
-          range: codexUsageRange,
-          kind: 'project'
-        }) as Promise<CodexUsageBreakdownRow[]>,
-        window.api.codexUsage.getRecentSessions({
-          scope: codexUsageScope,
-          range: codexUsageRange,
-          limit: 10
-        }) as Promise<CodexUsageSessionRow[]>
-      ])
+      if (hasCachedSnapshot) {
+        set({
+          codexUsageScanState:
+            opts?.forceRefresh === true
+              ? { ...snapshot.scanState, isScanning: true }
+              : snapshot.scanState,
+          codexUsageSummary: snapshot.summary,
+          codexUsageDaily: snapshot.daily,
+          codexUsageModelBreakdown: snapshot.modelBreakdown,
+          codexUsageProjectBreakdown: snapshot.projectBreakdown,
+          codexUsageRecentSessions: snapshot.recentSessions
+        })
+      } else {
+        set({
+          codexUsageScanState: {
+            ...scanState,
+            isScanning: true,
+            lastScanError: null
+          }
+        })
+      }
+
+      await window.api.codexUsage.refresh({
+        force: opts?.forceRefresh ?? false
+      })
+      const { codexUsageScope: refreshedScope, codexUsageRange: refreshedRange } = get()
+      const refreshedSnapshot = (await window.api.codexUsage.getSnapshot({
+        scope: refreshedScope,
+        range: refreshedRange,
+        limit: 10
+      })) as CodexUsageSnapshot
 
       set({
-        codexUsageScanState: nextScanState,
-        codexUsageSummary: summary,
-        codexUsageDaily: daily,
-        codexUsageModelBreakdown: modelBreakdown,
-        codexUsageProjectBreakdown: projectBreakdown,
-        codexUsageRecentSessions: recentSessions
+        codexUsageScanState: refreshedSnapshot.scanState,
+        codexUsageSummary: refreshedSnapshot.summary,
+        codexUsageDaily: refreshedSnapshot.daily,
+        codexUsageModelBreakdown: refreshedSnapshot.modelBreakdown,
+        codexUsageProjectBreakdown: refreshedSnapshot.projectBreakdown,
+        codexUsageRecentSessions: refreshedSnapshot.recentSessions
       })
     } catch (error) {
       console.error('Failed to fetch Codex usage:', error)

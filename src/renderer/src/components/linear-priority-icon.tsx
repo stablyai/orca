@@ -2,7 +2,11 @@ import React from 'react'
 
 import { cn } from '@/lib/utils'
 
-// Why: mirror Linear's priority glyph shape while keeping color on Orca tokens.
+// Why: Linear priority glyphs are provider-brand signals, so their fills match
+// Linear's lower-contrast icon colors instead of Orca's generic state tokens.
+const LINEAR_PRIORITY_URGENT_FILL = 'lch(66 80 48)'
+const LINEAR_PRIORITY_BAR_FILL = 'lch(39.576 1.25 282)'
+
 const LINEAR_PRIORITY_ICON_LABELS: Record<number, string> = {
   0: 'No priority',
   1: 'Urgent',
@@ -41,9 +45,10 @@ export function LinearPriorityIcon({
     return (
       <span
         className={cn(
-          'inline-flex size-4 shrink-0 items-center justify-center rounded-sm bg-destructive text-[10px] font-semibold leading-none text-destructive-foreground',
+          'inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-[10px] font-semibold leading-none text-white',
           className
         )}
+        style={{ backgroundColor: LINEAR_PRIORITY_URGENT_FILL }}
         title={label}
       >
         <span aria-hidden="true">!</span>
@@ -70,22 +75,33 @@ export function LinearPriorityIcon({
   const activeBars = getLinearPriorityBarCount(priority)
   return (
     <span
-      className={cn('inline-flex size-4 shrink-0 items-end justify-center gap-px', className)}
+      className={cn(
+        'linear-priority-bars inline-flex size-4 shrink-0 items-center justify-center',
+        className
+      )}
       title={label}
     >
-      {[1, 2, 3].map((bar) => (
-        <span
-          key={bar}
-          aria-hidden="true"
-          className={cn(
-            'w-1 rounded-[1px]',
-            bar === 1 && 'h-1.5',
-            bar === 2 && 'h-2.5',
-            bar === 3 && 'h-3.5',
-            bar <= activeBars ? 'bg-foreground' : 'bg-muted-foreground/20'
-          )}
-        />
-      ))}
+      <svg aria-hidden="true" className="size-full" viewBox="0 0 16 16" fill="none">
+        {[1, 2, 3].map((bar) => {
+          const height = bar === 1 ? 5 : bar === 2 ? 8 : 11
+          const x = bar === 1 ? 2.25 : bar === 2 ? 6.5 : 10.75
+          return (
+            <rect
+              key={bar}
+              x={x}
+              y={16 - height}
+              width="3.25"
+              height={height}
+              rx="1"
+              fill={
+                bar <= activeBars
+                  ? LINEAR_PRIORITY_BAR_FILL
+                  : 'var(--linear-priority-bar-inactive-fill)'
+              }
+            />
+          )
+        })}
+      </svg>
       <span className="sr-only">Priority: {label}</span>
     </span>
   )

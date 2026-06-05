@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: the macOS provider transport owns one lifecycle across stdio fallback and helper-app socket mode. */
-import { spawn } from 'child_process'
+import { spawn, type ChildProcess } from 'child_process'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
 import type net from 'net'
 import { release, tmpdir } from 'os'
@@ -45,13 +45,13 @@ export class MacOSNativeProviderClient {
   private socketStartPromise: Promise<net.Socket> | null = null
   private socketPath: string | null = null
   private socketDirectory: string | null = null
-  private socketTokenPath: string | null = null
   private socketToken: string | null = null
   private nextId = 1
   private pending = new Map<number, PendingNativeRequest>()
   private socketBuffer = ''
   private providerCapabilities: ComputerProviderCapabilities | null = null
   private socketListenerCleanup: (() => void) | null = null
+  private socketStartGeneration = 0
   async listApps(): Promise<ComputerListAppsResult> {
     return (await this.call('listApps', {})) as ComputerListAppsResult
   }
@@ -74,6 +74,7 @@ export class MacOSNativeProviderClient {
     const token = this.socketToken
     this.socket = null
     this.socketStartPromise = null
+    this.socketStartGeneration++
     this.providerCapabilities = null
     this.socketBuffer = ''
     this.cleanupActiveSocketListeners()
@@ -176,30 +177,48 @@ export class MacOSNativeProviderClient {
     if (this.socketStartPromise) {
       return await this.socketStartPromise
     }
-    this.socketStartPromise = this.startSocket(helperExecutablePath)
+    const socketStartPromise = this.startSocket(helperExecutablePath)
+    this.socketStartPromise = socketStartPromise
     try {
-      return await this.socketStartPromise
+      return await socketStartPromise
     } finally {
-      this.socketStartPromise = null
+      if (this.socketStartPromise === socketStartPromise) {
+        this.socketStartPromise = null
+      }
     }
   }
   private async startSocket(helperExecutablePath: string): Promise<net.Socket> {
-    this.socketDirectory = mkdtempSync(join(tmpdir(), 'orca-computer-use-'))
-    chmodSync(this.socketDirectory, 0o700)
-    this.socketPath = join(this.socketDirectory, 'provider.sock')
-    this.socketToken = randomUUID()
-    this.socketTokenPath = join(this.socketDirectory, 'provider.token')
-    writeFileSync(this.socketTokenPath, this.socketToken, { encoding: 'utf8', mode: 0o600 })
+    const startGeneration = ++this.socketStartGeneration
+    const socketDirectory = mkdtempSync(join(tmpdir(), 'orca-computer-use-'))
+    chmodSync(socketDirectory, 0o700)
+    const socketPath = join(socketDirectory, 'provider.sock')
+    const socketToken = randomUUID()
+    const socketTokenPath = join(socketDirectory, 'provider.token')
+    this.socketDirectory = socketDirectory
+    this.socketPath = socketPath
+    this.socketToken = socketToken
+    writeFileSync(socketTokenPath, socketToken, { encoding: 'utf8', mode: 0o600 })
     // Why: launching the nested helper via LaunchServices can make TCC evaluate
     // Orca.app as responsible; the signed helper executable owns this grant.
-    const provider = spawn(
-      helperExecutablePath,
-      ['--agent', this.socketPath, '--token-file', this.socketTokenPath],
-      { detached: true, stdio: 'ignore' }
-    )
-    provider.unref()
+    const provider = spawnProvider(helperExecutablePath, socketPath, socketTokenPath)
+    const providerFailure = waitForProviderLaunchFailure(provider)
+    const connectAbort = new AbortController()
     try {
-      const socket = await connectMacOSProviderSocket(this.socketPath, HELPER_CONNECT_TIMEOUT_MS)
+      const socket = await Promise.race([
+        connectMacOSProviderSocket(socketPath, HELPER_CONNECT_TIMEOUT_MS, connectAbort.signal),
+        providerFailure.promise
+      ])
+      providerFailure.cleanup()
+      rmSync(socketTokenPath, { force: true })
+      // Why: shutdown/retry can supersede an in-flight connect; old starts
+      // must not adopt replacement state or clean up the replacement helper.
+      if (this.socketStartGeneration !== startGeneration || this.socketPath !== socketPath) {
+        socket.destroy()
+        throw new RuntimeClientError(
+          'accessibility_error',
+          'native macOS provider startup was superseded'
+        )
+      }
       socket.setEncoding('utf8')
       this.socketBuffer = ''
       const onData = (chunk: string) => this.handleSocketData(socket, chunk)
@@ -218,13 +237,18 @@ export class MacOSNativeProviderClient {
       this.socket = socket
       return socket
     } catch (error) {
+      connectAbort.abort()
+      providerFailure.cleanup()
       // Why: connect failures happen after spawn; terminate the detached
       // helper so repeated startup attempts do not leave orphan providers.
       provider.kill('SIGTERM')
-      this.cleanupSocketDirectory()
-      this.socketPath = null
-      this.socketTokenPath = null
-      this.socketToken = null
+      if (
+        this.socketStartGeneration === startGeneration &&
+        this.socketDirectory === socketDirectory
+      ) {
+        this.cleanupSocketDirectory()
+        this.socketToken = null
+      }
       throw error
     }
   }
@@ -307,7 +331,6 @@ export class MacOSNativeProviderClient {
     rmSync(this.socketDirectory, { recursive: true, force: true })
     this.socketDirectory = null
     this.socketPath = null
-    this.socketTokenPath = null
   }
   private rejectPending(error: Error): void {
     for (const [id, pending] of this.pending) {
@@ -326,4 +349,52 @@ export class MacOSNativeProviderClient {
 function isMacOS14OrNewer(): boolean {
   const darwinMajor = Number.parseInt(release().split('.')[0] ?? '', 10)
   return Number.isFinite(darwinMajor) && darwinMajor >= 23
+}
+
+function spawnProvider(
+  helperExecutablePath: string,
+  socketPath: string,
+  socketTokenPath: string
+): ChildProcess {
+  const provider = spawn(
+    helperExecutablePath,
+    ['--agent', socketPath, '--token-file', socketTokenPath],
+    { detached: true, stdio: 'ignore' }
+  )
+  provider.unref()
+  return provider
+}
+
+function waitForProviderLaunchFailure(provider: ChildProcess): {
+  promise: Promise<never>
+  cleanup: () => void
+} {
+  let cleanup = (): void => {}
+  const promise = new Promise<never>((_resolve, reject) => {
+    const fail = (error: Error) => {
+      reject(
+        new RuntimeClientError(
+          'accessibility_error',
+          `native macOS helper app failed to start: ${error.message}`
+        )
+      )
+    }
+    const exit = (code: number | null, signal: NodeJS.Signals | null) => {
+      reject(
+        new RuntimeClientError(
+          'accessibility_error',
+          `native macOS helper app exited before connecting: ${
+            typeof code === 'number' ? `code ${code}` : `signal ${signal ?? 'unknown'}`
+          }`
+        )
+      )
+    }
+    provider.once('error', fail)
+    provider.once('exit', exit)
+    cleanup = () => {
+      provider.off('error', fail)
+      provider.off('exit', exit)
+    }
+  })
+  return { promise, cleanup }
 }

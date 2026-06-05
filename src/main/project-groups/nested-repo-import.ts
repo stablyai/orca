@@ -1,9 +1,9 @@
 import type { NestedRepoScanResult, ProjectGroup, ProjectGroupImportMode } from '../../shared/types'
 import {
+  getRuntimePathBasename,
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
-  relativePathInsideRoot,
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 
@@ -42,44 +42,6 @@ function trimPathSeparators(path: string): string {
   return path.replace(/[\\/]+$/g, '')
 }
 
-function splitPath(path: string): string[] {
-  return trimPathSeparators(path)
-    .split(/[\\/]+/)
-    .filter(Boolean)
-}
-
-function joinPath(parentPath: string, segments: readonly string[]): string {
-  const trimmedParent = trimPathSeparators(parentPath)
-  const separator = trimmedParent.includes('\\') && !trimmedParent.includes('/') ? '\\' : '/'
-  return segments.length === 0
-    ? trimmedParent
-    : trimmedParent === '/'
-      ? `/${segments.join('/')}`
-      : trimmedParent.endsWith(separator)
-        ? `${trimmedParent}${segments.join(separator)}`
-        : `${trimmedParent}${separator}${segments.join(separator)}`
-}
-
-function getRelativeSegments(parentPath: string, repoPath: string): string[] {
-  const relativePath = relativePathInsideRoot(parentPath, repoPath)
-  if (relativePath !== null) {
-    return splitPath(relativePath)
-  }
-  const normalizedParent = trimPathSeparators(parentPath)
-  const normalizedRepo = trimPathSeparators(repoPath)
-  const parentWithSeparator = `${normalizedParent}/`
-  const normalizedRepoForMatch = normalizedRepo.replace(/\\/g, '/')
-  const normalizedParentForMatch = normalizedParent.replace(/\\/g, '/')
-  const parentWithMatchSeparator = `${normalizedParentForMatch}/`
-  if (normalizedRepoForMatch.startsWith(parentWithMatchSeparator)) {
-    return splitPath(normalizedRepoForMatch.slice(parentWithMatchSeparator.length))
-  }
-  if (normalizedRepo.startsWith(parentWithSeparator)) {
-    return splitPath(normalizedRepo.slice(parentWithSeparator.length))
-  }
-  return splitPath(normalizedRepo).slice(-1)
-}
-
 export function createNestedProjectGroupResolver(args: {
   parentPath: string
   groupName: string
@@ -87,38 +49,29 @@ export function createNestedProjectGroupResolver(args: {
   createGroup: (input: CreateGroupInput) => ProjectGroup
 }): NestedProjectGroupResolver {
   const createdGroups: ProjectGroup[] = []
-  const groupsByRelativeDir = new Map<string, ProjectGroup>()
+  let rootGroup: ProjectGroup | undefined
 
-  const ensureGroup = (relativeDirs: readonly string[]): ProjectGroup | undefined => {
+  const ensureRootGroup = (): ProjectGroup | undefined => {
     if (args.mode !== 'group') {
       return undefined
     }
-    const key = relativeDirs.join('/')
-    const existing = groupsByRelativeDir.get(key)
-    if (existing) {
-      return existing
+    if (rootGroup) {
+      return rootGroup
     }
-    const parentDirs = relativeDirs.slice(0, -1)
-    const parentGroup = relativeDirs.length > 0 ? ensureGroup(parentDirs) : undefined
-    const group = args.createGroup({
-      name: relativeDirs.length === 0 ? args.groupName : (relativeDirs.at(-1) ?? args.groupName),
-      parentPath: joinPath(args.parentPath, relativeDirs),
-      parentGroupId: parentGroup?.id ?? null,
+    const fallbackName = getRuntimePathBasename(trimPathSeparators(args.parentPath))
+    rootGroup = args.createGroup({
+      name: args.groupName.trim() || fallbackName,
+      parentPath: trimPathSeparators(args.parentPath),
+      parentGroupId: null,
       createdFrom: 'folder-scan'
     })
-    groupsByRelativeDir.set(key, group)
-    createdGroups.push(group)
-    return group
+    createdGroups.push(rootGroup)
+    return rootGroup
   }
 
   return {
-    getGroupForRepo: (repoPath) => {
-      const segments = getRelativeSegments(args.parentPath, repoPath)
-      // Why: direct child repos belong to the selected-folder group; nested repos
-      // belong to the deepest intermediate directory group.
-      return ensureGroup(segments.slice(0, -1))
-    },
-    getRootGroup: () => groupsByRelativeDir.get(''),
+    getGroupForRepo: () => ensureRootGroup(),
+    getRootGroup: () => rootGroup,
     getCreatedGroups: () => [...createdGroups]
   }
 }

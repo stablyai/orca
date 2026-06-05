@@ -8,6 +8,7 @@ type SetupGuideProgressRingProps = {
   className?: string
   sizeClassName?: string
   strokeWidth?: number
+  tooltipLabel?: string
 }
 
 export function SetupGuideProgressRing({
@@ -15,7 +16,8 @@ export function SetupGuideProgressRing({
   total,
   className,
   sizeClassName = 'size-5',
-  strokeWidth = 2
+  strokeWidth = 2,
+  tooltipLabel
 }: SetupGuideProgressRingProps): JSX.Element {
   const boundedTotal = Math.max(total, 1)
   const boundedDone = Math.min(Math.max(done, 0), boundedTotal)
@@ -62,7 +64,7 @@ export function SetupGuideProgressRing({
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {progressLabel}
+        {tooltipLabel ?? progressLabel}
       </TooltipContent>
     </Tooltip>
   )

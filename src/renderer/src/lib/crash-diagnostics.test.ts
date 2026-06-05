@@ -49,10 +49,7 @@ describe('renderer crash diagnostics', () => {
     vi.doMock('../components/browser-pane/webview-registry', () => ({
       getBrowserWebviewMemoryProfile: () => ({
         browserWebviewCount: 4,
-        parkedBrowserWebviewCount: 2,
-        registeredBrowserGuestCount: 3,
-        hiddenBrowserWebviewCount: 2,
-        maxParkedBrowserWebviews: 6
+        registeredBrowserGuestCount: 3
       })
     }))
     diagnostics = (await import('./crash-diagnostics')) as DiagnosticsModule
@@ -85,10 +82,7 @@ describe('renderer crash diagnostics', () => {
         totalHeapMB: 64,
         heapLimitMB: 512,
         browserWebviews: 4,
-        parkedBrowserWebviews: 2,
-        registeredBrowserGuests: 3,
-        hiddenBrowserWebviews: 2,
-        maxParkedBrowserWebviews: 6
+        registeredBrowserGuests: 3
       }
     })
 

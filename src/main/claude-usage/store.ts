@@ -10,6 +10,7 @@ import type {
   ClaudeUsageScanState,
   ClaudeUsageScope,
   ClaudeUsageSessionRow,
+  ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
@@ -55,6 +56,7 @@ const SONNET_LONG_CONTEXT_PRICING = {
 } satisfies Partial<ClaudeModelPricing>
 
 const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
+  'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-7': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-6': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -91,10 +93,13 @@ const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
 const MODEL_ALIASES: Record<string, string> = {
   model_placeholder_m26: 'claude-opus-4-6',
   model_placeholder_m35: 'claude-sonnet-4-6',
+  'claude-opus-4.8': 'claude-opus-4-8',
   'claude-opus-4.6': 'claude-opus-4-6',
   'claude-sonnet-4.6': 'claude-sonnet-4-6',
+  'claude-opus-4.8-thinking': 'claude-opus-4-8',
   'claude-opus-4.6-thinking': 'claude-opus-4-6',
   'claude-sonnet-4.6-thinking': 'claude-sonnet-4-6',
+  'claude-opus-4-8-thinking': 'claude-opus-4-8',
   'claude-opus-4-6-thinking': 'claude-opus-4-6',
   'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6'
 }
@@ -137,6 +142,9 @@ function normalizeModelForPricing(model: string | null): string | null {
   const alias = MODEL_ALIASES[lower]
   if (alias) {
     return alias
+  }
+  if (lower.includes('opus-4-8') || lower.includes('opus-4.8')) {
+    return 'claude-opus-4-8'
   }
   if (lower.includes('opus-4-7')) {
     return 'claude-opus-4-7'
@@ -363,6 +371,21 @@ export class ClaudeUsageStore {
     }
   }
 
+  getSnapshot(
+    scope: ClaudeUsageScope,
+    range: ClaudeUsageRange,
+    recentSessionLimit = 10
+  ): ClaudeUsageSnapshot {
+    return {
+      scanState: this.getScanState(),
+      summary: this.buildSummary(scope, range),
+      daily: this.buildDaily(scope, range),
+      modelBreakdown: this.buildBreakdown(scope, range, 'model'),
+      projectBreakdown: this.buildBreakdown(scope, range, 'project'),
+      recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
+    }
+  }
+
   async refresh(force = false): Promise<ClaudeUsageScanState> {
     if (!this.state.scanState.enabled) {
       return this.getScanState()
@@ -417,6 +440,10 @@ export class ClaudeUsageStore {
 
   async getSummary(scope: ClaudeUsageScope, range: ClaudeUsageRange): Promise<ClaudeUsageSummary> {
     await this.refresh(false)
+    return this.buildSummary(scope, range)
+  }
+
+  private buildSummary(scope: ClaudeUsageScope, range: ClaudeUsageRange): ClaudeUsageSummary {
     const filteredDaily = this.getFilteredDaily(scope, range)
     const filteredSessions = this.getFilteredSessions(scope, range)
 
@@ -491,6 +518,10 @@ export class ClaudeUsageStore {
     range: ClaudeUsageRange
   ): Promise<ClaudeUsageDailyPoint[]> {
     await this.refresh(false)
+    return this.buildDaily(scope, range)
+  }
+
+  private buildDaily(scope: ClaudeUsageScope, range: ClaudeUsageRange): ClaudeUsageDailyPoint[] {
     const byDay = new Map<string, ClaudeUsageDailyPoint>()
     for (const row of this.getFilteredDaily(scope, range)) {
       const existing = byDay.get(row.day) ?? {
@@ -515,6 +546,14 @@ export class ClaudeUsageStore {
     kind: ClaudeUsageBreakdownKind
   ): Promise<ClaudeUsageBreakdownRow[]> {
     await this.refresh(false)
+    return this.buildBreakdown(scope, range, kind)
+  }
+
+  private buildBreakdown(
+    scope: ClaudeUsageScope,
+    range: ClaudeUsageRange,
+    kind: ClaudeUsageBreakdownKind
+  ): ClaudeUsageBreakdownRow[] {
     const rows = new Map<string, ClaudeUsageBreakdownRow>()
     const filteredDaily = this.getFilteredDaily(scope, range)
     const filteredSessions = this.getFilteredSessions(scope, range)
@@ -591,6 +630,14 @@ export class ClaudeUsageStore {
     limit = 12
   ): Promise<ClaudeUsageSessionRow[]> {
     await this.refresh(false)
+    return this.buildRecentSessions(scope, range, limit)
+  }
+
+  private buildRecentSessions(
+    scope: ClaudeUsageScope,
+    range: ClaudeUsageRange,
+    limit = 12
+  ): ClaudeUsageSessionRow[] {
     return this.getFilteredSessions(scope, range)
       .slice(0, limit)
       .map((session) => {

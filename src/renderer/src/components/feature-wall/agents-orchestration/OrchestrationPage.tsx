@@ -1,3 +1,4 @@
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this page is a timed storyboard; row state resets are part of replaying the animation when the active step changes. */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ChevronDown, Workflow } from 'lucide-react'
@@ -246,14 +247,14 @@ export function OrchestrationPage(props: {
       later(next, FIRST_DISPATCH_MS)
     }
 
-      const loop = (): void => {
-        runOnce(() => {
-          onCycleComplete?.()
-          const beatCount = showResponseBeats ? PHASE1_BEATS.length : 2
-          const elapsedMs = FIRST_DISPATCH_MS + beatCount * BUBBLE_GAP_MS + 800
-          later(loop, loopMs ? Math.max(0, loopMs - elapsedMs) : 1400)
-        })
-      }
+    const loop = (): void => {
+      runOnce(() => {
+        onCycleComplete?.()
+        const beatCount = showResponseBeats ? PHASE1_BEATS.length : 2
+        const elapsedMs = FIRST_DISPATCH_MS + beatCount * BUBBLE_GAP_MS + 800
+        later(loop, loopMs ? Math.max(0, loopMs - elapsedMs) : 1400)
+      })
+    }
 
     loop()
 

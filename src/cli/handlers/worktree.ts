@@ -20,6 +20,7 @@ import {
   getRequiredWorktreeSelector,
   resolveCurrentWorktreeSelector
 } from '../selectors'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 
 type HookWarningResult = {
   warning?: string
@@ -87,6 +88,84 @@ function assertParentFlagsCompatible(flags: Map<string, string | boolean>): void
   }
 }
 
+function getPresentStringFlag(
+  flags: Map<string, string | boolean>,
+  name: string,
+  options: { allowEmpty?: boolean } = {}
+): string | undefined {
+  if (!flags.has(name)) {
+    return undefined
+  }
+  const value = flags.get(name)
+  if (typeof value === 'string' && (options.allowEmpty || value.length > 0)) {
+    return value
+  }
+  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
+}
+
+function getOptionalStartupAgent(flags: Map<string, string | boolean>): string | undefined {
+  const agent = getPresentStringFlag(flags, 'agent')
+  if (agent === undefined) {
+    if (flags.has('prompt')) {
+      throw new RuntimeClientError('invalid_argument', '--prompt requires --agent')
+    }
+    return undefined
+  }
+  if (!isTuiAgent(agent)) {
+    throw new RuntimeClientError('invalid_argument', `Unknown TUI agent "${agent}"`)
+  }
+  return agent
+}
+
+function getOptionalSetupDecision(
+  flags: Map<string, string | boolean>
+): 'run' | 'skip' | 'inherit' | undefined {
+  const setup = getPresentStringFlag(flags, 'setup')
+  if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
+    throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
+  }
+  if (flags.get('run-hooks') === true) {
+    if (setup !== undefined && setup !== 'run') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Choose either --run-hooks or --setup run, not contradictory setup flags.'
+      )
+    }
+    return setup
+  }
+  return setup
+}
+
+function getRepoSelectorFromWorktreeSelector(selector: string | undefined): string | undefined {
+  if (!selector?.startsWith('id:')) {
+    return undefined
+  }
+  const worktreeId = selector.slice('id:'.length)
+  const separatorIndex = worktreeId.indexOf('::')
+  if (separatorIndex <= 0) {
+    return undefined
+  }
+  return `id:${worktreeId.slice(0, separatorIndex)}`
+}
+
+function getCreateRepoSelector(
+  flags: Map<string, string | boolean>,
+  cwdParentWorktree: string | undefined
+): string {
+  const explicitRepo = getPresentStringFlag(flags, 'repo')
+  if (explicitRepo) {
+    return explicitRepo
+  }
+  const inferredRepo = getRepoSelectorFromWorktreeSelector(cwdParentWorktree)
+  if (inferredRepo) {
+    return inferredRepo
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    'Missing repo selector. Pass --repo or run from inside an Orca-managed worktree.'
+  )
+}
+
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
     const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {
@@ -126,29 +205,40 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       cwd,
       client
     )
+    const startupAgent = getOptionalStartupAgent(flags)
+    const setupDecision = getOptionalSetupDecision(flags)
     const noParent = flags.get('no-parent') === true
     let cwdParentWorktree: string | undefined
-    if (!explicitParentWorktree && !noParent) {
+    if ((!explicitParentWorktree && !noParent) || !flags.has('repo')) {
       try {
         // Why: agent shells can lose ORCA_TERMINAL_HANDLE while still running
-        // inside an Orca worktree. Cwd keeps CLI-created children nestable.
+        // inside an Orca worktree. Cwd keeps CLI-created children nestable and
+        // lets create infer the repo for the common current-workspace case.
         cwdParentWorktree = await resolveCurrentWorktreeSelector(cwd, client)
       } catch {
         cwdParentWorktree = undefined
       }
     }
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: getRequiredStringFlag(flags, 'repo'),
+      repo: getCreateRepoSelector(flags, cwdParentWorktree),
       name: getRequiredStringFlag(flags, 'name'),
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
-      activate: flags.get('activate') === true || flags.get('run-hooks') === true,
+      activate:
+        flags.get('activate') === true || flags.get('run-hooks') === true || Boolean(startupAgent),
+      ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
       ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
       noParent,
-      callerTerminalHandle
+      callerTerminalHandle,
+      ...(startupAgent
+        ? {
+            startupAgent,
+            startupPrompt: getPresentStringFlag(flags, 'prompt', { allowEmpty: true }) ?? ''
+          }
+        : {})
     })
     printHookWarning(result.result, json)
     printLineageSummary(result.result, json)

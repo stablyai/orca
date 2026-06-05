@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: this component owns diff rendering, image previews, comment popovers, and expansion state as one synchronized editor row. */
 import {
-  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -9,8 +7,7 @@ import {
   type MutableRefObject,
   type ReactNode
 } from 'react'
-import { AlertCircle, RefreshCw } from 'lucide-react'
-import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
+import type { DiffOnMount } from '@monaco-editor/react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { monaco } from '@/lib/monaco-setup'
 import { detectLanguage } from '@/lib/language-detect'
@@ -21,24 +18,18 @@ import {
   useDiffCommentDecorator,
   type DecoratedDiffComment
 } from '../diff-comments/useDiffCommentDecorator'
-import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import {
   getDiffCommentPopoverLeft,
   getDiffCommentPopoverTop
 } from '../diff-comments/diff-comment-popover-position'
 import { applyDiffEditorLineNumberOptions } from './diff-editor-line-number-options'
-import { computeLineStats } from './diff-line-stats'
 import { DiffSectionHeader } from './DiffSectionHeader'
-import { getDiffSectionBodyHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
 import type { DiffComment } from '../../../../shared/types'
-import { cn } from '@/lib/utils'
 import { isDiffComment } from '@/lib/diff-comment-compat'
-import { Button } from '@/components/ui/button'
 import { installEditorSaveShortcut } from './editor-shortcuts'
-import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
-
-const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
+import { DiffSectionBody } from './DiffSectionBody'
+import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 
 export function DiffSectionItem({
   section,
@@ -285,37 +276,9 @@ export function DiffSectionItem({
     }
   }
 
-  const lineStats = useMemo(
-    () =>
-      section.loading || section.error
-        ? null
-        : computeLineStats(section.originalContent, section.modifiedContent, section.status),
-    [
-      section.error,
-      section.loading,
-      section.originalContent,
-      section.modifiedContent,
-      section.status
-    ]
-  )
-  const changedLineCount = useMemo(() => {
-    if (lineStats) {
-      return lineStats.added + lineStats.removed
-    }
-    if (section.added === undefined && section.removed === undefined) {
-      return undefined
-    }
-    return (section.added ?? 0) + (section.removed ?? 0)
-  }, [lineStats, section.added, section.removed])
-  // Why: image diffs need document-flow height in the combined view; the text
-  // fallback only knows line counts and would squash screenshots into one row.
-  const useIntrinsicImageHeight = isIntrinsicHeightImageDiff(section.diffResult)
-  const sectionBodyHeight = getDiffSectionBodyHeight({
-    measuredContentHeight: sectionHeight,
-    originalContent: section.originalContent,
-    modifiedContent: section.modifiedContent,
-    changedLineCount,
-    useIntrinsicImageHeight
+  const { lineStats, sectionBodyHeight, useIntrinsicImageHeight } = useDiffSectionLayoutMetrics({
+    section,
+    sectionHeight
   })
 
   const handleMount: DiffOnMount = (editor, _monaco) => {
@@ -445,111 +408,28 @@ export function DiffSectionItem({
       />
 
       {!section.collapsed && (
-        <div
-          ref={sectionBodyRef}
-          className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
-          style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
-        >
-          {popover && (
-            // Why: key by lineNumber so the popover remounts when the anchor
-            // line changes, resetting the internal draft body and textarea
-            // focus per anchor line instead of leaking state across lines.
-            <DiffCommentPopover
-              key={popover.lineNumber}
-              lineNumber={popover.lineNumber}
-              startLine={popover.startLine}
-              top={popover.top}
-              left={popover.left}
-              placeholder={addLineCommentPlaceholder}
-              submitLabel={addLineCommentLabel}
-              submittingLabel="Posting…"
-              onCancel={() => setPopover(null)}
-              onSubmit={handleSubmitComment}
-            />
-          )}
-          {section.loading ? (
-            <div className="flex h-full items-center gap-2 bg-muted/10 px-3 text-[11px] text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
-              <span>Loading diff...</span>
-            </div>
-          ) : section.error ? (
-            <div className="flex h-full items-center justify-between gap-3 bg-muted/10 px-3 text-[11px] text-muted-foreground">
-              <div className="flex min-w-0 items-center gap-2">
-                <AlertCircle className="size-3.5 shrink-0 text-destructive" />
-                <span className="truncate">{section.error}</span>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="h-6 shrink-0 px-2 text-[11px]"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  retrySection(index)
-                }}
-              >
-                <RefreshCw className="size-3" />
-                Retry
-              </Button>
-            </div>
-          ) : section.diffResult?.kind === 'binary' ? (
-            section.diffResult.isImage ? (
-              <ImageDiffViewer
-                originalContent={section.diffResult.originalContent}
-                modifiedContent={section.diffResult.modifiedContent}
-                filePath={section.path}
-                mimeType={section.diffResult.mimeType}
-                sideBySide={sideBySide}
-                layout={useIntrinsicImageHeight ? 'intrinsic' : 'fill'}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center px-6 text-center">
-                <div className="space-y-2">
-                  <div className="text-sm font-medium text-foreground">Binary file changed</div>
-                  <div className="text-xs text-muted-foreground">
-                    {isBranchMode
-                      ? 'Text diff is unavailable for this file in branch compare.'
-                      : 'Text diff is unavailable for this file.'}
-                  </div>
-                </div>
-              </div>
-            )
-          ) : (
-            <DiffEditor
-              height="100%"
-              language={language}
-              original={section.originalContent}
-              modified={section.modifiedContent}
-              theme={isDark ? 'vs-dark' : 'vs'}
-              onMount={handleMount}
-              // Why: @monaco-editor/react can dispose models before widget teardown.
-              // Keep them through unmount and dispose unattached models next tick.
-              originalModelPath={`${modelPathBase}:original`}
-              modifiedModelPath={`${modelPathBase}:modified`}
-              keepCurrentOriginalModel
-              keepCurrentModifiedModel
-              options={{
-                readOnly: !isEditable,
-                originalEditable: false,
-                renderSideBySide: sideBySide,
-                minimap: { enabled: false },
-                scrollBeyondLastLine: false,
-                fontSize: diffEditorFontSize,
-                fontFamily: settings?.terminalFontFamily || 'monospace',
-                lineNumbers: 'on',
-                automaticLayout: true,
-                renderOverviewRuler: false,
-                scrollbar: combinedDiffSectionScrollbarOptions,
-                hideUnchangedRegions: { enabled: true },
-                find: {
-                  addExtraSpaceOnTop: false,
-                  autoFindInSelection: 'never',
-                  seedSearchStringFromSelection: 'never'
-                }
-              }}
-            />
-          )}
-        </div>
+        <DiffSectionBody
+          section={section}
+          index={index}
+          sectionBodyRef={sectionBodyRef}
+          sectionBodyHeight={sectionBodyHeight}
+          useIntrinsicImageHeight={useIntrinsicImageHeight}
+          popover={popover}
+          addLineCommentPlaceholder={addLineCommentPlaceholder}
+          addLineCommentLabel={addLineCommentLabel}
+          isBranchMode={isBranchMode}
+          sideBySide={sideBySide}
+          isDark={isDark}
+          language={language}
+          modelPathBase={modelPathBase}
+          isEditable={isEditable}
+          diffEditorFontSize={diffEditorFontSize}
+          terminalFontFamily={settings?.terminalFontFamily}
+          onCancelComment={() => setPopover(null)}
+          onSubmitComment={handleSubmitComment}
+          onRetrySection={retrySection}
+          onMount={handleMount}
+        />
       )}
     </div>
   )

@@ -22,6 +22,7 @@ import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from '@/store/slices/githu
 import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,7 +64,6 @@ import {
 import { CreatePullRequestDialog } from './CreatePullRequestDialog'
 import type {
   HostedReviewCreationEligibility,
-  HostedReviewInfo,
   HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { getHostedReviewCacheKey, refreshHostedReviewCard } from '@/store/slices/hosted-review'
@@ -73,6 +73,7 @@ import {
   type HostedReviewClassificationOptions
 } from '../../../../shared/hosted-review-queue'
 import { hostedReviewSummaryFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
+import { type ChecksPanelReview, gitHubPRToChecksPanelReview } from './checks-panel-review'
 import { hostedReviewSummaryFromGitLabInfo } from '../../../../shared/hosted-review-gitlab'
 import {
   checksPanelAsyncResultKey,
@@ -99,6 +100,7 @@ import { installWindowVisibilityInterval } from '@/lib/window-visibility-interva
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { gitLabPipelineJobsToPRChecks } from '../../../../shared/gitlab-pipeline-checks'
+import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 
 const RUNTIME_SSH_STATUS_REFRESH_MS = 3000
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
@@ -110,12 +112,6 @@ type HostedReviewCreationSnapshot = {
   branch: string
   data: HostedReviewCreationEligibility
 }
-
-type ChecksPanelReview = Pick<
-  HostedReviewInfo,
-  'provider' | 'number' | 'title' | 'state' | 'url' | 'status' | 'updatedAt' | 'mergeable'
-> &
-  Partial<Pick<HostedReviewInfo, 'headSha' | 'conflictSummary'>>
 
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
@@ -197,21 +193,6 @@ export function ChecksPanelReviewHeader({
       )}
     </div>
   )
-}
-
-function gitHubPRToChecksPanelReview(pr: PRInfo): ChecksPanelReview {
-  return {
-    provider: 'github',
-    number: pr.number,
-    title: pr.title,
-    state: pr.state,
-    url: pr.url,
-    status: pr.checksStatus,
-    updatedAt: pr.updatedAt,
-    mergeable: pr.mergeable,
-    ...(pr.headSha ? { headSha: pr.headSha } : {}),
-    ...(pr.conflictSummary ? { conflictSummary: pr.conflictSummary } : {})
-  }
 }
 
 function isGitLabChecksPanelReview(
@@ -371,7 +352,9 @@ export default function ChecksPanel(): React.JSX.Element {
   const gitStatusSnapshotInFlightContextRef = useRef<string | null>(null)
   const gitStatusSnapshotRerunContextRef = useRef<string | null>(null)
   const gitStatusSnapshotRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const branch = activeWorktree ? activeWorktree.branch.replace(/^refs\/heads\//, '') : ''
+  const gitIdentityDisplay = activeWorktree ? getWorktreeGitIdentityDisplay(activeWorktree) : null
+  const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
+  const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
   const activeWorktreePath = activeWorktree?.path ?? null
   const activeWorktreePushTarget = activeWorktree?.pushTarget ?? null
   const runtimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
@@ -2431,6 +2414,11 @@ export default function ChecksPanel(): React.JSX.Element {
           />
         )}
         <div className="px-4 py-6">
+          {detachedHeadDisplay && (
+            <div className="mb-3">
+              <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />
+            </div>
+          )}
           <div className="text-sm font-medium text-foreground">{emptyStateCopy.title}</div>
           <div className="mt-1 text-xs text-muted-foreground">{emptyStateCopy.description}</div>
           {!operationInProgress && (
@@ -2497,6 +2485,8 @@ export default function ChecksPanel(): React.JSX.Element {
           onUnlinkPullRequest={handleUnlinkPullRequest}
           onLinkAnotherPullRequest={handleLinkAnotherPullRequest}
         />
+
+        {detachedHeadDisplay && <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />}
 
         {/* Review title */}
         {editingTitle ? (

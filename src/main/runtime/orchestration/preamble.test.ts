@@ -32,11 +32,10 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--body')
     expect(result).toMatch(/3-sentence summary/)
     expect(result).toContain('reportPath')
-    const workerDoneLine = result
-      .split('\n')
-      .find((line) => line.includes('"taskId"') && line.includes('filesModified'))
-    expect(workerDoneLine).toContain('dispatchId')
-    expect(workerDoneLine).toContain('ctx_def456')
+    expect(result).toContain('--task-id task_abc123')
+    expect(result).toContain('--dispatch-id ctx_def456')
+    expect(result).toContain('--files-modified "path/a,path/b"')
+    expect(result).toContain('--report-path "<optional: path to the full artifact>"')
   })
 
   it('CLI examples parse as valid shell (bash -n on the extracted block)', () => {
@@ -64,15 +63,12 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('--type heartbeat')
     expect(result).toContain('--subject "alive"')
     expect(result).toMatch(/5 minutes/)
-    // Both taskId and dispatchId are rendered inside the payload template
+    // Both taskId and dispatchId are rendered as structured payload flags
     // (regression guard for §5.3.4 attribution — dispatchId attribution
     // prevents the zombie-heartbeat-masks-hung-retry race).
-    const heartbeatLine = result
-      .split('\n')
-      .find((line) => line.includes('"taskId"') && line.includes('dispatchId'))
-    expect(heartbeatLine).toBeTruthy()
-    expect(heartbeatLine).toContain('task_abc123')
-    expect(heartbeatLine).toContain('ctx_def456')
+    expect(result).toContain('--task-id task_abc123')
+    expect(result).toContain('--dispatch-id ctx_def456')
+    expect(result).toContain('--phase "<short: investigating|implementing|reviewing|waiting>"')
   })
 
   it('includes ask block with BEHAVIOR RULE #1 forbidding AskUserQuestion', () => {

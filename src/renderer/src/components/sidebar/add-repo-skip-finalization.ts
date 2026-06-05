@@ -18,9 +18,6 @@ export function finalizeImportedRepoAfterSkip(
   importedRepoId: string
 ): void {
   const importedWorktrees = state.worktreesByRepo[importedRepoId] ?? []
-  if (importedWorktrees.length === 0) {
-    return
-  }
 
   // Why: Skip means "do not open or create a worktree", not "hide the
   // imported project behind sidebar filters so it looks like nothing landed."
@@ -34,6 +31,7 @@ export function finalizeImportedRepoAfterSkip(
     state.setShowActiveOnly(false)
   }
   if (
+    importedWorktrees.length > 0 &&
     state.hideDefaultBranchWorkspace &&
     importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree))
   ) {

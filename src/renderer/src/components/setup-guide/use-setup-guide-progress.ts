@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: setup-guide readiness is driven by bounded IPC probes and browser focus events; the state cannot be derived synchronously from render inputs. */
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
@@ -16,19 +17,16 @@ import {
   getFeatureWallSetupProgress,
   type FeatureWallSetupProgress
 } from '../feature-wall/feature-wall-setup-progress'
-import type { ComputerUsePermissionStatusResult } from '../../../../shared/computer-use-permissions-types'
+import {
+  getComputerUsePermissionSetupState,
+  getCurrentSetupScriptProbeState,
+  getSetupGuideProgressReady,
+  getSetupScriptProbeSignature,
+  INITIAL_SETUP_SCRIPT_PROBE_STATE,
+  type SetupScriptProbeState
+} from './setup-guide-progress-readiness'
 
-export function getComputerUsePermissionSetupState(
-  status: ComputerUsePermissionStatusResult | null
-): { ready: boolean; unavailable: boolean } {
-  return {
-    ready:
-      status !== null &&
-      status.helperUnavailableReason === null &&
-      status.permissions.every((permission) => permission.status !== 'not-granted'),
-    unavailable: status !== null && status.helperUnavailableReason !== null
-  }
-}
+const SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS = 15_000
 
 export function useSetupGuideProgress(
   shouldRefreshCoreState: boolean,
@@ -48,27 +46,30 @@ export function useSetupGuideProgress(
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const [hasSetupScript, setHasSetupScript] = useState(false)
+  const [setupScriptProbe, setSetupScriptProbe] = useState<SetupScriptProbeState>(
+    INITIAL_SETUP_SCRIPT_PROBE_STATE
+  )
   const [computerUsePermissionsReady, setComputerUsePermissionsReady] = useState(false)
+  const [computerUsePermissionStatusChecked, setComputerUsePermissionStatusChecked] =
+    useState(false)
   const [computerUseUnavailable, setComputerUseUnavailable] = useState(false)
-  const { installed: detectedBrowserUseSkillInstalled } = useInstalledAgentSkill(
-    ORCA_CLI_SKILL_NAME,
-    {
+  const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
+    useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
       sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-    }
-  )
-  const { installed: computerUseSkillInstalled } = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+    })
+  const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
+    useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
+      enabled: shouldRefreshCoreState,
+      sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+    })
+  const {
+    installed: detectedOrchestrationSkillInstalled,
+    loading: detectedOrchestrationSkillLoading
+  } = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     enabled: shouldRefreshCoreState,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const { installed: detectedOrchestrationSkillInstalled } = useInstalledAgentSkill(
-    ORCHESTRATION_SKILL_NAME,
-    {
-      enabled: shouldRefreshCoreState,
-      sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-    }
-  )
 
   useEffect(() => {
     if (!shouldRefreshCoreState) {
@@ -88,38 +89,64 @@ export function useSetupGuideProgress(
     shouldRefreshCoreState
   ])
 
-  useEffect(() => {
-    if (!shouldRefreshCoreState || !settings) {
-      return
-    }
-    let stale = false
+  const orderedGitRepos = useMemo(() => {
     const gitRepos = repos.filter(isGitRepoKind)
     const activeRepo = activeRepoId
       ? (gitRepos.find((repo) => repo.id === activeRepoId) ?? null)
       : null
-    const orderedRepos = activeRepo
+    return activeRepo
       ? [activeRepo, ...gitRepos.filter((repo) => repo.id !== activeRepo.id)]
       : gitRepos
+  }, [activeRepoId, repos])
+
+  const setupScriptProbeSignature = useMemo(
+    () => getSetupScriptProbeSignature(settings, orderedGitRepos),
+    [orderedGitRepos, settings]
+  )
+  const activeSetupScriptProbeSignatureRef = useRef<string | null>(setupScriptProbeSignature)
+  activeSetupScriptProbeSignatureRef.current = setupScriptProbeSignature
+
+  useEffect(() => {
+    if (!shouldRefreshCoreState || !settings || setupScriptProbeSignature === null) {
+      return
+    }
+    const signature = setupScriptProbeSignature
+    let stale = false
+    // Why: setup-script checks can cross SSH/runtime streams. Bound sidebar
+    // visibility readiness so a wedged read cannot hide the checklist forever.
+    const timeoutId = window.setTimeout(() => {
+      if (activeSetupScriptProbeSignatureRef.current === signature) {
+        setSetupScriptProbe({ signature, ready: true, hasSetupScript: false })
+      }
+    }, SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS)
+
+    const settle = (hasSetupScript: boolean): void => {
+      window.clearTimeout(timeoutId)
+      if (activeSetupScriptProbeSignatureRef.current === signature) {
+        setSetupScriptProbe({ signature, ready: true, hasSetupScript })
+      }
+    }
 
     async function refreshSetupScriptState(): Promise<void> {
-      for (const repo of orderedRepos) {
+      for (const repo of orderedGitRepos) {
         const hooksResult = await checkRuntimeHooks(settings, repo.id).catch(() => null)
         if (stale) {
           return
         }
         if (hooksResult && hasEffectiveSetupCommand(repo, hooksResult)) {
-          setHasSetupScript(true)
+          settle(true)
           return
         }
       }
-      setHasSetupScript(false)
+      settle(false)
     }
 
     void refreshSetupScriptState()
     return () => {
       stale = true
+      window.clearTimeout(timeoutId)
     }
-  }, [activeRepoId, repos, settings, shouldRefreshCoreState])
+  }, [orderedGitRepos, settings, setupScriptProbeSignature, shouldRefreshCoreState])
 
   const readComputerUsePermissions = useCallback(async (isStale: () => boolean): Promise<void> => {
     const status = await window.api.computerUsePermissions.getStatus().catch(() => null)
@@ -127,14 +154,13 @@ export function useSetupGuideProgress(
       return
     }
     const permissionState = getComputerUsePermissionSetupState(status)
+    setComputerUsePermissionStatusChecked(true)
     setComputerUsePermissionsReady(permissionState.ready)
     setComputerUseUnavailable(permissionState.unavailable)
   }, [])
 
   useEffect(() => {
     if (!shouldRefreshCoreState || !computerUseSkillInstalled) {
-      setComputerUsePermissionsReady(false)
-      setComputerUseUnavailable(false)
       return
     }
     let stale = false
@@ -165,30 +191,54 @@ export function useSetupGuideProgress(
     (preflightStatus?.gh.installed === true && preflightStatus.gh.authenticated === true) ||
     (preflightStatus?.glab?.installed === true && preflightStatus.glab.authenticated === true) ||
     linearStatus.connected === true
-  const gitRepoCount = useMemo(() => repos.filter(isGitRepoKind).length, [repos])
+  const gitRepoCount = orderedGitRepos.length
+  const currentSetupScriptProbe = getCurrentSetupScriptProbeState(
+    setupScriptProbe,
+    setupScriptProbeSignature
+  )
+  const currentComputerUsePermissionStatusChecked =
+    shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionStatusChecked : false
+  const currentComputerUsePermissionsReady =
+    shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionsReady : false
+  const currentComputerUseUnavailable =
+    shouldRefreshCoreState && computerUseSkillInstalled ? computerUseUnavailable : false
+  const ready = getSetupGuideProgressReady({
+    refreshEnabled: shouldRefreshCoreState,
+    settingsLoaded: settings !== null,
+    preflightStatusChecked,
+    linearStatusChecked,
+    browserUseSkillDiscoveryLoading: detectedBrowserUseSkillLoading,
+    computerUseSkillDiscoveryLoading: computerUseSkillLoading,
+    orchestrationSkillDiscoveryLoading: detectedOrchestrationSkillLoading,
+    setupScriptProbeReady: currentSetupScriptProbe.ready,
+    computerUseSkillInstalled,
+    computerUsePermissionStatusChecked: currentComputerUsePermissionStatusChecked
+  })
 
   return useMemo(
     () =>
       getFeatureWallSetupProgress({
+        ready,
         settings,
         featureInteractions,
         hasConnectedTaskSource,
         browserUseSkillInstalled: browserUseSkillInstalled || detectedBrowserUseSkillInstalled,
         computerUseSkillInstalled,
-        computerUsePermissionsReady,
-        computerUseUnavailable,
+        computerUsePermissionsReady: currentComputerUsePermissionsReady,
+        computerUseUnavailable: currentComputerUseUnavailable,
         orchestrationSkillInstalled:
           orchestrationSkillInstalled || detectedOrchestrationSkillInstalled,
         gitRepoCount,
         worktreesByRepo,
         tabsByWorktree,
         terminalLayoutsByTabId,
-        hasSetupScript
+        hasSetupScript: currentSetupScriptProbe.hasSetupScript
       }),
     [
       browserUseSkillInstalled,
-      computerUseUnavailable,
-      computerUsePermissionsReady,
+      ready,
+      currentComputerUseUnavailable,
+      currentComputerUsePermissionsReady,
       computerUseSkillInstalled,
       detectedBrowserUseSkillInstalled,
       detectedOrchestrationSkillInstalled,
@@ -196,7 +246,7 @@ export function useSetupGuideProgress(
       terminalLayoutsByTabId,
       gitRepoCount,
       hasConnectedTaskSource,
-      hasSetupScript,
+      currentSetupScriptProbe.hasSetupScript,
       orchestrationSkillInstalled,
       settings,
       tabsByWorktree,

@@ -10,6 +10,9 @@ import type * as UseNotificationDispatchModule from './use-notification-dispatch
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../shared/types'
 
+// Repro command:
+//   pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts -t "OpenTUI-style small ANSI redraw"
+
 // Why: the fresh-spawn and reattach paths now chain pre-signal → spawn →
 // register/settle through multiple microtasks. Tests that previously flushed
 // once with `await Promise.resolve()` must drain a few extra ticks before
@@ -475,6 +478,9 @@ describe('connectPanePty', () => {
           dispatch: vi.fn().mockResolvedValue({ delivered: true }),
           playSound: vi.fn().mockResolvedValue({ played: true })
         },
+        runtime: {
+          restoreTerminalFit: vi.fn().mockResolvedValue({ restored: true })
+        },
         agentStatus: {
           inferInterrupt: vi.fn().mockResolvedValue(false)
         }
@@ -601,6 +607,44 @@ describe('connectPanePty', () => {
     capturedDataCallback.current?.(redraw)
 
     expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
+  })
+
+  it('does not let OpenTUI-style small ANSI redraw bursts monopolize foreground writes', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const pane = createPane(1)
+    const transport = createMockTransport('pty-1')
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-1'
+    })
+    transportFactoryQueue.push(transport)
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+    expect(capturedDataCallback.current).not.toBeNull()
+
+    vi.useFakeTimers()
+
+    const frames = Array.from({ length: 270 }, (_, index) =>
+      [
+        '\x1b[?2026h',
+        '\x1b[?25l',
+        `\x1b[2;3H\x1b[38;2;255;138;0m${index % 2 === 0 ? '#' : '*'}${'*'.repeat(7)}\x1b[0m`,
+        `\x1b[2;12H\x1b[38;2;255;138;0mOpenTUI synthetic active TUI redraw ${index}\x1b[0m`,
+        `\x1b[4;6H\x1b[38;2;231;237;247m${'#'.repeat(36)} ${'opentui'.repeat(48)}\x1b[0m`
+      ].join('')
+    )
+    expect(frames.every((frame) => frame.length <= 2048 && frame.includes('\x1b['))).toBe(true)
+    expect(frames.join('').length).toBeGreaterThan(128 * 1024)
+
+    for (const frame of frames) {
+      capturedDataCallback.current?.(frame)
+    }
+
+    expect(pane.terminal.write.mock.calls.length).toBeLessThan(frames.length)
+    vi.advanceTimersByTime(0)
+    expect(pane.terminal.write.mock.calls.length).toBeGreaterThan(0)
   })
 
   it('keeps the surviving split pane mounted when an intentional pane-close PTY exit arrives', async () => {
@@ -1988,10 +2032,87 @@ describe('connectPanePty', () => {
       }
       terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
+      ;(onDataHandler as unknown as (data: string) => void)('x')
       vi.advanceTimersByTime(500)
 
+      expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
+    } finally {
+      setDriverForPty(ptyId, { kind: 'idle' })
+    }
+  })
+
+  it('drops xterm protocol replies from live TUI output while mobile presence lock is active', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+
+    const ptyId = 'pty-mobile-tui-query'
+    setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+    try {
+      const transport = createMockTransport(ptyId)
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
+        ptyIdsByTabId: { 'tab-1': [ptyId] }
+      }
+
+      const pane = createPane(1)
+      let onDataHandler: ((data: string) => void) | null = null
+      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+        onDataHandler = handler
+        return { dispose: vi.fn() }
+      }) as typeof pane.terminal.onData)
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
+      if (!onDataHandler) {
+        throw new Error('expected onData handler to be registered')
+      }
+      // Simulate xterm answering a TUI's DA1 query while the phone owns the PTY.
+      ;(onDataHandler as unknown as (data: string) => void)('\x1b[?1;2c')
+      await flushAsyncTicks()
+
+      expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
+      expect(transport.sendInput).not.toHaveBeenCalled()
+    } finally {
+      setDriverForPty(ptyId, { kind: 'idle' })
+    }
+  })
+
+  it('blocks remote locked terminal input before it reaches the runtime transport', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+
+    const ptyId = 'remote:env-1@@terminal-1'
+    setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+    try {
+      const transport = createMockTransport(ptyId)
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId }] },
+        ptyIdsByTabId: { 'tab-1': [ptyId] }
+      }
+
+      const pane = createPane(1)
+      let onDataHandler: ((data: string) => void) | null = null
+      pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+        onDataHandler = handler
+        return { dispose: vi.fn() }
+      }) as typeof pane.terminal.onData)
+
+      connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
+      if (!onDataHandler) {
+        throw new Error('expected onData handler to be registered')
+      }
+      ;(onDataHandler as unknown as (data: string) => void)('x')
+      await flushAsyncTicks()
+
+      expect(window.api.runtime.restoreTerminalFit).not.toHaveBeenCalled()
+      expect(transport.sendInput).not.toHaveBeenCalled()
     } finally {
       setDriverForPty(ptyId, { kind: 'idle' })
     }
@@ -3916,8 +4037,53 @@ describe('connectPanePty', () => {
       expect.objectContaining({ source: 'terminal-bell' })
     )
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
-    expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'agent-task-complete' })
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        suppressOsNotification: true
+      })
+    )
+  })
+
+  it('raises terminal attention for agent completion when OS completion notifications are disabled', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex')
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    mockStoreState.settings = {
+      ...mockStoreState.settings,
+      experimentalTerminalAttention: true,
+      notifications: {
+        enabled: true,
+        agentTaskComplete: false,
+        terminalBell: true,
+        suppressWhenFocused: false,
+        customSoundPath: null
+      }
+    }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!idleHandler) {
+      throw new Error('Expected idle handler to be registered')
+    }
+
+    idleHandler('* Codex done')
+    vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        suppressOsNotification: true
+      })
     )
   })
 
@@ -4688,11 +4854,36 @@ describe('connectPanePty', () => {
     })
   })
 
-  // Why: show-until-interact — a real keystroke through xterm onData is the
-  // canonical "user is here" signal that dismisses the bell. Guarded by the
-  // replay and codex-stale checks (see separate tests) so synthetic xterm
-  // auto-replies and blocked stale input never count as interaction.
-  it('clears tab and worktree unread on real keystroke via onData', async () => {
+  // Why: show-until-interact — a DOM keydown is the keyboard "user is here"
+  // signal that dismisses attention. Raw xterm onData is intentionally lower
+  // level because it can include terminal-generated replies/control bytes.
+  it('clears tab and worktree unread on real keydown', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    pane.terminal.element = createPaneContainer()
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const keydown = new Event('keydown')
+    Object.defineProperty(keydown, 'key', { value: 'a' })
+    Object.defineProperty(keydown, 'repeat', { value: false })
+    Object.defineProperty(keydown, 'ctrlKey', { value: false })
+    Object.defineProperty(keydown, 'metaKey', { value: false })
+    Object.defineProperty(keydown, 'shiftKey', { value: false })
+    ;(pane.terminal.element as EventTarget).dispatchEvent(keydown)
+
+    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
+  it('does not clear pane attention from raw onData after a bell', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
@@ -4708,14 +4899,16 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    if (!onDataHandler) {
-      throw new Error('expected onData handler to be registered')
+    const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+    if (!bellHandler || !onDataHandler) {
+      throw new Error('expected bell and onData handlers to be registered')
     }
+
+    bellHandler()
     ;(onDataHandler as (data: string) => void)('a')
 
-    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
-    expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
-    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.clearTerminalPaneUnread).not.toHaveBeenCalled()
     expect(transport.sendInput).toHaveBeenCalledWith('a')
   })
 

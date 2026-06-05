@@ -27,6 +27,7 @@ import type {
   GhosttyImportPreview,
   ListWorkItemsResult,
   MemorySnapshot,
+  NotificationDismissResult,
   NotificationDispatchResult,
   NotificationPermissionStatusResult,
   NotificationSoundDataResult,
@@ -134,8 +135,8 @@ import type {
 } from '../shared/automations-types'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import {
-  ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
-  type EditorSaveDirtyFilesDetail
+  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
+  type EditorPrepareHotExitDetail
 } from '../shared/editor-save-events'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
@@ -172,15 +173,13 @@ let nativeFileDropListenerRegistered = false
 type AppRestartPrepOptions = {
   startedEventName: string
   abortedEventName: string
-  continueOnSaveFailure: boolean
-  saveFailureLogPrefix: string
 }
 
-function requestDirtyEditorFileSave(): Promise<void> {
+function requestEditorHotExitBackup(): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let claimed = false
     window.dispatchEvent(
-      new CustomEvent<EditorSaveDirtyFilesDetail>(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
+      new CustomEvent<EditorPrepareHotExitDetail>(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, {
         detail: {
           claim: () => {
             claimed = true
@@ -193,9 +192,8 @@ function requestDirtyEditorFileSave(): Promise<void> {
       })
     )
 
-    // Why: restart paths can run when no editor surface is mounted. When
-    // nothing claims the request there are no in-memory editor buffers to
-    // flush, so proceed with the normal shutdown path immediately.
+    // Why: restart paths can run before the editor autosave controller mounts.
+    // With no claimant, there are no renderer-owned dirty buffers to back up.
     if (!claimed) {
       resolve()
     }
@@ -204,20 +202,15 @@ function requestDirtyEditorFileSave(): Promise<void> {
 
 async function prepareRendererForAppRestart({
   startedEventName,
-  abortedEventName,
-  continueOnSaveFailure,
-  saveFailureLogPrefix
+  abortedEventName
 }: AppRestartPrepOptions): Promise<void> {
   window.dispatchEvent(new Event(startedEventName))
 
   try {
-    await requestDirtyEditorFileSave()
+    await requestEditorHotExitBackup()
   } catch (error) {
-    if (!continueOnSaveFailure) {
-      window.dispatchEvent(new Event(abortedEventName))
-      throw error
-    }
-    console.warn(saveFailureLogPrefix, error)
+    window.dispatchEvent(new Event(abortedEventName))
+    throw error
   }
 
   // Dispatch beforeunload now so terminal buffers are captured while panes are
@@ -401,9 +394,7 @@ const api = {
     restart: async (): Promise<void> => {
       await prepareRendererForAppRestart({
         startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
-        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
-        continueOnSaveFailure: false,
-        saveFailureLogPrefix: '[app-restart] Saving dirty files before restart failed:'
+        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT
       })
       try {
         return await ipcRenderer.invoke('app:restart')
@@ -431,6 +422,14 @@ const api = {
     pickFloatingWorkspaceDirectory: (): Promise<string | null> =>
       ipcRenderer.invoke('app:pickFloatingWorkspaceDirectory')
   },
+
+  platform: {
+    get: () => ({
+      platform: process.platform,
+      osRelease:
+        (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ?? ''
+    })
+  } satisfies PreloadApi['platform'],
 
   wsl: {
     isAvailable: (): Promise<boolean> => ipcRenderer.invoke('wsl:isAvailable'),
@@ -830,6 +829,9 @@ const api = {
 
     repoSlug: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
       ipcRenderer.invoke('gh:repoSlug', args),
+
+    repoUpstream: (args: { repoPath: string; repoId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('gh:repoUpstream', args),
 
     prForBranch: (args: {
       repoPath: string
@@ -1580,6 +1582,8 @@ const api = {
   notifications: {
     dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>
       ipcRenderer.invoke('notifications:dispatch', args),
+    dismiss: (ids: string[]): Promise<NotificationDismissResult> =>
+      ipcRenderer.invoke('notifications:dismiss', ids),
     openSystemSettings: (): Promise<void> => ipcRenderer.invoke('notifications:openSystemSettings'),
     getPermissionStatus: (): Promise<NotificationPermissionStatusResult> =>
       ipcRenderer.invoke('notifications:getPermissionStatus'),
@@ -2079,6 +2083,8 @@ const api = {
     get: () => ipcRenderer.invoke('session:get'),
     set: (args) => ipcRenderer.invoke('session:set', args),
     patch: (args) => ipcRenderer.invoke('session:patch', args),
+    readTerminalScrollback: (args) =>
+      ipcRenderer.sendSync('session:read-terminal-scrollback-sync', args),
     /** Synchronous session save for beforeunload — blocks until flushed to disk. */
     setSync: (args) => {
       ipcRenderer.sendSync('session:set-sync', args)
@@ -2109,15 +2115,9 @@ const api = {
     download: () => ipcRenderer.invoke('updater:download'),
     dismissNudge: () => ipcRenderer.invoke('updater:dismissNudge'),
     quitAndInstall: async (): Promise<void> => {
-      // Why: update installs must proceed even when a dirty-file auto-save
-      // fails; otherwise a downloaded update can get stuck behind hidden editor
-      // state. Manual app restart uses the same prep but aborts on save failure.
       await prepareRendererForAppRestart({
         startedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-        continueOnSaveFailure: true,
-        saveFailureLogPrefix:
-          '[updater] Saving dirty files before quit failed; proceeding with install anyway:'
+        abortedEventName: ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
       })
       try {
         return await ipcRenderer.invoke('updater:quitAndInstall')
@@ -2192,6 +2192,8 @@ const api = {
       connectionId?: string
     }): Promise<{ size: number; isDirectory: boolean; mtime: number }> =>
       ipcRenderer.invoke('fs:stat', args),
+    pathExists: (args: { filePath: string; connectionId?: string }): Promise<boolean> =>
+      ipcRenderer.invoke('fs:pathExists', args),
     listFiles: (args: {
       rootPath: string
       connectionId?: string
@@ -2606,6 +2608,12 @@ const api = {
       ipcRenderer.on('ui:reloadBrowserPage', listener)
       return () => ipcRenderer.removeListener('ui:reloadBrowserPage', listener)
     },
+    onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
+        callback(direction)
+      ipcRenderer.on('ui:zoomBrowserPage', listener)
+      return () => ipcRenderer.removeListener('ui:zoomBrowserPage', listener)
+    },
     onHardReloadBrowserPage: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent) => callback()
       ipcRenderer.on('ui:hardReloadBrowserPage', listener)
@@ -3015,6 +3023,8 @@ const api = {
       ipcRenderer.invoke('claudeUsage:setEnabled', args),
     refresh: (args?: { force?: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('claudeUsage:refresh', args),
+    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
+      ipcRenderer.invoke('claudeUsage:getSnapshot', args),
     getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('claudeUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
@@ -3031,6 +3041,8 @@ const api = {
       ipcRenderer.invoke('codexUsage:setEnabled', args),
     refresh: (args?: { force?: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('codexUsage:refresh', args),
+    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
+      ipcRenderer.invoke('codexUsage:getSnapshot', args),
     getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
@@ -3047,6 +3059,8 @@ const api = {
       ipcRenderer.invoke('openCodeUsage:setEnabled', args),
     refresh: (args?: { force?: boolean }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:refresh', args),
+    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
+      ipcRenderer.invoke('openCodeUsage:getSnapshot', args),
     getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
       ipcRenderer.invoke('openCodeUsage:getSummary', args),
     getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
@@ -3423,6 +3437,12 @@ const api = {
         callback(data)
       ipcRenderer.on('agentStatus:set', listener)
       return () => ipcRenderer.removeListener('agentStatus:set', listener)
+    },
+    onClear: (callback: (data: { paneKey: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { paneKey: string }) =>
+        callback(data)
+      ipcRenderer.on('agentStatus:clear', listener)
+      return () => ipcRenderer.removeListener('agentStatus:clear', listener)
     },
     /** Pull the current cached hook statuses after renderer workspace-session
      *  hydration. This avoids losing startup replays before the renderer

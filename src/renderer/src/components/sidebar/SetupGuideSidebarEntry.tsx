@@ -16,13 +16,27 @@ import {
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSetupGuideProgress } from '../setup-guide/use-setup-guide-progress'
 
-export function shouldShowSetupGuideEntry(setupComplete: boolean, dismissed: boolean): boolean {
-  return !setupComplete && !dismissed
+export type SetupGuideEntryVisibilityInput = {
+  ready: boolean
+  setupComplete: boolean
+  dismissed: boolean
+}
+
+export function shouldShowSetupGuideEntry(input: SetupGuideEntryVisibilityInput): boolean {
+  return input.ready && !input.setupComplete && !input.dismissed
+}
+
+export function getSetupGuideSidebarEntryReady(
+  persistedUIReady: boolean,
+  setupProgressReady: boolean
+): boolean {
+  return persistedUIReady && setupProgressReady
 }
 
 export function SetupGuideSidebarEntry(): React.JSX.Element | null {
   const openModal = useAppStore((s) => s.openModal)
   const activeModal = useAppStore((s) => s.activeModal)
+  const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const setupGuideSidebarDismissed = useAppStore((s) => s.setupGuideSidebarDismissed)
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
   // Why: the sidebar count must be warmed before click so it matches the modal
@@ -34,7 +48,11 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
     () => getFirstIncompleteFeatureWallSetupStepId(setupProgress.stepDone),
     [setupProgress.stepDone]
   )
-  const showSetupGuideEntry = shouldShowSetupGuideEntry(setupComplete, setupGuideSidebarDismissed)
+  const showSetupGuideEntry = shouldShowSetupGuideEntry({
+    ready: getSetupGuideSidebarEntryReady(persistedUIReady, setupProgress.ready),
+    setupComplete,
+    dismissed: setupGuideSidebarDismissed
+  })
   const handleHideSetupGuide = React.useCallback(() => {
     setSetupGuideSidebarDismissed(true)
   }, [setSetupGuideSidebarDismissed])

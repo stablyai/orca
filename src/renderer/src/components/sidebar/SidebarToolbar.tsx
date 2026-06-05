@@ -1,18 +1,14 @@
 import React, { useState } from 'react'
 import {
-  BookOpen,
-  Boxes,
   CircleHelp,
   ExternalLink,
   FolderPlus,
-  HardDrive,
-  ListChecks,
   MessageSquareText,
   RotateCw,
   School,
-  Settings,
-  Smartphone
+  Settings
 } from 'lucide-react'
+import logo from '../../../../../resources/logo.svg'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
@@ -38,9 +34,6 @@ function openExternalUrl(url: string): void {
 const SidebarToolbar = React.memo(function SidebarToolbar() {
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSkillsPage = useAppStore((s) => s.openSkillsPage)
-  const openSpacePage = useAppStore((s) => s.openSpacePage)
-  const openMobilePage = useAppStore((s) => s.openMobilePage)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [helpMenuOpen, setHelpMenuOpen] = useState(false)
   const [showAdminHelpOptions, setShowAdminHelpOptions] = useState(false)
@@ -108,40 +101,6 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
         </Tooltip>
         <div className="flex items-center gap-1">
           <ScrollToCurrentWorkspaceToolbarButton />
-          <DropdownMenu modal={false}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    type="button"
-                    aria-label="Toolbox"
-                    className="text-muted-foreground"
-                  >
-                    <Boxes className="size-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={4}>
-                Toolbox
-              </TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-44">
-              <DropdownMenuItem onSelect={openSkillsPage}>
-                <BookOpen className="size-3.5" />
-                Skills
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={openSpacePage}>
-                <HardDrive className="size-3.5" />
-                Space Analyzer
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={openMobilePage}>
-                <Smartphone className="size-3.5" />
-                Orca Mobile
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <DropdownMenu modal={false} open={helpMenuOpen} onOpenChange={handleHelpMenuOpenChange}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -167,7 +126,12 @@ const SidebarToolbar = React.memo(function SidebarToolbar() {
               <DropdownMenuItem
                 onSelect={() => openModal('setup-guide', { telemetrySource: 'help_menu' })}
               >
-                <ListChecks className="size-3.5" />
+                <img
+                  src={logo}
+                  alt=""
+                  aria-hidden="true"
+                  className="size-3.5 object-contain invert opacity-55 dark:invert-0"
+                />
                 Onboarding checklist
               </DropdownMenuItem>
               <DropdownMenuItem

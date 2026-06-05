@@ -71,22 +71,31 @@ describe('prepareSkippedOnboardingPreferences', () => {
 })
 
 describe('remapOpenOnboardingLastCompletedStep', () => {
-  it('remaps old 7-step open progress to the new 5-step flow', () => {
+  it('remaps unversioned seven-step open progress to the new four-step flow', () => {
     const base = { ...getDefaultOnboardingState(), flowVersion: 1 }
 
-    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 4 })).toBe(3)
-    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 5 })).toBe(4)
-    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 6 })).toBe(4)
-    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 9 })).toBe(4)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 3 })).toBe(2)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 4 })).toBe(2)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 5 })).toBe(3)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 9 })).toBe(3)
   })
 
-  it('keeps current 5-step repo progress intact', () => {
+  it('remaps versioned five-step open progress to the new four-step flow', () => {
+    const base = { ...getDefaultOnboardingState(), flowVersion: 2 }
+
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 3 })).toBe(2)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 4 })).toBe(3)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 5 })).toBe(3)
+    expect(remapOpenOnboardingLastCompletedStep({ ...base, lastCompletedStep: 9 })).toBe(3)
+  })
+
+  it('keeps current four-step progress intact', () => {
     expect(
       remapOpenOnboardingLastCompletedStep({
         ...getDefaultOnboardingState(),
-        lastCompletedStep: 4
+        lastCompletedStep: 3
       })
-    ).toBe(4)
+    ).toBe(3)
   })
 
   it('maps unversioned completed onboarding to the current final step', () => {
@@ -97,6 +106,6 @@ describe('remapOpenOnboardingLastCompletedStep', () => {
         outcome: 'completed',
         lastCompletedStep: 7
       })
-    ).toBe(5)
+    ).toBe(4)
   })
 })

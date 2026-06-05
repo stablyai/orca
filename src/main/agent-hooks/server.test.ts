@@ -1062,6 +1062,27 @@ describe('AgentHookServer listener replay', () => {
     expect(listener).toHaveBeenNthCalledWith(4, [])
   })
 
+  it('notifies pane-status-clear listener when pane teardown evicts a cached status', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setPaneStatusClearListener(listener)
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'working', agentType: 'claude' }
+      },
+      'conn-1'
+    )
+    server.clearPaneState(PANE)
+    server.clearPaneState(PANE)
+
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener).toHaveBeenCalledWith(PANE)
+  })
+
   it('hydrates cached statuses as not observed in the current runtime', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-'))
     const firstServer = new AgentHookServer()

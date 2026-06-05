@@ -157,15 +157,15 @@ test.describe('Setup script import prompt', () => {
     const repoId = await addAndActivateRepo(orcaPage, repoPath)
 
     await expect(
-      orcaPage.getByText(/Detected setup config from Superset \(\.superset\/config\.json \+1\)\./)
+      orcaPage.getByText(
+        /Found a setup command in Superset \(\.superset\/config\.json \+1\)\. Save it to run for new worktrees\./
+      )
     ).toBeVisible({ timeout: 15_000 })
 
     await orcaPage.getByRole('button', { name: 'Save local setup' }).click()
 
     await expect(
-      orcaPage.getByText(
-        '2 unsupported fields skipped. Saved locally; move it to orca.yaml later to share it.'
-      )
+      orcaPage.getByText('2 unsupported fields skipped. Saved the setup command.')
     ).toBeVisible()
 
     const localCommands = await openImportedSetupSettingsFromToast(orcaPage, repoId)
@@ -186,7 +186,9 @@ test.describe('Setup script import prompt', () => {
     const repoId = await addAndActivateRepo(orcaPage, repoPath)
 
     await expect(
-      orcaPage.getByText(/Detected setup config from cmux \(\.cmux\/cmux\.json\)\./)
+      orcaPage.getByText(
+        /Found a setup command in cmux \(\.cmux\/cmux\.json\)\. Save it to run for new worktrees\./
+      )
     ).toBeVisible({ timeout: 15_000 })
 
     await orcaPage.getByRole('button', { name: 'Save local setup' }).click()

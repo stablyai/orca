@@ -53,6 +53,14 @@ describe('AgentSkillSetupPanel', () => {
     expect(buttonLabels(html)).not.toContain('Re-check')
   })
 
+  it('can hide install after the skill is detected', () => {
+    const html = renderPanel({ installed: true, showInstallWhenInstalled: false })
+
+    expect(html).toContain('Installed')
+    expect(buttonLabels(html)).not.toContain('Install')
+    expect(buttonLabels(html)).toContain('Re-check')
+  })
+
   it('keeps re-check visible before install when installed re-checks are disabled', () => {
     const html = renderPanel({ installed: false, showRecheckWhenInstalled: false })
 

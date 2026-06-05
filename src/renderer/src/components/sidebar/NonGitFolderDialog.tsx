@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 
 const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -42,6 +43,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           if (!state.repos.some((r) => r.id === repo.id)) {
             useAppStore.setState({ repos: [...state.repos, repo] })
           }
+          await markOnboardingProjectAdded('addedFolder')
           await state.fetchWorktrees(repo.id)
           // Why: mirror the local non-git folder flow — without this the
           // dialog closes and the UI shows no visible change, making the

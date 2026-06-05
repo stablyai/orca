@@ -8,6 +8,7 @@ import {
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
+  showAutomationsButton: boolean
   showMobileButton: boolean
   showTitlebarAppName: boolean
   statusBarVisible: boolean
@@ -223,6 +224,12 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
         type: 'checkbox',
         checked: appearance.showTasksButton,
         click: () => onToggleAppearance('showTasksButton')
+      },
+      {
+        label: 'Show Automations Button',
+        type: 'checkbox',
+        checked: appearance.showAutomationsButton,
+        click: () => onToggleAppearance('showAutomationsButton')
       },
       {
         label: 'Show Orca Mobile Button',

@@ -261,6 +261,30 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(collectText(element)).toContain('WSL')
   })
 
+  it('shows Windows shell controls for a remote Windows host on a non-Windows client', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackBytes: 10_000_000,
+        terminalWindowsShell: 'powershell.exe',
+        terminalWindowsPowerShellImplementation: 'auto',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      isWindowsTerminalHost: true
+    })
+
+    const text = collectText(element)
+    expect(text).toContain('Default shell for new terminal panes on Windows')
+    expect(text).toContain('Command Prompt')
+    expect(text).toContain('WSL')
+  })
+
   it('hides WSL as a Windows default shell option when unavailable', () => {
     const element = TerminalPane({
       settings: {

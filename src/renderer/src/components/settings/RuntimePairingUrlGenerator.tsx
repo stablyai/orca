@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: the generated URL cache, grant list, and
-   settings form stay together so revocation and cache invalidation remain
-   auditable. */
-import { Check, Copy, Loader2, RefreshCw } from 'lucide-react'
+import { Loader2, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -11,6 +8,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { GeneratedUrlRow, UnavailableUrlRow } from './RuntimePairingGeneratedUrlRows'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 
 const LOOPBACK_ADDRESS = '127.0.0.1'
@@ -29,58 +27,6 @@ const runtimePairingUrlCache: {
   runtimePairingUrl: null,
   webClientUrl: null,
   runtimePairingDeviceId: null
-}
-
-function GeneratedUrlRow({
-  label,
-  description,
-  value,
-  copied,
-  onCopy
-}: {
-  label: string
-  description?: string
-  value: string
-  copied: boolean
-  onCopy: () => void
-}): React.JSX.Element {
-  return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
-      {description ? <p className="text-xs text-muted-foreground">{description}</p> : null}
-      <div className="flex min-w-0 items-center gap-2 rounded-md border border-border/60 bg-background/70 px-2 py-1.5">
-        <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-[11px] text-muted-foreground">
-          {value}
-        </code>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          onClick={onCopy}
-          aria-label={`Copy ${label}`}
-        >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function UnavailableUrlRow({
-  label,
-  description
-}: {
-  label: string
-  description: string
-}): React.JSX.Element {
-  return (
-    <div className="space-y-1">
-      <Label>{label}</Label>
-      <div className="rounded-md border border-border/60 px-2 py-1.5">
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-    </div>
-  )
 }
 
 type RuntimePairingUrlGeneratorProps = {

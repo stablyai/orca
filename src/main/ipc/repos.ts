@@ -33,7 +33,6 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import type { ClaimedCloneTarget } from '../git/repo-clone-path'
-import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
@@ -61,7 +60,7 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
-import { detectRepoIcon } from '../repo-icon-autodetect'
+import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -161,7 +160,7 @@ const ProjectGroupCancelNestedScanArgs = z.object({
 const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
   z.object({
     parentPath: z.string().min(1),
-    groupName: z.string().min(1),
+    groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
     scanId: z.string().min(1).optional(),
@@ -574,7 +573,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         })
       )
 
-      for (const repoPath of selection.selectedPaths) {
+      for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
         try {
           if (args.connectionId) {
             const gitProvider = getSshGitProvider(args.connectionId)
@@ -601,16 +600,22 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
-              store.moveProjectToGroup(existing.id, group.id)
+              store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
             }
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
             continue
           }
+          const detected = await detectRepoIconAndUpstream({
+            repoPath,
+            kind: 'git',
+            connectionId: args.connectionId
+          })
           const repo: Repo = {
             id: randomUUID(),
             path: repoPath,
             displayName: getRepoName(repoPath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
+            ...detected,
             addedAt: Date.now(),
             kind: 'git',
             ...(args.connectionId ? { connectionId: args.connectionId } : {}),
@@ -619,7 +624,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             ...(group
               ? {
                   projectGroupId: group.id,
-                  projectGroupOrder: getNextProjectGroupOrder(store.getRepos(), group.id)
+                  projectGroupOrder
                 }
               : {})
           }
@@ -679,13 +684,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: existing }
       }
 
-      const repoIcon = await detectRepoIcon({ repoPath: args.path, kind: repoKind })
+      const detected = await detectRepoIconAndUpstream({ repoPath: args.path, kind: repoKind })
       const repo: Repo = {
         id: randomUUID(),
         path: args.path,
         displayName: getRepoName(args.path),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        ...(repoIcon ? { repoIcon } : {}),
+        ...detected,
         addedAt: Date.now(),
         kind: repoKind,
         ...(repoKind === 'git'
@@ -785,7 +790,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
 
-      const repoIcon = await detectRepoIcon({
+      const detected = await detectRepoIconAndUpstream({
         repoPath: resolvedPath,
         kind: repoKind,
         connectionId: args.connectionId
@@ -795,7 +800,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         path: resolvedPath,
         displayName,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        ...(repoIcon ? { repoIcon } : {}),
+        ...detected,
         addedAt: Date.now(),
         kind: repoKind,
         connectionId: args.connectionId,
@@ -996,13 +1001,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: raceWinner }
       }
 
-      const repoIcon = await detectRepoIcon({ repoPath: targetPath, kind: repoKind })
+      const detected = await detectRepoIconAndUpstream({ repoPath: targetPath, kind: repoKind })
       const repo: Repo = {
         id: randomUUID(),
         path: targetPath,
         displayName: name,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        ...(repoIcon ? { repoIcon } : {}),
+        ...detected,
         addedAt: Date.now(),
         kind: repoKind,
         ...(repoKind === 'git'
@@ -1055,6 +1060,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'displayName'
             | 'badgeColor'
             | 'repoIcon'
+            | 'upstream'
             | 'hookSettings'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'
@@ -1400,13 +1406,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             return existing
           }
 
-          const repoIcon = await detectRepoIcon({ repoPath: clonePath, kind: 'git' })
+          const detected = await detectRepoIconAndUpstream({ repoPath: clonePath, kind: 'git' })
           const repo: Repo = {
             id: randomUUID(),
             path: clonePath,
             displayName: getRepoName(clonePath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
-            ...(repoIcon ? { repoIcon } : {}),
+            ...detected,
             addedAt: Date.now(),
             kind: 'git',
             externalWorktreeVisibility: 'hide',

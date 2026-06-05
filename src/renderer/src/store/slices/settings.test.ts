@@ -21,6 +21,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 const runtimeEnvironmentCall = vi.fn()
+const runtimeEnvironmentGetStatus = vi.fn()
 const settingsSet = vi.fn().mockResolvedValue(undefined)
 
 const env2Lineage: WorktreeLineage = {
@@ -37,6 +38,17 @@ beforeEach(() => {
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   clearRuntimeCompatibilityCacheForTests()
   vi.clearAllMocks()
+  runtimeEnvironmentGetStatus.mockResolvedValue({
+    id: 'status-rpc-1',
+    ok: true,
+    result: {
+      runtimeId: 'runtime-2',
+      graphStatus: 'ready',
+      runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+      minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+    },
+    _meta: { runtimeId: 'runtime-2' }
+  })
   runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
     const result =
       method === 'status.get'
@@ -100,7 +112,7 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     api: {
       settings: { set: settingsSet },
-      runtimeEnvironments: { call: runtimeEnvironmentCall }
+      runtimeEnvironments: { call: runtimeEnvironmentCall, getStatus: runtimeEnvironmentGetStatus }
     }
   })
 })
@@ -201,6 +213,7 @@ describe('createSettingsSlice runtime switching', () => {
       editorDrafts: { '/env-1/repo/stale.md': 'stale' },
       markdownViewMode: { '/env-1/repo/stale.md': 'rich' },
       editorViewMode: { '/env-1/repo/stale.md': 'changes' },
+      markdownFrontmatterVisible: { '/env-1/repo/stale.md': true },
       editorCursorLine: { '/env-1/repo/stale.md': 4 },
       showDotfilesByWorktree: { 'repo-env-1::/env-1/repo': false },
       gitIgnoredPathsByWorktree: { 'repo-env-1::/env-1/repo': ['dist/'] },
@@ -212,7 +225,11 @@ describe('createSettingsSlice runtime switching', () => {
     await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(true)
 
     expect(settingsSet).toHaveBeenCalledWith({ activeRuntimeEnvironmentId: 'env-2' })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+    expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
+      selector: 'env-2',
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-2', method: 'status.get' })
     )
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
@@ -255,6 +272,7 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().editorDrafts).toEqual({})
     expect(store.getState().markdownViewMode).toEqual({})
     expect(store.getState().editorViewMode).toEqual({})
+    expect(store.getState().markdownFrontmatterVisible).toEqual({})
     expect(store.getState().editorCursorLine).toEqual({})
     expect(store.getState().showDotfilesByWorktree).toEqual({})
     expect(store.getState().gitIgnoredPathsByWorktree).toEqual({})
@@ -348,7 +366,7 @@ describe('createSettingsSlice runtime switching', () => {
   })
 
   it('keeps the current environment when the selected remote server is unreachable', async () => {
-    runtimeEnvironmentCall.mockRejectedValueOnce(
+    runtimeEnvironmentGetStatus.mockRejectedValueOnce(
       new Error('Remote Orca runtime closed the connection.')
     )
     const store = createTestStore()
@@ -362,9 +380,11 @@ describe('createSettingsSlice runtime switching', () => {
     await expect(store.getState().switchRuntimeEnvironment('env-2')).resolves.toBe(false)
 
     expect(settingsSet).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({ selector: 'env-2', method: 'status.get' })
-    )
+    expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
+      selector: 'env-2',
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-1', method: 'terminal.close' })
     )
@@ -377,22 +397,16 @@ describe('createSettingsSlice runtime switching', () => {
   })
 
   it('keeps the current environment when the selected server is protocol-incompatible', async () => {
-    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
-      const result =
-        method === 'status.get'
-          ? {
-              runtimeId: 'runtime-old',
-              graphStatus: 'ready',
-              runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1,
-              minCompatibleRuntimeClientVersion: 0
-            }
-          : {}
-      return Promise.resolve({
-        id: 'rpc-1',
-        ok: true,
-        result,
-        _meta: { runtimeId: 'runtime-old' }
-      })
+    runtimeEnvironmentGetStatus.mockResolvedValueOnce({
+      id: 'status-rpc-old',
+      ok: true,
+      result: {
+        runtimeId: 'runtime-old',
+        graphStatus: 'ready',
+        runtimeProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION - 1,
+        minCompatibleRuntimeClientVersion: 0
+      },
+      _meta: { runtimeId: 'runtime-old' }
     })
     const store = createTestStore()
     store.setState({
@@ -404,12 +418,11 @@ describe('createSettingsSlice runtime switching', () => {
     await expect(store.getState().switchRuntimeEnvironment('env-old')).resolves.toBe(false)
 
     expect(settingsSet).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({ selector: 'env-old', method: 'status.get' })
-    )
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
-      expect.objectContaining({ selector: 'env-old', method: 'repo.list' })
-    )
+    expect(runtimeEnvironmentGetStatus).toHaveBeenCalledWith({
+      selector: 'env-old',
+      timeoutMs: 15_000
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(toast.error).toHaveBeenCalledWith('Failed to switch servers', {
       description: expect.stringContaining('server is too old')
     })

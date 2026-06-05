@@ -109,10 +109,7 @@ function recordRendererMemory(reason: string): void {
       totalHeapMB: toMegabytes(memory.totalJSHeapSize),
       heapLimitMB: toMegabytes(memory.jsHeapSizeLimit),
       browserWebviews: browserWebviews.browserWebviewCount,
-      parkedBrowserWebviews: browserWebviews.parkedBrowserWebviewCount,
-      registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount,
-      hiddenBrowserWebviews: browserWebviews.hiddenBrowserWebviewCount,
-      maxParkedBrowserWebviews: browserWebviews.maxParkedBrowserWebviews
+      registeredBrowserGuests: browserWebviews.registeredBrowserGuestCount
     })
   )
 }

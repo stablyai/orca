@@ -296,6 +296,7 @@ describe('registerShellHandlers', () => {
       const handler = getHandler('shell:openInExternalEditor')
 
       await expect(handler({}, workspacePath)).resolves.toEqual({ ok: true })
+      expect(resolveCliCommandMock).toHaveBeenCalledWith(EXTERNAL_EDITOR_CLI_COMMAND)
       expect(getSpawnArgsForWindowsMock).toHaveBeenCalledWith('editor-cli', [
         normalize(workspacePath)
       ])

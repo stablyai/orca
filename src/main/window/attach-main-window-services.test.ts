@@ -7,6 +7,7 @@ const {
   removeListenerMock,
   setPermissionRequestHandlerMock,
   setPermissionCheckHandlerMock,
+  setDevicePermissionHandlerMock,
   setDisplayMediaRequestHandlerMock,
   handleMock,
   removeHandlerMock,
@@ -26,6 +27,7 @@ const {
   removeListenerMock: vi.fn(),
   setPermissionRequestHandlerMock: vi.fn(),
   setPermissionCheckHandlerMock: vi.fn(),
+  setDevicePermissionHandlerMock: vi.fn(),
   setDisplayMediaRequestHandlerMock: vi.fn(),
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
@@ -168,6 +170,7 @@ describe('attachMainWindowServices', () => {
     removeHandlerMock.mockReset()
     setPermissionRequestHandlerMock.mockReset()
     setPermissionCheckHandlerMock.mockReset()
+    setDevicePermissionHandlerMock.mockReset()
     setDisplayMediaRequestHandlerMock.mockReset()
     systemPreferencesAskForMediaAccessMock.mockReset()
     systemPreferencesGetMediaAccessStatusMock.mockReset()
@@ -182,6 +185,7 @@ describe('attachMainWindowServices', () => {
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
       on: vi.fn(),
       removeListener: vi.fn()
@@ -370,6 +374,7 @@ describe('attachMainWindowServices', () => {
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
       on: browserSessionOnMock,
       removeListener: vi.fn()
@@ -434,12 +439,107 @@ describe('attachMainWindowServices', () => {
     })
   })
 
+  it('wires browser-session WebAuthn device selection for security keys', () => {
+    const browserSessionOnMock = vi.fn()
+    sessionFromPartitionMock.mockReturnValue({
+      setPermissionRequestHandler: setPermissionRequestHandlerMock,
+      setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
+      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
+      on: browserSessionOnMock,
+      removeListener: vi.fn()
+    })
+
+    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
+
+    expect(setDevicePermissionHandlerMock).toHaveBeenCalledWith(expect.any(Function))
+    const devicePermissionHandler = setDevicePermissionHandlerMock.mock.calls[0][0] as (details: {
+      deviceType: string
+      origin: string
+      device: { collections?: { usagePage?: number }[] }
+    }) => boolean
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'https://github.com',
+        device: { collections: [{ usagePage: 0xf1d0 }] }
+      })
+    ).toBe(true)
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'http://[::1]:5173',
+        device: { collections: [{ usagePage: 0xf1d0 }] }
+      })
+    ).toBe(true)
+    expect(
+      devicePermissionHandler({
+        deviceType: 'hid',
+        origin: 'https://github.com',
+        device: { collections: [{ usagePage: 1 }] }
+      })
+    ).toBe(false)
+
+    const browserCheckHandler = setPermissionCheckHandlerMock.mock.calls[1][0] as (
+      wc: unknown,
+      permission: string,
+      origin: string,
+      details?: { securityOrigin?: string }
+    ) => boolean
+    expect(browserCheckHandler(null, 'hid', '', { securityOrigin: 'https://github.com' })).toBe(
+      true
+    )
+
+    const selectHidHandler = browserSessionOnMock.mock.calls.find(
+      ([eventName]) => eventName === 'select-hid-device'
+    )?.[1] as (
+      event: { preventDefault: () => void },
+      details: {
+        deviceList: { deviceId: string; collections?: { usagePage?: number }[] }[]
+        frame: { url: string }
+      },
+      callback: (deviceId?: string) => void
+    ) => void
+    const preventDefault = vi.fn()
+    const callback = vi.fn()
+    selectHidHandler(
+      { preventDefault },
+      {
+        frame: { url: 'https://github.com' },
+        deviceList: [
+          { deviceId: 'keyboard', collections: [{ usagePage: 1 }] },
+          { deviceId: 'security-key', collections: [{ usagePage: 0xf1d0 }] }
+        ]
+      },
+      callback
+    )
+
+    expect(preventDefault).toHaveBeenCalled()
+    expect(callback).toHaveBeenCalledWith('security-key')
+
+    const selectWebAuthnHandler = browserSessionOnMock.mock.calls.find(
+      ([eventName]) => eventName === 'select-webauthn-account'
+    )?.[1] as (
+      event: { preventDefault: () => void },
+      details: { accounts: { credentialId: string }[] },
+      callback: (credentialId?: string | null) => void
+    ) => void
+    const webAuthnCallback = vi.fn()
+    selectWebAuthnHandler(
+      { preventDefault: vi.fn() },
+      { accounts: [{ credentialId: 'credential-1' }] },
+      webAuthnCallback
+    )
+    expect(webAuthnCallback).toHaveBeenCalledWith('credential-1')
+  })
+
   it('replaces the persistent browser-session download handler on re-attach', () => {
     const browserSessionOnMock = vi.fn()
     const browserSessionRemoveListenerMock = vi.fn()
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
       on: browserSessionOnMock,
       removeListener: browserSessionRemoveListenerMock
@@ -463,6 +563,7 @@ describe('attachMainWindowServices', () => {
     sessionFromPartitionMock.mockReturnValue({
       setPermissionRequestHandler: setPermissionRequestHandlerMock,
       setPermissionCheckHandler: setPermissionCheckHandlerMock,
+      setDevicePermissionHandler: setDevicePermissionHandlerMock,
       setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
       on: vi.fn(),
       removeListener: vi.fn()

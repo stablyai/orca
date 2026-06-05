@@ -52,6 +52,7 @@ const terminalLayoutSnapshotSchema = z.object({
   expandedLeafId: z.string().nullable(),
   ptyIdsByLeafId: z.record(z.string(), z.string()).optional(),
   buffersByLeafId: z.record(z.string(), z.string()).optional(),
+  scrollbackRefsByLeafId: z.record(z.string(), z.string()).optional(),
   titlesByLeafId: z.record(z.string(), z.string()).optional()
 })
 
@@ -135,7 +136,8 @@ const persistedOpenFileSchema = z.object({
   worktreeId: z.string(),
   language: z.string(),
   isPreview: z.boolean().optional(),
-  runtimeEnvironmentId: z.string().nullable().optional()
+  runtimeEnvironmentId: z.string().nullable().optional(),
+  dirtyDraftContent: z.string().optional()
 })
 
 // ─── Browser ────────────────────────────────────────────────────────
@@ -216,6 +218,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   activeWorktreeIdsOnShutdown: z.array(z.string()).optional(),
   openFilesByWorktree: z.record(z.string(), z.array(persistedOpenFileSchema)).optional(),
   activeFileIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
+  markdownFrontmatterVisible: z.record(z.string(), z.boolean()).optional(),
   browserTabsByWorktree: z.record(z.string(), z.array(browserWorkspaceSchema)).optional(),
   browserPagesByWorkspace: z.record(z.string(), z.array(browserPageSchema)).optional(),
   activeBrowserTabIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),

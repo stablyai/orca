@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
-import { APPEARANCE_PANE_SEARCH_ENTRIES } from './appearance-search'
+import { APPEARANCE_PANE_SEARCH_ENTRIES, SIDEBAR_ENTRIES } from './appearance-search'
 
 describe('getTerminalPaneSearchEntries', () => {
   it('includes the Windows right-click setting on Windows', () => {
@@ -80,5 +80,19 @@ describe('getTerminalPaneSearchEntries', () => {
     ).toBe(true)
     expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Font Size')).toBe(true)
     expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Dark Theme')).toBe(true)
+  })
+
+  it('keeps sidebar shortcut restore settings in the Appearance search index', () => {
+    const automationsEntry = SIDEBAR_ENTRIES.find(
+      (entry) => entry.title === 'Show Automations Button'
+    )
+
+    expect(automationsEntry).toBeDefined()
+    expect(automationsEntry?.keywords).toEqual(
+      expect.arrayContaining(['automations', 'sidebar', 'hide', 'show'])
+    )
+    expect(
+      APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Show Automations Button')
+    ).toBe(true)
   })
 })

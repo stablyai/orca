@@ -34,6 +34,7 @@ import {
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import EditorAutosaveController from './editor/EditorAutosaveController'
 import type { Tab, TabContentType, TabGroupLayoutNode } from '../../../shared/types'
+import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
@@ -210,6 +211,7 @@ function Terminal(): React.JSX.Element | null {
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
   const setActiveFile = useAppStore((s) => s.setActiveFile)
   const closeFile = useAppStore((s) => s.closeFile)
+  const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const pinFile = useAppStore((s) => s.pinFile)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -283,7 +285,7 @@ function Terminal(): React.JSX.Element | null {
     : ''
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const hasSplitTerminalPane = useAppStore((s) =>
-    Boolean(s.featureInteractions['terminal-pane-split']?.interactionCount)
+    hasFeatureInteraction(s.featureInteractions, 'terminal-pane-split')
   )
 
   useContextualTour(
@@ -1634,6 +1636,7 @@ function Terminal(): React.JSX.Element | null {
             onCloseBrowserTab={handleCloseBrowserTab}
             onDuplicateBrowserTab={handleDuplicateBrowserTab}
             onCloseAllFiles={handleCloseAllFiles}
+            onMakePreviewFilePermanent={makePreviewFilePermanent}
             onPinFile={pinFile}
             tabBarOrder={tabBarOrder}
           />,

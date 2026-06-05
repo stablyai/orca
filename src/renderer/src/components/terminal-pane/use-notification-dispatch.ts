@@ -5,6 +5,7 @@ import { playDesktopNotificationSound } from '@/lib/desktop-notification-sound'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
+import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/types'
 
@@ -17,6 +18,7 @@ export type TerminalNotificationEvent = {
   terminalTitle?: string
   paneKey?: string
   agentStatusSnapshot?: ParsedAgentStatusPayload
+  suppressOsNotification?: boolean
 }
 
 function hasLivePtyForWorktree(state: StoreSnapshot, candidateWorktreeId: string): boolean {
@@ -213,13 +215,6 @@ function countReposNeedingNotificationDisambiguation(state: StoreSnapshot): numb
   return Math.max(activeRepoIds.size, countReposWithWorktrees(state))
 }
 
-function isOrcaWindowForegroundFocused(): boolean {
-  if (typeof document === 'undefined') {
-    return true
-  }
-  return document.visibilityState === 'visible' && document.hasFocus()
-}
-
 /**
  * Returns a stable dispatch function for terminal notifications.
  * Reads repo/worktree labels from the store at dispatch time rather
@@ -278,15 +273,18 @@ export function dispatchTerminalNotification(
       }
     }
 
+    // Why: a native agent-complete notification needs a matching workspace
+    // card affordance even when the workspace is selected; terminal-specific
+    // tab/pane attention remains gated by the experimental terminal setting.
+    state.markWorktreeUnread(worktreeId)
     if (terminalAttentionEnabled && tabId && event.paneKey) {
-      state.markWorktreeUnread(worktreeId)
       state.markTerminalTabUnread(tabId)
       state.markTerminalPaneUnread(event.paneKey)
-    } else if (state.activeWorktreeId !== worktreeId || !isOrcaWindowForegroundFocused()) {
-      // Why: activeWorktreeId is only in-app selection. If Orca is backgrounded,
-      // a selected chat finishing still needs unread/Dock attention.
-      state.markWorktreeUnread(worktreeId)
     }
+  }
+
+  if (event.suppressOsNotification) {
+    return
   }
 
   // Why: prefer worktree.repoId over string-parsing the worktreeId. The
@@ -311,10 +309,19 @@ export function dispatchTerminalNotification(
         agentInterrupted: agentStatus.interrupted
       }
     : {}
+  const notificationId =
+    event.source === 'agent-task-complete'
+      ? buildAgentNotificationId({
+          worktreeId,
+          paneKey: event.paneKey,
+          stateStartedAt: freshStoredAgentStatus?.stateStartedAt
+        })
+      : null
 
   void window.api.notifications
     .dispatch({
       source: event.source,
+      ...(notificationId ? { notificationId } : {}),
       worktreeId,
       paneKey: event.paneKey,
       repoLabel: repo?.displayName,

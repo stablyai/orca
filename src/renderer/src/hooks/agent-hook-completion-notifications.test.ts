@@ -6,6 +6,7 @@ const dispatchTerminalNotification = vi.fn()
 
 type MockStoreState = {
   settings: {
+    experimentalTerminalAttention?: boolean
     notifications: {
       enabled: boolean
       agentTaskComplete: boolean
@@ -56,6 +57,7 @@ describe('agent hook completion notifications', () => {
     dispatchTerminalNotification.mockClear()
     mockStoreState = {
       settings: {
+        experimentalTerminalAttention: false,
         notifications: {
           enabled: true,
           agentTaskComplete: true
@@ -117,6 +119,29 @@ describe('agent hook completion notifications', () => {
           prompt: 'implement notifications',
           lastAssistantMessage: 'Done.'
         })
+      })
+    )
+  })
+
+  it('tracks hook completion for terminal attention when OS completion notifications are disabled', async () => {
+    mockStoreState.settings.experimentalTerminalAttention = true
+    mockStoreState.settings.notifications.agentTaskComplete = false
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: hookStatus('done')
+    })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
+      'wt-1',
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey,
+        suppressOsNotification: true
       })
     )
   })

@@ -38,6 +38,20 @@ import {
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
+const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 30_000
+
+type EffectiveUpstreamStatusCacheEntry = {
+  expiresAt: number
+  status: GitUpstreamStatus
+}
+
+const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
+const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+
+export function clearEffectiveUpstreamStatusCacheForTests(): void {
+  effectiveUpstreamStatusCache.clear()
+  effectiveUpstreamStatusInFlight.clear()
+}
 
 export type GetStatusOptions = {
   includeIgnored?: boolean
@@ -102,9 +116,10 @@ export async function getStatus(
 
       if (line.startsWith('# branch.head ')) {
         const branchHead = line.slice('# branch.head '.length).trim()
-        // Why: undefined (not '') for detached/empty so renderer's
-        // `identity.branch ?? worktree.branch` preserves the prior branch
-        // value when git can't report one, instead of overwriting it with ''.
+        // Why: undefined (not '') keeps this parser transport-compatible.
+        // Renderer refresh code turns "head without branch" into an explicit
+        // detached-HEAD clear signal while legacy missing-identity payloads
+        // still preserve the prior branch.
         branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
         continue
       }
@@ -170,14 +185,20 @@ export async function getStatus(
     statusSucceeded = true
 
     if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
-      try {
-        effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
-          gitExecFileAsync(args, { cwd: worktreePath })
-        )
-      } catch {
-        // Why: git status polling should not fail just because the richer
-        // upstream probe hit a transient ref/read error; the explicit
-        // upstream-status path will surface those failures when invoked.
+      const branchName = getShortBranchName(branch)
+      if (branchName) {
+        const cacheKey = getEffectiveUpstreamStatusCacheKey(worktreePath, branchName, upstreamName)
+        try {
+          effectiveUpstreamStatus = await readOrProbeEffectiveUpstreamStatus(
+            cacheKey,
+            worktreePath,
+            branchName
+          )
+        } catch {
+          // Why: git status polling should not fail just because the richer
+          // upstream probe hit a transient ref/read error; the explicit
+          // upstream-status path will surface those failures when invoked.
+        }
       }
     }
   } catch {
@@ -269,6 +290,100 @@ async function attachLineStats(worktreePath: string, entries: GitStatusEntry[]):
 function getShortBranchName(branch: string | undefined): string | null {
   const prefix = 'refs/heads/'
   return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
+}
+
+function getEffectiveUpstreamStatusCacheKey(
+  worktreePath: string,
+  branchName: string,
+  upstreamName: string | undefined
+): string {
+  return [worktreePath, branchName, upstreamName ?? ''].join('\0')
+}
+
+function readCachedEffectiveUpstreamStatus(
+  cacheKey: string,
+  now: number
+): GitUpstreamStatus | undefined {
+  const entry = effectiveUpstreamStatusCache.get(cacheKey)
+  if (!entry) {
+    return undefined
+  }
+  if (entry.expiresAt <= now) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return undefined
+  }
+  return entry.status
+}
+
+function rememberEffectiveUpstreamStatus(
+  cacheKey: string,
+  status: GitUpstreamStatus,
+  now: number,
+  probedSameNameOriginRef: boolean
+): void {
+  if (status.hasUpstream) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return
+  }
+  if (!probedSameNameOriginRef) {
+    return
+  }
+  // Why: a stable no-upstream branch should not spawn failed git probes every
+  // source-control poll, but remote refs can appear after push/fetch.
+  effectiveUpstreamStatusCache.set(cacheKey, {
+    status,
+    expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
+  })
+}
+
+async function readOrProbeEffectiveUpstreamStatus(
+  cacheKey: string,
+  worktreePath: string,
+  branchName: string
+): Promise<GitUpstreamStatus> {
+  const cached = readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
+  if (cached) {
+    return cached
+  }
+
+  const inFlight = effectiveUpstreamStatusInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  // Why: source-control mount and root git refresh can overlap during startup.
+  // Coalesce the richer upstream probe so a stable missing ref fails once.
+  const probe = probeEffectiveUpstreamStatus(worktreePath, branchName).then((result) => {
+    rememberEffectiveUpstreamStatus(
+      cacheKey,
+      result.status,
+      Date.now(),
+      result.probedSameNameOriginRef
+    )
+    return result.status
+  })
+  effectiveUpstreamStatusInFlight.set(cacheKey, probe)
+  try {
+    return await probe
+  } finally {
+    if (effectiveUpstreamStatusInFlight.get(cacheKey) === probe) {
+      effectiveUpstreamStatusInFlight.delete(cacheKey)
+    }
+  }
+}
+
+async function probeEffectiveUpstreamStatus(
+  worktreePath: string,
+  branchName: string
+): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
+  let probedSameNameOriginRef = false
+  const status = await getEffectiveGitUpstreamStatus((args) => {
+    if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
+      probedSameNameOriginRef = true
+    }
+    return gitExecFileAsync(args, { cwd: worktreePath })
+  })
+  return { status, probedSameNameOriginRef }
 }
 
 function shouldProbeEffectiveUpstreamStatus(

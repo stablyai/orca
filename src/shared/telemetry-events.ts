@@ -114,10 +114,9 @@ export type ErrorClass = z.infer<typeof errorClassSchema>
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
 export type RepoMethod = z.infer<typeof repoMethodSchema>
 
-// Setup-step affordances the user can pick after `repo_added` fires (see
-// AddRepoSetupStep). One enum because every value lives on the same screen and
-// the funnel question is "which one did they pick" — adding values later is
-// additive-safe per the schema-evolution doctrine below.
+// Historical setup-step affordances users could pick after `repo_added` fired.
+// Current Add Project flows skip that choice screen and auto-open the default
+// checkout, but the schema stays for pre-rollout rows and compatibility.
 export const addRepoSetupStepActionSchema = z.enum([
   'open_primary',
   'create_worktree',
@@ -136,6 +135,34 @@ export const addRepoExistingWorkspaceSourceSchema = z.enum([
   'create_project'
 ])
 export type AddRepoExistingWorkspaceSource = z.infer<typeof addRepoExistingWorkspaceSourceSchema>
+export const addRepoDefaultCheckoutHandoffSourceSchema = z.enum([
+  'local_folder_picker',
+  'runtime_server_path',
+  'ssh_remote_path',
+  'clone_url',
+  'create_project',
+  'onboarding_open_folder',
+  'onboarding_clone_url',
+  'project_added_compat'
+])
+export type AddRepoDefaultCheckoutHandoffSource = z.infer<
+  typeof addRepoDefaultCheckoutHandoffSourceSchema
+>
+export const addRepoDefaultCheckoutHandoffResultSchema = z.enum([
+  'opened_default_checkout',
+  'revealed_project'
+])
+export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
+  'loaded_default_checkout',
+  'detected_default_checkout',
+  'no_authoritative_detection',
+  'no_default_checkout',
+  'show_detected_default_failed',
+  'show_detected_linked_failed',
+  'authoritative_refresh_failed',
+  'linked_external_refresh_failed',
+  'refreshed_default_missing'
+])
 
 export const setupScriptImportProviderSchema = z.enum(SETUP_SCRIPT_IMPORT_PROVIDERS)
 export type SetupScriptImportProviderTelemetry = z.infer<typeof setupScriptImportProviderSchema>
@@ -430,6 +457,14 @@ const addRepoExistingWorkspacesDetectedSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+const addRepoDefaultCheckoutHandoffSchema = z
+  .object({
+    source: addRepoDefaultCheckoutHandoffSourceSchema,
+    result: addRepoDefaultCheckoutHandoffResultSchema,
+    reason: addRepoDefaultCheckoutHandoffReasonSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
 
 // Why: same enum-only discipline as `agent_error` — `.strict()` rejects raw
 // error strings if a future call site tries to attach `error_message` /
@@ -588,7 +623,7 @@ const agentHookUnattributedSchema = z
 // unless a future versioned event replaces the historical schema.
 const ONBOARDING_TELEMETRY_LEGACY_MAX_STEP = 7
 const onboardingStepSchema = z.number().int().min(1).max(ONBOARDING_TELEMETRY_LEGACY_MAX_STEP)
-const onboardingPathSchema = z.enum(['open_folder', 'clone_url'])
+const onboardingPathSchema = z.enum(['open_folder', 'clone_url', 'add_project_modal'])
 const onboardingFailureReasonSchema = z.enum([
   'invalid_path',
   'clone_failed',
@@ -1199,6 +1234,7 @@ export const eventSchemas = {
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
   add_repo_existing_workspaces_detected: addRepoExistingWorkspacesDetectedSchema,
+  add_repo_default_checkout_handoff: addRepoDefaultCheckoutHandoffSchema,
   add_repo_nested_scan_result: addRepoNestedScanResultSchema,
   add_repo_nested_import_action: addRepoNestedImportActionSchema,
   add_repo_nested_import_result: addRepoNestedImportResultSchema,
@@ -1303,6 +1339,7 @@ type _CohortExtendedRoster =
   | 'repo_added'
   | 'add_repo_setup_step_action'
   | 'add_repo_existing_workspaces_detected'
+  | 'add_repo_default_checkout_handoff'
   | 'add_repo_nested_scan_result'
   | 'add_repo_nested_import_action'
   | 'add_repo_nested_import_result'

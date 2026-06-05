@@ -1,73 +1,24 @@
-/* eslint-disable max-lines -- Why: the add-project dialog centralizes step routing, clone/remote/create state, and reset semantics across five steps so the modal flow stays in one place. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { toast } from 'sonner'
-import {
-  FolderOpen,
-  ArrowLeft,
-  Globe,
-  Monitor,
-  FolderTree,
-  Lightbulb,
-  Loader2,
-  CircleStop
-} from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { Input } from '@/components/ui/input'
-import { NestedRepoTreePreview } from '@/components/repo/NestedRepoTreePreview'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { track } from '@/lib/telemetry'
-import { RemoteStep, CloneStep, useRemoteRepo } from './AddRepoSteps'
-import { CreateStep, useCreateRepo } from './AddRepoCreateStep'
-import { getProjectAddedPrimaryBranchName, SetupStep } from './AddRepoSetupStep'
-import { getCloneDestinationAutoFill } from './clone-defaults'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import {
-  buildNestedRepoImportActionTelemetry,
-  buildNestedRepoImportResultTelemetry,
-  buildNestedRepoScanTelemetry,
-  createNestedRepoTelemetryAttemptId,
-  shouldEmitNestedRepoImportSubmitTelemetry,
-  type NestedRepoTelemetryRuntimeKind
-} from '../../../../shared/nested-repo-telemetry'
-import type {
-  AddRepoExistingWorkspaceSource,
-  AddRepoSetupStepAction
-} from '../../../../shared/telemetry-events'
-import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
-import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
+import { useRemoteRepo } from './AddRepoSteps'
+import { useCreateRepo } from './AddRepoCreateStep'
+import { buildNestedRepoScanTelemetry } from '../../../../shared/nested-repo-telemetry'
+import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
+import { AddRepoStepIndicator } from './AddRepoStepIndicator'
+import { AddRepoDialogStepContent } from './AddRepoDialogStepContent'
+import type { AddRepoDialogStep } from './add-repo-dialog-types'
+import { useAddRepoNestedReviewState } from './useAddRepoNestedReviewState'
+import { useAddRepoCloneFlow } from './useAddRepoCloneFlow'
+import { useAddRepoLocalFolderFlow } from './useAddRepoLocalFolderFlow'
+import { useAddRepoServerPathFlow } from './useAddRepoServerPathFlow'
+import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
 import {
   buildAddRepoExistingWorkspacesTelemetry,
   shouldTrackAddRepoExistingWorkspacesDetected
 } from './add-repo-existing-workspaces-telemetry'
-import {
-  effectiveExternalWorktreeVisibility,
-  isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../shared/worktree-ownership'
-import { NestedRepoScanLimitNotice } from '../repo/NestedRepoScanLimitNotice'
-
-function defaultProjectGroupNameForPath(path: string): string {
-  return (
-    path
-      .replace(/[\\/]+$/g, '')
-      .split(/[\\/]/)
-      .filter(Boolean)
-      .at(-1) ?? path
-  )
-}
-
-function createNestedRepoScanId(): string {
-  return `nested-repo-scan-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 
 const AddRepoDialog = React.memo(function AddRepoDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -77,115 +28,73 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
-  const updateRepo = useAppStore((s) => s.updateRepo)
   const repos = useAppStore((s) => s.repos)
-  const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const settings = useAppStore((s) => s.settings)
+  const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
+  const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
 
-  const [step, setStep] = useState<'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'>(
-    'add'
-  )
-  const [addedRepo, setAddedRepo] = useState<Repo | null>(null)
-  const [existingWorkspaceSource, setExistingWorkspaceSource] =
-    useState<AddRepoExistingWorkspaceSource | null>(null)
+  const [step, setStep] = useState<AddRepoDialogStep>('add')
   const [isAdding, setIsAdding] = useState(false)
-  const [serverPath, setServerPath] = useState('')
-  const [isAddingServerPath, setIsAddingServerPath] = useState(false)
   const [addProjectBusyLabel, setAddProjectBusyLabel] = useState<string | null>(null)
-  const [cloneUrl, setCloneUrl] = useState('')
-  const [cloneDestination, setCloneDestination] = useState('')
-  const [isCloning, setIsCloning] = useState(false)
-  const [cloneError, setCloneError] = useState<string | null>(null)
-  const [cloneProgress, setCloneProgress] = useState<{ phase: string; percent: number } | null>(
-    null
-  )
-  const [nestedScan, setNestedScan] = useState<NestedRepoScanResult | null>(null)
-  const [nestedSelectedPaths, setNestedSelectedPaths] = useState<Set<string>>(new Set())
-  const [nestedGroupName, setNestedGroupName] = useState('')
-  const [nestedConnectionId, setNestedConnectionId] = useState<string | null>(null)
-  const [nestedAttemptId, setNestedAttemptId] = useState<string | null>(null)
-  const [nestedRuntimeKind, setNestedRuntimeKind] = useState<NestedRepoTelemetryRuntimeKind | null>(
-    null
-  )
-  const [nestedScanInProgress, setNestedScanInProgress] = useState(false)
-  const [nestedScanId, setNestedScanId] = useState<string | null>(null)
-  const [nestedImportScanId, setNestedImportScanId] = useState<string | null>(null)
-  const nestedScanIdRef = useRef<string | null>(null)
+  const detectedTelemetryTrackedRef = useRef<Set<string>>(new Set())
+  const {
+    nestedScan,
+    nestedSelectedPaths,
+    nestedGroupName,
+    nestedConnectionId,
+    nestedAttemptId,
+    nestedRuntimeKind,
+    nestedScanInProgress,
+    nestedScanId,
+    nestedImportScanId,
+    setNestedSelectedPaths,
+    setNestedGroupName,
+    setNestedScanInProgress,
+    getNestedRepoRuntimeKind,
+    showNestedRepoReview,
+    setActiveNestedScanId,
+    handleStopNestedScan,
+    resetNestedRepoReviewState
+  } = useAddRepoNestedReviewState({
+    activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    cancelNestedRepoScan,
+    setStep
+  })
 
-  const getNestedRepoRuntimeKind = useCallback(
-    (connectionId: string | null): NestedRepoTelemetryRuntimeKind => {
-      if (connectionId) {
-        return 'ssh'
-      }
-      return settings?.activeRuntimeEnvironmentId?.trim() ? 'runtime' : 'local'
-    },
-    [settings?.activeRuntimeEnvironmentId]
-  )
-
-  const showNestedRepoReview = useCallback(
-    (args: {
-      scan: NestedRepoScanResult
-      selectedPath: string
-      connectionId: string | null
-      attemptId: string
-      runtimeKind: NestedRepoTelemetryRuntimeKind
-      inProgress: boolean
-      scanId: string | null
-    }) => {
-      setNestedScan(args.scan)
-      setNestedSelectedPaths(new Set(args.scan.repos.map((repo) => repo.path)))
-      setNestedGroupName(
-        defaultProjectGroupNameForPath(args.scan.selectedPath || args.selectedPath)
+  const completeGitRepoAdd = useCallback(
+    async (repoId: string, source: AddRepoExistingWorkspaceSource): Promise<void> => {
+      const worktrees = useAppStore.getState().worktreesByRepo[repoId] ?? []
+      const sortedWorktrees = [...worktrees].sort((a, b) => {
+        if (a.lastActivityAt !== b.lastActivityAt) {
+          return b.lastActivityAt - a.lastActivityAt
+        }
+        return a.displayName.localeCompare(b.displayName)
+      })
+      const existingWorkspaceTelemetry = buildAddRepoExistingWorkspacesTelemetry(
+        source,
+        sortedWorktrees
       )
-      setNestedConnectionId(args.connectionId)
-      setNestedAttemptId(args.attemptId)
-      setNestedRuntimeKind(args.runtimeKind)
-      setNestedScanInProgress(args.inProgress)
-      setNestedImportScanId(args.scanId)
-      setStep('nested')
+      if (
+        existingWorkspaceTelemetry &&
+        shouldTrackAddRepoExistingWorkspacesDetected(existingWorkspaceTelemetry) &&
+        !detectedTelemetryTrackedRef.current.has(repoId)
+      ) {
+        detectedTelemetryTrackedRef.current.add(repoId)
+        track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
+      }
+      await finishProjectAddWithDefaultCheckout({
+        repoId,
+        source,
+        closeModal,
+        setHideDefaultBranchWorkspace
+      })
     },
-    []
+    [closeModal, setHideDefaultBranchWorkspace]
   )
-
-  const setActiveNestedScanId = useCallback((scanId: string | null) => {
-    nestedScanIdRef.current = scanId
-    setNestedScanId(scanId)
-  }, [])
-
-  const handleStopNestedScan = useCallback(() => {
-    const scanId = nestedScanIdRef.current
-    if (!scanId) {
-      return
-    }
-    void cancelNestedRepoScan(scanId)
-  }, [cancelNestedRepoScan])
-
-  // Why: monotonic ID so stale clone callbacks can detect they were superseded.
-  const cloneGenRef = useRef(0)
-  // Why: local folder picking/scanning can outlive the dialog; resetState
-  // invalidates stale continuations before they can repopulate closed UI.
-  const localAddGenRef = useRef(0)
-  // Why: server path adds share the same dialog but run against a runtime
-  // server; resetState cancels their stale scan/add/fetch continuations.
-  const serverAddGenRef = useRef(0)
-  // Why: nested group import can create many repos; resetState must prevent
-  // stale import completions from reopening setup UI after Back/close.
-  const nestedImportGenRef = useRef(0)
-  // Why: setup actions can await settings/worktree refreshes; resetState
-  // cancels stale continuations when the setup step is dismissed.
-  const setupActionGenRef = useRef(0)
-  // Why: a dropped path is modal data, so ordinary state updates must not
-  // re-run the import while the Add Project dialog advances through steps.
-  const droppedLocalPathHandledRef = useRef<string | null>(null)
-  // Why: track whether we've already auto-filled for this entry into the clone step,
-  // so a late settings hydration still gets a chance to set the default.
-  const cloneStepAutoFilledRef = useRef(false)
 
   const {
     sshTargets,
@@ -205,9 +114,8 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
   } = useRemoteRepo(
     fetchWorktrees,
     setStep,
-    setAddedRepo,
     closeModal,
-    setExistingWorkspaceSource,
+    (repoId) => completeGitRepoAdd(repoId, 'ssh_remote_path'),
     scanNestedRepos,
     (scan, selectedPath, connectionId, attemptId, inProgress, scanId) => {
       setActiveNestedScanId(inProgress ? scanId : null)
@@ -247,708 +155,121 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     resetCreateState,
     handlePickParent,
     handleCreate
-  } = useCreateRepo(fetchWorktrees, setStep, setAddedRepo, closeModal, setExistingWorkspaceSource)
-  useEffect(() => {
-    if (!isCloning) {
-      return
-    }
-    return window.api.repos.onCloneProgress(setCloneProgress)
-  }, [isCloning])
+  } = useCreateRepo(fetchWorktrees, closeModal, (repoId) =>
+    completeGitRepoAdd(repoId, 'create_project')
+  )
 
-  const cloneDestinationAutoFill = getCloneDestinationAutoFill({
-    step,
+  const {
+    cloneUrl,
     cloneDestination,
+    cloneError,
+    cloneProgress,
+    isCloning,
+    setCloneUrl,
+    setCloneDestination,
+    setCloneError,
+    resetCloneFlow,
+    handlePickDestination,
+    handleClone
+  } = useAddRepoCloneFlow({
+    step,
     activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
     workspaceDir: settings?.workspaceDir,
-    cloneStepAutoFilled: cloneStepAutoFilledRef.current
+    fetchWorktrees,
+    onGitRepoReady: completeGitRepoAdd
   })
-  if (step !== 'clone') {
-    cloneStepAutoFilledRef.current = false
-  } else if (cloneDestinationAutoFill) {
-    // Why: late settings hydration should still seed the local clone path,
-    // but runtime/server clone flows must keep their destination user-entered.
-    cloneStepAutoFilledRef.current = true
-    setCloneDestination(cloneDestinationAutoFill.destination)
-  }
 
   const isOpen = activeModal === 'add-repo'
   const droppedLocalPath =
     typeof modalData.droppedLocalPath === 'string' ? modalData.droppedLocalPath : ''
-  const projectId = addedRepo?.id ?? ''
   const isRuntimeEnvironmentActive = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  // Why: repo_added telemetry cannot reliably separate SSH from local folder adds,
+  // so promote remote projects from durable local SSH state instead.
+  const isSshLikely =
+    repos.some((repo) => Boolean(repo.connectionId)) ||
+    sshTargetLabels.size > 0 ||
+    Array.from(sshConnectionStates.values()).some((state) => state.status === 'connected')
 
-  const worktrees = useMemo(() => {
-    return worktreesByRepo[projectId] ?? []
-  }, [worktreesByRepo, projectId])
-  const detectedResult = projectId ? detectedWorktreesByRepo[projectId] : undefined
-  const hiddenWorktreeCount =
-    detectedResult?.authoritative === true
-      ? detectedResult.worktrees.filter(
-          (worktree) => !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
-        ).length
-      : 0
-  const otherWorktreesVisible = addedRepo
-    ? effectiveExternalWorktreeVisibility(
-        addedRepo,
-        isLegacyRepoForExternalWorktreeVisibility(addedRepo)
-      ) === 'show'
-    : false
-
-  // Why: sort by recent activity with alphabetical fallback.
-  const sortedWorktrees = useMemo(() => {
-    return [...worktrees].sort((a, b) => {
-      if (a.lastActivityAt !== b.lastActivityAt) {
-        return b.lastActivityAt - a.lastActivityAt
-      }
-      return a.displayName.localeCompare(b.displayName)
+  const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
+    isOpen,
+    droppedLocalPath,
+    activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+    addRepoPath,
+    closeModal,
+    fetchWorktrees,
+    scanNestedRepos,
+    setActiveNestedScanId,
+    setNestedScanInProgress,
+    showNestedRepoReview,
+    onGitRepoReady: completeGitRepoAdd,
+    setIsAdding,
+    setAddProjectBusyLabel
+  })
+  const {
+    serverPath,
+    isAddingServerPath,
+    setServerPath,
+    resetServerPathFlow,
+    handleAddServerPath
+  } = useAddRepoServerPathFlow({
+    addRepoPath,
+    closeModal,
+    fetchWorktrees,
+    getNestedRepoRuntimeKind,
+    scanNestedRepos,
+    setActiveNestedScanId,
+    setNestedScanInProgress,
+    showNestedRepoReview,
+    onGitRepoReady: completeGitRepoAdd,
+    setAddProjectBusyLabel
+  })
+  const { handleImportNestedRepos, resetNestedImportFlow, trackNestedBackAction } =
+    useAddRepoNestedImportFlow({
+      nestedAttemptId,
+      nestedScan,
+      nestedSelectedPaths,
+      nestedRuntimeKind,
+      nestedConnectionId,
+      nestedGroupName,
+      nestedImportScanId,
+      activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+      fetchWorktrees,
+      importNestedRepos,
+      getNestedRepoRuntimeKind,
+      onGitRepoReady: completeGitRepoAdd,
+      setIsAdding
     })
-  }, [worktrees])
-  const primaryWorktree = useMemo(
-    () => sortedWorktrees.find((worktree) => worktree.isMainWorktree) ?? null,
-    [sortedWorktrees]
-  )
-  const primaryBranchName = getProjectAddedPrimaryBranchName(primaryWorktree)
 
   const resetState = useCallback(() => {
-    const activeNestedScanId = nestedScanIdRef.current
-    if (activeNestedScanId) {
-      void cancelNestedRepoScan(activeNestedScanId)
-    }
-    cloneGenRef.current++
-    localAddGenRef.current++
-    serverAddGenRef.current++
-    nestedImportGenRef.current++
-    setupActionGenRef.current++
     // Why: kill the git clone process if one is running, so backing out
     // or closing the dialog doesn't leave a clone running on disk.
     void window.api.repos.cloneAbort()
+    resetLocalFolderFlow()
     setStep('add')
-    setAddedRepo(null)
-    setExistingWorkspaceSource(null)
     setIsAdding(false)
-    setServerPath('')
-    setIsAddingServerPath(false)
     setAddProjectBusyLabel(null)
-    setCloneUrl('')
-    setCloneDestination('')
-    setIsCloning(false)
-    setCloneError(null)
-    setCloneProgress(null)
-    setNestedScan(null)
-    setNestedSelectedPaths(new Set())
-    setNestedGroupName('')
-    setNestedConnectionId(null)
-    setNestedAttemptId(null)
-    setNestedRuntimeKind(null)
-    setNestedScanInProgress(false)
-    setNestedImportScanId(null)
-    setActiveNestedScanId(null)
+    resetServerPathFlow()
+    resetCloneFlow()
+    resetNestedImportFlow()
+    resetNestedRepoReviewState()
     resetCreateState()
     resetRemoteState()
-  }, [cancelNestedRepoScan, resetRemoteState, resetCreateState, setActiveNestedScanId])
+  }, [
+    resetCloneFlow,
+    resetLocalFolderFlow,
+    resetNestedRepoReviewState,
+    resetServerPathFlow,
+    resetNestedImportFlow,
+    resetRemoteState,
+    resetCreateState
+  ])
 
   // Why: reset state on close so reopening doesn't show stale step/repo.
   useEffect(() => {
     if (!isOpen) {
-      droppedLocalPathHandledRef.current = null
       resetState()
     }
   }, [isOpen, resetState])
-
-  const isInputStep =
-    step === 'add' ||
-    step === 'clone' ||
-    step === 'remote' ||
-    step === 'create' ||
-    step === 'nested'
-
-  const handleAddLocalPath = useCallback(
-    async (path: string, source: AddRepoExistingWorkspaceSource) => {
-      if (settings?.activeRuntimeEnvironmentId?.trim()) {
-        toast.error('Use a server path to add projects from a remote runtime.')
-        closeModal()
-        return
-      }
-      const gen = ++localAddGenRef.current
-      setIsAdding(true)
-      setAddProjectBusyLabel('Scanning for repositories...')
-      try {
-        const attemptId = createNestedRepoTelemetryAttemptId()
-        const scanId = createNestedRepoScanId()
-        setActiveNestedScanId(scanId)
-        setNestedScanInProgress(true)
-        const scan = await scanNestedRepos(path, undefined, {
-          scanId,
-          onProgress: (progressScan) => {
-            if (
-              gen !== localAddGenRef.current ||
-              progressScan.selectedPathKind !== 'non_git_folder' ||
-              progressScan.repos.length === 0
-            ) {
-              return
-            }
-            showNestedRepoReview({
-              scan: progressScan,
-              selectedPath: path,
-              connectionId: null,
-              attemptId,
-              runtimeKind: 'local',
-              inProgress: true,
-              scanId
-            })
-          }
-        })
-        if (gen !== localAddGenRef.current) {
-          return
-        }
-        setNestedScanInProgress(false)
-        setActiveNestedScanId(null)
-        track(
-          'add_repo_nested_scan_result',
-          buildNestedRepoScanTelemetry({
-            attemptId,
-            surface: 'sidebar',
-            runtimeKind: 'local',
-            scan
-          })
-        )
-        if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-          showNestedRepoReview({
-            scan,
-            selectedPath: path,
-            connectionId: null,
-            attemptId,
-            runtimeKind: 'local',
-            inProgress: false,
-            scanId
-          })
-          return
-        }
-        setAddProjectBusyLabel('Opening project...')
-        const repo = await addRepoPath(path)
-        if (gen !== localAddGenRef.current) {
-          return
-        }
-        if (repo && isGitRepoKind(repo)) {
-          setAddedRepo(repo)
-          setExistingWorkspaceSource(source)
-          await fetchWorktrees(repo.id)
-          if (gen !== localAddGenRef.current) {
-            return
-          }
-          setStep('setup')
-        } else if (repo) {
-          // Why: folder repos skip the Git worktree setup step and activate
-          // their synthetic root workspace in the folder add flow.
-          closeModal()
-        }
-      } finally {
-        if (gen === localAddGenRef.current) {
-          setNestedScanInProgress(false)
-          setActiveNestedScanId(null)
-          setIsAdding(false)
-          setAddProjectBusyLabel(null)
-        }
-      }
-    },
-    [
-      addRepoPath,
-      closeModal,
-      fetchWorktrees,
-      scanNestedRepos,
-      setActiveNestedScanId,
-      settings?.activeRuntimeEnvironmentId,
-      showNestedRepoReview
-    ]
-  )
-
-  useEffect(() => {
-    if (!isOpen || !droppedLocalPath) {
-      return
-    }
-    if (droppedLocalPathHandledRef.current === droppedLocalPath) {
-      return
-    }
-    droppedLocalPathHandledRef.current = droppedLocalPath
-    void handleAddLocalPath(droppedLocalPath, 'local_folder_picker')
-  }, [droppedLocalPath, handleAddLocalPath, isOpen])
-
-  const handleBrowse = useCallback(async () => {
-    const gen = ++localAddGenRef.current
-    setIsAdding(true)
-    setAddProjectBusyLabel('Choose a folder...')
-    try {
-      const path = await window.api.repos.pickFolder()
-      if (!path || gen !== localAddGenRef.current) {
-        return
-      }
-      await handleAddLocalPath(path, 'local_folder_picker')
-    } finally {
-      if (gen === localAddGenRef.current) {
-        setIsAdding(false)
-      }
-    }
-  }, [handleAddLocalPath])
-
-  const handleImportNestedRepos = useCallback(
-    async (mode: 'group' | 'separate') => {
-      const attemptId = nestedAttemptId
-      if (
-        !nestedScan ||
-        !attemptId ||
-        !shouldEmitNestedRepoImportSubmitTelemetry({
-          attemptId,
-          selectedCount: nestedSelectedPaths.size
-        })
-      ) {
-        return
-      }
-      const foundCount = nestedScan.repos.length
-      const selectedCount = nestedSelectedPaths.size
-      const runtimeKind = nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId)
-      const gen = ++nestedImportGenRef.current
-      setIsAdding(true)
-      track(
-        'add_repo_nested_import_action',
-        buildNestedRepoImportActionTelemetry({
-          attemptId,
-          surface: 'sidebar',
-          runtimeKind,
-          action: mode === 'group' ? 'import_group' : 'import_separate',
-          foundCount,
-          selectedCount
-        })
-      )
-      let resultTracked = false
-      try {
-        const result = await importNestedRepos({
-          parentPath: nestedScan.selectedPath,
-          groupName: nestedGroupName,
-          projectPaths: [...nestedSelectedPaths],
-          ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
-          ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
-          mode
-        })
-        track(
-          'add_repo_nested_import_result',
-          buildNestedRepoImportResultTelemetry({
-            attemptId,
-            surface: 'sidebar',
-            runtimeKind,
-            mode,
-            foundCount,
-            selectedCount,
-            result
-          })
-        )
-        resultTracked = true
-        if (!result) {
-          return
-        }
-        const importedRepoIds = result.projects
-          .map((entry) => entry.projectId)
-          .filter((projectId): projectId is string => typeof projectId === 'string')
-        const firstRepoId = importedRepoIds[0]
-        if (!firstRepoId) {
-          const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
-          if (gen === nestedImportGenRef.current) {
-            toast.error('No repositories imported', {
-              description: firstFailure ?? undefined
-            })
-          }
-          return
-        }
-        for (const projectId of importedRepoIds) {
-          await fetchWorktrees(projectId)
-        }
-        if (gen !== nestedImportGenRef.current) {
-          return
-        }
-        const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
-        if (repo) {
-          setAddedRepo(repo)
-          setExistingWorkspaceSource(
-            nestedConnectionId
-              ? 'ssh_remote_path'
-              : settings?.activeRuntimeEnvironmentId?.trim()
-                ? 'runtime_server_path'
-                : 'local_folder_picker'
-          )
-          setStep('setup')
-        }
-        if (result.failedCount > 0) {
-          if (gen === nestedImportGenRef.current) {
-            toast.warning('Some repositories could not be imported', {
-              description: `${result.failedCount} failed`
-            })
-          }
-        }
-      } finally {
-        if (!resultTracked) {
-          track(
-            'add_repo_nested_import_result',
-            buildNestedRepoImportResultTelemetry({
-              attemptId,
-              surface: 'sidebar',
-              runtimeKind,
-              mode,
-              foundCount,
-              selectedCount,
-              result: null
-            })
-          )
-        }
-        if (gen === nestedImportGenRef.current) {
-          setIsAdding(false)
-        }
-      }
-    },
-    [
-      fetchWorktrees,
-      importNestedRepos,
-      nestedGroupName,
-      nestedAttemptId,
-      nestedScan,
-      nestedSelectedPaths,
-      nestedImportScanId,
-      nestedConnectionId,
-      nestedRuntimeKind,
-      getNestedRepoRuntimeKind,
-      settings?.activeRuntimeEnvironmentId
-    ]
-  )
-
-  const handleAddServerPath = useCallback(
-    async (kind: 'git' | 'folder') => {
-      const path = serverPath.trim()
-      if (!path) {
-        return
-      }
-      const gen = ++serverAddGenRef.current
-      setIsAddingServerPath(true)
-      setAddProjectBusyLabel(kind === 'git' ? 'Scanning for repositories...' : 'Opening folder...')
-      try {
-        if (kind === 'git') {
-          const attemptId = createNestedRepoTelemetryAttemptId()
-          const runtimeKind = getNestedRepoRuntimeKind(null)
-          const supportsStreamingScan = runtimeKind !== 'runtime'
-          const scanId = supportsStreamingScan ? createNestedRepoScanId() : null
-          if (scanId) {
-            setActiveNestedScanId(scanId)
-            setNestedScanInProgress(true)
-          }
-          const scan = await scanNestedRepos(
-            path,
-            undefined,
-            scanId
-              ? {
-                  scanId,
-                  onProgress: (progressScan) => {
-                    if (
-                      gen !== serverAddGenRef.current ||
-                      progressScan.selectedPathKind !== 'non_git_folder' ||
-                      progressScan.repos.length === 0
-                    ) {
-                      return
-                    }
-                    showNestedRepoReview({
-                      scan: progressScan,
-                      selectedPath: path,
-                      connectionId: null,
-                      attemptId,
-                      runtimeKind,
-                      inProgress: true,
-                      scanId
-                    })
-                  }
-                }
-              : undefined
-          )
-          if (gen !== serverAddGenRef.current) {
-            return
-          }
-          setNestedScanInProgress(false)
-          setActiveNestedScanId(null)
-          track(
-            'add_repo_nested_scan_result',
-            buildNestedRepoScanTelemetry({
-              attemptId,
-              surface: 'sidebar',
-              runtimeKind,
-              scan
-            })
-          )
-          if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-            showNestedRepoReview({
-              scan,
-              selectedPath: path,
-              connectionId: null,
-              attemptId,
-              runtimeKind,
-              inProgress: false,
-              scanId
-            })
-            return
-          }
-        }
-        setAddProjectBusyLabel(kind === 'git' ? 'Opening project...' : 'Opening folder...')
-        const repo = await addRepoPath(path, kind)
-        if (gen !== serverAddGenRef.current) {
-          return
-        }
-        if (repo && isGitRepoKind(repo)) {
-          setAddedRepo(repo)
-          setExistingWorkspaceSource('runtime_server_path')
-          await fetchWorktrees(repo.id)
-          if (gen !== serverAddGenRef.current) {
-            return
-          }
-          setStep('setup')
-        } else if (repo) {
-          // Why: folder repos skip the Git worktree setup step; their synthetic
-          // root workspace is opened by the folder add flow.
-          closeModal()
-        }
-      } finally {
-        if (gen === serverAddGenRef.current) {
-          setNestedScanInProgress(false)
-          setActiveNestedScanId(null)
-          setIsAddingServerPath(false)
-          setAddProjectBusyLabel(null)
-        }
-      }
-    },
-    [
-      addRepoPath,
-      closeModal,
-      fetchWorktrees,
-      getNestedRepoRuntimeKind,
-      scanNestedRepos,
-      serverPath,
-      setActiveNestedScanId,
-      showNestedRepoReview
-    ]
-  )
-
-  const handlePickDestination = useCallback(async () => {
-    if (settings?.activeRuntimeEnvironmentId?.trim()) {
-      // Why: the native folder picker returns a client-local path. Runtime
-      // clone destinations must be typed as server paths.
-      toast.error('Enter a server path for the clone destination.')
-      return
-    }
-    const gen = cloneGenRef.current
-    const dir = await window.api.repos.pickDirectory()
-    if (dir && gen === cloneGenRef.current) {
-      setCloneDestination(dir)
-      setCloneError(null)
-    }
-  }, [settings?.activeRuntimeEnvironmentId])
-
-  const handleClone = useCallback(async () => {
-    const trimmedUrl = cloneUrl.trim()
-    if (!trimmedUrl || !cloneDestination.trim()) {
-      return
-    }
-    const gen = ++cloneGenRef.current
-    setIsCloning(true)
-    setCloneError(null)
-    setCloneProgress(null)
-    try {
-      const target = getActiveRuntimeTarget(useAppStore.getState().settings)
-      const repo =
-        target.kind === 'environment'
-          ? (
-              await callRuntimeRpc<{ repo: Repo }>(
-                target,
-                'repo.clone',
-                {
-                  url: trimmedUrl,
-                  destination: cloneDestination.trim()
-                },
-                { timeoutMs: 10 * 60_000 }
-              )
-            ).repo
-          : ((await window.api.repos.clone({
-              url: trimmedUrl,
-              destination: cloneDestination.trim()
-            })) as Repo)
-      // Why: if the user closed the dialog or clicked Back during the clone,
-      // cloneGenRef will have been bumped by resetState. Ignore this stale result.
-      if (gen !== cloneGenRef.current) {
-        return
-      }
-      toast.success('Repository cloned', { description: repo.displayName })
-      // Why: eagerly upsert so step 2 finds the repo before the IPC event.
-      const state = useAppStore.getState()
-      const existingIdx = state.repos.findIndex((r) => r.id === repo.id)
-      if (existingIdx === -1) {
-        useAppStore.setState({ repos: [...state.repos, repo] })
-      } else {
-        const updated = [...state.repos]
-        updated[existingIdx] = repo
-        useAppStore.setState({ repos: updated })
-      }
-      setAddedRepo(repo)
-      setExistingWorkspaceSource('clone_url')
-      await fetchWorktrees(repo.id)
-      if (gen !== cloneGenRef.current) {
-        return
-      }
-      setStep('setup')
-    } catch (err) {
-      if (gen !== cloneGenRef.current) {
-        return
-      }
-      const message = err instanceof Error ? err.message : String(err)
-      setCloneError(message)
-    } finally {
-      if (gen === cloneGenRef.current) {
-        setIsCloning(false)
-      }
-    }
-  }, [cloneUrl, cloneDestination, fetchWorktrees])
-
-  const existingWorkspaceTelemetry = useMemo(
-    () => buildAddRepoExistingWorkspacesTelemetry(existingWorkspaceSource, sortedWorktrees),
-    [existingWorkspaceSource, sortedWorktrees]
-  )
-
-  const detectedTelemetryTrackedRef = useRef<Set<string>>(new Set())
-  useEffect(() => {
-    if (
-      step !== 'setup' ||
-      !projectId ||
-      !existingWorkspaceTelemetry ||
-      !shouldTrackAddRepoExistingWorkspacesDetected(existingWorkspaceTelemetry) ||
-      detectedTelemetryTrackedRef.current.has(projectId)
-    ) {
-      return
-    }
-    detectedTelemetryTrackedRef.current.add(projectId)
-    track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
-  }, [existingWorkspaceSource, existingWorkspaceTelemetry, projectId, step])
-
-  const trackSetupAction = useCallback(
-    (action: AddRepoSetupStepAction): void => {
-      track('add_repo_setup_step_action', {
-        action,
-        ...(existingWorkspaceTelemetry
-          ? {
-              source: existingWorkspaceTelemetry.source,
-              existing_workspace_count: existingWorkspaceTelemetry.existing_workspace_count,
-              existing_linked_workspace_count:
-                existingWorkspaceTelemetry.existing_linked_workspace_count
-            }
-          : {})
-      })
-    },
-    [existingWorkspaceTelemetry]
-  )
-
-  const handleCreateWorktree = useCallback(
-    (name?: string) => {
-      // Why: Setup-step "Create" affordance — fires on click intent, not on IPC arrival, mirroring the other 4 actions in this dialog.
-      trackSetupAction('create_worktree')
-      // Why: small delay so the Add Project dialog close animation finishes before
-      // the composer modal takes focus; otherwise the dialog teardown can steal
-      // the first focus frame from the composer's prompt textarea.
-      closeModal()
-      setTimeout(() => {
-        openModal('new-workspace-composer', {
-          initialRepoId: projectId,
-          ...(name ? { prefilledName: name } : {}),
-          telemetrySource: 'sidebar'
-        })
-      }, 150)
-    },
-    [closeModal, openModal, projectId, trackSetupAction]
-  )
-
-  const handleStartPrimaryWorktree = useCallback(() => {
-    if (!primaryWorktree) {
-      return
-    }
-    trackSetupAction('open_primary')
-    closeModal()
-    if (useAppStore.getState().hideDefaultBranchWorkspace) {
-      setHideDefaultBranchWorkspace(false)
-    }
-    activateAndRevealWorktree(primaryWorktree.id)
-  }, [closeModal, primaryWorktree, setHideDefaultBranchWorkspace, trackSetupAction])
-
-  const handleConfigureRepo = useCallback(() => {
-    trackSetupAction('configure')
-    closeModal()
-    openSettingsTarget({ pane: 'repo', repoId: projectId })
-    openSettingsPage()
-  }, [closeModal, openSettingsTarget, openSettingsPage, projectId, trackSetupAction])
-
-  const finishImportedRepoWithoutOpening = useCallback(async () => {
-    const importedRepoId = projectId
-    closeModal()
-    resetState()
-    if (!importedRepoId) {
-      return
-    }
-
-    await fetchWorktrees(importedRepoId)
-    const state = useAppStore.getState()
-    finalizeImportedRepoAfterSkip(state, importedRepoId)
-  }, [closeModal, fetchWorktrees, projectId, resetState])
-
-  const handleUseExistingWorktrees = useCallback(async () => {
-    if (!projectId) {
-      return
-    }
-    const gen = ++setupActionGenRef.current
-    trackSetupAction('open_existing')
-    if (!otherWorktreesVisible) {
-      const updated = await updateRepo(projectId, { externalWorktreeVisibility: 'show' })
-      if (gen !== setupActionGenRef.current) {
-        return
-      }
-      if (updated && addedRepo) {
-        setAddedRepo({ ...addedRepo, externalWorktreeVisibility: 'show' })
-      }
-      await fetchWorktrees(projectId)
-      if (gen !== setupActionGenRef.current) {
-        return
-      }
-    }
-    await finishImportedRepoWithoutOpening()
-  }, [
-    addedRepo,
-    fetchWorktrees,
-    finishImportedRepoWithoutOpening,
-    otherWorktreesVisible,
-    projectId,
-    trackSetupAction,
-    updateRepo
-  ])
-
-  const trackNestedBackAction = useCallback((): void => {
-    if (nestedScan && nestedAttemptId) {
-      track(
-        'add_repo_nested_import_action',
-        buildNestedRepoImportActionTelemetry({
-          attemptId: nestedAttemptId,
-          surface: 'sidebar',
-          runtimeKind: nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId),
-          action: 'back',
-          foundCount: nestedScan.repos.length,
-          selectedCount: nestedSelectedPaths.size
-        })
-      )
-    }
-  }, [
-    getNestedRepoRuntimeKind,
-    nestedAttemptId,
-    nestedConnectionId,
-    nestedRuntimeKind,
-    nestedScan,
-    nestedSelectedPaths.size
-  ])
 
   // Why: handleBack reuses resetState which already aborts clones and resets all fields.
   const handleBack = useCallback(() => {
@@ -958,29 +279,11 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
     resetState()
   }, [resetState, step, trackNestedBackAction])
 
-  // Why: only the Setup step's "Add another project" back arrow counts as a
-  // funnel event — the in-flight Back arrows on clone/remote/create are not
-  // a Setup-step affordance. Keeping the emit scoped to this handler avoids
-  // also tagging mid-clone backs.
-  const handleSetupStepBack = useCallback(() => {
-    trackSetupAction('back')
-    handleBack()
-  }, [handleBack, trackSetupAction])
-
   return (
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
         if (!open) {
-          // Why: Radix only fires onOpenChange for internal triggers (X icon, ESC,
-          // outside-click), so this branch only runs for implicit closes — explicit
-          // Skip is handled on its own renderer-side click handler. Implicit closes
-          // on the Setup step are funnel-equivalent to Skip.
-          if (step === 'setup') {
-            trackSetupAction('skip')
-            void finishImportedRepoWithoutOpening()
-            return
-          }
           if (step === 'nested' && !isAdding) {
             trackNestedBackAction()
           }
@@ -994,416 +297,94 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           step === 'nested' ? 'max-h-[calc(100vh-2rem)] grid-rows-[auto_auto_minmax(0,1fr)]' : ''
         }`}
       >
-        {/* Step indicator row — back button (step 2 only), dots, X is rendered by DialogContent */}
-        <div className="flex items-center justify-center -mt-1">
-          {(step === 'clone' || step === 'remote' || step === 'create') && (
-            <button
-              className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              onClick={handleBack}
-            >
-              <ArrowLeft className="size-3" />
-              Back
-            </button>
-          )}
-          {step === 'nested' && (
-            <button
-              className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:cursor-default disabled:opacity-40"
-              disabled={isAdding}
-              onClick={handleBack}
-            >
-              <ArrowLeft className="size-3" />
-              Back
-            </button>
-          )}
-          {step === 'setup' && (
-            <button
-              className="absolute left-6 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              onClick={handleSetupStepBack}
-            >
-              <ArrowLeft className="size-3" />
-              Add another project
-            </button>
-          )}
-          <div className="flex items-center gap-1.5">
-            <div
-              className={`size-1.5 rounded-full transition-colors ${isInputStep ? 'bg-foreground' : 'bg-muted-foreground/30'}`}
-            />
-            <div
-              className={`size-1.5 rounded-full transition-colors ${step === 'setup' ? 'bg-foreground' : 'bg-muted-foreground/30'}`}
-            />
-          </div>
-        </div>
-
-        {step === 'add' && isRuntimeEnvironmentActive ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Add a server project</DialogTitle>
-              <DialogDescription>
-                Add a Git repository or folder that already exists on the selected runtime server.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="space-y-3 pt-2">
-              <div className="space-y-1">
-                <label
-                  htmlFor="server-project-path"
-                  className="text-[11px] font-medium text-muted-foreground block"
-                >
-                  Server path
-                </label>
-                <Input
-                  id="server-project-path"
-                  value={serverPath}
-                  onChange={(event) => setServerPath(event.target.value)}
-                  placeholder="/home/user/project"
-                  className="h-11 text-sm font-mono"
-                  disabled={isAddingServerPath}
-                  autoFocus
-                  spellCheck={false}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  onClick={() => void handleAddServerPath('git')}
-                  disabled={!serverPath.trim() || isAddingServerPath}
-                  className="h-10"
-                >
-                  Add Git Project
-                </Button>
-                <Button
-                  onClick={() => void handleAddServerPath('folder')}
-                  disabled={!serverPath.trim() || isAddingServerPath}
-                  variant="outline"
-                  className="h-10"
-                >
-                  Open as Folder
-                </Button>
-              </div>
-              {isAddingServerPath && addProjectBusyLabel ? (
-                <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-                  <Loader2 className="size-3.5 shrink-0 animate-spin" />
-                  <span>{addProjectBusyLabel}</span>
-                </div>
-              ) : null}
-              <div className="flex items-center justify-center gap-4 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCloneError(null)
-                    setStep('clone')
-                  }}
-                  disabled={isAddingServerPath}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
-                >
-                  Clone into server path
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCreateError(null)
-                    setStep('create')
-                  }}
-                  disabled={isAddingServerPath}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
-                >
-                  Create on server
-                </button>
-              </div>
-            </div>
-          </>
-        ) : step === 'add' ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Add a project</DialogTitle>
-              <DialogDescription>
-                {repos.length === 0
-                  ? 'Add a project to get started with Orca.'
-                  : 'Add another project to manage with Orca.'}
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid grid-cols-3 gap-3 pt-2">
-              <Button
-                onClick={handleBrowse}
-                disabled={isAdding}
-                variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
-              >
-                <FolderOpen className="size-6 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Browse folder</p>
-                  <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
-                    Local Git project or folder
-                  </p>
-                </div>
-              </Button>
-
-              <Button
-                onClick={() => setStep('clone')}
-                disabled={isAdding}
-                variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
-              >
-                <Globe className="size-6 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Clone from URL</p>
-                  <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
-                    Remote Git repository
-                  </p>
-                </div>
-              </Button>
-
-              <Button
-                onClick={handleOpenRemoteStep}
-                disabled={isAdding}
-                variant="outline"
-                className="h-auto py-5 px-2 flex flex-col items-center gap-2 text-center border-border/80"
-              >
-                <Monitor className="size-6 text-muted-foreground" />
-                <div>
-                  <p className="text-sm font-medium">Remote project</p>
-                  <p className="text-[11px] text-muted-foreground font-normal mt-0.5">
-                    SSH connected target
-                  </p>
-                </div>
-              </Button>
-            </div>
-
-            {isAdding && addProjectBusyLabel ? (
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 shrink-0 animate-spin" />
-                <span className="min-w-0 flex-1">{addProjectBusyLabel}</span>
-                {nestedScanInProgress && nestedScanId ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
-                        aria-label="Stop scan"
-                        title="Stop scanning"
-                        onClick={handleStopNestedScan}
-                      >
-                        <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
-                        <CircleStop className="hidden size-3.5 group-hover:block group-focus-visible:block" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={4}>
-                      Scanning repositories. Click to stop.
-                    </TooltipContent>
-                  </Tooltip>
-                ) : null}
-              </div>
-            ) : null}
-
-            <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-              <span className="grid size-6 shrink-0 place-items-center rounded-md border border-border bg-background text-foreground">
-                <Lightbulb className="size-3.5" />
-              </span>
-              <span>Want to import many repos at once? Select the parent folder.</span>
-            </div>
-
-            {/* Secondary link rather than a fourth card — create-from-scratch
-               is a less common path than importing. See orca#763. */}
-            <div className="flex items-center justify-center pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setCreateError(null)
-                  setStep('create')
-                }}
-                disabled={isAdding}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
-              >
-                Or start a new project from scratch
-              </button>
-            </div>
-          </>
-        ) : step === 'remote' ? (
-          <RemoteStep
-            sshTargets={sshTargets}
-            selectedTargetId={selectedTargetId}
-            remotePath={remotePath}
-            remoteError={remoteError}
-            isAddingRemote={isAddingRemote}
-            isScanningNested={isScanningRemoteNested}
-            onSelectTarget={(id) => {
-              setSelectedTargetId(id)
-              setRemoteError(null)
-            }}
-            onRemotePathChange={(value) => {
-              setRemotePath(value)
-              setRemoteError(null)
-            }}
-            onAdd={handleAddRemoteRepo}
-            onOpenSshSettings={() => {
-              closeModal()
-              openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
-              openSettingsPage()
-            }}
-            onConnectTarget={handleConnectTarget}
-            onStopNestedScan={stopRemoteNestedScan}
-          />
-        ) : step === 'clone' ? (
-          <CloneStep
-            cloneUrl={cloneUrl}
-            cloneDestination={cloneDestination}
-            cloneError={cloneError}
-            cloneProgress={cloneProgress}
-            isCloning={isCloning}
-            disableDestinationPicker={isRuntimeEnvironmentActive}
-            onUrlChange={(value) => {
-              setCloneUrl(value)
-              setCloneError(null)
-            }}
-            onDestChange={(value) => {
-              setCloneDestination(value)
-              setCloneError(null)
-            }}
-            onPickDestination={handlePickDestination}
-            onClone={handleClone}
-          />
-        ) : step === 'nested' && nestedScan ? (
-          <>
-            <DialogHeader>
-              <DialogTitle>Import as project group</DialogTitle>
-              <div className="flex min-w-0 items-center gap-1.5">
-                {nestedScanInProgress ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
-                        aria-label="Stop scan"
-                        title="Stop scanning"
-                        onClick={handleStopNestedScan}
-                      >
-                        <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
-                        <CircleStop className="hidden size-3.5 group-hover:block group-focus-visible:block" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={4}>
-                      Scanning repositories. Click to stop.
-                    </TooltipContent>
-                  </Tooltip>
-                ) : null}
-                <DialogDescription className="min-w-0 truncate">
-                  {`${nestedScanInProgress ? 'Scanning... ' : ''}Found ${
-                    nestedScan.repos.length
-                  } git ${
-                    nestedScan.repos.length === 1 ? 'repository' : 'repositories'
-                  } in this folder.`}
-                </DialogDescription>
-              </div>
-            </DialogHeader>
-
-            <div className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden pt-1">
-              <div className="flex min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-md border border-border bg-muted/30 p-3">
-                <div className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
-                  <FolderTree className="size-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-foreground">
-                    Group under {nestedGroupName}
-                  </div>
-                  <div className="truncate text-[11px] text-muted-foreground">
-                    {nestedScan.selectedPath}
-                  </div>
-                </div>
-              </div>
-
-              <div className="min-w-0 space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground">Group name</label>
-                <Input
-                  value={nestedGroupName}
-                  onChange={(event) => setNestedGroupName(event.target.value)}
-                  disabled={nestedScanInProgress}
-                  className="h-9"
-                />
-              </div>
-
-              <NestedRepoTreePreview
-                scan={nestedScan}
-                selectedPaths={nestedSelectedPaths}
-                onSelectedPathsChange={setNestedSelectedPaths}
-                disabled={isAdding || nestedScanInProgress}
-                className="flex-1"
-              />
-              {nestedScanInProgress ||
-              nestedScan.truncated ||
-              nestedScan.timedOut ||
-              nestedScan.stopped ? (
-                <NestedRepoScanLimitNotice scan={nestedScan} />
-              ) : null}
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button
-                  onClick={handleBack}
-                  disabled={isAdding && !nestedScanInProgress}
-                  variant="ghost"
-                >
-                  <ArrowLeft className="size-3.5" />
-                  Back
-                </Button>
-                <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
-                  <Button
-                    onClick={() => void handleImportNestedRepos('separate')}
-                    disabled={isAdding || nestedScanInProgress || nestedSelectedPaths.size === 0}
-                    variant="outline"
-                  >
-                    Import separately
-                  </Button>
-                  <Button
-                    onClick={() => void handleImportNestedRepos('group')}
-                    disabled={
-                      isAdding ||
-                      nestedScanInProgress ||
-                      nestedSelectedPaths.size === 0 ||
-                      !nestedGroupName.trim()
-                    }
-                  >
-                    Import as project group
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </>
-        ) : step === 'create' ? (
-          <CreateStep
-            createName={createName}
-            createParent={createParent}
-            createKind={createKind}
-            createError={createError}
-            isCreating={isCreating}
-            manualParentEntry={isRuntimeEnvironmentActive}
-            onNameChange={(value) => {
-              setCreateName(value)
-              setCreateError(null)
-            }}
-            onParentChange={(value) => {
-              setCreateParent(value)
-              setCreateError(null)
-            }}
-            onKindChange={(kind) => {
-              setCreateKind(kind)
-              setCreateError(null)
-            }}
-            onPickParent={handlePickParent}
-            onCreate={handleCreate}
-          />
-        ) : (
-          <SetupStep
-            repoName={addedRepo?.displayName ?? ''}
-            hiddenWorktreeCount={hiddenWorktreeCount}
-            primaryBranchName={primaryBranchName}
-            onStartPrimaryWorktree={handleStartPrimaryWorktree}
-            onUseExistingWorktrees={() => void handleUseExistingWorktrees()}
-            onCreateWorktree={handleCreateWorktree}
-            onConfigureRepo={handleConfigureRepo}
-          />
-        )}
+        <AddRepoStepIndicator step={step} isAdding={isAdding} onBack={handleBack} />
+        <AddRepoDialogStepContent
+          step={step}
+          isRuntimeEnvironmentActive={isRuntimeEnvironmentActive}
+          isSshLikely={isSshLikely}
+          repoCount={repos.length}
+          isAdding={isAdding}
+          addProjectBusyLabel={addProjectBusyLabel}
+          nestedScanInProgress={nestedScanInProgress}
+          nestedScanId={nestedScanId}
+          serverPath={serverPath}
+          isAddingServerPath={isAddingServerPath}
+          cloneUrl={cloneUrl}
+          cloneDestination={cloneDestination}
+          cloneError={cloneError}
+          cloneProgress={cloneProgress}
+          isCloning={isCloning}
+          sshTargets={sshTargets}
+          selectedTargetId={selectedTargetId}
+          remotePath={remotePath}
+          remoteError={remoteError}
+          isAddingRemote={isAddingRemote}
+          isScanningRemoteNested={isScanningRemoteNested}
+          nestedScan={nestedScan}
+          nestedSelectedPaths={nestedSelectedPaths}
+          nestedGroupName={nestedGroupName}
+          createName={createName}
+          createParent={createParent}
+          createKind={createKind}
+          createError={createError}
+          isCreating={isCreating}
+          onBrowse={handleBrowse}
+          onOpenCloneStep={() => {
+            setCloneError(null)
+            setStep('clone')
+          }}
+          onOpenCreateStep={() => {
+            setCreateError(null)
+            setStep('create')
+          }}
+          onOpenRemoteStep={handleOpenRemoteStep}
+          onStopNestedScan={handleStopNestedScan}
+          onServerPathChange={setServerPath}
+          onAddServerPath={(kind) => void handleAddServerPath(kind)}
+          onSelectTarget={(id) => {
+            setSelectedTargetId(id)
+            setRemoteError(null)
+          }}
+          onRemotePathChange={(value) => {
+            setRemotePath(value)
+            setRemoteError(null)
+          }}
+          onAddRemoteRepo={handleAddRemoteRepo}
+          onOpenSshSettings={() => {
+            closeModal()
+            openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
+            openSettingsPage()
+          }}
+          onConnectTarget={handleConnectTarget}
+          onStopRemoteNestedScan={stopRemoteNestedScan}
+          onCloneUrlChange={(value) => {
+            setCloneUrl(value)
+            setCloneError(null)
+          }}
+          onCloneDestinationChange={(value) => {
+            setCloneDestination(value)
+            setCloneError(null)
+          }}
+          onPickCloneDestination={handlePickDestination}
+          onClone={handleClone}
+          onNestedGroupNameChange={setNestedGroupName}
+          onNestedSelectedPathsChange={setNestedSelectedPaths}
+          onImportNestedRepos={(mode) => void handleImportNestedRepos(mode)}
+          onCreateNameChange={(value) => {
+            setCreateName(value)
+            setCreateError(null)
+          }}
+          onCreateParentChange={(value) => {
+            setCreateParent(value)
+            setCreateError(null)
+          }}
+          onCreateKindChange={(kind) => {
+            setCreateKind(kind)
+            setCreateError(null)
+          }}
+          onPickCreateParent={handlePickParent}
+          onCreate={handleCreate}
+        />
       </DialogContent>
     </Dialog>
   )

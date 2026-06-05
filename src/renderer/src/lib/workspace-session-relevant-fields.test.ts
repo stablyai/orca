@@ -13,6 +13,8 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     terminalLayoutsByTabId: true,
     activeTabIdByWorktree: true,
     openFiles: true,
+    editorDrafts: true,
+    markdownFrontmatterVisible: true,
     activeFileIdByWorktree: true,
     activeTabTypeByWorktree: true,
     browserTabsByWorktree: true,

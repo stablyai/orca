@@ -805,9 +805,9 @@ describe('splitWebRuntimeTerminal', () => {
     expect(splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'horizontal', 'keyboard')).toBe(
       true
     )
-    expect(consumePendingWebRuntimeSplitMirrorTelemetry('remote:web-env-1@@terminal-other', 'horizontal')).toBe(
-      false
-    )
+    expect(
+      consumePendingWebRuntimeSplitMirrorTelemetry('remote:web-env-1@@terminal-other', 'horizontal')
+    ).toBe(false)
     expect(
       consumePendingWebRuntimeSplitMirrorTelemetry('remote:web-env-1@@terminal-1', 'horizontal')
     ).toBe(true)

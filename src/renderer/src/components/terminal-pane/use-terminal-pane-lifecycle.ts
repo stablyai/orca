@@ -3,7 +3,6 @@ import { useEffect, useRef } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { trackTerminalPaneSplit } from '@/lib/feature-education-telemetry'
 import { consumePendingWebRuntimeSplitMirrorTelemetry } from '@/runtime/web-runtime-session'
 import { resolveTerminalCursorInactiveStyle } from '@/lib/pane-manager/pane-terminal-options'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
@@ -23,6 +22,7 @@ import type {
   TerminalTab,
   TerminalLayoutSnapshot
 } from '../../../../shared/types'
+import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import {
@@ -74,6 +74,18 @@ import {
   type CloseTerminalPaneDetail
 } from '@/constants/terminal'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/webview-registry'
+import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
+
+export function recordRuntimeCreatedTerminalPaneSplit(
+  createdPane: unknown,
+  args: {
+    source: TerminalPaneSplitSource
+    direction: 'vertical' | 'horizontal'
+    telemetrySuppressed?: boolean
+  }
+): boolean {
+  return recordCreatedTerminalPaneSplit(createdPane, args)
+}
 
 function extractUncHost(value: string | undefined): string | null {
   const match = /^(?:\\\\|\/\/)([^\\/]+)/.exec(value ?? '')
@@ -149,6 +161,7 @@ type UseTerminalPaneLifecycleDeps = {
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: ParsedAgentStatusPayload
+    suppressOsNotification?: boolean
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
@@ -191,6 +204,37 @@ function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
       ? Math.abs(range.end.x - range.start.x)
       : rowSpan * terminal.cols + Math.abs(range.end.x - range.start.x)
   return cellEstimate > PRIMARY_SELECTION_MAX_LENGTH
+}
+
+function hydrateTerminalScrollbackRefs(layout: TerminalLayoutSnapshot): {
+  layout: TerminalLayoutSnapshot
+  hydrated: boolean
+} {
+  const refs = layout.scrollbackRefsByLeafId
+  if (!refs || Object.keys(refs).length === 0) {
+    return { layout, hydrated: false }
+  }
+
+  const buffers = { ...layout.buffersByLeafId }
+  let hydrated = false
+  for (const [leafId, ref] of Object.entries(refs)) {
+    if (buffers[leafId] !== undefined) {
+      continue
+    }
+    try {
+      const buffer = window.api.session.readTerminalScrollback({ ref })
+      if (buffer) {
+        buffers[leafId] = buffer
+        hydrated = true
+      }
+    } catch {
+      // Best-effort restore; failed snapshot reads should not block terminal mount.
+    }
+  }
+
+  return hydrated
+    ? { layout: { ...layout, buffersByLeafId: buffers }, hydrated }
+    : { layout, hydrated }
 }
 
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
@@ -445,6 +489,11 @@ export function useTerminalPaneLifecycle({
     if (normalizedInitialLayout.changed) {
       initialLayoutRef.current = normalizedInitialLayout.snapshot
       useAppStore.getState().setTabLayout(tabId, normalizedInitialLayout.snapshot)
+    }
+    const initialLayoutHadBuffers = Boolean(initialLayoutRef.current.buffersByLeafId)
+    const hydratedInitialScrollback = hydrateTerminalScrollbackRefs(initialLayoutRef.current)
+    if (hydratedInitialScrollback.hydrated) {
+      initialLayoutRef.current = hydratedInitialScrollback.layout
     }
     let shouldPersistLayout = false
     const ptyDeps = {
@@ -912,8 +961,10 @@ export function useTerminalPaneLifecycle({
         const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
           (candidate) => candidate.id === tabId
         )
+        const platformInfo = window.api.platform?.get?.()
         const windowsPtyCompatibilityOptions = buildWindowsPtyCompatibilityOptions({
           userAgent: navigator.userAgent,
+          osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
           shellOverride: currentTab?.shellOverride
@@ -977,12 +1028,18 @@ export function useTerminalPaneLifecycle({
     }
     const restoredPaneByLeafId = replayTerminalLayout(manager, initialLayoutRef.current, isActive)
 
-    restoreScrollbackBuffers(
-      manager,
-      initialLayoutRef.current.buffersByLeafId,
-      restoredPaneByLeafId,
-      replayingPanesRef
-    )
+    const restoredBuffers = initialLayoutRef.current.buffersByLeafId
+    restoreScrollbackBuffers(manager, restoredBuffers, restoredPaneByLeafId, replayingPanesRef)
+    if (restoredBuffers && initialLayoutRef.current.scrollbackRefsByLeafId) {
+      const layoutWithoutRestoredBuffers = { ...initialLayoutRef.current }
+      delete layoutWithoutRestoredBuffers.buffersByLeafId
+      initialLayoutRef.current = layoutWithoutRestoredBuffers
+      if (initialLayoutHadBuffers) {
+        // Why: raw replay bytes belong only to this mount. Drop legacy hydrated
+        // copies from Zustand so normal session writes stay ref-only.
+        useAppStore.getState().setTabLayout(tabId, layoutWithoutRestoredBuffers)
+      }
+    }
 
     // Seed pane titles from the persisted snapshot using the same
     // old-leafId → new-paneId mapping used for buffer restore.
@@ -1043,6 +1100,8 @@ export function useTerminalPaneLifecycle({
     // than relying on getPanes()[0] which returns insertion order, not visual order.
     const initialPane = manager.getActivePane() ?? manager.getPanes()[0]
 
+    // Why: setup/issue automation panes are internal workspace bootstrap flows,
+    // not the user-visible split-terminal milestone recorded below.
     if (setupSplit) {
       if (initialPane) {
         const setupPane = splitPaneWithOneShotStartup(
@@ -1124,23 +1183,20 @@ export function useTerminalPaneLifecycle({
         const createdPane = splitPaneWithOneShotStartup(ptyDeps, { command: detail.command }, () =>
           mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
         )
-        if (createdPane) {
-          trackTerminalPaneSplit({
-            source: detail.telemetrySource ?? 'command',
-            direction: detail.direction
-          })
-        }
+        recordRuntimeCreatedTerminalPaneSplit(createdPane, {
+          source: detail.telemetrySource ?? 'command',
+          direction: detail.direction
+        })
       } else {
         const createdPane = mgr.splitPane(sourcePaneId, detail.direction, splitOptions)
-        if (
-          createdPane &&
-          !consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
-        ) {
-          trackTerminalPaneSplit({
-            source: detail.telemetrySource ?? 'command',
-            direction: detail.direction
-          })
-        }
+        const telemetrySuppressed = createdPane
+          ? consumePendingWebRuntimeSplitMirrorTelemetry(detail.sourcePtyId, detail.direction)
+          : false
+        recordRuntimeCreatedTerminalPaneSplit(createdPane, {
+          source: detail.telemetrySource ?? 'command',
+          direction: detail.direction,
+          telemetrySuppressed
+        })
       }
     }
     window.addEventListener(SPLIT_TERMINAL_PANE_EVENT, onCliSplitPane)
