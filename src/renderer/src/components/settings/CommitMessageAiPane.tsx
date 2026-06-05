@@ -52,6 +52,7 @@ type CommitMessageAiPaneProps = {
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
   onCustomPromptDirtyChange?: (dirty: boolean) => void
   customPromptDiscardSignal?: number
+  settingsSearchQuery?: string
 }
 
 type ModelDiscoveryState = {
@@ -277,9 +278,11 @@ export function CommitMessageAiPane({
   updateSettings,
   writeSourceControlAiSettings,
   onCustomPromptDirtyChange,
-  customPromptDiscardSignal
+  customPromptDiscardSignal,
+  settingsSearchQuery
 }: CommitMessageAiPaneProps): React.JSX.Element {
-  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const activeWorktree = useActiveWorktree()
   const activeConnectionId = getConnectionId(activeWorktree?.id ?? null)
   const discoveryHostKey = getCommitMessageSettingsPaneDiscoveryHostKey(
@@ -1179,6 +1182,13 @@ export function CommitMessageAiPane({
     description: 'Commit message generation settings.',
     keywords: ['commit', 'message', 'model', 'prompt', 'conventional commits']
   }
+  const commitAndPrCustomizationEntry = {
+    title: 'Commit and PR customization',
+    description: 'Configure behavior for commit message generation and PR creation.',
+    keywords: ['customization', 'advanced', 'commit', 'pull request', 'pr', 'model', 'prompt']
+  }
+  const commitAndPrCustomizationMatches =
+    config.enabled && matchesSettingsSearch(searchQuery, commitAndPrCustomizationEntry)
   const commitMessagesGroupMatches =
     config.enabled && matchesSettingsSearch(searchQuery, commitMessagesGroupEntry)
   const commitPromptMatches = matchesSettingsSearch(searchQuery, {
@@ -1191,11 +1201,14 @@ export function CommitMessageAiPane({
       'commitMessage',
       'Model',
       'Use a different model for commit message generation.',
-      ['model', 'override', 'commit', 'message', 'thinking'],
-      commitMessagesGroupMatches
+      ['model', 'override', 'commit', 'message', 'commit message model', 'thinking'],
+      commitMessagesGroupMatches || commitAndPrCustomizationMatches
     ),
     (config.enabled || isCommitPromptDirty) &&
-    (commitMessagesGroupMatches || isCommitPromptDirty || commitPromptMatches) ? (
+    (commitMessagesGroupMatches ||
+      commitAndPrCustomizationMatches ||
+      isCommitPromptDirty ||
+      commitPromptMatches) ? (
       <div key="commit-prompt" className="space-y-2 py-2">
         <div className="space-y-0.5">
           <Label htmlFor="source-control-ai-commit-prompt">Prompt</Label>
@@ -1300,11 +1313,14 @@ export function CommitMessageAiPane({
       'pullRequest',
       'Model',
       'Use a different model for pull request title and description generation.',
-      ['model', 'override', 'pull request', 'pr', 'thinking'],
-      pullRequestsGroupMatches
+      ['model', 'override', 'pull request', 'pr', 'pull request model', 'pr model', 'thinking'],
+      pullRequestsGroupMatches || commitAndPrCustomizationMatches
     ),
     (config.enabled || isPullRequestPromptDirty) &&
-    (pullRequestsGroupMatches || isPullRequestPromptDirty || pullRequestPromptMatches) ? (
+    (pullRequestsGroupMatches ||
+      commitAndPrCustomizationMatches ||
+      isPullRequestPromptDirty ||
+      pullRequestPromptMatches) ? (
       <div key="pull-request-prompt" className="space-y-2 py-2">
         <div className="space-y-0.5">
           <Label htmlFor="source-control-ai-pr-prompt">Prompt</Label>
@@ -1350,7 +1366,8 @@ export function CommitMessageAiPane({
         </div>
       </div>
     ) : null,
-    config.enabled && (pullRequestsGroupMatches || prCreationDefaultsMatches) ? (
+    config.enabled &&
+    (pullRequestsGroupMatches || commitAndPrCustomizationMatches || prCreationDefaultsMatches) ? (
       <div key="pr-creation-defaults" className="space-y-3 py-2">
         <div className="space-y-0.5">
           <Label>Creation defaults</Label>
@@ -1405,9 +1422,7 @@ export function CommitMessageAiPane({
     sections.push(
       <SearchableSetting
         key="output-overrides"
-        title="Commit and PR customization"
-        description="Configure behavior for commit message generation and PR creation."
-        keywords={['override', 'advanced', 'commit', 'pull request', 'pr', 'model', 'prompt']}
+        {...commitAndPrCustomizationEntry}
         forceVisible
         className="border-t border-border/50 px-1 pt-4"
       >

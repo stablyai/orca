@@ -1052,6 +1052,7 @@ function Settings(): React.JSX.Element {
                         writeSourceControlAiSettings={writeSourceControlAiSettings}
                         onCustomPromptDirtyChange={setHasUnsavedCommitPromptChanges}
                         customPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
+                        settingsSearchQuery={settingsSearchQuery}
                       />
                     </>
                   ) : null}

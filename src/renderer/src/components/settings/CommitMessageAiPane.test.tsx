@@ -17,11 +17,12 @@ import {
 } from './CommitMessageAiPane'
 import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 
-function renderPane(settings: GlobalSettings): string {
+function renderPane(settings: GlobalSettings, settingsSearchQuery = ''): string {
   return renderToStaticMarkup(
     React.createElement(CommitMessageAiPane, {
       settings,
-      updateSettings: () => {}
+      updateSettings: () => {},
+      settingsSearchQuery
     })
   )
 }
@@ -144,6 +145,47 @@ describe('CommitMessageAiPane', () => {
     expect(markup).not.toContain('Higher effort produces more careful messages')
     expect(markup).not.toContain('Use Conventional Commits.')
     expect(markup).not.toContain('Saved')
+  })
+
+  it('opens commit and PR customization for matching settings search terms', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' },
+          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      }),
+      'customization'
+    )
+
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('Commit Messages')
+    expect(markup).toContain('Pull Requests')
+    expect(markup).toContain('Creation defaults')
+  })
+
+  it('shows the nested commit model control for commit message model search', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' },
+          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      }),
+      'commit message model'
+    )
+
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('Commit Messages')
+    expect(markup).toContain('Use a different model for commit message generation.')
   })
 
   it('keeps the agent and model selectors aligned for long labels', () => {

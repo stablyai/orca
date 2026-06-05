@@ -193,9 +193,9 @@ export function buildSettingsNavigationMetadata({
     {
       id: 'git',
       title: 'Git & Source Control',
-      description: 'Branch naming, base refs, attribution, and AI commit messages.',
+      description: 'Branch naming, base refs, attribution, and Git AI Author.',
       icon: GitBranch,
-      // Why: the AI commit messages pane is rendered inside Git, so shared
+      // Why: Git AI Author is rendered inside Git, so shared
       // metadata must search both surfaces wherever Git appears.
       searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES],
       group: 'workflows'
