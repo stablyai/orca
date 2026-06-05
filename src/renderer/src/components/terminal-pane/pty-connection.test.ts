@@ -85,6 +85,7 @@ type StoreState = {
   dropAgentStatus: ReturnType<typeof vi.fn>
   markTerminalTabUnread: ReturnType<typeof vi.fn>
   markTerminalPaneUnread: ReturnType<typeof vi.fn>
+  markAgentCompletionPaneUnread: ReturnType<typeof vi.fn>
 }
 
 type ConnectCallbacks = {
@@ -454,7 +455,8 @@ describe('connectPanePty', () => {
       removeAgentStatus: vi.fn(),
       dropAgentStatus: vi.fn(),
       markTerminalTabUnread: vi.fn(),
-      markTerminalPaneUnread: vi.fn()
+      markTerminalPaneUnread: vi.fn(),
+      markAgentCompletionPaneUnread: vi.fn()
     } as StoreState
     ;(globalThis as unknown as { window: unknown }).window = {
       api: {
