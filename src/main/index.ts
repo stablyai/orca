@@ -218,6 +218,12 @@ function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
         })
       },
       setRenameError: (worktreeId, error) => {
+        // Skip the write + renderer push when nothing changes — benign skips
+        // clear the error on every settled worktree, most of which never had one.
+        const current = currentStore.getWorktreeMeta(worktreeId)?.firstAgentMessageRenameError
+        if ((current ?? null) === (error ?? null)) {
+          return
+        }
         currentStore.setWorktreeMeta(worktreeId, { firstAgentMessageRenameError: error })
         // Push to the renderer so the badge updates — the hook only knows the
         // worktreeId, so derive the repoId the same way notifyBranchRenamed expects.
