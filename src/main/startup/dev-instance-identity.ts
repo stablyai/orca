@@ -7,6 +7,7 @@ const BASE_APP_USER_MODEL_ID = 'com.stablyai.orca'
 const MAX_LABEL_LENGTH = 80
 
 export type DevInstanceIdentity = AppIdentity & {
+  displayName: string
   appUserModelId: string
 }
 
@@ -56,6 +57,7 @@ export function getDevInstanceIdentity(
       devWorktreeName: null,
       devRepoRoot: null,
       dockBadgeLabel: null,
+      displayName: BASE_APP_NAME,
       appUserModelId: BASE_APP_USER_MODEL_ID
     }
   }
@@ -66,17 +68,21 @@ export function getDevInstanceIdentity(
     cleanEnvValue(env.ORCA_DEV_WORKTREE_NAME) ??
     cleanEnvValue(path.basename(repoRoot ?? process.cwd()))
   const devLabel = cleanEnvValue(env.ORCA_DEV_INSTANCE_LABEL) ?? formatLabel(branch, worktreeName)
-  const dockTitle =
+  const displayName =
     cleanEnvValue(env.ORCA_DEV_DOCK_TITLE) ?? `${BASE_APP_NAME}: ${branch ?? devLabel ?? 'dev'}`
+  // Why: macOS safeStorage authorization is tied to the app identity. Default
+  // dev runs keep app.setName() stable while window titles remain distinct.
+  const name = env.ORCA_DEV_STABLE_NAME === '1' ? BASE_APP_NAME : displayName
 
   return {
-    name: dockTitle,
+    name,
     isDev: true,
     devLabel,
     devBranch: branch,
     devWorktreeName: worktreeName,
     devRepoRoot: repoRoot,
     dockBadgeLabel: null,
+    displayName,
     appUserModelId: createDevAppUserModelId(repoRoot ?? devLabel)
   }
 }

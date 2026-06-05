@@ -54,4 +54,19 @@ describe('dev-instance-identity', () => {
     expect(identity.name).toBe('Orca: feature/other')
     expect(identity.dockBadgeLabel).toBeNull()
   })
+
+  it('keeps the app name stable while preserving dev metadata when requested', () => {
+    const identity = getDevInstanceIdentity(true, {
+      ORCA_DEV_STABLE_NAME: '1',
+      ORCA_DEV_REPO_ROOT: '/repo/worktrees/payment-ui',
+      ORCA_DEV_WORKTREE_NAME: 'payment-ui',
+      ORCA_DEV_BRANCH: 'feature/billing-shell'
+    })
+
+    expect(identity.name).toBe('Orca')
+    expect(identity.displayName).toBe('Orca: feature/billing-shell')
+    expect(identity.devLabel).toBe('payment-ui @ feature/billing-shell')
+    expect(identity.devBranch).toBe('feature/billing-shell')
+    expect(identity.appUserModelId).toMatch(/^com\.stablyai\.orca\.dev\.[a-f0-9]{10}$/)
+  })
 })

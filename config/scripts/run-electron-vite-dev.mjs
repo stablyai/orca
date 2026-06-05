@@ -28,14 +28,26 @@ delete process.env.ELECTRON_RUN_AS_NODE
 const require = createRequire(import.meta.url)
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const STABLE_NAME_FLAG = '--stable-name'
+const BRANCH_APP_NAME_FLAG = '--branch-app-name'
 const rawForwardedArgs = process.argv.slice(2)
-// Why: keep an escape hatch for tools that key off Electron's stock app name.
-// The flag is runner-only and must not leak into Chromium/electron-vite.
-const useStableElectronName =
+const stableNameRequested =
   process.env.ORCA_DEV_STABLE_NAME === '1' || rawForwardedArgs.includes(STABLE_NAME_FLAG)
-const forwardedRaw = rawForwardedArgs.filter((arg) => arg !== STABLE_NAME_FLAG)
+const branchAppNameRequested =
+  process.env.ORCA_DEV_BRANCH_APP_NAME === '1' || rawForwardedArgs.includes(BRANCH_APP_NAME_FLAG)
+// Why: branch-named macOS dev bundles make Keychain treat each worktree as a
+// new app reading "Orca Safe Storage"; keep that unstable identity opt-in.
+const useStableElectronName =
+  stableNameRequested || (process.platform === 'darwin' && !branchAppNameRequested)
+const useBranchMacAppName =
+  process.platform === 'darwin' && branchAppNameRequested && !useStableElectronName
+const forwardedRaw = rawForwardedArgs.filter(
+  (arg) => arg !== STABLE_NAME_FLAG && arg !== BRANCH_APP_NAME_FLAG
+)
 if (useStableElectronName) {
   process.env.ORCA_DEV_STABLE_NAME = '1'
+}
+if (useBranchMacAppName) {
+  process.env.ORCA_DEV_BRANCH_APP_NAME = '1'
 }
 
 function readGitValue(args) {
@@ -314,7 +326,7 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
 }
 
 seedDevInstanceIdentityEnv()
-if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
+if (useBranchMacAppName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
 }
 

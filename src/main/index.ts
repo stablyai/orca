@@ -497,7 +497,7 @@ function openMainWindow(): BrowserWindow {
         expectedTeardown: getExpectedTeardownScope(webContentsId)
       }),
     deferLoad: true,
-    title: devInstanceIdentity.name,
+    title: devInstanceIdentity.displayName,
     getKeybindings: () => keybindings?.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
       if (mainWindow?.webContents.id === webContentsId) {
