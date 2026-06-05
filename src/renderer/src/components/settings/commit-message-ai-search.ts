@@ -44,7 +44,7 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Commit message model',
     description: 'Optional model choice for commit message generation.',
-    keywords: ['model', 'override', 'commit', 'message', 'thinking']
+    keywords: ['model', 'override', 'commit', 'message', 'commit model', 'thinking']
   },
   {
     title: 'Commit message prompt',

@@ -197,6 +197,26 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Use a different model for commit message generation.')
   })
 
+  it('shows the nested commit model control for commit model search', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' },
+          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      }),
+      'commit model'
+    )
+
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('Commit Messages')
+    expect(markup).toContain('Use a different model for commit message generation.')
+  })
+
   it('shows the nested pull request model control for pr model search', () => {
     const markup = renderPane(
       buildSettings({

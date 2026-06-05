@@ -1206,7 +1206,15 @@ export function CommitMessageAiPane({
       'commitMessage',
       'Model',
       'Use a different model for commit message generation.',
-      ['model', 'override', 'commit', 'message', 'commit message model', 'thinking'],
+      [
+        'model',
+        'override',
+        'commit',
+        'message',
+        'commit message model',
+        'commit model',
+        'thinking'
+      ],
       commitMessagesGroupMatches || commitAndPrCustomizationMatches
     ),
     (config.enabled || isCommitPromptDirty) &&
