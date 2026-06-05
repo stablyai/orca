@@ -42,16 +42,21 @@ export type WorkspaceIntentName = {
   seedName: string
 }
 
+// Why: generated workspace seeds are hyphenated; `issue-123-fix-title`
+// must not be reinterpreted as the user explicitly asking to fix a new issue.
 const ACTION_LABELS: [RegExp, string][] = [
-  [/\bfix(?:e[sd])?\b|\bresolve\b|\brepair\b/i, 'Fix'],
-  [/\bdebug\b|\bdiagnose\b/i, 'Debug'],
-  [/\breview\b|\blook\s+over\b|\binspect\b|\bcheck\b|\bsafe\b|\bsafety\b/i, 'Review'],
-  [/\bimplement\b|\bbuild\b|\bship\b/i, 'Implement'],
-  [/\binvestigate\b|\bunderstand\b|\btriage\b/i, 'Investigate'],
-  [/\badd\b|\bcreate\b/i, 'Add'],
-  [/\bupdate\b|\bchange\b/i, 'Update'],
-  [/\brefactor\b|\bsimplify\b/i, 'Refactor'],
-  [/\btest\b|\bverify\b|\bvalidate\b/i, 'Test']
+  [/(?:^|[^a-z0-9_-])(?:fix(?:e[sd])?|resolve|repair)(?:$|[^a-z0-9_-])/i, 'Fix'],
+  [/(?:^|[^a-z0-9_-])(?:debug|diagnose)(?:$|[^a-z0-9_-])/i, 'Debug'],
+  [
+    /(?:^|[^a-z0-9_-])(?:review|look\s+over|inspect|check|safe|safety)(?:$|[^a-z0-9_-])/i,
+    'Review'
+  ],
+  [/(?:^|[^a-z0-9_-])(?:implement|build|ship)(?:$|[^a-z0-9_-])/i, 'Implement'],
+  [/(?:^|[^a-z0-9_-])(?:investigate|understand|triage)(?:$|[^a-z0-9_-])/i, 'Investigate'],
+  [/(?:^|[^a-z0-9_-])(?:add|create)(?:$|[^a-z0-9_-])/i, 'Add'],
+  [/(?:^|[^a-z0-9_-])(?:update|change)(?:$|[^a-z0-9_-])/i, 'Update'],
+  [/(?:^|[^a-z0-9_-])(?:refactor|simplify)(?:$|[^a-z0-9_-])/i, 'Refactor'],
+  [/(?:^|[^a-z0-9_-])(?:test|verify|validate)(?:$|[^a-z0-9_-])/i, 'Test']
 ]
 
 const STOP_WORDS = new Set([

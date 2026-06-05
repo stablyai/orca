@@ -46,6 +46,7 @@ export type SmartGitHubSubmitLookup = {
 const SMART_GITHUB_SUBMIT_LOOKUP_TTL_MS = 60_000
 const SMART_GITHUB_SUBMIT_LOOKUP_CACHE_MAX_ENTRIES = 128
 const GITHUB_ITEM_URL_RE = /https?:\/\/(?:www\.)?github\.com\/\S+/i
+const TRAILING_GITHUB_ITEM_URL_PUNCTUATION_RE = /[),.;\]}]+$/
 
 type SmartGitHubSubmitLookupCacheEntry = {
   expiresAt: number
@@ -100,7 +101,9 @@ function parseGitHubIssueOrPRLinkFromText(
   input: string
 ): ReturnType<typeof parseGitHubIssueOrPRLink> {
   const match = GITHUB_ITEM_URL_RE.exec(input)
-  return match ? parseGitHubIssueOrPRLink(match[0]) : null
+  return match
+    ? parseGitHubIssueOrPRLink(match[0].replace(TRAILING_GITHUB_ITEM_URL_PUNCTUATION_RE, ''))
+    : null
 }
 
 function getSmartGitHubSubmitLookupCacheKey({

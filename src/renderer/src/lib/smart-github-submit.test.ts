@@ -39,6 +39,28 @@ describe('getSmartGitHubSubmitIntent', () => {
     })
   })
 
+  it('finds an embedded GitHub item URL when prose punctuation touches the URL', () => {
+    expect(
+      getSmartGitHubSubmitIntent('review (https://github.com/stablyai/orca/pull/2049), please')
+    ).toEqual({
+      kind: 'link',
+      owner: 'stablyai',
+      repo: 'orca',
+      number: 2049,
+      type: 'pr'
+    })
+
+    expect(getSmartGitHubSubmitIntent('fix https://github.com/stablyai/orca/issues/2050.')).toEqual(
+      {
+        kind: 'link',
+        owner: 'stablyai',
+        repo: 'orca',
+        number: 2050,
+        type: 'issue'
+      }
+    )
+  })
+
   it('treats #number as source intent but leaves plain numbers as names', () => {
     expect(getSmartGitHubSubmitIntent('#2049')).toEqual({
       kind: 'hash-number',
