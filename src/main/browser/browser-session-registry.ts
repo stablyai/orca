@@ -161,6 +161,13 @@ class BrowserSessionRegistry {
       this.hydrateFromPersisted(meta.profiles)
     }
 
+    // Why: the default partition is created in the constructor but never gets
+    // session policies (permission handlers, download handlers, etc.) because
+    // hydrateFromPersisted skips the default partition and createProfile never
+    // targets it. Without this, clipboard permissions and other guest policies
+    // are denied by default in the default browser partition.
+    this.setupSessionPolicies(ORCA_BROWSER_PARTITION)
+
     const partitions = new Set([
       ORCA_BROWSER_PARTITION,
       ...this.listProfiles().map((p) => p.partition)
