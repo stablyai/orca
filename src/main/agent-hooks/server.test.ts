@@ -89,6 +89,7 @@ describe('AgentHookServer listener replay', () => {
           paneKey: PANE,
           tabId: 'tab-1',
           worktreeId: 'wt-1',
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           payload: { state: 'working', prompt: 'long task', agentType: 'codex' }
         },
         'conn-1'
@@ -112,6 +113,7 @@ describe('AgentHookServer listener replay', () => {
           state: 'done',
           prompt: 'long task',
           agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           interrupted: true,
           receivedAt: 1_500,
           stateStartedAt: 1_500
@@ -120,6 +122,7 @@ describe('AgentHookServer listener replay', () => {
       expect(listener).toHaveBeenLastCalledWith(
         expect.objectContaining({
           paneKey: PANE,
+          providerSession: { key: 'session_id', id: 'codex-interrupt-session-1' },
           payload: expect.objectContaining({ state: 'done', interrupted: true })
         })
       )

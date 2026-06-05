@@ -245,4 +245,14 @@ describe('buildWorkspaceSessionPatch', () => {
     expect(Object.hasOwn(patch, 'defaultTerminalTabsAppliedByWorktreeId')).toBe(true)
     expect(patch.defaultTerminalTabsAppliedByWorktreeId).toBeUndefined()
   })
+
+  it('keeps sleeping agent session clearing keys in patches', () => {
+    const patch = buildWorkspaceSessionPatch(
+      createSnapshot({ sleepingAgentSessionsByPaneKey: {} }),
+      ['sleepingAgentSessionsByPaneKey']
+    )
+
+    expect(Object.hasOwn(patch, 'sleepingAgentSessionsByPaneKey')).toBe(true)
+    expect(patch.sleepingAgentSessionsByPaneKey).toBeUndefined()
+  })
 })

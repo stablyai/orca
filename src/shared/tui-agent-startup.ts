@@ -39,7 +39,11 @@ export function buildShellCommandFromArgv(
   args: readonly string[],
   shell: AgentStartupShell
 ): string {
-  return args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
+  const command = args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
+  if (shell === 'powershell' && command) {
+    return `& ${command}`
+  }
+  return command
 }
 
 function clearEnvCommand(name: string, shell: AgentStartupShell): string {
@@ -150,6 +154,7 @@ export function buildAgentStartupPlan(args: {
 export function buildAgentResumeStartupPlan(args: {
   agent: ResumableTuiAgent
   providerSession: AgentProviderSessionMetadata
+  cmdOverrides: Partial<Record<TuiAgent, string>>
   platform: NodeJS.Platform
   shell?: AgentStartupShell
 }): AgentStartupPlan | null {
@@ -159,9 +164,19 @@ export function buildAgentResumeStartupPlan(args: {
   }
   const shell = resolveStartupShell(args.platform, args.shell)
   const config = TUI_AGENT_CONFIG[args.agent]
+  const baseCommand = resolveBaseCommand({
+    agent: args.agent,
+    cmdOverrides: args.cmdOverrides,
+    shell
+  })
+  const resumeArgs = argv
+    .slice(1)
+    .map((arg) => quoteStartupArg(arg, shell))
+    .join(' ')
+  const launchCommand = resumeArgs ? `${baseCommand} ${resumeArgs}` : baseCommand
   return {
     agent: args.agent,
-    launchCommand: buildShellCommandFromArgv(argv, shell),
+    launchCommand,
     expectedProcess: config.expectedProcess,
     followupPrompt: null
   }

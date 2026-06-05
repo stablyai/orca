@@ -37,6 +37,8 @@ describe('agent session resume metadata', () => {
   it('rejects unsupported sources and unsafe ids', () => {
     expect(extractAgentProviderSession('pi', { session_id: 'pi-session' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: 'bad\nid' })).toBeNull()
+    expect(normalizeAgentProviderSession({ key: 'session_id', id: '--last' })).toBeNull()
+    expect(extractAgentProviderSession('codex', { session_id: '--last' })).toBeNull()
     expect(normalizeAgentProviderSession({ key: 'session_id', id: 'ok' })).toEqual({
       key: 'session_id',
       id: 'ok'

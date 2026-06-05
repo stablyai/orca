@@ -135,7 +135,8 @@ export function buildWorkspaceSessionPatch(
         : undefined
   }
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
-    Object.assign(patch, buildSleepingAgentSessionData(snapshot))
+    patch.sleepingAgentSessionsByPaneKey =
+      buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey
   }
 
   return patch

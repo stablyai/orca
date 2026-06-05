@@ -462,6 +462,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           payload.state === 'done' ? existing?.orchestration : undefined
         const orchestration =
           payloadMergedOrchestration ?? runtimeMergedOrchestration ?? completedFallbackOrchestration
+        const providerSession =
+          metadata?.providerSession ??
+          (existing?.agentType === identity.agentType ? existing.providerSession : undefined)
         const entry: AgentStatusEntry = {
           state: payload.state,
           prompt: payload.prompt,
@@ -485,9 +488,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           // metadata expires. Only final done rows keep the previous lineage
           // fallback so completed children stay grouped.
           orchestration,
-          ...((metadata?.providerSession ?? existing?.providerSession)
-            ? { providerSession: (metadata?.providerSession ?? existing?.providerSession)! }
-            : {}),
+          ...(providerSession ? { providerSession } : {}),
           // Why: interrupted lives on `done` only. parseAgentStatusPayload
           // already clamps it to `undefined` for non-done states, so writing
           // the field through directly preserves truth for done and resets

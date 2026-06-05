@@ -57,6 +57,7 @@ function normalizeSessionId(value: unknown): string | null {
   if (
     trimmed.length === 0 ||
     trimmed.length > PROVIDER_SESSION_ID_MAX_LENGTH ||
+    trimmed.startsWith('-') ||
     hasUnsafeProviderSessionIdChars(trimmed)
   ) {
     return null

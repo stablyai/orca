@@ -512,6 +512,7 @@ export class AgentHookServer {
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
       payload: {
         state: 'done',
         prompt: payload.prompt,

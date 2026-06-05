@@ -44,6 +44,7 @@ export function resumeSleepingAgentSession(paneKey: string): boolean {
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
+    cmdOverrides: state.settings?.agentCmdOverrides ?? {},
     platform: getResumeLaunchPlatform(record.worktreeId)
   })
   if (!startupPlan) {

@@ -19,7 +19,7 @@ import type {
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
-import { hasUnsafeProviderSessionIdChars, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
+import { normalizeAgentProviderSession, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -83,14 +83,13 @@ const terminalTabSchema = z.object({
 
 // ─── Sleeping agent resume records ─────────────────────────────────
 
-const agentProviderSessionSchema = z.object({
-  key: z.enum(['session_id', 'conversation_id']),
-  id: z
-    .string()
-    .min(1)
-    .max(512)
-    .refine((value) => !hasUnsafeProviderSessionIdChars(value), 'session id must be printable')
-})
+const agentProviderSessionSchema = z.preprocess(
+  (raw) => normalizeAgentProviderSession(raw) ?? undefined,
+  z.object({
+    key: z.enum(['session_id', 'conversation_id']),
+    id: z.string().min(1).max(512)
+  })
+)
 
 const sleepingAgentSessionRecordSchema = z.object({
   paneKey: z.string().refine((value) => value.length > 0),
@@ -106,6 +105,22 @@ const sleepingAgentSessionRecordSchema = z.object({
   lastAssistantMessage: z.string().optional(),
   connectionId: z.string().nullable().optional()
 })
+
+const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined
+  }
+
+  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = {}
+  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
+    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
+    if (parsed.success && parsed.data.paneKey === paneKey) {
+      cleaned[paneKey] = parsed.data
+    }
+  }
+
+  return Object.keys(cleaned).length > 0 ? cleaned : undefined
+}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
 
 // ─── Unified tab model ──────────────────────────────────────────────
 
@@ -284,10 +299,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     )
     .optional(),
   defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
-  sleepingAgentSessionsByPaneKey: z
-    .record(z.string(), sleepingAgentSessionRecordSchema)
-    .optional()
-    .catch(undefined)
+  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema
 })
 
 export type ParsedWorkspaceSession =
