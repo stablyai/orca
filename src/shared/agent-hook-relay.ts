@@ -23,6 +23,7 @@
 //   default env is `remote`, a location marker ignored by dev-vs-prod checks.
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
 
 // Why: the local hook server knows the discriminator from URL pathname routing
 // (`/hook/<source>`); the relay equally must tag each forwarded notification
@@ -72,6 +73,8 @@ export type AgentHookRelayEnvelope = {
   toolAgentId?: string
   /** Claude agent type, used only as a lower-confidence identity fallback. */
   toolAgentType?: string
+  /** Provider-owned conversation/session id needed to resume a sleeping agent. */
+  providerSession?: AgentProviderSessionMetadata
   /** True when the relay is replaying its cache after Orca reconnects. */
   isReplay?: boolean
   /** Forwarded from the agent CLI POST body. The relay default is `remote`,

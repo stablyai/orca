@@ -14,15 +14,18 @@ import {
   selectMigrationUnsupportedEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
   selectRetainedAgentEntriesForWorktree,
+  selectSleepingAgentSessionsForWorktree,
   selectTerminalLayoutsForWorktree
 } from './worktree-agent-row-selectors'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
 
 export { buildWorktreeAgentRows } from './worktree-agent-rows'
 export {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
   selectRuntimeAgentOrchestrationForWorktree,
-  selectRetainedAgentEntriesForWorktree
+  selectRetainedAgentEntriesForWorktree,
+  selectSleepingAgentSessionsForWorktree
 } from './worktree-agent-row-selectors'
 
 /**
@@ -109,4 +112,8 @@ export function useWorktreeAgentRows(worktreeId: string): DashboardAgentRow[] {
     runtimeAgentOrchestrationByPaneKey,
     agentStatusEpoch
   ])
+}
+
+export function useSleepingAgentSessions(worktreeId: string): SleepingAgentSessionRecord[] {
+  return useAppStore(useShallow((s) => selectSleepingAgentSessionsForWorktree(s, worktreeId)))
 }

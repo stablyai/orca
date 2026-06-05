@@ -24,6 +24,7 @@ import type {
   SourceControlAiSettings
 } from './source-control-ai-types'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
+import type { SleepingAgentSessionRecord } from './agent-session-resume'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -725,6 +726,8 @@ export type WorkspaceSessionState = {
    *  considered. Persisted so closing all tabs and re-opening the workspace
    *  does not recreate the template. */
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
+  /** Provider-session resume records captured when workspaces sleep. */
+  sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

@@ -1,4 +1,5 @@
 export {
+  buildAgentResumeStartupPlan,
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
   isShellProcess

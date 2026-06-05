@@ -19,6 +19,7 @@ import type {
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
+import { hasUnsafeProviderSessionIdChars, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -78,6 +79,32 @@ const terminalTabSchema = z.object({
     .custom<TuiAgent>((v) => isTuiAgent(v))
     .optional()
     .catch(undefined)
+})
+
+// ─── Sleeping agent resume records ─────────────────────────────────
+
+const agentProviderSessionSchema = z.object({
+  key: z.enum(['session_id', 'conversation_id']),
+  id: z
+    .string()
+    .min(1)
+    .max(512)
+    .refine((value) => !hasUnsafeProviderSessionIdChars(value), 'session id must be printable')
+})
+
+const sleepingAgentSessionRecordSchema = z.object({
+  paneKey: z.string().refine((value) => value.length > 0),
+  tabId: terminalTabIdSchema.optional(),
+  worktreeId: z.string().min(1),
+  agent: z.enum(RESUMABLE_TUI_AGENTS),
+  providerSession: agentProviderSessionSchema,
+  prompt: z.string(),
+  state: z.enum(['working', 'blocked', 'waiting', 'done']),
+  capturedAt: z.number().finite().positive(),
+  updatedAt: z.number().finite().positive(),
+  terminalTitle: z.string().optional(),
+  lastAssistantMessage: z.string().optional(),
+  connectionId: z.string().nullable().optional()
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────
@@ -256,7 +283,11 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
       z.record(z.string(), z.number().finite().nonnegative())
     )
     .optional(),
-  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional()
+  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
+  sleepingAgentSessionsByPaneKey: z
+    .record(z.string(), sleepingAgentSessionRecordSchema)
+    .optional()
+    .catch(undefined)
 })
 
 export type ParsedWorkspaceSession =
