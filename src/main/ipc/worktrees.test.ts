@@ -111,6 +111,14 @@ vi.mock('../git/runner', () => ({
   gitExecFileSync: vi.fn()
 }))
 
+const { detectUntrackedNestedReposMock } = vi.hoisted(() => ({
+  detectUntrackedNestedReposMock: vi.fn()
+}))
+
+vi.mock('../git/nested-repo-warning', () => ({
+  detectUntrackedNestedRepos: detectUntrackedNestedReposMock
+}))
+
 vi.mock('../git/repo', () => ({
   getGitUsername: getGitUsernameMock,
   getDefaultBaseRef: getDefaultBaseRefMock,
@@ -280,6 +288,7 @@ describe('registerWorktreeHandlers', () => {
       computeWorktreePathMock,
       ensurePathWithinWorkspaceMock,
       gitExecFileAsyncMock,
+      detectUntrackedNestedReposMock,
       getSshGitProviderMock,
       getSshFilesystemProviderMock,
       getActiveMultiplexerMock,
@@ -349,6 +358,7 @@ describe('registerWorktreeHandlers', () => {
     // narrow unit harnesses. Return a resolved promise so catch/then chains
     // don't trip on undefined.
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+    detectUntrackedNestedReposMock.mockResolvedValue(null)
     getEffectiveHooksMock.mockReturnValue(null)
     getEffectiveHooksFromConfigMock.mockImplementation(() => getEffectiveHooksMock())
     getDefaultTabsLaunchMock.mockReturnValue(undefined)
@@ -564,6 +574,116 @@ describe('registerWorktreeHandlers', () => {
         branch: 'improve-dashboard-2'
       })
     })
+  })
+
+  it('attaches the nested-repo warning to the local create result', async () => {
+    const warning = { paths: ['frontend/'], truncated: false, moreCount: 0 }
+    detectUntrackedNestedReposMock.mockResolvedValue(warning)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature-wt',
+        head: 'abc123',
+        branch: 'feature-wt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature-wt'
+    })) as { nestedRepos?: unknown }
+
+    expect(detectUntrackedNestedReposMock).toHaveBeenCalledWith('/workspace/repo')
+    expect(result.nestedRepos).toEqual(warning)
+  })
+
+  it('omits the nested-repo field when the detector resolves null', async () => {
+    detectUntrackedNestedReposMock.mockResolvedValue(null)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature-wt',
+        head: 'abc123',
+        branch: 'feature-wt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature-wt'
+    })) as Record<string, unknown>
+
+    expect('nestedRepos' in result).toBe(false)
+  })
+
+  it('launches nested-repo detection before the worktree add', async () => {
+    detectUntrackedNestedReposMock.mockResolvedValue(null)
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature-wt',
+        head: 'abc123',
+        branch: 'feature-wt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature-wt'
+    })
+
+    const detectorOrder = detectUntrackedNestedReposMock.mock.invocationCallOrder[0]
+    const addOrder = addWorktreeMock.mock.invocationCallOrder[0]
+    expect(detectorOrder).toBeLessThan(addOrder)
+  })
+
+  it('creates normally when the detector rejects even if the create itself throws early', async () => {
+    // Why: the detection promise is launched before the first await; if create
+    // throws before reaching its await, a rejecting detector must not surface
+    // as an unhandled rejection (the .catch must live at the launch site).
+    const unhandled: unknown[] = []
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason)
+    }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      detectUntrackedNestedReposMock.mockRejectedValue(new Error('detector exploded'))
+      addWorktreeMock.mockRejectedValue(new Error('add failed'))
+
+      await expect(
+        handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'feature-wt' })
+      ).rejects.toThrow('add failed')
+
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.removeListener('unhandledRejection', onUnhandled)
+      addWorktreeMock.mockReset()
+      addWorktreeMock.mockResolvedValue(undefined)
+    }
+  })
+
+  it('creates normally without the field when the detector rejects', async () => {
+    detectUntrackedNestedReposMock.mockRejectedValue(new Error('detector exploded'))
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature-wt',
+        head: 'abc123',
+        branch: 'feature-wt',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature-wt'
+    })) as Record<string, unknown>
+
+    expect('nestedRepos' in result).toBe(false)
   })
 
   it('uses a repo-specific worktree base path when creating local worktrees', async () => {
@@ -1581,6 +1701,43 @@ describe('registerWorktreeHandlers', () => {
         manualOrder: 123_456
       })
     })
+  })
+
+  it('does not run nested-repo detection for remote creates', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/feature-wt',
+          head: 'abc123',
+          branch: 'refs/heads/feature-wt',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ])
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+
+    await handlers['worktrees:create'](null, { repoId: 'repo-ssh', name: 'feature-wt' })
+
+    expect(detectUntrackedNestedReposMock).not.toHaveBeenCalled()
   })
 
   it('returns SSH local base refresh skip status when the owning worktree is dirty', async () => {
