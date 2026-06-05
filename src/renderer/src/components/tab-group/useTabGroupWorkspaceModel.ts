@@ -86,6 +86,7 @@ export function useTabGroupWorkspaceModel({
     (state) => state.openNewTerminalTabInActiveWorkspace
   )
   const closeFile = useAppStore((state) => state.closeFile)
+  const makePreviewFilePermanent = useAppStore((state) => state.makePreviewFilePermanent)
   const pinFile = useAppStore((state) => state.pinFile)
   const closeBrowserTab = useAppStore((state) => state.closeBrowserTab)
   const setActiveBrowserTab = useAppStore((state) => state.setActiveBrowserTab)
@@ -616,6 +617,7 @@ export function useTabGroupWorkspaceModel({
           focusTerminalTabSurface(terminal.id)
         })()
       },
+      makePreviewFilePermanent,
       pinFile,
       setTabColor,
       setTabCustomTitle,

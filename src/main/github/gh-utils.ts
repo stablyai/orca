@@ -146,10 +146,12 @@ type OwnerRepoCacheEntry = {
 }
 
 const ownerRepoCache = new Map<string, OwnerRepoCacheEntry>()
+const ownerRepoInFlight = new Map<string, Promise<OwnerRepo | null>>()
 
 /** @internal — exposed for tests only */
 export function _resetOwnerRepoCache(): void {
   ownerRepoCache.clear()
+  ownerRepoInFlight.clear()
 }
 
 /** @internal — exposed for tests only */
@@ -249,6 +251,32 @@ export async function getOwnerRepoForRemote(
   if (cached && cached.expiresAt > now) {
     return cached.value
   }
+
+  const inFlight = ownerRepoInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  // Why: startup can resolve issue sources, PR candidates, and repo metadata
+  // for the same repo concurrently. Coalesce missing-remote probes so a stable
+  // absent upstream does not spawn identical `git remote get-url` processes.
+  const probe = resolveOwnerRepoForRemote(context, remoteName, cacheKey)
+  ownerRepoInFlight.set(cacheKey, probe)
+  try {
+    return await probe
+  } finally {
+    if (ownerRepoInFlight.get(cacheKey) === probe) {
+      ownerRepoInFlight.delete(cacheKey)
+    }
+  }
+}
+
+async function resolveOwnerRepoForRemote(
+  context: GitHubRepoContext,
+  remoteName: string,
+  cacheKey: string
+): Promise<OwnerRepo | null> {
+  const now = Date.now()
   try {
     const remoteUrl = await getRemoteUrlForRepo(context, remoteName)
     const result = remoteUrl ? parseGitHubOwnerRepo(remoteUrl) : null

@@ -582,7 +582,7 @@ describe('WorktreeList lineage child card renderer', () => {
 
     expect(parentRow).not.toContain('padding-left')
     expect(markup).toContain(
-      '<section data-worktree-card-id="parent" data-content-indent="18" data-flush-surface="true">'
+      '<section data-worktree-card-id="parent" data-content-indent="20" data-flush-surface="true">'
     )
   })
 
@@ -594,7 +594,7 @@ describe('WorktreeList lineage child card renderer', () => {
 
     expect(parentRow).not.toContain('padding-left')
     expect(markup).toContain(
-      '<section data-worktree-card-id="parent" data-content-indent="36" data-flush-surface="true">'
+      '<section data-worktree-card-id="parent" data-content-indent="38" data-flush-surface="true">'
     )
   })
 })

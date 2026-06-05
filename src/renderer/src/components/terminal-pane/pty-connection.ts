@@ -44,7 +44,6 @@ import {
   discardTerminalOutput,
   flushTerminalOutput,
   registerTerminalBacklogRecovery,
-  suppressTerminalCursorUntilOutputSettles,
   waitForTerminalOutputParsed,
   writeTerminalOutput
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
@@ -77,6 +76,7 @@ import {
 import { createCommandCodeOutputStatusDetector } from './command-code-output-status'
 import type { PtyDataMeta } from './pty-dispatcher'
 import { createTerminalGitHubPRLinkDetector } from '@/lib/terminal-github-pr-link-detector'
+import { installConptyDeviceAttributesHandler } from './terminal-conpty-device-attributes'
 
 const pendingSpawnByPaneKey = new Map<string, Promise<string | null>>()
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
@@ -91,6 +91,8 @@ const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS = 10_000
 const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
+const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
+const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 const REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS = 250
 const FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS = 2048
 const FOREGROUND_INTERACTIVE_REDRAW_CHARS = 16 * 1024
@@ -199,35 +201,66 @@ function isAgentTaskCompleteNotificationEnabledFromState(
   return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
 }
 
-const agentTaskCompleteNotificationEnabledListeners = new Set<() => void>()
-let agentTaskCompleteNotificationSettingsUnsubscribe: (() => void) | null = null
-let agentTaskCompleteNotificationEnabledSnapshot: boolean | null = null
+function isTerminalAttentionEnabledFromState(
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  return state.settings?.experimentalTerminalAttention === true
+}
 
-function subscribeAgentTaskCompleteNotificationEnabled(listener: () => void): () => void {
-  if (agentTaskCompleteNotificationSettingsUnsubscribe === null) {
-    agentTaskCompleteNotificationEnabledSnapshot = isAgentTaskCompleteNotificationEnabled()
-    agentTaskCompleteNotificationSettingsUnsubscribe = useAppStore.subscribe((state) => {
-      const enabled = isAgentTaskCompleteNotificationEnabledFromState(state)
-      if (enabled === agentTaskCompleteNotificationEnabledSnapshot) {
+function isAgentTaskCompleteTrackingEnabled(): boolean {
+  const state = useAppStore.getState()
+  return (
+    isAgentTaskCompleteNotificationEnabledFromState(state) ||
+    isTerminalAttentionEnabledFromState(state)
+  )
+}
+
+function isAgentTaskCompleteTrackingEnabledFromState(
+  state: ReturnType<typeof useAppStore.getState>
+): boolean {
+  return (
+    isAgentTaskCompleteNotificationEnabledFromState(state) ||
+    isTerminalAttentionEnabledFromState(state)
+  )
+}
+
+const agentTaskCompleteTrackingEnabledListeners = new Set<() => void>()
+let agentTaskCompleteTrackingSettingsUnsubscribe: (() => void) | null = null
+let agentTaskCompleteTrackingSettingsSnapshot: string | null = null
+
+function getAgentTaskCompleteTrackingSettingsSnapshot(
+  state: ReturnType<typeof useAppStore.getState>
+): string {
+  return `${isAgentTaskCompleteTrackingEnabledFromState(state)}:${isAgentTaskCompleteNotificationEnabledFromState(state)}`
+}
+
+function subscribeAgentTaskCompleteTrackingEnabled(listener: () => void): () => void {
+  if (agentTaskCompleteTrackingSettingsUnsubscribe === null) {
+    agentTaskCompleteTrackingSettingsSnapshot = getAgentTaskCompleteTrackingSettingsSnapshot(
+      useAppStore.getState()
+    )
+    agentTaskCompleteTrackingSettingsUnsubscribe = useAppStore.subscribe((state) => {
+      const snapshot = getAgentTaskCompleteTrackingSettingsSnapshot(state)
+      if (snapshot === agentTaskCompleteTrackingSettingsSnapshot) {
         return
       }
-      agentTaskCompleteNotificationEnabledSnapshot = enabled
-      for (const subscriber of Array.from(agentTaskCompleteNotificationEnabledListeners)) {
+      agentTaskCompleteTrackingSettingsSnapshot = snapshot
+      for (const subscriber of Array.from(agentTaskCompleteTrackingEnabledListeners)) {
         subscriber()
       }
     })
   }
 
-  agentTaskCompleteNotificationEnabledListeners.add(listener)
+  agentTaskCompleteTrackingEnabledListeners.add(listener)
   return () => {
-    agentTaskCompleteNotificationEnabledListeners.delete(listener)
+    agentTaskCompleteTrackingEnabledListeners.delete(listener)
     if (
-      agentTaskCompleteNotificationEnabledListeners.size === 0 &&
-      agentTaskCompleteNotificationSettingsUnsubscribe !== null
+      agentTaskCompleteTrackingEnabledListeners.size === 0 &&
+      agentTaskCompleteTrackingSettingsUnsubscribe !== null
     ) {
-      agentTaskCompleteNotificationSettingsUnsubscribe()
-      agentTaskCompleteNotificationSettingsUnsubscribe = null
-      agentTaskCompleteNotificationEnabledSnapshot = null
+      agentTaskCompleteTrackingSettingsUnsubscribe()
+      agentTaskCompleteTrackingSettingsUnsubscribe = null
+      agentTaskCompleteTrackingSettingsSnapshot = null
     }
   }
 }
@@ -387,6 +420,48 @@ function shouldWritePtyOutputForeground(isPaneVisible: boolean): boolean {
   return document.visibilityState === 'visible'
 }
 
+function containsSynchronizedOutputStart(data: string): boolean {
+  return data.includes('\x1b[?2026h')
+}
+
+function containsSynchronizedOutputEnd(data: string): boolean {
+  return data.includes('\x1b[?2026l')
+}
+
+function shouldSynchronizedOutputRemainActive(data: string, wasActive: boolean): boolean {
+  const lastStartIndex = data.lastIndexOf('\x1b[?2026h')
+  const lastEndIndex = data.lastIndexOf('\x1b[?2026l')
+  if (lastStartIndex === -1 && lastEndIndex === -1) {
+    return wasActive
+  }
+  return lastStartIndex > lastEndIndex
+}
+
+function containsCursorPositionSequence(data: string): boolean {
+  let offset = data.indexOf('\x1b[')
+  while (offset !== -1) {
+    let index = offset + 2
+    while (index < data.length) {
+      const char = data[index]
+      if (char === 'G' || char === 'H' || char === 'f') {
+        return true
+      }
+      if ((char < '0' || char > '9') && char !== ';') {
+        break
+      }
+      index += 1
+    }
+    offset = data.indexOf('\x1b[', offset + 2)
+  }
+  return false
+}
+
+function containsCursorRestore(data: string): boolean {
+  const hideIndex = data.indexOf(CURSOR_HIDE_SEQUENCE)
+  const showIndex = data.lastIndexOf(CURSOR_SHOW_SEQUENCE)
+  return hideIndex !== -1 && showIndex > hideIndex && containsCursorPositionSequence(data)
+}
+
 export function connectPanePty(
   pane: ManagedPane,
   manager: PaneManager,
@@ -403,10 +478,12 @@ export function connectPanePty(
   let agentTaskCompleteStatusUnsubscribe: (() => void) | null = null
   let agentTaskCompleteSettingsUnsubscribe: (() => void) | null = null
   let agentTaskCompleteNotificationGeneration = 0
-  let wasAgentTaskCompleteNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
+  let wasAgentTaskCompleteTrackingEnabled = isAgentTaskCompleteTrackingEnabled()
+  let wasAgentTaskCompleteOsNotificationEnabled = isAgentTaskCompleteNotificationEnabled()
   let terminalBellNotificationTimer: ReturnType<typeof setTimeout> | null = null
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
+  let synchronizedForegroundOutputActive = false
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -687,6 +764,9 @@ export function connectPanePty(
   })
   commandLifecycle.attachXtermConsumer(pane.terminal)
   const onTerminalKeyDown = (event: KeyboardEvent): void => {
+    deps.clearTerminalTabUnread(deps.tabId)
+    deps.clearTerminalPaneUnread(cacheKey)
+    deps.clearWorktreeUnread(deps.worktreeId)
     if (isPlainEscapeKeyEvent(event)) {
       setPendingTerminalInputIntent('plain-escape')
       return
@@ -731,7 +811,7 @@ export function connectPanePty(
         ...(meta?.agentStatus ? { agentStatusSnapshot: meta.agentStatus } : {})
       }),
     shouldPollProcessCadence: () =>
-      isAgentTaskCompleteNotificationEnabled() && deps.isVisibleRef.current,
+      isAgentTaskCompleteTrackingEnabled() && deps.isVisibleRef.current,
     isLive: () => {
       if (disposed) {
         return false
@@ -788,7 +868,7 @@ export function connectPanePty(
   const onTitleChange = (title: string, rawTitle: string): void => {
     manager.setPaneGpuRendering(pane.id, !isGeminiTerminalTitle(rawTitle))
     deps.setRuntimePaneTitle(deps.tabId, pane.id, title)
-    if (syncAgentTaskCompleteNotificationEnabled()) {
+    if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeTitle(rawTitle)
     }
     // Why: only the focused pane should drive the tab title — otherwise two
@@ -997,24 +1077,32 @@ export function connectPanePty(
     }
   }
 
-  const syncAgentTaskCompleteNotificationEnabled = (): boolean => {
-    const enabled = isAgentTaskCompleteNotificationEnabled()
-    if (!enabled && wasAgentTaskCompleteNotificationEnabled) {
-      // Why: disabling notifications is an event-time boundary. Drop pending
-      // timers and coordinator state so completions observed while off cannot
-      // replay if the user turns the setting back on.
+  const syncAgentTaskCompleteTrackingEnabled = (): boolean => {
+    const enabled = isAgentTaskCompleteTrackingEnabled()
+    const osNotificationsEnabled = isAgentTaskCompleteNotificationEnabled()
+    if (
+      !osNotificationsEnabled &&
+      wasAgentTaskCompleteOsNotificationEnabled &&
+      pendingTerminalBellNotification
+    ) {
+      scheduleTerminalBellNotification()
+    }
+    if (!enabled && wasAgentTaskCompleteTrackingEnabled) {
+      // Why: disabling every completion consumer is an event-time boundary.
+      // Drop pending timers and coordinator state so old work cannot replay.
       agentTaskCompleteNotificationGeneration += 1
       clearPendingAgentTaskCompleteNotification()
       agentCompletionCoordinator.resetCompletionState({ requireFreshWorking: true })
       if (pendingTerminalBellNotification) {
         scheduleTerminalBellNotification()
       }
-    } else if (enabled && !wasAgentTaskCompleteNotificationEnabled) {
-      // Why: a pane may have observed work while agent-complete was disabled.
-      // Re-enabling should not let the next idle event notify for that old task.
+    } else if (enabled && !wasAgentTaskCompleteTrackingEnabled) {
+      // Why: a pane may have observed work while all completion consumers were
+      // disabled. Re-enabling should not let the next idle event report old work.
       agentCompletionCoordinator.resetCompletionState({ requireFreshWorking: true })
     }
-    wasAgentTaskCompleteNotificationEnabled = enabled
+    wasAgentTaskCompleteTrackingEnabled = enabled
+    wasAgentTaskCompleteOsNotificationEnabled = osNotificationsEnabled
     return enabled
   }
 
@@ -1025,7 +1113,7 @@ export function connectPanePty(
       agentStatusSnapshot?: ParsedAgentStatusPayload
     } = {}
   ): void => {
-    if (!syncAgentTaskCompleteNotificationEnabled()) {
+    if (!syncAgentTaskCompleteTrackingEnabled()) {
       return
     }
     clearPendingAgentTaskCompleteNotification()
@@ -1036,19 +1124,24 @@ export function connectPanePty(
       clearPendingAgentTaskCompleteNotification()
       if (
         generationAtSchedule !== agentTaskCompleteNotificationGeneration ||
-        !syncAgentTaskCompleteNotificationEnabled()
+        !syncAgentTaskCompleteTrackingEnabled()
       ) {
         return
       }
-      pendingTerminalBellNotification = false
-      clearTerminalBellNotificationTimer()
       if (disposed) {
         return
       }
+      // Why: terminal attention is a visual pane affordance, not an OS
+      // notification. Route through dispatch so stale pane completions are
+      // rejected before unread attention is marked.
+      const shouldDispatchOsNotification = isAgentTaskCompleteNotificationEnabled()
+      pendingTerminalBellNotification = false
+      clearTerminalBellNotificationTimer()
       deps.dispatchNotification({
         source: 'agent-task-complete',
         terminalTitle: title,
         paneKey: cacheKey,
+        ...(shouldDispatchOsNotification ? {} : { suppressOsNotification: true }),
         ...(options.agentStatusSnapshot ? { agentStatusSnapshot: options.agentStatusSnapshot } : {})
       })
     }
@@ -1076,8 +1169,8 @@ export function connectPanePty(
       AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS
     )
   }
-  agentTaskCompleteSettingsUnsubscribe = subscribeAgentTaskCompleteNotificationEnabled(() => {
-    if (syncAgentTaskCompleteNotificationEnabled()) {
+  agentTaskCompleteSettingsUnsubscribe = subscribeAgentTaskCompleteTrackingEnabled(() => {
+    if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.startProcessTracking()
     }
   })
@@ -1109,7 +1202,7 @@ export function connectPanePty(
     if (isClaudeAgent(title) && (settings === null || settings.promptCacheTimerEnabled)) {
       deps.setCacheTimerStartedAt(cacheKey, Date.now())
     }
-    if (syncAgentTaskCompleteNotificationEnabled()) {
+    if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeClassifiedTitleCompletion(title)
     }
     // Why: some agent TUIs leave xterm in DECSCUSR steady-cursor mode when
@@ -1117,7 +1210,7 @@ export function connectPanePty(
     queueAgentIdleCursorReset()
   }
   const onAgentBecameWorking = (): void => {
-    if (syncAgentTaskCompleteNotificationEnabled()) {
+    if (syncAgentTaskCompleteTrackingEnabled()) {
       agentCompletionCoordinator.observeTitleWorking()
     }
     // Why: a new API call refreshes the prompt-cache TTL, so clear any running
@@ -1156,12 +1249,14 @@ export function connectPanePty(
   const connectionId = repo?.connectionId ?? null
   const tab = (state.tabsByWorktree[deps.worktreeId] ?? []).find((t) => t.id === deps.tabId)
   const shellOverride = tab?.shellOverride
-  const shouldSuppressForegroundCursor = isLocalNativeWindowsPty({
+  const isNativeWindowsConpty = isLocalNativeWindowsPty({
     userAgent: navigator.userAgent,
     connectionId,
     cwd: deps.cwd,
     shellOverride
   })
+  const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
+  const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
 
   const restoredPtyIdForTransport =
     deps.restoredLeafId && deps.restoredPtyIdByLeafId
@@ -1212,7 +1307,7 @@ export function connectPanePty(
       const currentState = useAppStore.getState()
       const title = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
       currentState.setAgentStatus(cacheKey, payload, title)
-      if (syncAgentTaskCompleteNotificationEnabled()) {
+      if (syncAgentTaskCompleteTrackingEnabled()) {
         agentCompletionCoordinator.observeHookStatus(payload)
       }
       if (payload.state === 'working' && pendingTerminalBellNotification) {
@@ -1225,6 +1320,13 @@ export function connectPanePty(
     : createIpcPtyTransport(transportOptions)
   const hasExistingPaneTransport = deps.paneTransportsRef.current.size > 0
   deps.paneTransportsRef.current.set(pane.id, transport)
+  const conptyDeviceAttributesDisposable = isNativeWindowsConpty
+    ? installConptyDeviceAttributesHandler({
+        parser: pane.terminal.parser,
+        sendInput: (data) => transport.sendInput(data),
+        isReplaying: () => isPaneReplaying(deps.replayingPanesRef, pane.id)
+      })
+    : null
 
   const onDataDisposable = pane.terminal.onData((data) => {
     // Why: xterm auto-replies to embedded query sequences (DA1, DECRQM,
@@ -1260,18 +1362,6 @@ export function connectPanePty(
     if (currentPtyId && isPtyLocked(currentPtyId)) {
       clearPendingTerminalInputIntent()
       return
-    }
-    // Why: a real keystroke into the terminal is the unambiguous "user is
-    // here" signal that dismisses attention. Guarded by the replay and
-    // codex-stale checks above so synthetic xterm auto-replies never count.
-    deps.clearTerminalTabUnread(deps.tabId)
-    deps.clearTerminalPaneUnread(cacheKey)
-    deps.clearWorktreeUnread(deps.worktreeId)
-    if (shouldSuppressForegroundCursor) {
-      // Why: native Windows ConPTY can leave the old visual cursor painted
-      // until the shell echoes the next frame; other PTY hosts should keep
-      // normal cursor visibility when commands intentionally produce no echo.
-      suppressTerminalCursorUntilOutputSettles(pane.terminal)
     }
     const intent = pendingTerminalInputIntent
     // Why: real xterm can deliver the terminal byte even when our DOM keydown
@@ -1741,17 +1831,41 @@ export function connectPanePty(
         return true
       }
       return (
-        shouldSuppressForegroundCursor &&
+        shouldApplyNativeWindowsRewriteRefresh &&
         containsNonAsciiOutput(data) &&
         containsWindowsRewriteControl(data)
       )
     }
 
     function writePtyOutputToXterm(data: string, foreground: boolean): void {
+      if (foreground) {
+        resetHiddenOutputRestoreIfPtyChanged()
+      }
       const parseHiddenStartupOutput =
         !foreground &&
         canUseMainBufferSnapshot(transport.getPtyId()) &&
         isHiddenStartupRendererQueryWindowActive()
+      const synchronizedOutputStarted =
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        foreground &&
+        containsSynchronizedOutputStart(data)
+      const synchronizedOutputEnded =
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        foreground &&
+        containsSynchronizedOutputEnd(data)
+      const synchronizedForegroundOutput =
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        foreground &&
+        (synchronizedForegroundOutputActive || synchronizedOutputStarted || synchronizedOutputEnded)
+      const nextSynchronizedForegroundOutputActive =
+        shouldProtectNativeWindowsSynchronizedOutput &&
+        foreground &&
+        shouldSynchronizedOutputRemainActive(data, synchronizedForegroundOutputActive)
+      // Why: xterm's DOM renderer draws the cursor as row content; Windows
+      // cursor-only restores need row invalidation even outside DEC 2026.
+      const nativeWindowsCursorRestore =
+        shouldProtectNativeWindowsSynchronizedOutput && foreground && containsCursorRestore(data)
+      synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
       if (hiddenMode2031ScanTail) {
         respondToSkippedMode2031Subscribe(data)
       }
@@ -1762,7 +1876,14 @@ export function connectPanePty(
         latencySensitive:
           !foreground || parseHiddenStartupOutput ? true : isLatencySensitiveForegroundOutput(data),
         forceForegroundRefresh:
-          (foreground || parseHiddenStartupOutput) && shouldForceForegroundRenderRefresh(data)
+          (foreground || parseHiddenStartupOutput) &&
+          (synchronizedForegroundOutput ||
+            nativeWindowsCursorRestore ||
+            shouldForceForegroundRenderRefresh(data)),
+        followupForegroundRefresh: nativeWindowsCursorRestore,
+        stripTransientCursorShows: shouldProtectNativeWindowsSynchronizedOutput && foreground,
+        coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
+        holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
       })
     }
 
@@ -1897,7 +2018,10 @@ export function connectPanePty(
         return
       }
       if (transport.getPtyId() !== hiddenOutputRestorePtyId) {
+        // Why: renderer backlog is tied to the old PTY stream; after reattach,
+        // queued hidden bytes must not delay or replay before the new PTY.
         clearHiddenOutputRestoreState()
+        discardTerminalOutput(pane.terminal)
       }
     }
 
@@ -2781,6 +2905,7 @@ export function connectPanePty(
         connectFrame = null
       }
       onDataDisposable.dispose()
+      conptyDeviceAttributesDisposable?.dispose()
       onResizeDisposable.dispose()
       pane.container.removeEventListener(PANE_PTY_RESIZE_HOLD_FLUSH_EVENT, onHeldPtyResizeFlush)
       geometryReportObserver?.disconnect()

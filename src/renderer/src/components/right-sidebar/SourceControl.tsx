@@ -193,6 +193,8 @@ import {
 import { hasExpandedCommitFailureDetails, summarizeCommitFailure } from './commit-failure-summary'
 import {
   isSourceControlSplitOpenModifier,
+  shouldOpenSourceControlRowAsPreview,
+  toPermanentSourceControlRowOpenEvent,
   type SourceControlRowOpenEvent
 } from './source-control-split-open'
 
@@ -3018,12 +3020,14 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
       const targetGroupId = resolveSplitTargetGroupId(event)
+      const openAsPreview = shouldOpenSourceControlRowAsPreview(event, targetGroupId)
       if (entry.conflictKind && entry.conflictStatus) {
         if (entry.conflictStatus === 'unresolved') {
           trackConflictPath(activeWorktreeId, entry.path, entry.conflictKind)
         }
         openConflictFile(activeWorktreeId, worktreePath, entry, detectLanguage(entry.path), {
-          targetGroupId
+          targetGroupId,
+          preview: openAsPreview
         })
         return
       }
@@ -3046,13 +3050,14 @@ function SourceControlInner(): React.JSX.Element {
             language,
             mode: 'edit'
           },
-          { targetGroupId }
+          { targetGroupId, preview: openAsPreview }
         )
         setEditorViewMode(filePath, 'changes')
         return
       }
       openDiff(activeWorktreeId, filePath, entry.path, language, entry.area === 'staged', {
-        targetGroupId
+        targetGroupId,
+        preview: openAsPreview
       })
     },
     [
@@ -3641,13 +3646,14 @@ function SourceControlInner(): React.JSX.Element {
       ) {
         return
       }
+      const targetGroupId = resolveSplitTargetGroupId(event)
       openBranchDiff(
         activeWorktreeId,
         worktreePath,
         entry,
         branchSummary,
         detectLanguage(entry.path),
-        { targetGroupId: resolveSplitTargetGroupId(event) }
+        { targetGroupId, preview: shouldOpenSourceControlRowAsPreview(event, targetGroupId) }
       )
     },
     [activeWorktreeId, branchSummary, openBranchDiff, resolveSplitTargetGroupId, worktreePath]
@@ -6636,6 +6642,9 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             onOpen(entry, e)
           }
         }}
+        onDoubleClick={(e) => {
+          onOpen(entry, toPermanentSourceControlRowOpenEvent(e))
+        }}
       >
         <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <div className="min-w-0 flex-1 text-xs">
@@ -6768,7 +6777,7 @@ function BranchEntryRow({
   worktreePath: string
   depth?: number
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
-  onOpen: (event: React.MouseEvent<HTMLDivElement>) => void
+  onOpen: (event: SourceControlRowOpenEvent) => void
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
@@ -6794,7 +6803,8 @@ function BranchEntryRow({
           e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
           e.dataTransfer.effectAllowed = 'copy'
         }}
-        onClick={onOpen}
+        onClick={(e) => onOpen(e)}
+        onDoubleClick={(e) => onOpen(toPermanentSourceControlRowOpenEvent(e))}
       >
         <FileIcon className="size-3.5 shrink-0" style={{ color: STATUS_COLORS[entry.status] }} />
         <span className="min-w-0 flex-1 truncate text-xs">

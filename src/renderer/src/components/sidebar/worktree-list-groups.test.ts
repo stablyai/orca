@@ -923,6 +923,156 @@ describe('project groups', () => {
     ])
   })
 
+  it('disambiguates duplicate top-level repo basenames without renaming repos', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const paymentsApi: Repo = {
+      ...repo,
+      id: 'repo-payments-api',
+      path: '/workspace/platform/payments/api',
+      displayName: 'api'
+    }
+    const billingApi: Repo = {
+      ...repo,
+      id: 'repo-billing-api',
+      path: '/workspace/platform/billing/api',
+      displayName: 'api'
+    }
+    const webRepo: Repo = {
+      ...repo,
+      id: 'repo-web',
+      path: '/workspace/platform/web',
+      displayName: 'web'
+    }
+    const repos = new Map([
+      [paymentsApi.id, paymentsApi],
+      [billingApi.id, billingApi],
+      [webRepo.id, webRepo]
+    ])
+    const worktrees = [
+      { ...worktree, id: 'wt-payments-api', repoId: paymentsApi.id },
+      { ...worktree, id: 'wt-billing-api', repoId: billingApi.id },
+      { ...worktree, id: 'wt-web', repoId: webRepo.id }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      repos,
+      null,
+      new Set(),
+      new Map([
+        [paymentsApi.id, 0],
+        [billingApi.id, 1],
+        [webRepo.id, 2]
+      ]),
+      undefined,
+      'manual',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.label)).toEqual([
+      'Platform',
+      'payments/api',
+      'billing/api',
+      'web'
+    ])
+    expect(paymentsApi.displayName).toBe('api')
+    expect(billingApi.displayName).toBe('api')
+  })
+
+  it('disambiguates duplicate repo basenames inside each Project Group scope', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const paymentsApi: Repo = {
+      ...repo,
+      id: 'repo-payments-api',
+      path: '/workspace/platform/payments/api',
+      displayName: 'api',
+      projectGroupId: group.id,
+      projectGroupOrder: 0
+    }
+    const billingApi: Repo = {
+      ...repo,
+      id: 'repo-billing-api',
+      path: '/workspace/platform/billing/api',
+      displayName: 'api',
+      projectGroupId: group.id,
+      projectGroupOrder: 1
+    }
+    const webRepo: Repo = {
+      ...repo,
+      id: 'repo-web',
+      path: '/workspace/platform/web',
+      displayName: 'web',
+      projectGroupId: group.id,
+      projectGroupOrder: 2
+    }
+    const repos = new Map([
+      [paymentsApi.id, paymentsApi],
+      [billingApi.id, billingApi],
+      [webRepo.id, webRepo]
+    ])
+    const worktrees = [
+      { ...worktree, id: 'wt-payments-api', repoId: paymentsApi.id },
+      { ...worktree, id: 'wt-billing-api', repoId: billingApi.id },
+      { ...worktree, id: 'wt-web', repoId: webRepo.id }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      repos,
+      null,
+      new Set(),
+      new Map([
+        [paymentsApi.id, 0],
+        [billingApi.id, 1],
+        [webRepo.id, 2]
+      ]),
+      undefined,
+      'manual',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.label)).toEqual([
+      'Platform',
+      'payments/api',
+      'billing/api',
+      'web'
+    ])
+    expect(paymentsApi.displayName).toBe('api')
+    expect(billingApi.displayName).toBe('api')
+  })
+
   it('orders repos inside a Project Group by projectGroupOrder in manual mode', () => {
     const group: ProjectGroup = {
       id: 'group-1',

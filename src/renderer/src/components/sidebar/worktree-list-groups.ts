@@ -26,6 +26,7 @@ import type { SortBy } from './smart-sort'
 import type { AppState } from '@/store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { UNGROUPED_PROJECT_GROUP_KEY } from '../../../../shared/project-groups'
+import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 
 export { branchName }
 
@@ -80,6 +81,8 @@ export type ImportedWorktreesCardRow = {
 }
 
 export type Row = GroupHeaderRow | WorktreeRow | ImportedWorktreesCardRow
+
+type OrderedGroupEntry = [string, { label: string; items: Worktree[]; repo?: Repo }]
 
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
@@ -396,6 +399,20 @@ function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
 
+function withRepoSectionDisplayLabels(entries: readonly OrderedGroupEntry[]): OrderedGroupEntry[] {
+  const repos = entries
+    .map((entry) => entry[1].repo)
+    .filter((repo): repo is Repo => repo !== undefined)
+  if (repos.length < 2) {
+    return [...entries]
+  }
+  const labelsByPath = getRepoDisplayLabelsByPath(repos)
+  return entries.map(([key, group]) => [
+    key,
+    group.repo ? { ...group, label: labelsByPath.get(group.repo.path) ?? group.label } : group
+  ])
+}
+
 /**
  * Build the flat row list consumed by the virtualizer.
  * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
@@ -509,7 +526,7 @@ export function buildRows(
     }
   }
 
-  const orderedGroups: [string, { label: string; items: Worktree[]; repo?: Repo }][] = []
+  const orderedGroups: OrderedGroupEntry[] = []
   if (groupBy === 'pr-status') {
     for (const prGroup of PR_GROUP_ORDER) {
       const key = `pr:${prGroup}`
@@ -556,7 +573,7 @@ export function buildRows(
   }
 
   const appendOrderedGroups = (
-    groupsToAppend: [string, { label: string; items: Worktree[]; repo?: Repo }][],
+    groupsToAppend: OrderedGroupEntry[],
     projectGroupDepth = 0
   ): void => {
     for (const [key, group] of groupsToAppend) {
@@ -623,14 +640,13 @@ export function buildRows(
   }
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {
-    appendOrderedGroups(orderedGroups)
+    appendOrderedGroups(
+      groupBy === 'repo' ? withRepoSectionDisplayLabels(orderedGroups) : orderedGroups
+    )
     return result
   }
 
-  const groupByProjectGroupId = new Map<
-    string | null,
-    [string, { label: string; items: Worktree[]; repo?: Repo }][]
-  >()
+  const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
   for (const entry of orderedGroups) {
     const repo = entry[1].repo
     const projectGroupId = repo?.projectGroupId ?? null
@@ -639,9 +655,7 @@ export function buildRows(
     groupByProjectGroupId.set(projectGroupId, list)
   }
 
-  const sortRepoEntriesWithinGroup = (
-    entries: [string, { label: string; items: Worktree[]; repo?: Repo }][]
-  ): [string, { label: string; items: Worktree[]; repo?: Repo }][] => {
+  const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
     if (projectGroupOrdering !== 'manual') {
       return entries
     }
@@ -699,7 +713,7 @@ export function buildRows(
       projectGroupDepth: depth
     })
     if (!collapsedGroups.has(key)) {
-      appendOrderedGroups(repoEntries, depth + 1)
+      appendOrderedGroups(withRepoSectionDisplayLabels(repoEntries), depth + 1)
       for (const childGroup of childGroups) {
         appendProjectGroup(childGroup, depth + 1)
       }
@@ -711,7 +725,10 @@ export function buildRows(
     appendProjectGroup(projectGroup, 0)
   }
 
-  appendOrderedGroups(sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? []), 0)
+  appendOrderedGroups(
+    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? [])),
+    0
+  )
 
   return result
 }

@@ -253,11 +253,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     e.stopPropagation()
   }, [])
 
-  // Why: when any root row has a disclosure chevron, leaf siblings reserve a
-  // matching leading spacer so the state-dot column stays aligned across the
-  // card. Without this, parent rows shift right by the chevron's width while
-  // leaf rows hug the gutter — visible misalignment when the user sweeps the
-  // leading column.
+  // Why: when any root row has a disclosure chevron, root leaf siblings reserve
+  // a matching leading spacer so the state-dot column stays aligned across the
+  // card. Descendants already have the child rail indent, so adding this spacer
+  // there double-indents child agents.
   const anyRootHasChildren = rootAgents.some(
     (agent) => (childrenByParentPaneKey.get(agent.paneKey) ?? []).length > 0
   )
@@ -273,6 +272,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
+    const isRootAgent = ancestorPaneKeys.size === 0
     // Why: spawned child agents are actionable work, so they should be visible
     // as soon as the parent appears; the disclosure remains available to fold noise.
     const expanded = !collapsedLineageParents.has(agent.paneKey)
@@ -315,7 +315,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           }
           // Why: keep leaf rows aligned with parent rows in the same card —
           // see anyRootHasChildren above.
-          reserveDisclosureGutter={anyRootHasChildren && !hasChildAgents}
+          reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           sendTargetStatus={sendTarget?.status}
           sendTargetDisabledReason={sendTarget?.disabledReason}
@@ -346,6 +346,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     }
     const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
     const hasChildAgents = childAgents.length > 0
+    const isRootAgent = ancestorPaneKeys.size === 0
     const expanded = !collapsedLineageParents.has(agent.paneKey)
     const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
     descendantAncestorPaneKeys.add(agent.paneKey)
@@ -360,7 +361,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onToggleChildAgents={
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
-          reserveDisclosureGutter={anyRootHasChildren && !hasChildAgents}
+          reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
         />
         {hasChildAgents ? (
@@ -381,9 +382,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     // Why: compact worktree cards keep multiple active agents to a single
     // predictable status line, even when there are only two agents.
     const shouldUseSummaryRow = summaryAgents.length > 1
-    const subjectLabel = hasLineage
-      ? `${rootAgents.length} ${rootAgents.length === 1 ? 'parent' : 'parents'}`
-      : `${agents.length} agents`
+    const subjectLabel = `${hasLineage ? rootAgents.length : agents.length} agents`
 
     return (
       <div
@@ -395,11 +394,11 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         onPointerDown={stopBubble}
         role={hasLineage ? 'tree' : 'group'}
         aria-label="Agents"
+        data-compact-agent-list="true"
       >
         {shouldUseSummaryRow ? (
-          // Why: when expanded, the header and its agent rows read as a single
-          // enclosed panel rather than a standalone pill with rows floating
-          // below it — the border/fill wraps the whole group.
+          // Why: the worktree card is already the surface. Expanded compact
+          // agents stay a quiet tree; only the collapsed summary reads as a pill.
           <div
             className={cn(
               'compact-agent-summary-panel',

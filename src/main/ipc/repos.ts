@@ -33,7 +33,6 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import type { ClaimedCloneTarget } from '../git/repo-clone-path'
-import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
@@ -161,7 +160,7 @@ const ProjectGroupCancelNestedScanArgs = z.object({
 const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
   z.object({
     parentPath: z.string().min(1),
-    groupName: z.string().min(1),
+    groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
     scanId: z.string().min(1).optional(),
@@ -574,7 +573,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         })
       )
 
-      for (const repoPath of selection.selectedPaths) {
+      for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
         try {
           if (args.connectionId) {
             const gitProvider = getSshGitProvider(args.connectionId)
@@ -601,7 +600,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
-              store.moveProjectToGroup(existing.id, group.id)
+              store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
             }
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
             continue
@@ -625,7 +624,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             ...(group
               ? {
                   projectGroupId: group.id,
-                  projectGroupOrder: getNextProjectGroupOrder(store.getRepos(), group.id)
+                  projectGroupOrder
                 }
               : {})
           }

@@ -4037,8 +4037,53 @@ describe('connectPanePty', () => {
       expect.objectContaining({ source: 'terminal-bell' })
     )
     vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
-    expect(deps.dispatchNotification).not.toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'agent-task-complete' })
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        suppressOsNotification: true
+      })
+    )
+  })
+
+  it('raises terminal attention for agent completion when OS completion notifications are disabled', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-codex')
+    transportFactoryQueue.push(transport)
+
+    vi.useFakeTimers()
+    mockStoreState.settings = {
+      ...mockStoreState.settings,
+      experimentalTerminalAttention: true,
+      notifications: {
+        enabled: true,
+        agentTaskComplete: false,
+        terminalBell: true,
+        suppressWhenFocused: false,
+        customSoundPath: null
+      }
+    }
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
+      | ((title: string) => void)
+      | undefined
+    if (!idleHandler) {
+      throw new Error('Expected idle handler to be registered')
+    }
+
+    idleHandler('* Codex done')
+    vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS)
+
+    expect(deps.dispatchNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        paneKey: makePaneKey('tab-1', LEAF_1),
+        suppressOsNotification: true
+      })
     )
   })
 
@@ -4809,11 +4854,36 @@ describe('connectPanePty', () => {
     })
   })
 
-  // Why: show-until-interact — a real keystroke through xterm onData is the
-  // canonical "user is here" signal that dismisses the bell. Guarded by the
-  // replay and codex-stale checks (see separate tests) so synthetic xterm
-  // auto-replies and blocked stale input never count as interaction.
-  it('clears tab and worktree unread on real keystroke via onData', async () => {
+  // Why: show-until-interact — a DOM keydown is the keyboard "user is here"
+  // signal that dismisses attention. Raw xterm onData is intentionally lower
+  // level because it can include terminal-generated replies/control bytes.
+  it('clears tab and worktree unread on real keydown', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    pane.terminal.element = createPaneContainer()
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const keydown = new Event('keydown')
+    Object.defineProperty(keydown, 'key', { value: 'a' })
+    Object.defineProperty(keydown, 'repeat', { value: false })
+    Object.defineProperty(keydown, 'ctrlKey', { value: false })
+    Object.defineProperty(keydown, 'metaKey', { value: false })
+    Object.defineProperty(keydown, 'shiftKey', { value: false })
+    ;(pane.terminal.element as EventTarget).dispatchEvent(keydown)
+
+    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
+  it('does not clear pane attention from raw onData after a bell', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
@@ -4829,14 +4899,16 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    if (!onDataHandler) {
-      throw new Error('expected onData handler to be registered')
+    const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+    if (!bellHandler || !onDataHandler) {
+      throw new Error('expected bell and onData handlers to be registered')
     }
+
+    bellHandler()
     ;(onDataHandler as (data: string) => void)('a')
 
-    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
-    expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
-    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
+    expect(deps.markTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.clearTerminalPaneUnread).not.toHaveBeenCalled()
     expect(transport.sendInput).toHaveBeenCalledWith('a')
   })
 

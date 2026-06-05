@@ -162,6 +162,7 @@ import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
 } from '../powershell-osc133-bootstrap'
+import { SSH_SESSION_EXPIRED_ERROR } from '../providers/ssh-pty-provider'
 
 const POWERSHELL_OSC133_ARGS = [
   '-NoLogo',
@@ -169,6 +170,10 @@ const POWERSHELL_OSC133_ARGS = [
   '-EncodedCommand',
   encodePowerShellCommand(getPowerShellOsc133Bootstrap())
 ]
+const TEST_CODEX_HOME =
+  process.platform === 'win32'
+    ? 'C:\\Users\\test\\AppData\\Roaming\\orca\\codex-runtime-home\\home'
+    : '/tmp/orca-codex-home'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -529,9 +534,9 @@ describe('registerPtyHandlers', () => {
     })
 
     it('injects the selected Codex home into Orca terminal PTYs', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, () => '/tmp/orca-codex-home')
-      expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-      expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+      const env = await spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
+      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
 
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
@@ -878,10 +883,10 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv(
         undefined,
         { CODEX_HOME: '/tmp/system-codex-home' },
-        () => '/tmp/orca-codex-home'
+        () => TEST_CODEX_HOME
       )
-      expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-      expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
 
     it('injects explicit proxy settings into local PTY env', async () => {
@@ -1087,9 +1092,9 @@ describe('registerPtyHandlers', () => {
       })
 
       it('injects the selected Codex home on the daemon path', async () => {
-        const env = await daemonSpawnAndGetEnv({}, () => '/tmp/orca-codex-home')
-        expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-        expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+        const env = await daemonSpawnAndGetEnv({}, () => TEST_CODEX_HOME)
+        expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+        expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
       })
 
       it('injects explicit proxy settings on the daemon path', async () => {
@@ -1783,6 +1788,128 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1)
       })
 
+      it('runtime controller kill routes app-scoped SSH ids through the parsed provider when ownership is absent', async () => {
+        const localShutdown = vi.fn()
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: localShutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        const shutdown = vi.fn(async () => undefined)
+        const store = { markSshRemotePtyLease: vi.fn() }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        registerSshPtyProvider('ssh-1', {
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          kill: (ptyId: string) => boolean
+        }
+
+        expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(true)
+        await Promise.resolve()
+
+        expect(shutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', { immediate: false })
+        expect(localShutdown).not.toHaveBeenCalled()
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
+      })
+
+      it('runtime controller kill tombstones app-scoped SSH ids when ownership and provider are absent', async () => {
+        const localShutdown = vi.fn()
+        setLocalPtyProvider({
+          spawn: vi.fn(),
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown: localShutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () => []),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        const store = { markSshRemotePtyLease: vi.fn() }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          kill: (ptyId: string) => boolean
+        }
+
+        expect(controller.kill('ssh:ssh-1@@relay-pty')).toBe(true)
+
+        expect(localShutdown).not.toHaveBeenCalled()
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', -1)
+      })
+
       it('marks a detached SSH lease terminated when runtime controller kill has no provider', async () => {
         const store = {
           markSshRemotePtyLease: vi.fn()
@@ -2160,6 +2287,113 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('kills app-scoped SSH PTY ids through the parsed provider when ownership is not rebuilt', async () => {
+    const localShutdown = vi.fn()
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: localShutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const sshShutdown = vi.fn(async () => undefined)
+    const store = { markSshRemotePtyLease: vi.fn() }
+    registerSshPtyProvider('ssh-1', {
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: sshShutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+
+    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })
+
+    expect(sshShutdown).toHaveBeenCalledWith('ssh:ssh-1@@relay-pty', {
+      immediate: true,
+      keepHistory: false
+    })
+    expect(localShutdown).not.toHaveBeenCalled()
+    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
+  })
+
+  it('tombstones app-scoped SSH PTY ids instead of falling back local when ownership and provider are absent', async () => {
+    const localShutdown = vi.fn()
+    setLocalPtyProvider({
+      spawn: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: localShutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = { markSshRemotePtyLease: vi.fn() }
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+
+    await handlers.get('pty:kill')!(null, { id: 'ssh:ssh-1@@relay-pty' })
+
+    expect(localShutdown).not.toHaveBeenCalled()
+    expect(store.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'relay-pty', 'terminated')
+  })
+
   it('ignores fire-and-forget IPC for detached SSH PTYs without a provider', async () => {
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
@@ -2292,6 +2526,7 @@ describe('registerPtyHandlers', () => {
       preAllocateHandleForPty: vi.fn(() => 'term_wrong'),
       registerPreAllocatedHandleForPty: vi.fn(),
       registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
@@ -2315,6 +2550,707 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'term_expected'
     )
+  })
+
+  it('persists runtime-owned headless session bindings when explicitly requested', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        env?: Record<string, string>
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const store = {
+      persistPtyBinding: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    await spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-headless',
+      leafId,
+      env: { ORCA_PANE_KEY: makePaneKey('tab-headless', leafId) },
+      persistHostSessionBinding: true
+    })
+
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'tab-headless',
+      leafId,
+      ptyId: expect.any(String)
+    })
+  })
+
+  it('records SSH leases for runtime-owned headless session bindings', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        sessionId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const remoteSpawn = vi.fn(async () => ({ id: 'ssh:ssh-1@@relay-pty' }))
+    registerSshPtyProvider('ssh-1', {
+      spawn: remoteSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    await spawnController.spawn({
+      cols: 80,
+      rows: 24,
+      connectionId: 'ssh-1',
+      worktreeId: 'wt-remote',
+      tabId: 'tab-remote',
+      leafId,
+      sessionId: 'ssh:ssh-1@@relay-pty',
+      persistHostSessionBinding: true
+    })
+
+    expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetId: 'ssh-1',
+        ptyId: 'relay-pty',
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        state: 'attached'
+      })
+    )
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      worktreeId: 'wt-remote',
+      tabId: 'tab-remote',
+      leafId,
+      ptyId: 'ssh:ssh-1@@relay-pty'
+    })
+    expect(store.persistPtyBinding.mock.invocationCallOrder[0]!).toBeLessThan(
+      store.upsertSshRemotePtyLease.mock.invocationCallOrder[0]!
+    )
+    unregisterSshPtyProvider('ssh-1')
+  })
+
+  it('rejects runtime-owned binding persistence without complete stable identity', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const store = {
+      persistPtyBinding: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => 'term_trusted'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const validLeafId = '11111111-1111-4111-8111-111111111111'
+    const baseArgs = {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-headless',
+      leafId: validLeafId,
+      persistHostSessionBinding: true
+    }
+
+    for (const args of [
+      { ...baseArgs, worktreeId: undefined },
+      { ...baseArgs, tabId: undefined },
+      { ...baseArgs, leafId: undefined },
+      { ...baseArgs, leafId: 'legacy-leaf' }
+    ]) {
+      await expect(spawnController.spawn(args)).rejects.toThrow(
+        'Cannot persist runtime PTY binding without worktreeId, tabId, and leafId'
+      )
+    }
+    expect(spawnMock).not.toHaveBeenCalled()
+    expect(store.persistPtyBinding).not.toHaveBeenCalled()
+  })
+
+  it('refreshes SSH leases after successful runtime-owned reattach binding', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        sessionId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string; isReattach?: boolean }>
+    }
+    registerSshPtyProvider('ssh-reattach-ok', {
+      spawn: vi.fn(async () => ({ id: 'ssh:ssh-reattach-ok@@relay-pty', isReattach: true })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const spawnController = controller as unknown as RuntimeSpawnController
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      await spawnController.spawn({
+        cols: 80,
+        rows: 24,
+        connectionId: 'ssh-reattach-ok',
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        sessionId: 'ssh:ssh-reattach-ok@@relay-pty',
+        persistHostSessionBinding: true
+      })
+
+      expect(store.persistPtyBinding).toHaveBeenCalledWith({
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
+      })
+      expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetId: 'ssh-reattach-ok',
+          ptyId: 'relay-pty',
+          state: 'attached',
+          lastAttachedAt: expect.any(Number)
+        })
+      )
+    } finally {
+      unregisterSshPtyProvider('ssh-reattach-ok')
+    }
+  })
+
+  it('strips runtime-owned SSH pane env when remote agent hooks are disabled', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        env?: Record<string, string>
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const savedRemoteHooks = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '0'
+    const remoteSpawn = vi.fn(async (_opts: { env?: Record<string, string> }) => ({
+      id: 'ssh:ssh-runtime-env@@relay-pty'
+    }))
+    registerSshPtyProvider('ssh-runtime-env', {
+      spawn: remoteSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const spawnController = controller as unknown as RuntimeSpawnController
+      const leafId = '11111111-1111-4111-8111-111111111111'
+      await spawnController.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          FOO: 'bar',
+          ORCA_PANE_KEY: makePaneKey('tab-remote', leafId),
+          ORCA_TAB_ID: 'tab-remote',
+          ORCA_WORKTREE_ID: 'wt-remote'
+        },
+        connectionId: 'ssh-runtime-env',
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        persistHostSessionBinding: true
+      })
+
+      const env = remoteSpawn.mock.calls[0]?.[0].env
+      expect(env).toMatchObject({ FOO: 'bar' })
+      expect(env?.ORCA_PANE_KEY).toBeUndefined()
+      expect(env?.ORCA_TAB_ID).toBeUndefined()
+      expect(env?.ORCA_WORKTREE_ID).toBeUndefined()
+      expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetId: 'ssh-runtime-env',
+          ptyId: 'relay-pty',
+          leafId,
+          state: 'attached'
+        })
+      )
+    } finally {
+      if (savedRemoteHooks === undefined) {
+        delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+      } else {
+        process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = savedRemoteHooks
+      }
+      unregisterSshPtyProvider('ssh-runtime-env')
+    }
+  })
+
+  it('does not leave SSH leases when runtime-owned binding persistence fails after reattach', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        sessionId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const remoteShutdown = vi.fn()
+    const remoteWrite = vi.fn()
+    registerSshPtyProvider('ssh-reattach-fail', {
+      spawn: vi.fn(async () => ({ id: 'ssh:ssh-reattach-fail@@relay-pty', isReattach: true })),
+      write: remoteWrite,
+      resize: vi.fn(),
+      shutdown: remoteShutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn(() => {
+        throw new Error('disk full')
+      }),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const spawnController = controller as unknown as RuntimeSpawnController
+    const leafId = '11111111-1111-4111-8111-111111111111'
+
+    await expect(
+      spawnController.spawn({
+        cols: 80,
+        rows: 24,
+        connectionId: 'ssh-reattach-fail',
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        sessionId: 'ssh:ssh-reattach-fail@@relay-pty',
+        persistHostSessionBinding: true
+      })
+    ).rejects.toThrow(/ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED/)
+
+    expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
+    expect(store.removeSshRemotePtyLease).not.toHaveBeenCalled()
+    expect(remoteShutdown).not.toHaveBeenCalled()
+    getPtyWriteListener()(null, {
+      id: 'ssh:ssh-reattach-fail@@relay-pty',
+      data: 'echo should-not-route'
+    })
+    expect(remoteWrite).not.toHaveBeenCalled()
+    unregisterSshPtyProvider('ssh-reattach-fail')
+  })
+
+  it('marks runtime-owned SSH reattach as expired and clears stale local ownership', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        sessionId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const appPtyId = 'ssh:ssh-expired-runtime@@relay-pty'
+    const remoteWrite = vi.fn()
+    registerSshPtyProvider('ssh-expired-runtime', {
+      spawn: vi.fn(async () => {
+        throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: relay-pty`)
+      }),
+      write: remoteWrite,
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      setPtyOwnership(appPtyId, 'ssh-expired-runtime')
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const spawnController = controller as unknown as RuntimeSpawnController
+      const leafId = '11111111-1111-4111-8111-111111111111'
+
+      await expect(
+        spawnController.spawn({
+          cols: 80,
+          rows: 24,
+          connectionId: 'ssh-expired-runtime',
+          worktreeId: 'wt-remote',
+          tabId: 'tab-remote',
+          leafId,
+          sessionId: appPtyId,
+          persistHostSessionBinding: true
+        })
+      ).rejects.toThrow(SSH_SESSION_EXPIRED_ERROR)
+
+      expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
+        'ssh-expired-runtime',
+        'relay-pty',
+        'expired'
+      )
+      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
+      expect(store.persistPtyBinding).not.toHaveBeenCalled()
+      expect(openCodeClearPtyMock).toHaveBeenCalledWith(appPtyId)
+      expect(piClearPtyMock).toHaveBeenCalledWith(appPtyId)
+      getPtyWriteListener()(null, { id: appPtyId, data: 'echo nope' })
+      expect(remoteWrite).not.toHaveBeenCalled()
+    } finally {
+      deletePtyOwnership(appPtyId)
+      unregisterSshPtyProvider('ssh-expired-runtime')
+    }
+  })
+
+  it('cleans up fresh runtime-owned SSH spawns when binding persistence fails', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId?: string
+        connectionId?: string
+        tabId?: string
+        leafId?: string
+        sessionId?: string
+        persistHostSessionBinding?: boolean
+      }): Promise<{ id: string }>
+    }
+    const appPtyId = 'ssh:ssh-fresh-fail@@relay-pty'
+    const remoteShutdown = vi.fn()
+    registerSshPtyProvider('ssh-fresh-fail', {
+      spawn: vi.fn(async () => ({ id: appPtyId })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: remoteShutdown,
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    const store = {
+      upsertSshRemotePtyLease: vi.fn(),
+      persistPtyBinding: vi.fn(() => {
+        throw new Error('disk full')
+      }),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term_remote'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      const spawnController = controller as unknown as RuntimeSpawnController
+      const leafId = '11111111-1111-4111-8111-111111111111'
+
+      await expect(
+        spawnController.spawn({
+          cols: 80,
+          rows: 24,
+          connectionId: 'ssh-fresh-fail',
+          worktreeId: 'wt-remote',
+          tabId: 'tab-remote',
+          leafId,
+          sessionId: appPtyId,
+          persistHostSessionBinding: true
+        })
+      ).rejects.toThrow(/ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED/)
+
+      expect(remoteShutdown).toHaveBeenCalledWith(appPtyId, { immediate: true })
+      expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
+      expect(store.removeSshRemotePtyLease).not.toHaveBeenCalled()
+      expect(openCodeClearPtyMock).toHaveBeenCalledWith(appPtyId)
+      expect(piClearPtyMock).toHaveBeenCalledWith(appPtyId)
+    } finally {
+      unregisterSshPtyProvider('ssh-fresh-fail')
+    }
   })
 
   it('maps runtime-owned spawn paneKeys for renderer serializer settlement', async () => {

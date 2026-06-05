@@ -4,7 +4,6 @@ backlog/resume guarantees harder to audit. */
 import { e2eConfig } from '@/lib/e2e-config'
 import {
   discardForegroundRenderSettle,
-  suppressTerminalCursorUntilOutputSettles,
   writeForegroundTerminalChunk,
   type ForegroundTerminalOutputTarget
 } from './pane-terminal-foreground-render-settle'
@@ -20,18 +19,26 @@ type WriteTerminalOutputOptions = {
   onBackgroundBacklogDropped?: () => void
   latencySensitive?: boolean
   forceForegroundRefresh?: boolean
+  followupForegroundRefresh?: boolean
+  stripTransientCursorShows?: boolean
+  coalesceForeground?: boolean
+  holdForeground?: boolean
 }
 
 type QueueChunk = {
   data: string
   foreground: boolean
   forceForegroundRefresh: boolean
+  followupForegroundRefresh: boolean
+  stripTransientCursorShows: boolean
 }
 
 type QueuedWrite = {
   data: string
   foreground: boolean
   forceForegroundRefresh: boolean
+  followupForegroundRefresh: boolean
+  stripTransientCursorShows: boolean
 }
 
 type QueueEntry = {
@@ -43,6 +50,10 @@ type QueueEntry = {
   onBackgroundBacklogDropped?: () => void
   backgroundBacklogDropped: boolean
   highPriority: boolean
+  foregroundHold: boolean
+  foregroundCoalesce: boolean
+  foregroundHoldSafetyTimer: ReturnType<typeof setTimeout> | null
+  foregroundCoalesceTimer: ReturnType<typeof setTimeout> | null
 }
 
 const BACKGROUND_FLUSH_DELAY_MS = 50
@@ -56,6 +67,11 @@ const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
 const MAX_BACKGROUND_QUEUE_CHARS = 2 * 1024 * 1024
 const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
 const PARSE_SETTLE_TIMEOUT_MS = 250
+const FOREGROUND_COALESCE_DELAY_MS = 1000
+const FOREGROUND_HOLD_SAFETY_DELAY_MS = 250
+const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
+const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
+const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 // Why: CAN aborts a partial escape sequence before resetting style and showing
 // the lossy-backlog warning.
 const BACKGROUND_BACKLOG_WARNING =
@@ -149,25 +165,144 @@ function scheduleDrain(delayMs: number): void {
   drainTimerDelayMs = delayMs
 }
 
+function createQueueEntry(
+  terminal: TerminalOutputTarget,
+  options: WriteTerminalOutputOptions
+): QueueEntry {
+  return {
+    terminal,
+    chunks: [],
+    chunkIndex: 0,
+    queuedChars: 0,
+    beforeWrite: options.beforeWrite,
+    onBackgroundBacklogDropped: options.onBackgroundBacklogDropped,
+    backgroundBacklogDropped: false,
+    highPriority: true,
+    foregroundHold: false,
+    foregroundCoalesce: false,
+    foregroundHoldSafetyTimer: null,
+    foregroundCoalesceTimer: null
+  }
+}
+
+function clearForegroundHoldSafety(entry: QueueEntry): void {
+  if (entry.foregroundHoldSafetyTimer === null) {
+    return
+  }
+  clearTimeout(entry.foregroundHoldSafetyTimer)
+  entry.foregroundHoldSafetyTimer = null
+}
+
+function clearForegroundCoalesce(entry: QueueEntry): void {
+  if (entry.foregroundCoalesceTimer !== null) {
+    clearTimeout(entry.foregroundCoalesceTimer)
+    entry.foregroundCoalesceTimer = null
+  }
+  entry.foregroundCoalesce = false
+}
+
+function scheduleForegroundHoldSafety(entry: QueueEntry): void {
+  clearForegroundHoldSafety(entry)
+  entry.foregroundHoldSafetyTimer = setTimeout(() => {
+    entry.foregroundHoldSafetyTimer = null
+    entry.foregroundHold = false
+    clearForegroundCoalesce(entry)
+    if (queuedByTerminal.has(entry.terminal)) {
+      scheduleDrain(0)
+    }
+  }, FOREGROUND_HOLD_SAFETY_DELAY_MS)
+}
+
+function scheduleForegroundCoalesceRelease(entry: QueueEntry): void {
+  if (entry.foregroundCoalesceTimer !== null) {
+    entry.foregroundCoalesce = true
+    return
+  }
+  entry.foregroundCoalesce = true
+  entry.foregroundCoalesceTimer = setTimeout(() => {
+    entry.foregroundCoalesceTimer = null
+    entry.foregroundCoalesce = false
+    if (queuedByTerminal.has(entry.terminal)) {
+      scheduleDrain(0)
+    }
+  }, FOREGROUND_COALESCE_DELAY_MS)
+}
+
+function isEntryDrainable(entry: QueueEntry): boolean {
+  return !entry.foregroundHold && !entry.foregroundCoalesce
+}
+
+function removeTransientCursorShowSequences(data: string): string {
+  let result = ''
+  let offset = 0
+  let showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE)
+  while (showIndex !== -1) {
+    const nextHideIndex = data.indexOf(
+      CURSOR_HIDE_SEQUENCE,
+      showIndex + CURSOR_SHOW_SEQUENCE.length
+    )
+    if (nextHideIndex === -1) {
+      break
+    }
+    result += data.slice(offset, showIndex)
+    offset = showIndex + CURSOR_SHOW_SEQUENCE.length
+    showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
+  }
+  return offset === 0 ? data : result + data.slice(offset)
+}
+
+function containsCursorPositionSequence(data: string): boolean {
+  let offset = data.indexOf('\x1b[')
+  while (offset !== -1) {
+    let index = offset + 2
+    while (index < data.length) {
+      const char = data[index]
+      if (char === 'G' || char === 'H' || char === 'f') {
+        return true
+      }
+      if ((char < '0' || char > '9') && char !== ';') {
+        break
+      }
+      index += 1
+    }
+    offset = data.indexOf('\x1b[', offset + 2)
+  }
+  return false
+}
+
+function containsCursorRestore(data: string): boolean {
+  const hideIndex = data.indexOf(CURSOR_HIDE_SEQUENCE)
+  const showIndex = data.lastIndexOf(CURSOR_SHOW_SEQUENCE)
+  return hideIndex !== -1 && showIndex > hideIndex && containsCursorPositionSequence(data)
+}
+
+function containsDrainableCursorRestore(data: string): boolean {
+  const synchronizedEndIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
+  if (synchronizedEndIndex === -1) {
+    return containsCursorRestore(data)
+  }
+  return containsCursorRestore(
+    data.slice(synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length)
+  )
+}
+
 function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   let remaining = limit
   let data = ''
   let foreground: boolean | null = null
-  let forceForegroundRefresh: boolean | null = null
+  let forceForegroundRefresh = false
+  let followupForegroundRefresh = false
+  let stripTransientCursorShows = false
 
   while (remaining > 0 && entry.chunkIndex < entry.chunks.length) {
     const chunk = entry.chunks[entry.chunkIndex]
     if (foreground !== null && chunk.foreground !== foreground) {
       break
     }
-    if (
-      forceForegroundRefresh !== null &&
-      chunk.forceForegroundRefresh !== forceForegroundRefresh
-    ) {
-      break
-    }
     foreground ??= chunk.foreground
-    forceForegroundRefresh ??= chunk.forceForegroundRefresh
+    forceForegroundRefresh ||= chunk.forceForegroundRefresh
+    followupForegroundRefresh ||= chunk.followupForegroundRefresh
+    stripTransientCursorShows ||= chunk.stripTransientCursorShows
     if (chunk.data.length <= remaining) {
       data += chunk.data
       remaining -= chunk.data.length
@@ -193,7 +328,9 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
     ? {
         data,
         foreground: foreground === true,
-        forceForegroundRefresh: forceForegroundRefresh === true
+        forceForegroundRefresh,
+        followupForegroundRefresh,
+        stripTransientCursorShows
       }
     : null
 }
@@ -216,25 +353,41 @@ function compactConsumedChunks(entry: QueueEntry): void {
 function enqueueChunk(
   entry: QueueEntry,
   data: string,
-  options?: { foreground?: boolean; forceForegroundRefresh?: boolean }
+  options?: {
+    foreground?: boolean
+    forceForegroundRefresh?: boolean
+    followupForegroundRefresh?: boolean
+    stripTransientCursorShows?: boolean
+  }
 ): void {
   entry.chunks.push({
     data,
     foreground: options?.foreground === true,
-    forceForegroundRefresh: options?.forceForegroundRefresh === true
+    forceForegroundRefresh: options?.forceForegroundRefresh === true,
+    followupForegroundRefresh: options?.followupForegroundRefresh === true,
+    stripTransientCursorShows: options?.stripTransientCursorShows === true
   })
   entry.queuedChars += data.length
 }
 
 function replaceBacklogWithWarning(entry: QueueEntry): void {
   const shouldNotify = !entry.backgroundBacklogDropped
+  clearForegroundHoldSafety(entry)
   entry.chunks = [
-    { data: BACKGROUND_BACKLOG_WARNING, foreground: false, forceForegroundRefresh: false }
+    {
+      data: BACKGROUND_BACKLOG_WARNING,
+      foreground: false,
+      forceForegroundRefresh: false,
+      followupForegroundRefresh: false,
+      stripTransientCursorShows: false
+    }
   ]
   entry.chunkIndex = 0
   entry.queuedChars = BACKGROUND_BACKLOG_WARNING.length
   entry.backgroundBacklogDropped = true
   entry.highPriority = true
+  entry.foregroundHold = false
+  clearForegroundCoalesce(entry)
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
   }
@@ -246,11 +399,34 @@ function hasQueuedChunks(entry: QueueEntry): boolean {
 
 function hasHighPriorityBacklog(): boolean {
   for (const entry of queuedByTerminal.values()) {
-    if (entry.highPriority || entry.queuedChars > LARGE_BACKLOG_CHARS) {
+    if (
+      isEntryDrainable(entry) &&
+      (entry.highPriority || entry.queuedChars > LARGE_BACKLOG_CHARS)
+    ) {
       return true
     }
   }
   return false
+}
+
+function hasDrainableBacklog(): boolean {
+  for (const entry of queuedByTerminal.values()) {
+    if (isEntryDrainable(entry)) {
+      return true
+    }
+  }
+  return false
+}
+
+function takeNextDrainableEntry(): QueueEntry | null {
+  for (const entry of queuedByTerminal.values()) {
+    if (!isEntryDrainable(entry)) {
+      continue
+    }
+    queuedByTerminal.delete(entry.terminal)
+    return entry
+  }
+  return null
 }
 
 function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null {
@@ -261,9 +437,16 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
   try {
     entry.beforeWrite?.(queuedWrite.data)
     if (queuedWrite.foreground) {
-      writeForegroundTerminalChunk(entry.terminal, queuedWrite.data, {
-        forceViewportRefresh: queuedWrite.forceForegroundRefresh
-      })
+      writeForegroundTerminalChunk(
+        entry.terminal,
+        queuedWrite.stripTransientCursorShows
+          ? removeTransientCursorShowSequences(queuedWrite.data)
+          : queuedWrite.data,
+        {
+          forceViewportRefresh: queuedWrite.forceForegroundRefresh,
+          followupViewportRefresh: queuedWrite.followupForegroundRefresh
+        }
+      )
     } else {
       entry.terminal.write(queuedWrite.data)
     }
@@ -274,6 +457,8 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
     entry.chunks.length = 0
     entry.chunkIndex = 0
     entry.queuedChars = 0
+    clearForegroundHoldSafety(entry)
+    clearForegroundCoalesce(entry)
     return null
   }
   return queuedWrite.foreground ? 'foreground' : 'background'
@@ -288,12 +473,11 @@ function drainQueuedOutput(): void {
     : MAX_WRITES_PER_DRAIN
 
   while (queuedByTerminal.size > 0 && writes < maxWrites) {
-    const entry = queuedByTerminal.values().next().value
+    const entry = takeNextDrainableEntry()
     if (!entry) {
       break
     }
 
-    queuedByTerminal.delete(entry.terminal)
     const writeKind = writeQueuedChunk(entry)
     if (writeKind) {
       writes++
@@ -309,13 +493,15 @@ function drainQueuedOutput(): void {
       queuedByTerminal.set(entry.terminal, entry)
     } else {
       entry.highPriority = false
+      clearForegroundCoalesce(entry)
+      clearForegroundHoldSafety(entry)
     }
   }
 
   if (debugEnabled && writes > 0) {
     debugState.drainWrites.push(writes)
   }
-  if (queuedByTerminal.size > 0) {
+  if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
     scheduleDrain(
       hasHighPriorityBacklog() ? HIGH_PRIORITY_DRAIN_INTERVAL_MS : BACKGROUND_DRAIN_INTERVAL_MS
     )
@@ -334,12 +520,58 @@ export function writeTerminalOutput(
 
   if (options.foreground) {
     const entry = queuedByTerminal.get(terminal)
+    if (entry?.highPriority || options.coalesceForeground || options.holdForeground) {
+      const queued = entry ?? createQueueEntry(terminal, options)
+      queued.beforeWrite = options.beforeWrite
+      queued.onBackgroundBacklogDropped = options.onBackgroundBacklogDropped
+      queued.highPriority = true
+      queuedByTerminal.set(terminal, queued)
+      enqueueChunk(queued, data, {
+        foreground: true,
+        forceForegroundRefresh: options.forceForegroundRefresh,
+        followupForegroundRefresh: options.followupForegroundRefresh,
+        stripTransientCursorShows: options.stripTransientCursorShows
+      })
+      if (debugEnabled) {
+        debugState.foregroundWriteCount++
+        debugState.deferredForegroundEnqueueCount++
+      }
+      if (options.holdForeground) {
+        // Why: synchronized-output start/body chunks contain transient cursor
+        // moves. Holding them prevents Chromium from rasterizing those states.
+        queued.foregroundHold = true
+        clearForegroundCoalesce(queued)
+        scheduleForegroundHoldSafety(queued)
+        return
+      }
+      if (options.coalesceForeground || queued.foregroundCoalesce) {
+        queued.foregroundHold = false
+        clearForegroundHoldSafety(queued)
+        if (containsDrainableCursorRestore(data)) {
+          clearForegroundCoalesce(queued)
+          scheduleDrain(0)
+          return
+        }
+        // Why: TUI synchronized-output end markers can be split from the
+        // immediate cursor-restoring bytes by the PTY transport. Wait only
+        // until the restore arrives; the timer is a bounded fallback.
+        scheduleForegroundCoalesceRelease(queued)
+        return
+      }
+      queued.foregroundHold = false
+      clearForegroundCoalesce(queued)
+      clearForegroundHoldSafety(queued)
+      scheduleDrain(0)
+      return
+    }
     if (entry && entry.queuedChars > SYNC_FOREGROUND_FLUSH_CHARS) {
       entry.beforeWrite = options.beforeWrite
       entry.highPriority = true
       enqueueChunk(entry, data, {
         foreground: true,
-        forceForegroundRefresh: options.forceForegroundRefresh
+        forceForegroundRefresh: options.forceForegroundRefresh,
+        followupForegroundRefresh: options.followupForegroundRefresh,
+        stripTransientCursorShows: options.stripTransientCursorShows
       })
       if (debugEnabled) {
         debugState.foregroundWriteCount++
@@ -354,16 +586,7 @@ export function writeTerminalOutput(
     if (options.latencySensitive === false) {
       let queued = entry
       if (!queued) {
-        queued = {
-          terminal,
-          chunks: [],
-          chunkIndex: 0,
-          queuedChars: 0,
-          beforeWrite: options.beforeWrite,
-          onBackgroundBacklogDropped: options.onBackgroundBacklogDropped,
-          backgroundBacklogDropped: false,
-          highPriority: true
-        }
+        queued = createQueueEntry(terminal, options)
         queuedByTerminal.set(terminal, queued)
       } else {
         queued.beforeWrite = options.beforeWrite
@@ -372,7 +595,9 @@ export function writeTerminalOutput(
       }
       enqueueChunk(queued, data, {
         foreground: true,
-        forceForegroundRefresh: options.forceForegroundRefresh
+        forceForegroundRefresh: options.forceForegroundRefresh,
+        followupForegroundRefresh: options.followupForegroundRefresh,
+        stripTransientCursorShows: options.stripTransientCursorShows
       })
       if (debugEnabled) {
         debugState.foregroundWriteCount++
@@ -389,24 +614,21 @@ export function writeTerminalOutput(
       debugState.foregroundWriteCount++
     }
     options.beforeWrite?.(data)
-    writeForegroundTerminalChunk(terminal, data, {
-      forceViewportRefresh: options.forceForegroundRefresh
-    })
+    writeForegroundTerminalChunk(
+      terminal,
+      options.stripTransientCursorShows ? removeTransientCursorShowSequences(data) : data,
+      {
+        forceViewportRefresh: options.forceForegroundRefresh,
+        followupViewportRefresh: options.followupForegroundRefresh
+      }
+    )
     return
   }
 
   let entry = queuedByTerminal.get(terminal)
   if (!entry) {
-    entry = {
-      terminal,
-      chunks: [],
-      chunkIndex: 0,
-      queuedChars: 0,
-      beforeWrite: options.beforeWrite,
-      onBackgroundBacklogDropped: options.onBackgroundBacklogDropped,
-      backgroundBacklogDropped: false,
-      highPriority: false
-    }
+    entry = createQueueEntry(terminal, options)
+    entry.highPriority = false
     queuedByTerminal.set(terminal, entry)
   } else {
     entry.beforeWrite = options.beforeWrite
@@ -440,11 +662,17 @@ export function flushTerminalOutput(
     return
   }
   queuedByTerminal.delete(terminal)
+  if (!isEntryDrainable(entry)) {
+    queuedByTerminal.set(terminal, entry)
+    return
+  }
   if (entry.backgroundBacklogDropped && requestRegisteredTerminalBacklogRecovery(terminal)) {
     entry.chunks.length = 0
     entry.chunkIndex = 0
     entry.queuedChars = 0
     entry.highPriority = false
+    clearForegroundHoldSafety(entry)
+    clearForegroundCoalesce(entry)
     return
   }
 
@@ -458,9 +686,16 @@ export function flushTerminalOutput(
     try {
       entry.beforeWrite?.(queuedWrite.data)
       if (queuedWrite.foreground) {
-        writeForegroundTerminalChunk(terminal, queuedWrite.data, {
-          forceViewportRefresh: queuedWrite.forceForegroundRefresh
-        })
+        writeForegroundTerminalChunk(
+          terminal,
+          queuedWrite.stripTransientCursorShows
+            ? removeTransientCursorShowSequences(queuedWrite.data)
+            : queuedWrite.data,
+          {
+            forceViewportRefresh: queuedWrite.forceForegroundRefresh,
+            followupViewportRefresh: queuedWrite.followupForegroundRefresh
+          }
+        )
       } else {
         terminal.write(queuedWrite.data)
       }
@@ -468,6 +703,8 @@ export function flushTerminalOutput(
       // Why: pane.terminal.dispose() can race with a queued late-arriving PTY ping;
       // a write to a disposed terminal throws. Drop the entry rather than crashing
       // the scheduler for other panes still draining.
+      clearForegroundHoldSafety(entry)
+      clearForegroundCoalesce(entry)
       return
     }
     if (options?.maxChars !== undefined && flushedChars >= options.maxChars) {
@@ -481,6 +718,8 @@ export function flushTerminalOutput(
     scheduleDrain(0)
   } else {
     entry.highPriority = false
+    clearForegroundCoalesce(entry)
+    clearForegroundHoldSafety(entry)
   }
 }
 
@@ -541,4 +780,3 @@ export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
 }
 
 exposeDebugApi()
-export { suppressTerminalCursorUntilOutputSettles }

@@ -21,8 +21,10 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
     },
     activeTabIdByWorktree: { 'wt-1': 'tab-1', 'wt-2': 'tab-2' },
     editorDrafts: {},
+    markdownFrontmatterVisible: {},
     openFiles: [
       {
+        id: '/tmp/demo.ts',
         filePath: '/tmp/demo.ts',
         relativePath: 'demo.ts',
         worktreeId: 'wt-1',
@@ -34,6 +36,7 @@ function createSnapshot(overrides: Partial<AppState> = {}): AppState {
         originalContent: ''
       },
       {
+        id: '/tmp/demo.diff',
         filePath: '/tmp/demo.diff',
         relativePath: 'demo.diff',
         worktreeId: 'wt-1',
@@ -171,6 +174,20 @@ describe('buildWorkspaceSessionPayload', () => {
       ]
     })
     expect(payload.browserTabsByWorktree?.['wt-1'][0].loading).toBe(false)
+  })
+
+  it('persists front-matter visibility only for restored editor files', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        markdownFrontmatterVisible: {
+          '/tmp/demo.ts': true,
+          '/tmp/demo.diff': true,
+          '/tmp/closed.md': true
+        }
+      })
+    )
+
+    expect(payload.markdownFrontmatterVisible).toEqual({ '/tmp/demo.ts': true })
   })
 
   it('drops local terminal scrollback buffers from session payloads', () => {

@@ -120,6 +120,28 @@ describe('LocalPtyProvider', () => {
       expect(typeof result.id).toBe('string')
     })
 
+    it('reattaches to an existing caller-supplied session id without spawning', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+
+      expect(second).toEqual({ id: 'serve-session-1', pid: 12345, isReattach: true })
+      expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('does not reattach numeric caller session ids that can collide after restart', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24 })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+
+      expect(second.id).not.toBe(first.id)
+      expect(second.isReattach).toBeUndefined()
+      expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
     it('calls node-pty spawn with correct args', async () => {
       await provider.spawn({ cols: 120, rows: 40, cwd: '/tmp' })
       expect(spawnMock).toHaveBeenCalledWith(

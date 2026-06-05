@@ -163,6 +163,9 @@ import {
 } from './worktree-sidebar-drag-autoscroll'
 import {
   computeWorktreeSidebarDropPreview,
+  resolveWorktreeSidebarStatusDropCommitTarget,
+  type WorktreeSidebarStatusDropTarget,
+  type WorktreeSidebarTrackedStatusDropTarget,
   type WorktreeSidebarDropPreview
 } from './worktree-sidebar-drop-preview'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
@@ -497,6 +500,7 @@ type WorktreePointerDrag = {
   previewOffsetY: number
   frameId: number | null
   latestBoardDropTarget: WorkspaceKanbanCardTrackedDropTarget | null
+  latestStatusDropTarget: WorktreeSidebarTrackedStatusDropTarget | null
 }
 
 function areWorktreeDragPreviewOffsetsEqual(
@@ -517,15 +521,32 @@ function areWorktreeDragPreviewOffsetsEqual(
   return true
 }
 
+function updateLatestWorktreeStatusDropTarget(
+  drag: WorktreePointerDrag,
+  target: WorktreeSidebarStatusDropTarget,
+  preview: WorktreeSidebarDropPreview | null
+): void {
+  drag.latestStatusDropTarget =
+    target.status || target.isPinDrop
+      ? {
+          target,
+          preview,
+          x: drag.currentX,
+          y: drag.currentY
+        }
+      : null
+}
+
 function getWorktreeVirtualRowTransform(start: number, previewOffset: number): string {
   const base = getVirtualRowTransform(start)
   return previewOffset === 0 ? base : `${base} translateY(${previewOffset}px)`
 }
 
-function getPointerDropStatusTarget(args: { container: HTMLElement; x: number; y: number }): {
-  status: WorkspaceStatus | null
-  isPinDrop: boolean
-} {
+function getPointerDropStatusTarget(args: {
+  container: HTMLElement
+  x: number
+  y: number
+}): WorktreeSidebarStatusDropTarget {
   const target = document.elementFromPoint(args.x, args.y)
   if (!(target instanceof Element) || !args.container.contains(target)) {
     return { status: null, isPinDrop: false }
@@ -542,6 +563,23 @@ function getPointerDropStatusTarget(args: { container: HTMLElement; x: number; y
         : null,
     isPinDrop: false
   }
+}
+
+function shouldPreferSidebarStatusDropTarget(args: {
+  sourceGroupKey: string
+  target: WorktreeSidebarStatusDropTarget
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+}): boolean {
+  if (args.target.isPinDrop) {
+    return true
+  }
+  if (!args.target.status) {
+    return false
+  }
+  const sourceStatus = getWorkspaceStatusFromGroupKey(args.sourceGroupKey, args.workspaceStatuses)
+  // Why: source-group edge zones overlap adjacent status sections; the visible
+  // section under the pointer must win so the guide and committed drop agree.
+  return sourceStatus !== null && args.target.status !== sourceStatus
 }
 
 function isWorktreeItemRow(row: Row): row is WorktreeItemRow {
@@ -1611,6 +1649,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       y: drag.currentY
     }
     if (boardTarget.status || boardTarget.isPinDrop) {
+      drag.latestStatusDropTarget = null
       setDragOverStatus(null)
       setPinDragOver(false)
       setWorktreeDragState((prev) =>
@@ -1630,24 +1669,30 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       return
     }
 
-    const drop = computeWorktreeDrop(drag.currentY)
     const sidebarContainer = scrollRef.current
-    if (!drop) {
-      const target = sidebarContainer
-        ? getPointerDropStatusTarget({
-            container: sidebarContainer,
-            x: drag.currentX,
-            y: drag.currentY
-          })
-        : { status: null, isPinDrop: false }
-      const statusDrop = target.status
+    const preferredStatusTarget = sidebarContainer
+      ? getPointerDropStatusTarget({
+          container: sidebarContainer,
+          x: drag.currentX,
+          y: drag.currentY
+        })
+      : { status: null, isPinDrop: false }
+    if (
+      shouldPreferSidebarStatusDropTarget({
+        sourceGroupKey: drag.sourceGroupKey,
+        target: preferredStatusTarget,
+        workspaceStatuses
+      })
+    ) {
+      const statusDrop = preferredStatusTarget.status
         ? computeWorktreeStatusDrop({
             pointerY: drag.currentY,
-            status: target.status,
+            status: preferredStatusTarget.status,
             draggedIds: drag.draggedIds
           })
         : null
       if (statusDrop) {
+        updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, statusDrop)
         clearWorkspaceKanbanSidebarDropTargetVisual()
         setDragOverStatus(null)
         setPinDragOver(false)
@@ -1664,6 +1709,55 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         )
         return
       }
+      updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, statusDrop)
+      setDragOverStatus(preferredStatusTarget.status)
+      setPinDragOver(preferredStatusTarget.isPinDrop)
+      setWorktreeDragState((prev) =>
+        prev.dropIndex === null &&
+        prev.dropIndicatorY === null &&
+        prev.pointerY === drag.currentY &&
+        prev.previewOffsetsByWorktreeId.size === 0
+          ? prev
+          : {
+              ...prev,
+              dropIndex: null,
+              dropIndicatorY: null,
+              previewOffsetsByWorktreeId: EMPTY_WORKTREE_DRAG_PREVIEW_OFFSETS,
+              pointerY: drag.currentY
+            }
+      )
+      return
+    }
+
+    const drop = computeWorktreeDrop(drag.currentY)
+    if (!drop) {
+      const target = preferredStatusTarget
+      const statusDrop = target.status
+        ? computeWorktreeStatusDrop({
+            pointerY: drag.currentY,
+            status: target.status,
+            draggedIds: drag.draggedIds
+          })
+        : null
+      if (statusDrop) {
+        updateLatestWorktreeStatusDropTarget(drag, target, statusDrop)
+        clearWorkspaceKanbanSidebarDropTargetVisual()
+        setDragOverStatus(null)
+        setPinDragOver(false)
+        setWorktreeDragState((prev) =>
+          prev.dropIndex === statusDrop.dropIndex &&
+          prev.dropIndicatorY === statusDrop.dropIndicatorY &&
+          prev.pointerY === drag.currentY &&
+          areWorktreeDragPreviewOffsetsEqual(
+            prev.previewOffsetsByWorktreeId,
+            statusDrop.previewOffsetsByWorktreeId
+          )
+            ? prev
+            : { ...prev, ...statusDrop, pointerY: drag.currentY }
+        )
+        return
+      }
+      updateLatestWorktreeStatusDropTarget(drag, target, statusDrop)
       setDragOverStatus(target.status)
       setPinDragOver(target.isPinDrop)
       setWorktreeDragState((prev) =>
@@ -1682,6 +1776,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       )
       return
     }
+    drag.latestStatusDropTarget = null
     clearWorkspaceKanbanSidebarDropTargetVisual()
     setDragOverStatus(null)
     setPinDragOver(false)
@@ -1701,7 +1796,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     computeWorktreeDrop,
     computeWorktreeStatusDrop,
     refreshWorktreeDragSession,
-    shouldShowWorkspaceBoardDropIndicator
+    shouldShowWorkspaceBoardDropIndicator,
+    workspaceStatuses
   ])
 
   const scheduleWorktreePointerDragFrame = useCallback(
@@ -1846,7 +1942,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         previewOffsetX: 0,
         previewOffsetY: 0,
         frameId: null,
-        latestBoardDropTarget: null
+        latestBoardDropTarget: null,
+        latestStatusDropTarget: null
       }
     },
     [
@@ -1919,6 +2016,44 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           groups: getWorkspaceKanbanSidebarDropGroups()
         })
       } else {
+        const preferredStatusTarget = scrollRef.current
+          ? getPointerDropStatusTarget({
+              container: scrollRef.current,
+              x: event.clientX,
+              y: event.clientY
+            })
+          : { status: null, isPinDrop: false }
+        if (
+          shouldPreferSidebarStatusDropTarget({
+            sourceGroupKey: drag.sourceGroupKey,
+            target: preferredStatusTarget,
+            workspaceStatuses
+          })
+        ) {
+          const statusDrop = preferredStatusTarget.status
+            ? computeWorktreeStatusDrop({
+                pointerY: event.clientY,
+                status: preferredStatusTarget.status,
+                draggedIds: drag.draggedIds
+              })
+            : null
+          if (preferredStatusTarget.isPinDrop) {
+            onPinWorktrees(drag.draggedIds)
+          } else if (preferredStatusTarget.status) {
+            if (statusDrop) {
+              onMoveWorktreesToStatusAtIndex({
+                worktreeIds: drag.draggedIds,
+                status: preferredStatusTarget.status,
+                dropIndex: statusDrop.dropIndex,
+                groups: worktreeDragGroups
+              })
+            } else {
+              onMoveWorktreesToStatus(drag.draggedIds, preferredStatusTarget.status)
+            }
+          }
+          clearWorktreeDrag()
+          return
+        }
         const drop = computeWorktreeDrop(event.clientY)
         if (drop) {
           onReorderWorktrees({
@@ -1932,20 +2067,24 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             })
           })
         } else if (scrollRef.current) {
-          const container = scrollRef.current
-          const target = getPointerDropStatusTarget({
-            container,
+          const currentTarget = preferredStatusTarget
+          const currentPreview = currentTarget.status
+            ? computeWorktreeStatusDrop({
+                pointerY: event.clientY,
+                status: currentTarget.status,
+                draggedIds: drag.draggedIds
+              })
+            : null
+          const { target, preview: statusDrop } = resolveWorktreeSidebarStatusDropCommitTarget({
+            currentTarget,
+            currentPreview,
+            latestTrackedTarget: drag.latestStatusDropTarget,
             x: event.clientX,
             y: event.clientY
           })
           if (target.isPinDrop) {
             onPinWorktrees(drag.draggedIds)
           } else if (target.status) {
-            const statusDrop = computeWorktreeStatusDrop({
-              pointerY: event.clientY,
-              status: target.status,
-              draggedIds: drag.draggedIds
-            })
             if (statusDrop) {
               onMoveWorktreesToStatusAtIndex({
                 worktreeIds: drag.draggedIds,
@@ -1992,7 +2131,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     scheduleWorktreePointerDragFrame,
     shouldShowWorkspaceBoardDropIndicator,
     worktreeDragGroups,
-    worktreeDragUnitGroups
+    worktreeDragUnitGroups,
+    workspaceStatuses
   ])
 
   useEffect(() => {
@@ -2981,7 +3121,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <TooltipTrigger asChild>
                           {createState?.disabled ? (
                             <span
-                              className="inline-flex cursor-not-allowed"
+                              className="inline-flex cursor-not-allowed opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
                               tabIndex={0}
                               aria-label={createState.ariaLabel}
                               onKeyDown={stopRepoHeaderKeyboardToggle}
@@ -3004,7 +3144,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               type="button"
                               variant="ghost"
                               size="icon-xs"
-                              className="size-5 shrink-0 rounded-md text-muted-foreground hover:bg-accent/70 hover:text-foreground transition-opacity"
+                              className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
                               aria-label={
                                 createState?.ariaLabel ?? `Create workspace for ${row.label}`
                               }

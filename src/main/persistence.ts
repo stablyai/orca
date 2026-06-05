@@ -1901,7 +1901,9 @@ export class Store {
               parsed.settings?.terminalShortcutPolicy
             ),
             disabledTuiAgents: normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents),
-            openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
+            openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
+              seedDefaults: true
+            }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
             // Why: new builds read sourceControlAi, but rollback builds still
@@ -3732,24 +3734,34 @@ export class Store {
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
     const now = Date.now()
     let changed = false
+    const shouldClearBindings = state === 'terminated' || state === 'expired'
+    const leasesToClear: SshRemotePtyLease[] = []
     this.state.sshRemotePtyLeases ??= []
     for (const lease of this.state.sshRemotePtyLeases) {
-      if (lease.targetId !== targetId || lease.state === state) {
+      if (lease.targetId !== targetId) {
         continue
       }
       if (state === 'detached' && lease.state !== 'attached') {
         continue
       }
-      lease.state = state
-      lease.updatedAt = now
-      if (state === 'attached') {
-        lease.lastAttachedAt = now
-      } else if (state === 'detached') {
-        lease.lastDetachedAt = now
+      if (lease.state !== state) {
+        lease.state = state
+        lease.updatedAt = now
+        if (state === 'attached') {
+          lease.lastAttachedAt = now
+        } else if (state === 'detached') {
+          lease.lastDetachedAt = now
+        }
+        changed = true
       }
-      changed = true
+      if (shouldClearBindings) {
+        leasesToClear.push(lease)
+      }
     }
-    if (changed) {
+    const bindingsChanged = shouldClearBindings
+      ? this.clearSshRemotePtyBindingsForLeases(targetId, leasesToClear)
+      : false
+    if (changed || bindingsChanged) {
       this.flush()
     }
   }
@@ -3759,7 +3771,14 @@ export class Store {
     const lease = this.state.sshRemotePtyLeases?.find(
       (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId
     )
-    if (!lease || lease.state === state) {
+    if (!lease) {
+      return
+    }
+    const shouldClearBindings = state === 'terminated' || state === 'expired'
+    if (lease.state === state) {
+      if (shouldClearBindings && this.clearSshRemotePtyBindingsForLeases(targetId, [lease])) {
+        this.flush()
+      }
       return
     }
     const now = Date.now()
@@ -3769,6 +3788,9 @@ export class Store {
       lease.lastAttachedAt = now
     } else if (state === 'detached') {
       lease.lastDetachedAt = now
+    }
+    if (shouldClearBindings) {
+      this.clearSshRemotePtyBindingsForLeases(targetId, [lease])
     }
     this.flush()
   }
@@ -3805,10 +3827,13 @@ export class Store {
     this.clearSshRemotePtyBindingsForLeases(targetId, leases ?? [])
   }
 
-  private clearSshRemotePtyBindingsForLeases(targetId: string, leases: SshRemotePtyLease[]): void {
+  private clearSshRemotePtyBindingsForLeases(
+    targetId: string,
+    leases: SshRemotePtyLease[]
+  ): boolean {
     const session = this.state.workspaceSession
     if (!leases?.length || !session) {
-      return
+      return false
     }
     let changed = false
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
@@ -3859,6 +3884,7 @@ export class Store {
     if (changed) {
       this.scheduleSave()
     }
+    return changed
   }
 
   // ── Flush (for shutdown) ───────────────────────────────────────────

@@ -211,6 +211,7 @@ function Terminal(): React.JSX.Element | null {
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
   const setActiveFile = useAppStore((s) => s.setActiveFile)
   const closeFile = useAppStore((s) => s.closeFile)
+  const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const pinFile = useAppStore((s) => s.pinFile)
   const browserTabsByWorktree = useAppStore((s) => s.browserTabsByWorktree)
   const createBrowserTab = useAppStore((s) => s.createBrowserTab)
@@ -1635,6 +1636,7 @@ function Terminal(): React.JSX.Element | null {
             onCloseBrowserTab={handleCloseBrowserTab}
             onDuplicateBrowserTab={handleDuplicateBrowserTab}
             onCloseAllFiles={handleCloseAllFiles}
+            onMakePreviewFilePermanent={makePreviewFilePermanent}
             onPinFile={pinFile}
             tabBarOrder={tabBarOrder}
           />,

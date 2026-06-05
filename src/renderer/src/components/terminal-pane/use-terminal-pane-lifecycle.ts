@@ -161,6 +161,7 @@ type UseTerminalPaneLifecycleDeps = {
     terminalTitle?: string
     paneKey?: string
     agentStatusSnapshot?: ParsedAgentStatusPayload
+    suppressOsNotification?: boolean
   }) => void
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
@@ -960,8 +961,10 @@ export function useTerminalPaneLifecycle({
         const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
           (candidate) => candidate.id === tabId
         )
+        const platformInfo = window.api.platform?.get?.()
         const windowsPtyCompatibilityOptions = buildWindowsPtyCompatibilityOptions({
           userAgent: navigator.userAgent,
+          osRelease: platformInfo?.osRelease,
           connectionId: getConnectionId(worktreeId),
           cwd: startupCwd,
           shellOverride: currentTab?.shellOverride

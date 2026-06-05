@@ -24,7 +24,7 @@ describe('parseDesktopStableTag', () => {
       patch: 44
     })
     expect(parseDesktopStableTag('v1.4.44-rc.0')).toBeNull()
-    expect(parseDesktopStableTag('mobile-v0.0.11')).toBeNull()
+    expect(parseDesktopStableTag('mobile-v0.0.12')).toBeNull()
     expect(parseDesktopStableTag('cli-v4.12.28')).toBeNull()
   })
 })
@@ -35,7 +35,7 @@ describe('latestStableDesktopReleaseTag', () => {
       { tag_name: 'v1.4.43-rc.0', draft: false },
       { tag_name: 'v1.4.42', draft: false },
       { tag_name: 'v1.4.44', draft: false },
-      { tag_name: 'mobile-v0.0.11', draft: false }
+      { tag_name: 'mobile-v0.0.12', draft: false }
     ]
 
     expect(latestStableDesktopReleaseTag(releases)).toBe('v1.4.44')
@@ -54,7 +54,7 @@ describe('latestStableDesktopReleaseTag', () => {
     expect(
       latestStableDesktopReleaseTag([
         { tag_name: 'v1.4.44-rc.0', draft: false },
-        { tag_name: 'mobile-v0.0.11', draft: false }
+        { tag_name: 'mobile-v0.0.12', draft: false }
       ])
     ).toBe('')
   })

@@ -189,6 +189,29 @@ describe('TabsSlice', () => {
       expect(group.tabOrder).not.toContain(preview1.id)
     })
 
+    it('replaces editor preview tabs with diff preview tabs', () => {
+      store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts',
+        isPreview: true
+      })
+      store.getState().createUnifiedTab(WT, 'diff', {
+        id: 'diff-file-b.ts',
+        entityId: 'diff-file-b.ts',
+        label: 'file-b.ts',
+        isPreview: true
+      })
+
+      expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([
+        expect.objectContaining({
+          id: 'diff-file-b.ts',
+          contentType: 'diff',
+          isPreview: true
+        })
+      ])
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual(['diff-file-b.ts'])
+    })
+
     it('reuses the existing group for the worktree', () => {
       store.getState().createUnifiedTab(WT, 'terminal')
       store.getState().createUnifiedTab(WT, 'editor', { id: 'f.ts', label: 'f.ts' })

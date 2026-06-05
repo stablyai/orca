@@ -7,7 +7,7 @@ import {
 import type { ProjectGroup } from '../../shared/types'
 
 describe('createNestedProjectGroupResolver', () => {
-  it('creates a root group plus intermediate directory groups for nested repos', () => {
+  it('creates one root group for nested repos in grouped imports', () => {
     const groups: ProjectGroup[] = []
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/workspace',
@@ -36,13 +36,9 @@ describe('createNestedProjectGroupResolver', () => {
     const sibling = resolver.getGroupForRepo('/workspace/services/payments/worker')
 
     expect(direct?.name).toBe('workspace')
-    expect(nested?.name).toBe('payments')
+    expect(nested?.name).toBe('workspace')
     expect(sibling?.id).toBe(nested?.id)
-    expect(groups.map((group) => [group.name, group.parentGroupId])).toEqual([
-      ['workspace', null],
-      ['services', 'group-0'],
-      ['payments', 'group-1']
-    ])
+    expect(groups.map((group) => [group.name, group.parentGroupId])).toEqual([['workspace', null]])
     expect(resolver.getRootGroup()?.id).toBe('group-0')
   })
 
@@ -60,7 +56,7 @@ describe('createNestedProjectGroupResolver', () => {
     expect(resolver.getCreatedGroups()).toEqual([])
   })
 
-  it('preserves filesystem root parent paths when creating groups', () => {
+  it('preserves filesystem root parent paths when creating the root group', () => {
     const groups: ProjectGroup[] = []
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/',
@@ -87,10 +83,10 @@ describe('createNestedProjectGroupResolver', () => {
     resolver.getGroupForRepo('/api')
     resolver.getGroupForRepo('/services/api')
 
-    expect(groups.map((group) => group.parentPath)).toEqual(['/', '/services'])
+    expect(groups.map((group) => group.parentPath)).toEqual(['/'])
   })
 
-  it('preserves Windows drive roots when creating groups', () => {
+  it('preserves Windows drive roots when creating the root group', () => {
     const groups: ProjectGroup[] = []
     const resolver = createNestedProjectGroupResolver({
       parentPath: 'C:\\',
@@ -117,7 +113,36 @@ describe('createNestedProjectGroupResolver', () => {
     resolver.getGroupForRepo('C:\\api')
     resolver.getGroupForRepo('C:\\services\\api')
 
-    expect(groups.map((group) => group.parentPath)).toEqual(['C:/', 'C:/services'])
+    expect(groups.map((group) => group.parentPath)).toEqual(['C:/'])
+  })
+
+  it('falls back to the selected parent folder basename for blank group names', () => {
+    const groups: ProjectGroup[] = []
+    const resolver = createNestedProjectGroupResolver({
+      parentPath: '/workspace/platform',
+      groupName: '   ',
+      mode: 'group',
+      createGroup: (input) => {
+        const group: ProjectGroup = {
+          id: `group-${groups.length}`,
+          name: input.name,
+          parentPath: input.parentPath ?? null,
+          parentGroupId: input.parentGroupId ?? null,
+          createdFrom: input.createdFrom,
+          tabOrder: groups.length,
+          isCollapsed: false,
+          color: null,
+          createdAt: 1,
+          updatedAt: 1
+        }
+        groups.push(group)
+        return group
+      }
+    })
+
+    resolver.getGroupForRepo('/workspace/platform/apps/web')
+
+    expect(groups.map((group) => group.name)).toEqual(['platform'])
   })
 
   it('resolves Windows-style repo paths back to canonical scan output', () => {

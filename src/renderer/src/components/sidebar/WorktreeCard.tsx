@@ -662,6 +662,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     : hasDetailedMetaRowContent
   const showHeaderActions = showTitleRowUnread || showTitleRowPrimary || showDeleteQuickAction
   const showBranchIdentityHover = compactCards && showBranch
+  const showInlineAgentList = showDetailedCardProperties && cardProps.includes('inline-agents')
   // Why: sidebar rows need a small surface inset, while their content remains
   // aligned with the pre-inset layout and the repo header hierarchy.
   const cardStyle = flushSurface
@@ -808,7 +809,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
       <div
         className={cn(
           'flex min-w-0 flex-1 flex-col gap-1.5',
-          lineageChildren ? 'overflow-visible' : 'overflow-hidden'
+          // Why: inline agent rows intentionally outdent into the card gutter;
+          // title/meta truncation is handled by their own inner elements.
+          lineageChildren || showInlineAgentList ? 'overflow-visible' : 'overflow-hidden'
         )}
       >
         {/* Header row: Title */}
@@ -1054,7 +1057,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
              naturally when agents appear/disappear. When agents directly
              follow the title, counterbalance the card stack gap so both rows
              read as one compact header group. */}
-        {showDetailedCardProperties && cardProps.includes('inline-agents') && (
+        {showInlineAgentList && (
           <WorktreeCardAgents
             worktreeId={worktree.id}
             className={hasMetaRow || remoteBranchConflict ? 'mt-0' : '-mt-1'}

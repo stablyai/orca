@@ -69,7 +69,7 @@ export type TabsSlice = {
     entityId: string,
     contentType?: TabContentType
   ) => Tab | null
-  activateTab: (tabId: string) => void
+  activateTab: (tabId: string, opts?: { preservePreview?: boolean }) => void
   closeUnifiedTab: (
     tabId: string,
     opts?: { recordInteraction?: boolean }
@@ -202,6 +202,20 @@ function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] {
     const sortOrder = orderMap.get(tab.id)
     return sortOrder === undefined ? tab : { ...tab, sortOrder }
   })
+}
+
+function isReplaceablePreviewContentType(contentType: Tab['contentType']): boolean {
+  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+}
+
+function canReplacePreviewContentType(
+  incomingContentType: Tab['contentType'],
+  existingContentType: Tab['contentType']
+): boolean {
+  if (isReplaceablePreviewContentType(incomingContentType)) {
+    return isReplaceablePreviewContentType(existingContentType)
+  }
+  return existingContentType === incomingContentType
 }
 
 export function findSiblingGroupId(root: TabGroupLayoutNode, targetGroupId: string): string | null {
@@ -455,7 +469,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       let nextOrder = dedupeTabOrder(group.tabOrder)
       if (init?.isPreview) {
         const existingPreview = existingTabs.find(
-          (tab) => tab.groupId === group.id && tab.isPreview && tab.contentType === contentType
+          (tab) =>
+            tab.groupId === group.id &&
+            tab.isPreview &&
+            canReplacePreviewContentType(contentType, tab.contentType)
         )
         if (existingPreview) {
           nextTabs = existingTabs.filter((tab) => tab.id !== existingPreview.id)
@@ -536,7 +553,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   findTabForEntityInGroup: (worktreeId, groupId, entityId, contentType) =>
     findTabByEntityInGroup(get().unifiedTabsByWorktree, worktreeId, groupId, entityId, contentType),
 
-  activateTab: (tabId) => {
+  activateTab: (tabId, opts) => {
     set((state) => {
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {
@@ -562,12 +579,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             })()
           : state.unreadTerminalTabs
       return {
-        unifiedTabsByWorktree: {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
-            item.id === tabId ? { ...item, isPreview: false } : item
-          )
-        },
+        unifiedTabsByWorktree: opts?.preservePreview
+          ? state.unifiedTabsByWorktree
+          : {
+              ...state.unifiedTabsByWorktree,
+              [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
+                item.id === tabId ? { ...item, isPreview: false } : item
+              )
+            },
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).map((group) =>

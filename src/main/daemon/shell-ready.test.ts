@@ -57,6 +57,17 @@ function expectBashOsc133Lifecycle(output: string): void {
   expect(output.split(oscD)).toHaveLength(3)
 }
 
+function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain(`source "$_orca_home/${fileName}"`)
+  expect(content).toContain('export ZDOTDIR="$_orca_wrapper_zdotdir"')
+}
+
+function expectFinalZdotdirRestoreContext(content: string) {
+  expect(content).toContain("after Orca's last wrapper file has loaded")
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+}
+
 describePosix('daemon shell-ready launch config', () => {
   let previousUserDataPath: string | undefined
   let previousOrcaOrigZdotdir: string | undefined
@@ -213,9 +224,17 @@ describePosix('daemon shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zprofile = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zprofile'), 'utf8')
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+    expectZdotdirSourceContext(zprofile, '.zprofile')
+    expectZdotdirSourceContext(zshrc, '.zshrc')
+    expectZdotdirSourceContext(zlogin, '.zlogin')
+    expectFinalZdotdirRestoreContext(zshrc)
+    expectFinalZdotdirRestoreContext(zlogin)
   })
 
   it('writes wrappers that restore OpenCode and Pi config after user startup files', async () => {

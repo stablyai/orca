@@ -369,7 +369,6 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
           onClone={handleClone}
           onNestedGroupNameChange={setNestedGroupName}
           onNestedSelectedPathsChange={setNestedSelectedPaths}
-          onNestedBack={handleBack}
           onImportNestedRepos={(mode) => void handleImportNestedRepos(mode)}
           onCreateNameChange={(value) => {
             setCreateName(value)

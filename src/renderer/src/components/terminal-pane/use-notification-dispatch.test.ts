@@ -218,6 +218,20 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
   })
 
+  it('can mark terminal attention without dispatching an OS notification', () => {
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      suppressOsNotification: true
+    })
+
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
+    expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
+  })
+
   it('marks the visible focused worktree unread when terminal attention is disabled', () => {
     mockState.settings.experimentalTerminalAttention = false
     mockState.activeWorktreeId = 'wt-primary'

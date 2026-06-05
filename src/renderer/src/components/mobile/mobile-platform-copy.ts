@@ -12,6 +12,6 @@ export const PLATFORM_COPY: Record<
   android: {
     description: 'Scan with your Android camera to download the latest APK from GitHub Releases.',
     ctaLabel: 'Download APK',
-    url: 'https://github.com/stablyai/orca/releases/download/mobile-v0.0.11/app-release.apk'
+    url: 'https://github.com/stablyai/orca/releases/download/mobile-v0.0.12/app-release.apk'
   }
 }

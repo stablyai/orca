@@ -1013,10 +1013,8 @@
   animation: compact-agent-expansion-reveal 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* Why: the expanded summary becomes one enclosed panel. Keep the box model
-   stable across states (padding always reserved, border drawn as a non-layout
-   box-shadow) and fade only the chrome, so toggling doesn't snap the header and
-   rows while the content height animates. */
+/* Why: the collapsed summary still uses pill spacing, while expanded compact
+   agents read as a quiet tree inside the existing worktree card. */
 .compact-agent-summary-panel {
   padding: 2px;
   border-radius: var(--radius-sm, 0.25rem);
@@ -1028,8 +1026,61 @@
 }
 
 .compact-agent-summary-panel-expanded {
-  background: color-mix(in srgb, var(--sidebar-accent) 20%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sidebar-border) 70%, transparent);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+[data-compact-agent-list='true'] {
+  margin-inline-start: -0.5rem;
+  width: calc(100% + 0.5rem);
+}
+
+/* Why: compact expanded agents live inside an already-framed worktree card.
+   Keep the tree legible with indentation and interaction states instead of
+   stacking row cards and shaded panels. */
+[data-compact-agent-list='true'] .compact-agent-row.worktree-agent-lineage-parent-row,
+[data-compact-agent-list='true'] .compact-agent-row.worktree-agent-lineage-child-row {
+  background: transparent;
+  box-shadow: none;
+}
+
+[data-compact-agent-list='true'] .compact-agent-row.worktree-agent-lineage-child-row::before {
+  content: none;
+}
+
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+}
+
+.dark
+  [data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
+.dark
+  [data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+[data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar-accent));
+}
+
+.dark
+  [data-compact-agent-list='true']
+  .compact-agent-row.worktree-agent-row-hover[data-focused-agent-pane='true'] {
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+[data-compact-agent-list='true'] .worktree-agent-lineage-children {
+  border-left-color: color-mix(in srgb, var(--sidebar-foreground) 16%, transparent);
+}
+
+.dark [data-compact-agent-list='true'] .worktree-agent-lineage-children {
+  border-left-color: color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -29,6 +29,61 @@ type RepositoryPaneProps = {
   mayNeedUpdate: boolean
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
   removeProject: (repoId: string) => void
+}
+
+type RepoTextDraft = { repoId: string; text: string }
+
+// Why: updateRepo persists via async IPC before the store value updates, so a
+// store-controlled input resets mid-IME-composition (Hangul decomposes into
+// jamo). Keep keystrokes in local draft state; persist stays per-keystroke.
+export function RepoSettingsDraftInput({
+  repoId,
+  storeValue,
+  onTextChange,
+  ...inputProps
+}: {
+  repoId: string
+  storeValue: string
+  onTextChange: (text: string) => void
+} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>): React.JSX.Element {
+  const [draft, setDraft] = useState<RepoTextDraft>({ repoId, text: storeValue })
+  const pendingStoreEchoesRef = useRef<string[]>([])
+
+  useEffect(() => {
+    setDraft((current) => {
+      if (current.repoId !== repoId) {
+        pendingStoreEchoesRef.current = []
+        return { repoId, text: storeValue }
+      }
+      if (storeValue === current.text) {
+        pendingStoreEchoesRef.current = []
+        return current
+      }
+      const pendingEchoIndex = pendingStoreEchoesRef.current.indexOf(storeValue)
+      if (pendingEchoIndex !== -1) {
+        // Why: queued updateRepo calls can echo older input text after newer
+        // keystrokes; accepting that echo re-cancels active IME composition.
+        pendingStoreEchoesRef.current.splice(0, pendingEchoIndex + 1)
+        return current
+      }
+      pendingStoreEchoesRef.current = []
+      return { repoId, text: storeValue }
+    })
+  }, [repoId, storeValue])
+
+  const text = draft.repoId === repoId ? draft.text : storeValue
+  return (
+    <Input
+      {...inputProps}
+      value={text}
+      onChange={(e) => {
+        const nextText = e.target.value
+        pendingStoreEchoesRef.current.push(nextText)
+        setDraft({ repoId, text: nextText })
+        onTextChange(nextText)
+      }}
+    />
+  )
 }
 
 export function matchesRepositoryIdentitySearch(query: string, repo: Repo): boolean {
@@ -215,14 +270,14 @@ export function RepositoryPane({
           className="space-y-2"
           forceVisible={forceFullPaneForRepoMatch}
         >
-          <Label className="text-sm font-semibold">Display Name</Label>
-          <Input
-            value={repo.displayName}
-            onChange={(e) =>
-              updateRepo(repo.id, {
-                displayName: e.target.value
-              })
-            }
+          <Label htmlFor={`repo-display-name-${repo.id}`} className="text-sm font-semibold">
+            Display Name
+          </Label>
+          <RepoSettingsDraftInput
+            id={`repo-display-name-${repo.id}`}
+            repoId={repo.id}
+            storeValue={repo.displayName}
+            onTextChange={(text) => updateRepo(repo.id, { displayName: text })}
             className="h-9 text-sm"
           />
         </SearchableSetting>
@@ -292,13 +347,12 @@ export function RepositoryPane({
                   </Button>
                 ) : null}
               </div>
-              <Input
-                value={repo.worktreeBasePath ?? ''}
+              <RepoSettingsDraftInput
+                repoId={repo.id}
+                storeValue={repo.worktreeBasePath ?? ''}
                 placeholder={settings?.workspaceDir ?? ''}
-                onChange={(e) =>
-                  updateRepo(repo.id, {
-                    worktreeBasePath: e.target.value.trim() ? e.target.value : undefined
-                  })
+                onTextChange={(text) =>
+                  updateRepo(repo.id, { worktreeBasePath: text.trim() ? text : undefined })
                 }
                 className="h-9 text-sm"
               />

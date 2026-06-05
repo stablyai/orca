@@ -713,9 +713,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Debian',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
@@ -812,6 +812,7 @@ describe('CodexAccountService config sync', () => {
         return `${wslLinuxHomePath}\n`
       }
       if (script.includes('command -v codex')) {
+        expect(args.slice(0, 5)).toEqual(['-d', 'Debian', '--exec', 'bash', '-ic'])
         throw new Error('codex missing')
       }
       mkdirSync(wslManagedHomePath, { recursive: true })
@@ -897,9 +898,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       const child = new EventEmitter() as EventEmitter & {
@@ -1012,9 +1013,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       expect(readFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'utf-8')).toBe(

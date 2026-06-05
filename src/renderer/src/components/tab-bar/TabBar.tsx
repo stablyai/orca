@@ -96,6 +96,7 @@ type TabBarProps = {
   onCloseBrowserTab?: (tabId: string) => void
   onDuplicateBrowserTab?: (tabId: string) => void
   onCloseAllFiles?: () => void
+  onMakePreviewFilePermanent?: (fileId: string, tabId?: string) => void
   onPinFile?: (fileId: string, tabId?: string) => void
   tabBarOrder?: string[]
   onCreateSplitGroup?: (
@@ -185,6 +186,7 @@ function TabBarInner({
   onCloseBrowserTab,
   onDuplicateBrowserTab,
   onCloseAllFiles,
+  onMakePreviewFilePermanent,
   onPinFile,
   tabBarOrder,
   onCreateSplitGroup,
@@ -814,7 +816,7 @@ function TabBarInner({
                 onClose={() => onCloseFile?.(item.id)}
                 onCloseToRight={() => onCloseToRight(item.id)}
                 onCloseAll={() => onCloseAllFiles?.()}
-                onPin={() => onPinFile?.(item.data.id, item.data.tabId)}
+                onMakePermanent={() => onMakePreviewFilePermanent?.(item.data.id, item.data.tabId)}
                 onTogglePin={() => togglePinned(item)}
                 onSplitGroup={(direction, sourceVisibleTabId) =>
                   onCreateSplitGroup?.(direction, sourceVisibleTabId)

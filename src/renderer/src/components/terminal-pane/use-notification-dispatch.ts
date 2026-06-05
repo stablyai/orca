@@ -18,6 +18,7 @@ export type TerminalNotificationEvent = {
   terminalTitle?: string
   paneKey?: string
   agentStatusSnapshot?: ParsedAgentStatusPayload
+  suppressOsNotification?: boolean
 }
 
 function hasLivePtyForWorktree(state: StoreSnapshot, candidateWorktreeId: string): boolean {
@@ -280,6 +281,10 @@ export function dispatchTerminalNotification(
       state.markTerminalTabUnread(tabId)
       state.markTerminalPaneUnread(event.paneKey)
     }
+  }
+
+  if (event.suppressOsNotification) {
+    return
   }
 
   // Why: prefer worktree.repoId over string-parsing the worktreeId. The

@@ -509,20 +509,30 @@ describe('preflight', () => {
       value: 'win32'
     })
     execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command === 'where') {
-        throw new Error('not found')
-      }
       if (command !== 'wsl.exe') {
         throw new Error(`unexpected command ${String(command)}`)
       }
       const script = String(args[5])
-      if (script === "command -v 'claude'") {
-        return { stdout: '/home/test/.local/bin/claude\n' }
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
       }
       throw new Error('not found')
     })
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      expect.arrayContaining([
+        '-d',
+        'Ubuntu',
+        '--exec',
+        'bash',
+        '-ic',
+        expect.stringContaining("'claude'")
+      ]),
+      { encoding: 'utf-8', timeout: 10000 }
+    )
   })
 
   it('detects agents from the default WSL distro when requested', async () => {
@@ -535,17 +545,18 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       const script = String(args[3])
-      if (script === "command -v 'codex'") {
-        return { stdout: '/home/test/.local/bin/codex\n' }
+      if (script.includes("'codex'")) {
+        return { stdout: '__ORCA_AGENT_PATH__codex\t/home/test/.local/bin/codex\n' }
       }
       throw new Error('not found')
     })
 
     await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['--', 'bash', '-lc', "command -v 'codex'"],
-      { encoding: 'utf-8', timeout: 5000 }
+      expect.arrayContaining(['--exec', 'bash', '-ic', expect.stringContaining("'codex'")]),
+      { encoding: 'utf-8', timeout: 10000 }
     )
   })
 

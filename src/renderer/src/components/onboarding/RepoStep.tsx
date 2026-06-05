@@ -3,7 +3,6 @@ import {
   ArrowRight,
   CircleStop,
   FolderOpen,
-  FolderTree,
   GitBranch,
   Lightbulb,
   Loader2,
@@ -11,10 +10,11 @@ import {
 } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
 import { Button } from '@/components/ui/button'
-import { NestedRepoTreePreview } from '@/components/repo/NestedRepoTreePreview'
+import { NestedRepoChecklist } from '@/components/repo/NestedRepoChecklist'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import { NestedRepoScanLimitNotice } from '../repo/NestedRepoScanLimitNotice'
+import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 
 type RepoStepProps = {
   cloneUrl: string
@@ -23,9 +23,7 @@ type RepoStepProps = {
   nestedScanInProgress: boolean
   nestedSelectedPaths: Set<string>
   onNestedSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
-  nestedGroupName: string
-  onNestedGroupNameChange: (value: string) => void
-  onImportNested: (mode: 'group' | 'separate') => void
+  onImportNested: () => void
   onCancelNested: () => void
   onStopNestedScan: () => void
   onOpenFolder: () => void
@@ -49,8 +47,6 @@ export function RepoStep({
   nestedScanInProgress,
   nestedSelectedPaths,
   onNestedSelectedPathsChange,
-  nestedGroupName,
-  onNestedGroupNameChange,
   onImportNested,
   onCancelNested,
   onStopNestedScan,
@@ -70,15 +66,16 @@ export function RepoStep({
   const disabled = Boolean(busyLabel)
   const nestedImportDisabled = disabled || nestedScanInProgress
   if (nestedScan) {
+    const folderName = getRuntimePathBasename(nestedScan.selectedPath) || nestedScan.selectedPath
     return (
       <div className="flex h-full min-h-0 min-w-0 flex-col gap-3">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-muted/30 p-5">
           <div className="flex min-w-0 shrink-0 items-center gap-4">
             <div className="grid size-11 shrink-0 place-items-center rounded-lg bg-muted text-foreground">
-              <FolderTree className="size-5" />
+              <FolderOpen className="size-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-base font-semibold text-foreground">Import as project group</div>
+              <div className="text-base font-semibold text-foreground">Import repositories</div>
               <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] text-muted-foreground">
                 {nestedScanInProgress ? (
                   <Tooltip>
@@ -102,33 +99,22 @@ export function RepoStep({
                   </Tooltip>
                 ) : null}
                 <span className="min-w-0 truncate">
-                  {`${nestedScanInProgress ? 'Scanning... ' : ''}Found ${
-                    nestedScan.repos.length
-                  } git ${
+                  {`${nestedScanInProgress ? 'Scanning... ' : ''}Found ${nestedScan.repos.length} ${
                     nestedScan.repos.length === 1 ? 'repository' : 'repositories'
                   } in this folder.`}
                 </span>
               </div>
               <div className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {nestedScan.selectedPath}
+                Scanned folder: {folderName} - {nestedScan.selectedPath}
               </div>
             </div>
           </div>
-          <div className="mt-4 min-w-0 shrink-0 space-y-1">
-            <label className="text-[11px] font-medium text-muted-foreground">Group name</label>
-            <input
-              className="w-full min-w-0 rounded-lg border border-border bg-background px-4 py-3 text-sm text-foreground outline-none transition focus:border-foreground/50 focus:ring-2 focus:ring-foreground/15"
-              value={nestedGroupName}
-              disabled={nestedImportDisabled}
-              onChange={(event) => onNestedGroupNameChange(event.target.value)}
-            />
-          </div>
-          <NestedRepoTreePreview
+          <NestedRepoChecklist
             scan={nestedScan}
             selectedPaths={nestedSelectedPaths}
             onSelectedPathsChange={onNestedSelectedPathsChange}
             disabled={nestedImportDisabled}
-            className="mt-3 flex-1"
+            className="mt-4 flex-1"
           />
           {nestedScanInProgress ||
           nestedScan.truncated ||
@@ -148,26 +134,14 @@ export function RepoStep({
               <ArrowLeft className="size-3.5" />
               Back
             </button>
-            <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium text-foreground hover:bg-muted/60 disabled:opacity-40"
-                disabled={nestedImportDisabled || nestedSelectedPaths.size === 0}
-                onClick={() => onImportNested('separate')}
-              >
-                Import separately
-              </button>
-              <button
-                type="button"
-                className="rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
-                disabled={
-                  nestedImportDisabled || nestedSelectedPaths.size === 0 || !nestedGroupName.trim()
-                }
-                onClick={() => onImportNested('group')}
-              >
-                Import as project group
-              </button>
-            </div>
+            <button
+              type="button"
+              className="ml-auto rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40"
+              disabled={nestedImportDisabled || nestedSelectedPaths.size === 0}
+              onClick={onImportNested}
+            >
+              Import repositories
+            </button>
           </div>
         </div>
         {busyLabel && (

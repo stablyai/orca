@@ -164,14 +164,17 @@ export function CompactAgentSummaryButton({
       type="button"
       draggable={false}
       className={cn(
-        'group/agent-summary flex h-6 w-full min-w-0 items-center gap-1 rounded-sm',
+        'compact-agent-summary-button group/agent-summary flex h-6 w-full min-w-0 items-center gap-1 rounded-sm',
         'px-1 text-left text-[11px] leading-none text-muted-foreground',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
-        // Why: collapsed it's a standalone pill; expanded it's the header of the
-        // enclosing panel, so it drops its own border/fill to avoid double chrome.
+        // Why: sidebar-accent is near-white in light mode and dark in dark
+        // mode, so hover lightening needs a theme-specific token mix.
+        'hover:bg-sidebar-accent/55 dark:hover:bg-sidebar-foreground/[0.035]',
+        // Why: expanded is a tree header inside the card, so only the
+        // standalone collapsed pill gets a resting surface and border.
         expanded
-          ? 'hover:bg-sidebar-accent/60'
-          : 'border border-sidebar-border/70 bg-sidebar-accent/35 hover:bg-sidebar-accent'
+          ? 'compact-agent-summary-button-expanded'
+          : 'border border-sidebar-border/70 bg-sidebar-accent/35'
       )}
       aria-label={
         expanded ? `Collapse ${subjectLabel}` : `Expand ${summary}. ${agentIdentitySummary}`
@@ -293,7 +296,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       {hasChildDisclosure ? (
         <button
           type="button"
-          className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-sidebar-border/80 bg-sidebar text-foreground/80 shadow-xs hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+          className="compact-agent-child-disclosure-button flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
           aria-label={`${childAgentsExpanded ? 'Hide' : 'Show'} ${childAgentCount} child ${
             childAgentCount === 1 ? 'agent' : 'agents'
           }`}
@@ -357,7 +360,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     <div
       draggable={false}
       className={cn(
-        'group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
+        'compact-agent-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
         'text-muted-foreground worktree-agent-row-hover',
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',
