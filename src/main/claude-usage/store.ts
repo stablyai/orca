@@ -56,6 +56,7 @@ const SONNET_LONG_CONTEXT_PRICING = {
 } satisfies Partial<ClaudeModelPricing>
 
 const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
+  'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-7': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-6': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -92,10 +93,13 @@ const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
 const MODEL_ALIASES: Record<string, string> = {
   model_placeholder_m26: 'claude-opus-4-6',
   model_placeholder_m35: 'claude-sonnet-4-6',
+  'claude-opus-4.8': 'claude-opus-4-8',
   'claude-opus-4.6': 'claude-opus-4-6',
   'claude-sonnet-4.6': 'claude-sonnet-4-6',
+  'claude-opus-4.8-thinking': 'claude-opus-4-8',
   'claude-opus-4.6-thinking': 'claude-opus-4-6',
   'claude-sonnet-4.6-thinking': 'claude-sonnet-4-6',
+  'claude-opus-4-8-thinking': 'claude-opus-4-8',
   'claude-opus-4-6-thinking': 'claude-opus-4-6',
   'claude-sonnet-4-6-thinking': 'claude-sonnet-4-6'
 }
@@ -138,6 +142,9 @@ function normalizeModelForPricing(model: string | null): string | null {
   const alias = MODEL_ALIASES[lower]
   if (alias) {
     return alias
+  }
+  if (lower.includes('opus-4-8') || lower.includes('opus-4.8')) {
+    return 'claude-opus-4-8'
   }
   if (lower.includes('opus-4-7')) {
     return 'claude-opus-4-7'
