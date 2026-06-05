@@ -1,8 +1,8 @@
-// Why: when "Auto-Rename Branch From Work" is on, the first time an agent
-// starts working in a freshly-created workspace we replace the auto-generated
-// creature branch (e.g. `you/Nautilus`) with a short, work-derived name. This
-// module owns the orchestration: gate on the signal, enforce the safety
-// guardrails, summarize the prompt via the configured agent, and rename.
+// Why: when first-message auto-name is on, the first time an agent starts
+// working in a freshly-created workspace we replace the auto-generated creature
+// branch (e.g. `you/Nautilus`) with a short, work-derived name. This module
+// owns the orchestration: gate on the signal, enforce the safety guardrails,
+// summarize the prompt via the configured agent, and rename.
 import type { GlobalSettings, Repo } from '../../shared/types'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
 import { parsePaneKey } from '../../shared/stable-pane-id'

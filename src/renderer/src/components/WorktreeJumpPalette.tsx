@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/command'
 import { branchName } from '@/lib/git-utils'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
-import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import { getLinkedWorkItemSuggestedName, getWorkspaceIntentName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
@@ -1034,7 +1034,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               url: item.url
             }
             data.linkedWorkItem = linkedWorkItem
-            data.prefilledName = getLinkedWorkItemSuggestedName({ title: item.title })
+            data.prefilledName =
+              getWorkspaceIntentName({ sourceText: trimmed, workItem: linkedWorkItem })?.seedName ??
+              getLinkedWorkItemSuggestedName({ title: item.title })
           } else {
             // Fallback: we couldn't resolve the URL, just seed the name.
             data.prefilledName = `${slug.owner}-${slug.repo}-${number}`
@@ -1097,7 +1099,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               url: item.url
             }
             data.linkedWorkItem = linkedWorkItem
-            data.prefilledName = getLinkedWorkItemSuggestedName({ title: item.title })
+            data.prefilledName =
+              getWorkspaceIntentName({ sourceText: trimmed, workItem: linkedWorkItem })?.seedName ??
+              getLinkedWorkItemSuggestedName({ title: item.title })
           } else {
             data.prefilledName = trimmed
           }

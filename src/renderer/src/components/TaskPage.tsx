@@ -130,6 +130,7 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
+  getWorkspaceIntentName,
   getTaskPresetQuery,
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT
@@ -330,6 +331,40 @@ const GITHUB_TASK_ROW_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_50%,var(--background))]'
 const GITHUB_TASK_ROW_HOVER_SURFACE_CLASS =
   'group-hover/github-task-row:[background:color-mix(in_srgb,var(--muted)_70%,var(--background))]'
+
+function getGitHubWorkItemWorkspaceSeed(item: GitHubWorkItem): string {
+  return (
+    getWorkspaceIntentName({ workItem: item })?.seedName ?? getLinkedWorkItemSuggestedName(item)
+  )
+}
+
+function getGitLabWorkItemWorkspaceSeed(item: GitLabWorkItem): string {
+  return (
+    getWorkspaceIntentName({
+      workItem: {
+        type: item.type,
+        provider: 'gitlab',
+        number: item.number,
+        title: item.title
+      }
+    })?.seedName ?? getLinkedWorkItemSuggestedName(item)
+  )
+}
+
+function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
+  return (
+    getWorkspaceIntentName({
+      workItem: {
+        type: 'issue',
+        provider: 'jira',
+        number: 0,
+        title: `${issue.key} ${issue.title}`,
+        jiraIdentifier: issue.key
+      }
+    })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+  )
+}
+
 // Why: the row's px-3 left padding leaves a 12px gap between the scroll-viewport
 // edge and the sticky ID column; without a covering ::before, scrolled cell text
 // bleeds through that strip. Same trick as the title column for its 8px gap.
@@ -5134,7 +5169,7 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
-        prefilledName: getLinkedWorkItemSuggestedName(item),
+        prefilledName: getGitHubWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
         telemetrySource: 'sidebar'
       })
@@ -5191,7 +5226,7 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
-        prefilledName: getLinkedWorkItemSuggestedName(item),
+        prefilledName: getGitLabWorkItemWorkspaceSeed(item),
         initialRepoId: item.repoId,
         telemetrySource: 'sidebar'
       })
@@ -6183,7 +6218,7 @@ export default function TaskPage(): React.JSX.Element {
       }
       openModal('new-workspace-composer', {
         linkedWorkItem,
-        prefilledName: getLinkedWorkItemSuggestedName(issue),
+        prefilledName: getJiraIssueWorkspaceSeed(issue),
         telemetrySource: 'sidebar'
       })
     },

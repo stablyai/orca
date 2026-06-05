@@ -7,9 +7,9 @@ import { cn } from '@/lib/utils'
 
 /**
  * Gear affordance on the workspace Name label row. Its popover explains that a
- * blank name lets Orca auto-rename the branch from the work, and lets the user
- * flip the `autoRenameBranchFromWork` setting inline without leaving the
- * composer. Only relevant for git repos, where a branch exists to rename.
+ * blank name lets Orca auto-name the workspace title and branch from the work,
+ * and lets the user flip the `autoRenameBranchFromWork` setting inline without
+ * leaving the composer. Only relevant for git repos, where a branch exists.
  */
 export default function AutoRenameBranchHint(): React.JSX.Element {
   const autoRenameBranchFromWork = useAppStore((s) => s.settings?.autoRenameBranchFromWork ?? false)
@@ -37,7 +37,7 @@ export default function AutoRenameBranchHint(): React.JSX.Element {
           // order like the adjacent agent-settings gear.
           tabIndex={-1}
           className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground data-[state=open]:text-foreground"
-          aria-label="Auto-rename branch settings"
+          aria-label="Auto-name settings"
         >
           <Settings2 className="size-3" />
         </Button>
@@ -46,12 +46,12 @@ export default function AutoRenameBranchHint(): React.JSX.Element {
         <div className="space-y-2.5">
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-medium text-foreground">Auto-rename branch</span>
+              <span className="text-sm font-medium text-foreground">Auto-name from work</span>
               <button
                 type="button"
                 role="switch"
                 aria-checked={autoRenameBranchFromWork}
-                aria-label="Auto-rename branch"
+                aria-label="Auto-name from work"
                 onClick={() =>
                   updateSettings({ autoRenameBranchFromWork: !autoRenameBranchFromWork })
                 }
@@ -69,8 +69,8 @@ export default function AutoRenameBranchHint(): React.JSX.Element {
               </button>
             </div>
             <p className="text-xs text-muted-foreground">
-              When you leave the name blank, Orca renames the branch to match the work once an agent
-              starts.
+              When you leave the name blank, Orca uses the first task to rename the sidebar title
+              and unpublished generated branch.
             </p>
           </div>
 

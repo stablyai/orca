@@ -28,6 +28,166 @@ export function getLinkedWorkItemSuggestedName(item: { title: string }): string 
   return slugifyForWorkspaceName(seed)
 }
 
+export type WorkspaceIntentWorkItem = {
+  type: 'issue' | 'pr' | 'mr'
+  number: number
+  title: string
+  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+  linearIdentifier?: string
+  jiraIdentifier?: string
+}
+
+export type WorkspaceIntentName = {
+  displayName: string
+  seedName: string
+}
+
+const ACTION_LABELS: [RegExp, string][] = [
+  [/\bfix(?:e[sd])?\b|\bresolve\b|\brepair\b/i, 'Fix'],
+  [/\bdebug\b|\bdiagnose\b/i, 'Debug'],
+  [/\breview\b|\blook\s+over\b|\binspect\b|\bcheck\b|\bsafe\b|\bsafety\b/i, 'Review'],
+  [/\bimplement\b|\bbuild\b|\bship\b/i, 'Implement'],
+  [/\binvestigate\b|\bunderstand\b|\btriage\b/i, 'Investigate'],
+  [/\badd\b|\bcreate\b/i, 'Add'],
+  [/\bupdate\b|\bchange\b/i, 'Update'],
+  [/\brefactor\b|\bsimplify\b/i, 'Refactor'],
+  [/\btest\b|\bverify\b|\bvalidate\b/i, 'Test']
+]
+
+const STOP_WORDS = new Set([
+  'a',
+  'an',
+  'and',
+  'for',
+  'from',
+  'in',
+  'is',
+  'it',
+  'of',
+  'on',
+  'or',
+  'the',
+  'this',
+  'to',
+  'with'
+])
+
+function detectIntentAction(sourceText: string): string | null {
+  for (const [pattern, label] of ACTION_LABELS) {
+    if (pattern.test(sourceText)) {
+      return label
+    }
+  }
+  return null
+}
+
+function titleCaseWord(word: string): string {
+  const lower = word.toLowerCase()
+  if (/^[A-Z]{2,}\d*$/.test(word) || /^[A-Z]+-\d+$/i.test(word)) {
+    return word.toUpperCase()
+  }
+  return lower.charAt(0).toUpperCase() + lower.slice(1)
+}
+
+function compactWords(input: string, maxWords = 4): string {
+  return input
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/[()[\]{}"']/g, ' ')
+    .replace(/[#/\\:_-]+/g, ' ')
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean)
+    .filter((word) => !STOP_WORDS.has(word.toLowerCase()))
+    .slice(0, maxWords)
+    .map(titleCaseWord)
+    .join(' ')
+}
+
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): string {
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  let withoutPrefix = title
+    .trim()
+    .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
+    .replace(/\([#!]?\d+\)/g, '')
+    .replace(/^[^:]{1,32}:\s*/, '')
+    .trim()
+  if (item.number > 0) {
+    withoutPrefix = withoutPrefix.replace(new RegExp(`\\b[#!]?${item.number}\\b`, 'g'), '').trim()
+  }
+  if (identifier) {
+    withoutPrefix = withoutPrefix
+      .replace(new RegExp(`^${escapeRegExp(identifier)}\\s*[:-]?\\s*`, 'i'), '')
+      .trim()
+  }
+  return compactWords(withoutPrefix || title, 3)
+}
+
+function workItemIdentity(item: WorkspaceIntentWorkItem): string {
+  if (item.linearIdentifier) {
+    return item.linearIdentifier.toUpperCase()
+  }
+  if (item.jiraIdentifier) {
+    return item.jiraIdentifier.toUpperCase()
+  }
+  if (item.type === 'pr') {
+    return `PR ${item.number}`
+  }
+  if (item.type === 'mr') {
+    return `MR ${item.number}`
+  }
+  return `Issue ${item.number}`
+}
+
+function defaultActionForWorkItem(item: WorkspaceIntentWorkItem): string | null {
+  return item.type === 'pr' || item.type === 'mr' ? 'Review' : null
+}
+
+/**
+ * Resolve the one human intent label that should drive first-create workspace
+ * identity. The display label and git-safe seed are derived together so the
+ * folder, branch, and sidebar name do not drift before work has started.
+ */
+export function getWorkspaceIntentName(args: {
+  sourceText?: string
+  workItem?: WorkspaceIntentWorkItem | null
+  fallbackName?: string
+}): WorkspaceIntentName | null {
+  const sourceText = args.sourceText?.trim() ?? ''
+  const item = args.workItem ?? null
+  let displayName = ''
+
+  if (item) {
+    const action = detectIntentAction(sourceText) ?? defaultActionForWorkItem(item)
+    const identity = workItemIdentity(item)
+    if (action) {
+      displayName = `${action} ${identity}`
+    } else {
+      const subject = compactWorkItemTitle(item.title, item)
+      displayName = [identity, subject].filter(Boolean).join(' ')
+    }
+  } else if (sourceText) {
+    const compact = compactWords(sourceText, 5)
+    displayName = compact
+  }
+
+  if (!displayName && args.fallbackName?.trim()) {
+    displayName = args.fallbackName.trim()
+  }
+  if (!displayName) {
+    return null
+  }
+
+  const seedName = slugifyForWorkspaceName(displayName)
+  if (!seedName) {
+    return null
+  }
+  return { displayName, seedName }
+}
+
 export function getLinearIssueWorkspaceName(issue: { identifier: string; title: string }): string {
   const key = slugifyForWorkspaceName(issue.identifier)
   const titleSlug = getLinkedWorkItemSuggestedName(issue)

@@ -12,6 +12,7 @@ import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-sou
 import { isExpectedAgentProcess } from '../../../shared/agent-process-recognition'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
 export { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
+export { getWorkspaceIntentName } from '../../../shared/workspace-name'
 
 /**
  * Why: the TaskPage's preset buttons and the openTaskPage prefetcher both need

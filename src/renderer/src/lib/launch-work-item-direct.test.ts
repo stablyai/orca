@@ -47,7 +47,21 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'darwin',
-  getLinkedWorkItemSuggestedName: (item: { title: string }) => item.title,
+  getWorkspaceIntentName: (args: {
+    workItem?: { type: 'issue' | 'pr' | 'mr'; number: number; title: string } | null
+  }) =>
+    args.workItem
+      ? {
+          displayName:
+            args.workItem.type === 'pr'
+              ? `Review PR ${args.workItem.number}`
+              : `Issue ${args.workItem.number}`,
+          seedName:
+            args.workItem.type === 'pr'
+              ? `review-pr-${args.workItem.number}`
+              : `issue-${args.workItem.number}`
+        }
+      : null,
   getSetupConfig: vi.fn(() => null),
   getWorkspaceSeedName: ({ explicitName }: { explicitName?: string }) => explicitName ?? '',
   isGitLabIssueUrl: vi.fn(() => false)
@@ -105,7 +119,7 @@ describe('launchWorkItemDirect', () => {
     globalThis.window = { api: mockApi }
   })
 
-  it('passes a resolved PR branch override while keeping the PR title as the workspace display name', async () => {
+  it('passes a resolved PR branch override while using a short PR identity for workspace names', async () => {
     await launchWorkItemDirect({
       repoId: 'repo-1',
       launchSource: 'task_page',
@@ -121,12 +135,12 @@ describe('launchWorkItemDirect', () => {
 
     expect(storeState.value.createWorktree).toHaveBeenCalledWith(
       'repo-1',
-      'Fix the bug',
+      'review-pr-42',
       'abc123',
       'inherit',
       undefined,
       'sidebar',
-      'Fix the bug',
+      'Review PR 42',
       undefined,
       42,
       { remoteName: 'origin', branchName: 'feature/fix' },

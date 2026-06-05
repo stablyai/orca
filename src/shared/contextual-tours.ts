@@ -163,7 +163,7 @@ export const CONTEXTUAL_TOURS = [
       },
       {
         title: 'Name it, or start from existing work',
-        body: 'Start a workspace from a task source to inherit the title. Or leave it blank to auto-name it from your first agent message.',
+        body: 'Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-name"]',
         control: { kind: 'auto-rename-branch-from-work' }
       },

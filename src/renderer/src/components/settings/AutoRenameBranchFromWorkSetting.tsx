@@ -281,11 +281,14 @@ export function AutoRenameBranchFromWorkSetting({
 
   return (
     <SearchableSetting
-      title="Auto-Rename Branch"
-      description="Rename the auto-generated branch based on the work once an agent starts."
+      title="Auto-Name From First Message"
+      description="Use the first task to name blank new workspaces and their unpublished branches."
       keywords={[
+        'workspace',
+        'title',
         'branch',
         'rename',
+        'name',
         'auto',
         'creature name',
         'agent',
@@ -300,11 +303,11 @@ export function AutoRenameBranchFromWorkSetting({
     >
       <div ref={setSettingRootRef} className="flex items-center justify-between gap-4">
         <div className="space-y-0.5">
-          <Label>Auto-Rename Branch</Label>
+          <Label>Auto-name from first message</Label>
           <p className="text-xs text-muted-foreground">
-            When an agent starts working in a new workspace, Orca renames its auto-generated branch
-            (e.g. <code>Nautilus</code>) to a short name summarizing the task. Only branches Orca
-            named itself are renamed, and never after they have been pushed.
+            When a blank new workspace starts work, Orca uses the first task to rename the sidebar
+            title and unpublished generated branch (e.g. <code>Nautilus</code>). Workspaces created
+            from linked issues or pull requests are named up front from the same short identity.
           </p>
         </div>
         <button

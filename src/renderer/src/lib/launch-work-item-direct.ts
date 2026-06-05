@@ -8,7 +8,7 @@ import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/wor
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   CLIENT_PLATFORM,
-  getLinkedWorkItemSuggestedName,
+  getWorkspaceIntentName,
   getSetupConfig,
   getWorkspaceSeedName,
   isGitLabIssueUrl
@@ -214,10 +214,17 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const finalSetupDecision: SetupDecision =
     trustDecision === 'skip' ? 'skip' : setupResolution.decision
 
+  const workspaceIntentName =
+    item.number !== null
+      ? getWorkspaceIntentName({
+          sourceText: item.pasteContent,
+          workItem: { ...item, number: item.number }
+        })
+      : null
   const workspaceName = getWorkspaceSeedName({
     explicitName: item.linearIdentifier
       ? getLinearIssueWorkspaceName({ identifier: item.linearIdentifier, title: item.title })
-      : getLinkedWorkItemSuggestedName(item),
+      : (workspaceIntentName?.seedName ?? ''),
     prompt: '',
     linkedIssueNumber: item.type === 'issue' ? (item.number ?? null) : null,
     linkedPR: item.type === 'pr' ? (item.number ?? null) : null
@@ -254,7 +261,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       finalSetupDecision,
       undefined,
       telemetrySource,
-      item.title,
+      workspaceIntentName?.displayName ?? item.title,
       item.type === 'issue' && item.number ? item.number : undefined,
       item.type === 'pr' && item.number ? item.number : undefined,
       resolvedPushTarget,
