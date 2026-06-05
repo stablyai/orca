@@ -1,12 +1,14 @@
 import type React from 'react'
 import { AppWindow } from 'lucide-react'
 import type { OpenInApplication } from '../../../shared/types'
+import { cn } from './utils'
 
 export type OpenInAppPreset = {
   id: string
   label: string
   command: string
   faviconDomain: string
+  iconClassName?: string
 }
 
 export const OPEN_IN_APP_PRESETS: OpenInAppPreset[] = [
@@ -17,7 +19,14 @@ export const OPEN_IN_APP_PRESETS: OpenInAppPreset[] = [
     faviconDomain: 'code.visualstudio.com'
   },
   { id: 'cursor', label: 'Cursor', command: 'cursor', faviconDomain: 'cursor.com' },
-  { id: 'zed', label: 'Zed', command: 'zed', faviconDomain: 'zed.dev' }
+  {
+    id: 'zed',
+    label: 'Zed',
+    command: 'zed',
+    faviconDomain: 'zed.dev',
+    // Why: Zed's favicon is a black transparent mark, which disappears on dark menus.
+    iconClassName: 'dark:invert'
+  }
 ]
 
 export function getOpenInAppPreset(
@@ -52,6 +61,7 @@ export function OpenInApplicationIcon({
         height={size}
         alt=""
         aria-hidden
+        className={cn('shrink-0', preset.iconClassName)}
         style={{ borderRadius: 2 }}
       />
     )

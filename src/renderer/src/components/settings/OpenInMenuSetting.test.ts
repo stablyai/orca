@@ -3,7 +3,11 @@ import {
   createPresetOpenInApplication,
   shouldCommitOpenInApplicationsDraft
 } from './OpenInMenuSetting'
-import { isOpenInAppPresetAdded, OPEN_IN_APP_PRESETS } from '@/lib/open-in-app-catalog'
+import {
+  isOpenInAppPresetAdded,
+  OPEN_IN_APP_PRESETS,
+  OpenInApplicationIcon
+} from '@/lib/open-in-app-catalog'
 import type { OpenInAppPreset } from '@/lib/open-in-app-catalog'
 
 function requirePreset(id: string): OpenInAppPreset {
@@ -29,6 +33,12 @@ describe('OpenInMenuSetting presets', () => {
     const cursor = requirePreset('cursor')
 
     expect(isOpenInAppPresetAdded([{ command: ' cursor ' }], cursor)).toBe(true)
+  })
+
+  it('keeps the Zed icon visible on dark menus', () => {
+    const icon = OpenInApplicationIcon({ application: { command: 'zed' } })
+
+    expect(icon.props.className).toContain('dark:invert')
   })
 })
 
