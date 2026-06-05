@@ -362,6 +362,28 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).toHaveBeenCalledWith('\x1b[?2026h\x1b[?25lpartial', expect.any(Function))
   })
 
+  it('safety-flushes latency-sensitive synchronized holds without a visible input delay', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[?25linput redraw', {
+      foreground: true,
+      holdForeground: true,
+      latencySensitive: true
+    })
+
+    vi.advanceTimersByTime(31)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledWith(
+      '\x1b[?2026h\x1b[?25linput redraw',
+      expect.any(Function)
+    )
+  })
+
   it('drains a synchronized foreground ending after the restore coalescing window', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
