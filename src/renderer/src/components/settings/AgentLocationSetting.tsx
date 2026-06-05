@@ -2,6 +2,8 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type AgentDetectionRuntime = {
   runtime: 'host' | 'wsl'
   wslDistro?: string | null
@@ -12,6 +14,7 @@ type AgentLocationSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   refresh: () => Promise<unknown>
+  wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
@@ -23,13 +26,14 @@ function getHostRuntimeLabel(): string {
 
 function getSelectedAgentRuntime(
   settings: GlobalSettings,
+  wslSupportedPlatform: boolean,
   wslAvailable: boolean,
   wslDistros: string[],
   wslCapabilitiesLoading: boolean
 ): AgentDetectionRuntime {
   const configuredRuntime =
     settings.localAgentRuntime ?? (settings.terminalWindowsShell === 'wsl.exe' ? 'wsl' : 'host')
-  if (configuredRuntime === 'wsl') {
+  if (wslSupportedPlatform && configuredRuntime === 'wsl') {
     if (!wslAvailable && !wslCapabilitiesLoading) {
       return { runtime: 'wsl', label: 'WSL' }
     }
@@ -52,18 +56,24 @@ export function AgentLocationSetting({
   settings,
   updateSettings,
   refresh,
+  wslSupportedPlatform = false,
   wslAvailable = false,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false
-}: AgentLocationSettingProps): React.JSX.Element {
+}: AgentLocationSettingProps): React.JSX.Element | null {
   const agentRuntime = getSelectedAgentRuntime(
     settings,
+    wslSupportedPlatform,
     wslAvailable,
     wslDistros,
     wslCapabilitiesLoading
   )
   const updateAgentLocation = (updates: Partial<GlobalSettings>): void => {
     void Promise.resolve(updateSettings(updates)).then(() => refresh())
+  }
+
+  if (!wslSupportedPlatform) {
+    return null
   }
 
   return (
@@ -85,14 +95,18 @@ export function AgentLocationSetting({
               equalWidth
               options={[
                 { value: 'host', label: getHostRuntimeLabel() },
-                {
-                  value: 'wsl',
-                  label: 'WSL',
-                  disabled: wslCapabilitiesLoading || !wslAvailable
-                }
+                ...(wslSupportedPlatform
+                  ? [
+                      {
+                        value: 'wsl',
+                        label: 'WSL',
+                        disabled: wslCapabilitiesLoading || !wslAvailable
+                      } as const
+                    ]
+                  : [])
               ]}
             />
-            {agentRuntime.runtime === 'wsl' ? (
+            {wslSupportedPlatform && agentRuntime.runtime === 'wsl' ? (
               <Select
                 value={agentRuntime.wslDistro ?? '__default__'}
                 onValueChange={(value) =>

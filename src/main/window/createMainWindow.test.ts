@@ -36,12 +36,8 @@ vi.mock('@electron-toolkit/utils', () => ({
   is: isMock
 }))
 
-vi.mock('../../../resources/icon.png?asset', () => ({
-  default: 'icon'
-}))
-
-vi.mock('../../../resources/icon-dev.png?asset', () => ({
-  default: 'icon-dev'
+vi.mock('../app-icon', () => ({
+  getAppIconPath: vi.fn(() => 'icon')
 }))
 
 vi.mock('../browser/browser-manager', () => ({
@@ -1087,6 +1083,64 @@ describe('createMainWindow', () => {
     expect(webContents.send).not.toHaveBeenCalledWith('window:close-requested', {
       isQuitting: true
     })
+
+    consoleError.mockRestore()
+  })
+
+  it('does not notify the crash recorder when renderer teardown follows a confirmed window close', () => {
+    const windowHandlers: Record<string, (...args: any[]) => void> = {}
+    const ipcHandlers: Record<string, (...args: any[]) => void> = {}
+    const webContents = {
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      setZoomLevel: vi.fn(),
+      setBackgroundThrottling: vi.fn(),
+      invalidate: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      send: vi.fn(),
+      isCrashed: vi.fn(() => false)
+    }
+    const browserWindowInstance = {
+      webContents,
+      on: vi.fn((event, handler) => {
+        windowHandlers[event] = handler
+      }),
+      isDestroyed: vi.fn(() => false),
+      isMaximized: vi.fn(() => true),
+      isFullScreen: vi.fn(() => false),
+      getSize: vi.fn(() => [1200, 800]),
+      setSize: vi.fn(),
+      maximize: vi.fn(),
+      show: vi.fn(),
+      loadFile: vi.fn(),
+      loadURL: vi.fn(),
+      close: vi.fn(() => {
+        windowHandlers.close({} as never)
+      })
+    }
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
+      ipcHandlers[channel] = handler as (...args: any[]) => void
+      return ipcMain
+    })
+    browserWindowMock.mockImplementation(function () {
+      return browserWindowInstance
+    })
+    const onRendererProcessGone = vi.fn()
+
+    createMainWindow(null, { onRendererProcessGone })
+
+    ipcHandlers['window:confirm-close']?.()
+    windowHandlers['render-process-gone']?.(
+      {} as never,
+      {
+        reason: 'killed',
+        exitCode: 9
+      } as never
+    )
+
+    expect(onRendererProcessGone).not.toHaveBeenCalled()
 
     consoleError.mockRestore()
   })

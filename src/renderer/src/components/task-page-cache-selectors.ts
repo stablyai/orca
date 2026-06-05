@@ -1,10 +1,12 @@
+/* eslint-disable max-lines -- Why: TaskPage cache reconciliation helpers are
+   kept together so list refresh and drawer lookup behavior stay consistent. */
 import {
   workItemsCacheKey,
   type CacheEntry,
   type WorkItemsCacheError,
   type WorkItemsCacheSources
 } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearIssue } from '../../../shared/types'
+import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
 
 export type TaskPageRepoCacheInput = {
   id: string
@@ -31,6 +33,7 @@ export type TaskPageWorkItemsFetchOptions = {
 type WorkItemsCache = Record<string, CacheEntry<GitHubWorkItem[]>>
 type LinearIssueCache = Record<string, CacheEntry<LinearIssue>>
 type LinearSearchCache = Record<string, CacheEntry<LinearIssue[]>>
+type LinearListCache = Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
 
 export function deriveTaskPageGitHubWorkItemsFetchOptions(
   forcedFetch: boolean,
@@ -304,25 +307,29 @@ export function findTaskPageDialogWorkItem(
 export function findTaskPageLinearIssue(
   linearIssueCache: LinearIssueCache,
   linearSearchCache: LinearSearchCache,
+  linearListCache: LinearListCache,
   linearIssueId: string | null
 ): LinearIssue | null {
   if (!linearIssueId) {
     return null
   }
-
   for (const entry of Object.values(linearIssueCache)) {
     if (entry?.data?.id === linearIssueId) {
       return entry.data
     }
   }
-
   for (const entry of Object.values(linearSearchCache)) {
     const found = entry?.data?.find((issue) => issue.id === linearIssueId)
     if (found) {
       return found
     }
   }
-
+  for (const entry of Object.values(linearListCache)) {
+    const found = entry?.data?.items.find((issue) => issue.id === linearIssueId)
+    if (found) {
+      return found
+    }
+  }
   return null
 }
 

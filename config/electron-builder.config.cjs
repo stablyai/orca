@@ -1,6 +1,12 @@
 const { chmodSync, existsSync, readdirSync } = require('node:fs')
 const { execFileSync } = require('node:child_process')
 const { join, resolve } = require('node:path')
+const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
+const {
+  createPackagedRuntimeNodeModuleResources,
+  prunePackagedRuntimeNodeModules,
+  verifyPackagedMainRuntimeDeps
+} = require('./packaged-runtime-node-modules.cjs')
 
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1'
 const featureWallResources = {
@@ -14,6 +20,25 @@ const relayExtraResource = {
   from: 'out/relay',
   to: 'relay'
 }
+// Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
+// from package directories where pnpm's symlink farm is absent. Copy the exact
+// runtime dependency closure to Resources/node_modules so bare require() calls
+// do not fall through to a developer checkout's node_modules.
+const packagedRuntimeNodeModuleResources = createPackagedRuntimeNodeModuleResources()
+
+const commonExtraResources = [relayExtraResource, ...packagedRuntimeNodeModuleResources]
+const macSpeechNativeResource = {
+  from: 'node_modules/sherpa-onnx-darwin-${arch}',
+  to: 'node_modules/sherpa-onnx-darwin-${arch}'
+}
+const linuxSpeechNativeResource = {
+  from: 'node_modules/sherpa-onnx-linux-${arch}',
+  to: 'node_modules/sherpa-onnx-linux-${arch}'
+}
+const winSpeechNativeResource = {
+  from: 'node_modules/sherpa-onnx-win-x64',
+  to: 'node_modules/sherpa-onnx-win-x64'
+}
 
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
@@ -24,12 +49,22 @@ module.exports = {
   },
   files: [
     '!**/.vscode/*',
-    '!src/*',
+    // Why: these repo-only inputs are either bundled into out/ or copied via
+    // extraResources. Shipping them in app.asar bloats the desktop bundle.
+    '!src{,/**/*}',
+    '!config{,/**/*}',
+    '!docs{,/**/*}',
+    '!mobile{,/**/*}',
+    '!native{,/**/*}',
+    '!skills{,/**/*}',
+    '!tests{,/**/*}',
+    '!Casks{,/**/*}',
+    '!{AGENTS.md,CLAUDE.md,DEVELOPING.md,bundle-size-progress.md}',
+    '!out/**/*.test.js',
     '!electron.vite.config.{js,ts,mjs,cjs}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
     '!tsconfig.json',
-    '!config/*',
     // Why: feature-wall media is copied via extraResources so runtime can read
     // it from process.resourcesPath; exclude the source copy from app.asar.
     '!resources/onboarding/feature-wall/**'
@@ -88,6 +123,9 @@ module.exports = {
     if (!existsSync(resourcesDir)) {
       return
     }
+    prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName)
+    verifyPackagedMainRuntimeDeps(resourcesDir)
+    chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -104,7 +142,8 @@ module.exports = {
   win: {
     executableName: 'Orca',
     extraResources: [
-      relayExtraResource,
+      ...commonExtraResources,
+      winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'
@@ -158,7 +197,8 @@ module.exports = {
     hardenedRuntime: isMacRelease,
     notarize: isMacRelease,
     extraResources: [
-      relayExtraResource,
+      ...commonExtraResources,
+      macSpeechNativeResource,
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
@@ -198,7 +238,8 @@ module.exports = {
     // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
     icon: 'resources/build/icon.icns',
     extraResources: [
-      relayExtraResource,
+      ...commonExtraResources,
+      linuxSpeechNativeResource,
       {
         from: 'resources/linux/bin/orca-ide',
         to: 'bin/orca-ide'
@@ -230,17 +271,34 @@ module.exports = {
     artifactName: 'orca-ide-${version}.${arch}.${ext}',
     depends: ['python3', 'python3-gobject', 'at-spi2-core', 'xdotool', 'xclip']
   },
+  beforeBuild: electronBuilderNativeRebuild,
   // Why: must be true so that electron-builder rebuilds native modules
   // (node-pty) for each target architecture when producing dual-arch macOS
   // builds (x64 + arm64). With npmRebuild disabled, CI on an arm64 runner
   // packages arm64 binaries into the x64 DMG, causing "posix_spawnp failed"
-  // on Intel Macs.
+  // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
+  // returns false so electron-builder does not rebuild optional cpu-features.
   npmRebuild: true,
   publish: {
     provider: 'github',
     owner: 'stablyai',
     repo: 'orca',
     releaseType: 'release'
+  }
+}
+
+function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
+  if (electronPlatformName === 'win32') {
+    return
+  }
+  for (const launcherName of ['orca', 'orca-ide']) {
+    const launcherPath = join(resourcesDir, 'bin', launcherName)
+    if (!existsSync(launcherPath)) {
+      continue
+    }
+    // Why: packaged Unix installs expose these extraResources as public shell
+    // commands, and source/packager mode drift must not ship a non-executable CLI.
+    chmodSync(launcherPath, 0o755)
   }
 }
 

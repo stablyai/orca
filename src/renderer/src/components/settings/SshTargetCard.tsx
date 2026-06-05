@@ -43,7 +43,7 @@ export function statusColor(status: SshConnectionStatus): string {
     case 'reconnection-failed':
     case 'error':
       return 'bg-red-500'
-    default:
+    case 'disconnected':
       return 'bg-muted-foreground/40'
   }
 }
@@ -86,6 +86,9 @@ export function SshTargetCard({
   const resetInFlight = actionInFlight === 'reset' || busyAction === 'reset'
   const removeInFlight = busyAction === 'remove'
   const mountedRef = useRef(true)
+  const endpoint = target.username
+    ? `${target.username}@${target.host}:${target.port}`
+    : `${target.host}:${target.port}`
 
   const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
     // Why: SSH target actions can resolve after the card is removed; the root
@@ -238,7 +241,7 @@ export function SshTargetCard({
           <span className="text-[11px] text-muted-foreground">{STATUS_LABELS[status]}</span>
         </div>
         <p className="truncate text-xs text-muted-foreground">
-          {target.username}@{target.host}:{target.port}
+          {endpoint}
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
         </p>
         {state?.error ? (

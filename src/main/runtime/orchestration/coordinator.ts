@@ -263,7 +263,9 @@ export class Coordinator {
         case 'status':
           this.opts.onLog(`Status from ${msg.from_handle}: ${msg.subject}`)
           break
-        default:
+        case 'dispatch':
+        case 'handoff':
+        case 'merge_ready':
           break
       }
     }

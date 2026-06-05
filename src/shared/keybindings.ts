@@ -31,6 +31,7 @@ export type KeybindingActionId =
   | 'app.forceReload'
   | 'file.exportPdf'
   | 'workspace.create'
+  | 'workspace.rename'
   | 'workspace.delete'
   | 'voice.dictation'
   | 'view.tasks'
@@ -53,6 +54,7 @@ export type KeybindingActionId =
   | 'tab.newMarkdown'
   | 'tab.openMarkdown'
   | 'tab.close'
+  | 'tab.rename'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
@@ -229,6 +231,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'create', 'new workspace'],
     defaultBindings: platformBindings(['Mod+N', 'Mod+Shift+N'])
+  },
+  {
+    id: 'workspace.rename',
+    title: 'Rename worktree',
+    group: 'Global',
+    scope: 'global',
+    conflictGroup: 'workspace-shell',
+    searchKeywords: ['shortcut', 'global', 'worktree', 'rename', 'workspace', 'title'],
+    // Why: macOS only. On Windows/Linux Ctrl+Alt+R has no safe default, and the
+    // chord families there (Ctrl+R reverse-search, Ctrl+Shift+R reload) are
+    // taken, so users bind it explicitly in Settings.
+    defaultBindings: {
+      darwin: ['Mod+Alt+R'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'workspace.delete',
@@ -424,6 +442,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'close', 'tab', 'pane'],
     defaultBindings: platformBindings(['Mod+W'])
+  },
+  {
+    id: 'tab.rename',
+    title: 'Rename active tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    conflictGroup: 'workspace-shell',
+    searchKeywords: ['shortcut', 'tab', 'rename', 'title', 'label'],
+    // Why: macOS only. Cmd+R is free in the app/terminal focus zone (the
+    // browser pane owns its own Cmd+R reload). On Windows/Linux Ctrl+R is the
+    // shell reverse-search, so it is left unbound for explicit user binding.
+    defaultBindings: {
+      darwin: ['Mod+R'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'tab.reopenClosed',
@@ -1282,6 +1316,21 @@ function shouldUseMacOptionLetterPhysicalFallback(
   )
 }
 
+function shouldUseMacOptionPunctuationPhysicalFallback(
+  parsed: ParsedKeybinding,
+  input: KeybindingInput,
+  platform: NodeJS.Platform
+): boolean {
+  // Why: macOS Option+punctuation can report composed quote/dead-key values,
+  // leaving no logical bracket token for app shortcuts that intentionally use Alt.
+  return (
+    getKeybindingPlatform(platform) === 'darwin' &&
+    parsed.alt &&
+    hasModifier(input, 'alt') &&
+    logicalKeyTokenFromInput(input) === null
+  )
+}
+
 function letterKeyMatches(
   input: KeybindingInput,
   letter: string,
@@ -1372,7 +1421,11 @@ function keyMatches(
       }
       return semanticKey === parsedKey
     }
-    return canUsePhysicalCodeFallback(input) && physicalPunctuationKey(input) === parsedKey
+    return (
+      (canUsePhysicalCodeFallback(input) ||
+        shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
+      physicalPunctuationKey(input) === parsedKey
+    )
   }
 
   const logicalKey = logicalKeyTokenFromInput(input)

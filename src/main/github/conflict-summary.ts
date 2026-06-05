@@ -95,38 +95,57 @@ async function loadConflictingFiles(
   headOid: string,
   baseOid: string
 ): Promise<string[]> {
-  let stdout = ''
-  try {
-    const result = await gitExecFileAsync(
-      [
-        'merge-tree',
-        '--write-tree',
-        '--name-only',
-        '-z',
-        '--no-messages',
-        '--merge-base',
-        mergeBase,
-        headOid,
-        baseOid
-      ],
-      { cwd: repoPath }
-    )
-    stdout = result.stdout
-  } catch (error) {
-    const stdoutFromError =
-      typeof error === 'object' && error && 'stdout' in error && typeof error.stdout === 'string'
-        ? error.stdout
-        : ''
+  const modernArgs = [
+    'merge-tree',
+    '--write-tree',
+    '--name-only',
+    '-z',
+    '--no-messages',
+    '--merge-base',
+    mergeBase,
+    headOid,
+    baseOid
+  ]
+  const legacyArgs = [
+    'merge-tree',
+    '--write-tree',
+    '--name-only',
+    '-z',
+    '--no-messages',
+    headOid,
+    baseOid
+  ]
 
+  try {
+    const result = await gitExecFileAsync(modernArgs, { cwd: repoPath })
+    return parseMergeTreeNameOnlyOutput(result.stdout)
+  } catch (error) {
     // Why: `git merge-tree --write-tree` exits with status 1 when it finds
     // conflicts, but still writes the conflicted file list to stdout. Treat
     // that stdout as the useful result instead of dropping the summary.
-    if (!stdoutFromError) {
+    const stdoutFromError = getGitErrorOutput(error, 'stdout')
+    if (stdoutFromError) {
+      return parseMergeTreeNameOnlyOutput(stdoutFromError)
+    }
+
+    if (!isUnsupportedMergeBaseOption(error)) {
       throw error
     }
-    stdout = stdoutFromError
-  }
 
+    try {
+      const result = await gitExecFileAsync(legacyArgs, { cwd: repoPath })
+      return parseMergeTreeNameOnlyOutput(result.stdout)
+    } catch (fallbackError) {
+      const fallbackStdout = getGitErrorOutput(fallbackError, 'stdout')
+      if (fallbackStdout) {
+        return parseMergeTreeNameOnlyOutput(fallbackStdout)
+      }
+      throw fallbackError
+    }
+  }
+}
+
+function parseMergeTreeNameOnlyOutput(stdout: string): string[] {
   const entries = stdout.split('\0').filter(Boolean)
   if (entries.length === 0) {
     return []
@@ -134,4 +153,21 @@ async function loadConflictingFiles(
 
   const [, ...files] = entries
   return files
+}
+
+function getGitErrorOutput(error: unknown, key: 'stdout' | 'stderr'): string {
+  if (typeof error !== 'object' || error === null) {
+    return ''
+  }
+  const output = (error as Partial<Record<'stdout' | 'stderr', unknown>>)[key]
+  return typeof output === 'string' ? output : ''
+}
+
+function isUnsupportedMergeBaseOption(error: unknown): boolean {
+  const output = `${getGitErrorOutput(error, 'stderr')}\n${
+    error instanceof Error ? error.message : ''
+  }`
+  return /(?:unknown|unrecognized) option(?::|\s+)[`']?(?:--?)?merge-base[`']?(?:\s|$)/i.test(
+    output
+  )
 }

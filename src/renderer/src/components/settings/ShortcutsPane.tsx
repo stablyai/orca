@@ -26,13 +26,13 @@ import {
   matchesShortcutLocalSearch,
   ShortcutFilterRail,
   type ShortcutFilter,
-  type ShortcutGroupSummary,
   type ShortcutRowsByGroup
 } from './ShortcutFilterRail'
 import { ShortcutRowsList } from './ShortcutRowsList'
 import { ShortcutTerminalPolicyControl } from './ShortcutTerminalPolicyControl'
 import { TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY } from './shortcuts-search'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
+import { clearRecordingActionForShortcutMutation } from './shortcut-recording-state'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
 type ShortcutGroup = {
@@ -136,7 +136,6 @@ export function ShortcutsPane(): React.JSX.Element {
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
-  const [activeShortcutGroup, setActiveShortcutGroup] = useState<string>('all')
 
   const groups = useMemo(groupDefinitions, [])
   const conflictByAction = useMemo(() => {
@@ -191,29 +190,11 @@ export function ShortcutsPane(): React.JSX.Element {
     unassigned: baseVisibleRows.filter((row) => row.effective.length === 0).length,
     conflicts: baseVisibleRows.filter((row) => row.warnings.length > 0).length
   }
-  const groupSummaries: ShortcutGroupSummary[] = [
-    {
-      id: 'all',
-      label: 'All shortcuts',
-      count: baseVisibleRows.filter((row) => matchesShortcutFilter(row, shortcutFilter)).length
-    },
-    ...shortcutGroups.map((group) => ({
-      id: group.title,
-      label: group.title,
-      count: group.rows.filter(
-        (row) =>
-          matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
-          matchesShortcutLocalSearch(row, shortcutSearchQuery, platform) &&
-          matchesShortcutFilter(row, shortcutFilter)
-      ).length
-    }))
-  ]
   const visibleShortcutGroups = shortcutGroups
     .map((group) => ({
       title: group.title,
       rows: group.rows.filter(
         (row) =>
-          (activeShortcutGroup === 'all' || row.groupTitle === activeShortcutGroup) &&
           matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row)) &&
           matchesShortcutLocalSearch(row, shortcutSearchQuery, platform) &&
           matchesShortcutFilter(row, shortcutFilter)
@@ -330,15 +311,55 @@ export function ShortcutsPane(): React.JSX.Element {
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
   }
 
+  const clearRecordingForAction = (actionId: KeybindingActionId): void => {
+    // Why: disable/reset are final shortcut edits; the next keypress must not
+    // be captured into the shortcut the user just removed or restored.
+    setRecordingActionId((current) => clearRecordingActionForShortcutMutation(current, actionId))
+  }
+
   const showPolicy = matchesSettingsSearch(searchQuery, TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY)
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
       <section className="flex min-h-0 flex-1 flex-col space-y-3">
+        {showPolicy ? (
+          <ShortcutTerminalPolicyControl
+            terminalShortcutPolicy={terminalShortcutPolicy}
+            keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
+            updateSettings={updateSettings}
+          />
+        ) : null}
+
         <SettingsSubsectionHeader
           title="Keyboard Shortcuts"
-          description="Customize shortcuts visually or edit the file directly."
+          description={
+            <>
+              Customize shortcuts visually or edit{' '}
+              <span className="font-mono text-[11px]">
+                {keybindingSnapshot?.path ?? '~/.orca/keybindings.json'}
+              </span>{' '}
+              directly.
+            </>
+          }
+          action={<KeybindingsFileActions />}
         />
+
+        {keybindingSnapshot?.diagnostics.length ? (
+          <div className="space-y-1">
+            {keybindingSnapshot.diagnostics.map((diagnostic, index) => (
+              <p
+                key={`${diagnostic.section ?? 'root'}-${diagnostic.actionId ?? index}`}
+                className={
+                  diagnostic.severity === 'error'
+                    ? 'text-xs text-destructive'
+                    : 'text-xs text-muted-foreground'
+                }
+              >
+                {diagnostic.message}
+              </p>
+            ))}
+          </div>
+        ) : null}
 
         <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[16rem_minmax(0,1fr)]">
           <ShortcutFilterRail
@@ -346,42 +367,33 @@ export function ShortcutsPane(): React.JSX.Element {
             onQueryChange={setShortcutQuery}
             filter={shortcutFilter}
             onFilterChange={setShortcutFilter}
-            activeGroup={activeShortcutGroup}
-            onActiveGroupChange={setActiveShortcutGroup}
             filterCounts={filterCounts}
-            groupSummaries={groupSummaries}
             visibleCount={visibleShortcutCount}
             totalCount={shortcutRows.length}
           />
 
-          <div className="flex min-h-0 min-w-0 flex-col gap-5">
-            {showPolicy ? (
-              <ShortcutTerminalPolicyControl
-                terminalShortcutPolicy={terminalShortcutPolicy}
-                keywords={TERMINAL_SHORTCUT_POLICY_SEARCH_ENTRY.keywords}
-                updateSettings={updateSettings}
-              />
-            ) : null}
-
-            <KeybindingsFileActions />
-
-            <ShortcutRowsList
-              className="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
-              groups={visibleShortcutGroups}
-              platform={platform}
-              errors={errors}
-              recordingActionId={recordingActionId}
-              onStartRecording={(actionId) => {
-                setRecordingActionId(actionId)
-                clearError(actionId)
-              }}
-              onCancelRecording={() => setRecordingActionId(null)}
-              onCapture={(actionId, input) => void captureBinding(actionId, input)}
-              onClearError={clearError}
-              onDisable={(actionId) => void disableBinding(actionId)}
-              onReset={(actionId) => void resetBinding(actionId)}
-            />
-          </div>
+          <ShortcutRowsList
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
+            groups={visibleShortcutGroups}
+            platform={platform}
+            errors={errors}
+            recordingActionId={recordingActionId}
+            onStartRecording={(actionId) => {
+              setRecordingActionId(actionId)
+              clearError(actionId)
+            }}
+            onCancelRecording={() => setRecordingActionId(null)}
+            onCapture={(actionId, input) => void captureBinding(actionId, input)}
+            onClearError={clearError}
+            onDisable={(actionId) => {
+              clearRecordingForAction(actionId)
+              void disableBinding(actionId)
+            }}
+            onReset={(actionId) => {
+              clearRecordingForAction(actionId)
+              void resetBinding(actionId)
+            }}
+          />
         </div>
       </section>
     </div>

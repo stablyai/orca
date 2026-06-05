@@ -37,6 +37,7 @@ import { normalizeTerminalLayoutSnapshot } from '@/components/terminal-pane/term
 import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
@@ -215,6 +216,9 @@ export type TerminalSlice = {
    *  than unreadTerminalTabs and clears when the user interacts with the exact
    *  pane that raised attention. */
   unreadTerminalPanes: Record<string, true>
+  /** Agent-completion source marker for focus-return auto-ack. Kept separate
+   *  from unreadTerminalPanes so generic terminal bells still show until interact. */
+  unreadAgentCompletionPanes: Record<string, true>
   suppressedPtyExitIds: Record<string, true>
   pendingCodexPaneRestartIds: Record<string, true>
   codexRestartNoticeByPtyId: Record<
@@ -259,6 +263,8 @@ export type TerminalSlice = {
   pendingIssueCommandSplitByTabId: Record<string, { command: string; env?: Record<string, string> }>
   tabBarOrderByWorktree: Record<string, string[]>
   workspaceSessionReady: boolean
+  defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
+  markDefaultTerminalTabsApplied: (worktreeId: string) => void
   /** True only after hydrateWorkspaceSession ran from a real load of
    *  orca-data.json. Guards the debounced session writer so that a crash
    *  during early startup (fetchRepos / fetchAllWorktrees / session.get /
@@ -332,6 +338,7 @@ export type TerminalSlice = {
    *  so a flag would never clear naturally. */
   markTerminalTabUnread: (tabId: string) => void
   markTerminalPaneUnread: (paneKey: string) => void
+  markAgentCompletionPaneUnread: (paneKey: string) => void
   /** Clear a tab's unread indicator. Called on user interaction with the
    *  pane (keystroke, click) — matches ghostty's "show until interact"
    *  model where the bell stays visible until the user engages with the
@@ -419,6 +426,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   runtimePaneTitlesByTabId: {},
   unreadTerminalTabs: {},
   unreadTerminalPanes: {},
+  unreadAgentCompletionPanes: {},
   suppressedPtyExitIds: {},
   pendingCodexPaneRestartIds: {},
   codexRestartNoticeByPtyId: {},
@@ -430,6 +438,19 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   pendingIssueCommandSplitByTabId: {},
   tabBarOrderByWorktree: {},
   workspaceSessionReady: false,
+  defaultTerminalTabsAppliedByWorktreeId: {},
+  markDefaultTerminalTabsApplied: (worktreeId) =>
+    set((s) => {
+      if (s.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
+        return {}
+      }
+      return {
+        defaultTerminalTabsAppliedByWorktreeId: {
+          ...s.defaultTerminalTabsAppliedByWorktreeId,
+          [worktreeId]: true
+        }
+      }
+    }),
   hydrationSucceeded: false,
   setHydrationSucceeded: (value) => {
     set({ hydrationSucceeded: value })
@@ -777,6 +798,15 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           delete nextUnreadTerminalPanes[paneKey]
         }
       }
+      let nextUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
+      for (const paneKey of Object.keys(s.unreadAgentCompletionPanes)) {
+        if (paneKey.startsWith(`${tabId}:`)) {
+          if (nextUnreadAgentCompletionPanes === s.unreadAgentCompletionPanes) {
+            nextUnreadAgentCompletionPanes = { ...s.unreadAgentCompletionPanes }
+          }
+          delete nextUnreadAgentCompletionPanes[paneKey]
+        }
+      }
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
       const nextPendingSetupSplitByTabId = { ...s.pendingSetupSplitByTabId }
@@ -844,6 +874,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           : {}),
         ...(nextUnreadTerminalPanes !== s.unreadTerminalPanes
           ? { unreadTerminalPanes: nextUnreadTerminalPanes }
+          : {}),
+        ...(nextUnreadAgentCompletionPanes !== s.unreadAgentCompletionPanes
+          ? { unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes }
           : {}),
         expandedPaneByTabId: nextExpanded,
         canExpandPaneByTabId: nextCanExpand,
@@ -1226,6 +1259,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     })
   },
 
+  markAgentCompletionPaneUnread: (paneKey) => {
+    set((s) => {
+      if (s.unreadAgentCompletionPanes[paneKey]) {
+        return s
+      }
+      return {
+        unreadAgentCompletionPanes: {
+          ...s.unreadAgentCompletionPanes,
+          [paneKey]: true as const
+        }
+      }
+    })
+  },
+
   clearTerminalTabUnread: (tabId) => {
     set((s) => {
       if (!s.unreadTerminalTabs[tabId]) {
@@ -1239,12 +1286,17 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   clearTerminalPaneUnread: (paneKey) => {
     set((s) => {
-      if (!s.unreadTerminalPanes[paneKey]) {
+      if (!s.unreadTerminalPanes[paneKey] && !s.unreadAgentCompletionPanes[paneKey]) {
         return s
       }
-      const copy = { ...s.unreadTerminalPanes }
-      delete copy[paneKey]
-      return { unreadTerminalPanes: copy }
+      const nextUnreadTerminalPanes = { ...s.unreadTerminalPanes }
+      const nextUnreadAgentCompletionPanes = { ...s.unreadAgentCompletionPanes }
+      delete nextUnreadTerminalPanes[paneKey]
+      delete nextUnreadAgentCompletionPanes[paneKey]
+      return {
+        unreadTerminalPanes: nextUnreadTerminalPanes,
+        unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes
+      }
     })
   },
 
@@ -1550,6 +1602,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       // in tabs.ts.
       let nextUnreadTerminalTabs = s.unreadTerminalTabs
       let nextUnreadTerminalPanes = s.unreadTerminalPanes
+      let nextUnreadAgentCompletionPanes = s.unreadAgentCompletionPanes
       for (const tab of tabs) {
         if (!keepIdentifiers) {
           delete nextRuntimePaneTitlesByTabId[tab.id]
@@ -1568,6 +1621,14 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
               nextUnreadTerminalPanes = { ...s.unreadTerminalPanes }
             }
             delete nextUnreadTerminalPanes[paneKey]
+          }
+        }
+        for (const paneKey of Object.keys(nextUnreadAgentCompletionPanes)) {
+          if (paneKey.startsWith(`${tab.id}:`)) {
+            if (nextUnreadAgentCompletionPanes === s.unreadAgentCompletionPanes) {
+              nextUnreadAgentCompletionPanes = { ...s.unreadAgentCompletionPanes }
+            }
+            delete nextUnreadAgentCompletionPanes[paneKey]
           }
         }
         if (!keepIdentifiers) {
@@ -1614,6 +1675,9 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           : {}),
         ...(nextUnreadTerminalPanes !== s.unreadTerminalPanes
           ? { unreadTerminalPanes: nextUnreadTerminalPanes }
+          : {}),
+        ...(nextUnreadAgentCompletionPanes !== s.unreadAgentCompletionPanes
+          ? { unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes }
           : {})
       }
     })
@@ -1634,7 +1698,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       await callRuntimeRpc(
         target,
         'terminal.stop',
-        { worktree: worktreeId },
+        { worktree: toRuntimeWorktreeSelector(worktreeId) },
         { timeoutMs: 15_000 }
       ).catch(() => null)
     }
@@ -2103,6 +2167,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         // after hydration) — not here — because SSH worktrees may still be
         // appearing in worktreesByRepo at this moment.
         lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
+        defaultTerminalTabsAppliedByWorktreeId:
+          session.defaultTerminalTabsAppliedByWorktreeId ?? {},
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,

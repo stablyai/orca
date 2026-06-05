@@ -343,6 +343,33 @@ describe('buildConnectConfig', () => {
     expect(config.username).toBe('admin')
   })
 
+  it('uses ssh -G HostName when a config-host target still points at its alias', () => {
+    const config = buildConnectConfig(
+      makeTarget({ label: 'workbox', configHost: 'workbox', host: 'workbox' }),
+      makeResolved({ hostname: 'workbox.internal' })
+    )
+
+    expect(config.host).toBe('workbox.internal')
+  })
+
+  it('uses ssh -G Port when a config-host target still has the default port', () => {
+    const config = buildConnectConfig(
+      makeTarget({ configHost: 'workbox', host: 'workbox', port: 22 }),
+      makeResolved({ port: 2202 })
+    )
+
+    expect(config.port).toBe(2202)
+  })
+
+  it('keeps explicit non-default target ports ahead of ssh -G Port', () => {
+    const config = buildConnectConfig(
+      makeTarget({ configHost: 'workbox', host: 'workbox', port: 2022 }),
+      makeResolved({ port: 2202 })
+    )
+
+    expect(config.port).toBe(2022)
+  })
+
   it('sets readyTimeout to CONNECT_TIMEOUT_MS', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.readyTimeout).toBe(30_000)
@@ -356,6 +383,26 @@ describe('buildConnectConfig', () => {
   it('uses agent auth when no explicit key and SSH_AUTH_SOCK is set', () => {
     const config = buildConnectConfig(makeTarget(), null)
     expect(config.agent).toBe('/tmp/agent.sock')
+  })
+
+  it('enables agent forwarding when OpenSSH config requests it and an agent is available', () => {
+    const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: true }))
+
+    expect(config.agent).toBe('/tmp/agent.sock')
+    expect(config.agentForward).toBe(true)
+  })
+
+  it('does not enable agent forwarding without a usable agent', () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    delete process.env.SSH_AUTH_SOCK
+
+    try {
+      const config = buildConnectConfig(makeTarget(), makeResolved({ forwardAgent: true }))
+      expect(config.agent).toBeUndefined()
+      expect(config.agentForward).toBeUndefined()
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 
   it('uses configured IdentityAgent before SSH_AUTH_SOCK', () => {

@@ -8,20 +8,20 @@ import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/types'
 
-type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'
 type RepoKind = 'git' | 'folder'
 
 export function useCreateRepo(
-  fetchWorktrees: (repoId: string) => Promise<unknown>,
-  setStep: (step: DialogStep) => void,
-  setAddedRepo: (repo: Repo | null) => void,
+  fetchWorktrees: (
+    repoId: string,
+    options?: { requireAuthoritative?: boolean }
+  ) => Promise<boolean>,
   closeModal: () => void,
-  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void
+  onGitRepoReady?: (repoId: string) => void | Promise<void>
 ) {
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
@@ -123,17 +123,16 @@ export function useCreateRepo(
         })
       }
       if (isGitRepoKind(repo)) {
-        // Why: setAddedRepo only drives the git "setup" step; the folder
-        // branch closes the dialog, which resets addedRepo to null anyway.
-        setAddedRepo(repo)
-        setExistingWorkspaceSource?.('create_project')
-        await fetchWorktrees(repo.id)
+        // Why: Git repos use the shared default-checkout completion path.
+        // Why: if refresh is temporarily non-authoritative, the shared opener
+        // still reveals the project so the user is not left in a completed add flow.
+        await fetchWorktrees(repo.id, { requireAuthoritative: true })
         if (gen !== createGenRef.current || !mountedRef.current) {
           return
         }
-        setStep('setup')
+        await onGitRepoReady?.(repo.id)
       } else {
-        // Why: folder repos skip the Git setup step, so activate the synthetic
+        // Why: folder repos skip the Git default-checkout handoff, so activate the synthetic
         // root workspace before closing. Matches addNonGitFolder's behavior.
         await fetchWorktrees(repo.id)
         if (gen !== createGenRef.current || !mountedRef.current) {
@@ -143,6 +142,7 @@ export function useCreateRepo(
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }
+        await markOnboardingProjectAdded('addedFolder')
         closeModal()
       }
     } catch (err) {
@@ -157,17 +157,7 @@ export function useCreateRepo(
         setIsCreating(false)
       }
     }
-  }, [
-    createName,
-    createParent,
-    createKind,
-    fetchWorktrees,
-    mountedRef,
-    setStep,
-    setAddedRepo,
-    closeModal,
-    setExistingWorkspaceSource
-  ])
+  }, [createName, createParent, createKind, fetchWorktrees, mountedRef, closeModal, onGitRepoReady])
 
   return {
     createName,

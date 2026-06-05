@@ -7,6 +7,7 @@ import {
   sendRuntimePtyInputVerified
 } from '@/runtime/runtime-terminal-inspection'
 import { subscribeToRuntimeTerminalData } from '@/runtime/runtime-terminal-stream'
+import { waitForAgentReady } from './agent-ready-wait'
 
 // Why: bracketed paste markers let modern TUIs (Claude Code / Codex / Pi /
 // OpenCode / Gemini / cursor-agent / copilot) treat the inserted text as a
@@ -91,8 +92,17 @@ export async function pasteDraftWhenAgentReady(args: {
 
   const ready = await waitForInputBoxReady(ptyId, budget, readySignal)
   if (!ready) {
-    onTimeout?.()
-    return false
+    // Why: fast-starting TUIs can emit the paste-ready escape sequence before
+    // this sidecar subscription attaches. If process/title inspection says the
+    // launched agent owns the PTY, fall back to a best-effort paste instead of
+    // silently dropping generated prompts.
+    const fallbackReady = agentConfig
+      ? await waitForAgentReady(tabId, agentConfig.expectedProcess, { timeoutMs: 1000 })
+      : { ready: false }
+    if (!fallbackReady.ready) {
+      onTimeout?.()
+      return false
+    }
   }
 
   return await sendBracketedPasteToAgent({

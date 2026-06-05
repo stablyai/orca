@@ -255,6 +255,14 @@ export function setupGuestShortcutForwarding(args: {
     // which rejects Alt. Every other chord handled further down can reuse
     // the same `action` rather than re-running the full predicate chain.
     const action = resolveWindowShortcutAction(input, process.platform, keybindings)
+    if (action?.type === 'zoom') {
+      // Why: browser page zoom must consume repeats and teardown races before
+      // Chromium or the guest page can apply its own shortcut behavior.
+      event.preventDefault()
+      const renderer = resolveRenderer(browserTabId)
+      renderer?.send('ui:zoomBrowserPage', action.direction)
+      return
+    }
     if (input.isAutoRepeat) {
       if (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) {
         event.preventDefault()
@@ -333,6 +341,8 @@ export function setupGuestShortcutForwarding(args: {
     }
     if (keybindingMatchesAction('tab.newBrowser', input, process.platform, keybindings)) {
       renderer.send('ui:newBrowserTab')
+    } else if (keybindingMatchesAction('tab.newMarkdown', input, process.platform, keybindings)) {
+      renderer.send('ui:newMarkdownTab')
     } else if (keybindingMatchesAction('tab.newTerminal', input, process.platform, keybindings)) {
       // Why: Cmd/Ctrl+T opens a terminal in the user's active terminal surface
       // even when focus is inside a browser guest. Cmd/Ctrl+Shift+B is the

@@ -172,6 +172,17 @@ function expectBashOsc133Lifecycle(output: string): void {
   expect(output.split(oscD)).toHaveLength(3)
 }
 
+function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain(`source "$_orca_home/${fileName}"`)
+  expect(content).toContain('export ZDOTDIR="$_orca_wrapper_zdotdir"')
+}
+
+function expectFinalZdotdirRestoreContext(content: string) {
+  expect(content).toContain("after Orca's last wrapper file has loaded")
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+}
+
 describePosix('local PTY shell-ready launch config', () => {
   let userDataPath: string
   let previousOrcaOrigZdotdir: string | undefined
@@ -288,9 +299,17 @@ describePosix('local PTY shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zprofile = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zprofile'), 'utf8')
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
+    expectZdotdirSourceContext(zprofile, '.zprofile')
+    expectZdotdirSourceContext(zshrc, '.zshrc')
+    expectZdotdirSourceContext(zlogin, '.zlogin')
+    expectFinalZdotdirRestoreContext(zshrc)
+    expectFinalZdotdirRestoreContext(zlogin)
   })
 
   it('writes wrappers that restore agent config homes after user startup files', async () => {
@@ -574,6 +593,9 @@ path=(/custom/bin $path)
       }
       delete cleanEnv.ZDOTDIR
       delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      // Why: attribution shims are intentionally restored after user rcfiles;
+      // this test isolates zsh top-level path scoping, not attribution ordering.
+      delete cleanEnv.ORCA_ATTRIBUTION_SHIM_DIR
       cleanEnv.ZDOTDIR = config.env.ZDOTDIR // Point to Orca wrapper dir
 
       const result = spawnSync(
@@ -639,6 +661,56 @@ export ZDOTDIR="$HOME/.config/zsh"
       expect(result.stdout).toContain('PATH_HEAD=/env/bin')
       expect(result.stdout).toContain('MY_VAR=from-zshenv')
       expect(result.stdout).toContain('from-zshenv-function')
+    })
+
+    it('sources user startup files with their own ZDOTDIR in scope', async () => {
+      // Why: plugin managers such as Antidote resolve files from $ZDOTDIR
+      // while .zprofile/.zshrc/.zlogin are sourced.
+      const xdgZshDir = join(testHome, '.config', 'zsh')
+      const zdotdirLog = join(testHome, 'zdotdir.log')
+      mkdirSync(xdgZshDir, { recursive: true })
+      writeFileSync(join(testHome, '.zshenv'), 'export ZDOTDIR="$HOME/.config/zsh"\n')
+      writeFileSync(
+        join(xdgZshDir, '.zprofile'),
+        'printf "zprofile=%s\\n" "$ZDOTDIR" >> "$HOME/zdotdir.log"\n'
+      )
+      writeFileSync(
+        join(xdgZshDir, '.zshrc'),
+        'printf "zshrc=%s\\n" "$ZDOTDIR" >> "$HOME/zdotdir.log"\n'
+      )
+      writeFileSync(
+        join(xdgZshDir, '.zlogin'),
+        'printf "zlogin=%s\\n" "$ZDOTDIR" >> "$HOME/zdotdir.log"\n'
+      )
+
+      const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+
+      const cleanEnv: Record<string, string | undefined> = { ...process.env, HOME: testHome }
+      delete cleanEnv.ZDOTDIR
+      delete cleanEnv.ORCA_ORIG_ZDOTDIR
+      cleanEnv.ZDOTDIR = config.env.ZDOTDIR
+
+      const result = spawnSync(
+        'zsh',
+        ['-l', '-i', '-c', 'printf "command=%s\\n" "$ZDOTDIR" >> "$HOME/zdotdir.log"'],
+        {
+          env: cleanEnv as NodeJS.ProcessEnv,
+          encoding: 'utf8',
+          timeout: 5000
+        }
+      )
+
+      expect(result.status).toBe(0)
+      expect(readFileSync(zdotdirLog, 'utf8')).toBe(
+        [
+          `zprofile=${xdgZshDir}`,
+          `zshrc=${xdgZshDir}`,
+          `zlogin=${xdgZshDir}`,
+          `command=${xdgZshDir}`,
+          ''
+        ].join('\n')
+      )
     })
 
     it('survives early return in user .zshenv without crashing', async () => {

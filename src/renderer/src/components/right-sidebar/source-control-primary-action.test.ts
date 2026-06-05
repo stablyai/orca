@@ -408,4 +408,25 @@ describe('resolvePrimaryAction', () => {
       disabled: false
     })
   })
+
+  it('returns Create MR when a clean tracked GitLab branch is eligible for review creation', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        upstreamStatus: upstreamInSync,
+        hostedReviewCreation: {
+          provider: 'gitlab',
+          review: null,
+          canCreate: true,
+          blockedReason: null,
+          nextAction: null
+        }
+      })
+    )
+    expect(result).toEqual({
+      kind: 'create_pr',
+      label: 'Create MR',
+      title: 'Create a merge request for this branch',
+      disabled: false
+    })
+  })
 })

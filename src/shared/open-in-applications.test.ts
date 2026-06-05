@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeOpenInApplications } from './open-in-applications'
+import { DEFAULT_OPEN_IN_APPLICATIONS, normalizeOpenInApplications } from './open-in-applications'
 
 describe('normalizeOpenInApplications', () => {
   it('trims fields, drops invalid rows, keeps first duplicate id, and caps list', () => {
@@ -43,5 +43,12 @@ describe('normalizeOpenInApplications', () => {
       { id: 'gen-1', label: 'Cursor', command: 'cursor' },
       { id: 'gen-2', label: 'Zed', command: 'zed' }
     ])
+  })
+
+  it('seeds defaults only when the persisted field is missing', () => {
+    expect(normalizeOpenInApplications(undefined, { seedDefaults: true })).toEqual(
+      DEFAULT_OPEN_IN_APPLICATIONS
+    )
+    expect(normalizeOpenInApplications([], { seedDefaults: true })).toEqual([])
   })
 })

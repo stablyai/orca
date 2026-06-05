@@ -363,6 +363,56 @@ describe('updater', () => {
     })
   })
 
+  it('runs a fresh prerelease check when Shift-click promotes an in-flight stable check', async () => {
+    let resolveStableTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
+    fetchNewerReleaseTagsMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ tags: string[]; state: 'no-newer' }>((resolve) => {
+            resolveStableTags = resolve
+          })
+      )
+      .mockResolvedValueOnce({ tags: ['v1.4.36-rc.5'], state: 'ready' })
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = { webContents: { send: sendMock } }
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+
+    appMock.getVersion.mockReturnValue('1.4.35')
+    setupAutoUpdater(mainWindow as never, { getLastUpdateCheckAt: () => null })
+    checkForUpdatesFromMenu({ includePrerelease: true })
+
+    expect(sendMock).toHaveBeenCalledWith('updater:status', {
+      state: 'checking',
+      userInitiated: true
+    })
+    expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+
+    resolveStableTags({ tags: [], state: 'no-newer' })
+    await vi.waitFor(() => {
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+    })
+
+    autoUpdaterMock.emit('update-not-available')
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenCalledWith('1.4.35', 2, {
+        includePrerelease: true
+      })
+      expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+    })
+    expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+      provider: 'generic',
+      url: 'https://github.com/stablyai/orca/releases/download/v1.4.36-rc.5'
+    })
+    expect(
+      sendMock.mock.calls
+        .filter(([channel]) => channel === 'updater:status')
+        .map(([, status]) => status)
+    ).not.toContainEqual({ state: 'not-available', userInitiated: true })
+  })
+
   it('keeps promoted background promise failures user-initiated after a paired error event', async () => {
     let resolveTags: (value: { tags: string[]; state: 'no-newer' }) => void = () => {}
     fetchNewerReleaseTagsMock.mockImplementation(

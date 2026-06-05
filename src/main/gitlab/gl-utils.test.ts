@@ -13,6 +13,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import {
+  _getProjectRefCacheSize,
   _resetKnownHostsCache,
   _resetProjectRefCache,
   classifyGlabError,
@@ -92,6 +93,17 @@ describe('gitlab project ref parsing', () => {
     })
   })
 
+  it('strips trailing slashes after .git suffixes', () => {
+    expect(parseGitLabProjectRef('https://gitlab.com/acme/widgets.git/')).toEqual({
+      host: 'gitlab.com',
+      path: 'acme/widgets'
+    })
+    expect(parseGitLabProjectRef('ssh://git@gitlab.com/acme/widgets.git/')).toEqual({
+      host: 'gitlab.com',
+      path: 'acme/widgets'
+    })
+  })
+
   it('preserves git protocol remote support', () => {
     expect(parseGitLabProjectRef('git://gitlab.com/acme/widgets.git')).toEqual({
       host: 'gitlab.com',
@@ -166,6 +178,30 @@ describe('gitlab project ref resolution', () => {
     })
   })
 
+  it('coalesces concurrent missing remote probes for the same repo and remote', async () => {
+    gitExecFileAsyncMock.mockImplementation(async () => {
+      await Promise.resolve()
+      throw new Error("error: No such remote 'upstream'")
+    })
+
+    await expect(
+      Promise.all([
+        getProjectRefForRemote('/repo', 'upstream'),
+        getProjectRefForRemote('/repo', 'upstream'),
+        getProjectRefForRemote('/repo', 'upstream'),
+        getProjectRefForRemote('/repo', 'upstream')
+      ])
+    ).resolves.toEqual([null, null, null, null])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
+      cwd: '/repo'
+    })
+
+    await expect(getProjectRefForRemote('/repo', 'upstream')).resolves.toBeNull()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves project refs through the SSH git provider for connected repos', async () => {
     sshExecMock.mockResolvedValueOnce({ stdout: 'git@gitlab.com:remote/orca.git\n', stderr: '' })
     registerSshGitProvider('conn-1', { exec: sshExecMock } as never)
@@ -177,6 +213,19 @@ describe('gitlab project ref resolution', () => {
 
     expect(sshExecMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/repo')
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('bounds cached project refs for distinct repo paths', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: 'git@gitlab.com:stablyai/orca.git\n',
+      stderr: ''
+    })
+
+    for (let i = 0; i < 513; i += 1) {
+      await getProjectRef(`/repo-${i}`)
+    }
+
+    expect(_getProjectRefCacheSize()).toBe(512)
   })
 
   it('does not cache a missing SSH provider as a permanent null project ref', async () => {

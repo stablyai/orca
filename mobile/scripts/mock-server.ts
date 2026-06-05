@@ -36,11 +36,15 @@ function e2eeEncrypt(plaintext: string, sharedKey: Uint8Array): string {
 
 function e2eeDecrypt(encrypted: string, sharedKey: Uint8Array): string | null {
   const bundle = Uint8Array.from(Buffer.from(encrypted, 'base64'))
-  if (bundle.length < nacl.box.nonceLength + nacl.box.overheadLength) return null
+  if (bundle.length < nacl.box.nonceLength + nacl.box.overheadLength) {
+    return null
+  }
   const nonce = bundle.slice(0, nacl.box.nonceLength)
   const ciphertext = bundle.slice(nacl.box.nonceLength)
   const plaintext = nacl.box.open.after(ciphertext, nonce, sharedKey)
-  if (!plaintext) return null
+  if (!plaintext) {
+    return null
+  }
   return new TextDecoder().decode(plaintext)
 }
 
@@ -147,7 +151,9 @@ function toGitStatusEntry(entry: FakeGitEntry): MobileGitStatusEntry {
 }
 
 function stageFakeGitEntry(entry: FakeGitEntry, filePaths: Set<string>): FakeGitEntry {
-  if (!filePaths.has(entry.path)) return entry
+  if (!filePaths.has(entry.path)) {
+    return entry
+  }
   if (entry.area === 'untracked') {
     return { ...entry, area: 'staged', status: 'added', stagedFromUntracked: true }
   }
@@ -155,7 +161,9 @@ function stageFakeGitEntry(entry: FakeGitEntry, filePaths: Set<string>): FakeGit
 }
 
 function unstageFakeGitEntry(entry: FakeGitEntry, filePaths: Set<string>): FakeGitEntry {
-  if (!filePaths.has(entry.path)) return entry
+  if (!filePaths.has(entry.path)) {
+    return entry
+  }
   if (entry.stagedFromUntracked) {
     return { ...entry, area: 'untracked', status: 'untracked', stagedFromUntracked: false }
   }

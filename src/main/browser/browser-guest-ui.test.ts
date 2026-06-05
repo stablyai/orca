@@ -9,7 +9,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
-import { setupGuestContextMenu } from './browser-guest-ui'
+import { setupGuestContextMenu, setupGuestShortcutForwarding } from './browser-guest-ui'
 
 describe('setupGuestContextMenu', () => {
   const browserTabId = 'tab-1'
@@ -250,5 +250,116 @@ describe('setupGuestContextMenu', () => {
 
       expect(rendererSendMock).not.toHaveBeenCalled()
     })
+  })
+})
+
+describe('setupGuestShortcutForwarding', () => {
+  const browserTabId = 'tab-1'
+  let rendererSendMock: ReturnType<typeof vi.fn>
+  let guestOnMock: ReturnType<typeof vi.fn>
+  let guestOffMock: ReturnType<typeof vi.fn>
+
+  function makeGuest() {
+    return {
+      on: guestOnMock,
+      off: guestOffMock
+    } as unknown as Electron.WebContents
+  }
+
+  function makeRenderer() {
+    return { send: rendererSendMock } as unknown as Electron.WebContents
+  }
+
+  function triggerBeforeInput(input: Partial<Electron.Input>): ReturnType<typeof vi.fn> {
+    const handler = guestOnMock.mock.calls.find((call) => call[0] === 'before-input-event')?.[1] as
+      | ((event: Electron.Event, input: Electron.Input) => void)
+      | undefined
+    expect(handler).toBeTypeOf('function')
+    const preventDefault = vi.fn()
+    handler!(
+      { preventDefault } as unknown as Electron.Event,
+      {
+        type: 'keyDown',
+        alt: false,
+        meta: process.platform === 'darwin',
+        control: process.platform !== 'darwin',
+        shift: false,
+        ...input
+      } as Electron.Input
+    )
+    return preventDefault
+  }
+
+  beforeEach(() => {
+    rendererSendMock = vi.fn()
+    guestOnMock = vi.fn()
+    guestOffMock = vi.fn()
+  })
+
+  it('forwards browser page zoom shortcuts from focused guest pages', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer()
+    })
+
+    const zoomInPreventDefault = triggerBeforeInput({ code: 'Equal', key: '=' })
+    const shiftedPlusPreventDefault = triggerBeforeInput({
+      code: 'Equal',
+      key: '+',
+      shift: true
+    })
+    const zoomOutPreventDefault = triggerBeforeInput({ code: 'Minus', key: '-' })
+    const numpadSubtractPreventDefault = triggerBeforeInput({ code: 'NumpadSubtract', key: '-' })
+    const resetPreventDefault = triggerBeforeInput({ code: 'Digit0', key: '0' })
+    const repeatPreventDefault = triggerBeforeInput({
+      code: 'NumpadAdd',
+      key: '+',
+      isAutoRepeat: true
+    })
+
+    expect(zoomInPreventDefault).toHaveBeenCalledTimes(1)
+    expect(shiftedPlusPreventDefault).toHaveBeenCalledTimes(1)
+    expect(zoomOutPreventDefault).toHaveBeenCalledTimes(1)
+    expect(numpadSubtractPreventDefault).toHaveBeenCalledTimes(1)
+    expect(resetPreventDefault).toHaveBeenCalledTimes(1)
+    expect(repeatPreventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenNthCalledWith(1, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(2, 'ui:zoomBrowserPage', 'in')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(3, 'ui:zoomBrowserPage', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(4, 'ui:zoomBrowserPage', 'out')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(5, 'ui:zoomBrowserPage', 'reset')
+    expect(rendererSendMock).toHaveBeenNthCalledWith(6, 'ui:zoomBrowserPage', 'in')
+  })
+
+  it('consumes guest zoom shortcuts even when the renderer is unavailable', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => null
+    })
+
+    const preventDefault = triggerBeforeInput({ code: 'Equal', key: '=' })
+
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).not.toHaveBeenCalled()
+  })
+
+  it('uses customized zoom keybindings when forwarding guest shortcuts', () => {
+    setupGuestShortcutForwarding({
+      browserTabId,
+      guest: makeGuest(),
+      resolveRenderer: () => makeRenderer(),
+      getKeybindings: () => ({
+        'zoom.in': ['Mod+Alt+Z']
+      })
+    })
+
+    const defaultPreventDefault = triggerBeforeInput({ code: 'Equal', key: '=' })
+    const customPreventDefault = triggerBeforeInput({ code: 'KeyZ', key: 'z', alt: true })
+
+    expect(defaultPreventDefault).not.toHaveBeenCalled()
+    expect(customPreventDefault).toHaveBeenCalledTimes(1)
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:zoomBrowserPage', 'in')
   })
 })

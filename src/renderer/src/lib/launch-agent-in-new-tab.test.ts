@@ -128,6 +128,54 @@ describe('launchAgentInNewTab', () => {
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
   })
 
+  it('uses the explicit startup shell platform when building draft launch commands', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: "review Bob's change",
+      promptDelivery: 'draft',
+      launchPlatform: 'win32'
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: "claude --prefill 'review Bob''s change'"
+      })
+    )
+  })
+
+  it('falls back to post-ready draft paste when a Windows inline draft would be too large', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const prompt = 'x'.repeat(25_000)
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt,
+      promptDelivery: 'draft',
+      launchPlatform: 'win32'
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: 'claude'
+      })
+    )
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'tab-1',
+        content: prompt,
+        agent: 'claude',
+        submit: false,
+        forcePaste: false
+      })
+    )
+  })
+
   it('seeds working after Command Code submit-after-ready prompt delivery', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 

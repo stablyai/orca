@@ -4,6 +4,7 @@ import {
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
+  WorktreePrefetchCreateBase,
   WorktreePsParams,
   WorktreeRemove,
   WorktreeResolveMrBase,
@@ -75,13 +76,15 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         runHooks: params.runHooks === true,
         activate: params.activate === true,
         setupDecision: params.setupDecision,
-        createdWithAgent: params.createdWithAgent,
+        createdWithAgent: params.createdWithAgent ?? params.startupAgent,
         startup: params.startupCommand
           ? {
               command: params.startupCommand,
               ...(params.startupEnv ? { env: params.startupEnv } : {})
             }
           : undefined,
+        ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
+        ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
         startupDraft: params.startupDraft,
         lineage: {
           parentWorktree: params.parentWorktree,
@@ -91,6 +94,17 @@ export const WORKTREE_METHODS: RpcMethod[] = [
           orchestrationContext: params.orchestrationContext
         }
       })
+  }),
+  defineMethod({
+    name: 'worktree.prefetchCreateBase',
+    params: WorktreePrefetchCreateBase,
+    handler: async (params, { runtime }) => {
+      await runtime.prefetchManagedWorktreeCreateBase({
+        repoSelector: params.repo,
+        baseBranch: params.baseBranch
+      })
+      return null
+    }
   }),
   defineMethod({
     name: 'worktree.set',

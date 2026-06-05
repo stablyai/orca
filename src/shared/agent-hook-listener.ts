@@ -608,6 +608,7 @@ function extractToolResponseText(toolResponse: unknown): string | undefined {
 const TRANSCRIPT_CHUNK_BYTES = 64 * 1024
 const TRANSCRIPT_MAX_SCAN_BYTES = 4 * 1024 * 1024
 const AMP_THREAD_ID_MAX_LENGTH = 256
+const AMP_MAX_SCOPED_THREAD_CACHE_KEYS = 32
 const GROK_SESSION_ID_MAX_LENGTH = 128
 const GROK_SESSION_CWD_MAX_LENGTH = 4096
 
@@ -1812,11 +1813,6 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     }
     case 'hermes':
       return eventName === 'pre_llm_call' || eventName === 'on_session_start'
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      return false
-    }
   }
 }
 
@@ -1901,11 +1897,6 @@ function extractToolFields(
       return extractCopilotToolFields(normalizeCopilotEventName(eventName), hookPayload)
     case 'hermes':
       return extractHermesToolFields(eventName, hookPayload)
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      return {}
-    }
   }
 }
 
@@ -2161,6 +2152,9 @@ function normalizeAmpEvent(
   if (normalized && eventName === 'agent.end') {
     state.ampCompletedCacheKeys.add(ampCacheKey)
   }
+  if (normalized) {
+    pruneAmpThreadCacheKeys(state, paneKey, ampCacheKey)
+  }
   return normalized
 }
 
@@ -2173,6 +2167,55 @@ function getAmpCacheKey(paneKey: string, hookPayload: Record<string, unknown>): 
   // Why: Amp plugin processes can emit events for multiple threads in one
   // pane. Cache by thread internally while keeping the visible paneKey stable.
   return threadId ? `${paneKey}\0amp:${threadId}` : paneKey
+}
+
+function pruneAmpThreadCacheKeys(
+  state: HookListenerState,
+  paneKey: string,
+  currentCacheKey: string
+): void {
+  const scopedPrefix = `${paneKey}\0amp:`
+  if (!currentCacheKey.startsWith(scopedPrefix)) {
+    return
+  }
+
+  const scopedKeys = new Set<string>()
+  for (const key of state.lastPromptByPaneKey.keys()) {
+    if (key.startsWith(scopedPrefix)) {
+      scopedKeys.add(key)
+    }
+  }
+  for (const key of state.lastToolByPaneKey.keys()) {
+    if (key.startsWith(scopedPrefix)) {
+      scopedKeys.add(key)
+    }
+  }
+  for (const key of state.ampCompletedCacheKeys) {
+    if (key.startsWith(scopedPrefix)) {
+      scopedKeys.add(key)
+    }
+  }
+
+  let overflow = scopedKeys.size - AMP_MAX_SCOPED_THREAD_CACHE_KEYS
+  if (overflow <= 0) {
+    return
+  }
+
+  // Why: Amp can multiplex many thread IDs through one pane. Keep the current
+  // thread plus the most recent cache entries instead of retaining every
+  // completed thread until pane teardown.
+  for (const key of scopedKeys) {
+    if (overflow <= 0) {
+      break
+    }
+    if (key === currentCacheKey) {
+      continue
+    }
+    state.lastPromptByPaneKey.delete(key)
+    state.lastToolByPaneKey.delete(key)
+    state.ampCompletedCacheKeys.delete(key)
+    overflow--
+  }
 }
 
 function hasExplicitPromptForSource(
@@ -2839,11 +2882,6 @@ export function normalizeHookPayload(
     case 'hermes':
       payload = normalizeHermesEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
-    default: {
-      const _exhaustive: never = source
-      void _exhaustive
-      payload = null
-    }
   }
 
   // Why: connectionId stays null at the listener layer. The local server keeps

@@ -118,6 +118,7 @@ function mockLocalPathStats(entries: Record<string, [number, number]>) {
 
 function createRuntimeFileCommands(options?: {
   path?: string
+  openFile?: ReturnType<typeof vi.fn>
   openDiff?: ReturnType<typeof vi.fn>
   resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
 }) {
@@ -134,7 +135,7 @@ function createRuntimeFileCommands(options?: {
       path
     })),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
-    openFile: vi.fn(),
+    openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
   } as never)
   return { commands, store }
@@ -187,7 +188,33 @@ describe('RuntimeFileCommands', () => {
 
     const result = await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
 
-    expect(openDiff).toHaveBeenCalledWith('wt-1', '/repo/docs/readme.md', 'docs/readme.md', true)
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      true,
+      'runtime-1'
+    )
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'docs/readme.md',
+      kind: 'markdown',
+      opened: true
+    })
+  })
+
+  it('opens text files through the renderer host with the runtime owner', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'docs/readme.md')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      'runtime-1'
+    )
     expect(result).toEqual({
       worktree: 'wt-1',
       relativePath: 'docs/readme.md',
@@ -365,6 +392,36 @@ describe('RuntimeFileCommands', () => {
     resolveUnsubscribe()
     await drainPromise
     expect(drained).toBe(true)
+  })
+
+  it('collapses large Parcel watcher batches to an overflow refresh', async () => {
+    resolveAuthorizedPathMock.mockResolvedValue('/repo')
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    type ParcelCallback = (err: Error | null, events: { type: 'create'; path: string }[]) => void
+    const parcelCallbackRef: { current: ParcelCallback | null } = { current: null }
+    subscribeParcelWatcherMock.mockImplementation(async (_rootPath, callback) => {
+      parcelCallbackRef.current = callback as ParcelCallback
+      return { unsubscribe: vi.fn() }
+    })
+    const { commands } = createRuntimeFileCommands()
+    const onEvents = vi.fn()
+
+    await commands.watchFileExplorer('id:wt-1', onEvents)
+    statMock.mockClear()
+    if (!parcelCallbackRef.current) {
+      throw new Error('Parcel watcher callback was not registered')
+    }
+    parcelCallbackRef.current(
+      null,
+      Array.from({ length: 201 }, (_, index) => ({
+        type: 'create',
+        path: `/repo/generated-${index}.txt`
+      }))
+    )
+    await Promise.resolve()
+
+    expect(statMock).not.toHaveBeenCalled()
+    expect(onEvents).toHaveBeenCalledWith([{ kind: 'overflow', absolutePath: '/repo' }])
   })
 
   it('settles and detaches runtime rg searches when timeout kill is ignored', async () => {

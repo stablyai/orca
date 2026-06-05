@@ -280,7 +280,7 @@ describe('resolveCommitMessageSettings', () => {
 
     expect(resolveCommitMessageSettings(settings)).toEqual({
       ok: false,
-      error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
+      error: 'Custom command is empty. Add one in Settings -> Git -> Git AI Author.'
     })
   })
 })

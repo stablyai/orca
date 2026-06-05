@@ -1,11 +1,12 @@
 /* eslint-disable max-lines -- Why: OpenCode usage analytics need to normalize multiple local DB schema generations, attribute worktrees, and build persisted projections in one auditable pipeline. */
-import Database from 'better-sqlite3'
 import { existsSync } from 'fs'
 import { readdir, realpath, stat } from 'fs/promises'
 import { homedir } from 'os'
 import { isAbsolute, join, posix, win32 } from 'path'
 import type { Repo } from '../../shared/types'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
+import Database from '../sqlite/sync-database'
+import { canonicalizeUsageWorktreePaths } from '../usage-worktree-canonicalizer'
 import type {
   OpenCodeUsageAttributedEvent,
   OpenCodeUsageDailyAggregate,
@@ -441,13 +442,7 @@ function isContainingPath(candidatePath: string, targetPath: string): boolean {
 async function buildWorktreesWithCanonicalPaths(
   worktrees: OpenCodeUsageWorktreeRef[]
 ): Promise<(OpenCodeUsageWorktreeRef & { canonicalPath: string })[]> {
-  const canonicalized = await Promise.all(
-    worktrees.map(async (worktree) => ({
-      ...worktree,
-      canonicalPath: await canonicalizePath(worktree.path)
-    }))
-  )
-  return canonicalized.sort((left, right) => right.canonicalPath.length - left.canonicalPath.length)
+  return canonicalizeUsageWorktreePaths(worktrees, canonicalizePath)
 }
 
 async function canonicalizePath(pathValue: string): Promise<string> {

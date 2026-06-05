@@ -7,14 +7,17 @@ import type { TreeNode } from './file-explorer-types'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
-  openFile: (params: {
-    filePath: string
-    relativePath: string
-    worktreeId: string
-    language: string
-    mode: 'edit'
-  }) => void
-  pinFile: (filePath: string) => void
+  openFile: (
+    params: {
+      filePath: string
+      relativePath: string
+      worktreeId: string
+      language: string
+      mode: 'edit'
+    },
+    options?: { preview?: boolean }
+  ) => void
+  makePreviewFilePermanent: (filePath: string) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   loadDir: (
     dirPath: string,
@@ -34,11 +37,12 @@ type UseFileExplorerHandlersReturn = {
 }
 
 type OpenFileParams = Parameters<UseFileExplorerHandlersParams['openFile']>[0]
+type OpenFileOptions = Parameters<UseFileExplorerHandlersParams['openFile']>[1]
 
 export async function activateFileExplorerNode(args: {
   node: TreeNode
   activeWorktreeId: string | null
-  openFile: (params: OpenFileParams) => void
+  openFile: (params: OpenFileParams, options?: OpenFileOptions) => void
   toggleDir: (worktreeId: string, dirPath: string) => void
   loadDir: UseFileExplorerHandlersParams['loadDir']
   statPath: UseFileExplorerHandlersParams['statPath']
@@ -87,19 +91,22 @@ export async function activateFileExplorerNode(args: {
       return
     }
   }
-  openFile({
-    filePath: node.path,
-    relativePath: node.relativePath,
-    worktreeId: activeWorktreeId,
-    language: detectLanguage(node.name),
-    mode: 'edit'
-  })
+  openFile(
+    {
+      filePath: node.path,
+      relativePath: node.relativePath,
+      worktreeId: activeWorktreeId,
+      language: detectLanguage(node.name),
+      mode: 'edit'
+    },
+    { preview: true }
+  )
 }
 
 export function useFileExplorerHandlers({
   activeWorktreeId,
   openFile,
-  pinFile,
+  makePreviewFilePermanent,
   toggleDir,
   loadDir,
   statPath,
@@ -128,9 +135,9 @@ export function useFileExplorerHandlers({
       if (!activeWorktreeId || node.isDirectory) {
         return
       }
-      pinFile(node.path)
+      makePreviewFilePermanent(node.path)
     },
-    [activeWorktreeId, pinFile]
+    [activeWorktreeId, makePreviewFilePermanent]
   )
 
   const handleWheelCapture = useCallback(

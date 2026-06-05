@@ -1,18 +1,9 @@
 import { useCallback } from 'react'
-import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
-import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
-import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
+import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
-import {
-  hasSelectedOnboardingFeatureSetup,
-  onboardingFeatureSetupRunTelemetry,
-  runOnboardingFeatureSetup,
-  type OnboardingFeatureSetupResult,
-  type OnboardingFeatureSetupSelection
-} from './onboarding-feature-setup'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
 export async function persistStep(
@@ -20,6 +11,7 @@ export async function persistStep(
   updates: Partial<OnboardingState> = {}
 ): Promise<OnboardingState> {
   return window.api.onboarding.update({
+    flowVersion: ONBOARDING_FLOW_VERSION,
     lastCompletedStep: Math.max(stepNumber, -1),
     ...updates
   })
@@ -74,7 +66,7 @@ export function useCloseWith({
       outcome: 'completed' | 'dismissed',
       checklist: Partial<OnboardingState['checklist']>,
       lastStepReached: StepNumber,
-      completedPath?: 'open_folder' | 'clone_url',
+      completedPath?: 'open_folder' | 'clone_url' | 'add_project_modal',
       dismissedExtras?: DismissedExtras
     ): Promise<boolean> => {
       let nextState: OnboardingState
@@ -83,6 +75,7 @@ export function useCloseWith({
         // so spreading the local (potentially stale) onboarding.checklist would
         // overwrite concurrent updates.
         nextState = await window.api.onboarding.update({
+          flowVersion: ONBOARDING_FLOW_VERSION,
           closedAt: Date.now(),
           outcome,
           lastCompletedStep: outcome === 'completed' ? ONBOARDING_FINAL_STEP : -1,
@@ -132,7 +125,6 @@ type PersistCurrentStepDeps = {
   currentStepId: StepId
   selectedAgent: TuiAgent | null
   theme: GlobalSettings['theme']
-  featureSetupSelection: OnboardingFeatureSetupSelection
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
   onboardingChecklist: OnboardingState['checklist']
@@ -140,143 +132,82 @@ type PersistCurrentStepDeps = {
   setError: (msg: string | null) => void
 }
 
-const ONBOARDING_FEATURE_INTERACTIONS: Record<
-  keyof OnboardingFeatureSetupSelection,
-  FeatureInteractionId
-> = {
-  browserUse: 'agent-browser-setup',
-  computerUse: 'computer-use-setup',
-  orchestration: 'agent-orchestration-setup'
-}
-
 export type PersistCurrentStepResult = {
   ok: boolean
-  featureSetupResult?: OnboardingFeatureSetupResult
-}
-
-type PersistCurrentStepOptions = {
-  runFeatureSetup?: boolean
 }
 
 export function usePersistCurrentStep({
   currentStepId,
   selectedAgent,
   theme,
-  featureSetupSelection,
   settings,
   updateSettings,
   onboardingChecklist,
   onOnboardingChange,
   setError
 }: PersistCurrentStepDeps) {
-  return useCallback(
-    async (options: PersistCurrentStepOptions = {}): Promise<PersistCurrentStepResult> => {
-      if (!settings) {
-        return { ok: false }
-      }
-      try {
-        if (currentStepId === 'agent') {
-          const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
-          await updateSettings({ defaultTuiAgent })
-          const choseAgent = defaultTuiAgent !== 'blank'
-          const wasAlreadyChosen = onboardingChecklist.choseAgent
-          onOnboardingChange(
-            await persistStep(1, {
-              checklist: { ...onboardingChecklist, choseAgent }
-            })
-          )
-          if (choseAgent && !wasAlreadyChosen) {
-            track('activation_checklist_item_completed', {
-              item: 'choseAgent',
-              time_since_completed_ms: 0
-            })
-          }
-          return { ok: true }
-        }
-        if (currentStepId === 'theme') {
-          await updateSettings({ theme })
-          onOnboardingChange(await persistStep(2))
-          return { ok: true }
-        }
-        if (currentStepId === 'notifications') {
-          await updateSettings({
-            notifications: {
-              ...settings.notifications,
-              enabled: true,
-              agentTaskComplete: true,
-              terminalBell: true
-            }
+  return useCallback(async (): Promise<PersistCurrentStepResult> => {
+    if (!settings) {
+      return { ok: false }
+    }
+    try {
+      if (currentStepId === 'agent') {
+        const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
+        await updateSettings({ defaultTuiAgent })
+        const choseAgent = defaultTuiAgent !== 'blank'
+        const wasAlreadyChosen = onboardingChecklist.choseAgent
+        onOnboardingChange(
+          await persistStep(1, {
+            checklist: { ...onboardingChecklist, choseAgent }
           })
-          useAppStore.getState().recordFeatureInteraction('notifications')
-          onOnboardingChange(await persistStep(3))
-          return { ok: true }
-        }
-        if (currentStepId === 'agentSetup') {
-          if (!options.runFeatureSetup) {
-            onOnboardingChange(await persistStep(4))
-            return { ok: true }
-          }
-          const setupResult = await runOnboardingFeatureSetup(featureSetupSelection)
-          const featureSetupResult: OnboardingFeatureSetupResult = setupResult
-          track('onboarding_feature_setup_run', {
-            ...onboardingFeatureSetupRunTelemetry(featureSetupSelection, setupResult)
+        )
+        if (choseAgent && !wasAlreadyChosen) {
+          track('activation_checklist_item_completed', {
+            item: 'choseAgent',
+            time_since_completed_ms: 0
           })
-          if (hasSelectedOnboardingFeatureSetup(featureSetupSelection)) {
-            const recordFeatureInteraction = useAppStore.getState().recordFeatureInteraction
-            for (const [id, selected] of Object.entries(featureSetupSelection) as [
-              keyof OnboardingFeatureSetupSelection,
-              boolean
-            ][]) {
-              if (selected) {
-                recordFeatureInteraction(ONBOARDING_FEATURE_INTERACTIONS[id])
-              }
-            }
-            const firstWarning = setupResult.warnings[0]
-            if (firstWarning) {
-              toast.warning('Some feature setup needs attention', {
-                description: firstWarning.message
-              })
-            }
-            if (setupResult.skillCommandsCopied) {
-              toast.success('Feature setup ready', {
-                description: 'Skill command copied and inserted below for review.'
-              })
-            }
-            if (setupResult.computerUsePermissionsOpened) {
-              toast.message('Opened Computer Use permissions')
-            }
-          }
-          onOnboardingChange(await persistStep(4))
-          return { ok: true, featureSetupResult }
         }
-        if (currentStepId === 'integrations') {
-          // Why: GitHub and Linear connections persist through their own
-          // store slices when the user actually wires them up. The step itself
-          // is a no-op for settings/onboarding state beyond marking it
-          // completed.
-          onOnboardingChange(await persistStep(5))
-          return { ok: true }
-        }
-        if (currentStepId === 'tour') {
-          onOnboardingChange(await persistStep(6))
-          return { ok: true }
-        }
-        return { ok: false }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-        return { ok: false }
+        return { ok: true }
       }
-    },
-    [
-      currentStepId,
-      featureSetupSelection,
-      onboardingChecklist,
-      onOnboardingChange,
-      selectedAgent,
-      settings,
-      theme,
-      updateSettings,
-      setError
-    ]
-  )
+      if (currentStepId === 'theme') {
+        await updateSettings({ theme })
+        onOnboardingChange(await persistStep(2))
+        return { ok: true }
+      }
+      if (currentStepId === 'notifications') {
+        await updateSettings({
+          notifications: {
+            ...settings.notifications,
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true
+          }
+        })
+        useAppStore.getState().recordFeatureInteraction('notifications')
+        onOnboardingChange(await persistStep(4))
+        return { ok: true }
+      }
+      if (currentStepId === 'integrations') {
+        // Why: GitHub and Linear connections persist through their own
+        // store slices when the user actually wires them up. The step itself
+        // is a no-op for settings/onboarding state beyond marking it
+        // completed.
+        onOnboardingChange(await persistStep(3))
+        return { ok: true }
+      }
+      return { ok: false }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      return { ok: false }
+    }
+  }, [
+    currentStepId,
+    onboardingChecklist,
+    onOnboardingChange,
+    selectedAgent,
+    settings,
+    theme,
+    updateSettings,
+    setError
+  ])
 }

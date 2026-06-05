@@ -31,6 +31,8 @@ describe('RepositoryPane search entries', () => {
     expect(matchesSettingsSearch('advanced', entries)).toBe(true)
     expect(matchesSettingsSearch('command source', entries)).toBe(true)
     expect(matchesSettingsSearch('local settings scripts', entries)).toBe(true)
+    expect(matchesSettingsSearch('../worktrees', entries)).toBe(true)
+    expect(matchesSettingsSearch('worktree path', entries)).toBe(true)
   })
 
   it('matches project identity searches on display name and path only', () => {

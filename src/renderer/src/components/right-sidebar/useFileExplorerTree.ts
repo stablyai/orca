@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import type { DirCache, TreeNode } from './file-explorer-types'
@@ -12,8 +12,6 @@ import { createFileExplorerDirLoadTracker } from './file-explorer-dir-load-track
 type UseFileExplorerTreeResult = {
   dirCache: Record<string, DirCache>
   setDirCache: React.Dispatch<React.SetStateAction<Record<string, DirCache>>>
-  flatRows: TreeNode[]
-  rowsByPath: Map<string, TreeNode>
   rootCache: DirCache | undefined
   rootError: string | null
   loadDir: (
@@ -52,8 +50,8 @@ export function useFileExplorerTree(
       const loadToken = dirLoadTrackerRef.current.begin(dirPath)
       // Why: when force-reloading a directory (e.g. after a file is created,
       // duplicated, or deleted), keep the previous children visible while the
-      // fresh listing loads. Clearing to [] would momentarily shrink flatRows,
-      // causing the virtualizer to lose scroll position and jump to the top.
+      // fresh listing loads. Clearing to [] would momentarily shrink the
+      // visible projection and make the virtualizer jump to the top.
       setDirCache((prev) => ({
         ...prev,
         [dirPath]: {
@@ -150,10 +148,9 @@ export function useFileExplorerTree(
     if (!worktreePath) {
       return
     }
-    // Why: clearing the entire dirCache here would momentarily empty flatRows,
-    // causing the virtualizer scroll position to jump to the top. Instead we
-    // rely on the force-reload inside loadDir which keeps existing children
-    // visible until the fresh listing arrives.
+    // Why: clearing the entire dirCache here would momentarily empty the
+    // visible projection and jump the virtualizer to the top. Instead we rely
+    // on force-reload keeping existing children visible until fresh data lands.
     const refreshSession = dirLoadTrackerRef.current.getSession()
     const rootLoadCompleted = await loadDir(worktreePath, -1, { force: true })
     if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
@@ -181,28 +178,6 @@ export function useFileExplorerTree(
     [worktreePath, loadDir]
   )
 
-  const flatRows = useMemo(() => {
-    if (!worktreePath) {
-      return []
-    }
-    const result: TreeNode[] = []
-    const addChildren = (parentPath: string): void => {
-      const cached = dirCache[parentPath]
-      if (!cached?.children) {
-        return
-      }
-      for (const child of cached.children) {
-        result.push(child)
-        if (child.isDirectory && expanded.has(child.path)) {
-          addChildren(child.path)
-        }
-      }
-    }
-    addChildren(worktreePath)
-    return result
-  }, [worktreePath, dirCache, expanded])
-
-  const rowsByPath = useMemo(() => new Map(flatRows.map((row) => [row.path, row])), [flatRows])
   const rootCache = worktreePath ? dirCache[worktreePath] : undefined
 
   const resetAndLoad = useCallback(() => {
@@ -219,8 +194,6 @@ export function useFileExplorerTree(
   return {
     dirCache,
     setDirCache,
-    flatRows,
-    rowsByPath,
     rootCache,
     rootError,
     loadDir,

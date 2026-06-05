@@ -1,15 +1,7 @@
 /* eslint-disable max-lines */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { create } from 'zustand'
-import type { AppState } from '../types'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type {
-  BrowserTab,
-  DetectedWorktreeListResult,
-  TerminalLayoutSnapshot,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { BrowserTab, DetectedWorktreeListResult, Worktree } from '../../../../shared/types'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
@@ -108,110 +100,9 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createRepoSlice } from './repos'
-import { createSparsePresetsSlice } from './sparse-presets'
-import { createWorktreeSlice } from './worktrees'
-import { createTerminalSlice } from './terminals'
-import { createTabsSlice } from './tabs'
-import { createUISlice } from './ui'
-import { createSettingsSlice } from './settings'
-import { createKeybindingsSlice } from './keybindings'
-import { createGitHubSlice } from './github'
-import { createHostedReviewSlice } from './hosted-review'
-import { createLinearSlice } from './linear'
-import { createPreflightSlice } from './preflight'
-import { createEditorSlice } from './editor'
-import { createStatsSlice } from './stats'
-import { createMemorySlice } from './memory'
-import { createWorkspaceSpaceSlice } from './workspace-space'
-import { createClaudeUsageSlice } from './claude-usage'
-import { createCodexUsageSlice } from './codex-usage'
-import { createOpenCodeUsageSlice } from './opencode-usage'
-import { createBrowserSlice } from './browser'
-import { createRateLimitSlice } from './rate-limits'
-import { createSshSlice } from './ssh'
-import { createAgentStatusSlice } from './agent-status'
-import { createDiffCommentsSlice } from './diffComments'
-import { createDetectedAgentsSlice } from './detected-agents'
-import { createWorktreeNavHistorySlice } from './worktree-nav-history'
-import { createDictationSlice } from './dictation'
-import { createWorkspaceCleanupSlice } from './workspace-cleanup'
-
-function createTestStore() {
-  return create<AppState>()((...a) => ({
-    ...createRepoSlice(...a),
-    ...createSparsePresetsSlice(...a),
-    ...createWorktreeSlice(...a),
-    ...createTerminalSlice(...a),
-    ...createTabsSlice(...a),
-    ...createUISlice(...a),
-    ...createSettingsSlice(...a),
-    ...createKeybindingsSlice(...a),
-    ...createGitHubSlice(...a),
-    ...createHostedReviewSlice(...a),
-    ...createLinearSlice(...a),
-    ...createPreflightSlice(...a),
-    ...createEditorSlice(...a),
-    ...createStatsSlice(...a),
-    ...createMemorySlice(...a),
-    ...createWorkspaceSpaceSlice(...a),
-    ...createClaudeUsageSlice(...a),
-    ...createCodexUsageSlice(...a),
-    ...createOpenCodeUsageSlice(...a),
-    ...createBrowserSlice(...a),
-    ...createRateLimitSlice(...a),
-    ...createSshSlice(...a),
-    ...createAgentStatusSlice(...a),
-    ...createDiffCommentsSlice(...a),
-    ...createDetectedAgentsSlice(...a),
-    ...createWorktreeNavHistorySlice(...a),
-    ...createDictationSlice(...a),
-    ...createWorkspaceCleanupSlice(...a)
-  }))
-}
+import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test-helpers'
 
 // ─── Helpers ──────────────────────────────────────────────────────────
-
-function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: string }): Worktree {
-  return {
-    path: '/tmp/wt',
-    head: 'abc123',
-    branch: 'refs/heads/feature',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 0,
-    ...overrides
-  }
-}
-
-function makeTab(
-  overrides: Partial<TerminalTab> & { id: string; worktreeId: string }
-): TerminalTab {
-  return {
-    ptyId: null,
-    title: 'Terminal 1',
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: Date.now(),
-    ...overrides
-  }
-}
-
-function makeLayout(): TerminalLayoutSnapshot {
-  return { root: null, activeLeafId: null, expandedLeafId: null }
-}
 
 function makeDetectedWorktreeResult(
   repoId: string,
@@ -1905,7 +1796,8 @@ describe('hydrateEditorSession', () => {
         ]
       },
       activeFileIdByWorktree: { [wt]: '/path/wt1/src/index.ts' },
-      activeTabTypeByWorktree: { [wt]: 'editor' }
+      activeTabTypeByWorktree: { [wt]: 'editor' },
+      markdownFrontmatterVisible: { '/path/wt1/README.md': true }
     })
 
     const s = store.getState()
@@ -1914,6 +1806,7 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[0].mode).toBe('edit')
     expect(s.openFiles[0].isDirty).toBe(false)
     expect(s.openFiles[1].isPreview).toBe(true)
+    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': true })
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
   })
@@ -1938,7 +1831,8 @@ describe('hydrateEditorSession', () => {
             relativePath: 'note.md',
             worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
             language: 'markdown',
-            runtimeEnvironmentId: null
+            runtimeEnvironmentId: null,
+            dirtyDraftContent: ''
           }
         ]
       },
@@ -1954,10 +1848,47 @@ describe('hydrateEditorSession', () => {
         id: fileId,
         filePath,
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        runtimeEnvironmentId: null
+        runtimeEnvironmentId: null,
+        isDirty: true
       })
     ])
+    expect(s.editorDrafts).toEqual({ [fileId]: '' })
+    expect(s.markdownFrontmatterVisible).toEqual({})
     expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
+  })
+
+  it('migrates hydrated front-matter visibility to owner-qualified editor file ids', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/note.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'note.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: filePath
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      markdownFrontmatterVisible: { [filePath]: true }
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: true })
   })
 
   it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {

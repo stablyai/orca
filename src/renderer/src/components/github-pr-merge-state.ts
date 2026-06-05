@@ -131,7 +131,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
-  if (item.mergeable === 'CONFLICTING') {
+  if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY') {
     return {
       label: 'Conflicts',
       tone: DANGER_TONE,
@@ -187,9 +187,9 @@ export function presentGitHubPRMergeState(
     }
   }
   return {
-    label: 'Unknown',
+    label: 'Checking',
     tone: MUTED_TONE,
-    tooltip: 'GitHub has not reported a final merge status',
+    tooltip: 'GitHub is still computing this pull request merge status',
     directMergeAvailable: false,
     autoMergeAction
   }

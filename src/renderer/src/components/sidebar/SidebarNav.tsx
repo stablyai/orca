@@ -7,6 +7,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -21,6 +22,9 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
+import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
+
+export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
 
 export function shouldShowAgentsButton(
   settings: Pick<GlobalSettings, 'experimentalActivity'> | null | undefined
@@ -32,6 +36,57 @@ export function shouldShowMobileButton(
   settings: Pick<GlobalSettings, 'showMobileButton'> | null | undefined
 ): boolean {
   return settings?.showMobileButton !== false
+}
+
+export function shouldShowAutomationsButton(
+  settings: Pick<GlobalSettings, 'showAutomationsButton'> | null | undefined
+): boolean {
+  return settings?.showAutomationsButton !== false
+}
+
+function HideSidebarMenu({ onHide }: { onHide: () => void }): React.JSX.Element {
+  return (
+    <ContextMenuContent>
+      <ContextMenuItem onSelect={onHide}>
+        <EyeOff className="size-3.5" />
+        Hide from sidebar
+      </ContextMenuItem>
+    </ContextMenuContent>
+  )
+}
+
+function TaskProviderShortcut({
+  canBrowseTasks,
+  label,
+  onOpen,
+  children
+}: {
+  canBrowseTasks: boolean
+  label: string
+  onOpen: () => void
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <span
+      role={canBrowseTasks ? 'button' : undefined}
+      tabIndex={-1}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (!canBrowseTasks) {
+          return
+        }
+        onOpen()
+      }}
+      className={cn(
+        'rounded p-0.5 text-muted-foreground/70',
+        canBrowseTasks ? 'transition-colors hover:text-foreground' : 'cursor-default'
+      )}
+      aria-label={canBrowseTasks ? label : undefined}
+      aria-hidden={canBrowseTasks ? undefined : true}
+    >
+      {children}
+    </span>
+  )
 }
 
 const SidebarNav = React.memo(function SidebarNav() {
@@ -58,6 +113,7 @@ const SidebarNav = React.memo(function SidebarNav() {
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const showAgentsButton = useAppStore((s) => shouldShowAgentsButton(s.settings))
+  const showAutomationsButton = useAppStore((s) => shouldShowAutomationsButton(s.settings))
   const showMobileButton = useAppStore((s) => shouldShowMobileButton(s.settings))
   const preferredVisibleTaskProviders = React.useMemo(
     () => normalizeVisibleTaskProviders(rawVisibleTaskProviders),
@@ -135,110 +191,129 @@ const SidebarNav = React.memo(function SidebarNav() {
   const mobileActive = activeView === 'mobile'
   const activityUnreadCount = useActivityUnreadCount(showAgentsButton, 'sidebar-badge')
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
+  const hideTasksButton = React.useCallback(() => {
+    void updateSettings({ showTasksButton: false })
+  }, [updateSettings])
+  const hideAutomationsButton = React.useCallback(() => {
+    void updateSettings({ showAutomationsButton: false })
+  }, [updateSettings])
   const hideMobileButton = React.useCallback(() => {
     void updateSettings({ showMobileButton: false })
   }, [updateSettings])
 
   return (
-    <div className="flex flex-col gap-0.5 px-2 pt-2 pb-1">
+    <div
+      className="flex flex-col gap-0.5 px-2 pt-2 pb-1"
+      data-contextual-tour-target="sidebar-navigation"
+    >
+      <SetupGuideSidebarEntry />
       {showTasksButton ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (!canBrowseTasks) {
-              return
-            }
-            openTaskPage()
-          }}
-          onPointerEnter={handlePrefetch}
-          onFocus={handlePrefetch}
-          disabled={!canBrowseTasks}
-          aria-current={tasksActive ? 'page' : undefined}
-          className={cn(
-            'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-            tasksActive
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8',
-            !canBrowseTasks && 'cursor-not-allowed opacity-50 hover:bg-transparent'
-          )}
-        >
-          <List
-            className={cn('size-4 shrink-0', !tasksActive && 'text-sidebar-foreground/30')}
-            strokeWidth={tasksActive ? 2.25 : 1.75}
-          />
-          <span className="flex-1">Tasks</span>
-          <span className="flex items-center gap-1">
-            {visibleTaskProviders.includes('github') ? (
-              <span
-                role="button"
-                tabIndex={-1}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!canBrowseTasks) {
-                    return
-                  }
-                  openTaskPage({ taskSource: 'github' })
-                }}
-                className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-                aria-label="Open GitHub tasks"
-              >
-                <Github className="size-3.5" aria-hidden />
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={() => {
+                if (!canBrowseTasks) {
+                  return
+                }
+                openTaskPage()
+              }}
+              onPointerEnter={handlePrefetch}
+              onFocus={handlePrefetch}
+              aria-disabled={!canBrowseTasks}
+              aria-current={tasksActive ? 'page' : undefined}
+              data-contextual-tour-target="sidebar-tasks"
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                tasksActive
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8',
+                !canBrowseTasks && 'cursor-not-allowed opacity-50 hover:bg-transparent'
+              )}
+            >
+              <List
+                className={cn('size-4 shrink-0', !tasksActive && 'text-sidebar-foreground/30')}
+                strokeWidth={tasksActive ? 2.25 : 1.75}
+              />
+              <span className="flex-1">Tasks</span>
+              <span className="flex items-center gap-1">
+                {visibleTaskProviders.includes('github') ? (
+                  <TaskProviderShortcut
+                    canBrowseTasks={canBrowseTasks}
+                    label="Open GitHub tasks"
+                    onOpen={() => {
+                      openTaskPage({ taskSource: 'github' })
+                    }}
+                  >
+                    <Github className="size-3.5" aria-hidden />
+                  </TaskProviderShortcut>
+                ) : null}
+                {visibleTaskProviders.includes('gitlab') ? (
+                  <TaskProviderShortcut
+                    canBrowseTasks={canBrowseTasks}
+                    label="Open GitLab tasks"
+                    onOpen={() => {
+                      openTaskPage({ taskSource: 'gitlab' })
+                    }}
+                  >
+                    <Gitlab className="size-3.5" aria-hidden />
+                  </TaskProviderShortcut>
+                ) : null}
+                {visibleTaskProviders.includes('linear') ? (
+                  <TaskProviderShortcut
+                    canBrowseTasks={canBrowseTasks}
+                    label="Open Linear tasks"
+                    onOpen={() => {
+                      openTaskPage({ taskSource: 'linear' })
+                    }}
+                  >
+                    <LinearIcon className="size-3.5" />
+                  </TaskProviderShortcut>
+                ) : null}
+                {visibleTaskProviders.includes('jira') ? (
+                  <TaskProviderShortcut
+                    canBrowseTasks={canBrowseTasks}
+                    label="Open Jira tasks"
+                    onOpen={() => {
+                      openTaskPage({ taskSource: 'jira' })
+                    }}
+                  >
+                    <JiraIcon className="size-3.5" />
+                  </TaskProviderShortcut>
+                ) : null}
               </span>
-            ) : null}
-            {visibleTaskProviders.includes('gitlab') ? (
-              <span
-                role="button"
-                tabIndex={-1}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!canBrowseTasks) {
-                    return
-                  }
-                  openTaskPage({ taskSource: 'gitlab' })
-                }}
-                className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-                aria-label="Open GitLab tasks"
-              >
-                <Gitlab className="size-3.5" aria-hidden />
-              </span>
-            ) : null}
-            {visibleTaskProviders.includes('linear') ? (
-              <span
-                role="button"
-                tabIndex={-1}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!canBrowseTasks) {
-                    return
-                  }
-                  openTaskPage({ taskSource: 'linear' })
-                }}
-                className="rounded p-0.5 text-muted-foreground/70 transition-colors hover:text-foreground"
-                aria-label="Open Linear tasks"
-              >
-                <LinearIcon className="size-3.5" />
-              </span>
-            ) : null}
-          </span>
-        </button>
+            </button>
+          </ContextMenuTrigger>
+          <HideSidebarMenu onHide={hideTasksButton} />
+        </ContextMenu>
       ) : null}
-      <button
-        type="button"
-        onClick={openAutomationsPage}
-        aria-current={automationsActive ? 'page' : undefined}
-        className={cn(
-          'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
-          automationsActive
-            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-            : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
-        )}
-      >
-        <CalendarClock
-          className={cn('size-4 shrink-0', !automationsActive && 'text-sidebar-foreground/30')}
-          strokeWidth={automationsActive ? 2.25 : 1.75}
-        />
-        <span className="flex-1">Automations</span>
-      </button>
+      {showAutomationsButton ? (
+        <ContextMenu>
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={openAutomationsPage}
+              aria-current={automationsActive ? 'page' : undefined}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
+                automationsActive
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                  : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+              )}
+            >
+              <CalendarClock
+                className={cn(
+                  'size-4 shrink-0',
+                  !automationsActive && 'text-sidebar-foreground/30'
+                )}
+                strokeWidth={automationsActive ? 2.25 : 1.75}
+              />
+              <span className="flex-1">Automations</span>
+            </button>
+          </ContextMenuTrigger>
+          <HideSidebarMenu onHide={hideAutomationsButton} />
+        </ContextMenu>
+      ) : null}
       {showAgentsButton ? (
         <button
           type="button"
@@ -292,12 +367,7 @@ const SidebarNav = React.memo(function SidebarNav() {
               ) : null}
             </button>
           </ContextMenuTrigger>
-          <ContextMenuContent>
-            <ContextMenuItem onSelect={hideMobileButton}>
-              <EyeOff className="size-3.5" />
-              Hide from sidebar
-            </ContextMenuItem>
-          </ContextMenuContent>
+          <HideSidebarMenu onHide={hideMobileButton} />
         </ContextMenu>
       ) : null}
       <button

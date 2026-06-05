@@ -17,8 +17,10 @@ import {
   SettingsSwitchRow
 } from './SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../shared/constants'
+import { normalizeAppIconId } from '../../../../shared/app-icon'
 import { useAvailableStatusBarToggles } from '../status-bar/use-available-status-bar-toggles'
 import {
+  APP_ICON_ENTRIES,
   APPEARANCE_PANE_SEARCH_ENTRIES,
   LAYOUT_ENTRIES,
   SIDEBAR_ENTRIES,
@@ -29,6 +31,10 @@ import {
   TYPOGRAPHY_ENTRIES,
   ZOOM_ENTRIES
 } from './appearance-search'
+import { TERMINAL_APPEARANCE_SEARCH_ENTRIES } from './terminal-search'
+import { TerminalAppearanceSection } from './TerminalAppearanceSection'
+import type { UseGhosttyImportReturn } from './useGhosttyImport'
+import { AppIconSelector } from './AppIconSelector'
 export { APPEARANCE_PANE_SEARCH_ENTRIES }
 
 type AppearancePaneProps = {
@@ -36,6 +42,9 @@ type AppearancePaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
+  terminalFontSuggestions: string[]
+  systemPrefersDark: boolean
+  ghostty: UseGhosttyImportReturn
 }
 
 function ShortcutHintList({ combos }: { combos: string[][] }): React.JSX.Element {
@@ -61,7 +70,10 @@ export function AppearancePane({
   settings,
   updateSettings,
   applyTheme,
-  fontSuggestions
+  fontSuggestions,
+  terminalFontSuggestions,
+  systemPrefersDark,
+  ghostty
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const zoomInKeyCombos = useShortcutKeyCombos('zoom.in')
@@ -148,6 +160,16 @@ export function AppearancePane({
           </SearchableSetting>
         ) : null}
       </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, TERMINAL_APPEARANCE_SEARCH_ENTRIES) ? (
+      <TerminalAppearanceSection
+        key="terminal-appearance"
+        settings={settings}
+        updateSettings={updateSettings}
+        systemPrefersDark={systemPrefersDark}
+        terminalFontSuggestions={terminalFontSuggestions}
+        ghostty={ghostty}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, LAYOUT_ENTRIES) ? (
       <section key="layout" className="space-y-3">
@@ -255,8 +277,35 @@ export function AppearancePane({
             <SettingsSwitchRow
               label="Show Tasks Button"
               description="Show the Tasks button at the top of the left sidebar."
-              checked={settings.showTasksButton}
-              onChange={() => updateSettings({ showTasksButton: !settings.showTasksButton })}
+              checked={settings.showTasksButton !== false}
+              onChange={() =>
+                updateSettings({ showTasksButton: !(settings.showTasksButton !== false) })
+              }
+            />
+          </SearchableSetting>
+
+          <SearchableSetting
+            title="Show Automations Button"
+            description="Show the Automations button at the top of the left sidebar."
+            keywords={[
+              'automations',
+              'automation',
+              'schedule',
+              'sidebar',
+              'button',
+              'hide',
+              'show'
+            ]}
+          >
+            <SettingsSwitchRow
+              label="Show Automations Button"
+              description="Show the Automations button at the top of the left sidebar."
+              checked={settings.showAutomationsButton !== false}
+              onChange={() =>
+                updateSettings({
+                  showAutomationsButton: !(settings.showAutomationsButton !== false)
+                })
+              }
             />
           </SearchableSetting>
 
@@ -275,6 +324,25 @@ export function AppearancePane({
             />
           </SearchableSetting>
         </div>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, APP_ICON_ENTRIES) ? (
+      <section key="app-icon" className="space-y-3">
+        <SearchableSetting
+          title="App Icon"
+          description="Choose the app icon shown in the Dock and window switcher."
+          keywords={APP_ICON_ENTRIES.flatMap((entry) => [
+            entry.title,
+            entry.description ?? '',
+            ...(entry.keywords ?? [])
+          ])}
+          className="max-w-none py-2"
+        >
+          <AppIconSelector
+            value={normalizeAppIconId(settings.appIcon)}
+            onChange={(appIcon) => updateSettings({ appIcon })}
+          />
+        </SearchableSetting>
       </section>
     ) : null
   ].filter(Boolean)

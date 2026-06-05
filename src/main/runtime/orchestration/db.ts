@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: the orchestration DB keeps schema creation, message CRUD, task DAG resolution, and dispatch context management in one class so transactional invariants (e.g. promoteReadyTasks running inside the same writer as updateTaskStatus) are enforced by locality. */
-import Database from 'better-sqlite3'
 import { randomBytes } from 'crypto'
+import Database from '../../sqlite/sync-database'
 import type {
   MessageType,
   MessagePriority,
@@ -469,7 +469,7 @@ export class OrchestrationDb {
     dispatch_id: string | null
   })[] {
     const whereClauses: string[] = []
-    const params: unknown[] = []
+    const params: Database.BindValue[] = []
     if (filter?.ready) {
       whereClauses.push("t.status = 'ready'")
     } else if (filter?.status) {
@@ -606,6 +606,14 @@ export class OrchestrationDb {
     return this.db
       .prepare(
         "SELECT * FROM dispatch_contexts WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 1"
+      )
+      .get(handle) as DispatchContextRow | undefined
+  }
+
+  getLatestDispatchForTerminal(handle: string): DispatchContextRow | undefined {
+    return this.db
+      .prepare(
+        'SELECT * FROM dispatch_contexts WHERE assignee_handle = ? ORDER BY rowid DESC LIMIT 1'
       )
       .get(handle) as DispatchContextRow | undefined
   }

@@ -55,6 +55,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 type StatusBarProps = {
   floatingTerminalOpen: boolean
@@ -602,10 +603,16 @@ function ClaudeSwitcherMenu({
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
+  const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  const runtimeTarget = useMemo(
+    () => getActiveRuntimeTarget(settings),
+    [settings?.activeRuntimeEnvironmentId]
+  )
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    navigator.userAgent.includes('Windows'),
+    navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
-    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId)
+    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId),
+    runtimeTarget
   )
   const claudeAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
@@ -643,8 +650,12 @@ function ClaudeSwitcherMenu({
     }
   }, [])
 
-  useEffect(() => {
-    if (accountsExpanded) {
+  // Why: inactive-account usage is needed only for the explicit switcher
+  // expansion, so fetch it on that event instead of one render later.
+  const handleAccountsExpandedToggle = useCallback((): void => {
+    const nextExpanded = !accountsExpanded
+    setAccountsExpanded(nextExpanded)
+    if (nextExpanded) {
       void fetchInactiveClaudeAccountUsage()
     }
   }, [accountsExpanded, fetchInactiveClaudeAccountUsage])
@@ -735,7 +746,7 @@ function ClaudeSwitcherMenu({
       <DropdownMenuItem
         onSelect={(event) => {
           event.preventDefault()
-          setAccountsExpanded((prev) => !prev)
+          handleAccountsExpandedToggle()
         }}
       >
         <span className="max-w-[180px] truncate text-[12px] text-foreground">
@@ -781,11 +792,11 @@ function ClaudeSwitcherMenu({
                         </span>
                       ) : null}
                     </div>
-                    {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                    {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
                       <InlineUsageSkeleton />
-                    ) : inactiveUsage?.claude ? (
+                    ) : inactiveUsage?.rateLimits ? (
                       <InlineUsageBars
-                        limits={inactiveUsage.claude}
+                        limits={inactiveUsage.rateLimits}
                         isFetching={inactiveUsage.isFetching}
                       />
                     ) : null}
@@ -1088,10 +1099,16 @@ function CodexSwitcherMenu({
   const inactiveCodexAccounts = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
+  const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
+  const runtimeTarget = useMemo(
+    () => getActiveRuntimeTarget(settings),
+    [settings?.activeRuntimeEnvironmentId]
+  )
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    navigator.userAgent.includes('Windows'),
+    navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
-    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId)
+    getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId),
+    runtimeTarget
   )
   const codexAccountSyncKey = useAppStore((s) => {
     const settings = s.settings
@@ -1297,7 +1314,7 @@ function CodexSwitcherMenu({
                   const showSignInAction =
                     !target.active &&
                     target.id !== null &&
-                    isUnavailableInactiveUsage(inactiveUsage?.claude)
+                    isUnavailableInactiveUsage(inactiveUsage?.rateLimits)
                   const isSigningIn = reauthenticatingAccountId === target.id
                   const isBusy = isSwitching || reauthenticatingAccountId !== null
 
@@ -1329,7 +1346,7 @@ function CodexSwitcherMenu({
                             </span>
                           ) : null}
                         </div>
-                        {inactiveUsage?.isFetching && !inactiveUsage.claude ? (
+                        {inactiveUsage?.isFetching && !inactiveUsage.rateLimits ? (
                           <InlineUsageSkeleton />
                         ) : showSignInAction ? (
                           <InlineUsageSignInAction
@@ -1344,9 +1361,9 @@ function CodexSwitcherMenu({
                               }
                             }}
                           />
-                        ) : inactiveUsage?.claude ? (
+                        ) : inactiveUsage?.rateLimits ? (
                           <InlineUsageBars
-                            limits={inactiveUsage.claude}
+                            limits={inactiveUsage.rateLimits}
                             isFetching={inactiveUsage.isFetching}
                           />
                         ) : null}
@@ -1377,7 +1394,7 @@ function CodexSwitcherMenu({
   )
 }
 
-function ProviderDetailsMenu({
+export function ProviderDetailsMenu({
   provider,
   compact,
   iconOnly,
@@ -1397,16 +1414,18 @@ function ProviderDetailsMenu({
   children?: React.ReactNode
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const skipCloseAutoFocusRef = useRef(false)
 
   const handleOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
+      skipCloseAutoFocusRef.current = false
       recordFeatureInteraction('usage-tracking')
     }
     onOpenChange?.(nextOpen)
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -1433,7 +1452,24 @@ function ProviderDetailsMenu({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[260px]">
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-[260px]"
+        onPointerDownOutside={() => {
+          skipCloseAutoFocusRef.current = true
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!skipCloseAutoFocusRef.current) {
+            return
+          }
+          skipCloseAutoFocusRef.current = false
+          // Why: click-away should focus the clicked surface, especially xterm;
+          // Radix's default trigger restore steals that first click.
+          event.preventDefault()
+        }}
+      >
         {topContent}
         <div className="p-2">
           <ProviderPanel p={provider} />

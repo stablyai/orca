@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: duplicated from GitHubItemDialog so the dedicated PR full-page surface can evolve its Primer-styled header without destabilizing the issue dialog; planned to refactor shared parts out later. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PR pages hydrate provider data, diff sections, snippets, and cache refetches from async provider/virtualizer lifecycles. */
 import React, {
   Suspense,
   lazy,
@@ -47,6 +48,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Input } from '@/components/ui/input'
+import { useMountedRef } from '@/hooks/useMountedRef'
 import { useConfirmationDialog } from '@/components/confirmation-dialog'
 import {
   Accordion,
@@ -70,7 +72,6 @@ import { cn } from '@/lib/utils'
 import { setWithLRU } from '@/lib/scroll-cache'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { DiffSectionItem } from '@/components/editor/DiffSectionItem'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import type { DecoratedDiffComment } from '@/components/diff-comments/useDiffCommentDecorator'
 import {
   CombinedDiffFileTree,
@@ -84,6 +85,24 @@ import {
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import {
+  createGitHubChecksTabState,
+  resolveGitHubChecksTabState,
+  toggleGitHubChecksTabExpandedKey,
+  updateGitHubChecksTabDetails,
+  updateGitHubChecksTabLocalChecks,
+  type CheckDetailsLoadState
+} from '@/components/github-checks-tab-state'
+import {
+  clearGitHubLinkCopied,
+  createGitHubLinkCopyState,
+  markGitHubLinkCopied,
+  resolveGitHubLinkCopyState
+} from '@/components/github-link-copy-state'
+import {
+  resolveGitHubBodyDraft,
+  shouldSyncGitHubBodyDraft
+} from '@/components/github-body-draft-state'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
@@ -102,6 +121,13 @@ import {
   PR_COMMENT_RESOLVED_CONTAINER_CLASS,
   type PRCommentGroup
 } from '@/lib/pr-comment-groups'
+import {
+  createCommentCodeContextExpansionState,
+  resolveCommentCodeContextExpansionState,
+  updateCommentCodeContextExpansionState,
+  type CommentCodeContextLineUpdate
+} from '@/components/comment-code-context-state'
+import { resolveCommentReplyTarget } from '@/components/comment-reply-target-state'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -112,6 +138,10 @@ import {
   normalizeGitHubReviewerLogins
 } from '@/components/github-pr-reviewer-display'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import {
+  GITHUB_PR_MERGE_METHOD_LABELS,
+  resolveGitHubPRMergeMethods
+} from '../../../shared/github-pr-merge-methods'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { getConnectionId } from '@/lib/connection-context'
@@ -132,10 +162,10 @@ import type {
   GitHubWorkItemDetails,
   GitHubAssignableUser,
   GitHubReaction,
+  GitHubPRMergeMethod,
   GitBranchChangeEntry,
   GitDiffResult,
   PRCheckDetail,
-  PRCheckRunDetails,
   PRComment,
   TuiAgent
 } from '../../../shared/types'
@@ -472,11 +502,16 @@ function PRReviewersPanel({
   const [reviewerInput, setReviewerInput] = useState('')
   const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
   const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
-  const [activeReviewerIndex, setActiveReviewerIndex] = useState(0)
+  const [activeReviewerCursor, setActiveReviewerCursor] = useState({ resetKey: '', index: 0 })
   const [submitting, setSubmitting] = useState(false)
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
   )
+  const [reviewRequestsSource, setReviewRequestsSource] = useState(() => ({
+    itemId: item.id,
+    repoId: item.repoId,
+    reviewRequests: item.reviewRequests
+  }))
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const settings = useAppStore((s) => s.settings)
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
@@ -509,9 +544,20 @@ function PRReviewersPanel({
     }
   }, [cancelReviewerInputFocusFrame])
 
-  useEffect(() => {
+  // Why: reviewer edits are optimistic, but item switches/refetches must clear
+  // stale local requests before paint; a passive Effect leaves one stale render.
+  if (
+    reviewRequestsSource.itemId !== item.id ||
+    reviewRequestsSource.repoId !== item.repoId ||
+    reviewRequestsSource.reviewRequests !== item.reviewRequests
+  ) {
+    setReviewRequestsSource({
+      itemId: item.id,
+      repoId: item.repoId,
+      reviewRequests: item.reviewRequests
+    })
     setLocalReviewRequests(item.reviewRequests ?? [])
-  }, [item.id, item.reviewRequests])
+  }
 
   const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
     const byLogin = new Map<string, GitHubAssignableUser>()
@@ -621,9 +667,24 @@ function PRReviewersPanel({
     [everyoneElseReviewerRows, suggestedReviewerRows]
   )
 
-  useEffect(() => {
-    setActiveReviewerIndex(0)
-  }, [reviewerQuery, actionableReviewerRows.length])
+  const reviewerCursorResetKey = `${reviewerQuery}\u0000${actionableReviewerRows.length}`
+  if (activeReviewerCursor.resetKey !== reviewerCursorResetKey) {
+    setActiveReviewerCursor({ resetKey: reviewerCursorResetKey, index: 0 })
+  }
+  const activeReviewerIndex =
+    activeReviewerCursor.resetKey === reviewerCursorResetKey ? activeReviewerCursor.index : 0
+  const setActiveReviewerIndex = useCallback(
+    (nextIndex: number | ((current: number) => number)): void => {
+      setActiveReviewerCursor((current) => {
+        const currentIndex = current.resetKey === reviewerCursorResetKey ? current.index : 0
+        return {
+          resetKey: reviewerCursorResetKey,
+          index: typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
+        }
+      })
+    },
+    [reviewerCursorResetKey]
+  )
 
   const hasReviewerMetadata =
     item.reviewDecision !== undefined ||
@@ -1532,7 +1593,9 @@ function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChangeEntry['
       return 'renamed'
     case 'copied':
       return 'copied'
-    default:
+    case 'changed':
+    case 'modified':
+    case 'unchanged':
       return 'modified'
   }
 }
@@ -2095,7 +2158,7 @@ function PRFilesCombinedDiffViewer({
   )
 
   return (
-    <div className="flex min-h-[520px] flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       <div className="sticky top-0 z-20 flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-3 py-1.5">
         <div className="flex min-w-0 items-center gap-2">
           {fileTreeCollapsed && (
@@ -2220,8 +2283,9 @@ function CommentCodeContext({
 }): React.JSX.Element | null {
   const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
   const [error, setError] = useState(false)
-  const [contextBefore, setContextBefore] = useState(0)
-  const [contextAfter, setContextAfter] = useState(0)
+  const [contextExpansionState, setContextExpansionState] = useState(() =>
+    createCommentCodeContextExpansionState(comment.id)
+  )
   const file = useMemo(
     () => files.find((candidate) => candidate.path === comment.path),
     [comment.path, files]
@@ -2252,10 +2316,37 @@ function CommentCodeContext({
     }
   }, [baseSha, file, headSha, line, prNumber, repoId, repoPath])
 
-  useEffect(() => {
-    setContextBefore(0)
-    setContextAfter(0)
-  }, [comment.id])
+  const resolvedContextExpansionState = resolveCommentCodeContextExpansionState(
+    contextExpansionState,
+    comment.id
+  )
+  if (resolvedContextExpansionState !== contextExpansionState) {
+    // Why: comment rows can be reused when a PR refreshes; reset before paint
+    // so expanded context from the previous comment is never shown on the next.
+    setContextExpansionState(resolvedContextExpansionState)
+  }
+  const contextBefore = resolvedContextExpansionState.contextBefore
+  const contextAfter = resolvedContextExpansionState.contextAfter
+  const setContextBefore = useCallback(
+    (contextBeforeUpdate: CommentCodeContextLineUpdate) => {
+      setContextExpansionState((current) =>
+        updateCommentCodeContextExpansionState(current, comment.id, {
+          contextBefore: contextBeforeUpdate
+        })
+      )
+    },
+    [comment.id]
+  )
+  const setContextAfter = useCallback(
+    (contextAfterUpdate: CommentCodeContextLineUpdate) => {
+      setContextExpansionState((current) =>
+        updateCommentCodeContextExpansionState(current, comment.id, {
+          contextAfter: contextAfterUpdate
+        })
+      )
+    },
+    [comment.id]
+  )
 
   if (!comment.path || !line || !file || file.isBinary || error) {
     return null
@@ -2499,6 +2590,7 @@ function ConversationTab({
     [commentFilter, comments]
   )
   const visibleCommentGroups = useMemo(() => groupPRComments(visibleComments), [visibleComments])
+  const resolvedReplyingTo = resolveCommentReplyTarget(replyingTo, visibleComments)
   const mentionOptions = useMemo(
     () =>
       buildMentionOptions({
@@ -2517,17 +2609,18 @@ function ConversationTab({
     }
   }, [])
 
-  useEffect(() => {
-    if (replyingTo !== null && !visibleComments.some((comment) => comment.id === replyingTo)) {
-      setReplyingTo(null)
-    }
-  }, [replyingTo, visibleComments])
+  if (resolvedReplyingTo !== replyingTo) {
+    // Why: comment filters/refetches can hide the active reply target; clear it
+    // before paint so a stale composer does not flash for the wrong comment set.
+    setReplyingTo(resolvedReplyingTo)
+  }
 
-  useEffect(() => {
-    if (!bodyEditing) {
-      setBodyDraft(body)
-    }
-  }, [body, bodyEditing, item.id])
+  const resolvedBodyDraft = resolveGitHubBodyDraft(bodyDraft, body, bodyEditing)
+  if (shouldSyncGitHubBodyDraft(bodyDraft, body, bodyEditing)) {
+    // Why: background detail refreshes can change the body while the editor is
+    // closed; reconcile before paint so reopening never sees a stale draft.
+    setBodyDraft(resolvedBodyDraft)
+  }
 
   useEffect(() => {
     if (!bodyEditing) {
@@ -2549,7 +2642,7 @@ function ConversationTab({
   )
   const canEditBody =
     item.type === 'pr' ? Boolean(projectOrigin || bodySlug) : Boolean(projectOrigin || repoPath)
-  const bodyChanged = bodyDraft !== body
+  const bodyChanged = resolvedBodyDraft !== body
 
   const handleSaveBody = useCallback(async (): Promise<void> => {
     if (bodySaving || !bodyChanged) {
@@ -2562,10 +2655,10 @@ function ConversationTab({
         item,
         repoPath,
         projectOrigin,
-        body: bodyDraft,
+        body: resolvedBodyDraft,
         parsedSlug: bodySlug
       })
-      onBodyUpdated(bodyDraft)
+      onBodyUpdated(resolvedBodyDraft)
       setBodyEditing(false)
       toast.success('Description updated.')
     } catch (err) {
@@ -2573,7 +2666,16 @@ function ConversationTab({
     } finally {
       setBodySaving(false)
     }
-  }, [bodyChanged, bodyDraft, bodySaving, bodySlug, item, onBodyUpdated, projectOrigin, repoPath])
+  }, [
+    bodyChanged,
+    resolvedBodyDraft,
+    bodySaving,
+    bodySlug,
+    item,
+    onBodyUpdated,
+    projectOrigin,
+    repoPath
+  ])
 
   const handleReply = useCallback(
     async (comment: PRComment, replyBody: string): Promise<boolean> => {
@@ -2739,7 +2841,7 @@ function ConversationTab({
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
         />
         <CommentReactions reactions={comment.reactions} />
-        {replyingTo === comment.id && (
+        {resolvedReplyingTo === comment.id && (
           <CommentReplyForm
             className="mt-3"
             placeholder={
@@ -2870,7 +2972,7 @@ function ConversationTab({
             ) : bodyEditing ? (
               <MentionTextarea
                 textareaRef={bodyTextareaRef}
-                value={bodyDraft}
+                value={resolvedBodyDraft}
                 onValueChange={setBodyDraft}
                 onKeyDown={(event) => {
                   if (event.key === 'Escape') {
@@ -2996,6 +3098,7 @@ function PRActionsPanel({
   const confirm = useConfirmationDialog()
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
+  const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
   const canMutateState = localState !== 'merged' && (!!repoPath || !!projectOrigin)
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
   const mergeDisabled = !repoPath || mergePending || !mergePresentation.directMergeAvailable
@@ -3057,12 +3160,11 @@ function PRActionsPanel({
     }
   }
 
-  const handleMerge = async (method: 'merge' | 'squash' | 'rebase'): Promise<void> => {
+  const handleMerge = async (method: GitHubPRMergeMethod): Promise<void> => {
     if (!repoPath || mergeDisabled) {
       return
     }
-    const label =
-      method === 'squash' ? 'Squash and merge' : method === 'rebase' ? 'Rebase and merge' : 'Merge'
+    const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
     const confirmed = await confirm({
       title: `${label} PR #${item.number}?`,
       description: 'This will update the pull request on GitHub.',
@@ -3150,7 +3252,9 @@ function PRActionsPanel({
                     <GitMerge className="size-3.5" />
                   )}
                   {mergePresentation.autoMergeAction?.label ??
-                    (mergePresentation.directMergeAvailable ? 'Merge' : mergePresentation.label)}
+                    (mergePresentation.directMergeAvailable
+                      ? mergeMethods.defaultLabel
+                      : mergePresentation.label)}
                   <ChevronDown className="size-3 opacity-60" />
                 </Button>
               </DropdownMenuTrigger>
@@ -3170,18 +3274,16 @@ function PRActionsPanel({
               </DropdownMenuItem>
             )}
             {mergePresentation.autoMergeAction && <DropdownMenuSeparator />}
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('squash')}>
-              <GitMerge className="size-4" />
-              Squash and merge
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('merge')}>
-              <GitMerge className="size-4" />
-              Create merge commit
-            </DropdownMenuItem>
-            <DropdownMenuItem disabled={mergeDisabled} onSelect={() => void handleMerge('rebase')}>
-              <GitMerge className="size-4" />
-              Rebase and merge
-            </DropdownMenuItem>
+            {mergeMethods.methods.map(({ method, label }) => (
+              <DropdownMenuItem
+                key={method}
+                disabled={mergeDisabled}
+                onSelect={() => void handleMerge(method)}
+              >
+                <GitMerge className="size-4" />
+                {label}
+              </DropdownMenuItem>
+            ))}
             <DropdownMenuItem onSelect={() => window.api.shell.openUrl(item.url)}>
               <ExternalLink className="size-4" />
               Open GitHub merge box
@@ -3257,14 +3359,7 @@ function CommentReplyForm({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
+  const mountedRef = useMountedRef()
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -3289,7 +3384,7 @@ function CommentReplyForm({
         setSubmitting(false)
       }
     }
-  }, [body, onSubmit, submitting])
+  }, [body, mountedRef, onSubmit, submitting])
 
   return (
     <div className={cn('rounded-md border border-border/50 bg-background/60 p-2', className)}>
@@ -3458,12 +3553,6 @@ function pickDefaultAgent(
   return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
 }
 
-type CheckDetailsLoadState = {
-  loading: boolean
-  details: PRCheckRunDetails | null
-  error: string | null
-}
-
 function getCheckDetailsKey(check: PRCheckDetail): string {
   return String(check.checkRunId ?? check.workflowRunId ?? check.url ?? check.name)
 }
@@ -3503,15 +3592,18 @@ function ChecksTab({
   variant?: 'compact' | 'page'
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
-  const [localChecks, setLocalChecks] = useState<PRCheckDetail[] | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
-  const [expandedCheckKey, setExpandedCheckKey] = useState<string | null>(null)
-  const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
-    {}
-  )
+  const [checksState, setChecksState] = useState(() => createGitHubChecksTabState(checks))
   const mountedRef = useMountedRef()
+  const resolvedChecksState = resolveGitHubChecksTabState(checksState, checks)
+  if (resolvedChecksState !== checksState) {
+    // Why: parent check refreshes replace the source list; clear local refresh
+    // and inline detail state before stale rows/details can paint.
+    setChecksState(resolvedChecksState)
+  }
+  const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const sorted = [...list].sort(
@@ -3540,12 +3632,6 @@ function ChecksTab({
           : 'text-muted-foreground'
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
-  useEffect(() => {
-    setLocalChecks(null)
-    setExpandedCheckKey(null)
-    setDetailsByCheckKey({})
-  }, [checks])
-
   const handleRefresh = useCallback(async (): Promise<PRCheckDetail[] | null> => {
     if (!repoPath) {
       toast.error('Unable to refresh checks without a repository path.')
@@ -3560,7 +3646,7 @@ function ChecksTab({
         headSha,
         noCache: true
       })) as PRCheckDetail[]
-      setLocalChecks(nextChecks)
+      setChecksState((current) => updateGitHubChecksTabLocalChecks(current, nextChecks))
       onChecksUpdated(nextChecks)
       return nextChecks
     } catch (err) {
@@ -3680,7 +3766,7 @@ function ChecksTab({
   const handleToggleCheckDetails = useCallback(
     (check: PRCheckDetail): void => {
       const key = getCheckDetailsKey(check)
-      setExpandedCheckKey((current) => (current === key ? null : key))
+      setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
       if (
         !repoPath ||
         detailsByCheckKey[key] ||
@@ -3688,10 +3774,9 @@ function ChecksTab({
       ) {
         return
       }
-      setDetailsByCheckKey((current) => ({
-        ...current,
-        [key]: { loading: true, details: null, error: null }
-      }))
+      setChecksState((current) =>
+        updateGitHubChecksTabDetails(current, key, { loading: true, details: null, error: null })
+      )
       void window.api.gh
         .prCheckDetails({
           repoPath,
@@ -3706,27 +3791,25 @@ function ChecksTab({
           if (!mountedRef.current) {
             return
           }
-          setDetailsByCheckKey((current) => ({
-            ...current,
-            [key]: {
+          setChecksState((current) =>
+            updateGitHubChecksTabDetails(current, key, {
               loading: false,
               details,
               error: details ? null : 'No inline details are available for this check.'
-            }
-          }))
+            })
+          )
         })
         .catch((err) => {
           if (!mountedRef.current) {
             return
           }
-          setDetailsByCheckKey((current) => ({
-            ...current,
-            [key]: {
+          setChecksState((current) =>
+            updateGitHubChecksTabDetails(current, key, {
               loading: false,
               details: null,
               error: err instanceof Error ? err.message : 'Failed to load check details.'
-            }
-          }))
+            })
+          )
         })
     },
     [detailsByCheckKey, mountedRef, prRepo, repoId, repoPath]
@@ -3966,7 +4049,7 @@ function ChecksTab({
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
                   Annotations
                 </div>
-                <div className="flex max-h-48 flex-col overflow-y-auto scrollbar-sleek">
+                <div className="flex flex-col">
                   {details!.annotations.map((annotation, index) => (
                     <div
                       key={`${annotation.path ?? 'annotation'}-${index}`}
@@ -3995,7 +4078,7 @@ function ChecksTab({
                         {annotation.message}
                       </div>
                       {annotation.rawDetails && (
-                        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground scrollbar-sleek">
+                        <pre className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[11px] text-muted-foreground">
                           {annotation.rawDetails}
                         </pre>
                       )}
@@ -4010,7 +4093,7 @@ function ChecksTab({
                 <div className="border-b border-border/40 px-2.5 py-1.5 text-[11px] font-medium text-foreground">
                   Jobs
                 </div>
-                <div className="flex max-h-64 flex-col overflow-y-auto scrollbar-sleek">
+                <div className="flex flex-col">
                   {details!.jobs.map((job, index) => (
                     <div
                       key={`${job.name}-${index}`}
@@ -4487,7 +4570,8 @@ function GHEditSection({
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
   const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
-  const hasEditedAssigneesRef = useRef(false)
+  const editedAssigneesItemKeyRef = useRef<string | null>(null)
+  const assigneesItemKey = `${item.repoId}\0${item.id}`
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const { isPending, run } = useImmediateMutation()
@@ -4528,16 +4612,11 @@ function GHEditSection({
   // resolves with real data — but skip if the user already made an
   // optimistic edit so we don't clobber in-flight changes.
   useEffect(() => {
-    if (hasEditedAssigneesRef.current) {
+    if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
       return
     }
     setLocalAssignees(assignees)
-  }, [item.id, assignees])
-
-  // Reset the dirty flag when we switch to a different item.
-  useEffect(() => {
-    hasEditedAssigneesRef.current = false
-  }, [item.id])
+  }, [assigneesItemKey, assignees])
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed') => {
@@ -4668,7 +4747,9 @@ function GHEditSection({
         ? prevAssignees.filter((l) => l !== login)
         : [...prevAssignees, login]
 
-      hasEditedAssigneesRef.current = true
+      // Why: the optimistic guard is scoped to this repo item so switching
+      // items does not suppress the next item's assignee sync.
+      editedAssigneesItemKeyRef.current = assigneesItemKey
       if (isAssigned) {
         run('assignees', {
           mutate: () =>
@@ -4720,6 +4801,7 @@ function GHEditSection({
     [
       item.number,
       item.repoId,
+      assigneesItemKey,
       repoPath,
       projectOrigin,
       localAssignees,
@@ -4939,14 +5021,7 @@ function GHCommentComposer({
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const mountedRef = useRef(true)
-
-  useEffect(() => {
-    mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
-  }, [])
+  const mountedRef = useMountedRef()
 
   const autoGrow = useCallback(() => {
     const el = textareaRef.current
@@ -4992,7 +5067,7 @@ function GHCommentComposer({
         setSubmitting(false)
       }
     }
-  }, [autoGrow, body, repoPath, repoId, issueNumber, itemType, onCommentAdded])
+  }, [autoGrow, body, mountedRef, repoPath, repoId, issueNumber, itemType, onCommentAdded])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -5052,11 +5127,18 @@ export default function PullRequestPage({
   onClose
 }: PullRequestPageProps): React.JSX.Element {
   // Why: this component is page-only — the sheet variant lives in GitHubItemDialog.
+  const workItemId = workItem?.id
   const [tab, setTab] = useState<ItemDialogTab>(() => normalizeItemDialogTab(workItem, initialTab))
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
-  const [linkCopied, setLinkCopied] = useState(false)
-  const workItemId = workItem?.id
+  const [linkCopyState, setLinkCopyState] = useState(() => createGitHubLinkCopyState(workItemId))
+  const resolvedLinkCopyState = resolveGitHubLinkCopyState(linkCopyState, workItemId)
+  if (resolvedLinkCopyState !== linkCopyState) {
+    // Why: switching GitHub items should not paint a stale copied indicator
+    // from the previous item while waiting for a passive Effect pass.
+    setLinkCopyState(resolvedLinkCopyState)
+  }
+  const linkCopied = resolvedLinkCopyState.copied
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
   const workItemType = workItem?.type
@@ -5379,21 +5461,25 @@ export default function PullRequestPage({
   // Why: clipboard IPC can resolve after the page unmounts; skip copied-state
   // feedback instead of starting its reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
-  const setLinkCopyButtonRef = useCallback((node: HTMLButtonElement | null) => {
-    linkCopyMountedRef.current = node !== null
-  }, [])
-
-  useEffect(() => {
-    setLinkCopied(false)
-  }, [workItemId])
-
-  useEffect(() => {
-    if (!linkCopied) {
+  const linkCopiedResetTimerRef = useRef<number | null>(null)
+  const clearLinkCopiedResetTimer = useCallback((): void => {
+    if (linkCopiedResetTimerRef.current === null) {
       return
     }
-    const handle = window.setTimeout(() => setLinkCopied(false), 1500)
-    return () => window.clearTimeout(handle)
-  }, [linkCopied])
+    window.clearTimeout(linkCopiedResetTimerRef.current)
+    linkCopiedResetTimerRef.current = null
+  }, [])
+  const setLinkCopyButtonRef = useCallback(
+    (node: HTMLButtonElement | null) => {
+      linkCopyMountedRef.current = node !== null
+      if (node === null) {
+        // Why: the copied-state timer belongs to the copy control surface;
+        // clear it when that surface detaches without a passive cleanup Effect.
+        clearLinkCopiedResetTimer()
+      }
+    },
+    [clearLinkCopiedResetTimer]
+  )
 
   const handleCopyWorkItemLink = useCallback(async (): Promise<void> => {
     if (!workItem) {
@@ -5406,12 +5492,18 @@ export default function PullRequestPage({
       if (!linkCopyMountedRef.current) {
         return
       }
-      setLinkCopied(true)
+      clearLinkCopiedResetTimer()
+      const copiedWorkItemId = workItem.id
+      setLinkCopyState(markGitHubLinkCopied(copiedWorkItemId))
+      linkCopiedResetTimerRef.current = window.setTimeout(() => {
+        linkCopiedResetTimerRef.current = null
+        setLinkCopyState((current) => clearGitHubLinkCopied(current, copiedWorkItemId))
+      }, 1500)
       toast.success('GitHub link copied')
     } catch {
       toast.error('Failed to copy GitHub link')
     }
-  }, [workItem])
+  }, [clearLinkCopiedResetTimer, workItem])
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
@@ -5794,7 +5886,7 @@ export default function PullRequestPage({
                 />
               </TabsContent>
 
-              <TabsContent value="files" className="mt-0">
+              <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
                 {loading && files.length === 0 ? (
                   <div className="flex items-center justify-center py-10">
                     <LoaderCircle className="size-5 animate-spin text-muted-foreground" />

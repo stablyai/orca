@@ -14,7 +14,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { applyTerminalAttributionEnv } from './terminal-attribution'
+import { applyTerminalAttributionEnv, resolveAttributionShellFamily } from './terminal-attribution'
 
 describe('applyTerminalAttributionEnv', () => {
   let tmpRoot: string | null = null
@@ -60,6 +60,26 @@ describe('applyTerminalAttributionEnv', () => {
       env: cleanAttributionEnv(env)
     })
   }
+
+  it('classifies Windows native and POSIX shell families for attribution shims', () => {
+    expect(resolveAttributionShellFamily({ platform: 'win32', shellPath: 'powershell.exe' })).toBe(
+      'native-windows'
+    )
+    expect(resolveAttributionShellFamily({ platform: 'win32', shellPath: 'cmd.exe' })).toBe(
+      'native-windows'
+    )
+    expect(
+      resolveAttributionShellFamily({
+        platform: 'win32',
+        shellPath: 'C:\\Program Files\\Git\\bin\\bash.exe'
+      })
+    ).toBe('posix')
+    expect(resolveAttributionShellFamily({ platform: 'win32', shellPath: 'wsl.exe' })).toBe('posix')
+    expect(resolveAttributionShellFamily({ platform: 'win32', isWsl: true })).toBe('posix')
+    expect(resolveAttributionShellFamily({ platform: 'darwin', shellPath: '/bin/zsh' })).toBe(
+      undefined
+    )
+  })
 
   it('does not amend HEAD when git commit --dry-run exits successfully', () => {
     const root = makeTmpRoot()
@@ -728,6 +748,50 @@ exit 1
       entry.includes('orca-terminal-attribution')
     )
     expect(new Set(shimEntries).size).toBe(shimEntries.length)
+  })
+
+  it('puts only Windows shims on PATH for native Windows shells', () => {
+    const root = makeTmpRoot()
+    const userDataPath = join(root, 'user-data')
+    const baseEnv: Record<string, string> = { PATH: 'C:\\Git\\cmd;C:\\Windows\\System32' }
+
+    applyTerminalAttributionEnv(baseEnv, {
+      enabled: true,
+      platform: 'win32',
+      shellFamily: 'native-windows',
+      userDataPath
+    })
+
+    const posixDir = join(userDataPath, 'orca-terminal-attribution', 'posix')
+    const win32Dir = join(userDataPath, 'orca-terminal-attribution', 'win32')
+    const pathEntries = baseEnv.PATH.split(';')
+
+    expect(pathEntries[0]).toBe(win32Dir)
+    expect(pathEntries).not.toContain(posixDir)
+    expect(baseEnv.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(existsSync(join(win32Dir, 'git.cmd'))).toBe(true)
+  })
+
+  it('keeps POSIX shims first for Windows Git Bash and WSL shells', () => {
+    const root = makeTmpRoot()
+    const userDataPath = join(root, 'user-data')
+    const baseEnv: Record<string, string> = { PATH: 'C:\\Program Files\\Git\\cmd;C:\\Windows' }
+
+    applyTerminalAttributionEnv(baseEnv, {
+      enabled: true,
+      platform: 'win32',
+      shellFamily: 'posix',
+      userDataPath
+    })
+
+    const posixDir = join(userDataPath, 'orca-terminal-attribution', 'posix')
+    const win32Dir = join(userDataPath, 'orca-terminal-attribution', 'win32')
+    const pathEntries = baseEnv.PATH.split(';')
+
+    expect(pathEntries[0]).toBe(posixDir)
+    expect(pathEntries).not.toContain(win32Dir)
+    expect(baseEnv.ORCA_ATTRIBUTION_SHIM_DIR).toBe(posixDir)
+    expect(existsSync(join(posixDir, 'git'))).toBe(true)
   })
 
   it('writes PowerShell wrappers without raw-template backslash escapes', () => {

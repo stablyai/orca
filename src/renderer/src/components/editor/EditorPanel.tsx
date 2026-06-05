@@ -18,13 +18,16 @@ import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
+import { extractFrontMatter } from './markdown-frontmatter'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
-  activeViewStateId: activeViewStateIdProp
+  activeViewStateId: activeViewStateIdProp,
+  markdownAnnotationsEnabled = true
 }: {
   activeFileId?: string | null
   activeViewStateId?: string | null
+  markdownAnnotationsEnabled?: boolean
 } = {}): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
   const globalActiveFileId = useAppStore((s) => s.activeFileId)
@@ -41,6 +44,8 @@ function EditorPanelInner({
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+  const markdownFrontmatterVisible = useAppStore((s) => s.markdownFrontmatterVisible)
+  const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
   const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
   const editorDrafts = useAppStore((s) => s.editorDrafts)
@@ -50,13 +55,27 @@ function EditorPanelInner({
   const [copiedPathToast, setCopiedPathToast] = useState<{ fileId: string; token: number } | null>(
     null
   )
+  const copiedPathToastResetTimerRef = useRef<number | null>(null)
   // Why: clipboard IPC can resolve after the editor panel unmounts; skip path
   // toast feedback instead of starting a reset timer on a stale panel.
   const pathCopyMountedRef = useRef(false)
-  const setPanelRef = useCallback((node: HTMLDivElement | null) => {
-    panelRef.current = node
-    pathCopyMountedRef.current = node !== null
+  const clearCopiedPathToastResetTimer = useCallback((): void => {
+    if (copiedPathToastResetTimerRef.current === null) {
+      return
+    }
+    window.clearTimeout(copiedPathToastResetTimerRef.current)
+    copiedPathToastResetTimerRef.current = null
   }, [])
+  const setPanelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      panelRef.current = node
+      pathCopyMountedRef.current = node !== null
+      if (!node) {
+        clearCopiedPathToastResetTimer()
+      }
+    },
+    [clearCopiedPathToastResetTimer]
+  )
   const [showMarkdownTableOfContents, setShowMarkdownTableOfContents] = useState(false)
   const [sideBySide, setSideBySide] = useState(settings?.diffDefaultView === 'side-by-side')
   const [prevDiffView, setPrevDiffView] = useState(settings?.diffDefaultView)
@@ -96,14 +115,6 @@ function EditorPanelInner({
   useEffect(() => acquireExportPdfListener(), [])
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
-
-  useEffect(() => {
-    if (!copiedPathToast) {
-      return
-    }
-    const timeout = window.setTimeout(() => setCopiedPathToast(null), 1500)
-    return () => window.clearTimeout(timeout)
-  }, [copiedPathToast])
 
   const handleContentChangeForFile = useCallback(
     (file: typeof activeFile, content: string) => {
@@ -192,14 +203,21 @@ function EditorPanelInner({
       if (!pathCopyMountedRef.current) {
         return
       }
-      setCopiedPathToast({ fileId: activeFile.id, token: Date.now() })
+      clearCopiedPathToastResetTimer()
+      const nextToast = { fileId: activeFile.id, token: Date.now() }
+      setCopiedPathToast(nextToast)
+      copiedPathToastResetTimerRef.current = window.setTimeout(() => {
+        copiedPathToastResetTimerRef.current = null
+        setCopiedPathToast((current) => (current?.token === nextToast.token ? null : current))
+      }, 1500)
     } catch {
       if (!pathCopyMountedRef.current) {
         return
       }
+      clearCopiedPathToastResetTimer()
       setCopiedPathToast(null)
     }
-  }, [activeFile])
+  }, [activeFile, clearCopiedPathToastResetTimer])
 
   if (!activeFile) {
     return null
@@ -289,6 +307,26 @@ function EditorPanelInner({
     )?.activeRuntimeEnvironmentId?.trim() ||
     (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
+  const markdownFrontmatterSourceFileId =
+    activeFile.mode === 'markdown-preview'
+      ? (activeFile.markdownPreviewSourceFileId ?? activeFile.filePath)
+      : activeFile.id
+  let activeMarkdownContent: string | null = null
+  if (activeFile.mode === 'markdown-preview') {
+    activeMarkdownContent =
+      editorDrafts[markdownFrontmatterSourceFileId] ?? fileContents[activeFile.id]?.content ?? null
+  } else if (activeFile.mode === 'edit') {
+    activeMarkdownContent =
+      editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null
+  }
+  const canShowMarkdownFrontmatterToggle = Boolean(
+    model.isMarkdown &&
+    (activeFile.mode === 'markdown-preview' || model.mdViewMode !== 'source') &&
+    activeMarkdownContent &&
+    extractFrontMatter(activeMarkdownContent)
+  )
+  const isMarkdownFrontmatterVisible =
+    markdownFrontmatterVisible[markdownFrontmatterSourceFileId] ?? false
 
   return (
     <EditorPanelShell
@@ -298,6 +336,8 @@ function EditorPanelInner({
       model={model}
       copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
       showMarkdownTableOfContents={showMarkdownTableOfContents}
+      canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+      markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
       sideBySide={sideBySide}
       openFiles={openFiles}
       fileContents={fileContents}
@@ -315,6 +355,12 @@ function EditorPanelInner({
       onToggleSideBySide={() => setSideBySide((prev) => !prev)}
       onEditorToggleChange={handleEditorToggleChange}
       onToggleMarkdownTableOfContents={() => setShowMarkdownTableOfContents((shown) => !shown)}
+      onToggleMarkdownFrontmatter={() =>
+        setMarkdownFrontmatterVisible(
+          markdownFrontmatterSourceFileId,
+          !isMarkdownFrontmatterVisible
+        )
+      }
       onExportMarkdownToPdf={() => void exportActiveMarkdownToPdf()}
       onContentChange={handleContentChange}
       onContentChangeForFile={handleContentChangeForFile}
@@ -325,6 +371,7 @@ function EditorPanelInner({
       onCloseMarkdownTableOfContents={() => setShowMarkdownTableOfContents(false)}
       onCloseRenameDialog={closeRenameDialog}
       onRenameConfirm={handleRenameConfirm}
+      markdownAnnotationsEnabled={markdownAnnotationsEnabled}
     />
   )
 }

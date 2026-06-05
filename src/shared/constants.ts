@@ -18,6 +18,8 @@ import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
+import { DEFAULT_APP_ICON_ID } from './app-icon'
+import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -37,7 +39,8 @@ export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivity
 
 // Why: the onboarding wizard's last step index. Centralized so backfill,
 // clamps, and UI step references all agree on the same upper bound.
-export const ONBOARDING_FINAL_STEP = 7
+export const ONBOARDING_FINAL_STEP = 4
+export const ONBOARDING_FLOW_VERSION = 3
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
 // Why: blank browser tabs must start from an inert guest URL that does not
@@ -134,6 +137,7 @@ export function getDefaultNotificationSettings(): NotificationSettings {
 
 export function getDefaultOnboardingState(): OnboardingState {
   return {
+    flowVersion: ONBOARDING_FLOW_VERSION,
     closedAt: null,
     outcome: null,
     lastCompletedStep: -1,
@@ -171,6 +175,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     branchPrefixCustom: '',
     enableGitHubAttribution: false,
     theme: 'system',
+    appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: DEFAULT_APP_FONT_FAMILY,
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -227,14 +232,18 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalAllowOsc52Clipboard: false,
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackBytes: 10_000_000,
+    httpProxyUrl: '',
+    httpProxyBypassRules: '',
+    electronHttp1CompatibilityMode: false,
     openLinksInApp: true,
-    openInApplications: [],
+    openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     sourceControlGroupOrder: 'changes-first',
     rightSidebarOpenByDefault: true,
     showGitIgnoredFiles: true,
     sourceControlViewMode: 'list',
     showTitlebarAppName: true,
     showTasksButton: true,
+    showAutomationsButton: true,
     showMobileButton: true,
     ctrlTabOrderMode: 'mru',
     // Why: switching worktrees and opening command surfaces from a focused
@@ -264,6 +273,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
     visibleTaskProviders: [...TASK_PROVIDERS],
+    visibleTaskProvidersDefaultedForJira: true,
     defaultRepoSelection: null,
     defaultLinearTeamSelection: null,
     opencodeSessionCookie: '',
@@ -388,6 +398,7 @@ export function getDefaultUIState(): PersistedUIState {
     hideSleepingWorkspaces: DEFAULT_HIDE_SLEEPING_WORKSPACES,
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     hideDefaultBranchWorkspace: false,
+    showDotfilesByWorktree: {},
     filterRepoIds: [],
     collapsedGroups: [],
     uiZoomLevel: 0,
@@ -396,7 +407,6 @@ export function getDefaultUIState(): PersistedUIState {
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
-    workspaceBoardCompact: false,
     workspaceBoardColumnWidth: 308,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesDefaultWorkflowMigrated: true,
@@ -408,9 +418,11 @@ export function getDefaultUIState(): PersistedUIState {
     trustedOrcaHooks: {},
     setupScriptPromptDismissedRepoIds: [],
     acknowledgedAgentsByPaneKey: {},
+    setupGuideSidebarDismissed: false,
     workspaceCleanup: { dismissals: {} },
     featureTipsSeenIds: [],
-    featureInteractions: {}
+    featureInteractions: {},
+    contextualToursSeenIds: []
   }
 }
 
@@ -422,11 +434,13 @@ export function getDefaultWorkspaceSession(): WorkspaceSessionState {
     tabsByWorktree: {},
     terminalLayoutsByTabId: {},
     openFilesByWorktree: {},
+    markdownFrontmatterVisible: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
     activeBrowserTabIdByWorktree: {},
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
-    browserUrlHistory: []
+    browserUrlHistory: [],
+    defaultTerminalTabsAppliedByWorktreeId: {}
   }
 }

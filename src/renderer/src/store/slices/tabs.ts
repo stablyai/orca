@@ -34,6 +34,9 @@ export type TabSplitDirection = 'left' | 'right' | 'up' | 'down'
 
 export type TabsSlice = {
   unifiedTabsByWorktree: Record<string, Tab[]>
+  // Why: signals the matching tab's inline title editor to open. A global
+  // keyboard shortcut (tab.rename) sets this; the tab clears it on consume.
+  renamingTabId: string | null
   groupsByWorktree: Record<string, TabGroup[]>
   activeGroupIdByWorktree: Record<string, string>
   layoutByWorktree: Record<string, TabGroupLayoutNode>
@@ -66,7 +69,7 @@ export type TabsSlice = {
     entityId: string,
     contentType?: TabContentType
   ) => Tab | null
-  activateTab: (tabId: string) => void
+  activateTab: (tabId: string, opts?: { preservePreview?: boolean }) => void
   closeUnifiedTab: (
     tabId: string,
     opts?: { recordInteraction?: boolean }
@@ -83,6 +86,7 @@ export type TabsSlice = {
     opts?: { recordInteraction?: boolean }
   ) => void
   setUnifiedTabColor: (tabId: string, color: string | null) => void
+  setRenamingTabId: (tabId: string | null) => void
   pinTab: (tabId: string) => void
   unpinTab: (tabId: string) => void
   closeOtherTabs: (tabId: string) => string[]
@@ -182,6 +186,36 @@ function updateSplitRatio(
 
 function findFirstLeaf(root: TabGroupLayoutNode): string {
   return root.type === 'leaf' ? root.groupId : findFirstLeaf(root.first)
+}
+
+function partitionPinnedTabOrder(tabOrder: string[], tabs: Tab[], movingTabId: string): string[] {
+  const tabById = new Map(tabs.map((tab) => [tab.id, tab]))
+  const withoutMoving = dedupeTabOrder(tabOrder).filter((id) => id !== movingTabId)
+  const pinnedIds = withoutMoving.filter((id) => tabById.get(id)?.isPinned)
+  const unpinnedIds = withoutMoving.filter((id) => !tabById.get(id)?.isPinned)
+  return [...pinnedIds, movingTabId, ...unpinnedIds]
+}
+
+function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] {
+  const orderMap = new Map(tabOrder.map((id, index) => [id, index]))
+  return tabs.map((tab) => {
+    const sortOrder = orderMap.get(tab.id)
+    return sortOrder === undefined ? tab : { ...tab, sortOrder }
+  })
+}
+
+function isReplaceablePreviewContentType(contentType: Tab['contentType']): boolean {
+  return contentType === 'editor' || contentType === 'diff' || contentType === 'conflict-review'
+}
+
+function canReplacePreviewContentType(
+  incomingContentType: Tab['contentType'],
+  existingContentType: Tab['contentType']
+): boolean {
+  if (isReplaceablePreviewContentType(incomingContentType)) {
+    return isReplaceablePreviewContentType(existingContentType)
+  }
+  return existingContentType === incomingContentType
 }
 
 export function findSiblingGroupId(root: TabGroupLayoutNode, targetGroupId: string): string | null {
@@ -414,6 +448,7 @@ function buildActiveSurfacePatch(
 
 export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, get) => ({
   unifiedTabsByWorktree: {},
+  renamingTabId: null,
   groupsByWorktree: {},
   activeGroupIdByWorktree: {},
   layoutByWorktree: {},
@@ -434,7 +469,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       let nextOrder = dedupeTabOrder(group.tabOrder)
       if (init?.isPreview) {
         const existingPreview = existingTabs.find(
-          (tab) => tab.groupId === group.id && tab.isPreview && tab.contentType === contentType
+          (tab) =>
+            tab.groupId === group.id &&
+            tab.isPreview &&
+            canReplacePreviewContentType(contentType, tab.contentType)
         )
         if (existingPreview) {
           nextTabs = existingTabs.filter((tab) => tab.id !== existingPreview.id)
@@ -515,7 +553,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
   findTabForEntityInGroup: (worktreeId, groupId, entityId, contentType) =>
     findTabByEntityInGroup(get().unifiedTabsByWorktree, worktreeId, groupId, entityId, contentType),
 
-  activateTab: (tabId) => {
+  activateTab: (tabId, opts) => {
     set((state) => {
       const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
       if (!found) {
@@ -541,12 +579,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             })()
           : state.unreadTerminalTabs
       return {
-        unifiedTabsByWorktree: {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
-            item.id === tabId ? { ...item, isPreview: false } : item
-          )
-        },
+        unifiedTabsByWorktree: opts?.preservePreview
+          ? state.unifiedTabsByWorktree
+          : {
+              ...state.unifiedTabsByWorktree,
+              [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
+                item.id === tabId ? { ...item, isPreview: false } : item
+              )
+            },
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).map((group) =>
@@ -766,6 +806,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { label }) ?? {})
   },
 
+  setRenamingTabId: (tabId) => {
+    set({ renamingTabId: tabId })
+  },
+
   setTabCustomLabel: (tabId, label, opts) => {
     const exists = get().getTab(tabId) !== null
     set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { customLabel: label }) ?? {})
@@ -784,10 +828,34 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   pinTab: (tabId) => {
     const exists = get().getTab(tabId) !== null
-    set(
-      (state) =>
-        patchTab(state.unifiedTabsByWorktree, tabId, { isPinned: true, isPreview: false }) ?? {}
-    )
+    set((state) => {
+      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      if (!found) {
+        return {}
+      }
+      const { tab, worktreeId } = found
+      const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId ? { ...candidate, isPinned: true, isPreview: false } : candidate
+      )
+      const groups = state.groupsByWorktree[worktreeId] ?? []
+      const group = groups.find((candidate) => candidate.id === tab.groupId)
+      if (!group) {
+        return {
+          unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
+        }
+      }
+      const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
+      return {
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
+        },
+        groupsByWorktree: {
+          ...state.groupsByWorktree,
+          [worktreeId]: updateGroup(groups, { ...group, tabOrder })
+        }
+      }
+    })
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }
@@ -795,7 +863,34 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
   unpinTab: (tabId) => {
     const exists = get().getTab(tabId) !== null
-    set((state) => patchTab(state.unifiedTabsByWorktree, tabId, { isPinned: false }) ?? {})
+    set((state) => {
+      const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+      if (!found) {
+        return {}
+      }
+      const { tab, worktreeId } = found
+      const tabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+        candidate.id === tabId ? { ...candidate, isPinned: false } : candidate
+      )
+      const groups = state.groupsByWorktree[worktreeId] ?? []
+      const group = groups.find((candidate) => candidate.id === tab.groupId)
+      if (!group) {
+        return {
+          unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, [worktreeId]: tabs }
+        }
+      }
+      const tabOrder = partitionPinnedTabOrder(group.tabOrder, tabs, tabId)
+      return {
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: applyTabOrderSortValues(tabs, tabOrder)
+        },
+        groupsByWorktree: {
+          ...state.groupsByWorktree,
+          [worktreeId]: updateGroup(groups, { ...group, tabOrder })
+        }
+      }
+    })
     if (exists) {
       get().recordFeatureInteraction?.('terminal-tabs')
     }

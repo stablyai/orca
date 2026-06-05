@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useRef, useState, type MutableRefObject } from 'react'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -8,12 +8,7 @@ import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { useAppStore } from '../../store'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
-import {
-  normalizeBrowserNavigationUrl,
-  SEARCH_ENGINE_LABELS,
-  type SearchEngine
-} from '../../../../shared/browser-url'
+import { SEARCH_ENGINE_LABELS, type SearchEngine } from '../../../../shared/browser-url'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import {
@@ -22,9 +17,14 @@ import {
 } from './browser-search'
 import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
 import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-pane-search'
+import { BrowserHomePageSetting } from './BrowserHomePageSetting'
 import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
+import {
+  createBrowserHomePageDraftState,
+  resolveBrowserHomePageDraftState
+} from './browser-home-page-draft-state'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 export { BROWSER_PANE_SEARCH_ENTRIES }
@@ -60,21 +60,36 @@ export function BrowserPane({
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
   const mountedRef = useMountedRef()
-  const [homePageDraft, setHomePageDraft] = useState(browserDefaultUrl ?? '')
+  const persistedHomePageDraft = browserDefaultUrl ?? ''
+  const [homePageDraftState, setHomePageDraftState] = useState(() =>
+    createBrowserHomePageDraftState(persistedHomePageDraft)
+  )
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const [newProfileName, setNewProfileName] = useState('')
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
   const sessionCookieScrollFrameIdsRef = useRef<number[]>([])
+  const resolvedHomePageDraftState = resolveBrowserHomePageDraftState(
+    homePageDraftState,
+    persistedHomePageDraft
+  )
 
-  // Why: sync draft with store value whenever it changes externally (e.g. the
-  // in-app browser tab's address bar saves a home page). Without this, the
-  // settings field would show stale text after another surface wrote the value.
-  useEffect(() => {
-    setHomePageDraft(browserDefaultUrl ?? '')
-  }, [browserDefaultUrl])
+  // Why: the in-app browser address bar can save the home page from outside
+  // Settings, so reconcile the draft before commit when that stored URL changes.
+  if (resolvedHomePageDraftState !== homePageDraftState) {
+    setHomePageDraftState(resolvedHomePageDraftState)
+  }
+  const homePageDraft = resolvedHomePageDraftState.value
+  const setHomePageDraft = (value: string): void => {
+    setHomePageDraftState((current) => ({ ...current, value }))
+  }
 
-  useEffect(() => {
-    return () => cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
+  const setBrowserPaneRootNode = useCallback((node: HTMLDivElement | null) => {
+    if (node !== null) {
+      return
+    }
+    // Why: session-cookie scroll frames are owned by this Settings pane surface;
+    // cancel them as soon as the pane unmounts so stale jumps cannot fire later.
+    cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
   }, [])
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
@@ -126,7 +141,7 @@ export function BrowserPane({
   }
 
   return (
-    <div className="space-y-6">
+    <div ref={setBrowserPaneRootNode} className="space-y-6">
       {showBrowserUse ? (
         <BrowserUseSetup
           onConfigureMoreBrowsers={scrollToSessionCookies}
@@ -135,49 +150,14 @@ export function BrowserPane({
       ) : null}
 
       {showHomePage ? (
-        <SearchableSetting
-          title="Default Home Page"
-          description="URL opened when creating a new browser tab. Leave empty to open a blank tab."
-          keywords={['browser', 'home', 'homepage', 'default', 'url', 'new tab', 'blank']}
-          className="flex items-start justify-between gap-4 py-2"
-        >
-          <div className="min-w-0 shrink space-y-0.5">
-            <Label>Default Home Page</Label>
-            <p className="text-xs text-muted-foreground">
-              URL opened when creating a new browser tab. Leave empty to open a blank tab.
-            </p>
-          </div>
-          <form
-            className="flex shrink-0 items-center gap-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const trimmed = homePageDraft.trim()
-              if (!trimmed) {
-                setBrowserDefaultUrl(null)
-                return
-              }
-              const normalized = normalizeBrowserNavigationUrl(trimmed)
-              if (normalized && normalized !== ORCA_BROWSER_BLANK_URL) {
-                setBrowserDefaultUrl(normalized)
-                setHomePageDraft(normalized)
-                toast.success('Home page saved.')
-              }
-            }}
-          >
-            <Input
-              value={homePageDraft}
-              onChange={(e) => setHomePageDraft(e.target.value)}
-              placeholder="https://google.com"
-              spellCheck={false}
-              autoCapitalize="none"
-              autoCorrect="off"
-              className="h-7 w-52 text-xs"
-            />
-            <Button type="submit" size="sm" variant="outline" className="h-7 text-xs">
-              Save
-            </Button>
-          </form>
-        </SearchableSetting>
+        <BrowserHomePageSetting
+          value={homePageDraft}
+          onChange={setHomePageDraft}
+          onSave={(url) => {
+            setBrowserDefaultUrl(url)
+            setHomePageDraftState(createBrowserHomePageDraftState(url ?? ''))
+          }}
+        />
       ) : null}
 
       {showSearchEngine ? (

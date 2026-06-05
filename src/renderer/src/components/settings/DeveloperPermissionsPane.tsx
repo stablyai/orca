@@ -111,7 +111,7 @@ function statusLabel(status: DeveloperPermissionStatus | undefined): string {
     case 'ready':
       return 'Entitled'
     case 'unknown':
-    default:
+    case undefined:
       return 'Check manually'
   }
 }

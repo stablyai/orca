@@ -19,6 +19,35 @@ describe('AgentDetector', () => {
     expect(stats.onAgentStop).not.toHaveBeenCalled()
   })
 
+  it('does not inspect unknown non-agent output for meaningful content', () => {
+    const stats = {
+      onAgentStart: vi.fn(),
+      onAgentStop: vi.fn()
+    }
+    const detectMeaningfulContent = vi.fn(() => true)
+    const detector = new AgentDetector(stats as never, detectMeaningfulContent)
+
+    detector.onData('pty-1', '\x1b[2K\x1b[1G'.repeat(100), 100)
+
+    expect(detectMeaningfulContent).not.toHaveBeenCalled()
+    expect(stats.onAgentStart).not.toHaveBeenCalled()
+    expect(stats.onAgentStop).not.toHaveBeenCalled()
+  })
+
+  it('inspects content once when an agent title starts a session', () => {
+    const stats = {
+      onAgentStart: vi.fn(),
+      onAgentStop: vi.fn()
+    }
+    const detectMeaningfulContent = vi.fn(() => true)
+    const detector = new AgentDetector(stats as never, detectMeaningfulContent)
+
+    detector.onData('pty-1', `${oscTitle('⠂ Writing patch')}real output`, 100)
+
+    expect(detectMeaningfulContent).toHaveBeenCalledTimes(1)
+    expect(stats.onAgentStart).toHaveBeenCalledWith('pty-1', 100)
+  })
+
   it('stops a session on working to idle transition using the last meaningful output time', () => {
     const stats = {
       onAgentStart: vi.fn(),

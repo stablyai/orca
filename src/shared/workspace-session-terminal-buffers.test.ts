@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
 import type { WorkspaceSessionState } from './types'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT } from './terminal-scrollback-limits'
 import {
   pruneLocalTerminalScrollbackBuffers,
   shouldPreserveTerminalScrollbackBuffers
@@ -43,6 +44,7 @@ function makeSession(overrides: Partial<WorkspaceSessionState> = {}): WorkspaceS
         activeLeafId: null,
         expandedLeafId: null,
         buffersByLeafId: { 'pane:1': 'local-scrollback' },
+        scrollbackRefsByLeafId: { 'pane:1': 'v1-local' },
         ptyIdsByLeafId: { 'pane:1': 'local-pty' }
       },
       'remote-tab': {
@@ -50,6 +52,7 @@ function makeSession(overrides: Partial<WorkspaceSessionState> = {}): WorkspaceS
         activeLeafId: null,
         expandedLeafId: null,
         buffersByLeafId: { 'pane:1': 'remote-scrollback' },
+        scrollbackRefsByLeafId: { 'pane:1': 'v1-remote' },
         ptyIdsByLeafId: { 'pane:1': 'remote-pty' }
       }
     },
@@ -78,7 +81,7 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     ).toBe(true)
   })
 
-  it('drops local buffers while preserving SSH buffers and PTY bindings', () => {
+  it('drops local scrollback while preserving SSH scrollback and PTY bindings', () => {
     const result = pruneLocalTerminalScrollbackBuffers(makeSession(), [
       { id: 'local-repo', connectionId: null },
       { id: 'remote-repo', connectionId: 'ssh-target-1' }
@@ -93,6 +96,30 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     expect(result.terminalLayoutsByTabId['remote-tab'].buffersByLeafId).toEqual({
       'pane:1': 'remote-scrollback'
     })
+    expect(result.terminalLayoutsByTabId['remote-tab'].scrollbackRefsByLeafId).toEqual({
+      'pane:1': 'v1-remote'
+    })
+  })
+
+  it('caps preserved SSH buffers so session JSON cannot scale with raw scrollback', () => {
+    const hugeScrollback = `start-${'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT + 10)}`
+    const result = pruneLocalTerminalScrollbackBuffers(
+      makeSession({
+        terminalLayoutsByTabId: {
+          'remote-tab': {
+            root: null,
+            activeLeafId: null,
+            expandedLeafId: null,
+            buffersByLeafId: { 'pane:1': hugeScrollback }
+          }
+        }
+      }),
+      [{ id: 'remote-repo', connectionId: 'ssh-target-1' }]
+    )
+
+    const buffer = result.terminalLayoutsByTabId['remote-tab'].buffersByLeafId?.['pane:1']
+    expect(buffer).toHaveLength(TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT)
+    expect(buffer?.startsWith('start-')).toBe(false)
   })
 
   it('drops floating terminal buffers even though the synthetic worktree has no repo', () => {

@@ -120,6 +120,28 @@ describe('LocalPtyProvider', () => {
       expect(typeof result.id).toBe('string')
     })
 
+    it('reattaches to an existing caller-supplied session id without spawning', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+
+      expect(second).toEqual({ id: 'serve-session-1', pid: 12345, isReattach: true })
+      expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('does not reattach numeric caller session ids that can collide after restart', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24 })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+
+      expect(second.id).not.toBe(first.id)
+      expect(second.isReattach).toBeUndefined()
+      expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
     it('calls node-pty spawn with correct args', async () => {
       await provider.spawn({ cols: 120, rows: 40, cwd: '/tmp' })
       expect(spawnMock).toHaveBeenCalledWith(
@@ -296,8 +318,49 @@ describe('LocalPtyProvider', () => {
         '--',
         'bash',
         '-c',
-        "cd '/mnt/c/Users/jin/repo' && exec bash -l"
+        'cd \'/mnt/c/Users/jin/repo\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
       ])
+    })
+
+    it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const savedCodexHome = process.env.CODEX_HOME
+      const savedOrcaCodexHome = process.env.ORCA_CODEX_HOME
+      delete process.env.CODEX_HOME
+      delete process.env.ORCA_CODEX_HOME
+      provider.configure({
+        buildSpawnEnv: (_id, env, ctx) => {
+          env.ORCA_TERMINAL_HANDLE = 'term_wsl'
+          if (ctx?.isWsl) {
+            env.WSLENV = 'ORCA_TERMINAL_HANDLE/u'
+          }
+          return env
+        }
+      })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+      } finally {
+        if (savedCodexHome === undefined) {
+          delete process.env.CODEX_HOME
+        } else {
+          process.env.CODEX_HOME = savedCodexHome
+        }
+        if (savedOrcaCodexHome === undefined) {
+          delete process.env.ORCA_CODEX_HOME
+        } else {
+          process.env.ORCA_CODEX_HOME = savedOrcaCodexHome
+        }
+      }
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[0]).toBe('wsl.exe')
+      expect(spawnCall[2].env.ORCA_TERMINAL_HANDLE).toBe('term_wsl')
+      expect(spawnCall[2].env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
     })
 
     it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
@@ -425,7 +488,14 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'bash', '-c', "cd '/home/jin/repo/subdir' && exec bash -l"],
+        [
+          '-d',
+          'Ubuntu',
+          '--',
+          'bash',
+          '-c',
+          'cd \'/home/jin/repo/subdir\' && export PATH="$HOME/.local/bin:$PATH" && exec bash -l'
+        ],
         expect.objectContaining({ cwd: expect.any(String) })
       )
     })

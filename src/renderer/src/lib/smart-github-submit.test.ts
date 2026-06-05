@@ -3,6 +3,7 @@ import {
   clearSmartGitHubSubmitLookupCacheForTests,
   getSmartGitHubSubmitIntent,
   getSmartGitHubSubmitResolution,
+  getSmartGitHubSubmitLookupCacheSizeForTests,
   lookupSmartGitHubSubmitItem
 } from './smart-github-submit'
 
@@ -22,6 +23,42 @@ describe('getSmartGitHubSubmitIntent', () => {
       number: 2050,
       type: 'issue'
     })
+  })
+
+  it('finds a GitHub item URL embedded in a short instruction', () => {
+    expect(
+      getSmartGitHubSubmitIntent(
+        'https://github.com/mvanhorn/cli-printing-press/issues/2635 and fix it'
+      )
+    ).toEqual({
+      kind: 'link',
+      owner: 'mvanhorn',
+      repo: 'cli-printing-press',
+      number: 2635,
+      type: 'issue'
+    })
+  })
+
+  it('finds an embedded GitHub item URL when prose punctuation touches the URL', () => {
+    expect(
+      getSmartGitHubSubmitIntent('review (https://github.com/stablyai/orca/pull/2049), please')
+    ).toEqual({
+      kind: 'link',
+      owner: 'stablyai',
+      repo: 'orca',
+      number: 2049,
+      type: 'pr'
+    })
+
+    expect(getSmartGitHubSubmitIntent('fix https://github.com/stablyai/orca/issues/2050.')).toEqual(
+      {
+        kind: 'link',
+        owner: 'stablyai',
+        repo: 'orca',
+        number: 2050,
+        type: 'issue'
+      }
+    )
   })
 
   it('treats #number as source intent but leaves plain numbers as names', () => {
@@ -179,20 +216,68 @@ describe('lookupSmartGitHubSubmitItem', () => {
     expect(workItemByOwnerRepo).toHaveBeenCalledTimes(2)
     expect(workItem).not.toHaveBeenCalled()
   })
+
+  it('prunes expired distinct lookup entries on later lookups', async () => {
+    const nowSpy = vi.spyOn(Date, 'now')
+    const workItemByOwnerRepo = vi.fn()
+    const workItem = vi.fn().mockImplementation(({ number }) =>
+      Promise.resolve({
+        id: `issue-${number}`,
+        type: 'issue' as const,
+        number,
+        title: `Issue ${number}`,
+        state: 'open' as const,
+        url: `https://github.com/stablyai/orca/issues/${number}`,
+        labels: [],
+        updatedAt: '2026-05-26T00:00:00.000Z',
+        author: 'octocat',
+        repoId: 'repo-1'
+      })
+    )
+
+    try {
+      nowSpy.mockReturnValue(1_000)
+      await lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        intent: { kind: 'hash-number', number: 2049 },
+        workItem,
+        workItemByOwnerRepo
+      })
+      expect(getSmartGitHubSubmitLookupCacheSizeForTests()).toBe(1)
+
+      nowSpy.mockReturnValue(62_000)
+      await lookupSmartGitHubSubmitItem({
+        repoId: 'repo-1',
+        repoPath: '/repo',
+        intent: { kind: 'hash-number', number: 2050 },
+        workItem,
+        workItemByOwnerRepo
+      })
+
+      expect(getSmartGitHubSubmitLookupCacheSizeForTests()).toBe(1)
+      expect(workItem).toHaveBeenCalledTimes(2)
+    } finally {
+      nowSpy.mockRestore()
+    }
+  })
 })
 
 describe('getSmartGitHubSubmitResolution', () => {
-  it('uses the resolved item title for workspace name and linked PR metadata', () => {
+  it('uses short intent identity for workspace name, display name, and linked PR metadata', () => {
     expect(
-      getSmartGitHubSubmitResolution({
-        type: 'pr',
-        number: 2049,
-        title: 'Fix smart resolution delay',
-        url: 'https://github.com/stablyai/orca/pull/2049'
-      })
+      getSmartGitHubSubmitResolution(
+        {
+          type: 'pr',
+          number: 2049,
+          title: 'Fix smart resolution delay',
+          url: 'https://github.com/stablyai/orca/pull/2049'
+        },
+        { sourceText: 'review https://github.com/stablyai/orca/pull/2049' }
+      )
     ).toEqual({
-      workspaceName: 'fix-smart-resolution-delay',
-      displayName: 'Fix smart resolution delay',
+      workspaceName: 'review-pr-2049',
+      displayName: 'Review PR 2049',
       linkedWorkItem: {
         type: 'pr',
         number: 2049,
@@ -204,15 +289,19 @@ describe('getSmartGitHubSubmitResolution', () => {
     })
   })
 
-  it('uses the resolved item title for workspace name and linked issue metadata', () => {
-    const resolution = getSmartGitHubSubmitResolution({
-      type: 'issue',
-      number: 2050,
-      title: 'Issue #2050: Make create feel instant',
-      url: 'https://github.com/stablyai/orca/issues/2050'
-    })
+  it('uses user intent instead of the raw title for linked issue metadata', () => {
+    const resolution = getSmartGitHubSubmitResolution(
+      {
+        type: 'issue',
+        number: 2050,
+        title: 'Issue #2050: Make create feel instant',
+        url: 'https://github.com/stablyai/orca/issues/2050'
+      },
+      { sourceText: 'https://github.com/stablyai/orca/issues/2050 and fix it' }
+    )
 
-    expect(resolution.workspaceName).toBe('make-create-feel-instant')
+    expect(resolution.workspaceName).toBe('fix-issue-2050')
+    expect(resolution.displayName).toBe('Fix Issue 2050')
     expect(resolution.linkedIssueNumber).toBe(2050)
     expect(resolution.linkedPR).toBeNull()
   })

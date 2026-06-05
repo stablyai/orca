@@ -226,6 +226,33 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('persists resolved GitHub upstream metadata updates', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        upstream: { owner: 'stablyai', repo: 'orca' }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { upstream: { owner: 'stablyai', repo: 'orca' } }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      upstream: { owner: 'stablyai', repo: 'orca' }
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', upstream: { owner: 'stablyai', repo: 'orca' } } }
+    })
+  })
+
   it('routes project group mutations to the runtime server', async () => {
     const group = {
       id: 'group-1',
@@ -314,6 +341,39 @@ describe('repo RPC methods', () => {
       groupName: '',
       projectPaths: ['/srv/platform/api'],
       mode: 'separate'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { importedCount: 1, failedCount: 0 }
+    })
+  })
+
+  it('allows grouped nested-repo imports with a blank group name', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      importNestedRepos: vi.fn().mockResolvedValue({
+        projects: [{ path: '/srv/platform/api', projectId: 'repo-1', status: 'imported' }],
+        importedCount: 1,
+        alreadyKnownCount: 0,
+        failedCount: 0
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('projectGroup.importNested', {
+        parentPath: '/srv/platform',
+        groupName: '',
+        projectPaths: ['/srv/platform/api'],
+        mode: 'group'
+      })
+    )
+
+    expect(runtime.importNestedRepos).toHaveBeenCalledWith({
+      parentPath: '/srv/platform',
+      groupName: '',
+      projectPaths: ['/srv/platform/api'],
+      mode: 'group'
     })
     expect(response).toMatchObject({
       ok: true,

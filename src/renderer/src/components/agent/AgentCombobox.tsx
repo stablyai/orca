@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Check, ChevronsUpDown, Star, Terminal } from 'lucide-react'
+import { ArrowRight, Check, ChevronsUpDown, Star, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -16,8 +16,18 @@ import {
 } from '@/components/ui/context-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import {
+  agentPickerBlankTerminalMatches,
+  getAgentPickerCommandValue,
+  searchAgentPickerEntries
+} from '@/lib/agent-picker-search'
 import { cn } from '@/lib/utils'
 import type { TuiAgent } from '../../../../shared/types'
+import {
+  createAgentComboboxCommandState,
+  resolveAgentComboboxCommandState,
+  updateAgentComboboxCommandValue
+} from './agent-combobox-command-state'
 
 type DefaultAgentPreference = TuiAgent | 'blank' | null
 
@@ -98,27 +108,6 @@ function renderItem({
   )
 }
 
-function searchAgents(agents: AgentCatalogEntry[], rawQuery: string): AgentCatalogEntry[] {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) {
-    return agents
-  }
-  // Why: cheap prefix-favored sort — label matches starting earlier in the
-  // string outrank later matches, mirroring repo-search semantics so the
-  // two comboboxes feel consistent.
-  const matches: { agent: AgentCatalogEntry; score: number; index: number }[] = []
-  agents.forEach((agent, index) => {
-    const labelIdx = agent.label.toLowerCase().indexOf(query)
-    const idIdx = agent.id.toLowerCase().indexOf(query)
-    const score = labelIdx !== -1 ? labelIdx : idIdx !== -1 ? 1000 + idIdx : -1
-    if (score !== -1) {
-      matches.push({ agent, score, index })
-    }
-  })
-  matches.sort((a, b) => a.score - b.score || a.index - b.index)
-  return matches.map((m) => m.agent)
-}
-
 export default function AgentCombobox({
   agents,
   value,
@@ -136,7 +125,7 @@ export default function AgentCombobox({
   // Why: controlled cmdk selection so hovering the footer (which lives outside
   // the cmdk tree) can clear the list's highlighted item — otherwise cmdk keeps
   // the last-hovered agent visually selected while the mouse is on the footer.
-  const [commandValue, setCommandValue] = useState('')
+  const [commandState, setCommandState] = useState(() => createAgentComboboxCommandState(''))
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const focusFrameRef = React.useRef<number | null>(null)
@@ -145,14 +134,26 @@ export default function AgentCombobox({
     () => (value ? (agents.find((agent) => agent.id === value) ?? null) : null),
     [agents, value]
   )
-  const filteredAgents = useMemo(() => searchAgents(agents, query), [agents, query])
-  const blankMatchesQuery = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) {
-      return true
-    }
-    return 'blank terminal'.includes(q) || 'terminal'.startsWith(q)
-  }, [query])
+  const filteredAgents = useMemo(() => searchAgentPickerEntries(agents, query), [agents, query])
+  const blankMatchesQuery = useMemo(() => agentPickerBlankTerminalMatches(query), [query])
+  const activeCommandValue = getAgentPickerCommandValue({
+    blankValue: BLANK_VALUE,
+    blankMatchesQuery,
+    currentValue: value,
+    filteredAgents,
+    rawQuery: query
+  })
+  const resolvedCommandState = resolveAgentComboboxCommandState(
+    commandState,
+    open,
+    activeCommandValue
+  )
+  if (resolvedCommandState !== commandState) {
+    // Why: cmdk highlights should follow query/result changes before paint,
+    // while manual hover selection remains intact until the active candidate changes.
+    setCommandState(resolvedCommandState)
+  }
+  const commandValue = resolvedCommandState.commandValue
 
   const cancelFocusFrame = useCallback((): void => {
     if (focusFrameRef.current !== null) {
@@ -161,7 +162,19 @@ export default function AgentCombobox({
     }
   }, [])
 
-  React.useEffect(() => cancelFocusFrame, [cancelFocusFrame])
+  const setInputNode = useCallback(
+    (node: HTMLInputElement | null): void => {
+      if (node === null) {
+        cancelFocusFrame()
+      }
+      inputRef.current = node
+    },
+    [cancelFocusFrame]
+  )
+
+  const setCommandValue = useCallback((nextCommandValue: string): void => {
+    setCommandState((current) => updateAgentComboboxCommandValue(current, nextCommandValue))
+  }, [])
 
   const focusSearchInput = useCallback(() => {
     cancelFocusFrame()
@@ -184,7 +197,7 @@ export default function AgentCombobox({
     (nextOpen: boolean) => {
       setOpen(nextOpen)
       if (nextOpen) {
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         return
       }
       cancelFocusFrame()
@@ -227,7 +240,7 @@ export default function AgentCombobox({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         setOpen(true)
         return
       }
@@ -236,7 +249,7 @@ export default function AgentCombobox({
       }
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
-        setCommandValue(value ?? BLANK_VALUE)
+        setCommandState(createAgentComboboxCommandState(value ?? BLANK_VALUE))
         setQuery(event.key)
         setOpen(true)
       }
@@ -292,7 +305,7 @@ export default function AgentCombobox({
         >
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
-              ref={inputRef}
+              ref={setInputNode}
               placeholder="Search agents..."
               value={query}
               onValueChange={setQuery}
@@ -335,16 +348,7 @@ export default function AgentCombobox({
                   className="h-9 w-full justify-start rounded-none px-3 text-xs font-normal text-muted-foreground"
                 >
                   Manage agents
-                  <svg
-                    className="ml-auto size-3"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    aria-hidden
-                  >
-                    <path d="M5 12h14M12 5l7 7-7 7" />
-                  </svg>
+                  <ArrowRight className="ml-auto size-3" />
                 </Button>
               </div>
             ) : null}

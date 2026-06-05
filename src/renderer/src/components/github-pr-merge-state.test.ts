@@ -42,6 +42,9 @@ describe('presentGitHubPRMergeState', () => {
     expect(
       presentGitHubPRMergeState(pr({ mergeable: 'CONFLICTING', mergeStateStatus: 'DIRTY' }))
     ).toMatchObject({ label: 'Conflicts', directMergeAvailable: false })
+    expect(
+      presentGitHubPRMergeState(pr({ mergeable: 'UNKNOWN', mergeStateStatus: 'DIRTY' }))
+    ).toMatchObject({ label: 'Conflicts', directMergeAvailable: false })
     expect(presentGitHubPRMergeState(pr({ mergeStateStatus: 'BEHIND' }))).toMatchObject({
       label: 'Behind',
       directMergeAvailable: false
@@ -59,6 +62,15 @@ describe('presentGitHubPRMergeState', () => {
     expect(presentGitHubPRMergeState(pr())).toMatchObject({
       label: 'Able to merge',
       directMergeAvailable: true
+    })
+  })
+
+  it('labels unresolved GitHub mergeability as checking', () => {
+    expect(
+      presentGitHubPRMergeState(pr({ mergeable: 'UNKNOWN', mergeStateStatus: null }))
+    ).toMatchObject({
+      label: 'Checking',
+      directMergeAvailable: false
     })
   })
 

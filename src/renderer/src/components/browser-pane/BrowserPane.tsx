@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: BrowserPane synchronizes Electron webviews, remote browser drivers, streams, downloads, and annotation overlays; those external lifecycles cannot be derived during render. */
 import {
   useCallback,
   useEffect,
@@ -68,17 +69,9 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
-import {
-  consumeEvictedBrowserTab,
-  markEvictedBrowserTab,
-  rememberLiveBrowserUrl
-} from './browser-runtime'
+import { rememberLiveBrowserUrl } from './browser-runtime'
 import {
   destroyPersistentWebview,
-  getHiddenContainer,
-  MAX_PARKED_WEBVIEWS,
-  moveFocusToRendererBeforeWebviewDetach,
-  parkedAtByTabId,
   registerPersistentWebview,
   registeredWebContentsIds,
   webviewRegistry
@@ -112,10 +105,20 @@ import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
 import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import {
+  getRemoteBrowserKeyboardShortcut,
+  getRemoteBrowserKeypressKey
+} from './remote-browser-keyboard'
+import {
   consumeBrowserFocusRequest,
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   type BrowserFocusRequestDetail
 } from './browser-focus'
+import {
+  addBrowserPageZoomEventListener,
+  applyBrowserPageZoom,
+  browserPageZoomLevelToPercent,
+  type BrowserPageZoomDirection
+} from './browser-page-zoom'
 import {
   isRemoteRuntimeFileOperation,
   statRuntimePath,
@@ -126,6 +129,7 @@ import {
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
+import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   BrowserBackResult,
   BrowserGotoResult,
@@ -153,6 +157,7 @@ import {
   type BrowserDriverState
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { shouldPollChromiumErrorPage } from './chromium-error-page-polling'
+import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 
 type BrowserTabPageState = Partial<
   Pick<
@@ -182,6 +187,7 @@ const BROWSER_ANNOTATION_INTENT_OPTIONS = [
 // Why: priority remains in the persisted annotation shape for backwards
 // compatibility, but the annotation UI no longer exposes urgency choices.
 const DEFAULT_BROWSER_ANNOTATION_PRIORITY: BrowserAnnotationPriority = 'important'
+const BROWSER_PAGE_ZOOM_FEEDBACK_MS = 1400
 
 type BrowserOverlayViewport = {
   scrollX: number
@@ -523,52 +529,6 @@ function getNotebookPathFromBrowserUrl(url: string): string | null {
   return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
 }
 
-function getRemoteBrowserKeypressKey(event: React.KeyboardEvent): string | null {
-  if (event.key.length === 1) {
-    return event.key === ' ' ? 'Space' : event.key
-  }
-  if (event.metaKey || event.ctrlKey || event.altKey) {
-    return null
-  }
-  const supported = new Set([
-    'Enter',
-    'Backspace',
-    'Delete',
-    'Tab',
-    'Escape',
-    'ArrowUp',
-    'ArrowDown',
-    'ArrowLeft',
-    'ArrowRight',
-    'Home',
-    'End',
-    'PageUp',
-    'PageDown'
-  ])
-  return supported.has(event.key) ? event.key : null
-}
-
-function getRemoteBrowserKeyboardShortcut(event: React.KeyboardEvent): string | null {
-  const modifiers: string[] = []
-  if (event.metaKey) {
-    modifiers.push('Meta')
-  }
-  if (event.ctrlKey) {
-    modifiers.push('Control')
-  }
-  if (event.altKey) {
-    modifiers.push('Alt')
-  }
-  if (event.shiftKey && event.key.length !== 1) {
-    modifiers.push('Shift')
-  }
-  if (modifiers.length === 0 || ['Meta', 'Control', 'Alt', 'Shift'].includes(event.key)) {
-    return null
-  }
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key
-  return `${modifiers.join('+')}+${key}`
-}
-
 function getRemoteBrowserMouseButton(button: number): 'left' | 'middle' | 'right' | null {
   if (button === 0) {
     return 'left'
@@ -739,34 +699,6 @@ function retryBrowserTabLoad(
   webview.src = retryUrl
 }
 
-function evictParkedWebviews(excludedTabId: string | null = null): void {
-  if (webviewRegistry.size <= MAX_PARKED_WEBVIEWS) {
-    return
-  }
-
-  const hidden = getHiddenContainer()
-  const parkedBrowserTabIds = [...webviewRegistry.entries()]
-    .filter(
-      ([browserTabId, webview]) =>
-        browserTabId !== excludedTabId && webview.parentElement === hidden
-    )
-    .sort((a, b) => (parkedAtByTabId.get(a[0]) ?? 0) - (parkedAtByTabId.get(b[0]) ?? 0))
-    .map(([browserTabId]) => browserTabId)
-
-  while (webviewRegistry.size > MAX_PARKED_WEBVIEWS && parkedBrowserTabIds.length > 0) {
-    const browserTabId = parkedBrowserTabIds.shift()
-    if (browserTabId) {
-      // Why: browser tabs are persistent for fast switching, but hidden guests
-      // cannot grow without bound or long Orca sessions accumulate Chromium
-      // processes and GPU surfaces. Evict only parked webviews, never the
-      // currently visible guest. Remember the eviction so the next mount can
-      // explain why an older tab had to reload instead of silently losing state.
-      markEvictedBrowserTab(browserTabId)
-      destroyPersistentWebview(browserTabId)
-    }
-  }
-}
-
 export default function BrowserPane({
   browserTab,
   isActive
@@ -786,20 +718,15 @@ export default function BrowserPane({
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
   const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
   const activeBrowserPageId = activeBrowserPage?.id ?? null
+  const activeBrowserPageIsBlank =
+    !runtimeEnvironmentActive &&
+    (activeBrowserPage?.url === 'about:blank' || activeBrowserPage?.url === ORCA_BROWSER_BLANK_URL)
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
   const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
-  const renderedBrowserPages = useMemo(() => {
-    const pages: BrowserPageState[] = []
-    if (activeBrowserPage) {
-      pages.push(activeBrowserPage)
-    }
-    for (const page of browserPages) {
-      if (page.id !== activeBrowserPage?.id && automationVisiblePageIds.has(page.id)) {
-        pages.push(page)
-      }
-    }
-    return pages
-  }, [activeBrowserPage, automationVisiblePageIds, browserPages])
+  // Why: inactive Electron webviews must stay mounted in their original DOM
+  // parent. Parking them by unmounting/reparenting loses form text and SPA
+  // state on normal tab switches.
+  const renderedBrowserPages = browserPages
   const [activeBrowserDriver, setActiveBrowserDriver] = useState<BrowserDriverState>({
     kind: 'idle'
   })
@@ -825,6 +752,15 @@ export default function BrowserPane({
       }
     })
   }, [activeBrowserPageId, runtimeEnvironmentActive])
+
+  useContextualTour(
+    'browser',
+    isActive &&
+      activeBrowserPage !== null &&
+      !runtimeEnvironmentActive &&
+      !activeBrowserPageIsBlank,
+    'browser_visible'
+  )
 
   const reclaimActiveBrowserForDesktop = useCallback(async (): Promise<void> => {
     if (!activeBrowserPageId) {
@@ -921,6 +857,7 @@ function RemoteBrowserPagePane({
   const isActiveRef = useRef(isActive)
   const currentBrowserTabIdRef = useRef(browserTab.id)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
+  const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
   const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() ?? null
   const activeRuntimeEnvironmentIdRef = useRef<string | null>(activeRuntimeEnvironmentId)
   const startRemoteStreamRef = useRef<
@@ -1072,7 +1009,7 @@ function RemoteBrowserPagePane({
         target,
         'browser.viewport',
         {
-          worktree: `id:${worktreeId}`,
+          worktree: runtimeWorktree,
           page: pageId,
           width: size.width,
           height: size.height,
@@ -1088,7 +1025,7 @@ function RemoteBrowserPagePane({
           target,
           'browser.eval',
           {
-            worktree: `id:${worktreeId}`,
+            worktree: runtimeWorktree,
             page: pageId,
             expression: 'JSON.stringify({ width: window.innerWidth, height: window.innerHeight })'
           },
@@ -1099,7 +1036,7 @@ function RemoteBrowserPagePane({
         remoteCssViewportSizeRef.current = size
       }
     },
-    [readRemoteViewportSize, runtimeTarget, worktreeId]
+    [readRemoteViewportSize, runtimeTarget, runtimeWorktree]
   )
 
   const enqueueRemoteInput = useCallback((operation: () => Promise<void>): Promise<void> => {
@@ -1183,6 +1120,7 @@ function RemoteBrowserPagePane({
         remoteTabRefreshTimerRef.current = null
       }
       clearPendingRemoteWheel()
+      restartRemoteStreamForViewportRef.current = () => {}
       if (streamFrameUrlRef.current) {
         URL.revokeObjectURL(streamFrameUrlRef.current)
         streamFrameUrlRef.current = null
@@ -1303,11 +1241,11 @@ function RemoteBrowserPagePane({
       void callRuntimeRpc(
         { kind: 'environment', environmentId: removedHandle.environmentId },
         'browser.tabClose',
-        { worktree: `id:${worktreeId}`, page: removedHandle.remotePageId },
+        { worktree: runtimeWorktree, page: removedHandle.remotePageId },
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       ).catch(() => {})
     }
-  }, [activeRuntimeEnvironmentId, browserTab.id, worktreeId])
+  }, [activeRuntimeEnvironmentId, browserTab.id, runtimeWorktree])
 
   const applyRemoteTabInfo = useCallback(
     (tab: Pick<BrowserTabInfo, 'url' | 'title'>): void => {
@@ -1410,14 +1348,14 @@ function RemoteBrowserPagePane({
         const created = await callRuntimeRpc<{ browserPageId: string }>(
           target,
           'browser.tabCreate',
-          { worktree: `id:${worktreeId}`, url: initialUrl },
+          { worktree: runtimeWorktree, url: initialUrl },
           { timeoutMs: 30_000, suppressFeatureInteraction: true }
         )
         if (!isCurrentRemoteOperationToken(token)) {
           void callRuntimeRpc(
             target,
             'browser.tabClose',
-            { worktree: `id:${worktreeId}`, page: created.browserPageId },
+            { worktree: runtimeWorktree, page: created.browserPageId },
             { timeoutMs: 15_000, suppressFeatureInteraction: true }
           ).catch(() => {})
           return null
@@ -1464,7 +1402,7 @@ function RemoteBrowserPagePane({
       closeMissingRemotePage,
       isCurrentRemoteOperationToken,
       setRemoteBrowserPageHandle,
-      worktreeId
+      runtimeWorktree
     ]
   )
 
@@ -1476,12 +1414,12 @@ function RemoteBrowserPagePane({
       const shown = await callRuntimeRpc<{ tab: BrowserTabInfo }>(
         { kind: 'environment', environmentId: token.environmentId },
         'browser.tabShow',
-        { worktree: `id:${worktreeId}`, page: token.remotePageId },
+        { worktree: runtimeWorktree, page: token.remotePageId },
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       )
       return shown.tab
     },
-    [isCurrentRemoteOperationToken, worktreeId]
+    [isCurrentRemoteOperationToken, runtimeWorktree]
   )
   fetchRemoteTabInfoRef.current = fetchRemoteTabInfo
 
@@ -1639,7 +1577,7 @@ function RemoteBrowserPagePane({
             selector: target.environmentId,
             method: 'browser.screencast',
             params: withBrowserPaneUiRuntimeRpcSource({
-              worktree: `id:${worktreeId}`,
+              worktree: runtimeWorktree,
               page: pageId,
               format: 'jpeg',
               quality: 70,
@@ -1715,7 +1653,7 @@ function RemoteBrowserPagePane({
       syncRemoteViewport,
       updateStreamFrame,
       waitForRemoteViewportSize,
-      worktreeId
+      runtimeWorktree
     ]
   )
 
@@ -1782,12 +1720,6 @@ function RemoteBrowserPagePane({
     startRemoteStreamRef.current = startRemoteStream
     restartRemoteStreamForViewportRef.current = restartRemoteStreamForViewport
   }, [restartRemoteStreamForViewport, startRemoteStream])
-
-  useEffect(() => {
-    return () => {
-      restartRemoteStreamForViewportRef.current = () => {}
-    }
-  }, [])
 
   useEffect(() => {
     if (!isActive) {
@@ -1907,8 +1839,8 @@ function RemoteBrowserPagePane({
       try {
         const params =
           method === 'browser.goto'
-            ? { worktree: `id:${worktreeId}`, page: pageId, url: url ?? 'about:blank' }
-            : { worktree: `id:${worktreeId}`, page: pageId }
+            ? { worktree: runtimeWorktree, page: pageId, url: url ?? 'about:blank' }
+            : { worktree: runtimeWorktree, page: pageId }
         const result = await callRuntimeRpc<
           BrowserGotoResult | BrowserBackResult | BrowserReloadResult
         >(target, method, params, { timeoutMs: 30_000, suppressFeatureInteraction: true })
@@ -1945,7 +1877,7 @@ function RemoteBrowserPagePane({
       isCurrentRemoteOperationToken,
       onUpdatePageState,
       runtimeTarget,
-      worktreeId
+      runtimeWorktree
     ]
   )
 
@@ -2002,7 +1934,7 @@ function RemoteBrowserPagePane({
         return
       }
       try {
-        const params = { worktree: `id:${worktreeId}`, page: pageId }
+        const params = { worktree: runtimeWorktree, page: pageId }
         await callRuntimeRpc(
           target,
           'browser.mouseMove',
@@ -2049,7 +1981,7 @@ function RemoteBrowserPagePane({
         return
       }
       try {
-        const params = { worktree: `id:${worktreeId}`, page: pageId }
+        const params = { worktree: runtimeWorktree, page: pageId }
         await callRuntimeRpc(
           target,
           'browser.mouseMove',
@@ -2104,7 +2036,7 @@ function RemoteBrowserPagePane({
           target,
           'browser.eval',
           {
-            worktree: `id:${worktreeId}`,
+            worktree: runtimeWorktree,
             page: pageId,
             expression: buildRemoteContextMenuExpression(point.x, point.y)
           },
@@ -2144,7 +2076,7 @@ function RemoteBrowserPagePane({
     if (!target || !pageId || !operationToken) {
       return
     }
-    const params = { worktree: `id:${worktreeId}`, page: pageId }
+    const params = { worktree: runtimeWorktree, page: pageId }
     const key = getRemoteBrowserKeyboardShortcut(event) ?? getRemoteBrowserKeypressKey(event)
     if (!key) {
       return
@@ -2162,7 +2094,13 @@ function RemoteBrowserPagePane({
           { ...params, key },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
-        if (key === 'Enter' || key === 'Meta+r' || key === 'Control+r') {
+        if (
+          key === 'Enter' ||
+          key === 'Meta+r' ||
+          key === 'Meta+Shift+r' ||
+          key === 'Control+r' ||
+          key === 'Control+Shift+r'
+        ) {
           scheduleRemoteTabInfoRefresh(operationToken, 400)
         }
       } catch (error) {
@@ -2190,7 +2128,7 @@ function RemoteBrowserPagePane({
       pendingRemoteWheelRef.current = null
       remoteWheelInFlightRef.current = true
       const { target, pageId, operationToken, point, dx, dy } = pending
-      const params = { worktree: `id:${worktreeId}`, page: pageId }
+      const params = { worktree: runtimeWorktree, page: pageId }
       void enqueueRemoteInput(async () => {
         if (!isCurrentRemoteOperationToken(operationToken)) {
           return
@@ -2234,7 +2172,7 @@ function RemoteBrowserPagePane({
     enqueueRemoteInput,
     isCurrentRemoteOperationToken,
     scheduleRemoteTabInfoRefresh,
-    worktreeId
+    runtimeWorktree
   ])
 
   const handleRemoteScreenshotWheel = useCallback(
@@ -2419,7 +2357,10 @@ function RemoteBrowserPagePane({
             document.body
           )
         : null}
-      <div className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5">
+      <div
+        className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
+        data-contextual-tour-target="browser-toolbar"
+      >
         <Button
           size="icon"
           variant="ghost"
@@ -2557,6 +2498,20 @@ function BrowserPagePane({
 }): React.JSX.Element {
   const isPaintable = isActive || isAutomationVisible
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const browserZoomFeedbackTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const setContainerRef = useCallback((node: HTMLDivElement | null): void => {
+    containerRef.current = node
+    if (node !== null) {
+      return
+    }
+    // Why: feedback timers are scoped to this pane owner and must not fire
+    // after the DOM owner is detached.
+    clearTimeout(grabToastTimerRef.current)
+    clearTimeout(annotationCopyTimerRef.current)
+    clearTimeout(browserZoomFeedbackTimerRef.current)
+  }, [])
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const browserTabIdRef = useRef(browserTab.id)
@@ -2591,6 +2546,8 @@ function BrowserPagePane({
   const [resourceNotice, setResourceNotice] = useState<string | null>(null)
   const [downloadState, setDownloadState] = useState<BrowserDownloadState | null>(null)
   const downloadStateRef = useRef<BrowserDownloadState | null>(null)
+  const [browserZoomPercent, setBrowserZoomPercent] = useState(100)
+  const [browserZoomFeedbackVisible, setBrowserZoomFeedbackVisible] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -2653,6 +2610,14 @@ function BrowserPagePane({
   const webviewPartition = sessionProfile?.partition ?? ORCA_BROWSER_PARTITION
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const clearBrowserSessionImportState = useAppStore((s) => s.clearBrowserSessionImportState)
+  const showBrowserZoomFeedback = useCallback((level: number): void => {
+    setBrowserZoomPercent(browserPageZoomLevelToPercent(level))
+    setBrowserZoomFeedbackVisible(true)
+    clearTimeout(browserZoomFeedbackTimerRef.current)
+    browserZoomFeedbackTimerRef.current = setTimeout(() => {
+      setBrowserZoomFeedbackVisible(false)
+    }, BROWSER_PAGE_ZOOM_FEEDBACK_MS)
+  }, [])
 
   useEffect(() => {
     if (!browserSessionImportState) {
@@ -2694,17 +2659,6 @@ function BrowserPagePane({
     below: boolean
     payload: BrowserGrabPayload | null
   } | null>(null)
-  const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
-  // Why: clear the toast auto-dismiss timer on unmount so it cannot fire
-  // after the component is destroyed (prevents setState-on-unmounted warnings
-  // and stale rearm calls).
-  useEffect(() => {
-    return () => {
-      clearTimeout(grabToastTimerRef.current)
-      clearTimeout(annotationCopyTimerRef.current)
-    }
-  }, [])
 
   const grabRef = useRef(grab)
   grabRef.current = grab
@@ -2779,9 +2733,17 @@ function BrowserPagePane({
     if (!grab.contextMenu) {
       const text = formatGrabPayloadAsText(grab.payload)
       void window.api.ui.writeClipboardText(text)
+      recordFeatureInteraction('browser-grab')
       showGrabToast('Copied', 'success', grab.payload)
     }
-  }, [grab.state, grab.payload, grab.contextMenu, grabIntent, showGrabToast])
+  }, [
+    grab.state,
+    grab.payload,
+    grab.contextMenu,
+    grabIntent,
+    recordFeatureInteraction,
+    showGrabToast
+  ])
 
   useEffect(() => {
     if (grab.state === 'idle' || grab.state === 'error') {
@@ -2850,11 +2812,7 @@ function BrowserPagePane({
   }, [downloadState])
 
   useEffect(() => {
-    setResourceNotice(
-      consumeEvictedBrowserTab(browserTab.id)
-        ? 'This tab reloaded to free browser resources.'
-        : null
-    )
+    setResourceNotice(null)
     setDownloadState(null)
   }, [browserTab.id])
 
@@ -3244,6 +3202,32 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
+    const applyActivePageZoom = (direction: BrowserPageZoomDirection): void => {
+      if (!isActiveRef.current) {
+        return
+      }
+      const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
+      if (nextLevel !== null) {
+        showBrowserZoomFeedback(nextLevel)
+      }
+    }
+    const removeGuestListener = window.api.ui.onZoomBrowserPage(applyActivePageZoom)
+    const removeLocalListener = addBrowserPageZoomEventListener((detail) => {
+      if (detail.browserPageId !== browserTabIdRef.current) {
+        return
+      }
+      applyActivePageZoom(detail.direction)
+    })
+    return () => {
+      removeGuestListener()
+      removeLocalListener()
+    }
+  }, [isActive, showBrowserZoomFeedback])
+
+  useEffect(() => {
+    if (!isActive) {
+      return
+    }
     return window.api.ui.onHardReloadBrowserPage(() => {
       webviewRef.current?.reloadIgnoringCache()
     })
@@ -3263,10 +3247,10 @@ function BrowserPagePane({
             webview.getTitle(),
             webview.getURL() || browserTabUrlRef.current
           ),
-          // Why: webview reclaim/attach can transiently report isLoading() even
+          // Why: webview attach can transiently report isLoading() even
           // when no user-visible navigation happened. If we sync that into the
           // tab model on every activation, switching tabs flashes the blue
-          // loading dot and makes parked tabs look like they are reloading.
+          // loading dot and makes hidden tabs look like they are reloading.
           // Only explicit navigation/load events should drive Orca's loading UI.
           canGoBack: webview.canGoBack(),
           canGoForward: webview.canGoForward()
@@ -3274,7 +3258,7 @@ function BrowserPagePane({
       } catch {
         // Why: Electron only exposes these getters after the guest fully
         // attaches. Ignoring the transient failure avoids crashing Orca while
-        // the parked webview is being reclaimed into the visible tab body.
+        // the webview guest becomes ready.
       }
     },
     [browserTab.id]
@@ -3307,7 +3291,7 @@ function BrowserPagePane({
   }, [browserTab.id])
 
   // Why: this effect manages the full lifecycle of the webview DOM element —
-  // creation, parking, event wiring, and teardown. browserTab.url is
+  // creation, event wiring, and teardown. browserTab.url is
   // intentionally excluded — it changes on every navigation, and including it
   // would destroy and recreate the webview on every page load. URL-dependent
   // logic inside the effect reads from browserTabUrlRef instead.
@@ -3320,15 +3304,19 @@ function BrowserPagePane({
 
     let webview = webviewRegistry.get(browserTab.id)
     let needsInitialNavigation = false
+    if (webview && webview.parentElement !== container) {
+      // Why: moving an Electron webview between DOM parents can recreate the
+      // guest document. Treat unexpected parent drift as stale state instead.
+      destroyPersistentWebview(browserTab.id)
+      webview = undefined
+    }
     if (webview) {
-      container.appendChild(webview)
-      parkedAtByTabId.delete(browserTab.id)
       webview.style.pointerEvents = inputLockedRef.current ? 'none' : 'auto'
       syncNavigationState(webview)
       // Why: seed the ref with the store URL so the URL sync effect does not
-      // force-navigate a reclaimed webview that is already on the right page.
-      // getURL() can throw briefly during reattach, so use the store URL which
-      // was set by the last navigation event before parking.
+      // force-navigate an already-mounted webview that is on the right page.
+      // getURL() can throw briefly during attach, so use the store URL from the
+      // last navigation event.
       lastKnownWebviewUrlRef.current =
         normalizeBrowserNavigationUrl(browserTabUrlRef.current) ?? null
     } else {
@@ -3599,9 +3587,7 @@ function BrowserPagePane({
       // Why: connection-refused localhost tabs can fail before Electron wires up
       // event delivery if src is assigned too early. Attach listeners first so
       // Orca never misses the initial did-fail-load signal for a new tab.
-      // Only non-blank initial tabs should light up Orca's loading indicator;
-      // reclaiming/activating a parked about:blank tab is not a meaningful
-      // navigation and should not flash the tab-loading dot.
+      // Only non-blank initial tabs should light up Orca's loading indicator.
       const initialUrl =
         normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
       trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
@@ -3626,10 +3612,7 @@ function BrowserPagePane({
       }
 
       if (webviewRegistry.get(browserTab.id) === webview) {
-        moveFocusToRendererBeforeWebviewDetach(webview)
-        getHiddenContainer().appendChild(webview)
-        parkedAtByTabId.set(browserTab.id, Date.now())
-        evictParkedWebviews(browserTab.id)
+        destroyPersistentWebview(browserTab.id)
       }
     }
     // Why: this effect mounts and wires up webview event listeners once per tab
@@ -3684,8 +3667,8 @@ function BrowserPagePane({
     try {
       liveUrl = webview.getURL() || null
     } catch {
-      // Why: reattached parked guests can briefly reject getURL() before the
-      // underlying guest is fully ready again. Skip entirely so we do not
+      // Why: newly attached guests can briefly reject getURL() before the
+      // underlying guest is fully ready. Skip entirely so we do not
       // misinterpret a transient error as a URL mismatch and force-navigate.
       return
     }
@@ -3760,6 +3743,7 @@ function BrowserPagePane({
         recordFeatureInteraction('browser-annotations')
       }
       setGrabIntent(nextIntent)
+      recordFeatureInteraction(nextIntent === 'annotate' ? 'browser-annotations' : 'browser-grab')
       if (nextIntent === 'copy') {
         setPendingAnnotationPayload(null)
       } else {
@@ -4000,6 +3984,7 @@ function BrowserPagePane({
         createdAt: new Date().toISOString(),
         payload: createBrowserAnnotationPayload(payload)
       })
+      recordFeatureInteraction('browser-annotations')
       setPendingAnnotationPayload(null)
       setBrowserAnnotationTrayOpen(true)
       recordFeatureInteraction('browser-annotations')
@@ -4113,8 +4098,8 @@ function BrowserPagePane({
     }
     clearTimeout(annotationCopyTimerRef.current)
     setBrowserAnnotationsCopied(false)
-    clearBrowserPageAnnotations(browserTab.id)
     recordFeatureInteraction('browser-annotations')
+    clearBrowserPageAnnotations(browserTab.id)
   }, [browserTab.id, clearBrowserPageAnnotations, recordFeatureInteraction])
 
   const handleDeleteBrowserAnnotation = useCallback(
@@ -4253,6 +4238,7 @@ function BrowserPagePane({
     }
     return received
   })()
+  const showBrowserZoomIndicator = browserZoomFeedbackVisible || browserZoomPercent !== 100
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -4460,7 +4446,10 @@ function BrowserPagePane({
           )
         : null}
 
-      <div className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5">
+      <div
+        className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
+        data-contextual-tour-target="browser-toolbar"
+      >
         <Button
           size="icon"
           variant="ghost"
@@ -4527,6 +4516,7 @@ function BrowserPagePane({
                 onClick={() => startGrabIntent('copy')}
                 disabled={isBlankTab}
                 aria-label="Grab page element"
+                data-contextual-tour-target="browser-grab-control"
               >
                 <Crosshair className="size-4" />
               </Button>
@@ -4556,6 +4546,7 @@ function BrowserPagePane({
                 onClick={() => startGrabIntent('annotate')}
                 disabled={isBlankTab}
                 aria-label="Annotate page element"
+                data-contextual-tour-target="browser-annotation-control"
               >
                 <MessageSquarePlus className="size-4" />
                 {browserAnnotations.length > 0 ? (
@@ -4767,11 +4758,26 @@ function BrowserPagePane({
         </div>
       ) : null}
       <div
-        ref={containerRef}
+        ref={setContainerRef}
         className="relative flex min-h-0 flex-1 overflow-hidden bg-background"
         onDragOver={handleInternalFileDragOver}
         onDrop={handleInternalFileDrop}
       >
+        <div
+          role="status"
+          aria-live="polite"
+          aria-hidden={!showBrowserZoomIndicator}
+          className={cn(
+            'pointer-events-none absolute top-3 right-3 z-30 rounded-md border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-xs transition-opacity duration-300 ease-out',
+            browserZoomFeedbackVisible
+              ? 'opacity-100'
+              : browserZoomPercent === 100
+                ? 'opacity-0'
+                : 'opacity-80'
+          )}
+        >
+          {browserZoomPercent}%
+        </div>
         <BrowserFind isOpen={findOpen} onClose={() => setFindOpen(false)} webviewRef={webviewRef} />
         {showFailureOverlay ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.02),transparent_58%)] px-6">

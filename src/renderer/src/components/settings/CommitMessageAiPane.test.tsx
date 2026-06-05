@@ -10,16 +10,19 @@ import {
 import { useAppStore } from '../../store'
 import {
   CommitMessageAiPane,
+  createCommitMessageInstructionDraftState,
   getCommitMessageSettingsPaneDiscoveryHostKey,
-  mergeDiscoveredModelsIntoCommitMessageConfig
+  mergeDiscoveredModelsIntoCommitMessageConfig,
+  resolveCommitMessageInstructionDraftState
 } from './CommitMessageAiPane'
 import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 
-function renderPane(settings: GlobalSettings): string {
+function renderPane(settings: GlobalSettings, settingsSearchQuery = ''): string {
   return renderToStaticMarkup(
     React.createElement(CommitMessageAiPane, {
       settings,
-      updateSettings: () => {}
+      updateSettings: () => {},
+      settingsSearchQuery
     })
   )
 }
@@ -43,17 +46,78 @@ describe('CommitMessageAiPane', () => {
     useAppStore.setState({ settingsSearchQuery: '' })
   })
 
+  it('updates clean instruction drafts when persisted instructions change', () => {
+    const state = createCommitMessageInstructionDraftState(
+      {
+        commitMessage: 'commit-a',
+        pullRequest: 'pr-a'
+      },
+      1
+    )
+
+    const resolved = resolveCommitMessageInstructionDraftState(
+      state,
+      {
+        commitMessage: 'commit-b',
+        pullRequest: 'pr-a'
+      },
+      1
+    )
+
+    expect(resolved.draft).toEqual({
+      commitMessage: 'commit-b',
+      pullRequest: 'pr-a'
+    })
+  })
+
+  it('preserves dirty instruction drafts until the discard signal changes', () => {
+    const state = createCommitMessageInstructionDraftState(
+      {
+        commitMessage: 'commit-a',
+        pullRequest: 'pr-a'
+      },
+      1
+    )
+    state.draft.commitMessage = 'local edit'
+
+    const withExternalChange = resolveCommitMessageInstructionDraftState(
+      state,
+      {
+        commitMessage: 'commit-b',
+        pullRequest: 'pr-b'
+      },
+      1
+    )
+    expect(withExternalChange.draft).toEqual({
+      commitMessage: 'local edit',
+      pullRequest: 'pr-b'
+    })
+
+    const afterDiscard = resolveCommitMessageInstructionDraftState(
+      withExternalChange,
+      {
+        commitMessage: 'commit-b',
+        pullRequest: 'pr-b'
+      },
+      2
+    )
+    expect(afterDiscard.draft).toEqual({
+      commitMessage: 'commit-b',
+      pullRequest: 'pr-b'
+    })
+  })
+
   it('renders only the opt-in control before the feature is enabled', () => {
     const markup = renderPane(buildSettings())
 
-    expect(markup).toContain('Source Control AI')
-    expect(markup).toContain('Enable Source Control AI')
+    expect(markup).toContain('Git AI Author')
+    expect(markup).toContain('Enable Git AI Author')
     expect(markup).toContain('aria-checked="false"')
     expect(markup).not.toContain('Orca invokes this CLI')
-    expect(markup).not.toContain('Thinking effort')
+    expect(markup).not.toContain('Thinking Effort')
   })
 
-  it('renders model, thinking, and prompt controls for enabled preset agents', () => {
+  it('renders model, thinking, and collapsed commit and PR customization for enabled preset agents', () => {
     const markup = renderPane(
       buildSettings({
         commitMessageAi: {
@@ -69,15 +133,110 @@ describe('CommitMessageAiPane', () => {
 
     expect(markup).toContain('aria-checked="true"')
     expect(markup).toContain('Orca invokes this CLI')
-    expect(markup).toContain('Default model')
-    expect(markup).toContain('Thinking effort')
-    expect(markup).toContain('Commit message model')
-    expect(markup).toContain('PR details model')
+    expect(markup).toContain('Model')
+    expect(markup).toContain('Thinking Effort')
+    expect(markup).toContain('Commit and PR customization')
+    expect(markup).toContain('aria-expanded="false"')
+    expect(markup).not.toContain('Commit Messages')
+    expect(markup).not.toContain('Pull Requests')
+    expect(markup).not.toContain('Use a different model for commit message generation.')
+    expect(markup).not.toContain('Creation defaults')
     expect(markup).not.toContain('Branch name model')
-    expect(markup).toContain('Higher effort produces more careful messages')
-    expect(markup).toContain('Use Conventional Commits.')
-    expect(markup).toContain('Save')
-    expect(markup).toContain('Saved')
+    expect(markup).not.toContain('Higher effort produces more careful messages')
+    expect(markup).not.toContain('Use Conventional Commits.')
+    expect(markup).not.toContain('Saved')
+  })
+
+  it('shows the enable row for Git AI Author search matches before the feature is enabled', () => {
+    const markup = renderPane(buildSettings(), 'customization')
+
+    expect(markup).toContain('Git AI Author')
+    expect(markup).toContain('Enable Git AI Author')
+    expect(markup).toContain('aria-checked="false"')
+    expect(markup).not.toContain('Commit and PR customization')
+  })
+
+  it('opens commit and PR customization for matching settings search terms', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' },
+          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      }),
+      'customization'
+    )
+
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('Commit Messages')
+    expect(markup).toContain('Pull Requests')
+    expect(markup).toContain('Creation defaults')
+  })
+
+  it('shows the nested commit model control for commit message model search', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' },
+          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      }),
+      'commit message model'
+    )
+
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('Commit Messages')
+    expect(markup).toContain('Use a different model for commit message generation.')
+  })
+
+  it('shows the nested commit model control for commit model search', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' },
+          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      }),
+      'commit model'
+    )
+
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('Commit Messages')
+    expect(markup).toContain('Use a different model for commit message generation.')
+  })
+
+  it('shows the nested pull request model control for pr model search', () => {
+    const markup = renderPane(
+      buildSettings({
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' },
+          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      }),
+      'pr model'
+    )
+
+    expect(markup).toContain('aria-expanded="true"')
+    expect(markup).toContain('Pull Requests')
+    expect(markup).toContain(
+      'Use a different model for pull request title and description generation.'
+    )
   })
 
   it('keeps the agent and model selectors aligned for long labels', () => {
@@ -112,7 +271,7 @@ describe('CommitMessageAiPane', () => {
       })
     )
 
-    expect(markup).toContain('Source Control AI')
+    expect(markup).toContain('Git AI Author')
     expect(markup).toContain('Custom command')
     expect(markup).toContain('ollama run llama3.1 {prompt}')
   })
@@ -136,7 +295,7 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Your default agent is Aider')
     expect(markup).toContain('Choose a supported agent or Custom')
     expect(markup).not.toContain('Which model the selected agent uses')
-    expect(markup).not.toContain('Thinking effort')
+    expect(markup).not.toContain('Thinking Effort')
   })
 
   it('shows Gemini as coming soon instead of a selectable generator', () => {
@@ -154,8 +313,8 @@ describe('CommitMessageAiPane', () => {
     )
 
     expect(markup).toContain('Gemini')
-    expect(markup).toContain('Gemini Source Control AI is coming soon')
-    expect(markup).not.toContain('Which model Source Control AI uses')
+    expect(markup).toContain('Gemini Git AI Author is coming soon')
+    expect(markup).not.toContain('Which model Git AI Author uses')
   })
 
   it('keeps custom command discoverable in settings search metadata', () => {

@@ -105,8 +105,8 @@ export function buildConnectConfig(
   resolved: SshResolvedConfig | null,
   options: BuildConnectConfigOptions = {}
 ): ConnectConfig {
-  const effectiveHost = target.host || resolved?.hostname || target.label
-  const effectivePort = target.port || resolved?.port || 22
+  const effectiveHost = resolveEffectiveHost(target, resolved)
+  const effectivePort = resolveEffectivePort(target, resolved)
   const effectiveUser = target.username || resolved?.user || ''
 
   const config: Record<string, unknown> = {
@@ -125,6 +125,10 @@ export function buildConnectConfig(
     config.agent = agent
   }
 
+  if (agent && resolved?.forwardAgent) {
+    config.agentForward = true
+  }
+
   const key =
     (options.includePrivateKey ?? !agent)
       ? resolvePrivateKey(target, resolved)
@@ -134,6 +138,30 @@ export function buildConnectConfig(
   }
 
   return config as ConnectConfig
+}
+
+function resolveEffectiveHost(target: SshTarget, resolved: SshResolvedConfig | null): string {
+  if (shouldUseResolvedEndpoint(target, resolved)) {
+    return resolved!.hostname
+  }
+  return target.host || resolved?.hostname || target.label
+}
+
+function resolveEffectivePort(target: SshTarget, resolved: SshResolvedConfig | null): number {
+  // Why: imported config aliases store 22 as the schema default even when an
+  // included/wildcard OpenSSH rule later resolves a different effective Port.
+  if (target.configHost && target.port === 22 && resolved?.port) {
+    return resolved.port
+  }
+  return target.port || resolved?.port || 22
+}
+
+function shouldUseResolvedEndpoint(target: SshTarget, resolved: SshResolvedConfig | null): boolean {
+  if (!target.configHost || !resolved?.hostname) {
+    return false
+  }
+  const host = target.host.trim()
+  return host === '' || host === target.configHost || host === target.label
 }
 
 // Why: ProxyJump and jumpHost are syntactic sugar for ProxyCommand.

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: daemon handshake, RPC, stream events, and reconnect cleanup share one socket lifecycle. */
 import { connect, type Socket } from 'net'
 import { readFileSync } from 'fs'
 import { randomUUID } from 'crypto'
@@ -45,6 +46,7 @@ export class DaemonClient {
   private eventListeners: ((event: unknown) => void)[] = []
   private disconnectedListeners: (() => void)[] = []
   private requestCounter = 0
+  private cleanupSocketListeners: (() => void) | null = null
 
   constructor(opts: DaemonClientOptions) {
     this.socketPath = opts.socketPath
@@ -74,16 +76,22 @@ export class DaemonClient {
 
   private async doConnect(): Promise<void> {
     const token = readFileSync(this.tokenPath, 'utf-8').trim()
+    const pendingListenerCleanups: (() => void)[] = []
+    const cleanupPendingListeners = (): void => {
+      for (const cleanup of pendingListenerCleanups.splice(0)) {
+        cleanup()
+      }
+    }
 
     try {
       // Sequential: control first, then stream
       this.controlSocket = await this.connectSocket()
       await this.sendHello(this.controlSocket, token, 'control')
-      this.setupControlParser()
+      pendingListenerCleanups.push(this.setupControlParser(this.controlSocket))
 
       this.streamSocket = await this.connectSocket()
       await this.sendHello(this.streamSocket, token, 'stream')
-      this.setupStreamParser()
+      pendingListenerCleanups.push(this.setupStreamParser(this.streamSocket))
 
       this.connected = true
       this.disconnectArmed = true
@@ -91,11 +99,21 @@ export class DaemonClient {
 
       const gen = this.connectionGeneration
       const handleClose = () => this.handleDisconnect(gen)
-      this.controlSocket.on('close', handleClose)
-      this.controlSocket.on('error', handleClose)
-      this.streamSocket.on('close', handleClose)
-      this.streamSocket.on('error', handleClose)
+      const controlSocket = this.controlSocket
+      const streamSocket = this.streamSocket
+      controlSocket.on('close', handleClose)
+      controlSocket.on('error', handleClose)
+      streamSocket.on('close', handleClose)
+      streamSocket.on('error', handleClose)
+      pendingListenerCleanups.push(() => {
+        controlSocket.off('close', handleClose)
+        controlSocket.off('error', handleClose)
+        streamSocket.off('close', handleClose)
+        streamSocket.off('error', handleClose)
+      })
+      this.cleanupSocketListeners = cleanupPendingListeners
     } catch (error) {
+      cleanupPendingListeners()
       this.controlSocket?.destroy()
       this.streamSocket?.destroy()
       this.controlSocket = null
@@ -163,6 +181,7 @@ export class DaemonClient {
   disconnect(): void {
     this.connected = false
     this.disconnectArmed = false
+    this.cleanupActiveSocketListeners()
 
     for (const [id, pending] of this.pendingRequests) {
       clearTimeout(pending.timer)
@@ -275,11 +294,7 @@ export class DaemonClient {
     })
   }
 
-  private setupControlParser(): void {
-    if (!this.controlSocket) {
-      return
-    }
-
+  private setupControlParser(socket: Socket): () => void {
     const parser = createNdjsonParser(
       (msg) => {
         const response = msg as RpcResponse
@@ -299,14 +314,12 @@ export class DaemonClient {
       () => {} // Ignore parse errors on control socket
     )
 
-    this.controlSocket.on('data', (chunk) => parser.feed(chunk.toString()))
+    const onData = (chunk: Buffer) => parser.feed(chunk.toString())
+    socket.on('data', onData)
+    return () => socket.off('data', onData)
   }
 
-  private setupStreamParser(): void {
-    if (!this.streamSocket) {
-      return
-    }
-
+  private setupStreamParser(socket: Socket): () => void {
     const parser = createNdjsonParser(
       (msg) => {
         const event = msg as DaemonEvent
@@ -319,7 +332,9 @@ export class DaemonClient {
       () => {} // Ignore parse errors on stream socket
     )
 
-    this.streamSocket.on('data', (chunk) => parser.feed(chunk.toString()))
+    const onData = (chunk: Buffer) => parser.feed(chunk.toString())
+    socket.on('data', onData)
+    return () => socket.off('data', onData)
   }
 
   private handleDisconnect(generation: number): void {
@@ -328,6 +343,7 @@ export class DaemonClient {
     }
     this.disconnectArmed = false
     this.connected = false
+    this.cleanupActiveSocketListeners()
 
     for (const [id, pending] of this.pendingRequests) {
       clearTimeout(pending.timer)
@@ -343,5 +359,11 @@ export class DaemonClient {
     for (const listener of this.disconnectedListeners) {
       listener()
     }
+  }
+
+  private cleanupActiveSocketListeners(): void {
+    const cleanup = this.cleanupSocketListeners
+    this.cleanupSocketListeners = null
+    cleanup?.()
   }
 }

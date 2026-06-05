@@ -30,9 +30,12 @@ import {
 
 export { AGENTS_PANE_SEARCH_ENTRIES } from './agents-search'
 
+const EMPTY_WSL_DISTROS: string[] = []
+
 type AgentsPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+  wslSupportedPlatform?: boolean
   wslAvailable?: boolean
   wslDistros?: string[]
   wslCapabilitiesLoading?: boolean
@@ -209,13 +212,6 @@ function AgentRow({
   onSaveOverride
 }: AgentRowProps): React.JSX.Element {
   const [cmdOpen, setCmdOpen] = useState(Boolean(cmdOverride))
-  const availabilityDescription = isEnabled
-    ? isDetected
-      ? 'Shown in launch and default choices.'
-      : 'Install to use in launch and default choices.'
-    : isDetected
-      ? 'Hidden from launch and default choices.'
-      : 'Hidden from launch and default choices if installed.'
 
   return (
     <div className={cn('py-3', !isDetected && 'opacity-70')}>
@@ -244,46 +240,49 @@ function AgentRow({
               defaultCmd
             )}
           </div>
-          <div className="mt-1 text-[11px] text-muted-foreground">{availabilityDescription}</div>
         </div>
 
-        <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+        <div className="ml-auto grid shrink-0 grid-cols-[max-content_6.5rem_1.75rem_1.75rem_1.75rem] items-center gap-1.5">
           <AgentAvailabilityControl
             label={label}
             isEnabled={isEnabled}
             onSetEnabled={onSetEnabled}
           />
 
-          {isDetected && isEnabled && (
-            <Button
-              type="button"
-              variant={isDefault ? 'secondary' : 'ghost'}
-              size="xs"
-              onClick={onSetDefault}
-              title={isDefault ? 'Default agent' : 'Set as default'}
-              className="h-7 gap-1 text-xs"
-            >
-              {isDefault && <Check className="size-3" />}
-              {isDefault ? 'Default' : 'Set default'}
-            </Button>
-          )}
+          <div className="flex justify-start">
+            {isDetected && isEnabled && (
+              <Button
+                type="button"
+                variant={isDefault ? 'secondary' : 'ghost'}
+                size="xs"
+                onClick={onSetDefault}
+                title={isDefault ? 'Default agent' : 'Set as default'}
+                className="h-7 w-full justify-center gap-1 text-xs"
+              >
+                {isDefault && <Check className="size-3" />}
+                {isDefault ? 'Default' : 'Set default'}
+              </Button>
+            )}
+          </div>
 
-          {isDetected && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setCmdOpen((prev) => !prev)}
-              title="Customize command"
-              aria-expanded={cmdOpen}
-              className={cn(
-                'size-7 text-muted-foreground hover:text-foreground',
-                (cmdOpen || cmdOverride) && 'text-foreground'
-              )}
-            >
-              <Terminal className="size-3.5" />
-            </Button>
-          )}
+          <div className="flex size-7 items-center justify-center">
+            {isDetected && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setCmdOpen((prev) => !prev)}
+                title="Customize command"
+                aria-expanded={cmdOpen}
+                className={cn(
+                  'size-7 text-muted-foreground hover:text-foreground',
+                  (cmdOpen || cmdOverride) && 'text-foreground'
+                )}
+              >
+                <Terminal className="size-3.5" />
+              </Button>
+            )}
+          </div>
 
           <a
             href={homepageUrl}
@@ -295,20 +294,22 @@ function AgentRow({
             <ExternalLink className="size-3.5" />
           </a>
 
-          {isDetected && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setCmdOpen((prev) => !prev)}
-              aria-label={cmdOpen ? 'Collapse command override' : 'Expand command override'}
-              className="size-7 text-muted-foreground hover:text-foreground"
-            >
-              <ChevronDown
-                className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
-              />
-            </Button>
-          )}
+          <div className="flex size-7 items-center justify-center">
+            {isDetected && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setCmdOpen((prev) => !prev)}
+                aria-label={cmdOpen ? 'Collapse command override' : 'Expand command override'}
+                className="size-7 text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown
+                  className={cn('size-3.5 transition-transform', cmdOpen && 'rotate-180')}
+                />
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -357,8 +358,9 @@ function DefaultAgentPill({ active, onClick, children }: DefaultAgentPillProps):
 export function AgentsPane({
   settings,
   updateSettings,
+  wslSupportedPlatform = false,
   wslAvailable = false,
-  wslDistros = [],
+  wslDistros = EMPTY_WSL_DISTROS,
   wslCapabilitiesLoading = false
 }: AgentsPaneProps): React.JSX.Element {
   const { detectedIds: detectedList, isRefreshing, refresh } = useDetectedAgents()
@@ -428,6 +430,7 @@ export function AgentsPane({
         settings={settings}
         updateSettings={updateSettings}
         refresh={refresh}
+        wslSupportedPlatform={wslSupportedPlatform}
         wslAvailable={wslAvailable}
         wslDistros={wslDistros}
         wslCapabilitiesLoading={wslCapabilitiesLoading}

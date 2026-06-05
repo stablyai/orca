@@ -13,6 +13,11 @@ import { FeatureWallClickRing } from './FeatureWallClickRing'
 
 const PROMPT_TEXT = 'Make Starter card stand out'
 
+// Why: these hand-rolled tour popovers need the same dark-mode separation as
+// Orca's dropdown/popover primitives while staying inside the storyboard DOM.
+const TOUR_FLOATING_SURFACE_CLASS =
+  'border border-black/14 bg-[rgba(255,255,255,0.82)] text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]'
+
 const PRE_INTRO_MS = 600
 const NEWTAB_APPROACH_MS = 700
 const NEWTAB_CLICK_MS = 180
@@ -124,7 +129,9 @@ const TERM_ENTRIES: readonly { entry: TermEntry; minPhase: Phase }[] = [
       html: (
         <>
           ✓ Updated{' '}
-          <code className="text-emerald-700">.pp-card[data-card=&quot;starter&quot;] .pp-cta</code>
+          <code className="text-emerald-600 dark:text-emerald-400">
+            .pp-card[data-card=&quot;starter&quot;] .pp-cta
+          </code>
         </>
       )
     },
@@ -151,8 +158,11 @@ const TERM_ENTRIES: readonly { entry: TermEntry; minPhase: Phase }[] = [
   }
 ]
 
-export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
-  const { reducedMotion } = props
+export function BrowserAnimatedVisual(props: {
+  reducedMotion: boolean
+  onCycleComplete?: () => void
+}): JSX.Element {
+  const { reducedMotion, onCycleComplete } = props
   const newBrowserShortcutLabel = useShortcutLabel('tab.newBrowser')
 
   const [phase, setPhase] = useState<Phase>('idle')
@@ -201,6 +211,9 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
     }
   }
 
+  /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: this
+     storyboard effect owns timed local animation state; deriving every phase
+     during render would break measured cursor sequencing. */
   useEffect(() => {
     if (reducedMotion) {
       setPhase('verified')
@@ -413,6 +426,7 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
         if (cancelled) {
           return
         }
+        onCycleComplete?.()
 
         await wait(RESET_HOLD_MS)
       }
@@ -423,7 +437,8 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
     }
-  }, [reducedMotion])
+  }, [onCycleComplete, reducedMotion])
+  /* oxlint-enable react-doctor/no-adjust-state-on-prop-change */
 
   const isIntroPhase =
     phase === 'idle' ||
@@ -472,7 +487,7 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
           }}
         >
           {/* Browser app-window — column 1 */}
-          <div className="relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card text-foreground shadow-[0_1px_2px_rgba(24,24,27,0.04)]">
+          <div className="relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-xs">
             <div
               ref={titlebarRef}
               className="relative flex min-h-[32px] items-end gap-1.5 border-b border-border bg-muted/40 px-2.5 pt-2"
@@ -500,7 +515,8 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
               <div
                 aria-hidden={!dropdownVisible}
                 className={cn(
-                  'absolute z-40 origin-top-left rounded-[10px] border bg-card text-[11.5px] text-foreground shadow-[0_16px_38px_rgba(24,24,27,0.18),0_2px_6px_rgba(24,24,27,0.08)] transition-[opacity,transform] duration-150',
+                  'absolute z-40 origin-top-left rounded-[10px] p-1 text-[11.5px] transition-[opacity,transform] duration-150',
+                  TOUR_FLOATING_SURFACE_CLASS,
                   dropdownVisible
                     ? 'translate-y-0 scale-100 opacity-100'
                     : '-translate-y-[3px] scale-[0.985] opacity-0'
@@ -508,9 +524,7 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
                 style={{
                   top: 'calc(100% + 4px)',
                   left: menuOffsetX,
-                  minWidth: 196,
-                  padding: 4,
-                  borderColor: 'rgba(24,24,27,0.12)'
+                  minWidth: 196
                 }}
               >
                 <DropdownSkeletonRow widthPct={64} />
@@ -518,14 +532,14 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
                   ref={newtabRowRef}
                   className={cn(
                     'grid items-center gap-2 rounded-md px-2 py-[5px]',
-                    newtabRowActive ? 'bg-foreground/[0.06]' : null
+                    newtabRowActive ? 'bg-black/8 dark:bg-white/14' : null
                   )}
-                  style={{ gridTemplateColumns: '18px 1fr auto' }}
+                  style={{ gridTemplateColumns: '18px 1fr' }}
                 >
-                  <span className="inline-flex size-[13px] items-center justify-center text-foreground">
+                  <span className="inline-flex size-[13px] items-center justify-center text-popover-foreground">
                     <GlobeGlyph />
                   </span>
-                  <span className="text-[11.5px] text-foreground">New Browser Tab</span>
+                  <span className="text-[11.5px] text-popover-foreground">New Browser Tab</span>
                   <span className="font-mono text-[10.5px] text-muted-foreground">
                     {newBrowserShortcutLabel}
                   </span>
@@ -591,7 +605,8 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
                 <div
                   aria-hidden={!annotateOpen}
                   className={cn(
-                    'pointer-events-none absolute z-30 flex origin-top-left flex-col gap-1.5 rounded-md border border-border bg-card px-[9px] pb-[7px] pt-2 text-[10px] text-foreground shadow-[0_12px_30px_rgba(24,24,27,0.18),0_2px_6px_rgba(24,24,27,0.08)] transition-[opacity,transform] duration-200',
+                    'pointer-events-none absolute z-30 flex origin-top-left flex-col gap-1.5 rounded-md px-[9px] pb-[7px] pt-2 text-[10px] transition-[opacity,transform] duration-200',
+                    TOUR_FLOATING_SURFACE_CLASS,
                     annotateOpen ? 'scale-100 opacity-100' : 'scale-[0.96] opacity-0'
                   )}
                   style={{ left: annotateAnchor.left, top: annotateAnchor.top, width: 188 }}
@@ -599,12 +614,12 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
                   <span className="block w-full shrink-0 truncate font-mono text-[9.5px] leading-none text-muted-foreground">
                     div.pricing-grid &gt; div.card.starter:nth-of-type(1) &gt; a.cta
                   </span>
-                  <span aria-hidden className="h-px w-full shrink-0 bg-foreground/10" />
-                  <div className="min-h-[28px] flex-1 break-words font-sans text-[10px] leading-[1.35] text-foreground">
+                  <span aria-hidden className="h-px w-full shrink-0 bg-popover-foreground/10" />
+                  <div className="min-h-[28px] flex-1 break-words font-sans text-[10px] leading-[1.35] text-popover-foreground">
                     {typedChars > 0 ? (
                       <>
                         {PROMPT_TEXT.slice(0, typedChars)}
-                        <span className="ml-px inline-block h-2 w-px translate-y-[1px] bg-foreground align-baseline" />
+                        <span className="ml-px inline-block h-2 w-px translate-y-[1px] bg-popover-foreground align-baseline" />
                       </>
                     ) : (
                       <span className="text-muted-foreground">Describe the change…</span>
@@ -628,7 +643,7 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
                   key={flashKey}
                   aria-hidden
                   className={cn(
-                    'pointer-events-none absolute inset-0 z-40 bg-white',
+                    'pointer-events-none absolute inset-0 z-40 bg-background/85 dark:bg-foreground/12',
                     flashing ? 'animate-[browserFlash_360ms_ease-out_forwards]' : 'opacity-0'
                   )}
                 />
@@ -649,13 +664,9 @@ export function BrowserAnimatedVisual(props: { reducedMotion: boolean }): JSX.El
             </div>
           </div>
 
-          {/* Terminal pane — column 2, sibling of the browser. Light theme to
-              match the other terminals in this tile (Terminal sub-step + the
-              workbench mock's `.br-terminal`); a dark pane next to a light
-              browser reads as two broken UIs (see STYLEGUIDE one-theme rule). */}
           <div
             className={cn(
-              'flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-[#fafafa] font-mono text-[10px] text-foreground shadow-[0_1px_2px_rgba(24,24,27,0.04)] transition-[opacity,transform] duration-500',
+              'flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card font-mono text-[10px] text-card-foreground shadow-xs transition-[opacity,transform] duration-500',
               isSplit ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0'
             )}
           >
@@ -724,9 +735,9 @@ function DropdownSkeletonRow(props: { widthPct: number }): JSX.Element {
       className="grid items-center gap-2 rounded-md px-2 py-[5px]"
       style={{ gridTemplateColumns: '18px 1fr' }}
     >
-      <span className="size-[13px] rounded-[3px] bg-foreground/10" />
+      <span className="size-[13px] rounded-[3px] bg-popover-foreground/10" />
       <span
-        className="h-[7px] rounded-[3px] bg-foreground/10"
+        className="h-[7px] rounded-[3px] bg-popover-foreground/10"
         style={{ width: `${props.widthPct}%` }}
       />
     </div>
@@ -737,7 +748,7 @@ function TermEntryView(props: { entry: TermEntry }): JSX.Element {
   const { entry } = props
   if (entry.kind === 'prompt') {
     return (
-      <span className="text-foreground">
+      <span className="text-card-foreground">
         <span className="text-muted-foreground">&gt;</span> {entry.text}
       </span>
     )
@@ -745,25 +756,25 @@ function TermEntryView(props: { entry: TermEntry }): JSX.Element {
   if (entry.kind === 'working') {
     return (
       <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-        <span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />
+        <span className="size-1.5 animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400" />
         Working…
       </span>
     )
   }
   if (entry.kind === 'ok') {
-    return <span className="text-emerald-700">{entry.html}</span>
+    return <span className="text-emerald-600 dark:text-emerald-400">{entry.html}</span>
   }
   if (entry.kind === 'tool') {
     return (
       <span>
-        <span className="text-violet-600">{entry.tool}</span>{' '}
-        <span className="text-emerald-700">{entry.arg}</span>
+        <span className="text-violet-600 dark:text-violet-400">{entry.tool}</span>{' '}
+        <span className="text-emerald-600 dark:text-emerald-400">{entry.arg}</span>
       </span>
     )
   }
   return (
     <span>
-      <span className="text-violet-600">{entry.tool}</span>{' '}
+      <span className="text-violet-600 dark:text-violet-400">{entry.tool}</span>{' '}
       <span className="text-muted-foreground">{entry.muted}</span>
     </span>
   )

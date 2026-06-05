@@ -137,6 +137,22 @@ describe('feature tip startup gate', () => {
     ).toEqual({ kind: 'skip' })
   })
 
+  it('does not open the voice tip after Settings marked it seen and dictation is disabled', () => {
+    expect(
+      getFeatureTipsAppOpenDecision({
+        activeModal: 'none',
+        cliInstalled: true,
+        featureTipsSeenIds: ['voice-dictation'],
+        featureInteractions: {},
+        onboarding: existingUserOnboarding,
+        persistedUIReady: true,
+        promptedThisSession: false,
+        settings: makeSettings(false),
+        suppressedByOnboardingThisSession: false
+      })
+    ).toEqual({ kind: 'skip' })
+  })
+
   it('does not open the CLI tip after the CLI is installed', () => {
     expect(
       getFeatureTipsAppOpenDecision({

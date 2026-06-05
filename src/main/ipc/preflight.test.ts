@@ -454,7 +454,35 @@ describe('preflight', () => {
     await expect(handlers['preflight:detectAgents']()).resolves.toEqual(['openclaude', 'cursor'])
   })
 
-  it('sends OpenClaude detection commands through the SSH remote preflight path', async () => {
+  it('detects Mistral Vibe from the installed vibe executable', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'vibe') {
+        return { stdout: '/home/test/.local/bin/vibe\n' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
+  })
+
+  it('deduplicates Mistral Vibe when both current and legacy executables exist', async () => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command !== 'which') {
+        throw new Error(`unexpected command ${String(command)}`)
+      }
+      if (String(args[0]) === 'vibe' || String(args[0]) === 'mistral-vibe') {
+        return { stdout: `/home/test/.local/bin/${String(args[0])}\n` }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
+  })
+
+  it('sends aliased detection commands through the SSH remote preflight path', async () => {
     const request = vi.fn().mockResolvedValue({ agents: ['openclaude'] })
     getActiveMultiplexerMock.mockReturnValue({
       isDisposed: () => false,
@@ -467,7 +495,11 @@ describe('preflight', () => {
       handlers['preflight:detectRemoteAgents'](undefined, { connectionId: 'ssh-1' })
     ).resolves.toEqual(['openclaude'])
     expect(request).toHaveBeenCalledWith('preflight.detectAgents', {
-      commands: expect.arrayContaining([{ id: 'openclaude', cmd: 'openclaude' }])
+      commands: expect.arrayContaining([
+        { id: 'openclaude', cmd: 'openclaude' },
+        { id: 'mistral-vibe', cmd: 'vibe' },
+        { id: 'mistral-vibe', cmd: 'mistral-vibe' }
+      ])
     })
   })
 
@@ -477,20 +509,30 @@ describe('preflight', () => {
       value: 'win32'
     })
     execFileAsyncMock.mockImplementation(async (command, args) => {
-      if (command === 'where') {
-        throw new Error('not found')
-      }
       if (command !== 'wsl.exe') {
         throw new Error(`unexpected command ${String(command)}`)
       }
       const script = String(args[5])
-      if (script === "command -v 'claude'") {
-        return { stdout: '/home/test/.local/bin/claude\n' }
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
       }
       throw new Error('not found')
     })
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(execFileAsyncMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      expect.arrayContaining([
+        '-d',
+        'Ubuntu',
+        '--exec',
+        'bash',
+        '-ic',
+        expect.stringContaining("'claude'")
+      ]),
+      { encoding: 'utf-8', timeout: 10000 }
+    )
   })
 
   it('detects agents from the default WSL distro when requested', async () => {
@@ -503,17 +545,18 @@ describe('preflight', () => {
         throw new Error(`unexpected command ${String(command)}`)
       }
       const script = String(args[3])
-      if (script === "command -v 'codex'") {
-        return { stdout: '/home/test/.local/bin/codex\n' }
+      if (script.includes("'codex'")) {
+        return { stdout: '__ORCA_AGENT_PATH__codex\t/home/test/.local/bin/codex\n' }
       }
       throw new Error('not found')
     })
 
     await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
+    expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['--', 'bash', '-lc', "command -v 'codex'"],
-      { encoding: 'utf-8', timeout: 5000 }
+      expect.arrayContaining(['--exec', 'bash', '-ic', expect.stringContaining("'codex'")]),
+      { encoding: 'utf-8', timeout: 10000 }
     )
   })
 

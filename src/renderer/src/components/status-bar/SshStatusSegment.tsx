@@ -48,7 +48,7 @@ function overallDotColor(status: 'connected' | 'partial' | 'disconnected' | 'con
       return 'bg-yellow-500'
     case 'connecting':
       return 'bg-yellow-500'
-    default:
+    case 'disconnected':
       return 'bg-muted-foreground/40'
   }
 }
@@ -61,7 +61,7 @@ function overallLabel(status: 'connected' | 'partial' | 'disconnected' | 'connec
       return 'Partial'
     case 'connecting':
       return 'Connecting…'
-    default:
+    case 'disconnected':
       return 'Disconnected'
   }
 }
@@ -80,7 +80,8 @@ function syncStatusLabel(status: RemoteWorkspaceSyncStatus | undefined): string 
       return 'Sync error'
     case 'offline':
       return 'Sync unavailable'
-    default:
+    case 'idle':
+    case undefined:
       return 'Sync idle'
   }
 }
@@ -97,7 +98,8 @@ function syncStatusTone(status: RemoteWorkspaceSyncStatus | undefined): string {
       return 'text-yellow-500'
     case 'synced':
       return 'text-emerald-500'
-    default:
+    case 'idle':
+    case undefined:
       return 'text-muted-foreground'
   }
 }

@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: repo IPC is intentionally centralized so SSH
 routing, clone lifecycle, and store persistence stay behind a single audited
 boundary. Splitting by line count would scatter tightly coupled repo behavior. */
-import type { BrowserWindow } from 'electron'
+import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
 import { z } from 'zod'
@@ -33,7 +33,6 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import type { ClaimedCloneTarget } from '../git/repo-clone-path'
-import { getNextProjectGroupOrder } from '../../shared/project-groups'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
@@ -61,7 +60,7 @@ import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import type { RepoMethod } from '../../shared/telemetry-events'
-import { detectRepoIcon } from '../repo-icon-autodetect'
+import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 
 // Why: `method` answers "which entry point did the user take?", not "what did
 // they add?" — so the IPC the renderer invoked IS the method. We never send
@@ -111,6 +110,14 @@ let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
 const pendingAbortCleanupByPath = new Map<string, Promise<void>>()
 const cloneInFlightByPath = new Map<string, Promise<void>>()
+const activeNestedRepoScans = new Map<string, AbortController>()
+type CompletedNestedRepoScan = {
+  scan: NestedRepoScanResult
+  parentPath: string
+  connectionId: string | null
+}
+const completedNestedRepoScans = new Map<string, CompletedNestedRepoScan>()
+const MAX_COMPLETED_NESTED_SCAN_RESULTS = 50
 
 const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -142,15 +149,21 @@ const ProjectGroupMoveProjectArgs = z.object({
 const ProjectGroupScanNestedArgs = z.object({
   path: z.string().min(1),
   connectionId: z.string().min(1).optional(),
+  scanId: z.string().min(1).optional(),
   options: z.unknown().optional()
+})
+
+const ProjectGroupCancelNestedScanArgs = z.object({
+  scanId: z.string().min(1)
 })
 
 const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
   z.object({
     parentPath: z.string().min(1),
-    groupName: z.string().min(1),
+    groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
+    scanId: z.string().min(1).optional(),
     mode: z.literal('group')
   }),
   z.object({
@@ -158,6 +171,7 @@ const ProjectGroupImportNestedArgs = z.discriminatedUnion('mode', [
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     connectionId: z.string().min(1).optional(),
+    scanId: z.string().min(1).optional(),
     mode: z.literal('separate')
   })
 ])
@@ -177,6 +191,50 @@ function validateNestedRepoScanRoot(path: string, connectionId?: string): void {
   if (!isAbsolute(path)) {
     throw new Error('Repo path must be an absolute path')
   }
+}
+
+function rememberCompletedNestedRepoScan(
+  scanId: string | undefined,
+  context: { parentPath: string; connectionId?: string },
+  scan: NestedRepoScanResult
+): void {
+  if (!scanId) {
+    return
+  }
+  completedNestedRepoScans.set(scanId, {
+    scan,
+    parentPath: scan.selectedPath,
+    connectionId: context.connectionId ?? null
+  })
+  while (completedNestedRepoScans.size > MAX_COMPLETED_NESTED_SCAN_RESULTS) {
+    const oldestScanId = completedNestedRepoScans.keys().next().value
+    if (!oldestScanId) {
+      break
+    }
+    completedNestedRepoScans.delete(oldestScanId)
+  }
+}
+
+function getCompletedNestedRepoScan(args: {
+  scanId?: string
+  parentPath: string
+  connectionId?: string
+}): NestedRepoScanResult | undefined {
+  if (!args.scanId) {
+    return undefined
+  }
+  const completed = completedNestedRepoScans.get(args.scanId)
+  if (!completed) {
+    return undefined
+  }
+  if (
+    completed.connectionId !== (args.connectionId ?? null) ||
+    normalizeRuntimePathForComparison(completed.parentPath) !==
+      normalizeRuntimePathForComparison(args.parentPath)
+  ) {
+    return undefined
+  }
+  return completed.scan
 }
 
 async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<void> {
@@ -270,10 +328,17 @@ async function scanNestedReposForIpc(args: {
   path: string
   connectionId?: string
   options?: unknown
+  signal?: AbortSignal
+  onProgress?: (scan: NestedRepoScanResult) => void
 }): Promise<NestedRepoScanResult> {
   validateNestedRepoScanRoot(args.path, args.connectionId)
   if (!args.connectionId) {
-    return scanNestedRepos({ path: args.path, options: args.options })
+    return scanNestedRepos({
+      path: args.path,
+      options: args.options,
+      signal: args.signal,
+      onProgress: args.onProgress
+    })
   }
   const gitProvider = getSshGitProvider(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
@@ -284,15 +349,35 @@ async function scanNestedReposForIpc(args: {
   return scanNestedRepos({
     path: resolvedPath,
     options: args.options,
+    signal: args.signal,
+    onProgress: args.onProgress,
     filesystem: {
       readDirectory: async (dirPath) =>
         (await fsProvider.readDir(dirPath)).map((entry) => ({
           name: entry.name,
-          isDirectory: entry.isDirectory
+          isDirectory: entry.isDirectory,
+          isSymlink: entry.isSymlink
         })),
+      readTextFile: async (filePath) => (await fsProvider.readFile(filePath)).content,
       joinPath: (parentPath, childName) => posix.join(parentPath, childName),
       basename: (path) => posix.basename(path),
-      isGitRepoPath: async (path) => {
+      hasGitMarker: async (path) => {
+        try {
+          const marker = await fsProvider.stat(posix.join(path, '.git'))
+          if (marker.type === 'directory' || marker.type === 'file') {
+            return true
+          }
+        } catch {
+          // Continue to cheap bare-repository marker checks below.
+        }
+        const [head, objects, refs] = await Promise.all([
+          fsProvider.stat(posix.join(path, 'HEAD')).catch(() => null),
+          fsProvider.stat(posix.join(path, 'objects')).catch(() => null),
+          fsProvider.stat(posix.join(path, 'refs')).catch(() => null)
+        ])
+        return head?.type === 'file' && objects?.type === 'directory' && refs?.type === 'directory'
+      },
+      isSelectedPathGitRepo: async (path) => {
         try {
           return (await gitProvider.isGitRepoAsync(path)).isRepo
         } catch {
@@ -301,6 +386,42 @@ async function scanNestedReposForIpc(args: {
       }
     }
   })
+}
+
+async function runNestedRepoScanForIpc(
+  event: IpcMainInvokeEvent,
+  args: z.infer<typeof ProjectGroupScanNestedArgs>
+): Promise<NestedRepoScanResult> {
+  const controller = args.scanId ? new AbortController() : undefined
+  if (args.scanId && controller) {
+    activeNestedRepoScans.get(args.scanId)?.abort()
+    activeNestedRepoScans.set(args.scanId, controller)
+  }
+
+  try {
+    const scan = await scanNestedReposForIpc({
+      ...args,
+      signal: controller?.signal,
+      onProgress: args.scanId
+        ? (scan) => {
+            event.sender.send('projectGroups:scanNestedProgress', {
+              scanId: args.scanId,
+              scan
+            })
+          }
+        : undefined
+    })
+    rememberCompletedNestedRepoScan(
+      args.scanId,
+      { parentPath: args.path, connectionId: args.connectionId },
+      scan
+    )
+    return scan
+  } finally {
+    if (args.scanId && activeNestedRepoScans.get(args.scanId) === controller) {
+      activeNestedRepoScans.delete(args.scanId)
+    }
+  }
 }
 
 export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
@@ -317,6 +438,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('projectGroups:delete')
   ipcMain.removeHandler('projectGroups:moveProject')
   ipcMain.removeHandler('projectGroups:scanNested')
+  ipcMain.removeHandler('projectGroups:cancelNestedScan')
   ipcMain.removeHandler('projectGroups:importNested')
   ipcMain.removeHandler('repos:pickFolder')
   ipcMain.removeHandler('repos:pickDirectory')
@@ -395,15 +517,29 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
 
   ipcMain.handle(
     'projectGroups:scanNested',
-    async (_event, rawArgs: unknown): Promise<NestedRepoScanResult> => {
+    async (event, rawArgs: unknown): Promise<NestedRepoScanResult> => {
       const args = parseProjectGroupIpcArgs(
         ProjectGroupScanNestedArgs,
         rawArgs,
         'invalid_project_group_scan_nested_args'
       )
-      return scanNestedReposForIpc(args)
+      return runNestedRepoScanForIpc(event, args)
     }
   )
+
+  ipcMain.handle('projectGroups:cancelNestedScan', (_event, rawArgs: unknown): boolean => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupCancelNestedScanArgs,
+      rawArgs,
+      'invalid_project_group_cancel_nested_scan_args'
+    )
+    const controller = activeNestedRepoScans.get(args.scanId)
+    if (!controller) {
+      return false
+    }
+    controller.abort()
+    return true
+  })
 
   ipcMain.handle(
     'projectGroups:importNested',
@@ -414,10 +550,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         'invalid_project_group_import_nested_args'
       )
       const requestedPaths = args.projectPaths
-      const scan = await scanNestedReposForIpc({
-        path: args.parentPath,
-        connectionId: args.connectionId
-      })
+      const completedScan = getCompletedNestedRepoScan(args)
+      const scan =
+        completedScan ??
+        (await scanNestedReposForIpc({
+          path: args.parentPath,
+          connectionId: args.connectionId,
+          options: { timeoutMs: 15_000 }
+        }))
       const selection = resolveNestedRepoSelection({ scan, projectPaths: requestedPaths })
       const groupResolver = createNestedProjectGroupResolver({
         parentPath: scan.selectedPath,
@@ -433,7 +573,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         })
       )
 
-      for (const repoPath of selection.selectedPaths) {
+      for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
         try {
           if (args.connectionId) {
             const gitProvider = getSshGitProvider(args.connectionId)
@@ -460,16 +600,22 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
-              store.moveProjectToGroup(existing.id, group.id)
+              store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
             }
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
             continue
           }
+          const detected = await detectRepoIconAndUpstream({
+            repoPath,
+            kind: 'git',
+            connectionId: args.connectionId
+          })
           const repo: Repo = {
             id: randomUUID(),
             path: repoPath,
             displayName: getRepoName(repoPath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
+            ...detected,
             addedAt: Date.now(),
             kind: 'git',
             ...(args.connectionId ? { connectionId: args.connectionId } : {}),
@@ -478,7 +624,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             ...(group
               ? {
                   projectGroupId: group.id,
-                  projectGroupOrder: getNextProjectGroupOrder(store.getRepos(), group.id)
+                  projectGroupOrder
                 }
               : {})
           }
@@ -538,13 +684,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: existing }
       }
 
-      const repoIcon = await detectRepoIcon({ repoPath: args.path, kind: repoKind })
+      const detected = await detectRepoIconAndUpstream({ repoPath: args.path, kind: repoKind })
       const repo: Repo = {
         id: randomUUID(),
         path: args.path,
         displayName: getRepoName(args.path),
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        ...(repoIcon ? { repoIcon } : {}),
+        ...detected,
         addedAt: Date.now(),
         kind: repoKind,
         ...(repoKind === 'git'
@@ -644,7 +790,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         }
       }
 
-      const repoIcon = await detectRepoIcon({
+      const detected = await detectRepoIconAndUpstream({
         repoPath: resolvedPath,
         kind: repoKind,
         connectionId: args.connectionId
@@ -654,7 +800,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         path: resolvedPath,
         displayName,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        ...(repoIcon ? { repoIcon } : {}),
+        ...detected,
         addedAt: Date.now(),
         kind: repoKind,
         connectionId: args.connectionId,
@@ -855,13 +1001,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         return { repo: raceWinner }
       }
 
-      const repoIcon = await detectRepoIcon({ repoPath: targetPath, kind: repoKind })
+      const detected = await detectRepoIconAndUpstream({ repoPath: targetPath, kind: repoKind })
       const repo: Repo = {
         id: randomUUID(),
         path: targetPath,
         displayName: name,
         badgeColor: DEFAULT_REPO_BADGE_COLOR,
-        ...(repoIcon ? { repoIcon } : {}),
+        ...detected,
         addedAt: Date.now(),
         kind: repoKind,
         ...(repoKind === 'git'
@@ -914,8 +1060,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'displayName'
             | 'badgeColor'
             | 'repoIcon'
+            | 'upstream'
             | 'hookSettings'
             | 'worktreeBaseRef'
+            | 'worktreeBasePath'
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
@@ -954,6 +1102,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         const v = updates.symlinkPaths as unknown
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
           delete updates.symlinkPaths
+        }
+      }
+      if ('worktreeBasePath' in updates && updates.worktreeBasePath !== undefined) {
+        const v = updates.worktreeBasePath as unknown
+        if (typeof v !== 'string') {
+          delete updates.worktreeBasePath
+        } else {
+          updates.worktreeBasePath = v.trim() || undefined
         }
       }
       if ('repoIcon' in updates) {
@@ -1000,6 +1156,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       }
       const updated = store.updateRepo(args.repoId, updates)
       if (updated) {
+        if ('worktreeBasePath' in updates) {
+          invalidateAuthorizedRootsCache()
+        }
         notifyReposChanged(mainWindow)
       }
       return updated
@@ -1247,13 +1406,13 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             return existing
           }
 
-          const repoIcon = await detectRepoIcon({ repoPath: clonePath, kind: 'git' })
+          const detected = await detectRepoIconAndUpstream({ repoPath: clonePath, kind: 'git' })
           const repo: Repo = {
             id: randomUUID(),
             path: clonePath,
             displayName: getRepoName(clonePath),
             badgeColor: DEFAULT_REPO_BADGE_COLOR,
-            ...(repoIcon ? { repoIcon } : {}),
+            ...detected,
             addedAt: Date.now(),
             kind: 'git',
             externalWorktreeVisibility: 'hide',

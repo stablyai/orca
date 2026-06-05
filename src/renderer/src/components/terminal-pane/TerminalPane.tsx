@@ -7,6 +7,7 @@ import { X } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
   DEFAULT_TERMINAL_DIVIDER_DARK,
   isTerminalBackgroundLight,
@@ -36,10 +37,12 @@ import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { TerminalErrorToast } from './TerminalErrorToast'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
+import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
+import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
@@ -88,6 +91,9 @@ import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
+import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
+import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
+import { useRepoById } from '@/store/selectors'
 
 type TerminalPaneProps = {
   tabId: string
@@ -103,6 +109,31 @@ type TerminalPaneProps = {
   isolatedPaneKey?: string | null
   onPtyExit: (ptyId: string) => void
   onCloseTab: () => void
+}
+
+type TerminalQuickCommandEditorDialogProps = {
+  command: TerminalQuickCommand
+  onOpenChange: (open: boolean) => void
+  onSave: (command: TerminalQuickCommand) => void
+}
+
+function TerminalQuickCommandEditorDialog({
+  command,
+  onOpenChange,
+  onSave
+}: TerminalQuickCommandEditorDialogProps): React.JSX.Element {
+  const repos = useAppStore((store) => store.repos)
+
+  return (
+    <TerminalQuickCommandDialog
+      open
+      mode="add"
+      command={command}
+      repos={repos}
+      onOpenChange={onOpenChange}
+      onSave={onSave}
+    />
+  )
 }
 
 function formatClipboardImagePasteError(error: unknown): string {
@@ -179,8 +210,10 @@ export default function TerminalPane({
   // Why: the terminal menu can be the first quick-command entry point, so each
   // Add action starts with a fresh draft instead of reusing cancelled text.
   const [quickCommandDraft, setQuickCommandDraft] = useState(createTerminalQuickCommandDraft)
+  const [agentSessionFork, setAgentSessionFork] = useState<PreparedAgentSessionFork | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
   const [sessionStateSaveFailureOpen, setSessionStateSaveFailureOpen] = useState(false)
+  const daemonActions = useDaemonActions()
   // Why: override state lives in a plain Map for perf (safeFit reads it on
   // every resize). This counter forces a re-render when overrides change so
   // the mobile-fit banner appears/disappears. When an override is cleared
@@ -304,6 +337,7 @@ export default function TerminalPane({
   const paneTitlesRef = useRef<Record<number, string>>({})
   paneTitlesRef.current = paneTitles
   const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
+  const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
   const [renamingPaneId, setRenamingPaneId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
@@ -335,8 +369,8 @@ export default function TerminalPane({
   )
   const clearCodexRestartNotice = useAppStore((store) => store.clearCodexRestartNotice)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
-  const terminalTab = useAppStore(
-    (store) => (store.tabsByWorktree[worktreeId] ?? []).find((tab) => tab.id === tabId) ?? null
+  const terminalTab = useAppStore((store) =>
+    getCachedTerminalTabForWorktree(store.tabsByWorktree, worktreeId, tabId)
   )
   const setTabLayout = useAppStore((store) => store.setTabLayout)
   const restoredLayout = useMemo(
@@ -358,7 +392,6 @@ export default function TerminalPane({
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
-  const repos = useAppStore((store) => store.repos)
   const updateSettings = useAppStore((store) => store.updateSettings)
   const keybindings = useAppStore((store) => store.keybindings)
   // Why: Windows is the only platform where bare right-click is repurposed as
@@ -375,7 +408,6 @@ export default function TerminalPane({
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
   const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
-
   useEffect(() => {
     if (startup) {
       consumeTabStartupCommand(tabId)
@@ -392,7 +424,7 @@ export default function TerminalPane({
 
   const quickCommandRepoId =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
-  const quickCommandRepo = repos.find((repo) => repo.id === quickCommandRepoId) ?? null
+  const quickCommandRepo = useRepoById(quickCommandRepoId)
   const quickCommandRepoLabel = quickCommandRepo
     ? quickCommandRepo.displayName || quickCommandRepo.path
     : quickCommandRepoId
@@ -411,9 +443,7 @@ export default function TerminalPane({
   const quickCommandGroupId =
     useAppStore(
       (s) =>
-        s.unifiedTabsByWorktree[worktreeId]?.find(
-          (tab) => tab.entityId === tabId && tab.contentType === 'terminal'
-        )?.groupId ??
+        getCachedTerminalGroupIdForWorktree(s.unifiedTabsByWorktree, worktreeId, tabId) ??
         s.activeGroupIdByWorktree[worktreeId] ??
         null
     ) ?? null
@@ -484,16 +514,28 @@ export default function TerminalPane({
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
     const currentPanes = manager.getPanes()
     const currentLeafIds = new Set(currentPanes.map((p) => p.leafId))
+    const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
+    const scrollbackPreserveLeafIds = new Set(
+      [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
+    )
     // Preserve existing buffersByLeafId so layout-only persists (resize, split,
     // reorder) don't clobber previously captured scrollback. Drop entries for
     // leaves that no longer exist.
     const mergedBuffers = mergeCapturedLeafState({
       prior: existing?.buffersByLeafId,
       fresh: {},
-      currentLeafIds
+      currentLeafIds: scrollbackPreserveLeafIds
     })
     if (Object.keys(mergedBuffers).length > 0) {
       layout.buffersByLeafId = mergedBuffers
+    }
+    const mergedScrollbackRefs = mergeCapturedLeafState({
+      prior: existing?.scrollbackRefsByLeafId,
+      fresh: {},
+      currentLeafIds: scrollbackPreserveLeafIds
+    })
+    if (Object.keys(mergedScrollbackRefs).length > 0) {
+      layout.scrollbackRefsByLeafId = mergedScrollbackRefs
     }
     // Why: between pane creation and the deferred rAF where PTYs actually
     // attach, all transports have getPtyId() === null. The merge below
@@ -541,7 +583,19 @@ export default function TerminalPane({
       layout.titlesByLeafId = titlesByLeafId
     }
     setTabLayout(tabId, layout)
+    for (const leafId of currentLeafIds) {
+      clearedScrollbackLeafIds.delete(leafId)
+    }
   }, [tabId, setTabLayout])
+
+  const clearPaneScrollback = useCallback(
+    (pane: ManagedPane): void => {
+      clearedScrollbackLeafIdsRef.current.add(pane.leafId)
+      pane.terminal.clear()
+      persistLayoutSnapshot()
+    },
+    [persistLayoutSnapshot]
+  )
 
   useEffect(() => {
     if (!terminalTab) {
@@ -1029,6 +1083,7 @@ export default function TerminalPane({
     setSearchOpen,
     onSearchSelectedText: handleSearchSelectedText,
     onRequestClosePane: handleRequestClosePane,
+    onClearPaneScrollback: clearPaneScrollback,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
@@ -1352,9 +1407,13 @@ export default function TerminalPane({
         existingLayout: existing,
         // Why: beforeunload skips local/floating bytes because session payloads
         // immediately prune them; worktree sleep keeps them as defense-in-depth.
-        captureBuffers: shouldCaptureScrollbackBuffers
+        captureBuffers: shouldCaptureScrollbackBuffers,
+        clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
       })
       setTabLayout(tabId, layout)
+      for (const pane of panes) {
+        clearedScrollbackLeafIdsRef.current.delete(pane.leafId)
+      }
     }
     shutdownBufferCaptures.set(tabId, captureBuffers)
     return () => {
@@ -1382,8 +1441,14 @@ export default function TerminalPane({
     cancelPendingRenameFrames()
   }, [cancelPendingRenameFrames])
 
-  useEffect(
-    () => () => {
+  const setContainerRef = useCallback(
+    (node: HTMLDivElement | null): void => {
+      containerRef.current = node
+      if (node !== null) {
+        return
+      }
+      // Why: inline title rename focus/blur frames are owned by the terminal
+      // container; invalidate them when that DOM owner detaches.
       closeRenameSession()
     },
     [closeRenameSession]
@@ -1538,17 +1603,19 @@ export default function TerminalPane({
   }, [cancelPendingRenameFrames, renamingPaneId])
 
   const contextMenu = useTerminalPaneContextMenu({
+    tabId,
     managerRef,
     paneTransportsRef,
     paneCwdRef,
-    tabId,
     worktreeId,
     groupId: quickCommandGroupId,
     fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
+    onClearPaneScrollback: clearPaneScrollback,
     onSetTitle: handleStartRename,
     onPasteError: setTerminalError,
+    onAgentSessionForkReady: setAgentSessionFork,
     rightClickToPaste
   })
 
@@ -1642,6 +1709,9 @@ export default function TerminalPane({
     // users still see its output while typing elsewhere. Hiding on `isActive`
     // blanked the previously focused pane and exposed the white group body.
     display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
+    // Why: split divider lines intentionally overdraw inside the pane tree.
+    // `hidden` reliably clips that pseudo-element paint at the terminal body.
+    overflow: 'hidden',
     ...(shouldMeasureHiddenStartup ? { opacity: 0, pointerEvents: 'none' } : {}),
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -1655,9 +1725,10 @@ export default function TerminalPane({
   return (
     <>
       <div
-        ref={containerRef}
+        ref={setContainerRef}
         className="absolute inset-0 min-h-0 min-w-0"
         data-native-file-drop-target="terminal"
+        data-contextual-tour-target="terminal-pane-split-target"
         data-terminal-tab-id={tabId}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
@@ -1713,8 +1784,13 @@ export default function TerminalPane({
         }}
       />
       {terminalError && isActive && (
-        <TerminalErrorToast error={terminalError} onDismiss={() => setTerminalError(null)} />
+        <TerminalErrorToast
+          error={terminalError}
+          onDismiss={() => setTerminalError(null)}
+          onRestartDaemon={() => daemonActions.setPending('restart')}
+        />
       )}
+      <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog
           open={sessionStateSaveFailureOpen}
@@ -1747,9 +1823,11 @@ export default function TerminalPane({
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
+        keybindings={keybindings}
         onEqualizePaneSizes={contextMenu.onEqualizePaneSizes}
         onClosePane={contextMenu.onClosePane}
         onClearScreen={contextMenu.onClearScreen}
+        onForkAgentSession={() => void contextMenu.onForkAgentSession()}
         repoQuickCommands={repoQuickCommands}
         globalQuickCommands={globalQuickCommands}
         quickCommandRepoLabel={quickCommandRepoLabel}
@@ -1763,13 +1841,22 @@ export default function TerminalPane({
         onSetTitle={contextMenu.onSetTitle}
         onCopyPaneId={contextMenu.onCopyPaneId}
       />
-      <TerminalQuickCommandDialog
-        open={quickCommandEditorOpen}
-        mode="add"
-        command={quickCommandDraft}
-        repos={repos}
-        onOpenChange={setQuickCommandEditorOpen}
-        onSave={saveQuickCommand}
+      {/* Why: repos is a broad store slice; only subscribe while the editor is visible. */}
+      {quickCommandEditorOpen ? (
+        <TerminalQuickCommandEditorDialog
+          command={quickCommandDraft}
+          onOpenChange={setQuickCommandEditorOpen}
+          onSave={saveQuickCommand}
+        />
+      ) : null}
+      <TerminalAgentSessionForkDialog
+        open={agentSessionFork !== null}
+        fork={agentSessionFork}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAgentSessionFork(null)
+          }
+        }}
       />
       {/* Title bar overlays — portaled into each pane container that has a title
           or is currently being renamed (so the inline input appears even for

@@ -29,13 +29,21 @@ const EDITOR_DOCUMENT_URL = `${EDITOR_DOCUMENT_ORIGIN}/rich-markdown-editor`
 
 function normalizeExternalEditorUrl(value: string): string | null {
   const url = value.trim()
-  if (!url) return null
+  if (!url) {
+    return null
+  }
   for (let index = 0; index < url.length; index += 1) {
     const code = url.charCodeAt(index)
-    if (code <= 32 || code === 127) return null
+    if (code <= 32 || code === 127) {
+      return null
+    }
   }
-  if (/^mailto:/i.test(url)) return url
-  if (!/^https?:\/\//i.test(url)) return null
+  if (/^mailto:/i.test(url)) {
+    return url
+  }
+  if (!/^https?:\/\//i.test(url)) {
+    return null
+  }
   try {
     const parsed = new URL(url)
     return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null
@@ -128,7 +136,9 @@ function MobileRichMarkdownEditorInner({ content, editable, onChange }: Props) {
   )
 
   useEffect(() => {
-    if (!readyRef.current) return
+    if (!readyRef.current) {
+      return
+    }
     if (currentWebViewContentRef.current !== content) {
       applyContent(content)
     }
@@ -148,7 +158,9 @@ function MobileRichMarkdownEditorInner({ content, editable, onChange }: Props) {
       } catch {
         return
       }
-      if (!message || typeof message !== 'object') return
+      if (!message || typeof message !== 'object') {
+        return
+      }
       const editorMessage = message as Partial<EditorWebViewMessage>
       if ('type' in message && message.type === 'ready') {
         readyRef.current = true

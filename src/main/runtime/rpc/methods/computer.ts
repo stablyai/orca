@@ -179,6 +179,10 @@ const Hotkey = ComputerObserveTargetBase.extend({
   key: requiredString('Missing key')
 }).superRefine(validateWindowTarget)
 
+const ComputerPermissions = z.object({
+  id: z.enum(['accessibility', 'screenshots']).optional()
+})
+
 const PasteText = ComputerObserveTargetBase.extend({
   text: requiredString('Missing text')
 }).superRefine(validateWindowTarget)
@@ -214,11 +218,20 @@ export const COMPUTER_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'computer.permissions',
-    params: z.object({}),
-    handler: async () => {
+    params: ComputerPermissions,
+    handler: async (params) => {
       const { openComputerUsePermissions } =
         await import('../../../computer/macos-computer-use-permissions')
-      return openComputerUsePermissions()
+      return openComputerUsePermissions(params.id)
+    }
+  }),
+  defineMethod({
+    name: 'computer.permissionsStatus',
+    params: z.object({}),
+    handler: async () => {
+      const { getComputerUsePermissionStatus } =
+        await import('../../../computer/macos-computer-use-permissions')
+      return getComputerUsePermissionStatus()
     }
   }),
   defineMethod({

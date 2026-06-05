@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: the setting owns one collapsed form with
-   queued writes, model selection, and prompt draft state. Splitting the
-   tiny subcontrols would make the settings write flow harder to audit. */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/types'
 import type {
@@ -9,7 +6,6 @@ import type {
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
 } from '../../../../shared/source-control-ai-types'
-import { buildBranchNamePrompt } from '../../../../shared/branch-name-from-work'
 import {
   clearSourceControlAiModelChoiceForHost,
   normalizeSourceControlAiSettings,
@@ -35,9 +31,9 @@ import { useActiveWorktree } from '../../store/selectors'
 import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Label } from '../ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { AUTO_RENAME_BRANCH_ADVANCED_SEARCH_ENTRIES } from './auto-rename-branch-search'
+import { AutoRenameBranchPromptEditor } from './AutoRenameBranchPromptEditor'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 
@@ -52,10 +48,6 @@ type AutoRenameBranchFromWorkSettingProps = {
 }
 
 const INHERIT_BRANCH_MODEL_VALUE = '__inherit_branch_model__'
-const BUILT_IN_BRANCH_NAME_PROMPT = buildBranchNamePrompt({
-  firstPrompt: '{first agent prompt}',
-  assistantMessage: '{agent initial response, when available}'
-})
 export function shouldOpenAutoRenameBranchAdvanced(searchQuery: string): boolean {
   return (
     normalizeSettingsSearchQuery(searchQuery) !== '' &&
@@ -158,12 +150,16 @@ export function AutoRenameBranchFromWorkSetting({
     onBranchPromptDirtyChange?.(branchNamePromptDirty)
   }, [branchNamePromptDirty, onBranchPromptDirtyChange])
 
-  useEffect(
-    () => () => {
-      onBranchPromptDirtyChange?.(false)
-    },
-    [onBranchPromptDirtyChange]
-  )
+  const onBranchPromptDirtyChangeRef = useRef(onBranchPromptDirtyChange)
+  onBranchPromptDirtyChangeRef.current = onBranchPromptDirtyChange
+  const setSettingRootRef = useCallback((node: HTMLDivElement | null): void => {
+    if (node !== null) {
+      return
+    }
+    // Why: Settings owns the global unsaved-branch-prompt guard; reset it
+    // when this setting detaches without a passive cleanup-only Effect.
+    onBranchPromptDirtyChangeRef.current?.(false)
+  }, [])
 
   const resolvedAgentId = resolveCommitMessageAgentChoice(
     config.agentId,
@@ -285,11 +281,14 @@ export function AutoRenameBranchFromWorkSetting({
 
   return (
     <SearchableSetting
-      title="Auto-Rename Branch"
-      description="Rename the auto-generated branch based on the work once an agent starts."
+      title="Auto-Name From First Message"
+      description="Use the first task to name blank new workspaces and their unpublished branches."
       keywords={[
+        'workspace',
+        'title',
         'branch',
         'rename',
+        'name',
         'auto',
         'creature name',
         'agent',
@@ -302,13 +301,13 @@ export function AutoRenameBranchFromWorkSetting({
       forceVisible={forceVisible || branchNamePromptDirty || advancedSearchOpen}
       className="space-y-3 py-2"
     >
-      <div className="flex items-center justify-between gap-4">
+      <div ref={setSettingRootRef} className="flex items-center justify-between gap-4">
         <div className="space-y-0.5">
-          <Label>Auto-Rename Branch</Label>
+          <Label>Auto-name from first message</Label>
           <p className="text-xs text-muted-foreground">
-            When an agent starts working in a new workspace, Orca renames its auto-generated branch
-            (e.g. <code>Nautilus</code>) to a short name summarizing the task. Only branches Orca
-            named itself are renamed, and never after they have been pushed.
+            When a blank new workspace starts work, Orca uses the first task to rename the sidebar
+            title and unpublished generated branch (e.g. <code>Nautilus</code>). Workspaces created
+            from linked issues or pull requests are named up front from the same short identity.
           </p>
         </div>
         <button
@@ -347,73 +346,14 @@ export function AutoRenameBranchFromWorkSetting({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2 space-y-3 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-            <div className="space-y-2">
-              <div className="space-y-0.5">
-                <Label htmlFor="git-auto-rename-branch-name-prompt">Branch name prompt</Label>
-                <p className="text-xs text-muted-foreground">
-                  Appended to Orca&apos;s{' '}
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline rounded-sm font-medium text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                      >
-                        built-in branch-name prompt
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent
-                      align="start"
-                      side="bottom"
-                      className="w-[520px] max-w-[calc(100vw-2rem)] p-3"
-                    >
-                      <div>
-                        <pre className="scrollbar-sleek max-h-72 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                          {BUILT_IN_BRANCH_NAME_PROMPT}
-                        </pre>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                  . Orca generates only the final segment, like{' '}
-                  <code className="font-mono">fix-login-flow</code>; your branch prefix setting
-                  still applies.
-                </p>
-              </div>
-              <textarea
-                id="git-auto-rename-branch-name-prompt"
-                rows={4}
-                value={branchNamePromptDraft}
-                onChange={(event) => setBranchNamePromptDraft(event.target.value)}
-                placeholder="Prefer domain nouns from the task, avoid ticket IDs, and keep names reviewer-friendly."
-                className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-              />
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] text-muted-foreground">
-                  {branchNamePromptDirty ? 'Unsaved changes' : 'Saved'}
-                </p>
-                <div className="flex items-center gap-2">
-                  {branchNamePromptDirty ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="xs"
-                      onClick={onDiscardPrompt}
-                      disabled={isSavingPrompt}
-                    >
-                      Discard
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="xs"
-                    onClick={() => void onSavePrompt()}
-                    disabled={!branchNamePromptDirty || isSavingPrompt}
-                  >
-                    {isSavingPrompt ? 'Saving...' : 'Save'}
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <AutoRenameBranchPromptEditor
+              draft={branchNamePromptDraft}
+              dirty={branchNamePromptDirty}
+              saving={isSavingPrompt}
+              onDraftChange={setBranchNamePromptDraft}
+              onDiscard={onDiscardPrompt}
+              onSave={onSavePrompt}
+            />
 
             <div className="flex flex-col gap-3 border-t border-border/50 pt-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="space-y-0.5">
@@ -467,7 +407,7 @@ export function AutoRenameBranchFromWorkSetting({
                 </div>
               ) : (
                 <p className="max-w-[260px] text-right text-xs text-muted-foreground">
-                  Choose a Source Control AI agent that supports model selection.
+                  Choose a Git AI Author agent that supports model selection.
                 </p>
               )}
             </div>

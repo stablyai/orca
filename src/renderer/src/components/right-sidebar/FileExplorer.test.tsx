@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- File Explorer toolbar and row tests share element-walking fixtures. */
 import { describe, expect, it, vi } from 'vitest'
 import { Ellipsis, ListCollapse, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import {
 } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import type { TreeNode } from './file-explorer-types'
+import { createFileExplorerRowProjection } from './file-explorer-row-projection'
 
 type ReactElementLike = {
   type: unknown
@@ -93,6 +95,19 @@ function findGitIgnoredMenuItem(node: unknown): ReactElementLike {
   })
   if (!found) {
     throw new Error('git ignored menu item not found')
+  }
+  return found
+}
+
+function findDotfilesMenuItem(node: unknown): ReactElementLike {
+  let found: ReactElementLike | null = null
+  visit(node, (entry) => {
+    if (entry.type === DropdownMenuCheckboxItem && entry.props.children === 'Show Dotfiles') {
+      found = entry
+    }
+  })
+  if (!found) {
+    throw new Error('dotfiles menu item not found')
   }
   return found
 }
@@ -195,6 +210,8 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
     showGitIgnoredFilesToggle: true,
     showGitIgnoredFiles: true,
     onToggleGitIgnoredFiles: vi.fn(),
+    showDotfiles: true,
+    onToggleDotfiles: vi.fn(),
     ...overrides
   })
 }
@@ -273,6 +290,17 @@ describe('FileExplorerToolbar', () => {
     expect(menuItem.props.checked).toBe(true)
   })
 
+  it('puts the dotfile visibility toggle in the overflow menu', () => {
+    const onToggleDotfiles = vi.fn()
+    const element = makeToolbar({ onToggleDotfiles, showDotfiles: false })
+
+    const menuItem = findDotfilesMenuItem(element)
+    ;(menuItem.props.onCheckedChange as () => void)()
+
+    expect(onToggleDotfiles).toHaveBeenCalledTimes(1)
+    expect(menuItem.props.checked).toBe(false)
+  })
+
   it('adds open-in launchers to the overflow menu', () => {
     const element = makeToolbar({ connectionId: 'ssh-1' })
 
@@ -349,7 +377,7 @@ describe('FileExplorerRow collapse folder action', () => {
         measureElement: vi.fn()
       } as never,
       inlineInputIndex: -1,
-      flatRows: [directoryNode],
+      rowProjection: createFileExplorerRowProjection([directoryNode]),
       inlineInput: null,
       handleInlineSubmit: vi.fn(),
       dismissInlineInput: vi.fn(),
@@ -400,7 +428,7 @@ describe('FileExplorerRow collapse folder action', () => {
         measureElement: vi.fn()
       } as never,
       inlineInputIndex: -1,
-      flatRows: [directoryNode],
+      rowProjection: createFileExplorerRowProjection([directoryNode]),
       inlineInput: null,
       handleInlineSubmit: vi.fn(),
       dismissInlineInput: vi.fn(),

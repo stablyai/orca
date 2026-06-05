@@ -60,6 +60,7 @@ const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 const RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES = 10 * 1024 * 1024
 const WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS = 150
+const RUNTIME_FILE_WATCH_EVENT_STAT_LIMIT = 200
 // Why: runtime files.watch subscriptions are cleaned up through synchronous RPC
 // callbacks. Track native Parcel unsubscribe work so app shutdown can drain it.
 const pendingRuntimeFileWatcherUnsubscribes = new Set<Promise<void>>()
@@ -119,8 +120,19 @@ export type RuntimeFileCommandHost = {
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
-  openFile(worktreeId: string, filePath: string, relativePath: string): void
-  openDiff(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
+  openFile(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    runtimeEnvironmentId: string
+  ): void
+  openDiff(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    staged: boolean,
+    runtimeEnvironmentId: string
+  ): void
 }
 
 export class RuntimeFileCommands {
@@ -172,7 +184,7 @@ export class RuntimeFileCommands {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openFile(worktree.id, filePath, relativePath)
+    this.host.openFile(worktree.id, filePath, relativePath, this.host.getRuntimeId())
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -191,7 +203,7 @@ export class RuntimeFileCommands {
         ? 'markdown'
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openDiff(worktree.id, filePath, relativePath, staged)
+    this.host.openDiff(worktree.id, filePath, relativePath, staged, this.host.getRuntimeId())
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -281,6 +293,12 @@ export class RuntimeFileCommands {
       (err, events) => {
         if (err) {
           console.error('[runtime-files.watch] watcher error', { rootPath, err })
+          callback([{ kind: 'overflow', absolutePath: rootPath }])
+          return
+        }
+        // Why: large watcher batches usually mean a generated directory or
+        // branch switch. Avoid stat fanout and ask the renderer to refresh.
+        if (events.length > RUNTIME_FILE_WATCH_EVENT_STAT_LIMIT) {
           callback([{ kind: 'overflow', absolutePath: rootPath }])
           return
         }

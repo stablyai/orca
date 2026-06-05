@@ -12,6 +12,7 @@ import {
   encodeTerminalStreamText,
   type TerminalStreamFrame
 } from '../../../../shared/terminal-stream-protocol'
+import { TERMINAL_PANE_SPLIT_SOURCES } from '../../../../shared/feature-education-telemetry'
 
 // Why: when a mobile client subscribes the server resizes the PTY to phone
 // dims and serializes the buffer. Sending only the visible screen meant
@@ -159,12 +160,25 @@ function resolveMobileFloorClientId(
 function appendPendingMultiplexOutput(stream: TerminalMultiplexStream, data: string): void {
   stream.pendingOutput.push(data)
   stream.pendingOutputChars += data.length
+  stream.pendingOutputChars = trimPendingOutputToBudget(
+    stream.pendingOutput,
+    stream.pendingOutputChars
+  )
+}
+
+function trimPendingOutputToBudget(pendingOutput: string[], pendingOutputChars: number): number {
+  let omittedChunkCount = 0
   while (
-    stream.pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
-    stream.pendingOutput.length > 0
+    pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
+    omittedChunkCount < pendingOutput.length
   ) {
-    stream.pendingOutputChars -= stream.pendingOutput.shift()?.length ?? 0
+    pendingOutputChars -= pendingOutput[omittedChunkCount].length
+    omittedChunkCount += 1
   }
+  if (omittedChunkCount > 0) {
+    pendingOutput.splice(0, omittedChunkCount)
+  }
+  return pendingOutputChars
 }
 
 function isTerminalReadPayloadIncomplete(read: { truncated: boolean; limited?: boolean }): boolean {
@@ -339,7 +353,8 @@ const TerminalSplit = TerminalHandle.extend({
     .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
     .optional(),
   command: OptionalString,
-  env: z.record(z.string(), z.string()).optional()
+  env: z.record(z.string(), z.string()).optional(),
+  telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional()
 })
 
 const TerminalStop = z.object({
@@ -494,6 +509,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     })
   }),
   defineMethod({
+    name: 'terminal.isRunningAgent',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => ({
+      isRunningAgent: await runtime.isTerminalRunningAgent(params.terminal)
+    })
+  }),
+  defineMethod({
     name: 'terminal.rename',
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
@@ -573,7 +595,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       split: await runtime.splitTerminal(params.terminal, {
         direction: params.direction,
         command: params.command,
-        env: params.env
+        env: params.env,
+        telemetrySource: params.telemetrySource
       })
     })
   }),
@@ -1044,6 +1067,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (!useBinaryStream) {
         const read = await runtime.readTerminal(params.terminal)
         const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
+        // Why: legacy JSON streams register cleanup after snapshot awaits; if
+        // the socket closed meanwhile, registering now would orphan listeners.
+        if (signal?.aborted) {
+          return
+        }
         const size = runtime.getTerminalSize(ptyId)
         const displayMode = runtime.getMobileDisplayMode(ptyId)
         const seq = runtime.getLayout(ptyId)?.seq
@@ -1210,12 +1238,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           if (buffering) {
             pendingOutput.push(data)
             pendingOutputChars += data.length
-            while (
-              pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
-              pendingOutput.length > 0
-            ) {
-              pendingOutputChars -= pendingOutput.shift()?.length ?? 0
-            }
+            pendingOutputChars = trimPendingOutputToBudget(pendingOutput, pendingOutputChars)
             return
           }
           outputBatcher?.push(data)

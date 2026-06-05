@@ -1,10 +1,9 @@
 /* eslint-disable max-lines -- Why: the Linear drawer co-locates read-only preview, edit controls, and comment input so the full issue surface stays in one file. */
+/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Linear drawer state hydrates full issue details and comments from provider IPC for the selected issue. */
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  AlertTriangle,
   ArrowRight,
   ChevronDown,
-  Circle,
   ExternalLink,
   Gauge,
   LoaderCircle,
@@ -37,6 +36,7 @@ import {
   getLinearStateMarkerStyle,
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
+import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import type { LinearIssue, LinearComment } from '../../../shared/types'
 import {
   linearAddIssueComment,
@@ -74,6 +74,10 @@ const LINEAR_ESTIMATE_PRESETS = [1, 2, 3, 5, 8] as const
 
 export function formatLinearEstimateLabel(estimate: number | null | undefined): string {
   return estimate === null || estimate === undefined ? 'Set estimate' : `Estimate ${estimate}`
+}
+
+function formatLinearEstimateInput(estimate: number | null | undefined): string {
+  return estimate === null || estimate === undefined ? '' : String(estimate)
 }
 
 function LinearEditChipAdornment({
@@ -139,7 +143,6 @@ export function LinearIssueEditSection({
 }: EditSectionProps): React.JSX.Element {
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [estimatePopoverOpen, setEstimatePopoverOpen] = useState(false)
-  const [estimateInput, setEstimateInput] = useState('')
   const patchLinearIssue = useAppStore((s) => s.patchLinearIssue)
   const settings = useAppStore((s) => s.settings)
   const { isPending, run } = useImmediateMutation()
@@ -152,19 +155,22 @@ export function LinearIssueEditSection({
     labelIds: localLabelIds,
     labels: localLabels
   } = editState
+  const [estimateInput, setEstimateInput] = useState(() => formatLinearEstimateInput(localEstimate))
 
   const teamId = issue.team?.id || null
   const states = useTeamStates(teamId, settings, issue.workspaceId)
   const labels = useTeamLabels(teamId, settings, issue.workspaceId)
   const members = useTeamMembers(teamId, settings, issue.workspaceId)
 
-  useEffect(() => {
-    if (!estimatePopoverOpen) {
-      setEstimateInput(
-        localEstimate === null || localEstimate === undefined ? '' : String(localEstimate)
-      )
-    }
-  }, [estimatePopoverOpen, localEstimate])
+  const handleEstimatePopoverOpenChange = useCallback(
+    (open: boolean) => {
+      setEstimatePopoverOpen(open)
+      if (open) {
+        setEstimateInput(formatLinearEstimateInput(localEstimate))
+      }
+    },
+    [localEstimate]
+  )
 
   const handleStateChange = useCallback(
     (stateId: string) => {
@@ -434,11 +440,7 @@ export function LinearIssueEditSection({
                   className={propertyRowClass}
                   aria-busy={priorityPending}
                 >
-                  {localPriority === 1 ? (
-                    <AlertTriangle className="size-4 shrink-0 text-destructive" />
-                  ) : (
-                    <Circle className={propertyIconClass} />
-                  )}
+                  <LinearPriorityIcon priority={localPriority} />
                   <span className="min-w-0 flex-1 truncate">
                     {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
                   </span>
@@ -452,10 +454,11 @@ export function LinearIssueEditSection({
                     type="button"
                     onClick={() => handlePriorityChange(String(p))}
                     className={cn(
-                      LINEAR_EDIT_MENU_ITEM_CLASS,
+                      LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
                       localPriority === p && 'bg-accent/50'
                     )}
                   >
+                    <LinearPriorityIcon priority={p} />
                     {PRIORITY_LABELS[p]}
                   </button>
                 ))}
@@ -525,7 +528,7 @@ export function LinearIssueEditSection({
               </PopoverContent>
             </Popover>
 
-            <Popover open={estimatePopoverOpen} onOpenChange={setEstimatePopoverOpen}>
+            <Popover open={estimatePopoverOpen} onOpenChange={handleEstimatePopoverOpenChange}>
               <PopoverTrigger asChild>
                 <button
                   type="button"
@@ -737,6 +740,7 @@ export function LinearIssueEditSection({
             className={LINEAR_EDIT_CHIP_CLASS}
             aria-busy={priorityPending}
           >
+            <LinearPriorityIcon priority={localPriority} />
             <span className="truncate">
               {PRIORITY_LABELS[localPriority] ?? `P${localPriority}`}
             </span>
@@ -749,8 +753,12 @@ export function LinearIssueEditSection({
               key={p}
               type="button"
               onClick={() => handlePriorityChange(String(p))}
-              className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, localPriority === p && 'bg-accent/50')}
+              className={cn(
+                LINEAR_EDIT_MENU_ITEM_WITH_ICON_CLASS,
+                localPriority === p && 'bg-accent/50'
+              )}
             >
+              <LinearPriorityIcon priority={p} />
               {PRIORITY_LABELS[p]}
             </button>
           ))}
@@ -758,7 +766,7 @@ export function LinearIssueEditSection({
       </Popover>
 
       {/* Estimate */}
-      <Popover open={estimatePopoverOpen} onOpenChange={setEstimatePopoverOpen}>
+      <Popover open={estimatePopoverOpen} onOpenChange={handleEstimatePopoverOpenChange}>
         <PopoverTrigger asChild>
           <button
             type="button"

@@ -60,7 +60,7 @@ function statusLabel(status: ComputerUsePermissionStatus | undefined): string {
     case 'unsupported':
       return 'macOS only'
     case 'not-granted':
-    default:
+    case undefined:
       return 'Not enabled'
   }
 }

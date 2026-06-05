@@ -485,6 +485,27 @@ export function registerFilesystemHandlers(
     }
   )
 
+  ipcMain.handle(
+    'fs:pathExists',
+    async (_event, args: { filePath: string; connectionId?: string }): Promise<boolean> => {
+      try {
+        if (args.connectionId) {
+          const provider = requireSshFilesystemProvider(args.connectionId)
+          await provider.stat(args.filePath)
+          return true
+        }
+        const filePath = await resolveAuthorizedPath(args.filePath, store)
+        await stat(filePath)
+        return true
+      } catch (error) {
+        if (isENOENT(error)) {
+          return false
+        }
+        throw error
+      }
+    }
+  )
+
   // ─── Search ────────────────────────────────────────────
   ipcMain.handle(
     'fs:search',

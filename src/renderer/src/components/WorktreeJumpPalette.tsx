@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/command'
 import { branchName } from '@/lib/git-utils'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
-import { getLinkedWorkItemSuggestedName } from '@/lib/new-workspace'
+import { getLinkedWorkItemSuggestedName, getWorkspaceIntentName } from '@/lib/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { isDefaultBranchWorkspace } from '@/components/sidebar/visible-worktrees'
@@ -64,7 +64,14 @@ import {
   getUnavailableQuickActionMessage,
   type CmdJActiveGroupSnapshot
 } from '@/components/cmd-j/quick-action-context'
-import { CMD_J_QUICK_ACTIONS } from '@/components/cmd-j/quick-actions'
+import {
+  CMD_J_QUICK_ACTIONS,
+  CREATE_WORKSPACE_QUICK_ACTION_ID
+} from '@/components/cmd-j/quick-actions'
+import {
+  getComposerEligibleRepos,
+  resolveComposerGitRepoId
+} from '@/lib/new-workspace-composer-repo'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -120,6 +127,30 @@ type PaletteItem =
   | BrowserPaletteItem
 
 type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader | HintRow
+
+const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_QUICK_ACTION_ID}`
+
+function getComposerPrefetchRepoId(
+  state: ReturnType<typeof useAppStore.getState>,
+  initialRepoId?: string
+): string | null {
+  return resolveComposerGitRepoId({
+    eligibleRepos: getComposerEligibleRepos(state.repos),
+    initialRepoId,
+    activeRepoId: state.activeRepoId
+  })
+}
+
+function appendPaletteListEntries(
+  target: PaletteListEntry[],
+  source: readonly PaletteItem[]
+): void {
+  // Why: query mode can expose generated-size workspace/tab result lists.
+  // Avoid the function argument limit from `push(...source)`.
+  for (const entry of source) {
+    target.push(entry)
+  }
+}
 
 type BrowserSelection = {
   worktree: Worktree
@@ -485,11 +516,21 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   )
   const actionResults = useMemo(() => buildCmdJActionResults(CMD_J_QUICK_ACTIONS), [])
 
+  const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
+    const state = useAppStore.getState()
+    const repoIdForComposer = getComposerPrefetchRepoId(state, initialRepoId)
+    if (!repoIdForComposer) {
+      return
+    }
+    void state.prefetchWorktreeCreateBase(repoIdForComposer)
+  }, [])
+
   const openCreateWorkspaceAction = useCallback(() => {
+    prefetchCreateWorkspaceBaseForComposer()
     queueMicrotask(() =>
       openModal('new-workspace-composer', { telemetrySource: 'command_palette' })
     )
-  }, [openModal])
+  }, [openModal, prefetchCreateWorkspaceBaseForComposer])
 
   const deleteActiveWorkspaceAction = useCallback(() => {
     const { activeView, activeWorktreeId } = useAppStore.getState()
@@ -627,7 +668,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: hasQuery ? 'Workspaces' : 'Recent Workspaces'
         })
       }
-      entries.push(...visibleWorktreeItems)
+      appendPaletteListEntries(entries, visibleWorktreeItems)
       if (showCreateAction) {
         // Why: the typed create affordance is workspace-scoped, so keep it
         // directly under workspace matches instead of after actions/tabs.
@@ -649,7 +690,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Actions & Settings'
         })
       }
-      entries.push(...visibleMiddleItems)
+      appendPaletteListEntries(entries, visibleMiddleItems)
     }
     if (visibleBrowserItems.length > 0) {
       if (showBrowserHeader) {
@@ -659,7 +700,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           label: 'Browser Tabs'
         })
       }
-      entries.push(...visibleBrowserItems)
+      appendPaletteListEntries(entries, visibleBrowserItems)
     }
     return entries
   }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length])
@@ -735,6 +776,18 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     selectableItemIds: selectionItemIds,
     showCreateAction
   })
+
+  useEffect(() => {
+    const isCreateWorkspaceHighlighted =
+      commandSelectedItemId === CREATE_WORKTREE_ITEM_ID ||
+      commandSelectedItemId === CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID
+    if (!visible || !isCreateWorkspaceHighlighted) {
+      return
+    }
+    // Why: Cmd+J opens the composer after selection; warming the same default
+    // repo here buys time while the user is still on the highlighted row.
+    prefetchCreateWorkspaceBaseForComposer()
+  }, [commandSelectedItemId, prefetchCreateWorkspaceBaseForComposer, visible])
 
   const handleQueryChange = useCallback((nextQuery: string) => {
     setQuery(nextQuery)
@@ -912,6 +965,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     const ghNumber = parseGitHubIssueOrPRNumber(trimmed)
 
     const openComposer = (data: Record<string, unknown>): void => {
+      prefetchCreateWorkspaceBaseForComposer(
+        typeof data.initialRepoId === 'string' ? data.initialRepoId : undefined
+      )
       closeModal()
       // Why: defer opening so Radix fully unmounts the palette's dialog before
       // the composer modal mounts, avoiding focus churn between the two.
@@ -949,6 +1005,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
 
+      prefetchCreateWorkspaceBaseForComposer(repoForLookup.id)
       // Why: awaiting inside the user gesture would leave the palette open
       // indefinitely on slow networks. Close immediately and populate the
       // composer once the lookup returns.
@@ -977,7 +1034,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               url: item.url
             }
             data.linkedWorkItem = linkedWorkItem
-            data.prefilledName = getLinkedWorkItemSuggestedName({ title: item.title })
+            data.prefilledName =
+              getWorkspaceIntentName({ sourceText: trimmed, workItem: linkedWorkItem })?.seedName ??
+              getLinkedWorkItemSuggestedName({ title: item.title })
           } else {
             // Fallback: we couldn't resolve the URL, just seed the name.
             data.prefilledName = `${slug.owner}-${slug.repo}-${number}`
@@ -1021,6 +1080,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         return
       }
 
+      prefetchCreateWorkspaceBaseForComposer(repoForLookup.id)
       const lookupToken = createLookupGuard.start()
       preserveCreateLookupOnCloseRef.current = true
       closeModal()
@@ -1039,7 +1099,9 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
               url: item.url
             }
             data.linkedWorkItem = linkedWorkItem
-            data.prefilledName = getLinkedWorkItemSuggestedName({ title: item.title })
+            data.prefilledName =
+              getWorkspaceIntentName({ sourceText: trimmed, workItem: linkedWorkItem })?.seedName ??
+              getLinkedWorkItemSuggestedName({ title: item.title })
           } else {
             data.prefilledName = trimmed
           }
@@ -1064,7 +1126,15 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
 
     // Case 3: plain name — open composer prefilled.
     openComposer(trimmed ? { prefilledName: trimmed } : {})
-  }, [allWorktrees, closeModal, createLookupGuard, createWorktreeName, openModal, repoMap])
+  }, [
+    allWorktrees,
+    closeModal,
+    createLookupGuard,
+    createWorktreeName,
+    openModal,
+    prefetchCreateWorkspaceBaseForComposer,
+    repoMap
+  ])
 
   const handleCloseAutoFocus = useCallback((e: Event) => {
     e.preventDefault()

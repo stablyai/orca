@@ -25,7 +25,8 @@ import {
   waitForActiveTerminalManager,
   waitForTerminalOutput,
   waitForPaneCount,
-  getTerminalContent
+  getTerminalContent,
+  sendToTerminal
 } from './helpers/terminal'
 import {
   waitForSessionReady,
@@ -122,6 +123,18 @@ async function expectSavedLayoutNotToContainTitle(
       { timeout: 3_000 }
     )
     .toBe(false)
+}
+
+async function readVisiblePaneContents(page: Page): Promise<string[]> {
+  const snapshot = await waitForPaneIdentitySnapshot(page, 2)
+  return page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    return (
+      manager
+        ?.getPanes()
+        .map((pane) => pane.serializeAddon?.serialize?.({ scrollback: 200 }) ?? '') ?? []
+    )
+  }, snapshot.tabId)
 }
 
 // Why: only the pointer-drag resize test needs a visible window (pointer
@@ -699,6 +712,54 @@ test.describe('Terminal Panes', () => {
         { timeout: 5_000, message: 'Pane widths did not change after dragging divider' }
       )
       .toBe(true)
+  })
+
+  test('@headful resizing split panes forwards only the settled PTY size', async ({ orcaPage }) => {
+    await splitActiveTerminalPane(orcaPage, 'vertical')
+    const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+    const ptyIds = snapshot.panes
+      .map((pane) => pane.ptyId)
+      .filter((ptyId): ptyId is string => Boolean(ptyId))
+
+    for (const ptyId of ptyIds) {
+      await sendToTerminal(
+        orcaPage,
+        ptyId,
+        "export PS1='ISSUE2910_PROMPT$ '; export PROMPT=\"$PS1\"; trap 'printf \"\\nISSUE2910_WINCH\\n\"' WINCH; clear; printf 'ISSUE2910_READY\\n'\r"
+      )
+    }
+
+    await expect
+      .poll(
+        async () =>
+          (await readVisiblePaneContents(orcaPage)).every((content) =>
+            content.includes('ISSUE2910_READY')
+          ),
+        { timeout: 10_000, message: 'Split panes did not receive resize-regression prompt setup' }
+      )
+      .toBe(true)
+
+    const divider = orcaPage.locator('.pane-divider.is-vertical').first()
+    await expect(divider).toBeVisible({ timeout: 3_000 })
+    const box = await divider.boundingBox()
+    expect(box).not.toBeNull()
+
+    const startX = box!.x + box!.width / 2
+    const startY = box!.y + box!.height / 2
+    await orcaPage.mouse.move(startX, startY)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.move(startX - 350, startY, { steps: 40 })
+    await orcaPage.mouse.move(startX + 250, startY, { steps: 40 })
+    await orcaPage.mouse.up()
+    await orcaPage.waitForTimeout(500)
+
+    const paneContents = await readVisiblePaneContents(orcaPage)
+    for (const content of paneContents) {
+      const promptRedraws = content.match(/ISSUE2910_PROMPT/g)?.length ?? 0
+      const winchNotifications = content.match(/ISSUE2910_WINCH/g)?.length ?? 0
+      expect(promptRedraws).toBeLessThanOrEqual(3)
+      expect(winchNotifications).toBeLessThanOrEqual(1)
+    }
   })
 
   test('@headful dragging terminal panes around preserves leaf-keyed PTY bindings', async ({

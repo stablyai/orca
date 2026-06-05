@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { ProjectGroup, Repo, TerminalTab, Worktree } from '../../../../shared/types'
 import {
   getProjectGroupHeaderKey,
@@ -10,6 +11,8 @@ import {
   buildWorktreeSectionActivitySummaries,
   type WorktreeSectionActivityState
 } from './worktree-section-activity'
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -83,6 +86,7 @@ function makeState(
     browserTabsByWorktree: {},
     ptyIdsByTabId: {},
     runtimePaneTitlesByTabId: {},
+    terminalLayoutRootsByTabId: {},
     agentStatusEpoch: 0,
     agentStatusByPaneKey: {},
     migrationUnsupportedByPtyId: {},
@@ -163,7 +167,7 @@ describe('buildWorktreeSectionActivitySummaries', () => {
       prompt: '',
       updatedAt: now,
       stateStartedAt: now,
-      paneKey: 'tab-1:leaf-1',
+      paneKey: makePaneKey('tab-1', LEAF_ID),
       stateHistory: []
     }
     const state = makeState({

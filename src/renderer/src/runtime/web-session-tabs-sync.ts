@@ -38,6 +38,7 @@ import {
   toWebTerminalSurfaceTabId,
   WEB_TERMINAL_SURFACE_TAB_PREFIX
 } from './web-runtime-session'
+import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -134,6 +135,13 @@ export function shouldApplyWebSessionTabsSnapshot(
   environmentId: string
 ): boolean {
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+  if ((snapshot as { removed?: unknown }).removed === true) {
+    // Why: removed worktrees can stop publishing snapshots, so their
+    // freshness/mapping entries need explicit cleanup instead of waiting for
+    // a later replacement snapshot that may never arrive.
+    clearWebSessionTabsTrackingForWorktree(environmentId, snapshot.worktree)
+    return true
+  }
   const current = latestSessionTabsSnapshotByWorktree.get(key)
   if (
     current &&
@@ -149,9 +157,64 @@ export function shouldApplyWebSessionTabsSnapshot(
   return true
 }
 
+export function shouldBootstrapInitialWebRuntimeTerminal(args: {
+  event: SessionTabsStreamEvent
+  activeWorktreeId: string
+  requestedInitialTerminal: boolean
+  snapshotIsFresh: boolean
+  localTerminalCount: number
+}): boolean {
+  return (
+    args.snapshotIsFresh &&
+    args.event.type === 'snapshot' &&
+    args.event.tabs.length === 0 &&
+    args.localTerminalCount === 0 &&
+    !args.requestedInitialTerminal &&
+    args.activeWorktreeId === args.event.worktree
+  )
+}
+
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
+}
+
+export function _getWebSessionTabsTrackingCountsForTest(): {
+  freshness: number
+  hostMappings: number
+} {
+  return {
+    freshness: latestSessionTabsSnapshotByWorktree.size,
+    hostMappings: hostSessionTabIdByLocalKey.size
+  }
+}
+
+function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
+  latestSessionTabsSnapshotByWorktree.delete(sessionTabsFreshnessKey(environmentId, worktreeId))
+  const keyPrefix = `${environmentId}:${worktreeId}:`
+  for (const key of hostSessionTabIdByLocalKey.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      hostSessionTabIdByLocalKey.delete(key)
+    }
+  }
+}
+
+export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
+  const trimmedEnvironmentId = environmentId.trim()
+  if (!trimmedEnvironmentId) {
+    return
+  }
+  const keyPrefix = `${trimmedEnvironmentId}:`
+  for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      latestSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
+  for (const key of hostSessionTabIdByLocalKey.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      hostSessionTabIdByLocalKey.delete(key)
+    }
+  }
 }
 
 function hostSessionTabMappingKey(args: {
@@ -356,7 +419,7 @@ function buildMirroredTerminalTabs(
     return {
       tab: {
         id: localTabId,
-        ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? ptyIds[0] ?? null,
+        ptyId: ptyIdsByLeafId[activeSurface.leafId] ?? null,
         worktreeId: snapshot.worktree,
         title,
         defaultTitle: existing?.defaultTitle ?? title,
@@ -1072,6 +1135,7 @@ function terminalLayoutEqual(
     (a?.expandedLeafId ?? null) === b.expandedLeafId &&
     sameStringRecord(a?.ptyIdsByLeafId, b.ptyIdsByLeafId) &&
     sameStringRecord(a?.buffersByLeafId, b.buffersByLeafId) &&
+    sameStringRecord(a?.scrollbackRefsByLeafId, b.scrollbackRefsByLeafId) &&
     sameStringRecord(a?.titlesByLeafId, b.titlesByLeafId)
   )
 }
@@ -1228,6 +1292,7 @@ function openFileEqual(a: OpenFile, b: OpenFile): boolean {
     a.markdownPreviewAnchor === b.markdownPreviewAnchor &&
     a.isPreview === b.isPreview &&
     a.isUntitled === b.isUntitled &&
+    a.deleteUntouchedOnClose === b.deleteUntouchedOnClose &&
     a.externalMutation === b.externalMutation &&
     a.mode === b.mode
   )
@@ -2093,6 +2158,9 @@ export function useWebSessionTabsSync(): void {
     return () => {
       disposed = true
       unsubscribe?.()
+      // Why: environment ids can churn as paired runtimes reconnect or switch;
+      // stale freshness/mapping entries should not live for the renderer lifetime.
+      clearWebSessionTabsTrackingForEnvironment(environmentId)
     }
   }, [activeRuntimeEnvironmentId, workspaceSessionReady])
 
@@ -2110,7 +2178,7 @@ export function useWebSessionTabsSync(): void {
         {
           selector: environmentId,
           method: 'session.tabs.subscribe',
-          params: { worktree: `id:${activeWorktreeId}` },
+          params: { worktree: toRuntimeWorktreeSelector(activeWorktreeId) },
           timeoutMs: 15_000
         },
         {
@@ -2126,12 +2194,15 @@ export function useWebSessionTabsSync(): void {
             if (event.type !== 'snapshot' && event.type !== 'updated') {
               return
             }
-            const shouldBootstrapInitialTerminal =
-              event.type === 'snapshot' &&
-              event.tabs.length === 0 &&
-              !requestedInitialTerminal &&
-              activeWorktreeId === event.worktree
             const fresh = shouldApplyWebSessionTabsSnapshot(event, environmentId)
+            const shouldBootstrapInitialTerminal = shouldBootstrapInitialWebRuntimeTerminal({
+              event,
+              activeWorktreeId,
+              requestedInitialTerminal,
+              snapshotIsFresh: fresh,
+              localTerminalCount:
+                useAppStore.getState().tabsByWorktree[activeWorktreeId]?.length ?? 0
+            })
             if (fresh) {
               useAppStore.setState((state) =>
                 applyWebSessionTabsSnapshot(state, event, environmentId)

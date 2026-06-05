@@ -114,7 +114,9 @@ function formatResponse(response: RpcResponse): string {
 }
 
 async function chooseWorktree(ws: WebSocket): Promise<string> {
-  if (worktreeSelector) return worktreeSelector
+  if (worktreeSelector) {
+    return worktreeSelector
+  }
 
   const response = await send(ws, 'worktree.ps')
   if (!response.ok) {
@@ -275,7 +277,9 @@ ws.on('message', (data) => {
     // connect flow above. The global listener only cares about encrypted RPC.
     return
   }
-  if (!plaintext) return
+  if (!plaintext) {
+    return
+  }
   const response = JSON.parse(plaintext) as RpcResponse
   if (response._meta?.runtimeId) {
     runtimeId = response._meta.runtimeId

@@ -26,11 +26,20 @@ export type WorktreeDeleteState = {
   canForceDelete: boolean
 }
 
+export type WorktreeMetaUpdateGuard = (worktree: Worktree | DetectedWorktree | undefined) => boolean
+
+export type WorktreeMetaUpdateOptions = {
+  shouldApply?: WorktreeMetaUpdateGuard
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
   worktreeLineageById: Record<string, WorktreeLineage>
   activeWorktreeId: string | null
+  // Why: signals the matching worktree card's inline title editor to open. The
+  // workspace.rename shortcut sets this; the card clears it on consume.
+  renamingWorktreeId: string | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
   remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
@@ -99,22 +108,35 @@ export type WorktreeSlice = {
     workspaceStatus?: WorkspaceStatus,
     linkedGitLabMR?: number,
     linkedGitLabIssue?: number,
-    startup?: WorktreeStartupLaunch
+    startup?: WorktreeStartupLaunch,
+    pendingFirstAgentMessageRename?: boolean
   ) => Promise<CreateWorktreeResult>
+  prefetchWorktreeCreateBase: (repoId: string, baseBranch?: string) => Promise<void>
   removeWorktree: (
     worktreeId: string,
     force?: boolean
   ) => Promise<({ ok: true } & RemoveWorktreeResult) | { ok: false; error: string }>
+  markWorktreesDeleting: (worktreeIds: readonly string[]) => void
   forceDeletePreservedBranch: (
     worktreeId: string,
     branchName: string,
     expectedHead: string
   ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
-  updateWorktreeMeta: (worktreeId: string, updates: Partial<WorktreeMeta>) => Promise<void>
+  updateWorktreeMeta: (
+    worktreeId: string,
+    updates: Partial<WorktreeMeta>,
+    options?: WorktreeMetaUpdateOptions
+  ) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>
+  /**
+   * Pin/unpin worktrees, then reveal the first changed one. The reveal is the
+   * point: pinning moves the row to the Pinned section (unpinning moves it
+   * back), so without it the viewport stays put and the user loses the row.
+   */
+  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
   markWorktreeUnread: (worktreeId: string) => void
   observeTerminalGitHubPullRequestLink: (worktreeId: string, link: TerminalGitHubPRLink) => void
   /** Clear the worktree's unread dot. Called on user interaction with any
@@ -145,6 +167,7 @@ export type WorktreeSlice = {
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
+  setRenamingWorktreeId: (worktreeId: string | null) => void
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
   /**
@@ -155,7 +178,7 @@ export type WorktreeSlice = {
   purgeWorktreeTerminalState: (worktreeIds: string[]) => void
   updateWorktreeGitIdentity: (
     worktreeId: string,
-    identity: { head?: string; branch?: string }
+    identity: { head?: string; branch?: string | null }
   ) => void
   updateWorktreeBaseStatus: (event: WorktreeBaseStatusEvent) => void
   updateWorktreeRemoteBranchConflict: (event: WorktreeRemoteBranchConflictEvent) => void

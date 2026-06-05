@@ -171,6 +171,22 @@ function parseShellArgs(input: string): string[] {
   return args
 }
 
+function stripAgentBrowserTargetArgs(args: string[]): string[] {
+  const stripped: string[] = []
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]
+    if (arg === '--cdp' || arg === '--session') {
+      index++
+      continue
+    }
+    if (arg.startsWith('--cdp=') || arg.startsWith('--session=')) {
+      continue
+    }
+    stripped.push(arg)
+  }
+  return stripped
+}
+
 // Why: agent-browser returns generic error messages for stale/unknown refs.
 // Map them to a specific code so agents can reliably detect and re-snapshot.
 function classifyErrorCode(message: string): string {
@@ -498,7 +514,9 @@ export class AgentBrowserBridge {
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
     if (browserPageId) {
-      await this.destroySession(`orca-tab-${browserPageId}`)
+      const sessionName = `orca-tab-${browserPageId}`
+      await this.destroySession(sessionName)
+      this.pendingInterceptRestore.delete(sessionName)
     }
     this.options.onTabsChanged?.(owningWorktreeId)
   }
@@ -566,6 +584,7 @@ export class AgentBrowserBridge {
     for (const [tabId, wcId] of tabs) {
       const wc = this.getWebContents(wcId)
       if (!wc) {
+        this.browserManager.unregisterGuest(tabId)
         continue
       }
       if (firstLiveWcId === null) {
@@ -690,10 +709,10 @@ export class AgentBrowserBridge {
     // directly via JS and dispatch input/change events for React/framework compat.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       await this.execAgentBrowser(sessionName, ['focus', element])
-      const escaped = value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+      const serializedValue = JSON.stringify(value)
       await this.execAgentBrowser(sessionName, [
         'eval',
-        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, '${escaped}'); } else { el.value = '${escaped}'; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
+        `(() => { const el = document.activeElement; if (el) { const nativeSetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value')?.set; if (nativeSetter) { nativeSetter.call(el, ${serializedValue}); } else { el.value = ${serializedValue}; } el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); } })()`
       ])
       return { filled: element } as BrowserFillResult
     })
@@ -1695,12 +1714,9 @@ export class AgentBrowserBridge {
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: strip --cdp and --session from raw command to prevent session/target injection
-      const sanitized = command
-        .replace(/--cdp\s+\S+/g, '')
-        .replace(/--session\s+\S+/g, '')
-        .trim()
-      const args = parseShellArgs(sanitized)
+      // Why: strip target/session flags from raw passthrough commands so a
+      // caller cannot override Orca's selected browser page or CDP proxy.
+      const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -1713,6 +1729,7 @@ export class AgentBrowserBridge {
       promises.push(this.destroySession(sessionName))
     }
     await Promise.allSettled(promises)
+    this.pendingInterceptRestore.clear()
   }
 
   // ── Internal ──
@@ -1752,6 +1769,7 @@ export class AgentBrowserBridge {
         execute: (() =>
           this.executeWithVisibleTarget(
             sessionName,
+            worktreeId,
             target,
             execute,
             options
@@ -1765,6 +1783,7 @@ export class AgentBrowserBridge {
 
   private async executeWithVisibleTarget<T>(
     sessionName: string,
+    worktreeId: string | undefined,
     target: ResolvedBrowserCommandTarget,
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions
@@ -1777,10 +1796,48 @@ export class AgentBrowserBridge {
     // automation lease makes only this target paintable without selecting it.
     const restore = await this.browserManager.acquireAutomationVisibility(target.webContentsId)
     try {
-      return await execute(sessionName, target)
+      const visibleTarget = await this.refreshTargetAfterAutomationVisibility(
+        sessionName,
+        worktreeId,
+        target,
+        options
+      )
+      return await execute(sessionName, visibleTarget)
     } finally {
       restore()
     }
+  }
+
+  private async refreshTargetAfterAutomationVisibility(
+    sessionName: string,
+    worktreeId: string | undefined,
+    target: ResolvedBrowserCommandTarget,
+    options: EnqueueTargetedCommandOptions
+  ): Promise<ResolvedBrowserCommandTarget> {
+    const visibleTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+    if (visibleTarget.webContentsId === target.webContentsId) {
+      return visibleTarget
+    }
+
+    if (this.activeWebContentsId === target.webContentsId) {
+      this.activeWebContentsId = visibleTarget.webContentsId
+    }
+    if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === target.webContentsId) {
+      this.activeWebContentsPerWorktree.set(worktreeId, visibleTarget.webContentsId)
+    }
+
+    // Why: making a parked webview paintable can re-register the same browser
+    // page with a new guest webContents. Tear down any stale named session now;
+    // DOM commands recreate immediately, direct-CDP commands let the next DOM
+    // command recreate against the live guest.
+    await this.restartSessionForTarget(
+      sessionName,
+      visibleTarget.browserPageId,
+      visibleTarget.webContentsId,
+      { recreate: options.ensureSession !== false }
+    )
+
+    return visibleTarget
   }
 
   private async processQueue(sessionName: string): Promise<void> {
@@ -1800,6 +1857,9 @@ export class AgentBrowserBridge {
       }
     }
 
+    if (queue && queue.length === 0 && this.commandQueues.get(sessionName) === queue) {
+      this.commandQueues.delete(sessionName)
+    }
     this.processingQueues.delete(sessionName)
   }
 
@@ -1830,6 +1890,7 @@ export class AgentBrowserBridge {
     }
 
     if (!this.getWebContents(webContentsId)) {
+      this.browserManager.unregisterGuest(browserPageId)
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${browserPageId} is no longer available`
@@ -1856,6 +1917,15 @@ export class AgentBrowserBridge {
         if (wcId === preferredWcId && this.getWebContents(wcId)) {
           return { browserPageId: tabId, webContentsId: wcId }
         }
+        if (wcId === preferredWcId) {
+          this.browserManager.unregisterGuest(tabId)
+          if (this.activeWebContentsId === wcId) {
+            this.activeWebContentsId = null
+          }
+          if (worktreeId && this.activeWebContentsPerWorktree.get(worktreeId) === wcId) {
+            this.activeWebContentsPerWorktree.delete(worktreeId)
+          }
+        }
       }
     }
 
@@ -1871,6 +1941,7 @@ export class AgentBrowserBridge {
         }
         return { browserPageId: tabId, webContentsId: wcId }
       }
+      this.browserManager.unregisterGuest(tabId)
     }
 
     throw new BrowserError(
@@ -1944,6 +2015,55 @@ export class AgentBrowserBridge {
     }
   }
 
+  private async restartSessionForTarget(
+    sessionName: string,
+    browserPageId: string,
+    webContentsId: number,
+    options: { recreate: boolean } = { recreate: true }
+  ): Promise<void> {
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      await pendingCreation.catch(() => {})
+    }
+
+    const session = this.sessions.get(sessionName)
+    if (session) {
+      if (session.activeInterceptPatterns.length > 0) {
+        this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+      }
+      this.sessions.delete(sessionName)
+      this.pendingSessionCreation.delete(sessionName)
+      if (session.activeProcess) {
+        this.cancelledProcesses.add(session.activeProcess)
+        try {
+          session.activeProcess.kill()
+        } catch {
+          // Process may already be exiting.
+        }
+        session.activeProcess = null
+      }
+
+      const destroy = (async (): Promise<void> => {
+        try {
+          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'])
+        } catch {
+          // Session may already be dead.
+        }
+        await session.proxy.stop()
+      })()
+      this.pendingSessionDestruction.set(sessionName, destroy)
+      try {
+        await destroy
+      } finally {
+        this.pendingSessionDestruction.delete(sessionName)
+      }
+    }
+
+    if (options.recreate) {
+      await this.ensureSession(sessionName, browserPageId, webContentsId)
+    }
+  }
+
   private async destroySession(sessionName: string): Promise<void> {
     const pendingDestruction = this.pendingSessionDestruction.get(sessionName)
     if (pendingDestruction) {
@@ -1951,8 +2071,21 @@ export class AgentBrowserBridge {
       return
     }
 
+    const pendingCreation = this.pendingSessionCreation.get(sessionName)
+    if (pendingCreation) {
+      // Why: tab close can race with stale-session cleanup before sessions.set().
+      // Wait for creation to settle so a late proxy cannot survive the close.
+      try {
+        await pendingCreation
+      } catch {
+        // Creation failures are handled by the original caller; teardown still
+        // needs to reject queued work and clear any partial state below.
+      }
+    }
+
     const session = this.sessions.get(sessionName)
     if (!session) {
+      this.rejectQueuedCommandsForClosedSession(sessionName)
       return
     }
 
@@ -1961,19 +2094,7 @@ export class AgentBrowserBridge {
 
     // Why: queued commands would hang forever if we just delete the queue —
     // their promises would never resolve or reject. Drain and reject them.
-    const queue = this.commandQueues.get(sessionName)
-    this.commandQueues.delete(sessionName)
-    this.processingQueues.delete(sessionName)
-    if (queue) {
-      const err = new BrowserError(
-        'browser_tab_closed',
-        'Tab was closed while commands were queued'
-      )
-      for (const cmd of queue) {
-        cmd.reject(err)
-      }
-      queue.length = 0
-    }
+    this.rejectQueuedCommandsForClosedSession(sessionName)
 
     if (session.activeProcess) {
       // Why: queued command rejection is not enough when a daemon command is
@@ -2008,6 +2129,22 @@ export class AgentBrowserBridge {
     }
   }
 
+  private rejectQueuedCommandsForClosedSession(sessionName: string): void {
+    const queue = this.commandQueues.get(sessionName)
+    this.commandQueues.delete(sessionName)
+    this.processingQueues.delete(sessionName)
+    if (queue) {
+      const err = new BrowserError(
+        'browser_tab_closed',
+        'Tab was closed while commands were queued'
+      )
+      for (const cmd of queue) {
+        cmd.reject(err)
+      }
+      queue.length = 0
+    }
+  }
+
   private async execAgentBrowser(
     sessionName: string,
     commandArgs: string[],
@@ -2025,6 +2162,7 @@ export class AgentBrowserBridge {
     // could be destroyed. Check here to give a clear error instead of letting the
     // proxy fail with cryptic Electron debugger errors.
     if (!this.getWebContents(session.webContentsId)) {
+      await this.destroySession(sessionName)
       throw this.createPageUnavailableError(sessionName)
     }
 
@@ -2042,7 +2180,12 @@ export class AgentBrowserBridge {
       args.push('--cdp', String(port))
     }
 
-    args.push(...commandArgs, '--json')
+    // Why: exec passthrough can produce a large argv array; spreading it into
+    // push risks V8 argument limits before execFile receives the command.
+    for (const commandArg of commandArgs) {
+      args.push(commandArg)
+    }
+    args.push('--json')
 
     const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
     const translated = translateResult(stdout)

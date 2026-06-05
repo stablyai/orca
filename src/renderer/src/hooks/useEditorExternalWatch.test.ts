@@ -36,14 +36,14 @@ describe('getWatchedTargetKey', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: undefined,
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       })
     ).not.toBe(
       getWatchedTargetKey({
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: 'conn-1',
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       })
     )
   })
@@ -54,7 +54,7 @@ describe('getWatchedTargetKey', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         connectionId: undefined,
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       })
     ).not.toBe(
       getWatchedTargetKey({
@@ -116,23 +116,70 @@ describe('getOverflowExternalReloadTargets', () => {
       {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
-        relativePath: 'notes.md'
+        relativePath: 'notes.md',
+        runtimeEnvironmentId: null
       }
     ])
     expect(setExternalMutation).toHaveBeenCalledWith('file-1', null)
+  })
+
+  it('limits overflow reload targets to the matching runtime owner', () => {
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [
+        {
+          id: 'local-file',
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          relativePath: 'local.md',
+          mode: 'edit',
+          isDirty: false,
+          externalMutation: 'deleted',
+          runtimeEnvironmentId: null
+        },
+        {
+          id: 'runtime-file',
+          worktreeId: 'wt-1',
+          worktreePath: '/repo',
+          relativePath: 'runtime.md',
+          mode: 'edit',
+          isDirty: false,
+          externalMutation: 'deleted',
+          runtimeEnvironmentId: 'env-1'
+        }
+      ],
+      setExternalMutation
+    } as never)
+
+    expect(
+      getOverflowExternalReloadTargets({
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        runtimeEnvironmentId: 'env-1'
+      })
+    ).toEqual([
+      {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        relativePath: 'runtime.md',
+        runtimeEnvironmentId: 'env-1'
+      }
+    ])
+    expect(setExternalMutation).toHaveBeenCalledWith('runtime-file', null)
+    expect(setExternalMutation).not.toHaveBeenCalledWith('local-file', null)
   })
 })
 
 describe('createExternalWatchEventHandler tombstone coalescing', () => {
   const setExternalMutation = vi.fn()
   const findTarget = (
-    worktreePath: string
+    worktreePath: string,
+    runtimeEnvironmentId: string | null = null
   ):
     | {
         worktreeId: string
         worktreePath: string
         connectionId: string | undefined
-        runtimeEnvironmentId: string | undefined
+        runtimeEnvironmentId: string | null
       }
     | undefined =>
     worktreePath === '/repo'
@@ -140,7 +187,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
           worktreeId: 'wt-1',
           worktreePath: '/repo',
           connectionId: undefined,
-          runtimeEnvironmentId: undefined
+          runtimeEnvironmentId
         }
       : undefined
 
@@ -250,7 +297,8 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
       worktreeId: 'wt-win',
       worktreePath: 'C:\\Repo',
-      relativePath: 'notes.md'
+      relativePath: 'notes.md',
+      runtimeEnvironmentId: 'env-1'
     })
     dispose()
   })
@@ -286,7 +334,8 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
       worktreeId: 'wt-unc',
       worktreePath: '//Server/Share/Repo',
-      relativePath: 'notes.md'
+      relativePath: 'notes.md',
+      runtimeEnvironmentId: 'env-1'
     })
     dispose()
   })
@@ -308,7 +357,8 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       worktreePath: '/repo',
-      relativePath: 'notes.md'
+      relativePath: 'notes.md',
+      runtimeEnvironmentId: null
     })
     dispose()
   })
@@ -328,6 +378,91 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(notifyEditorExternalFileChange).not.toHaveBeenCalled()
+    dispose()
+  })
+
+  it('does not let a local self-write stamp suppress a runtime owner update', async () => {
+    const runtimeFile = {
+      ...fileNotes,
+      runtimeEnvironmentId: 'env-1'
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [runtimeFile],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([runtimeFile] as never)
+    const readFile = vi.fn().mockResolvedValue({ content: 'local save', isBinary: false })
+    vi.stubGlobal('window', { api: { fs: { readFile } } })
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    recordSelfWrite('/repo/notes.md', 'local save', null)
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]), 'env-1')
+    await vi.advanceTimersByTimeAsync(100)
+
+    expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      relativePath: 'notes.md',
+      runtimeEnvironmentId: 'env-1'
+    })
+    dispose()
+  })
+
+  it('routes local and runtime watch events to the matching editor owner', () => {
+    const localFile = fileNotes
+    const runtimeFile = {
+      ...fileNotes,
+      id: 'runtime-notes',
+      runtimeEnvironmentId: 'env-1'
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [localFile, runtimeFile],
+      setExternalMutation
+    } as never)
+    vi.mocked(getOpenFilesForExternalFileChange).mockImplementation((_files, notification) =>
+      notification.runtimeEnvironmentId === 'env-1'
+        ? ([runtimeFile] as never)
+        : ([localFile] as never)
+    )
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]), null)
+    handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]), 'env-1')
+    vi.advanceTimersByTime(100)
+
+    expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      relativePath: 'notes.md',
+      runtimeEnvironmentId: null
+    })
+    expect(notifyEditorExternalFileChange).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      worktreePath: '/repo',
+      relativePath: 'notes.md',
+      runtimeEnvironmentId: 'env-1'
+    })
+    dispose()
+  })
+
+  it('tombstones only the matching owner for same-path delete events', () => {
+    const localFile = fileNotes
+    const runtimeFile = {
+      ...fileNotes,
+      id: 'runtime-notes',
+      runtimeEnvironmentId: 'env-1'
+    }
+    vi.mocked(useAppStore.getState).mockReturnValue({
+      openFiles: [localFile, runtimeFile],
+      setExternalMutation
+    } as never)
+    const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
+
+    handleFsChanged(payload([{ kind: 'delete', absolutePath: '/repo/notes.md' }]), 'env-1')
+    vi.advanceTimersByTime(200)
+
+    expect(setExternalMutation).toHaveBeenCalledWith('runtime-notes', 'deleted')
+    expect(setExternalMutation).not.toHaveBeenCalledWith('file-notes', 'deleted')
     dispose()
   })
 })

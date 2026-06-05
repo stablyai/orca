@@ -335,6 +335,32 @@ describe('DaemonClient', () => {
   })
 
   describe('disconnect', () => {
+    it('removes socket listeners when disconnecting', async () => {
+      await startMockDaemon()
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+
+      const connectedClient = client as unknown as {
+        controlSocket: Socket | null
+        streamSocket: Socket | null
+      }
+      const sockets = [connectedClient.controlSocket, connectedClient.streamSocket]
+      for (const socket of sockets) {
+        expect(socket?.listenerCount('data')).toBe(1)
+        expect(socket?.listenerCount('close')).toBe(1)
+        expect(socket?.listenerCount('error')).toBe(1)
+      }
+
+      client.disconnect()
+
+      for (const socket of sockets) {
+        expect(socket?.listenerCount('data')).toBe(0)
+        expect(socket?.listenerCount('close')).toBe(0)
+        expect(socket?.listenerCount('error')).toBe(0)
+      }
+    })
+
     it('emits disconnected when server destroys sockets', async () => {
       const serverSockets: Socket[] = []
       await startMockDaemon()

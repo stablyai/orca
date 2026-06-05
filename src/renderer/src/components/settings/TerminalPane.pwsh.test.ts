@@ -149,17 +149,6 @@ vi.mock('@/lib/terminal-theme', () => ({
   resolvePaneStyleOptions: () => ({ inactivePaneOpacity: 0.8, dividerThicknessPx: 1 })
 }))
 
-const ghosttyMock = {
-  open: false,
-  preview: null,
-  loading: false,
-  applied: false,
-  applyError: null,
-  handleClick: vi.fn(),
-  handleApply: vi.fn(),
-  handleOpenChange: vi.fn()
-}
-
 import { TerminalPane } from './TerminalPane'
 
 type ReactElementLike = {
@@ -239,11 +228,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
       gitBashAvailable: false
@@ -264,11 +250,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
       pwshAvailable: false,
@@ -276,6 +259,30 @@ describe('TerminalPane PowerShell version setting', () => {
     })
 
     expect(collectText(element)).toContain('WSL')
+  })
+
+  it('shows Windows shell controls for a remote Windows host on a non-Windows client', () => {
+    const element = TerminalPane({
+      settings: {
+        terminalScrollbackBytes: 10_000_000,
+        terminalWindowsShell: 'powershell.exe',
+        terminalWindowsPowerShellImplementation: 'auto',
+        terminalWordSeparator: ''
+      } as never,
+      updateSettings: () => {},
+      scrollbackMode: 'preset',
+      setScrollbackMode: () => {},
+      wslAvailable: true,
+      wslDistros: ['Ubuntu'],
+      pwshAvailable: false,
+      gitBashAvailable: false,
+      isWindowsTerminalHost: true
+    })
+
+    const text = collectText(element)
+    expect(text).toContain('Default shell for new terminal panes on Windows')
+    expect(text).toContain('Command Prompt')
+    expect(text).toContain('WSL')
   })
 
   it('hides WSL as a Windows default shell option when unavailable', () => {
@@ -287,11 +294,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
       gitBashAvailable: false
@@ -310,11 +314,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: true,
       wslDistros: ['Ubuntu', 'Debian'],
       pwshAvailable: false,
@@ -337,11 +338,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
       gitBashAvailable: true
@@ -359,11 +357,8 @@ describe('TerminalPane PowerShell version setting', () => {
         terminalWordSeparator: ''
       } as never,
       updateSettings: () => {},
-      systemPrefersDark: true,
-      terminalFontSuggestions: [],
       scrollbackMode: 'preset',
       setScrollbackMode: () => {},
-      ghostty: ghosttyMock,
       wslAvailable: false,
       pwshAvailable: false,
       gitBashAvailable: false

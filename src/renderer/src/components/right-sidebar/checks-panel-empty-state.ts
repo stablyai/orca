@@ -71,7 +71,8 @@ export function getChecksPanelEmptyStateCopy(
         title: 'No pull request found',
         description: 'GitHub refresh is paused by the current rate-limit budget'
       }
-    default:
+    case 'skipped':
+    case undefined:
       return {
         title: `No ${reviewLabel} found`,
         description: `Create a ${reviewLabel} to start checks and review.`

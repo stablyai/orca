@@ -5,6 +5,7 @@ import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
+import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import { formatFileExplorerPathsForClipboard } from './file-explorer-selection'
 import {
   fileExplorerHasRedo,
@@ -22,11 +23,10 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
  */
 export function useFileExplorerKeys(opts: {
   containerRef: React.RefObject<HTMLDivElement | null>
-  flatRows: TreeNode[]
+  rowProjection: FileExplorerRowProjection
   inlineInput: InlineInput | null
   selectedPaths: Set<string>
   selectedNode: TreeNode | null
-  selectedNodes: TreeNode[]
   startRename: (node: TreeNode) => void
   requestDelete: (node: TreeNode) => void
   requestDeleteAll: (nodes: TreeNode[]) => void
@@ -35,16 +35,14 @@ export function useFileExplorerKeys(opts: {
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const keybindings = useAppStore((s) => s.keybindings)
 
-  const flatRowsRef = useRef(opts.flatRows)
-  flatRowsRef.current = opts.flatRows
+  const rowProjectionRef = useRef(opts.rowProjection)
+  rowProjectionRef.current = opts.rowProjection
   const inlineInputRef = useRef(opts.inlineInput)
   inlineInputRef.current = opts.inlineInput
   const selectedPathsRef = useRef(opts.selectedPaths)
   selectedPathsRef.current = opts.selectedPaths
   const selectedNodeRef = useRef(opts.selectedNode)
   selectedNodeRef.current = opts.selectedNode
-  const selectedNodesRef = useRef(opts.selectedNodes)
-  selectedNodesRef.current = opts.selectedNodes
   const startRenameRef = useRef(opts.startRename)
   startRenameRef.current = opts.startRename
   const requestDeleteRef = useRef(opts.requestDelete)
@@ -65,7 +63,7 @@ export function useFileExplorerKeys(opts: {
         return null
       }
       const idx = Number(wrapper.dataset.index)
-      return flatRowsRef.current[idx] ?? null
+      return rowProjectionRef.current.getRowAtIndex(idx)
     }
 
     const focusInExplorer = (): boolean => {
@@ -128,9 +126,8 @@ export function useFileExplorerKeys(opts: {
           )
           if (wantsDelete) {
             e.preventDefault()
-            requestDeleteAllRef.current(
-              selectedNodesRef.current.length > 1 ? selectedNodesRef.current : [node]
-            )
+            const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
+            requestDeleteAllRef.current(selectedNodes.length > 1 ? selectedNodes : [node])
             return
           }
         }
@@ -158,9 +155,7 @@ export function useFileExplorerKeys(opts: {
       }
 
       const node = selectedNodeRef.current ?? findFocusedNode()
-      const selectedNodes = flatRowsRef.current.filter((row) =>
-        selectedPathsRef.current.has(row.path)
-      )
+      const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
       const fallbackNodes = selectedNodes.length > 0 ? selectedNodes : node ? [node] : []
       if (fallbackNodes.length === 0) {
         return

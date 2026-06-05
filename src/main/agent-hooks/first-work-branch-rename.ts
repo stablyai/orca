@@ -1,8 +1,8 @@
-// Why: when "Auto-Rename Branch From Work" is on, the first time an agent
-// starts working in a freshly-created workspace we replace the auto-generated
-// creature branch (e.g. `you/Nautilus`) with a short, work-derived name. This
-// module owns the orchestration: gate on the signal, enforce the safety
-// guardrails, summarize the prompt via the configured agent, and rename.
+// Why: when first-message auto-name is on, the first time an agent starts
+// working in a freshly-created workspace we replace the auto-generated creature
+// branch (e.g. `you/Nautilus`) with a short, work-derived name. This module
+// owns the orchestration: gate on the signal, enforce the safety guardrails,
+// summarize the prompt via the configured agent, and rename.
 import type { GlobalSettings, Repo } from '../../shared/types'
 import { getRepoIdFromWorktreeId, splitWorktreeId } from '../../shared/worktree-id'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -68,11 +68,26 @@ export type FirstWorkBranchRenameDeps = {
 // settled, so the real first prompt can still succeed on a later event.
 const inFlightWorktreeIds = new Set<string>()
 const settledWorktreeIds = new Set<string>()
+export const FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT = 500
 
 /** Test seam: clear the per-process dedupe sets. */
 export function resetFirstWorkBranchRenameState(): void {
   inFlightWorktreeIds.clear()
   settledWorktreeIds.clear()
+}
+
+function rememberSettledWorktreeId(worktreeId: string): void {
+  // Why: the app can see unbounded worktree ids over a long session; evicting
+  // oldest entries trades a rare re-probe for bounded process memory.
+  settledWorktreeIds.delete(worktreeId)
+  settledWorktreeIds.add(worktreeId)
+  while (settledWorktreeIds.size > FIRST_WORK_BRANCH_RENAME_SETTLED_CACHE_LIMIT) {
+    const oldest = settledWorktreeIds.values().next().value
+    if (typeof oldest !== 'string') {
+      return
+    }
+    settledWorktreeIds.delete(oldest)
+  }
 }
 
 export async function maybeAutoRenameBranchOnFirstWork(
@@ -107,7 +122,7 @@ export async function maybeAutoRenameBranchOnFirstWork(
     // ineligible); false means a transient bail that should retry later.
     const settled = await runAutoRename(worktreeId, prompt, event.assistantMessage, deps)
     if (settled) {
-      settledWorktreeIds.add(worktreeId)
+      rememberSettledWorktreeId(worktreeId)
     }
   } catch (error) {
     // Why: best-effort, opt-in convenience. A failure must never disrupt the

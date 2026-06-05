@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import { existsSync } from 'fs'
-import { readFile } from 'fs/promises'
+import { readFile, stat } from 'fs/promises'
 import * as path from 'path'
 import type {
   GitBranchChangeEntry,
@@ -28,6 +28,7 @@ import {
   parseNumstat,
   type GitLineStats
 } from '../../shared/git-uncommitted-line-stats'
+import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
 import {
   removeSafeUntrackedDiscardTarget,
@@ -37,6 +38,20 @@ import {
 const MAX_GIT_SHOW_BYTES = 10 * 1024 * 1024
 const MAX_STAGED_COMMIT_CONTEXT_BYTES = MAX_GIT_SHOW_BYTES
 const BULK_CHUNK_SIZE = 100
+const EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS = 30_000
+
+type EffectiveUpstreamStatusCacheEntry = {
+  expiresAt: number
+  status: GitUpstreamStatus
+}
+
+const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
+const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
+
+export function clearEffectiveUpstreamStatusCacheForTests(): void {
+  effectiveUpstreamStatusCache.clear()
+  effectiveUpstreamStatusInFlight.clear()
+}
 
 export type GetStatusOptions = {
   includeIgnored?: boolean
@@ -101,9 +116,10 @@ export async function getStatus(
 
       if (line.startsWith('# branch.head ')) {
         const branchHead = line.slice('# branch.head '.length).trim()
-        // Why: undefined (not '') for detached/empty so renderer's
-        // `identity.branch ?? worktree.branch` preserves the prior branch
-        // value when git can't report one, instead of overwriting it with ''.
+        // Why: undefined (not '') keeps this parser transport-compatible.
+        // Renderer refresh code turns "head without branch" into an explicit
+        // detached-HEAD clear signal while legacy missing-identity payloads
+        // still preserve the prior branch.
         branch = branchHead && branchHead !== '(detached)' ? `refs/heads/${branchHead}` : undefined
         continue
       }
@@ -130,8 +146,8 @@ export async function getStatus(
           // space-delimited fields and the old path after the tab. Preserving
           // spaces here keeps row actions and numstat counts keyed correctly.
           const tabParts = line.split('\t')
-          const path = tabParts[0].split(' ').slice(9).join(' ')
-          const oldPath = tabParts.slice(1).join('\t')
+          const path = decodeGitCQuotedPath(tabParts[0].split(' ').slice(9).join(' '))
+          const oldPath = decodeGitCQuotedPath(tabParts.slice(1).join('\t'))
           if (indexStatus !== '.') {
             entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged', oldPath })
           }
@@ -145,7 +161,7 @@ export async function getStatus(
           }
         } else {
           // Regular change entry
-          const path = parts.slice(8).join(' ')
+          const path = decodeGitCQuotedPath(parts.slice(8).join(' '))
           if (indexStatus !== '.') {
             entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged' })
           }
@@ -155,10 +171,10 @@ export async function getStatus(
         }
       } else if (line.startsWith('? ')) {
         // Untracked file
-        const path = line.slice(2)
+        const path = decodeGitCQuotedPath(line.slice(2))
         entries.push({ path, status: 'untracked', area: 'untracked' })
       } else if (line.startsWith('! ')) {
-        ignoredPaths.push(line.slice(2))
+        ignoredPaths.push(decodeGitCQuotedPath(line.slice(2)))
       } else if (line.startsWith('u ')) {
         const unmergedEntry = await parseUnmergedEntry(worktreePath, line)
         if (unmergedEntry) {
@@ -169,14 +185,20 @@ export async function getStatus(
     statusSucceeded = true
 
     if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
-      try {
-        effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) =>
-          gitExecFileAsync(args, { cwd: worktreePath })
-        )
-      } catch {
-        // Why: git status polling should not fail just because the richer
-        // upstream probe hit a transient ref/read error; the explicit
-        // upstream-status path will surface those failures when invoked.
+      const branchName = getShortBranchName(branch)
+      if (branchName) {
+        const cacheKey = getEffectiveUpstreamStatusCacheKey(worktreePath, branchName, upstreamName)
+        try {
+          effectiveUpstreamStatus = await readOrProbeEffectiveUpstreamStatus(
+            cacheKey,
+            worktreePath,
+            branchName
+          )
+        } catch {
+          // Why: git status polling should not fail just because the richer
+          // upstream probe hit a transient ref/read error; the explicit
+          // upstream-status path will surface those failures when invoked.
+        }
       }
     }
   } catch {
@@ -219,7 +241,15 @@ async function runNumstat(
 ): Promise<Map<string, GitLineStats>> {
   try {
     const { stdout } = await gitExecFileAsync(
-      ['-c', 'core.quotePath=false', 'diff', ...(cached ? ['--cached'] : []), '--numstat', '-M'],
+      [
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        '-z',
+        ...(cached ? ['--cached'] : []),
+        '--numstat',
+        '-M'
+      ],
       { cwd: worktreePath, env: gitOptionalLocksDisabledEnv() }
     )
     return parseNumstat(stdout)
@@ -260,6 +290,100 @@ async function attachLineStats(worktreePath: string, entries: GitStatusEntry[]):
 function getShortBranchName(branch: string | undefined): string | null {
   const prefix = 'refs/heads/'
   return branch?.startsWith(prefix) ? branch.slice(prefix.length) : null
+}
+
+function getEffectiveUpstreamStatusCacheKey(
+  worktreePath: string,
+  branchName: string,
+  upstreamName: string | undefined
+): string {
+  return [worktreePath, branchName, upstreamName ?? ''].join('\0')
+}
+
+function readCachedEffectiveUpstreamStatus(
+  cacheKey: string,
+  now: number
+): GitUpstreamStatus | undefined {
+  const entry = effectiveUpstreamStatusCache.get(cacheKey)
+  if (!entry) {
+    return undefined
+  }
+  if (entry.expiresAt <= now) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return undefined
+  }
+  return entry.status
+}
+
+function rememberEffectiveUpstreamStatus(
+  cacheKey: string,
+  status: GitUpstreamStatus,
+  now: number,
+  probedSameNameOriginRef: boolean
+): void {
+  if (status.hasUpstream) {
+    effectiveUpstreamStatusCache.delete(cacheKey)
+    return
+  }
+  if (!probedSameNameOriginRef) {
+    return
+  }
+  // Why: a stable no-upstream branch should not spawn failed git probes every
+  // source-control poll, but remote refs can appear after push/fetch.
+  effectiveUpstreamStatusCache.set(cacheKey, {
+    status,
+    expiresAt: now + EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_TTL_MS
+  })
+}
+
+async function readOrProbeEffectiveUpstreamStatus(
+  cacheKey: string,
+  worktreePath: string,
+  branchName: string
+): Promise<GitUpstreamStatus> {
+  const cached = readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
+  if (cached) {
+    return cached
+  }
+
+  const inFlight = effectiveUpstreamStatusInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  // Why: source-control mount and root git refresh can overlap during startup.
+  // Coalesce the richer upstream probe so a stable missing ref fails once.
+  const probe = probeEffectiveUpstreamStatus(worktreePath, branchName).then((result) => {
+    rememberEffectiveUpstreamStatus(
+      cacheKey,
+      result.status,
+      Date.now(),
+      result.probedSameNameOriginRef
+    )
+    return result.status
+  })
+  effectiveUpstreamStatusInFlight.set(cacheKey, probe)
+  try {
+    return await probe
+  } finally {
+    if (effectiveUpstreamStatusInFlight.get(cacheKey) === probe) {
+      effectiveUpstreamStatusInFlight.delete(cacheKey)
+    }
+  }
+}
+
+async function probeEffectiveUpstreamStatus(
+  worktreePath: string,
+  branchName: string
+): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
+  let probedSameNameOriginRef = false
+  const status = await getEffectiveGitUpstreamStatus((args) => {
+    if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
+      probedSameNameOriginRef = true
+    }
+    return gitExecFileAsync(args, { cwd: worktreePath })
+  })
+  return { status, probedSameNameOriginRef }
 }
 
 function shouldProbeEffectiveUpstreamStatus(
@@ -337,7 +461,7 @@ async function parseUnmergedEntry(
   const modeStage1 = parts[3]
   const modeStage2 = parts[4]
   const modeStage3 = parts[5]
-  const filePath = parts.slice(10).join(' ')
+  const filePath = decodeGitCQuotedPath(parts.slice(10).join(' '))
   if (!filePath) {
     return null
   }
@@ -746,7 +870,7 @@ async function loadBranchChanges(
       gitOptions
     ),
     gitExecFileAsync(
-      ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
+      ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', mergeBase, headOid],
       gitOptions
     )
   ])
@@ -789,11 +913,12 @@ async function loadCommitChanges(
         commitOid
       ]
   const numstatArgs = parentOid
-    ? ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', parentOid, commitOid]
+    ? ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', parentOid, commitOid]
     : [
         '-c',
         'core.quotePath=false',
         'diff-tree',
+        '-z',
         '--root',
         '--no-commit-id',
         '--numstat',
@@ -830,15 +955,15 @@ function parseBranchChangeLine(line: string): GitBranchChangeEntry | null {
   const status = parseBranchStatusChar(rawStatus[0] ?? 'M')
 
   if (rawStatus.startsWith('R') || rawStatus.startsWith('C')) {
-    const oldPath = parts[1]
-    const path = parts[2]
+    const oldPath = decodeGitCQuotedPath(parts[1] ?? '')
+    const path = decodeGitCQuotedPath(parts[2] ?? '')
     if (!path) {
       return null
     }
     return { path, oldPath, status }
   }
 
-  const path = parts[1]
+  const path = decodeGitCQuotedPath(parts[1] ?? '')
   if (!path) {
     return null
   }
@@ -941,6 +1066,15 @@ async function readGitBlobAtOidPath(
 
 async function readWorkingTreeFile(filePath: string): Promise<GitBlobReadResult> {
   try {
+    const fileStat = await stat(filePath)
+    if (!fileStat.isFile()) {
+      return { content: '', isBinary: false, exists: false }
+    }
+    if (fileStat.size > MAX_GIT_SHOW_BYTES) {
+      // Why: git blob reads are capped through maxBuffer; mirror that bound for
+      // unstaged working-tree content before readFile can pull in huge assets.
+      return { content: '', isBinary: true, exists: true }
+    }
     const buffer = await readFile(filePath)
     return bufferToBlob(buffer, filePath)
   } catch {
@@ -1020,14 +1154,16 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
  * Stage a file.
  */
 export async function stageFile(worktreePath: string, filePath: string): Promise<void> {
-  await gitExecFileAsync(['add', '--', filePath], { cwd: worktreePath })
+  await gitExecFileAsync(['add', '--', literalPathspec(filePath)], { cwd: worktreePath })
 }
 
 /**
  * Unstage a file.
  */
 export async function unstageFile(worktreePath: string, filePath: string): Promise<void> {
-  await gitExecFileAsync(['restore', '--staged', '--', filePath], { cwd: worktreePath })
+  await gitExecFileAsync(['restore', '--staged', '--', literalPathspec(filePath)], {
+    cwd: worktreePath
+  })
 }
 
 export async function getStagedCommitContext(
@@ -1246,7 +1382,7 @@ export async function bulkStageFiles(worktreePath: string, filePaths: string[]):
   }
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['add', '--', ...chunk], { cwd: worktreePath })
+    await gitExecFileAsync(['add', '--', ...chunk.map(literalPathspec)], { cwd: worktreePath })
   }
 }
 
@@ -1259,6 +1395,8 @@ export async function bulkUnstageFiles(worktreePath: string, filePaths: string[]
   }
   for (let i = 0; i < filePaths.length; i += BULK_CHUNK_SIZE) {
     const chunk = filePaths.slice(i, i + BULK_CHUNK_SIZE)
-    await gitExecFileAsync(['restore', '--staged', '--', ...chunk], { cwd: worktreePath })
+    await gitExecFileAsync(['restore', '--staged', '--', ...chunk.map(literalPathspec)], {
+      cwd: worktreePath
+    })
   }
 }

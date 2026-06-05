@@ -19,7 +19,14 @@ vi.mock('node-pty', () => ({
   spawn: ptySpawnMock
 }))
 
+// Default to signed-in so the spawn paths under test still run; the auth gate
+// itself is covered by codex-auth-presence.test.ts and the no-auth case below.
+vi.mock('./codex-auth-presence', () => ({
+  codexAuthExists: vi.fn(() => true)
+}))
+
 import { fetchCodexRateLimits } from './codex-fetcher'
+import { codexAuthExists } from './codex-auth-presence'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -44,6 +51,22 @@ describe('fetchCodexRateLimits', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
+    vi.mocked(codexAuthExists).mockReturnValue(true)
+  })
+
+  it('does not spawn Codex when the user is not signed in', async () => {
+    vi.mocked(codexAuthExists).mockReturnValue(false)
+
+    await expect(fetchCodexRateLimits()).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'unavailable',
+      error: 'Codex not signed in'
+    })
+
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
   it('disposes node-pty listeners before killing the PTY fallback on timeout', async () => {

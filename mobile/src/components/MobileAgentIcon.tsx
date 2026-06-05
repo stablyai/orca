@@ -79,11 +79,21 @@ function AgentLetterIcon({ letter, size = 16 }: { letter: string; size?: number 
 }
 
 export function MobileAgentIcon({ agentId, size = 16 }: { agentId: string; size?: number }) {
-  if (agentId === 'claude') return <ClaudeIcon size={size} />
-  if (agentId === 'codex') return <OpenAIIcon size={size} />
-  if (agentId === 'pi') return <PiIcon size={size} />
-  if (agentId === 'omp') return <OmpIcon size={size} />
-  if (agentId === 'aider') return <AiderIcon size={size} />
+  if (agentId === 'claude') {
+    return <ClaudeIcon size={size} />
+  }
+  if (agentId === 'codex') {
+    return <OpenAIIcon size={size} />
+  }
+  if (agentId === 'pi') {
+    return <PiIcon size={size} />
+  }
+  if (agentId === 'omp') {
+    return <OmpIcon size={size} />
+  }
+  if (agentId === 'aider') {
+    return <AiderIcon size={size} />
+  }
   if (agentId === '__blank__' || agentId === 'blank') {
     return <Terminal size={size} color={colors.textMuted} />
   }

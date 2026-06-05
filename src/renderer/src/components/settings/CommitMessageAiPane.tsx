@@ -2,8 +2,8 @@
    model dropdown, thinking effort dropdown, custom command, custom prompt) is
    a SearchableSetting block, and splitting the pane across files would scatter
    the ~6 conditional render branches without making any of them clearer. */
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { RefreshCw, Terminal } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, RefreshCw, Terminal } from 'lucide-react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import type {
   SourceControlAiOperation,
@@ -32,7 +32,9 @@ import {
 } from '../../../../shared/commit-message-host-key'
 import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
 import { getConnectionId } from '@/lib/connection-context'
+import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import {
@@ -42,6 +44,7 @@ import {
 import { useAppStore } from '../../store'
 import { useActiveWorktree } from '../../store/selectors'
 import { SearchableSetting } from './SearchableSetting'
+import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 import { matchesSettingsSearch } from './settings-search'
 
 type CommitMessageAiPaneProps = {
@@ -50,6 +53,7 @@ type CommitMessageAiPaneProps = {
   writeSourceControlAiSettings?: (patch: SourceControlAiSettingsPatch) => Promise<void>
   onCustomPromptDirtyChange?: (dirty: boolean) => void
   customPromptDiscardSignal?: number
+  settingsSearchQuery?: string
 }
 
 type ModelDiscoveryState = {
@@ -60,11 +64,82 @@ type ModelDiscoveryState = {
   error?: string
 }
 
+type CommitMessageInstructionOperation = Extract<
+  SourceControlAiOperation,
+  'commitMessage' | 'pullRequest'
+>
+
+type CommitMessageInstructionDraftValues = Record<CommitMessageInstructionOperation, string>
+
+type CommitMessageInstructionDraftState = {
+  source: CommitMessageInstructionDraftValues
+  draft: CommitMessageInstructionDraftValues
+  discardSignal: number | undefined
+}
+
+const COMMIT_MESSAGE_INSTRUCTION_OPERATIONS: readonly CommitMessageInstructionOperation[] = [
+  'commitMessage',
+  'pullRequest'
+]
+
+function cloneInstructionDraftValues(
+  values: CommitMessageInstructionDraftValues
+): CommitMessageInstructionDraftValues {
+  return {
+    commitMessage: values.commitMessage,
+    pullRequest: values.pullRequest
+  }
+}
+
+export function createCommitMessageInstructionDraftState(
+  source: CommitMessageInstructionDraftValues,
+  discardSignal: number | undefined
+): CommitMessageInstructionDraftState {
+  return {
+    source: cloneInstructionDraftValues(source),
+    draft: cloneInstructionDraftValues(source),
+    discardSignal
+  }
+}
+
+export function resolveCommitMessageInstructionDraftState(
+  state: CommitMessageInstructionDraftState,
+  source: CommitMessageInstructionDraftValues,
+  discardSignal: number | undefined
+): CommitMessageInstructionDraftState {
+  if (state.discardSignal !== discardSignal) {
+    return createCommitMessageInstructionDraftState(source, discardSignal)
+  }
+
+  let changed = false
+  const nextSource = cloneInstructionDraftValues(state.source)
+  const nextDraft = cloneInstructionDraftValues(state.draft)
+  for (const operation of COMMIT_MESSAGE_INSTRUCTION_OPERATIONS) {
+    if (state.source[operation] === source[operation]) {
+      continue
+    }
+    if (state.draft[operation] === state.source[operation]) {
+      nextDraft[operation] = source[operation]
+    }
+    nextSource[operation] = source[operation]
+    changed = true
+  }
+
+  return changed
+    ? {
+        source: nextSource,
+        draft: nextDraft,
+        discardSignal
+      }
+    : state
+}
+
 const UNCONFIGURED_AGENT_SELECT_VALUE = ''
 const INHERIT_MODEL_SELECT_VALUE = '__inherit__'
 const COMING_SOON_COMMIT_MESSAGE_AGENTS: readonly { id: TuiAgent; label: string }[] = [
   { id: 'gemini', label: 'Gemini' }
 ]
+const GIT_AI_AUTHOR_SETTINGS_TITLE = 'Git AI Author'
 
 function readSettings(settings: GlobalSettings): SourceControlAiSettings {
   return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
@@ -204,9 +279,11 @@ export function CommitMessageAiPane({
   updateSettings,
   writeSourceControlAiSettings,
   onCustomPromptDirtyChange,
-  customPromptDiscardSignal
+  customPromptDiscardSignal,
+  settingsSearchQuery
 }: CommitMessageAiPaneProps): React.JSX.Element {
-  const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const activeWorktree = useActiveWorktree()
   const activeConnectionId = getConnectionId(activeWorktree?.id ?? null)
   const discoveryHostKey = getCommitMessageSettingsPaneDiscoveryHostKey(
@@ -221,55 +298,75 @@ export function CommitMessageAiPane({
   const [modelDiscoveryByAgent, setModelDiscoveryByAgent] = useState<
     Partial<Record<TuiAgent, ModelDiscoveryState>>
   >({})
-  const persistedCommitPrompt = config.instructionsByOperation.commitMessage ?? ''
-  const persistedPullRequestPrompt = config.instructionsByOperation.pullRequest ?? ''
-  const [commitPromptDraft, setCommitPromptDraft] = useState(persistedCommitPrompt)
-  const [pullRequestPromptDraft, setPullRequestPromptDraft] = useState(persistedPullRequestPrompt)
-  const [isSavingPrompt, setIsSavingPrompt] = useState(false)
-  const persistedPromptsRef = useRef({
-    commitMessage: persistedCommitPrompt,
-    pullRequest: persistedPullRequestPrompt
-  })
-  const isCommitPromptDirty = commitPromptDraft !== persistedCommitPrompt
-  const isPullRequestPromptDirty = pullRequestPromptDraft !== persistedPullRequestPrompt
-  const isCustomPromptDirty = isCommitPromptDirty || isPullRequestPromptDirty
-
-  useEffect(() => {
-    persistedPromptsRef.current = {
-      commitMessage: persistedCommitPrompt,
-      pullRequest: persistedPullRequestPrompt
-    }
-  }, [persistedCommitPrompt, persistedPullRequestPrompt])
-
-  useEffect(() => {
-    if (!isCommitPromptDirty) {
-      setCommitPromptDraft(persistedCommitPrompt)
-    }
-  }, [isCommitPromptDirty, persistedCommitPrompt])
-
-  useEffect(() => {
-    if (!isPullRequestPromptDirty) {
-      setPullRequestPromptDraft(persistedPullRequestPrompt)
-    }
-  }, [isPullRequestPromptDirty, persistedPullRequestPrompt])
-
-  useEffect(() => {
-    setCommitPromptDraft(persistedPromptsRef.current.commitMessage)
-    setPullRequestPromptDraft(persistedPromptsRef.current.pullRequest)
-    // Why: parent navigation guards use this signal after the user confirms
-    // they want to leave without saving the prompt draft.
-  }, [customPromptDiscardSignal])
+  const [outputOverridesOpen, setOutputOverridesOpen] = useState(false)
+  const persistedCommitInstructions = config.instructionsByOperation.commitMessage ?? ''
+  const persistedPullRequestInstructions = config.instructionsByOperation.pullRequest ?? ''
+  const persistedInstructionDraftValues: CommitMessageInstructionDraftValues = {
+    commitMessage: persistedCommitInstructions,
+    pullRequest: persistedPullRequestInstructions
+  }
+  const [instructionDraftState, setInstructionDraftState] = useState(() =>
+    createCommitMessageInstructionDraftState(
+      persistedInstructionDraftValues,
+      customPromptDiscardSignal
+    )
+  )
+  const [isSavingInstructions, setIsSavingInstructions] = useState(false)
+  const resolvedInstructionDraftState = resolveCommitMessageInstructionDraftState(
+    instructionDraftState,
+    persistedInstructionDraftValues,
+    customPromptDiscardSignal
+  )
+  if (resolvedInstructionDraftState !== instructionDraftState) {
+    // Why: prompt drafts should follow persisted settings only while clean,
+    // and the parent discard signal must reset all unsaved instruction edits.
+    setInstructionDraftState(resolvedInstructionDraftState)
+  }
+  const commitInstructionsDraft = resolvedInstructionDraftState.draft.commitMessage
+  const pullRequestInstructionsDraft = resolvedInstructionDraftState.draft.pullRequest
+  const updateInstructionDraft = (
+    operation: CommitMessageInstructionOperation,
+    value: string
+  ): void => {
+    setInstructionDraftState((current) => {
+      const resolved = resolveCommitMessageInstructionDraftState(
+        current,
+        persistedInstructionDraftValues,
+        customPromptDiscardSignal
+      )
+      return {
+        ...resolved,
+        draft: {
+          ...resolved.draft,
+          [operation]: value
+        }
+      }
+    })
+  }
+  const isCommitInstructionsDirty = commitInstructionsDraft !== persistedCommitInstructions
+  const isPullRequestInstructionsDirty =
+    pullRequestInstructionsDraft !== persistedPullRequestInstructions
+  const isCustomPromptDirty = isCommitInstructionsDirty || isPullRequestInstructionsDirty
+  const commitPromptDraft = commitInstructionsDraft
+  const pullRequestPromptDraft = pullRequestInstructionsDraft
+  const isCommitPromptDirty = isCommitInstructionsDirty
+  const isPullRequestPromptDirty = isPullRequestInstructionsDirty
+  const isSavingPrompt = isSavingInstructions
 
   useEffect(() => {
     onCustomPromptDirtyChange?.(isCustomPromptDirty)
   }, [isCustomPromptDirty, onCustomPromptDirtyChange])
 
-  useEffect(
-    () => () => {
-      onCustomPromptDirtyChange?.(false)
-    },
-    [onCustomPromptDirtyChange]
-  )
+  const onCustomPromptDirtyChangeRef = useRef(onCustomPromptDirtyChange)
+  onCustomPromptDirtyChangeRef.current = onCustomPromptDirtyChange
+  const setPaneRootRef = useCallback((node: HTMLDivElement | null): void => {
+    if (node !== null) {
+      return
+    }
+    // Why: Settings owns the global unsaved-prompt guard; reset it when this
+    // pane detaches without keeping a passive cleanup-only Effect.
+    onCustomPromptDirtyChangeRef.current?.(false)
+  }, [])
 
   const baseAgentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
   const agentCapabilities = useMemo(
@@ -689,13 +786,14 @@ export function CommitMessageAiPane({
     }))
   }
 
-  const onSavePrompt = async (operation: SourceControlAiOperation): Promise<void> => {
-    const draft = operation === 'commitMessage' ? commitPromptDraft : pullRequestPromptDraft
-    const dirty = operation === 'commitMessage' ? isCommitPromptDirty : isPullRequestPromptDirty
-    if (!dirty || isSavingPrompt) {
+  const onSavePrompt = async (operation: CommitMessageInstructionOperation): Promise<void> => {
+    const draft = resolvedInstructionDraftState.draft[operation]
+    const dirty =
+      operation === 'commitMessage' ? isCommitInstructionsDirty : isPullRequestInstructionsDirty
+    if (!dirty || isSavingInstructions) {
       return
     }
-    setIsSavingPrompt(true)
+    setIsSavingInstructions(true)
     try {
       await writeConfig((current) => ({
         instructionsByOperation: {
@@ -704,16 +802,25 @@ export function CommitMessageAiPane({
         }
       }))
     } finally {
-      setIsSavingPrompt(false)
+      setIsSavingInstructions(false)
     }
   }
 
-  const onDiscardPrompt = (operation: SourceControlAiOperation): void => {
-    if (operation === 'commitMessage') {
-      setCommitPromptDraft(persistedCommitPrompt)
-      return
-    }
-    setPullRequestPromptDraft(persistedPullRequestPrompt)
+  const onDiscardPrompt = (operation: CommitMessageInstructionOperation): void => {
+    setInstructionDraftState((current) => {
+      const resolved = resolveCommitMessageInstructionDraftState(
+        current,
+        persistedInstructionDraftValues,
+        customPromptDiscardSignal
+      )
+      return {
+        ...resolved,
+        draft: {
+          ...resolved.draft,
+          [operation]: resolved.source[operation]
+        }
+      }
+    })
   }
 
   const onPrDefaultChange = (
@@ -728,26 +835,113 @@ export function CommitMessageAiPane({
     }))
   }
 
-  const sections: React.ReactNode[] = []
+  const renderOperationModelControls = (
+    operation: SourceControlAiOperation,
+    title: string,
+    description: string,
+    keywords: string[],
+    forceVisible = false
+  ): React.JSX.Element | null => {
+    if (
+      !config.enabled ||
+      !activeCapability ||
+      !activeModel ||
+      (!forceVisible &&
+        !matchesSettingsSearch(searchQuery, {
+          title,
+          description,
+          keywords
+        }))
+    ) {
+      return null
+    }
+    const overrideModelId = readOperationOverrideModelId(operation)
+    const selectedModel = overrideModelId
+      ? activeCapability.models.find((model) => model.id === overrideModelId)
+      : undefined
+    const selectedThinking = selectedModel?.thinkingLevels?.some(
+      (level) =>
+        level.id ===
+        config.modelOverridesByOperation?.[operation]?.selectedThinkingByModel?.[selectedModel.id]
+    )
+      ? config.modelOverridesByOperation?.[operation]?.selectedThinkingByModel?.[selectedModel.id]
+      : selectedModel?.defaultThinkingLevel
 
-  if (
-    matchesSettingsSearch(searchQuery, {
-      title: 'Enable Source Control AI',
-      description:
-        'Adds AI generation to Source Control commit, pull request, and branch-name flows.',
-      keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'enabled']
-    })
-  ) {
+    return (
+      <div key={`${operation}-model`} className="space-y-2 py-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-0.5">
+            <Label>{title}</Label>
+            <p className="text-xs text-muted-foreground">{description}</p>
+          </div>
+          <Select
+            value={overrideModelId ?? INHERIT_MODEL_SELECT_VALUE}
+            onValueChange={(value) => onOperationModelChange(operation, value)}
+          >
+            <SelectTrigger size="sm" className="h-8 w-[220px] shrink-0 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={INHERIT_MODEL_SELECT_VALUE} className="cursor-pointer">
+                Use default model
+              </SelectItem>
+              {activeCapability.models.map((model) => (
+                <SelectItem key={model.id} value={model.id} className="cursor-pointer">
+                  {model.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {selectedModel?.thinkingLevels && selectedThinking ? (
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-[11px] text-muted-foreground">Thinking Effort</span>
+            <Select
+              value={selectedThinking}
+              onValueChange={(value) =>
+                onOperationThinkingChange(operation, selectedModel.id, value)
+              }
+            >
+              <SelectTrigger size="sm" className="h-7 w-[150px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {selectedModel.thinkingLevels.map((level) => (
+                  <SelectItem key={level.id} value={level.id} className="cursor-pointer">
+                    {level.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
+  const sections: React.ReactNode[] = []
+  const enableGitAiAuthorEntry = {
+    title: 'Enable Git AI Author',
+    description: 'Adds AI generation to git commit, pull request, and branch-name flows.',
+    keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'enabled']
+  }
+  const gitAiAuthorPaneMatches = matchesSettingsSearch(
+    searchQuery,
+    COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
+  )
+  const enableGitAiAuthorMatches = matchesSettingsSearch(searchQuery, enableGitAiAuthorEntry)
+  const forceEnableGitAiAuthorVisible = !config.enabled && gitAiAuthorPaneMatches
+
+  if (enableGitAiAuthorMatches || forceEnableGitAiAuthorVisible) {
     sections.push(
       <SearchableSetting
         key="enabled"
-        title="Enable Source Control AI"
-        description="Adds AI generation to Source Control commit, pull request, and branch-name flows."
-        keywords={['ai', 'commit', 'message', 'generate', 'agent', 'enabled']}
+        {...enableGitAiAuthorEntry}
+        forceVisible={forceEnableGitAiAuthorVisible}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
-          <Label>Enable Source Control AI</Label>
+          <Label>Enable Git AI Author</Label>
           <p className="text-xs text-muted-foreground">
             Adds Generate controls for commit messages and pull request details. Runs the selected
             agent CLI where the worktree is hosted.
@@ -775,7 +969,7 @@ export function CommitMessageAiPane({
     config.enabled &&
     matchesSettingsSearch(searchQuery, {
       title: 'Agent',
-      description: 'Which agent to invoke for Source Control text generation.',
+      description: 'Which agent to invoke for git text generation.',
       keywords: ['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor']
     })
   ) {
@@ -783,7 +977,7 @@ export function CommitMessageAiPane({
       <SearchableSetting
         key="agent"
         title="Agent"
-        description="Which agent to invoke for Source Control text generation."
+        description="Which agent to invoke for git text generation."
         keywords={['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor']}
         className="flex items-center justify-between gap-4 py-2"
       >
@@ -833,15 +1027,15 @@ export function CommitMessageAiPane({
           </Select>
           {unsupportedDefaultAgentLabel ? (
             <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
-              Your default agent is {unsupportedDefaultAgentLabel}, which does not support Source
-              Control AI yet. Choose a supported agent or Custom.
+              Your default agent is {unsupportedDefaultAgentLabel}, which does not support{' '}
+              {GIT_AI_AUTHOR_SETTINGS_TITLE} yet. Choose a supported agent or Custom.
             </p>
           ) : null}
           {unsupportedSelectedAgentLabel ? (
             <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
               {unsupportedSelectedAgentIsComingSoon
-                ? `${unsupportedSelectedAgentLabel} Source Control AI is coming soon.`
-                : `${unsupportedSelectedAgentLabel} does not support Source Control AI yet.`}{' '}
+                ? `${unsupportedSelectedAgentLabel} ${GIT_AI_AUTHOR_SETTINGS_TITLE} is coming soon.`
+                : `${unsupportedSelectedAgentLabel} does not support ${GIT_AI_AUTHOR_SETTINGS_TITLE} yet.`}{' '}
               Choose a supported agent or Custom.
             </p>
           ) : null}
@@ -902,26 +1096,21 @@ export function CommitMessageAiPane({
     activeCapability &&
     activeModel &&
     matchesSettingsSearch(searchQuery, {
-      title: 'Default model',
-      description: 'Which model Source Control AI uses unless an operation override exists.',
+      title: 'Model',
+      description: 'Which model Git AI Author uses unless a per-action model is set.',
       keywords: ['model', 'haiku', 'sonnet', 'opus', 'gpt']
     })
   ) {
     sections.push(
       <SearchableSetting
         key="model"
-        title="Default model"
-        description="Which model Source Control AI uses unless an operation override exists."
+        title="Model"
+        description="Which model Git AI Author uses unless a per-action model is set."
         keywords={['model', 'haiku', 'sonnet', 'opus', 'gpt']}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
-          <Label>Default model</Label>
-          <p className="text-xs text-muted-foreground">
-            {activeCapability.modelSource === 'dynamic'
-              ? 'Refreshes from the selected CLI when the CLI exposes model discovery.'
-              : 'This agent does not expose model discovery, so Orca uses a manual catalog.'}
-          </p>
+          <Label>Model</Label>
           {activeDiscovery?.status === 'error' && (
             <p className="text-xs text-destructive">{activeDiscovery.error}</p>
           )}
@@ -963,7 +1152,7 @@ export function CommitMessageAiPane({
     activeModel?.thinkingLevels &&
     activeThinking &&
     matchesSettingsSearch(searchQuery, {
-      title: 'Thinking effort',
+      title: 'Thinking Effort',
       description: 'Reasoning effort level for the selected model. Higher levels are slower.',
       keywords: ['thinking', 'effort', 'reasoning']
     })
@@ -971,17 +1160,12 @@ export function CommitMessageAiPane({
     sections.push(
       <SearchableSetting
         key="thinking"
-        title="Thinking effort"
+        title="Thinking Effort"
         description="Reasoning effort level for the selected model. Higher levels are slower."
         keywords={['thinking', 'effort', 'reasoning']}
         className="flex items-center justify-between gap-4 py-2"
       >
-        <div className="space-y-0.5">
-          <Label>Thinking effort</Label>
-          <p className="text-xs text-muted-foreground">
-            Higher effort produces more careful messages but takes longer and costs more tokens.
-          </p>
-        </div>
+        <Label>Thinking Effort</Label>
         <Select value={activeThinking} onValueChange={onThinkingChange}>
           <SelectTrigger size="sm" className="h-8 text-xs w-[160px]">
             <SelectValue />
@@ -998,153 +1182,59 @@ export function CommitMessageAiPane({
     )
   }
 
-  if (
-    config.enabled &&
-    activeCapability &&
-    activeModel &&
-    matchesSettingsSearch(searchQuery, {
-      title: 'Advanced model overrides',
-      description: 'Optional per-operation model choices for commit messages and PR details.',
-      keywords: ['model', 'override', 'commit', 'pull request', 'pr', 'thinking']
-    })
-  ) {
-    const operationRows: {
-      operation: SourceControlAiOperation
-      label: string
-      description: string
-    }[] = [
-      {
-        operation: 'commitMessage',
-        label: 'Commit message model',
-        description: 'Use a different model for commit message generation.'
-      },
-      {
-        operation: 'pullRequest',
-        label: 'PR details model',
-        description: 'Use a different model for pull request title and description generation.'
-      }
-    ]
-    sections.push(
-      <SearchableSetting
-        key="model-overrides"
-        title="Advanced model overrides"
-        description="Optional per-operation model choices for commit messages and PR details."
-        keywords={['model', 'override', 'commit', 'pull request', 'pr', 'thinking']}
-        className="space-y-3 px-1 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>Advanced model overrides</Label>
-          <p className="text-xs text-muted-foreground">
-            Leave these inherited unless commit messages or PR details need different model
-            behavior.
-          </p>
-        </div>
-        <div className="space-y-3">
-          {operationRows.map((row) => {
-            const overrideModelId = readOperationOverrideModelId(row.operation)
-            const selectedModel = overrideModelId
-              ? activeCapability.models.find((model) => model.id === overrideModelId)
-              : undefined
-            const selectedThinking = selectedModel?.thinkingLevels?.some(
-              (level) =>
-                level.id ===
-                config.modelOverridesByOperation?.[row.operation]?.selectedThinkingByModel?.[
-                  selectedModel.id
-                ]
-            )
-              ? config.modelOverridesByOperation?.[row.operation]?.selectedThinkingByModel?.[
-                  selectedModel.id
-                ]
-              : selectedModel?.defaultThinkingLevel
-            return (
-              <div
-                key={row.operation}
-                className="space-y-2 rounded-md border border-border px-3 py-2"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-0.5">
-                    <p className="text-xs font-medium text-foreground">{row.label}</p>
-                    <p className="text-[11px] text-muted-foreground">{row.description}</p>
-                  </div>
-                  <Select
-                    value={overrideModelId ?? INHERIT_MODEL_SELECT_VALUE}
-                    onValueChange={(value) => onOperationModelChange(row.operation, value)}
-                  >
-                    <SelectTrigger size="sm" className="h-8 w-[220px] shrink-0 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={INHERIT_MODEL_SELECT_VALUE} className="cursor-pointer">
-                        Use default model
-                      </SelectItem>
-                      {activeCapability.models.map((model) => (
-                        <SelectItem key={model.id} value={model.id} className="cursor-pointer">
-                          {model.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {selectedModel?.thinkingLevels && selectedThinking ? (
-                  <div className="flex items-center justify-end gap-2">
-                    <span className="text-[11px] text-muted-foreground">Thinking</span>
-                    <Select
-                      value={selectedThinking}
-                      onValueChange={(value) =>
-                        onOperationThinkingChange(row.operation, selectedModel.id, value)
-                      }
-                    >
-                      <SelectTrigger size="sm" className="h-7 w-[150px] text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedModel.thinkingLevels.map((level) => (
-                          <SelectItem key={level.id} value={level.id} className="cursor-pointer">
-                            {level.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-              </div>
-            )
-          })}
-        </div>
-      </SearchableSetting>
-    )
+  const commitMessagesGroupEntry = {
+    title: 'Commit Messages',
+    description: 'Commit message generation settings.',
+    keywords: ['commit', 'message', 'model', 'prompt', 'conventional commits']
   }
-
-  if (
+  const commitAndPrCustomizationEntry = {
+    title: 'Commit and PR customization',
+    description: 'Configure behavior for commit message generation and PR creation.',
+    keywords: ['customization', 'advanced', 'commit', 'pull request', 'pr', 'model', 'prompt']
+  }
+  const commitAndPrCustomizationMatches =
+    config.enabled && matchesSettingsSearch(searchQuery, commitAndPrCustomizationEntry)
+  const commitMessagesGroupMatches =
+    config.enabled && matchesSettingsSearch(searchQuery, commitMessagesGroupEntry)
+  const commitPromptMatches = matchesSettingsSearch(searchQuery, {
+    title: 'Commit message prompt',
+    description: 'Additional prompt text appended only when generating commit messages.',
+    keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
+  })
+  const commitMessageChildren = [
+    renderOperationModelControls(
+      'commitMessage',
+      'Model',
+      'Use a different model for commit message generation.',
+      [
+        'model',
+        'override',
+        'commit',
+        'message',
+        'commit message model',
+        'commit model',
+        'thinking'
+      ],
+      commitMessagesGroupMatches || commitAndPrCustomizationMatches
+    ),
     (config.enabled || isCommitPromptDirty) &&
-    (isCommitPromptDirty ||
-      matchesSettingsSearch(searchQuery, {
-        title: 'Commit message prompt',
-        description: 'Additional prompt text appended only when generating commit messages.',
-        keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
-      }))
-  ) {
-    sections.push(
-      <SearchableSetting
-        key="commit-prompt"
-        title="Commit message prompt"
-        description="Additional prompt text appended only when generating commit messages."
-        keywords={['prompt', 'conventional commits', 'gitmoji', 'style']}
-        forceVisible={isCommitPromptDirty}
-        className="space-y-2 px-1 py-2"
-      >
+    (commitMessagesGroupMatches ||
+      commitAndPrCustomizationMatches ||
+      isCommitPromptDirty ||
+      commitPromptMatches) ? (
+      <div key="commit-prompt" className="space-y-2 py-2">
         <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-commit-prompt">Commit message prompt</Label>
+          <Label htmlFor="source-control-ai-commit-prompt">Prompt</Label>
           <p className="text-xs text-muted-foreground">
-            This prompt is appended only when generating commit messages. Use it for Conventional
-            Commits, ticket prefixes, or any other commit style your team prefers.
+            Appended only when generating commit messages. Use it for Conventional Commits, ticket
+            prefixes, or any other commit style your team prefers.
           </p>
         </div>
         <textarea
           id="source-control-ai-commit-prompt"
           rows={4}
           value={commitPromptDraft}
-          onChange={(e) => setCommitPromptDraft(e.target.value)}
+          onChange={(e) => updateInstructionDraft('commitMessage', e.target.value)}
           placeholder="Use Conventional Commits format (feat:, fix:, ...). Reference the ticket key when present."
           className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         />
@@ -1175,40 +1265,88 @@ export function CommitMessageAiPane({
             </Button>
           </div>
         </div>
-      </SearchableSetting>
-    )
-  }
+      </div>
+    ) : null
+  ].filter(Boolean)
 
-  if (
+  const commitMessagesGroup =
+    commitMessageChildren.length > 0 ? (
+      <div key="commit-messages" className="space-y-3">
+        <h4 className="text-sm font-semibold">Commit Messages</h4>
+        <div className="divide-y divide-border/50">{commitMessageChildren}</div>
+      </div>
+    ) : null
+
+  const pullRequestsGroupEntry = {
+    title: 'Pull Requests',
+    description: 'Pull request authoring and creation settings.',
+    keywords: ['pull request', 'pr', 'model', 'prompt', 'draft', 'template', 'authoring']
+  }
+  const pullRequestsGroupMatches =
+    config.enabled && matchesSettingsSearch(searchQuery, pullRequestsGroupEntry)
+  const pullRequestPromptMatches = matchesSettingsSearch(searchQuery, {
+    title: 'Pull request prompt',
+    description: 'Additional prompt text appended only when generating pull request details.',
+    keywords: ['prompt', 'pull request', 'pr', 'description', 'template']
+  })
+  const prCreationDefaultsMatches = matchesSettingsSearch(searchQuery, {
+    title: 'PR creation defaults',
+    description: 'Defaults used when the Create PR composer opens.',
+    keywords: ['pull request', 'pr', 'draft', 'template', 'generate', 'open']
+  })
+  const prDefaults = config.prCreationDefaults ?? {}
+  const prDefaultRows: {
+    key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>
+    label: string
+    description: string
+  }[] = [
+    {
+      key: 'draft',
+      label: 'Draft by default',
+      description: 'Start new pull requests as drafts.'
+    },
+    {
+      key: 'useTemplate',
+      label: 'Use PR template when available',
+      description: 'Prefer repository pull request templates when no description is set.'
+    },
+    {
+      key: 'generateDetailsOnOpen',
+      label: 'Generate details when opening Create PR',
+      description: 'Run pull-request detail generation once when the composer opens.'
+    },
+    {
+      key: 'openAfterCreate',
+      label: 'Open PR after creation',
+      description: 'Open the created hosted review in your browser after submit.'
+    }
+  ]
+  const pullRequestChildren = [
+    renderOperationModelControls(
+      'pullRequest',
+      'Model',
+      'Use a different model for pull request title and description generation.',
+      ['model', 'override', 'pull request', 'pr', 'pull request model', 'pr model', 'thinking'],
+      pullRequestsGroupMatches || commitAndPrCustomizationMatches
+    ),
     (config.enabled || isPullRequestPromptDirty) &&
-    (isPullRequestPromptDirty ||
-      matchesSettingsSearch(searchQuery, {
-        title: 'Pull request prompt',
-        description: 'Additional prompt text appended only when generating pull request details.',
-        keywords: ['prompt', 'pull request', 'pr', 'description', 'template']
-      }))
-  ) {
-    sections.push(
-      <SearchableSetting
-        key="pull-request-prompt"
-        title="Pull request prompt"
-        description="Additional prompt text appended only when generating pull request details."
-        keywords={['prompt', 'pull request', 'pr', 'description', 'template']}
-        forceVisible={isPullRequestPromptDirty}
-        className="space-y-2 px-1 py-2"
-      >
+    (pullRequestsGroupMatches ||
+      commitAndPrCustomizationMatches ||
+      isPullRequestPromptDirty ||
+      pullRequestPromptMatches) ? (
+      <div key="pull-request-prompt" className="space-y-2 py-2">
         <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-pr-prompt">Pull request prompt</Label>
+          <Label htmlFor="source-control-ai-pr-prompt">Prompt</Label>
           <p className="text-xs text-muted-foreground">
-            This prompt is appended only when generating pull request titles, descriptions, draft
-            state, and base suggestions. It never affects commit messages.
+            Appended when generating pull request titles, descriptions, draft state, and base
+            suggestions. It never affects commit messages.
           </p>
         </div>
         <textarea
           id="source-control-ai-pr-prompt"
           rows={4}
           value={pullRequestPromptDraft}
-          onChange={(e) => setPullRequestPromptDraft(e.target.value)}
+          onChange={(e) => updateInstructionDraft('pullRequest', e.target.value)}
           placeholder="Summarize user-visible changes first, then list reviewer notes and testing evidence."
           className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
         />
@@ -1239,62 +1377,20 @@ export function CommitMessageAiPane({
             </Button>
           </div>
         </div>
-      </SearchableSetting>
-    )
-  }
-
-  if (
+      </div>
+    ) : null,
     config.enabled &&
-    matchesSettingsSearch(searchQuery, {
-      title: 'PR creation defaults',
-      description: 'Defaults used when the Create PR composer opens.',
-      keywords: ['pull request', 'pr', 'draft', 'template', 'generate', 'open']
-    })
-  ) {
-    const prDefaults = config.prCreationDefaults ?? {}
-    const rows: {
-      key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>
-      label: string
-      description: string
-    }[] = [
-      {
-        key: 'draft',
-        label: 'Draft by default',
-        description: 'Start new pull requests as drafts.'
-      },
-      {
-        key: 'useTemplate',
-        label: 'Use PR template when available',
-        description: 'Prefer repository pull request templates when no description is set.'
-      },
-      {
-        key: 'generateDetailsOnOpen',
-        label: 'Generate details when opening Create PR',
-        description: 'Run pull-request detail generation once when the composer opens.'
-      },
-      {
-        key: 'openAfterCreate',
-        label: 'Open PR after creation',
-        description: 'Open the created hosted review in your browser after submit.'
-      }
-    ]
-    sections.push(
-      <SearchableSetting
-        key="pr-creation-defaults"
-        title="PR creation defaults"
-        description="Defaults used when the Create PR composer opens."
-        keywords={['pull request', 'pr', 'draft', 'template', 'generate', 'open']}
-        className="space-y-3 px-1 py-2"
-      >
+    (pullRequestsGroupMatches || commitAndPrCustomizationMatches || prCreationDefaultsMatches) ? (
+      <div key="pr-creation-defaults" className="space-y-3 py-2">
         <div className="space-y-0.5">
-          <Label>PR creation defaults</Label>
+          <Label>Creation defaults</Label>
           <p className="text-xs text-muted-foreground">
             Provider-neutral defaults for the Create PR composer. Repo settings can override each
             field independently.
           </p>
         </div>
         <div className="space-y-2">
-          {rows.map((row) => {
+          {prDefaultRows.map((row) => {
             const checked = prDefaults[row.key] === true
             return (
               <label
@@ -1315,6 +1411,69 @@ export function CommitMessageAiPane({
             )
           })}
         </div>
+      </div>
+    ) : null
+  ].filter(Boolean)
+
+  const pullRequestsGroup =
+    pullRequestChildren.length > 0 ? (
+      <div key="pull-requests" className="space-y-3">
+        <h4 className="text-sm font-semibold">Pull Requests</h4>
+        <div className="divide-y divide-border/50">{pullRequestChildren}</div>
+      </div>
+    ) : null
+
+  const outputOverrideChildren = [commitMessagesGroup, pullRequestsGroup].filter(Boolean)
+  const outputOverridesSearchOpen = searchQuery.trim() !== '' && outputOverrideChildren.length > 0
+  const outputOverridesVisible =
+    outputOverridesOpen ||
+    outputOverridesSearchOpen ||
+    isCommitPromptDirty ||
+    isPullRequestPromptDirty
+
+  if (outputOverrideChildren.length > 0) {
+    sections.push(
+      <SearchableSetting
+        key="output-overrides"
+        {...commitAndPrCustomizationEntry}
+        forceVisible
+        className="border-t border-border/50 px-1 pt-4"
+      >
+        <Collapsible open={outputOverridesVisible} onOpenChange={setOutputOverridesOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex w-full cursor-pointer items-start gap-2 rounded-md py-1 text-left outline-none transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+              aria-label={
+                outputOverridesVisible
+                  ? 'Collapse commit and PR customization'
+                  : 'Expand commit and PR customization'
+              }
+            >
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-muted-foreground">
+                <ChevronDown
+                  className={cn(
+                    'size-3.5 transition-transform',
+                    outputOverridesVisible && 'rotate-180'
+                  )}
+                />
+              </span>
+              <span className="space-y-0.5">
+                <span className="block cursor-pointer text-sm leading-none font-medium">
+                  Commit and PR customization
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  Configure behavior for commit message generation and PR creation.
+                </span>
+              </span>
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-3 space-y-5 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
+              {outputOverrideChildren}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </SearchableSetting>
     )
   }
@@ -1322,17 +1481,19 @@ export function CommitMessageAiPane({
   if (sections.length === 0) {
     return <div className="space-y-4" />
   }
-  // Why: this pane lives nested inside the Git section, so we draw an explicit
-  // sub-heading + top border to keep its toggles visually distinct from the
-  // Branch Prefix / Refresh Local Base Ref / Orca Attribution rows above.
+  // Why: this pane lives nested inside the Git section, so an explicit
+  // subsection divider keeps its controls visually distinct from adjacent git rows.
   return (
     <div
+      ref={setPaneRootRef}
       id="source-control-ai-settings"
       data-settings-section="source-control-ai-settings"
-      className="space-y-4 border-t border-border/40 pt-4"
+      className="space-y-4 border-t border-border/60 pt-5"
     >
-      <div className="space-y-0.5">
-        <h3 className="text-sm font-semibold">Source Control AI</h3>
+      <div className="space-y-1 pb-1">
+        <h3 className="text-[15px] font-semibold leading-tight text-foreground">
+          {GIT_AI_AUTHOR_SETTINGS_TITLE}
+        </h3>
         <p className="text-xs text-muted-foreground">
           Generate commit messages and pull request details using one background agent CLI.
         </p>

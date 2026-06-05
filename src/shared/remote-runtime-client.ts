@@ -411,6 +411,11 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         return
       }
       callbacks.onError(error)
+      // Why: after a subscription is established, protocol failures are
+      // terminal for this socket. Closing here releases the WebSocket listeners
+      // and lets the IPC subscription registry drop its retained callbacks.
+      closeSocketAfterCleanup()
+      callbacks.onClose?.()
     }
 
     try {

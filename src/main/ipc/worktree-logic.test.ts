@@ -9,6 +9,10 @@ import {
   ensurePathWithinWorkspace,
   computeBranchName,
   computeWorktreePath,
+  computeRemoteWorktreePath,
+  computeWorkspaceRoot,
+  getWorktreeCreationLayout,
+  getWorktreePathSettings,
   shouldSetDisplayName,
   mergeWorktree,
   parseWorktreeId,
@@ -174,6 +178,78 @@ describe('computeWorktreePath', () => {
       })
     ).toBe(join('/workspaces', 'my-project', 'feature'))
   })
+
+  it('resolves relative workspace directories from the repo path', () => {
+    expect(computeWorkspaceRoot('/projects/app/repo', { workspaceDir: '../worktrees' })).toBe(
+      resolve('/projects/app/worktrees')
+    )
+    expect(
+      computeWorktreePath('feature', '/projects/app/repo', {
+        nestWorkspaces: false,
+        workspaceDir: '../worktrees'
+      })
+    ).toBe(resolve('/projects/app/worktrees/feature'))
+  })
+
+  it('scopes the same relative repo override to each repo root', () => {
+    const settings = { nestWorkspaces: false, workspaceDir: '/global/workspaces' }
+    const repoA = { path: '/projects/a/repo', worktreeBasePath: '../worktrees' }
+    const repoB = { path: '/projects/b/repo', worktreeBasePath: '../worktrees' }
+
+    expect(
+      computeWorktreePath('feature', repoA.path, getWorktreePathSettings(repoA, settings))
+    ).toBe(resolve('/projects/a/worktrees/feature'))
+    expect(
+      computeWorktreePath('feature', repoB.path, getWorktreePathSettings(repoB, settings))
+    ).toBe(resolve('/projects/b/worktrees/feature'))
+    expect(getWorktreeCreationLayout(repoA, settings)).toEqual({
+      path: '../worktrees',
+      nestWorkspaces: false
+    })
+  })
+
+  it('resolves Windows-style relative workspace directories with Windows separators', () => {
+    expect(
+      computeWorktreePath('feature', 'C:\\Projects\\app\\repo', {
+        nestWorkspaces: false,
+        workspaceDir: '..\\worktrees'
+      })
+    ).toBe('C:\\Projects\\app\\worktrees\\feature')
+  })
+
+  it('keeps legacy SSH sibling paths for global absolute workspace directories', () => {
+    expect(
+      computeRemoteWorktreePath('feature', '/remote/repo', {
+        nestWorkspaces: false,
+        workspaceDir: '/local/workspaces'
+      })
+    ).toBe('/remote/feature')
+  })
+
+  it('applies repo-specific SSH workspace directories on the remote path', () => {
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        '/remote/project/repo',
+        {
+          nestWorkspaces: false,
+          workspaceDir: '../worktrees'
+        },
+        { useConfiguredAbsolutePath: true }
+      )
+    ).toBe('/remote/project/worktrees/feature')
+    expect(
+      computeRemoteWorktreePath(
+        'feature',
+        'C:\\Remote\\repo',
+        {
+          nestWorkspaces: false,
+          workspaceDir: '..\\worktrees'
+        },
+        { useConfiguredAbsolutePath: true }
+      )
+    ).toBe('C:\\Remote\\worktrees\\feature')
+  })
 })
 
 describe('areWorktreePathsEqual', () => {
@@ -189,6 +265,16 @@ describe('areWorktreePathsEqual', () => {
 
   it('keeps POSIX path comparison case-sensitive', () => {
     expect(areWorktreePathsEqual('/tmp/Worktree', '/tmp/worktree', 'linux')).toBe(false)
+  })
+
+  it('treats macOS /private/tmp git paths as matching /tmp workspace paths', () => {
+    expect(
+      areWorktreePathsEqual(
+        '/private/tmp/orca-proof/worktrees/repo/feature',
+        '/tmp/orca-proof/worktrees/repo/feature',
+        'darwin'
+      )
+    ).toBe(true)
   })
 })
 

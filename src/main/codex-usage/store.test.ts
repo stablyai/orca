@@ -736,7 +736,7 @@ describe('CodexUsageStore', () => {
         }
       ]
     })
-    ;(store as unknown as { refresh: typeof store.refresh }).refresh = vi.fn().mockResolvedValue({
+    const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
       isScanning: false,
       lastScanStartedAt: 1,
@@ -744,18 +744,29 @@ describe('CodexUsageStore', () => {
       lastScanError: null,
       hasAnyCodexData: true
     })
-
-    const usage = await store.getAutomationRunUsage({
+    ;(store as unknown as { refresh: typeof store.refresh }).refresh = refreshMock
+    const completedAt = new Date('2026-04-10T15:06:00.000Z').getTime()
+    const request = {
       worktreeId,
       terminalSessionId: 'tab-1',
       startedAt: new Date('2026-04-10T14:59:00.000Z').getTime(),
-      completedAt: new Date('2026-04-10T15:06:00.000Z').getTime()
-    })
+      completedAt
+    }
+
+    const usage = await store.getAutomationRunUsage(request)
 
     expect(usage.status).toBe('known')
     expect(usage.providerSessionId).toBe('session-1')
     expect(usage.cacheReadTokens).toBe(400)
     expect(usage.reasoningOutputTokens).toBe(100)
     expect(usage.estimatedCostUsd).toBeCloseTo(0.0033)
+    expect(refreshMock).toHaveBeenCalledWith(true)
+
+    ;(store as unknown as { state: CodexUsagePersistedState }).state.scanState.lastScanCompletedAt =
+      completedAt + 1000
+    refreshMock.mockClear()
+    await store.getAutomationRunUsage(request)
+
+    expect(refreshMock).toHaveBeenCalledWith(false)
   })
 })

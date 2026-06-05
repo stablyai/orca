@@ -18,6 +18,7 @@ const listeners = new Set<() => void>()
 
 let version = 0
 let nextLeaseId = 0
+const AUTOMATION_VISIBILITY_PAINT_TIMEOUT_MS = 2_000
 
 function emitChange(): void {
   version += 1
@@ -46,6 +47,25 @@ function nextAnimationFrame(): Promise<void> {
     return Promise.resolve()
   }
   return new Promise((resolve) => window.requestAnimationFrame(() => resolve()))
+}
+
+async function waitForAutomationVisiblePaint(): Promise<boolean> {
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  const paint = (async () => {
+    await nextAnimationFrame()
+    await nextAnimationFrame()
+    return true
+  })()
+  const timedOut = new Promise<false>((resolve) => {
+    timeout = setTimeout(() => resolve(false), AUTOMATION_VISIBILITY_PAINT_TIMEOUT_MS)
+  })
+  try {
+    return await Promise.race([paint, timedOut])
+  } finally {
+    if (timeout !== null) {
+      clearTimeout(timeout)
+    }
+  }
 }
 
 export function isBrowserAutomationVisible(browserPageId: string): boolean {
@@ -107,11 +127,15 @@ async function acquireForMainProcess(browserPageId: string): Promise<string | nu
   if (typeof browserPageId !== 'string' || browserPageId.length === 0) {
     return null
   }
-  // Why: only allocate the lease after the paint wait succeeds. If RAF hangs,
-  // main times out without leaving a permanently visible hidden webview.
-  await nextAnimationFrame()
-  await nextAnimationFrame()
-  return acquireBrowserAutomationVisibility(browserPageId)
+  const token = acquireBrowserAutomationVisibility(browserPageId)
+  // Why: the hidden pane only becomes paintable after the visibility lease
+  // exists. Wait after acquiring it so agent-browser commands do not race a
+  // still-hidden webview; release locally if paint never arrives.
+  if (await waitForAutomationVisiblePaint()) {
+    return token
+  }
+  releaseBrowserAutomationVisibility(token)
+  return null
 }
 
 export function installBrowserAutomationVisibilityBridge(): void {

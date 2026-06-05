@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { DndContext, DragOverlay } from '@dnd-kit/core'
 import type { TabGroupLayoutNode } from '../../../../shared/types'
 import { useAppStore } from '../../store'
@@ -20,6 +20,14 @@ function ResizeHandle({
 }): React.JSX.Element {
   const isHorizontal = direction === 'horizontal'
   const [dragging, setDragging] = useState(false)
+  const activeResizeCleanupRef = useRef<((updateDragging?: boolean) => void) | null>(null)
+
+  useEffect(
+    () => () => {
+      activeResizeCleanupRef.current?.(false)
+    },
+    []
+  )
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -29,6 +37,7 @@ function ResizeHandle({
       if (!container) {
         return
       }
+      activeResizeCleanupRef.current?.()
       onResizeStart()
       setDragging(true)
       handle.setPointerCapture(event.pointerId)
@@ -44,15 +53,29 @@ function ResizeHandle({
         onRatioChange(Math.min(MAX_RATIO, Math.max(MIN_RATIO, ratio)))
       }
 
-      const cleanup = (): void => {
-        setDragging(false)
-        if (handle.hasPointerCapture(event.pointerId)) {
-          handle.releasePointerCapture(event.pointerId)
+      let cleaned = false
+      const cleanup = (updateDragging = true): void => {
+        if (cleaned) {
+          return
+        }
+        cleaned = true
+        if (updateDragging) {
+          setDragging(false)
+        }
+        try {
+          if (handle.hasPointerCapture(event.pointerId)) {
+            handle.releasePointerCapture(event.pointerId)
+          }
+        } catch {
+          // Best effort: unmount cleanup can run after Chromium has already dropped capture.
         }
         handle.removeEventListener('pointermove', onPointerMove)
         handle.removeEventListener('pointerup', onPointerUp)
         handle.removeEventListener('pointercancel', onPointerCancel)
         handle.removeEventListener('lostpointercapture', onLostPointerCapture)
+        if (activeResizeCleanupRef.current === cleanup) {
+          activeResizeCleanupRef.current = null
+        }
       }
 
       const onPointerUp = (): void => {
@@ -71,6 +94,7 @@ function ResizeHandle({
       handle.addEventListener('pointerup', onPointerUp)
       handle.addEventListener('pointercancel', onPointerCancel)
       handle.addEventListener('lostpointercapture', onLostPointerCapture)
+      activeResizeCleanupRef.current = cleanup
     },
     [isHorizontal, onRatioChange, onResizeStart]
   )

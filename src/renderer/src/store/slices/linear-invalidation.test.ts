@@ -103,8 +103,8 @@ describe('createLinearSlice invalidation', () => {
     const store = createTestStore()
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
-      linearSearchCache: {
-        'workspace-1::list::all::36': { data: [issue('LIST')], fetchedAt: Date.now() }
+      linearListCache: {
+        'workspace-1::list::all::36': { data: { items: [issue('LIST')] }, fetchedAt: Date.now() }
       }
     })
     linearSearchIssues.mockResolvedValueOnce([issue('SEARCH')])
@@ -118,7 +118,7 @@ describe('createLinearSlice invalidation', () => {
     ).toMatchObject([{ id: 'SEARCH' }])
     expect(
       store.getState().getCachedLinearIssues({ kind: 'list', filter: 'all', limit: 36 })
-    ).toMatchObject([{ id: 'LIST' }])
+    ).toMatchObject({ items: [{ id: 'LIST' }] })
   })
 
   it('caches teams by workspace and dedupes fresh reads', async () => {
@@ -157,8 +157,11 @@ describe('createLinearSlice invalidation', () => {
       linearIssueCache: {
         'workspace-1::issue-1': { data: issue('issue-1'), fetchedAt: Date.now() }
       },
-      linearSearchCache: {
-        'workspace-1::list::all::36': { data: [issue('LIN-CACHED')], fetchedAt: Date.now() }
+      linearListCache: {
+        'workspace-1::list::all::36': {
+          data: { items: [issue('LIN-CACHED')] },
+          fetchedAt: Date.now()
+        }
       },
       linearTeamCache: {
         'workspace-1::teams': { data: [team('team-old')], fetchedAt: Date.now() }
@@ -180,6 +183,7 @@ describe('createLinearSlice invalidation', () => {
     expect(resolved).toBe(false)
     expect(store.getState().linearIssueCache).toEqual({})
     expect(store.getState().linearSearchCache).toEqual({})
+    expect(store.getState().linearListCache).toEqual({})
     expect(store.getState().linearTeamCache).toEqual({})
 
     statusRefresh.resolve(status('workspace-1'))
@@ -215,8 +219,11 @@ describe('createLinearSlice invalidation', () => {
     const store = createTestStore()
     store.setState({
       linearStatus: status('workspace-1', 'Old Org'),
-      linearSearchCache: {
-        'workspace-1::list::all::36': { data: [issue('LIN-CACHED')], fetchedAt: Date.now() }
+      linearListCache: {
+        'workspace-1::list::all::36': {
+          data: { items: [issue('LIN-CACHED')] },
+          fetchedAt: Date.now()
+        }
       },
       linearTeamCache: {
         'workspace-1::teams': { data: [team('team-old')], fetchedAt: Date.now() }
@@ -227,7 +234,7 @@ describe('createLinearSlice invalidation', () => {
     await store.getState().checkLinearConnection(true)
 
     expect(store.getState().linearStatus.workspaces?.[0]?.organizationName).toBe('New Org')
-    expect(store.getState().linearSearchCache).toEqual({})
+    expect(store.getState().linearListCache).toEqual({})
     expect(store.getState().linearTeamCache).toEqual({})
   })
 
@@ -260,7 +267,9 @@ describe('createLinearSlice invalidation', () => {
     linearListIssues.mockRejectedValueOnce(new Error('401 unauthorized'))
     linearStatus.mockResolvedValueOnce(status('workspace-2', 'Beta'))
 
-    await expect(store.getState().listLinearIssues('all', 36, { force: true })).resolves.toEqual([])
+    await expect(store.getState().listLinearIssues('all', 36, { force: true })).resolves.toEqual({
+      items: []
+    })
     expect(store.getState().linearStatus.connected).toBe(true)
     await vi.waitFor(() => {
       expect(store.getState().linearStatus.workspaces?.map((workspace) => workspace.id)).toEqual([

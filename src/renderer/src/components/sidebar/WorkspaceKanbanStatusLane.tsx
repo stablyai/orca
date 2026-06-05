@@ -16,7 +16,6 @@ type WorkspaceKanbanStatusLaneProps = {
   items: readonly Worktree[]
   repoMap: Map<string, Repo>
   activeWorktreeId: string | null
-  compact: boolean
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
@@ -43,7 +42,6 @@ export default function WorkspaceKanbanStatusLane({
   items,
   repoMap,
   activeWorktreeId,
-  compact,
   columnWidth,
   isResizingColumn,
   isDragTarget,
@@ -83,6 +81,9 @@ export default function WorkspaceKanbanStatusLane({
     <section
       data-workspace-status-drop-target=""
       data-workspace-status={status.id}
+      data-contextual-tour-target={
+        status.id === 'completed' ? 'workspace-board-done-lane' : undefined
+      }
       className={cn(
         'group/lane',
         'relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-t-2 border-sidebar-border transition-colors',
@@ -158,7 +159,6 @@ export default function WorkspaceKanbanStatusLane({
                   selectedWorktrees={
                     isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
                   }
-                  compact={compact}
                   onActivate={onActivate}
                   onSelectionGesture={onSelectionGesture}
                   onContextMenuSelect={onContextMenuSelect}

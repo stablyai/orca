@@ -22,9 +22,33 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']
   },
   {
-    title: 'Open In Menu',
-    description: 'Add custom launchers to the workspace Open in menu.',
-    keywords: ['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']
+    title: 'Open In Apps',
+    description: "Choose apps available from a workspace's Open in menu.",
+    keywords: [
+      'open in',
+      'open menu',
+      'editor',
+      'launcher',
+      'cursor',
+      'zed',
+      'command',
+      'vscode',
+      'finder',
+      'file explorer'
+    ]
+  }
+]
+
+export const GENERAL_NETWORK_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+  {
+    title: 'HTTP Proxy',
+    description: 'Proxy URL for Orca network requests and local terminal children.',
+    keywords: ['proxy', 'http_proxy', 'https_proxy', 'network', 'dock', 'launchpad']
+  },
+  {
+    title: 'Proxy Bypass Rules',
+    description: 'Hosts that should bypass the configured HTTP proxy.',
+    keywords: ['proxy', 'bypass', 'no_proxy', 'localhost', 'network']
   }
 ]
 
@@ -141,6 +165,7 @@ export const GENERAL_SUPPORT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
 
 export const GENERAL_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   ...GENERAL_WORKSPACE_SEARCH_ENTRIES,
+  ...GENERAL_NETWORK_SEARCH_ENTRIES,
   ...GENERAL_NAVIGATION_SEARCH_ENTRIES,
   ...GENERAL_EDITOR_SEARCH_ENTRIES,
   ...GENERAL_CLI_SEARCH_ENTRIES,

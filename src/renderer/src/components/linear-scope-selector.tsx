@@ -173,6 +173,12 @@ export function LinearScopeSelector({
     [onOpen]
   )
 
+  const closeSelector = useCallback(() => {
+    setOpen(false)
+    setQuery('')
+    setCommandValue('')
+  }, [])
+
   const commitTeamSelection = useCallback(
     (nextSelectedTeamIds: ReadonlySet<string>) => {
       const normalized = normalizeLinearScopeTeamSelection({
@@ -211,7 +217,7 @@ export function LinearScopeSelector({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            'h-8 min-w-[180px] max-w-[260px] justify-between rounded-md border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none',
+            'h-8 w-[220px] max-w-[calc(100vw-5rem)] justify-between rounded-md border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none',
             className
           )}
         >
@@ -234,13 +240,13 @@ export function LinearScopeSelector({
                 <div className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase text-muted-foreground">
                   Workspace
                 </div>
-                <button
-                  type="button"
-                  onClick={() => {
+                <CommandItem
+                  value="workspace:all"
+                  onSelect={() => {
                     onWorkspaceChange('all')
-                    setOpen(false)
+                    closeSelector()
                   }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-accent hover:text-accent-foreground"
+                  className="items-center gap-2 px-3 py-1.5 text-xs"
                 >
                   <Check
                     className={cn(
@@ -249,16 +255,16 @@ export function LinearScopeSelector({
                     )}
                   />
                   <span>All workspaces</span>
-                </button>
+                </CommandItem>
                 {workspaces.map((workspace) => (
-                  <button
+                  <CommandItem
                     key={workspace.id}
-                    type="button"
-                    onClick={() => {
+                    value={`workspace:${workspace.id}`}
+                    onSelect={() => {
                       onWorkspaceChange(workspace.id)
-                      setOpen(false)
+                      closeSelector()
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-accent hover:text-accent-foreground"
+                    className="items-center gap-2 px-3 py-1.5 text-xs"
                   >
                     <Check
                       className={cn(
@@ -267,7 +273,7 @@ export function LinearScopeSelector({
                       )}
                     />
                     <span className="min-w-0 truncate">{workspace.organizationName}</span>
-                  </button>
+                  </CommandItem>
                 ))}
               </div>
             ) : null}
@@ -275,10 +281,10 @@ export function LinearScopeSelector({
               <div className="px-3 pb-1 pt-1 text-[11px] font-medium uppercase text-muted-foreground">
                 Teams
               </div>
-              <button
-                type="button"
-                onClick={handleAllTeams}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition hover:bg-accent hover:text-accent-foreground"
+              <CommandItem
+                value="teams:all"
+                onSelect={() => handleAllTeams()}
+                className="items-center gap-2 px-3 py-1.5 text-xs"
               >
                 <Check
                   className={cn(
@@ -287,7 +293,7 @@ export function LinearScopeSelector({
                   )}
                 />
                 <span>All teams</span>
-              </button>
+              </CommandItem>
             </div>
             {filteredTeams.length > 0 ? (
               filteredTeams.map((team) => {
@@ -337,7 +343,7 @@ export function LinearScopeSelector({
           <button
             type="button"
             onClick={() => {
-              setOpen(false)
+              closeSelector()
               onAddTeamAccess()
             }}
             className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-foreground transition hover:bg-accent hover:text-accent-foreground"

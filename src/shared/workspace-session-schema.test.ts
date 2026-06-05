@@ -222,6 +222,26 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('accepts default-tab idempotency markers', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      defaultTerminalTabsAppliedByWorktreeId: {
+        'repo1::/path/wt1': true
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+        'repo1::/path/wt1': true
+      })
+    }
+  })
+
   it('caps oversized browser history while parsing legacy workspace sessions', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

@@ -65,6 +65,10 @@ import {
   resolveResourceUsageSpaceScanReady,
   type ResourceUsageSpaceScanSnapshot
 } from './resource-usage-space-scan-ready'
+import {
+  getResourceManagerAriaLabel,
+  getResourceManagerTooltipLines
+} from './resource-manager-terminal-copy'
 
 const POLL_MS = 2_000
 const SESSIONS_POLL_MS = 10_000
@@ -714,8 +718,6 @@ export function ResourceUsageStatusSegment({
     popoverBodyFocusFrameRef.current = null
   }, [])
 
-  useEffect(() => cancelPopoverBodyFocusFrame, [cancelPopoverBodyFocusFrame])
-
   const setPopoverBodyNode = useCallback(
     (node: HTMLDivElement | null): void => {
       // Why: the queued post-kill focus is only valid while the popover body exists.
@@ -942,6 +944,17 @@ export function ResourceUsageStatusSegment({
   // empty/stale even though the resource numbers look fine.
   const sessionsOnlyError =
     !runtimeEnvironmentActive && sessionsError && memorySnapshotError === null
+  const resourceManagerTooltipLines = getResourceManagerTooltipLines({
+    memoryLabel: memBadgeLabel,
+    sessionCount: sessions.length,
+    runtimeEnvironmentActive,
+    spaceScanReady
+  })
+  const resourceManagerAriaLabel = getResourceManagerAriaLabel({
+    sessionCount: sessions.length,
+    runtimeEnvironmentActive,
+    spaceScanReady
+  })
 
   const toggleRepo = useCallback((repoId: string): void => {
     setCollapsedRepos((prev) => {
@@ -1110,9 +1123,9 @@ export function ResourceUsageStatusSegment({
               {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
               className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={
-                spaceScanReady && !runtimeEnvironmentActive
-                  ? 'Resource manager, Space scan ready'
-                  : 'Resource manager'
+                daemonUnreachable
+                  ? `${resourceManagerAriaLabel}, daemon unreachable`
+                  : resourceManagerAriaLabel
               }
             >
               {spaceScanReady && !runtimeEnvironmentActive ? (
@@ -1150,13 +1163,14 @@ export function ResourceUsageStatusSegment({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
           <div className="space-y-0.5">
-            <div>
-              Resource Manager — {memBadgeLabel} · {sessions.length} session
-              {sessions.length === 1 ? '' : 's'}
-            </div>
-            {spaceScanReady && !runtimeEnvironmentActive ? (
-              <div className="text-primary">Space scan ready</div>
-            ) : null}
+            {resourceManagerTooltipLines.map((line, index) => (
+              <div
+                key={`${index}:${line}`}
+                className={line === 'Space scan ready' ? 'text-primary' : ''}
+              >
+                {line}
+              </div>
+            ))}
           </div>
         </TooltipContent>
       </Tooltip>
@@ -1178,7 +1192,9 @@ export function ResourceUsageStatusSegment({
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
             <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
-            <span className="truncate">Resource Manager</span>
+            <span className="truncate">
+              {runtimeEnvironmentActive ? 'Resource Manager' : 'Resource Manager - Terminals'}
+            </span>
           </div>
 
           <div className="flex items-center gap-0.5">

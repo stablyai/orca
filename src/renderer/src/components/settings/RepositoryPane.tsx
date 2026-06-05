@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaHooks, Repo, RepoHookSettings } from '../../../../shared/types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../shared/repo-kind'
 import { Button } from '../ui/button'
@@ -31,6 +31,61 @@ type RepositoryPaneProps = {
   removeProject: (repoId: string) => void
 }
 
+type RepoTextDraft = { repoId: string; text: string }
+
+// Why: updateRepo persists via async IPC before the store value updates, so a
+// store-controlled input resets mid-IME-composition (Hangul decomposes into
+// jamo). Keep keystrokes in local draft state; persist stays per-keystroke.
+export function RepoSettingsDraftInput({
+  repoId,
+  storeValue,
+  onTextChange,
+  ...inputProps
+}: {
+  repoId: string
+  storeValue: string
+  onTextChange: (text: string) => void
+} & Omit<React.ComponentProps<typeof Input>, 'value' | 'onChange'>): React.JSX.Element {
+  const [draft, setDraft] = useState<RepoTextDraft>({ repoId, text: storeValue })
+  const pendingStoreEchoesRef = useRef<string[]>([])
+
+  useEffect(() => {
+    setDraft((current) => {
+      if (current.repoId !== repoId) {
+        pendingStoreEchoesRef.current = []
+        return { repoId, text: storeValue }
+      }
+      if (storeValue === current.text) {
+        pendingStoreEchoesRef.current = []
+        return current
+      }
+      const pendingEchoIndex = pendingStoreEchoesRef.current.indexOf(storeValue)
+      if (pendingEchoIndex !== -1) {
+        // Why: queued updateRepo calls can echo older input text after newer
+        // keystrokes; accepting that echo re-cancels active IME composition.
+        pendingStoreEchoesRef.current.splice(0, pendingEchoIndex + 1)
+        return current
+      }
+      pendingStoreEchoesRef.current = []
+      return { repoId, text: storeValue }
+    })
+  }, [repoId, storeValue])
+
+  const text = draft.repoId === repoId ? draft.text : storeValue
+  return (
+    <Input
+      {...inputProps}
+      value={text}
+      onChange={(e) => {
+        const nextText = e.target.value
+        pendingStoreEchoesRef.current.push(nextText)
+        setDraft({ repoId, text: nextText })
+        onTextChange(nextText)
+      }}
+    />
+  )
+}
+
 export function matchesRepositoryIdentitySearch(query: string, repo: Repo): boolean {
   const normalizedQuery = normalizeSettingsSearchQuery(query)
   if (!normalizedQuery) {
@@ -52,7 +107,8 @@ export function RepositoryPane({
 }: RepositoryPaneProps): React.JSX.Element {
   const isFolder = isFolderRepo(repo)
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const symlinksEnabled = useAppStore((state) => state.settings?.experimentalWorktreeSymlinks)
+  const settings = useAppStore((state) => state.settings)
+  const symlinksEnabled = settings?.experimentalWorktreeSymlinks
   const [confirmingRemove, setConfirmingRemove] = useState<string | null>(null)
   const [copiedTemplate, setCopiedTemplate] = useState(false)
   const copiedTemplateResetTimerRef = useRef<number | null>(null)
@@ -117,9 +173,13 @@ export function RepositoryPane({
 
   const allEntries = getRepositoryPaneSearchEntries(repo)
   const identityEntries = allEntries.filter((entry) =>
-    ['Display Name', 'Project Icon', 'Default Worktree Base', 'Remove Project'].includes(
-      entry.title
-    )
+    [
+      'Display Name',
+      'Project Icon',
+      'Default Worktree Base',
+      'Worktree Location',
+      'Remove Project'
+    ].includes(entry.title)
   )
   const sparsePresetEntries = allEntries.filter((entry) =>
     ['Sparse Checkout Presets'].includes(entry.title)
@@ -135,7 +195,7 @@ export function RepositoryPane({
   )
   const mcpEntries = allEntries.filter((entry) => entry.title === 'MCP Configs')
   const symlinkEntries = allEntries.filter((entry) => entry.title === 'Worktree Symlinks')
-  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Source Control AI')
+  const sourceControlAiEntries = allEntries.filter((entry) => entry.title === 'Git AI Author')
   const removeProjectLabel =
     confirmingRemove === repo.id ? 'Confirm Remove Project' : 'Remove Project'
 
@@ -210,14 +270,14 @@ export function RepositoryPane({
           className="space-y-2"
           forceVisible={forceFullPaneForRepoMatch}
         >
-          <Label className="text-sm font-semibold">Display Name</Label>
-          <Input
-            value={repo.displayName}
-            onChange={(e) =>
-              updateRepo(repo.id, {
-                displayName: e.target.value
-              })
-            }
+          <Label htmlFor={`repo-display-name-${repo.id}`} className="text-sm font-semibold">
+            Display Name
+          </Label>
+          <RepoSettingsDraftInput
+            id={`repo-display-name-${repo.id}`}
+            repoId={repo.id}
+            storeValue={repo.displayName}
+            onTextChange={(text) => updateRepo(repo.id, { displayName: text })}
             className="h-9 text-sm"
           />
         </SearchableSetting>
@@ -243,21 +303,64 @@ export function RepositoryPane({
         </SearchableSetting>
 
         {!isFolder ? (
-          <SearchableSetting
-            title="Default Worktree Base"
-            description="Default base branch or ref when creating worktrees."
-            keywords={[repo.displayName, 'base ref', 'branch']}
-            className="space-y-3"
-            forceVisible={forceFullPaneForRepoMatch}
-          >
-            <Label className="text-sm font-semibold">Default Worktree Base</Label>
-            <BaseRefPicker
-              repoId={repo.id}
-              currentBaseRef={repo.worktreeBaseRef}
-              onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
-              onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}
-            />
-          </SearchableSetting>
+          <>
+            <SearchableSetting
+              title="Default Worktree Base"
+              description="Default base branch or ref when creating worktrees."
+              keywords={[repo.displayName, 'base ref', 'branch']}
+              className="space-y-3"
+              forceVisible={forceFullPaneForRepoMatch}
+            >
+              <Label className="text-sm font-semibold">Default Worktree Base</Label>
+              <BaseRefPicker
+                repoId={repo.id}
+                currentBaseRef={repo.worktreeBaseRef}
+                onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
+                onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}
+              />
+            </SearchableSetting>
+
+            <SearchableSetting
+              title="Worktree Location"
+              description="Project-specific directory for new worktrees."
+              keywords={[
+                repo.displayName,
+                'worktree path',
+                'workspace path',
+                'directory',
+                'relative',
+                '../worktrees'
+              ]}
+              className="space-y-2"
+              forceVisible={forceFullPaneForRepoMatch}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-sm font-semibold">Worktree Location</Label>
+                {repo.worktreeBasePath ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => updateRepo(repo.id, { worktreeBasePath: undefined })}
+                  >
+                    Use Global
+                  </Button>
+                ) : null}
+              </div>
+              <RepoSettingsDraftInput
+                repoId={repo.id}
+                storeValue={repo.worktreeBasePath ?? ''}
+                placeholder={settings?.workspaceDir ?? ''}
+                onTextChange={(text) =>
+                  updateRepo(repo.id, { worktreeBasePath: text.trim() ? text : undefined })
+                }
+                className="h-9 text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Relative paths resolve from this project root.
+              </p>
+            </SearchableSetting>
+          </>
         ) : null}
       </section>
     ) : null,
