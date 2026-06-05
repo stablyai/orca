@@ -400,6 +400,18 @@ export type WorktreeLineageWarning = {
   details?: Record<string, unknown>
 }
 
+// Why: a worktree of a meta-repo (parent repo containing independent nested git
+// repos) materializes none of the nested repos' files; this warns the user
+// post-create instead of leaving them in a silently incomplete tree.
+export type NestedRepoWarning = {
+  /** Repo-relative paths, '/'-normalized, trailing '/'; capped at 10 shown. */
+  paths: string[]
+  /** True when more nested repos exist beyond the displayed cap. */
+  truncated: boolean
+  /** Count of additional repos beyond `paths` (0 when not truncated). */
+  moreCount: number
+}
+
 // ─── Diff line comments ──────────────────────────────────────────────
 // Why: users leave review notes on specific lines of the modified side of
 // a diff so they can be handed back to an AI agent (pasted into a terminal
@@ -1638,6 +1650,7 @@ export type CreateWorktreeResult = {
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
+  nestedRepos?: NestedRepoWarning
   startupTerminal?: {
     spawned: boolean
     surface?: 'visible' | 'background'
