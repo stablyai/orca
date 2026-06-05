@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
+import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
@@ -45,6 +46,8 @@ function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
   }
 
   switch (tip.action) {
+    case 'learn-cmd-j-palette':
+      return <CmdJPaletteFeatureTipVisual />
     case 'enable-voice':
       return (
         <div className="flex flex-col items-center gap-2.5">
@@ -177,6 +180,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
     markFeatureTipsSeen([currentTip.id])
     switch (currentTip.action) {
+      case 'learn-cmd-j-palette': {
+        // Why: passive education tip — acknowledging just dismisses; the rebind
+        // path lives in Settings and is reachable from the palette itself.
+        closeModal()
+        break
+      }
       case 'enable-voice': {
         const voice = settings?.voice ?? getDefaultVoiceSettings()
         void updateSettings({
@@ -360,6 +369,10 @@ export default function FeatureTipsModal(): JSX.Element | null {
             primaryBusy={primaryBusy}
             onPrimaryAction={() => void handlePrimaryAction()}
             onSkip={handleSkip}
+            // Why: passive education tips acknowledge with a single CTA; a
+            // secondary "Maybe Later" would be semantically wrong here.
+            showSkip={currentTip.action !== 'learn-cmd-j-palette'}
+            fullWidth={currentTip.action === 'learn-cmd-j-palette'}
           />
         </DialogFooter>
       </DialogContent>

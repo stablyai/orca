@@ -121,12 +121,28 @@ describe('feature tip startup gate', () => {
     ).toEqual({ kind: 'open', tipId: 'orca-cli' })
   })
 
+  it('opens the command palette tip after the CLI tip was marked seen', () => {
+    expect(
+      getFeatureTipsAppOpenDecision({
+        activeModal: 'none',
+        cliInstalled: true,
+        featureTipsSeenIds: ['orca-cli'],
+        featureInteractions: {},
+        onboarding: existingUserOnboarding,
+        persistedUIReady: true,
+        promptedThisSession: false,
+        settings: makeSettings(),
+        suppressedByOnboardingThisSession: false
+      })
+    ).toEqual({ kind: 'open', tipId: 'cmd-j-palette' })
+  })
+
   it('does not open after every tip was marked seen', () => {
     expect(
       getFeatureTipsAppOpenDecision({
         activeModal: 'none',
         cliInstalled: false,
-        featureTipsSeenIds: ['voice-dictation', 'orca-cli'],
+        featureTipsSeenIds: ['voice-dictation', 'orca-cli', 'cmd-j-palette'],
         featureInteractions: {},
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
@@ -142,7 +158,7 @@ describe('feature tip startup gate', () => {
       getFeatureTipsAppOpenDecision({
         activeModal: 'none',
         cliInstalled: true,
-        featureTipsSeenIds: ['voice-dictation'],
+        featureTipsSeenIds: ['voice-dictation', 'cmd-j-palette'],
         featureInteractions: {},
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
@@ -158,7 +174,7 @@ describe('feature tip startup gate', () => {
       getFeatureTipsAppOpenDecision({
         activeModal: 'none',
         cliInstalled: true,
-        featureTipsSeenIds: ['voice-dictation'],
+        featureTipsSeenIds: ['voice-dictation', 'cmd-j-palette'],
         featureInteractions: {},
         onboarding: existingUserOnboarding,
         persistedUIReady: true,
@@ -206,7 +222,7 @@ describe('feature tip startup gate', () => {
       getFeatureTipsAppOpenDecision({
         activeModal: 'none',
         cliInstalled: true,
-        featureTipsSeenIds: [],
+        featureTipsSeenIds: ['cmd-j-palette'],
         featureInteractions: {
           'voice-dictation': { firstInteractedAt: 100, interactionCount: 1 }
         },
