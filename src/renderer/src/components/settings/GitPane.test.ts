@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
-import { shouldOpenAutoRenameBranchAdvanced } from './AutoRenameBranchFromWorkSetting'
 import { GitPane, shouldShowAutoRenameBranchSetting } from './GitPane'
 
 function renderGitPane(searchQuery: string): string {
@@ -12,7 +11,6 @@ function renderGitPane(searchQuery: string): string {
     React.createElement(GitPane, {
       settings: getDefaultSettings('/tmp'),
       updateSettings: () => {},
-      writeSourceControlAiSettings: async () => {},
       displayedGitUsername: 'brennan',
       settingsSearchQuery: searchQuery
     })
@@ -20,37 +18,20 @@ function renderGitPane(searchQuery: string): string {
 }
 
 describe('GitPane', () => {
-  it('keeps the auto-rename branch setting visible while its prompt draft is dirty', () => {
-    expect(shouldShowAutoRenameBranchSetting('zz-no-match', true)).toBe(true)
+  it('shows the auto-rename branch toggle when search matches its identity terms', () => {
+    expect(shouldShowAutoRenameBranchSetting('creature name')).toBe(true)
+    expect(shouldShowAutoRenameBranchSetting('auto-name')).toBe(true)
   })
 
-  it('shows the auto-rename branch setting for advanced prompt and model searches', () => {
-    expect(shouldShowAutoRenameBranchSetting('instructions', false)).toBe(true)
-    expect(shouldShowAutoRenameBranchSetting('built-in prompt', false)).toBe(true)
-    expect(shouldShowAutoRenameBranchSetting('thinking', false)).toBe(true)
-    expect(shouldShowAutoRenameBranchSetting('override', false)).toBe(true)
+  it('hides the auto-rename branch toggle when search misses', () => {
+    expect(shouldShowAutoRenameBranchSetting('zz-no-match')).toBe(false)
   })
 
-  it('hides the auto-rename branch setting when search misses and the prompt draft is clean', () => {
-    expect(shouldShowAutoRenameBranchSetting('zz-no-match', false)).toBe(false)
-  })
-
-  it('opens auto-rename advanced controls when search matches hidden prompt or model fields', () => {
-    expect(shouldOpenAutoRenameBranchAdvanced('prompt')).toBe(true)
-    expect(shouldOpenAutoRenameBranchAdvanced('model')).toBe(true)
-    expect(shouldOpenAutoRenameBranchAdvanced('instructions')).toBe(true)
-    expect(shouldOpenAutoRenameBranchAdvanced('built-in prompt')).toBe(true)
-    expect(shouldOpenAutoRenameBranchAdvanced('thinking')).toBe(true)
-    expect(shouldOpenAutoRenameBranchAdvanced('override')).toBe(true)
-  })
-
-  it('renders auto-rename advanced controls for advanced-only search terms', () => {
-    expect(renderGitPane('instructions')).toContain('Branch name prompt')
-    expect(renderGitPane('thinking')).toContain('Branch name model')
-  })
-
-  it('keeps auto-rename advanced controls collapsed without an advanced search match', () => {
-    expect(shouldOpenAutoRenameBranchAdvanced('')).toBe(false)
-    expect(shouldOpenAutoRenameBranchAdvanced('creature name')).toBe(false)
+  it('renders only the toggle copy, not the relocated branch-name model/prompt controls', () => {
+    const markup = renderGitPane('rename')
+    expect(markup).toContain('Auto-name from first message')
+    // Why: branch-name model + prompt customization moved to Git AI Author -> Advanced.
+    expect(markup).not.toContain('Branch name prompt')
+    expect(markup).not.toContain('Branch name model')
   })
 })

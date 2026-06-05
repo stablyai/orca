@@ -189,6 +189,7 @@ function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): b
       worktree.workspaceStatus === candidate.workspaceStatus &&
       worktree.createdWithAgent === candidate.createdWithAgent &&
       worktree.pendingFirstAgentMessageRename === candidate.pendingFirstAgentMessageRename &&
+      worktree.firstAgentMessageRenameError === candidate.firstAgentMessageRenameError &&
       worktree.baseRef === candidate.baseRef &&
       worktree.pushTarget?.remoteName === candidate.pushTarget?.remoteName &&
       worktree.pushTarget?.branchName === candidate.pushTarget?.branchName &&
@@ -1548,7 +1549,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       : updates
     const renameCleared =
       'displayName' in targetEnriched
-        ? { ...targetEnriched, pendingFirstAgentMessageRename: false }
+        ? {
+            ...targetEnriched,
+            pendingFirstAgentMessageRename: false,
+            firstAgentMessageRenameError: null
+          }
         : targetEnriched
     const enriched =
       'comment' in renameCleared ? { ...renameCleared, lastActivityAt: Date.now() } : renameCleared

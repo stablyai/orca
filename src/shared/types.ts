@@ -269,6 +269,10 @@ export type Worktree = {
   /** True while an auto-named workspace is waiting for the first agent message
    *  to drive the branch/title rename. */
   pendingFirstAgentMessageRename?: boolean
+  /** Holds the last auto-rename generation failure message so the sidebar can
+   *  show a "rename failed" badge. null/undefined when there is no failure
+   *  (never attempted, succeeded, or only a benign skip). */
+  firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
@@ -325,6 +329,8 @@ export type WorktreeMeta = {
   createdWithAgent?: TuiAgent
   /** See {@link Worktree.pendingFirstAgentMessageRename}. */
   pendingFirstAgentMessageRename?: boolean
+  /** See {@link Worktree.firstAgentMessageRenameError}. */
+  firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string

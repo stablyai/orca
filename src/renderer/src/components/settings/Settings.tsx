@@ -239,7 +239,6 @@ function Settings(): React.JSX.Element {
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
-  const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
@@ -258,8 +257,9 @@ function Settings(): React.JSX.Element {
   const shortcutsEscapeConfirmUntilRef = useRef(0)
   const sourceControlAiWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
 
-  const hasUnsavedSourceControlAiPromptChanges =
-    hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
+  // Why: the commit pane now owns every Git AI Author prompt draft (commit, PR,
+  // and branch name), so its single dirty signal covers all unsaved prompt edits.
+  const hasUnsavedSourceControlAiPromptChanges = hasUnsavedCommitPromptChanges
 
   const writeSourceControlAiSettings = useCallback(
     (patch: SourceControlAiSettingsPatch): Promise<void> => {
@@ -315,7 +315,6 @@ function Settings(): React.JSX.Element {
     if (shouldDiscard) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
-      setHasUnsavedBranchPromptChanges(false)
     }
     return shouldDiscard
   }, [confirm, hasUnsavedSourceControlAiPromptChanges])
@@ -1040,11 +1039,7 @@ function Settings(): React.JSX.Element {
                       <GitPane
                         settings={settings}
                         updateSettings={updateSettings}
-                        writeSourceControlAiSettings={writeSourceControlAiSettings}
                         displayedGitUsername={displayedGitUsername}
-                        hasUnsavedBranchPromptChanges={hasUnsavedBranchPromptChanges}
-                        onBranchPromptDirtyChange={setHasUnsavedBranchPromptChanges}
-                        branchPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
                       />
                       <CommitMessageAiPane
                         settings={settings}

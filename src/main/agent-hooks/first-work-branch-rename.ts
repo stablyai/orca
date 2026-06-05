@@ -54,6 +54,9 @@ export type FirstWorkBranchRenameDeps = {
   canRenameOrcaCreatedBranch: (worktreeId: string) => boolean
   /** Persist a new sidebar display name for the worktree. */
   setDisplayName: (worktreeId: string, displayName: string) => void
+  /** Record (or clear with null) a user-facing auto-rename generation failure
+   *  so the sidebar can show a "rename failed" badge instead of silent retries. */
+  setRenameError: (worktreeId: string, error: string | null) => void
   /** Authoritative tab→worktree resolution from the session's tab map. */
   resolveWorktreeIdForTab: (tabId: string) => string | undefined
   /** Invalidate caches + notify the renderer so the new branch name surfaces. */
@@ -191,12 +194,16 @@ async function runAutoRename(
   const hostKey = getCommitMessageModelDiscoveryHostKey(repo.connectionId ?? null)
   const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
   if (!resolvedParams.ok) {
+    // Why: a generation-step failure (vs a benign skip) is user-actionable, so
+    // surface it on the card rather than leaving a silent "rename pending".
+    deps.setRenameError(worktreeId, resolvedParams.error)
     return stop(`no generation agent: ${resolvedParams.error}`)
   }
   const params = resolvedParams.params
 
   const target = await resolveGenerationTarget(worktreePath, params.agentId, provider, deps)
   if (!target) {
+    deps.setRenameError(worktreeId, 'Could not prepare the branch-name generation environment.')
     return retry('could not prepare generation environment')
   }
 
@@ -208,6 +215,7 @@ async function runAutoRename(
   if (!generated.success) {
     // Transient: the agent may be momentarily busy/unreachable — let a later
     // event retry rather than permanently leaving the creature name.
+    deps.setRenameError(worktreeId, generated.error)
     return retry(`generation failed: ${generated.error}`)
   }
 
@@ -247,6 +255,8 @@ async function runAutoRename(
     deps.setDisplayName(worktreeId, newDisplayName)
   }
 
+  // A successful rename clears any stale generation-failure surfaced earlier.
+  deps.setRenameError(worktreeId, null)
   deps.onRenamed(repo.id)
   const displayLog = updateDisplay
     ? `display "${currentDisplayName ?? ''}" -> "${newDisplayName}"`

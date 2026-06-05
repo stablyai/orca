@@ -32,9 +32,20 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['thinking', 'effort', 'reasoning']
   },
   {
-    title: 'Commit and PR customization',
-    description: 'Configure behavior for commit message generation and PR creation.',
-    keywords: ['customization', 'advanced', 'commit', 'pull request', 'pr', 'model', 'prompt']
+    title: 'Advanced',
+    description:
+      'Override the model and prompt for commit messages, pull requests, and branch names.',
+    keywords: [
+      'customization',
+      'advanced',
+      'commit',
+      'pull request',
+      'pr',
+      'branch',
+      'name',
+      'model',
+      'prompt'
+    ]
   },
   {
     title: 'Commit Messages',
@@ -70,6 +81,21 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'PR creation defaults',
     description: 'Defaults used when the Create PR composer opens.',
     keywords: ['pull request', 'pr', 'draft', 'template', 'generate', 'open']
+  },
+  {
+    title: 'Branch Names',
+    description: 'Branch name generation settings for auto-named workspaces.',
+    keywords: ['branch', 'name', 'rename', 'model', 'prompt', 'slug', 'workspace']
+  },
+  {
+    title: 'Branch name model',
+    description: 'Optional model choice for branch name generation.',
+    keywords: ['model', 'override', 'branch', 'name', 'branch name model', 'slug', 'thinking']
+  },
+  {
+    title: 'Branch name prompt',
+    description: 'Additional prompt text appended only when generating branch names.',
+    keywords: ['prompt', 'instructions', 'built-in prompt', 'slug', 'kebab-case']
   },
   {
     title: 'Custom command',
