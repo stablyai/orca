@@ -131,6 +131,16 @@ function getClaudeUsageFile(): string {
   return _claudeUsageFile
 }
 
+function hasClaudeModelVersion(model: string, family: string, version: string): boolean {
+  const normalized = model.replace(/\./g, '-')
+  return new RegExp(`${family}-${version}(?:$|[^0-9])`).test(normalized)
+}
+
+function isLegacyBaseOpus4Model(model: string): boolean {
+  const normalized = model.replace(/\./g, '-')
+  return /opus-4(?:$|-thinking$|-20\d{6}(?:-thinking)?$|@20\d{6}$)/.test(normalized)
+}
+
 function normalizeModelForPricing(model: string | null): string | null {
   if (!model) {
     return null
@@ -143,32 +153,37 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (alias) {
     return alias
   }
-  if (lower.includes('opus-4-8') || lower.includes('opus-4.8')) {
+  if (hasClaudeModelVersion(lower, 'opus', '4-8')) {
     return 'claude-opus-4-8'
   }
-  if (lower.includes('opus-4-7')) {
+  if (hasClaudeModelVersion(lower, 'opus', '4-7')) {
     return 'claude-opus-4-7'
   }
-  if (lower.includes('opus-4-6')) {
+  if (hasClaudeModelVersion(lower, 'opus', '4-6')) {
     return 'claude-opus-4-6'
   }
-  if (lower.includes('opus-4-5')) {
+  if (hasClaudeModelVersion(lower, 'opus', '4-5')) {
     return 'claude-opus-4-5'
   }
-  if (lower.includes('opus-4-1')) {
+  if (hasClaudeModelVersion(lower, 'opus', '4-1')) {
     return 'claude-opus-4-1'
   }
-  if (lower.includes('opus-4')) {
+  if (isLegacyBaseOpus4Model(lower)) {
     return 'claude-opus-4'
   }
-  if (lower.includes('sonnet-4-6')) {
+  if (lower.includes('opus-4')) {
+    // Why: new Opus 4 point releases now share the current low Opus pricing;
+    // avoid overbilling unknown future Claude Code model IDs as legacy Opus 4.
+    return 'claude-opus-4-8'
+  }
+  if (hasClaudeModelVersion(lower, 'sonnet', '4-6')) {
     return 'claude-sonnet-4-6'
   }
-  if (lower.includes('sonnet-4-5')) {
+  if (hasClaudeModelVersion(lower, 'sonnet', '4-5')) {
     return 'claude-sonnet-4-5'
   }
   if (lower.includes('sonnet-4')) {
-    return 'claude-sonnet-4'
+    return 'claude-sonnet-4-6'
   }
   if (lower.includes('sonnet-3-7') || lower.includes('sonnet-3.7')) {
     return 'claude-sonnet-3-7'
