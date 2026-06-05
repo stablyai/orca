@@ -170,6 +170,10 @@ const POWERSHELL_OSC133_ARGS = [
   '-EncodedCommand',
   encodePowerShellCommand(getPowerShellOsc133Bootstrap())
 ]
+const TEST_CODEX_HOME =
+  process.platform === 'win32'
+    ? 'C:\\Users\\test\\AppData\\Roaming\\orca\\codex-runtime-home\\home'
+    : '/tmp/orca-codex-home'
 
 function makeDisposable() {
   return { dispose: vi.fn() }
@@ -530,9 +534,9 @@ describe('registerPtyHandlers', () => {
     })
 
     it('injects the selected Codex home into Orca terminal PTYs', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, () => '/tmp/orca-codex-home')
-      expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-      expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+      const env = await spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
+      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
 
     it('injects the OpenCode hook env into Orca terminal PTYs', async () => {
@@ -879,10 +883,10 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv(
         undefined,
         { CODEX_HOME: '/tmp/system-codex-home' },
-        () => '/tmp/orca-codex-home'
+        () => TEST_CODEX_HOME
       )
-      expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-      expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+      expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+      expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
     })
 
     it('injects explicit proxy settings into local PTY env', async () => {
@@ -1088,9 +1092,9 @@ describe('registerPtyHandlers', () => {
       })
 
       it('injects the selected Codex home on the daemon path', async () => {
-        const env = await daemonSpawnAndGetEnv({}, () => '/tmp/orca-codex-home')
-        expect(env.CODEX_HOME).toBe('/tmp/orca-codex-home')
-        expect(env.ORCA_CODEX_HOME).toBe('/tmp/orca-codex-home')
+        const env = await daemonSpawnAndGetEnv({}, () => TEST_CODEX_HOME)
+        expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
+        expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
       })
 
       it('injects explicit proxy settings on the daemon path', async () => {
