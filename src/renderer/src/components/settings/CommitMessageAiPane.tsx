@@ -1459,7 +1459,9 @@ export function CommitMessageAiPane({
                 />
               </span>
               <span className="space-y-0.5">
-                <Label className="cursor-pointer">Commit and PR customization</Label>
+                <span className="block cursor-pointer text-sm leading-none font-medium">
+                  Commit and PR customization
+                </span>
                 <span className="block text-xs text-muted-foreground">
                   Configure behavior for commit message generation and PR creation.
                 </span>
