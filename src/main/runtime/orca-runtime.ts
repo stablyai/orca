@@ -782,8 +782,19 @@ type RuntimeNotifier = {
   focusEditorTab?(tabId: string, worktreeId: string): void
   closeSessionTab?(tabId: string, worktreeId: string): void
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
-  openFile?(worktreeId: string, filePath: string, relativePath: string): void
-  openDiff?(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
+  openFile?(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    runtimeEnvironmentId: string
+  ): void
+  openDiff?(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    staged: boolean,
+    runtimeEnvironmentId: string
+  ): void
   readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
   saveMobileMarkdownTab?(
     worktreeId: string,
@@ -2697,17 +2708,17 @@ export class OrcaRuntimeService {
     requireStore: () => this.requireStore(),
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     resolveRuntimeGitTarget: (selector) => this.resolveRuntimeGitTarget(selector),
-    openFile: (worktreeId, filePath, relativePath) => {
+    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId) => {
       if (!this.notifier?.openFile) {
         throw new Error('renderer_unavailable')
       }
-      this.notifier.openFile(worktreeId, filePath, relativePath)
+      this.notifier.openFile(worktreeId, filePath, relativePath, runtimeEnvironmentId)
     },
-    openDiff: (worktreeId, filePath, relativePath, staged) => {
+    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId) => {
       if (!this.notifier?.openDiff) {
         throw new Error('renderer_unavailable')
       }
-      this.notifier.openDiff(worktreeId, filePath, relativePath, staged)
+      this.notifier.openDiff(worktreeId, filePath, relativePath, staged, runtimeEnvironmentId)
     }
   })
 

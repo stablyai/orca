@@ -204,6 +204,7 @@ const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 type EditorOpenTargetOptions = {
   targetGroupId?: string
   preview?: boolean
+  runtimeEnvironmentId?: string | null
 }
 
 export type PendingEditorReveal = {
@@ -778,6 +779,19 @@ function buildOwnedEditorFileId(
 ): string {
   const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+}
+
+function buildDiffEditorFileId(
+  worktreeId: string,
+  diffSource: DiffSource,
+  relativePath: string,
+  runtimeEnvironmentId: string | null | undefined
+): string {
+  const legacyId = `${worktreeId}::diff::${diffSource}::${relativePath}`
+  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId)
+  return runtimeKey
+    ? `editor-diff:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(diffSource)}:${encodeURIComponent(relativePath)}`
+    : legacyId
 }
 
 function isEditorFileIdOccupiedByOtherOwner(
@@ -2264,10 +2278,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
     const isPreview = options?.preview ?? false
+    const runtimeEnvironmentId = options?.runtimeEnvironmentId
     let editorItemTargetGroupId = options?.targetGroupId
+    let editorItemFileId = ''
     set((s) => {
       const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
-      const id = `${worktreeId}::diff::${diffSource}::${relativePath}`
+      const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
+      editorItemFileId = id
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
@@ -2277,7 +2294,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         const needsUpdate =
           existing.mode !== 'diff' ||
           existing.diffSource !== diffSource ||
-          existing.isPreview !== updatedPreview
+          existing.isPreview !== updatedPreview ||
+          existing.runtimeEnvironmentId !== runtimeEnvironmentId
         return {
           openFiles: needsUpdate
             ? s.openFiles.map((f) =>
@@ -2289,7 +2307,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                       conflict: undefined,
                       skippedConflicts: undefined,
                       conflictReview: undefined,
-                      isPreview: updatedPreview
+                      isPreview: updatedPreview,
+                      runtimeEnvironmentId
                     }
                   : f
               )
@@ -2312,7 +2331,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        runtimeEnvironmentId: options?.runtimeEnvironmentId
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -2342,7 +2362,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     })
     void openWorkspaceEditorItem(
       get(),
-      `${worktreeId}::diff::${staged ? 'staged' : 'unstaged'}::${relativePath}`,
+      editorItemFileId,
       worktreeId,
       relativePath,
       'diff',

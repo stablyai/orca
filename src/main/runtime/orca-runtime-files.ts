@@ -120,8 +120,19 @@ export type RuntimeFileCommandHost = {
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
-  openFile(worktreeId: string, filePath: string, relativePath: string): void
-  openDiff(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
+  openFile(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    runtimeEnvironmentId: string
+  ): void
+  openDiff(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    staged: boolean,
+    runtimeEnvironmentId: string
+  ): void
 }
 
 export class RuntimeFileCommands {
@@ -173,7 +184,7 @@ export class RuntimeFileCommands {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openFile(worktree.id, filePath, relativePath)
+    this.host.openFile(worktree.id, filePath, relativePath, this.host.getRuntimeId())
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -192,7 +203,7 @@ export class RuntimeFileCommands {
         ? 'markdown'
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openDiff(worktree.id, filePath, relativePath, staged)
+    this.host.openDiff(worktree.id, filePath, relativePath, staged, this.host.getRuntimeId())
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 

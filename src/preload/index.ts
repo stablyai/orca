@@ -2847,11 +2847,21 @@ const api = {
       return () => ipcRenderer.removeListener('ui:moveSessionTab', listener)
     },
     onOpenFileFromMobile: (
-      callback: (data: { worktreeId: string; filePath: string; relativePath: string }) => void
+      callback: (data: {
+        worktreeId: string
+        filePath: string
+        relativePath: string
+        runtimeEnvironmentId: string
+      }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { worktreeId: string; filePath: string; relativePath: string }
+        data: {
+          worktreeId: string
+          filePath: string
+          relativePath: string
+          runtimeEnvironmentId: string
+        }
       ) => callback(data)
       ipcRenderer.on('ui:openFileFromMobile', listener)
       return () => ipcRenderer.removeListener('ui:openFileFromMobile', listener)
@@ -2862,11 +2872,18 @@ const api = {
         filePath: string
         relativePath: string
         staged: boolean
+        runtimeEnvironmentId: string
       }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
-        data: { worktreeId: string; filePath: string; relativePath: string; staged: boolean }
+        data: {
+          worktreeId: string
+          filePath: string
+          relativePath: string
+          staged: boolean
+          runtimeEnvironmentId: string
+        }
       ) => callback(data)
       ipcRenderer.on('ui:openDiffFromMobile', listener)
       return () => ipcRenderer.removeListener('ui:openDiffFromMobile', listener)

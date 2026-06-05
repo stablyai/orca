@@ -2163,7 +2163,12 @@ export type PreloadApi = {
       callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
     ) => () => void
     onOpenFileFromMobile: (
-      callback: (data: { worktreeId: string; filePath: string; relativePath: string }) => void
+      callback: (data: {
+        worktreeId: string
+        filePath: string
+        relativePath: string
+        runtimeEnvironmentId: string
+      }) => void
     ) => () => void
     onOpenDiffFromMobile: (
       callback: (data: {
@@ -2171,6 +2176,7 @@ export type PreloadApi = {
         filePath: string
         relativePath: string
         staged: boolean
+        runtimeEnvironmentId: string
       }) => void
     ) => () => void
     onMobileMarkdownRequest: (

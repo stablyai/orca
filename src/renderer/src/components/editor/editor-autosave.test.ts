@@ -193,4 +193,33 @@ describe('getOpenFilesForExternalFileChange', () => {
       ).map((file) => file.id)
     ).toEqual(['/repo/file.ts', 'markdown-preview::/repo/file.ts', 'wt-1::diff::unstaged::file.ts'])
   })
+
+  it('filters same-path matches by runtime owner when the watcher supplies one', () => {
+    const localEdit = makeOpenFile({ id: 'local-edit', runtimeEnvironmentId: null })
+    const runtimeEdit = makeOpenFile({ id: 'runtime-edit', runtimeEnvironmentId: 'env-1' })
+    const runtimeDiff = makeOpenFile({
+      id: 'runtime-diff',
+      mode: 'diff',
+      diffSource: 'unstaged',
+      runtimeEnvironmentId: 'env-1'
+    })
+
+    expect(
+      getOpenFilesForExternalFileChange([localEdit, runtimeEdit, runtimeDiff], {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        relativePath: 'file.ts',
+        runtimeEnvironmentId: null
+      }).map((file) => file.id)
+    ).toEqual(['local-edit'])
+
+    expect(
+      getOpenFilesForExternalFileChange([localEdit, runtimeEdit, runtimeDiff], {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        relativePath: 'file.ts',
+        runtimeEnvironmentId: 'env-1'
+      }).map((file) => file.id)
+    ).toEqual(['runtime-edit', 'runtime-diff'])
+  })
 })

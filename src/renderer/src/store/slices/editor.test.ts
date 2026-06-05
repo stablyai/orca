@@ -289,6 +289,26 @@ describe('createEditorSlice openDiff', () => {
     ])
   })
 
+  it('keeps local and runtime-owned diffs in separate tabs for the same path', () => {
+    const store = createEditorStore()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false, {
+      runtimeEnvironmentId: 'env-1'
+    })
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'wt-1::diff::unstaged::file.ts',
+        runtimeEnvironmentId: undefined
+      }),
+      expect.objectContaining({
+        id: 'editor-diff:wt-1:env-1:unstaged:file.ts',
+        runtimeEnvironmentId: 'env-1'
+      })
+    ])
+  })
+
   it('repairs an existing diff tab entry to the correct mode and staged state', () => {
     const store = createEditorStore()
 

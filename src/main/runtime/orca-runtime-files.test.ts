@@ -118,6 +118,7 @@ function mockLocalPathStats(entries: Record<string, [number, number]>) {
 
 function createRuntimeFileCommands(options?: {
   path?: string
+  openFile?: ReturnType<typeof vi.fn>
   openDiff?: ReturnType<typeof vi.fn>
   resolveRuntimeGitTarget?: ReturnType<typeof vi.fn>
 }) {
@@ -134,7 +135,7 @@ function createRuntimeFileCommands(options?: {
       path
     })),
     resolveRuntimeGitTarget: options?.resolveRuntimeGitTarget ?? vi.fn(),
-    openFile: vi.fn(),
+    openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
   } as never)
   return { commands, store }
@@ -187,7 +188,33 @@ describe('RuntimeFileCommands', () => {
 
     const result = await commands.openMobileDiff('id:wt-1', 'docs/readme.md', true)
 
-    expect(openDiff).toHaveBeenCalledWith('wt-1', '/repo/docs/readme.md', 'docs/readme.md', true)
+    expect(openDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      true,
+      'runtime-1'
+    )
+    expect(result).toEqual({
+      worktree: 'wt-1',
+      relativePath: 'docs/readme.md',
+      kind: 'markdown',
+      opened: true
+    })
+  })
+
+  it('opens text files through the renderer host with the runtime owner', async () => {
+    const openFile = vi.fn()
+    const { commands } = createRuntimeFileCommands({ openFile })
+
+    const result = await commands.openMobileFile('id:wt-1', 'docs/readme.md')
+
+    expect(openFile).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/docs/readme.md',
+      'docs/readme.md',
+      'runtime-1'
+    )
     expect(result).toEqual({
       worktree: 'wt-1',
       relativePath: 'docs/readme.md',
