@@ -205,6 +205,34 @@ describe('pane terminal output scheduler', () => {
     )
   })
 
+  it('drains harmless synchronized endings when latency-sensitive foreground follows', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b]0;spinner\x07\x1b[?2026h\x1b[0 q\x1b[?2026l', {
+      foreground: true,
+      stripTransientCursorShows: true,
+      coalesceForeground: true
+    })
+
+    vi.advanceTimersByTime(0)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    writeTerminalOutput(terminal, 's', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true
+    })
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+    expect(terminal.write).toHaveBeenCalledWith(
+      '\x1b]0;spinner\x07\x1b[?2026h\x1b[0 q\x1b[?2026ls',
+      expect.any(Function)
+    )
+  })
+
   it('waits for cursor restore when synchronized output ends with a transient show', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -230,6 +258,27 @@ describe('pane terminal output scheduler', () => {
       '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?2026l\x1b[?25l\x1b[13;4H\x1b[?25h',
       expect.any(Function)
     )
+  })
+
+  it('keeps transient cursor shows coalesced when latency-sensitive foreground lacks restore', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?25h\x1b[?2026l', {
+      foreground: true,
+      stripTransientCursorShows: true,
+      coalesceForeground: true
+    })
+
+    writeTerminalOutput(terminal, 's', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true
+    })
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.write).not.toHaveBeenCalled()
   })
 
   it('keeps transient cursor shows unless the caller opts into stripping', async () => {

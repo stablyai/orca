@@ -286,6 +286,32 @@ function containsDrainableCursorRestore(data: string): boolean {
   )
 }
 
+function previewQueuedData(entry: QueueEntry, limit: number): string {
+  let data = ''
+  for (let index = entry.chunkIndex; index < entry.chunks.length; index += 1) {
+    const chunk = entry.chunks[index]
+    const remaining = limit - data.length
+    if (remaining <= 0) {
+      break
+    }
+    data += chunk.data.slice(0, remaining)
+  }
+  return data
+}
+
+function coalescedQueuedDataNeedsCursorRestore(entry: QueueEntry): boolean {
+  const data = previewQueuedData(entry, SYNC_FOREGROUND_FLUSH_CHARS)
+  const synchronizedEndIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
+  if (synchronizedEndIndex === -1) {
+    return false
+  }
+  const synchronizedFrame = data.slice(
+    0,
+    synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
+  )
+  return containsCursorRestore(synchronizedFrame) && !containsDrainableCursorRestore(data)
+}
+
 function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   let remaining = limit
   let data = ''
@@ -547,7 +573,12 @@ export function writeTerminalOutput(
       if (options.coalesceForeground || queued.foregroundCoalesce) {
         queued.foregroundHold = false
         clearForegroundHoldSafety(queued)
-        if (containsDrainableCursorRestore(data)) {
+        const shouldDrainForLatencySensitiveForeground =
+          queued.foregroundCoalesce &&
+          !options.coalesceForeground &&
+          options.latencySensitive === true &&
+          !coalescedQueuedDataNeedsCursorRestore(queued)
+        if (containsDrainableCursorRestore(data) || shouldDrainForLatencySensitiveForeground) {
           clearForegroundCoalesce(queued)
           scheduleDrain(0)
           return
