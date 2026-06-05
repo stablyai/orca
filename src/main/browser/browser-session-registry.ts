@@ -140,16 +140,17 @@ class BrowserSessionRegistry {
     }
   }
 
-  // Why: the User-Agent must be set on the session BEFORE any webview loads,
-  // otherwise the first request uses Electron's default UA and the server may
-  // invalidate the imported session cookies.
+  // Why: browser sessions must be initialized BEFORE any webview loads.
+  // Permission/download policies must exist before sites request capabilities,
+  // and the User-Agent must be set before the first request so imported session
+  // cookies are not invalidated by Electron's default UA.
   //
   // Why this also refreshes defaultSource: the singleton constructor runs at
   // module-import time, which may be before app.isReady(). app.getPath('userData')
   // is not guaranteed before ready, so the constructor's loadPersistedSource()
-  // silently returns null. Re-reading here (called from registerCoreHandlers,
-  // after app is ready) ensures the default profile's source is populated.
-  restorePersistedUserAgent(): void {
+  // silently returns null. Re-reading here after app readiness ensures the
+  // default profile's source is populated.
+  initializeBrowserSessionsFromPersistedState(): void {
     const meta = this.loadPersistedMeta()
     if (meta.defaultSource) {
       const current = this.profiles.get('default')
@@ -469,10 +470,9 @@ class BrowserSessionRegistry {
     }
   }
 
-  // Why: each non-default partition needs the same deny-by-default permission
-  // and download policies as the shared partition. Without this, newly created
-  // session partitions would silently allow permissions and downloads that the
-  // shared partition correctly denies.
+  // Why: every browser partition needs the same deny-by-default permission
+  // and download policies. Keeping the installer here prevents the default
+  // partition and imported/isolated partitions from drifting apart.
   private readonly configuredPartitions = new Set<string>()
   private readonly handleWillDownload = (
     _event: Electron.Event,
@@ -486,7 +486,6 @@ class BrowserSessionRegistry {
     if (this.configuredPartitions.has(partition)) {
       return
     }
-    this.configuredPartitions.add(partition)
 
     const sess = session.fromPartition(partition)
     if (typeof sess.getUserAgent === 'function') {
@@ -494,9 +493,9 @@ class BrowserSessionRegistry {
       sess.setUserAgent(cleanUA)
       setupClientHintsOverride(sess, cleanUA)
     }
-    // Why: clipboard-read and clipboard-sanitized-write are required for agent-browser's
-    // clipboard commands to work. Without these, navigator.clipboard.writeText/readText
-    // throws NotAllowedError even when invoked via CDP with userGesture:true.
+    // Why: agent-browser clipboard commands execute via CDP in this session.
+    // Until there is a separate trusted bridge, denying clipboard-read breaks
+    // those runtime commands even when invoked with a user gesture.
     const autoGranted = new Set(['fullscreen', 'clipboard-read', 'clipboard-sanitized-write'])
     sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
       // Why: `media` (camera/mic) must defer to macOS TCC instead of being
@@ -556,6 +555,7 @@ class BrowserSessionRegistry {
     })
     sess.removeListener('will-download', this.handleWillDownload)
     sess.on('will-download', this.handleWillDownload)
+    this.configuredPartitions.add(partition)
   }
 
   private clearSessionPolicies(partition: string, sess: Session): void {
