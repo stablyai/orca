@@ -44,6 +44,7 @@ import {
 import { useAppStore } from '../../store'
 import { useActiveWorktree } from '../../store/selectors'
 import { SearchableSetting } from './SearchableSetting'
+import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 import { matchesSettingsSearch } from './settings-search'
 
 type CommitMessageAiPaneProps = {
@@ -919,20 +920,24 @@ export function CommitMessageAiPane({
   }
 
   const sections: React.ReactNode[] = []
+  const enableGitAiAuthorEntry = {
+    title: 'Enable Git AI Author',
+    description: 'Adds AI generation to git commit, pull request, and branch-name flows.',
+    keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'enabled']
+  }
+  const gitAiAuthorPaneMatches = matchesSettingsSearch(
+    searchQuery,
+    COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
+  )
+  const enableGitAiAuthorMatches = matchesSettingsSearch(searchQuery, enableGitAiAuthorEntry)
+  const forceEnableGitAiAuthorVisible = !config.enabled && gitAiAuthorPaneMatches
 
-  if (
-    matchesSettingsSearch(searchQuery, {
-      title: 'Enable Git AI Author',
-      description: 'Adds AI generation to git commit, pull request, and branch-name flows.',
-      keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'enabled']
-    })
-  ) {
+  if (enableGitAiAuthorMatches || forceEnableGitAiAuthorVisible) {
     sections.push(
       <SearchableSetting
         key="enabled"
-        title="Enable Git AI Author"
-        description="Adds AI generation to git commit, pull request, and branch-name flows."
-        keywords={['ai', 'commit', 'message', 'generate', 'agent', 'enabled']}
+        {...enableGitAiAuthorEntry}
+        forceVisible={forceEnableGitAiAuthorVisible}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="space-y-0.5">
@@ -1022,8 +1027,8 @@ export function CommitMessageAiPane({
           </Select>
           {unsupportedDefaultAgentLabel ? (
             <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
-              Your default agent is {unsupportedDefaultAgentLabel}, which does not support Source
-              Control generation yet. Choose a supported agent or Custom.
+              Your default agent is {unsupportedDefaultAgentLabel}, which does not support{' '}
+              {GIT_AI_AUTHOR_SETTINGS_TITLE} yet. Choose a supported agent or Custom.
             </p>
           ) : null}
           {unsupportedSelectedAgentLabel ? (

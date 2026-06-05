@@ -147,6 +147,15 @@ describe('CommitMessageAiPane', () => {
     expect(markup).not.toContain('Saved')
   })
 
+  it('shows the enable row for Git AI Author search matches before the feature is enabled', () => {
+    const markup = renderPane(buildSettings(), 'customization')
+
+    expect(markup).toContain('Git AI Author')
+    expect(markup).toContain('Enable Git AI Author')
+    expect(markup).toContain('aria-checked="false"')
+    expect(markup).not.toContain('Commit and PR customization')
+  })
+
   it('opens commit and PR customization for matching settings search terms', () => {
     const markup = renderPane(
       buildSettings({
