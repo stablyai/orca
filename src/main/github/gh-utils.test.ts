@@ -137,6 +137,30 @@ describe('github owner/repo resolution', () => {
     await expect(getIssueOwnerRepo('/repo')).resolves.toEqual({ owner: 'stablyai', repo: 'orca' })
   })
 
+  it('coalesces concurrent missing remote probes for the same repo and remote', async () => {
+    gitExecFileAsyncMock.mockImplementation(async () => {
+      await Promise.resolve()
+      throw new Error("error: No such remote 'upstream'")
+    })
+
+    await expect(
+      Promise.all([
+        getOwnerRepoForRemote('/repo', 'upstream'),
+        getOwnerRepoForRemote('/repo', 'upstream'),
+        getOwnerRepoForRemote('/repo', 'upstream'),
+        getOwnerRepoForRemote('/repo', 'upstream')
+      ])
+    ).resolves.toEqual([null, null, null, null])
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
+      cwd: '/repo'
+    })
+
+    await expect(getOwnerRepoForRemote('/repo', 'upstream')).resolves.toBeNull()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves SSH repo remotes through the registered SSH git provider', async () => {
     const sshProvider = {
       exec: vi.fn().mockResolvedValue({ stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' })

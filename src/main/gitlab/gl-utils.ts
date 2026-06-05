@@ -105,10 +105,12 @@ export type ProjectRef = GitLabProjectRef
 
 const PROJECT_REF_CACHE_MAX_ENTRIES = 512
 const projectRefCache = new Map<string, ProjectRef | null>()
+const projectRefInFlight = new Map<string, Promise<ProjectRef | null>>()
 
 /** @internal — exposed for tests only */
 export function _resetProjectRefCache(): void {
   projectRefCache.clear()
+  projectRefInFlight.clear()
 }
 
 /** @internal — exposed for tests only */
@@ -192,6 +194,31 @@ export async function getProjectRefForRemote(
   if (projectRefCache.has(cacheKey)) {
     return projectRefCache.get(cacheKey)!
   }
+  const inFlight = projectRefInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  // Why: issue/PR refresh and repo metadata can ask for the same missing
+  // upstream concurrently. Coalesce the subprocess before caching the result.
+  const probe = resolveProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, cacheKey)
+  projectRefInFlight.set(cacheKey, probe)
+  try {
+    return await probe
+  } finally {
+    if (projectRefInFlight.get(cacheKey) === probe) {
+      projectRefInFlight.delete(cacheKey)
+    }
+  }
+}
+
+async function resolveProjectRefForRemote(
+  repoPath: string,
+  remoteName: string,
+  knownHosts: readonly string[],
+  connectionId: string | null | undefined,
+  cacheKey: string
+): Promise<ProjectRef | null> {
   try {
     const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
     if (connectionId && !sshGitProvider) {
