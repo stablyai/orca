@@ -6,6 +6,7 @@ import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { RemoteFileBrowser } from './RemoteFileBrowser'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
@@ -256,6 +257,7 @@ type CloneStepProps = {
   cloneProgress: { phase: string; percent: number } | null
   isCloning: boolean
   disableDestinationPicker?: boolean
+  runtimeEnvironmentId?: string | null
   onUrlChange: (value: string) => void
   onDestChange: (value: string) => void
   onPickDestination: () => void
@@ -269,11 +271,13 @@ export function CloneStep({
   cloneProgress,
   isCloning,
   disableDestinationPicker = false,
+  runtimeEnvironmentId,
   onUrlChange,
   onDestChange,
   onPickDestination,
   onClone
 }: CloneStepProps): React.JSX.Element {
+  const [browsingDestination, setBrowsingDestination] = useState(false)
   const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
@@ -283,6 +287,29 @@ export function CloneStep({
       }
     }
   }
+
+  if (browsingDestination && runtimeEnvironmentId) {
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle>Browse server filesystem</DialogTitle>
+          <DialogDescription>
+            Navigate to a directory and click Select to choose it.
+          </DialogDescription>
+        </DialogHeader>
+        <RemoteFileBrowser
+          runtimeEnvironmentId={runtimeEnvironmentId}
+          initialPath={cloneDestination || '~'}
+          onSelect={(path) => {
+            onDestChange(path)
+            setBrowsingDestination(false)
+          }}
+          onCancel={() => setBrowsingDestination(false)}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       <DialogHeader>
@@ -319,9 +346,16 @@ export function CloneStep({
               variant="outline"
               size="sm"
               className="h-8 px-2 shrink-0"
-              onClick={onPickDestination}
-              disabled={isCloning || disableDestinationPicker}
-              title={disableDestinationPicker ? 'Enter a server path manually' : 'Choose folder'}
+              onClick={() => {
+                if (runtimeEnvironmentId) {
+                  setBrowsingDestination(true)
+                  return
+                }
+                onPickDestination()
+              }}
+              disabled={isCloning || (disableDestinationPicker && !runtimeEnvironmentId)}
+              title={runtimeEnvironmentId ? 'Browse server filesystem' : 'Choose folder'}
+              aria-label={runtimeEnvironmentId ? 'Browse server filesystem' : 'Choose folder'}
             >
               <Folder className="size-3.5" />
             </Button>

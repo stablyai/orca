@@ -3043,6 +3043,27 @@ describe('OrcaRuntimeService', () => {
     expect(added).toHaveLength(0)
   })
 
+  it('browses runtime server directories before projects are added', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-browse-'))
+    try {
+      await mkdir(join(tempRoot, 'zeta'))
+      await mkdir(join(tempRoot, 'alpha'))
+      await writeFile(join(tempRoot, 'readme.md'), '# Readme\n')
+      const runtime = new OrcaRuntimeService(store)
+
+      const result = await runtime.browseServerDir(tempRoot)
+
+      expect(result.resolvedPath).toBe(tempRoot)
+      expect(result.entries).toEqual([
+        { name: 'alpha', isDirectory: true, isSymlink: false },
+        { name: 'zeta', isDirectory: true, isSymlink: false },
+        { name: 'readme.md', isDirectory: false, isSymlink: false }
+      ])
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('defaults runtime addRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const added: Record<string, unknown>[] = []
     const colorStore = {

@@ -83,6 +83,25 @@ describe('file RPC methods', () => {
     })
   })
 
+  it('browses server directories before a project is added', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browseServerDir: vi.fn().mockResolvedValue({
+        resolvedPath: '/home/me',
+        entries: [{ name: 'project', isDirectory: true, isSymlink: false }]
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
+    const response = await dispatcher.dispatch(makeRequest('files.browseServerDir', { path: '~' }))
+
+    expect(runtime.browseServerDir).toHaveBeenCalledWith('~')
+    expect(response).toMatchObject({
+      ok: true,
+      result: { resolvedPath: '/home/me', entries: [{ name: 'project', isDirectory: true }] }
+    })
+  })
+
   it('streams file watch changes until the subscription is cleaned up', async () => {
     vi.useFakeTimers()
     try {

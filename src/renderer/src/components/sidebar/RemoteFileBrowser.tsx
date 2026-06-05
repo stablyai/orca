@@ -15,9 +15,12 @@ import {
   resolveSegmentStep,
   type DirEntry
 } from './remote-file-browser-helpers'
+import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
 
-type RemoteFileBrowserProps = {
-  targetId: string
+type RemoteFileBrowserProps = (
+  | { targetId: string; runtimeEnvironmentId?: never }
+  | { runtimeEnvironmentId: string; targetId?: never }
+) & {
   initialPath?: string
   onSelect: (path: string) => void
   onCancel: () => void
@@ -39,6 +42,7 @@ type PreviewState = {
 
 export function RemoteFileBrowser({
   targetId,
+  runtimeEnvironmentId,
   initialPath = '~',
   onSelect,
   onCancel
@@ -116,7 +120,12 @@ export function RemoteFileBrowser({
       if (cached) {
         return cached
       }
-      const result = await window.api.ssh.browseDir({ targetId, dirPath })
+      const result = targetId
+        ? await window.api.ssh.browseDir({ targetId, dirPath })
+        : await browseRuntimeServerDirectory(
+            requireRuntimeEnvironmentId(runtimeEnvironmentId),
+            dirPath
+          )
       listingCacheRef.current.set(result.resolvedPath, result)
       // Also cache under the requested dirPath when it differs from the
       // server-resolved canonical path (e.g. `~`, `~/foo`, or a relative
@@ -127,7 +136,7 @@ export function RemoteFileBrowser({
       }
       return result
     },
-    [targetId]
+    [runtimeEnvironmentId, targetId]
   )
 
   const loadDir = useCallback(
@@ -748,4 +757,11 @@ export function RemoteFileBrowser({
 function committedPrefix(raw: string): string {
   const i = raw.lastIndexOf('/')
   return i === -1 ? '' : raw.slice(0, i + 1)
+}
+
+function requireRuntimeEnvironmentId(runtimeEnvironmentId: string | undefined): string {
+  if (!runtimeEnvironmentId) {
+    throw new Error('Runtime environment is required')
+  }
+  return runtimeEnvironmentId
 }
