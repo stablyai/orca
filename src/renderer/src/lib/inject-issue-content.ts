@@ -12,7 +12,7 @@ import type {
 import type { LinkedWorkItemContext } from './linked-work-item-context'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 
-export type InjectionDecision = 'inject' | 'skip' | 'ask'
+export type InjectionDecision = 'inject' | 'skip'
 
 export function resolveInjectionDecision(
   preference: IssueContentInjectionPreference | undefined,
@@ -26,10 +26,7 @@ export function resolveInjectionDecision(
   if (effectivePreference === 'always') {
     return 'inject'
   }
-  if (effectivePreference === 'never') {
-    return 'skip'
-  }
-  return 'ask'
+  return 'skip'
 }
 
 export type FetchIssueContentResult =

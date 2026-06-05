@@ -3,7 +3,6 @@ import { useAppStore } from '@/store'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
-import { InjectionConfirmDialog } from '@/components/InjectionConfirmDialog'
 import { useComposerState } from '@/hooks/useComposerState'
 import {
   pickQuickWorkspaceAgent,
@@ -111,12 +110,7 @@ function QuickTabBody({
     onComposerNodeChange,
     nameInputRef,
     submitQuick,
-    createDisabled,
-    pendingInjection,
-    injectionDialogOpen,
-    setInjectionDialogOpen,
-    handleConfirmInjection,
-    handleCancelInjection
+    createDisabled
   } = useComposerState({
     initialName: modalData.prefilledName ?? '',
     // Why: the modal is quick-create only now, so prompt-prefill state is
@@ -244,13 +238,6 @@ function QuickTabBody({
         hasSelectedWorkItem={cardProps.hasSelectedWorkItem}
       />
       <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
-      <InjectionConfirmDialog
-        open={injectionDialogOpen}
-        onOpenChange={setInjectionDialogOpen}
-        issueTitle={pendingInjection?.worktree.displayName ?? ''}
-        onConfirm={() => void handleConfirmInjection()}
-        onCancel={handleCancelInjection}
-      />
     </>
   )
 }

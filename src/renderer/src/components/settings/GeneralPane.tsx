@@ -712,7 +712,6 @@ export function GeneralPane({
               <SelectContent>
                 <SelectItem value="always">Always Inject</SelectItem>
                 <SelectItem value="never">Never Inject</SelectItem>
-                <SelectItem value="ask">Ask Every Time</SelectItem>
               </SelectContent>
             </Select>
           </div>

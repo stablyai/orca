@@ -1922,7 +1922,7 @@ export type FloatingTerminalCwdRequest = {
 }
 
 /** Controls whether issue content is injected into agent chats after worktree creation. */
-export type IssueContentInjectionPreference = 'always' | 'never' | 'ask'
+export type IssueContentInjectionPreference = 'always' | 'never'
 
 export type GlobalSettings = {
   workspaceDir: string

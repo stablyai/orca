@@ -247,15 +247,6 @@ export type UseComposerStateResult = {
   createDisabled: boolean
   injectIssueContent: boolean
   setInjectIssueContent: (value: boolean | null) => void
-  pendingInjection: {
-    worktree: Worktree
-    repoPath: string | undefined
-    primaryTabId: string | null
-  } | null
-  injectionDialogOpen: boolean
-  setInjectionDialogOpen: (open: boolean) => void
-  handleConfirmInjection: () => Promise<void>
-  handleCancelInjection: () => void
 }
 
 // Why: both the full-page TaskPage composer and the Cmd+J modal can be
@@ -502,12 +493,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [linkDirectItem, setLinkDirectItem] = useState<GitHubWorkItem | null>(null)
   const [linkDirectLoading, setLinkDirectLoading] = useState(false)
   const [injectIssueContent, setInjectIssueContent] = useState<boolean | null>(null)
-  const [pendingInjection, setPendingInjection] = useState<{
-    worktree: Worktree
-    repoPath: string | undefined
-    primaryTabId: string | null
-  } | null>(null)
-  const [injectionDialogOpen, setInjectionDialogOpen] = useState(false)
 
   const lastAutoNameRef = useRef<string>(
     persistDraft ? (newWorkspaceDraft?.name ?? initialName) : initialName
@@ -1867,46 +1852,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [updateWorktreeMeta]
   )
 
-  const handleConfirmInjection = useCallback(async (): Promise<void> => {
-    if (!pendingInjection) {
-      return
-    }
-    setInjectionDialogOpen(false)
-
-    const fetchResult = await fetchIssueContent({
-      worktree: pendingInjection.worktree,
-      settings: settings ?? { activeRuntimeEnvironmentId: null },
-      repoPath: pendingInjection.repoPath
-    })
-
-    if (!fetchResult.success) {
-      toast.error('Failed to fetch issue content')
-      setPendingInjection(null)
-      return
-    }
-
-    if (!pendingInjection.primaryTabId) {
-      toast.warning('No agent tab found')
-      setPendingInjection(null)
-      return
-    }
-
-    const injectResult = await injectIssueContentIntoAgent({
-      tabId: pendingInjection.primaryTabId,
-      content: fetchResult.content
-    })
-    if (!injectResult.success) {
-      toast.error('Failed to inject issue content')
-    }
-
-    setPendingInjection(null)
-  }, [pendingInjection, settings])
-
-  const handleCancelInjection = useCallback((): void => {
-    setInjectionDialogOpen(false)
-    setPendingInjection(null)
-  }, [])
-
   const handleIssueContentInjection = useCallback(
     async (
       worktree: Worktree,
@@ -1943,16 +1888,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         } else {
           toast.error('Failed to fetch issue content for injection')
         }
-      } else if (decision === 'ask') {
-        setPendingInjection({
-          worktree,
-          repoPath: selectedRepo?.path,
-          primaryTabId: activation.primaryTabId
-        })
-        setInjectionDialogOpen(true)
       }
     },
-    [settings, selectedRepo, setPendingInjection, setInjectionDialogOpen]
+    [settings, selectedRepo]
   )
 
   const submit = useCallback(async (): Promise<void> => {
@@ -2613,11 +2551,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     submitQuick,
     createDisabled,
     injectIssueContent: effectiveInjectIssueContent,
-    setInjectIssueContent,
-    pendingInjection,
-    injectionDialogOpen,
-    setInjectionDialogOpen,
-    handleConfirmInjection,
-    handleCancelInjection
+    setInjectIssueContent
   }
 }

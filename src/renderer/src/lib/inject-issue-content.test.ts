@@ -67,9 +67,6 @@ describe('resolveInjectionDecision', () => {
     expect(resolveInjectionDecision('never', undefined)).toBe('skip')
   })
 
-  it('returns ask when preference is ask', () => {
-    expect(resolveInjectionDecision('ask', undefined)).toBe('ask')
-  })
 })
 
 describe('fetchIssueContent', () => {
