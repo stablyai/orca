@@ -59,7 +59,7 @@ export const COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'Pull request model',
     description: 'Optional model choice for pull request detail generation.',
-    keywords: ['model', 'override', 'pull request', 'pr', 'thinking']
+    keywords: ['model', 'override', 'pull request', 'pr', 'pr model', 'thinking']
   },
   {
     title: 'Pull request prompt',
