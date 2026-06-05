@@ -28,6 +28,7 @@ function renderNestedStep(repoCount: number): string {
         <AddRepoDialogStepContent
           step="nested"
           isRuntimeEnvironmentActive={false}
+          isSshLikely={false}
           repoCount={repoCount}
           isAdding={false}
           addProjectBusyLabel={null}
