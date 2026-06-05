@@ -114,6 +114,7 @@ export function AgentCapabilitiesSetupAction(props: {
 type AgentCapabilitySetupRow = {
   id: OnboardingFeatureSetupId
   title: string
+  description: string
   icon: ReactNode
 }
 
@@ -121,16 +122,22 @@ const AGENT_CAPABILITY_SETUP_ROWS: readonly AgentCapabilitySetupRow[] = [
   {
     id: 'orchestration',
     title: 'Agent Orchestration',
+    description:
+      'Let agents coordinate through Orca to keep large, multi-step tasks moving to completion.',
     icon: <Workflow className="size-4" />
   },
   {
     id: 'browserUse',
     title: 'Agent Browser Use',
+    description:
+      "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.",
     icon: <Globe2 className="size-4" />
   },
   {
     id: 'computerUse',
     title: 'Computer Use',
+    description:
+      'Let agents control the desktop, moving the cursor, clicking, and typing in any app.',
     icon: <MonitorCog className="size-4" />
   }
 ]
@@ -233,6 +240,9 @@ function AgentCapabilitySetupChecklist(props: {
                 </span>
               </span>
               <span className="mt-3 text-sm font-medium text-foreground">{row.title}</span>
+              <span className="mt-1 text-xs leading-snug text-muted-foreground">
+                {row.description}
+              </span>
               <AgentCapabilityStatusNote status={installStatus} />
             </button>
           )

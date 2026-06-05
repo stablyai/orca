@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
@@ -81,6 +82,26 @@ export function TwoAgentsAction(props: { done: boolean }): React.JSX.Element | n
       <ArrowUpRight className="size-3.5" />
       Try it out
     </Button>
+  )
+}
+
+const SETUP_HINT_KBD_CLASS =
+  'rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[11.5px] text-foreground'
+
+// Platform-aware split/close shortcuts for the active terminal pane. The
+// labels resolve to ⌘D / Ctrl+Shift+D etc. based on the user's OS and overrides.
+export function SplitTerminalShortcutHint(): React.JSX.Element {
+  const splitRight = useShortcutLabel('terminal.splitRight')
+  const splitDown = useShortcutLabel('terminal.splitDown')
+  const closePane = useShortcutLabel('terminal.closePane')
+  return (
+    <div className="space-y-1.5 text-[13px] leading-relaxed text-muted-foreground">
+      <p>
+        Split right with <kbd className={SETUP_HINT_KBD_CLASS}>{splitRight}</kbd> or down with{' '}
+        <kbd className={SETUP_HINT_KBD_CLASS}>{splitDown}</kbd>, or right-click a pane and choose a
+        split. Close the active pane with <kbd className={SETUP_HINT_KBD_CLASS}>{closePane}</kbd>.
+      </p>
+    </div>
   )
 }
 

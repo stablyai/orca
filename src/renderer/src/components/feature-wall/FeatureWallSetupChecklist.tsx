@@ -11,16 +11,12 @@ import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
 import {
   AddReposAction,
   SetupScriptAction,
+  SplitTerminalShortcutHint,
   TwoAgentsAction,
   WorkspacesAction
 } from './FeatureWallSetupWorkflowActions'
 import {
-  SetupDefaultAgentVisual,
-  SetupIntegrationsVisual,
   SetupMultipleReposVisual,
-  SetupNotificationsVisual,
-  SetupOrcaCliVisual,
-  SetupScriptVisual,
   SetupTwoAgentsVisual,
   SetupWorkspacesVisual
 } from './FeatureWallSetupStepVisuals'
@@ -156,26 +152,11 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
 }
 
 function SelectedStepVisual(props: { stepId: FeatureWallSetupStepId }): React.JSX.Element | null {
-  if (props.stepId === 'default-agent') {
-    return <SetupDefaultAgentVisual />
-  }
-  if (props.stepId === 'notifications') {
-    return <SetupNotificationsVisual />
-  }
   if (props.stepId === 'split-terminal') {
     return <SetupTwoAgentsVisual />
   }
   if (props.stepId === 'two-worktrees') {
     return <SetupWorkspacesVisual />
-  }
-  if (props.stepId === 'task-sources') {
-    return <SetupIntegrationsVisual />
-  }
-  if (props.stepId === 'agent-capabilities') {
-    return <SetupOrcaCliVisual />
-  }
-  if (props.stepId === 'setup-script') {
-    return <SetupScriptVisual />
   }
   if (props.stepId === 'add-two-repos') {
     return <SetupMultipleReposVisual />
@@ -259,6 +240,10 @@ export function FeatureWallSetupChecklist(
 ): React.JSX.Element {
   const { activeStep, progress, onSelectStep } = props
   const activeDone = activeStep ? progress.stepDone[activeStep.id] : false
+  const useWideStepCopyLayout =
+    activeStep?.id === 'split-terminal' ||
+    activeStep?.id === 'two-worktrees' ||
+    activeStep?.id === 'add-two-repos'
   const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
   const setupSteps = getFeatureWallSetupStepsForSection('setup')
 
@@ -303,11 +288,26 @@ export function FeatureWallSetupChecklist(
                 {activeDone ? 'Done' : 'Not done yet'}
               </span>
             </div>
-            <div className="grid max-w-3xl items-center gap-5 sm:grid-cols-[minmax(0,48ch)_auto]">
+            <div
+              className={cn(
+                'grid max-w-3xl items-start sm:grid-cols-[minmax(0,48ch)_auto]',
+                useWideStepCopyLayout ? 'gap-8 sm:gap-10' : 'gap-5'
+              )}
+            >
               <div className="min-w-0">
-                <p className="text-base leading-normal text-muted-foreground">
+                <p
+                  className={cn(
+                    'text-base leading-normal text-muted-foreground',
+                    useWideStepCopyLayout ? 'pr-4 sm:pr-6' : null
+                  )}
+                >
                   {activeStep.description}
                 </p>
+                {activeStep.id === 'split-terminal' ? (
+                  <div className="mt-3">
+                    <SplitTerminalShortcutHint />
+                  </div>
+                ) : null}
               </div>
               <SelectedStepVisual stepId={activeStep.id} />
             </div>
