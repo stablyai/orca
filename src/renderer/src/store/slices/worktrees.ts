@@ -6,6 +6,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   LocalBaseRefRefreshResult,
+  NestedRepoWarning,
   ForceDeleteWorktreeBranchResult,
   GitHubPrStartPoint,
   Worktree,
@@ -94,6 +95,19 @@ function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefi
 
   toast.warning(`Local ${result.localBranch} was not refreshed`, {
     description: `Workspace created from ${result.baseRef}, but Orca could not fast-forward local ${result.localBranch} because ${reason}`
+  })
+}
+
+// Why: a worktree of a meta-repo materializes none of the nested repos' files;
+// without this warning the user lands in a silently incomplete tree. The field
+// is only attached by local creates, so remote/folder flows are no-ops here.
+function showNestedReposToast(warning: NestedRepoWarning | undefined): void {
+  if (!warning) {
+    return
+  }
+  const more = warning.truncated && warning.moreCount > 0 ? ` and ${warning.moreCount} more` : ''
+  toast.warning('Workspace created without nested repos', {
+    description: `This repo contains nested git repos not tracked by it: ${warning.paths.join(', ')}${more}. The new worktree only contains files tracked by the parent repo.`
   })
 }
 
@@ -1134,6 +1148,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             }
           })
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh)
+          showNestedReposToast(result.nestedRepos)
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)

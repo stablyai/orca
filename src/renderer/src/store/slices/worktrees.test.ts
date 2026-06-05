@@ -1316,6 +1316,75 @@ describe('createWorktree base status merge', () => {
     expect(toast.warning).not.toHaveBeenCalled()
   })
 
+  it('warns about untracked nested repos after a local create', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      nestedRepos: { paths: ['backend/', 'frontend/'], truncated: false, moreCount: 0 }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).toHaveBeenCalledWith('Workspace created without nested repos', {
+      description: expect.stringContaining('backend/, frontend/')
+    })
+    const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+    expect(description).toContain('only contains files tracked by the parent repo')
+  })
+
+  it('appends the remainder count when the nested repo list is truncated', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      nestedRepos: {
+        paths: Array.from({ length: 10 }, (_, i) => `pkg-${i}/`),
+        truncated: true,
+        moreCount: 2
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const description = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.description
+    expect(description).toContain('and 2 more')
+  })
+
+  it('does not warn about nested repos when the field is absent', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).not.toHaveBeenCalledWith(
+      'Workspace created without nested repos',
+      expect.anything()
+    )
+  })
+
+  it('shows both the base-ref and nested-repo warnings when present together', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefRefresh: {
+        status: 'skipped_dirty_worktree',
+        baseRef: 'origin/main',
+        localBranch: 'main',
+        ownerWorktreePath: '/repo'
+      },
+      nestedRepos: { paths: ['frontend/'], truncated: false, moreCount: 0 }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const titles = vi.mocked(toast.warning).mock.calls.map((call) => call[0])
+    expect(titles).toContain('Local main was not refreshed')
+    expect(titles).toContain('Workspace created without nested repos')
+  })
+
   it('stamps manualOrder on create while Manual sort is active', async () => {
     const store = createTestStore()
     store.setState({ sortBy: 'manual' } as Partial<AppState>)
