@@ -11,7 +11,7 @@ export function createProductionLauncher(opts: ProductionLauncherOptions): Daemo
   return async (socketPath: string, tokenPath: string): Promise<DaemonProcessHandle> => {
     const entryPath = opts.getDaemonEntryPath()
 
-    const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
+    const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath, '--parent-pid', String(process.pid)], {
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       detached: true,
       env: { ...process.env },

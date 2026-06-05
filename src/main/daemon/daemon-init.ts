@@ -216,7 +216,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
     await killStaleDaemon(runtimeDir, socketPath, tokenPath)
 
     const userDataPath = app.getPath('userData')
-    const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath], {
+    const child = fork(entryPath, ['--socket', socketPath, '--token', tokenPath, '--parent-pid', String(process.pid)], {
       // Why: detached daemons can outlive dev worktrees. Starting from
       // userData keeps process.cwd() valid after a repo/worktree is deleted.
       cwd: userDataPath,
