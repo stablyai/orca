@@ -599,10 +599,7 @@ export function writeTerminalOutput(
       if (options.coalesceForeground || queued.foregroundCoalesce) {
         queued.foregroundHold = false
         clearForegroundHoldSafety(queued)
-        const shouldShortenCoalesceForLatencySensitiveForeground =
-          queued.foregroundCoalesce &&
-          !options.coalesceForeground &&
-          options.latencySensitive === true
+        const shouldShortenCoalesceForLatencySensitiveForeground = options.latencySensitive === true
         if (shouldShortenCoalesceForLatencySensitiveForeground) {
           // Why: user input echo must not inherit the normal synchronized-frame
           // restore fallback; wait briefly for the restore, then paint.
