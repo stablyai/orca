@@ -211,6 +211,32 @@ describe('BrowserSessionRegistry persistence', () => {
     ).toBe(true)
   })
 
+  it('sets up session policies for the default partition on restore', async () => {
+    const fsState = createFsState()
+    seedMeta(fsState, {
+      defaultSource: null,
+      userAgent: null,
+      userAgentByPartition: {},
+      pendingCookieDbPath: null,
+      pendingCookieImports: {},
+      profiles: []
+    })
+
+    const { sessionFromPartitionMock } = installModuleMocks(fsState)
+    const { browserSessionRegistry } = await import('./browser-session-registry')
+
+    browserSessionRegistry.restorePersistedUserAgent()
+
+    const defaultSessions = sessionFromPartitionMock.mock.results
+      .filter((_, idx) => sessionFromPartitionMock.mock.calls[idx]?.[0] === 'persist:orca-browser')
+      .map((r) => r.value)
+    expect(defaultSessions.length).toBeGreaterThan(0)
+    const defaultSession = defaultSessions[0]
+    expect(defaultSession.setPermissionRequestHandler).toHaveBeenCalled()
+    expect(defaultSession.setPermissionCheckHandler).toHaveBeenCalled()
+    expect(defaultSession.setDisplayMediaRequestHandler).toHaveBeenCalled()
+  })
+
   it('keeps failed partition replay pending and removes unrelated missing entries', async () => {
     const importedPartition = 'persist:orca-browser-session-22222222-2222-4222-8222-222222222222'
     const fsState = createFsState()
