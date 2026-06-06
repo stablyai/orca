@@ -1757,106 +1757,40 @@
   border-width: 1.5px;
 }
 
-/* Cmd+J feature tip — keypress cue, palette entrance, and selection sweep.
-   One 3.6s loop: keys press, the palette settles, then the highlight steps
-   across a worktree, the Shortcuts setting, and a quick action. */
-@keyframes cmd-j-tip-keypress {
+/* Cmd+J feature tip — JS-driven sequence (keypress → palette → typing → results).
+   The keypress press-down and palette entrance are handled inline by React state
+   transitions; this file only defines the caret blink and the results fade-in. */
+
+/* Blinking caret for the simulated command-palette input while "typing". */
+@keyframes cmd-j-tip-caret {
   0%,
-  6%,
   100% {
-    transform: translateY(0);
-    background-color: color-mix(in srgb, var(--foreground) 8%, transparent);
+    opacity: 1;
   }
-  3% {
-    transform: translateY(1.5px);
-    background-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+  50% {
+    opacity: 0;
   }
 }
 
-.animate-cmd-j-tip-keypress {
-  animation: cmd-j-tip-keypress 3.6s ease-in-out infinite;
+.animate-cmd-j-tip-caret {
+  animation: cmd-j-tip-caret 1s step-end infinite;
 }
 
-@keyframes cmd-j-tip-palette {
+/* Results fade in together once typing completes — mirrors the real palette,
+   which filters synchronously rather than dropping rows one at a time. */
+@keyframes cmd-j-tip-result-in {
   0% {
     opacity: 0;
-    transform: translateY(6px) scale(0.985);
+    transform: translateY(2px);
   }
-  8%,
-  92% {
+  100% {
     opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(6px) scale(0.985);
+    transform: translateY(0);
   }
 }
 
-.animate-cmd-j-tip-palette {
-  animation: cmd-j-tip-palette 3.6s ease-in-out infinite;
-  transform-origin: center top;
-}
-
-@keyframes cmd-j-tip-row-1 {
-  0%,
-  24% {
-    background-color: var(--accent);
-    border-color: var(--border);
-  }
-  30%,
-  100% {
-    background-color: transparent;
-    border-color: transparent;
-  }
-}
-
-@keyframes cmd-j-tip-row-2 {
-  0%,
-  30% {
-    background-color: transparent;
-    border-color: transparent;
-  }
-  36%,
-  54% {
-    background-color: var(--accent);
-    border-color: var(--border);
-  }
-  60%,
-  100% {
-    background-color: transparent;
-    border-color: transparent;
-  }
-}
-
-@keyframes cmd-j-tip-row-3 {
-  0%,
-  60% {
-    background-color: transparent;
-    border-color: transparent;
-  }
-  66%,
-  86% {
-    background-color: var(--accent);
-    border-color: var(--border);
-  }
-  92%,
-  100% {
-    background-color: transparent;
-    border-color: transparent;
-  }
-}
-
-.animate-cmd-j-tip-row-1 {
-  animation: cmd-j-tip-row-1 3.6s ease-in-out infinite;
-}
-
-.animate-cmd-j-tip-row-2 {
-  animation: cmd-j-tip-row-2 3.6s ease-in-out infinite;
-}
-
-.animate-cmd-j-tip-row-3 {
-  animation: cmd-j-tip-row-3 3.6s ease-in-out infinite;
+.animate-cmd-j-tip-result-in {
+  animation: cmd-j-tip-result-in 200ms ease-out both;
 }
 
 /* ── Feature wall: agents-orchestration animations ───────────────── */

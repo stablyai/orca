@@ -45,7 +45,7 @@ export const FEATURE_TIPS = [
     eyebrow: 'Tip',
     title: 'Jump anywhere with the command palette',
     description:
-      'Open the palette to search across worktrees, settings, tabs, and quick actions — then jump straight to the result. Rebind the shortcut anytime in Settings.',
+      'Open the palette to search across worktrees, settings, tabs, and quick actions — or type a name to create a new worktree.',
     action: 'learn-cmd-j-palette',
     ctaLabel: 'Got it',
     completedByFeatureInteractions: []

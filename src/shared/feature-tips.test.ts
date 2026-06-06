@@ -84,7 +84,7 @@ describe('feature tips', () => {
       ctaLabel: 'Got it'
     })
     expect(paletteTip?.description).toContain('worktrees')
-    expect(paletteTip?.description).toContain('Rebind')
+    expect(paletteTip?.description).toContain('create a new worktree')
   })
 
   it('describes the CLI tip as an install action with concrete workflows', () => {
