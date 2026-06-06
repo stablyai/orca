@@ -30,7 +30,7 @@ export function AutoRenameBranchPromptEditor({
     // divide-y divider the way the model/prompt rows are spaced.
     <div className="space-y-2 py-2">
       <div className="space-y-0.5">
-        <Label htmlFor="git-auto-rename-branch-name-prompt">Branch name prompt</Label>
+        <Label htmlFor="git-auto-rename-branch-name-prompt">Prompt</Label>
         <p className="text-xs text-muted-foreground">
           Appended to Orca&apos;s{' '}
           <Popover>
