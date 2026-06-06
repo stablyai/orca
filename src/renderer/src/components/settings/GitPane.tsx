@@ -6,15 +6,9 @@ import { GIT_PANE_SEARCH_ENTRIES } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
-import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
-import { AUTO_RENAME_BRANCH_SEARCH_ENTRIES } from './auto-rename-branch-search'
 import { GitLabRateLimitPanel } from '../gitlab/gitlab-rate-limit-display'
 
 export { GIT_PANE_SEARCH_ENTRIES }
-
-export function shouldShowAutoRenameBranchSetting(searchQuery: string): boolean {
-  return matchesSettingsSearch(searchQuery, AUTO_RENAME_BRANCH_SEARCH_ENTRIES)
-}
 
 type GitPaneProps = {
   settings: GlobalSettings
@@ -146,13 +140,6 @@ export function GitPane({
           />
         </button>
       </SearchableSetting>
-    ) : null,
-    shouldShowAutoRenameBranchSetting(searchQuery) ? (
-      <AutoRenameBranchFromWorkSetting
-        key="auto-rename-branch-from-work"
-        settings={settings}
-        updateSettings={updateSettings}
-      />
     ) : null,
     matchesSettingsSearch(searchQuery, {
       title: 'GitHub API Budget',

@@ -44,6 +44,7 @@ import {
 import { useAppStore } from '../../store'
 import { useActiveWorktree } from '../../store/selectors'
 import { AutoRenameBranchPromptEditor } from './AutoRenameBranchPromptEditor'
+import { AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY } from './auto-rename-branch-search'
 import { SearchableSetting } from './SearchableSetting'
 import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 import { matchesSettingsSearch } from './settings-search'
@@ -1192,6 +1193,48 @@ export function CommitMessageAiPane({
             ))}
           </SelectContent>
         </Select>
+      </SearchableSetting>
+    )
+  }
+
+  // Why: auto-name fires automatically and runs through the same agent as the
+  // other operations, so it can't work unless Git AI Author is on — keep its
+  // toggle here (gated on config.enabled) rather than orphaned in Git settings.
+  if (
+    config.enabled &&
+    matchesSettingsSearch(searchQuery, AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY)
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="auto-rename-branch-from-work"
+        {...AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY}
+        className="flex items-center justify-between gap-4 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Auto-name new workspaces from first message</Label>
+          <p className="text-xs text-muted-foreground">
+            When a blank new workspace starts work, Orca uses the first task to rename the sidebar
+            title and unpublished generated branch (e.g. <code>Nautilus</code>). Workspaces created
+            from linked issues or pull requests are named up front from the same short identity.
+            Tune the model and prompt under Advanced → Branch Names below.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={settings.autoRenameBranchFromWork}
+          onClick={() =>
+            updateSettings({ autoRenameBranchFromWork: !settings.autoRenameBranchFromWork })
+          }
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+            settings.autoRenameBranchFromWork ? 'bg-foreground' : 'bg-muted-foreground/30'
+          }`}
+        >
+          <span
+            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+              settings.autoRenameBranchFromWork ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
       </SearchableSetting>
     )
   }

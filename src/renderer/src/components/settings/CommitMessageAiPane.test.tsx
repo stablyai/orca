@@ -123,6 +123,37 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('aria-checked="false"')
     expect(markup).not.toContain('Orca invokes this CLI')
     expect(markup).not.toContain('Thinking Effort')
+    // The auto-name toggle depends on Git AI Author, so it is hidden while off.
+    expect(markup).not.toContain('Auto-name new workspaces from first message')
+  })
+
+  it('renders the auto-name toggle once Git AI Author is enabled', () => {
+    const markup = renderPane(
+      buildSettings({
+        autoRenameBranchFromWork: true,
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: { codex: 'gpt-5.5' },
+          selectedThinkingByModel: { 'gpt-5.5': 'medium' },
+          customPrompt: '',
+          customAgentCommand: ''
+        }
+      })
+    )
+
+    expect(markup).toContain('Auto-name new workspaces from first message')
+    // Tuning lives in the Advanced -> Branch Names group, not on the toggle row.
+    expect(markup).toContain('Tune the model and prompt under Advanced')
+  })
+
+  it('surfaces the enable row when searching for auto-name while the feature is off', () => {
+    const markup = renderPane(buildSettings(), 'auto-name')
+
+    // Why: the toggle can't render while disabled, so an auto-name search should
+    // still guide the user to the Enable Git AI Author row.
+    expect(markup).toContain('Enable Git AI Author')
+    expect(markup).not.toContain('Auto-name new workspaces from first message')
   })
 
   it('renders model, thinking, and collapsed advanced customization for enabled preset agents', () => {
@@ -145,9 +176,11 @@ describe('CommitMessageAiPane', () => {
     expect(markup).toContain('Thinking Effort')
     expect(markup).toContain('Advanced')
     expect(markup).toContain('aria-expanded="false"')
-    expect(markup).not.toContain('Commit Messages')
-    expect(markup).not.toContain('Pull Requests')
-    expect(markup).not.toContain('Branch Names')
+    // Match the group headings specifically: the auto-name toggle copy mentions
+    // "Branch Names", but the collapsed group heading must not be rendered.
+    expect(markup).not.toContain('>Commit Messages</h4>')
+    expect(markup).not.toContain('>Pull Requests</h4>')
+    expect(markup).not.toContain('>Branch Names</h4>')
     expect(markup).not.toContain('Use a different model for commit message generation.')
     expect(markup).not.toContain('Creation defaults')
     expect(markup).not.toContain('Use a different model for branch name generation.')
