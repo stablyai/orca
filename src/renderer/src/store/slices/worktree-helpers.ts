@@ -36,6 +36,11 @@ export type WorktreeMetaUpdateOptions = {
   shouldApply?: WorktreeMetaUpdateGuard
 }
 
+export type WorktreeRenameRequest = {
+  worktreeId: string
+  rowKey?: string
+}
+
 export type WorktreeSlice = {
   worktreesByRepo: Record<string, Worktree[]>
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
@@ -58,7 +63,7 @@ export type WorktreeSlice = {
   activePendingCreationId: string | null
   // Why: signals the matching worktree card's inline title editor to open. The
   // workspace.rename shortcut sets this; the card clears it on consume.
-  renamingWorktreeId: string | null
+  renamingWorktreeId: WorktreeRenameRequest | null
   deleteStateByWorktreeId: Record<string, WorktreeDeleteState>
   baseStatusByWorktreeId: Record<string, WorktreeBaseStatusEvent>
   remoteBranchConflictByWorktreeId: Record<string, WorktreeRemoteBranchConflictEvent>
@@ -172,9 +177,9 @@ export type WorktreeSlice = {
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>
   ) => Promise<void>
   /**
-   * Pin/unpin worktrees, then reveal the first changed one. The reveal is the
-   * point: pinning moves the row to the Pinned section (unpinning moves it
-   * back), so without it the viewport stays put and the user loses the row.
+   * Pin/unpin worktrees, then reveal the first changed one. The reveal keeps
+   * the shortcut action visible even though pinned worktrees also remain in
+   * their normal sidebar groups.
    */
   setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
   markWorktreeUnread: (worktreeId: string) => void
@@ -207,7 +212,7 @@ export type WorktreeSlice = {
    */
   seedActiveWorktreeLastVisitedIfMissing: () => void
   setActiveWorktree: (worktreeId: string | null) => void
-  setRenamingWorktreeId: (worktreeId: string | null) => void
+  setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]
   getKnownWorktreeById: (worktreeId: string) => Worktree | DetectedWorktree | undefined
   /**

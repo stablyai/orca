@@ -23,12 +23,11 @@ export async function runSleepWorktree(worktreeId: string): Promise<void> {
 }
 
 function findSidebarWorktreeRow(worktreeId: string): HTMLElement | null {
-  const rowKey = `wt:${worktreeId}`
-  return (
-    Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-virtual-row]')).find(
-      (element) => element.getAttribute('data-worktree-virtual-row-key') === rowKey
+  const option =
+    Array.from(document.querySelectorAll<HTMLElement>('[data-worktree-id]')).find(
+      (element) => element.dataset.worktreeId === worktreeId
     ) ?? null
-  )
+  return option?.closest<HTMLElement>('[data-worktree-virtual-row]') ?? null
 }
 
 function preserveSidebarWorktreePosition(worktreeId: string): () => void {

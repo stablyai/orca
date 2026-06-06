@@ -88,7 +88,9 @@ describe('sidebar worktree activation', () => {
     activateWorktreeFromSidebar('wt-live')
 
     expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live', {
+      revealInSidebar: false
+    })
   })
 
   it('does not defer slept workspace activation in the web client', () => {

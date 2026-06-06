@@ -62,18 +62,28 @@ import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { translate } from '@/i18n/i18n'
 
+type WorktreeRenameRequest = {
+  worktreeId: string
+  rowKey?: string
+}
+
+export type ActiveSurfaceVariant = 'primary' | 'secondary'
+
 type WorktreeCardProps = {
   worktree: Worktree
   repo: Repo | undefined
   isActive: boolean
   isCurrentWorktree?: boolean
   isActiveSurface?: boolean
+  activeSurfaceVariant?: ActiveSurfaceVariant
   isMultiSelected?: boolean
   revealHighlight?: boolean
   revealHighlightTone?: 'default' | 'ai'
   selectedWorktrees?: readonly Worktree[]
   hideRepoBadge?: boolean
   inPinnedSection?: boolean
+  activationRowKey?: string
+  renameRowKey?: string
   contentIndent?: number
   flushSurface?: boolean
   lineageChildCount?: number
@@ -81,7 +91,7 @@ type WorktreeCardProps = {
   lineageChildren?: React.ReactNode
   onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
   onActivate?: () => void
-  onImmediateActivate?: (worktreeId: string) => void
+  onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onContextMenuSelect?: (
     event: React.MouseEvent<HTMLElement>,
@@ -97,6 +107,17 @@ type WorktreeCardProps = {
 }
 
 const EMPTY_WORKSPACE_PORTS = []
+
+export function shouldBeginWorktreeRename(
+  request: WorktreeRenameRequest | null,
+  worktreeId: string,
+  rowKey: string | undefined
+): boolean {
+  return (
+    request?.worktreeId === worktreeId &&
+    (request.rowKey === undefined || request.rowKey === rowKey)
+  )
+}
 
 function formatSparseDirectoryPreview(directories: string[]): string {
   const preview = directories.slice(0, 4).join(', ')
@@ -142,6 +163,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   repo,
   isActive,
   isActiveSurface = isActive,
+  activeSurfaceVariant = 'primary',
   isMultiSelected = false,
   revealHighlight = false,
   revealHighlightTone = 'default',
@@ -155,6 +177,8 @@ const WorktreeCard = React.memo(function WorktreeCard({
   nativeDragEnabled = true,
   hideRepoBadge,
   inPinnedSection = false,
+  activationRowKey,
+  renameRowKey,
   contentIndent = 0,
   flushSurface = false,
   lineageChildCount = 0,
@@ -173,6 +197,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
   const compactCards = settings?.compactWorktreeCards === true
+  const activeSurfaceIsSecondary = isActiveSurface && activeSurfaceVariant === 'secondary'
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -496,7 +521,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
       // Why: route sidebar clicks through the shared activation path so the
       // back/forward stack stays complete for the primary worktree navigation
       // surface instead of only recording palette-driven switches.
-      onImmediateActivate?.(worktree.id)
+      onImmediateActivate?.(worktree.id, activationRowKey)
       activateWorktreeFromSidebar(worktree.id)
       if (isSshDisconnected) {
         setShowDisconnectedDialog(true)
@@ -506,6 +531,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     [
       worktree.id,
       isDeleting,
+      activationRowKey,
       isSshDisconnected,
       onActivate,
       onImmediateActivate,
@@ -849,7 +875,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'rounded-lg',
         isActiveSurface
-          ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
+          ? activeSurfaceIsSecondary
+            ? 'border border-sidebar-ring/25 bg-sidebar-accent/45 shadow-none ring-1 ring-sidebar-ring/15'
+            : 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] border border-black/[0.015] dark:bg-white/[0.10] dark:border-border/40 dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
           : isMultiSelected
             ? 'border border-worktree-sidebar-ring/35 bg-worktree-sidebar-accent/70 ring-1 ring-worktree-sidebar-ring/30'
             : 'border border-transparent worktree-sidebar-card-hover',
@@ -863,7 +891,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         isSshDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
-      data-worktree-card-active={isActiveSurface ? 'true' : undefined}
+      data-worktree-card-active={isActiveSurface ? activeSurfaceVariant : undefined}
       onClick={handleClick}
       onDoubleClick={handleDoubleClick}
       draggable={nativeDragEnabled && !isDeleting && !titleRenaming}
@@ -961,7 +989,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
               titleWrapper={titleDetailsWrapper}
               onEditingChange={setTitleRenaming}
               onRename={handleRenameTitle}
-              beginEditing={renamingWorktreeId === worktree.id}
+              beginEditing={shouldBeginWorktreeRename(
+                renamingWorktreeId,
+                worktree.id,
+                renameRowKey
+              )}
               onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
             />
 

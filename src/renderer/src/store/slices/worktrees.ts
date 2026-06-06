@@ -1836,7 +1836,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     }
     // updateWorktreesMeta applies its store update synchronously (only the
     // persistence is async), so the reveal below resolves against a render
-    // where the row already sits in its new section.
+    // where the shortcut row already exists.
     void get().updateWorktreesMeta(updates)
     get().revealWorktreeInSidebar(revealWorktreeId, { behavior: 'smooth', highlight: true })
   },
@@ -2140,8 +2140,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
-  setRenamingWorktreeId: (worktreeId) => {
-    set({ renamingWorktreeId: worktreeId })
+  setRenamingWorktreeId: (request) => {
+    set({
+      renamingWorktreeId: typeof request === 'string' ? { worktreeId: request } : request
+    })
   },
 
   setActiveWorktree: (worktreeId) => {

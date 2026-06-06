@@ -3567,7 +3567,7 @@ describe('setRenamingWorktreeId', () => {
     expect(store.getState().renamingWorktreeId).toBeNull()
 
     store.getState().setRenamingWorktreeId('repo1::/feature')
-    expect(store.getState().renamingWorktreeId).toBe('repo1::/feature')
+    expect(store.getState().renamingWorktreeId).toEqual({ worktreeId: 'repo1::/feature' })
 
     store.getState().setRenamingWorktreeId(null)
     expect(store.getState().renamingWorktreeId).toBeNull()

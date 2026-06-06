@@ -43,6 +43,7 @@ import { runSleepWorktree, runSleepWorktrees } from './sleep-worktree-flow'
 
 describe('runSleepWorktree', () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
     mocks.state.setActiveWorktree.mockClear()
     mocks.state.shutdownWorktreeBrowsers.mockClear().mockResolvedValue(undefined)
     mocks.state.shutdownWorktreeTerminals.mockClear().mockResolvedValue(undefined)
@@ -108,6 +109,34 @@ describe('runSleepWorktree', () => {
     const clearCall = mocks.clearWorktreeSleepIntent.mock.invocationCallOrder[0]
     expect(markCall).toBeLessThan(activeClear)
     expect(terminalShutdown).toBeLessThan(clearCall)
+  })
+
+  it('preserves active row position through section-scoped sidebar row ids', async () => {
+    const requestAnimationFrame = vi.fn(() => 1)
+    const scroller = {
+      dispatchEvent: vi.fn(),
+      scrollHeight: 100,
+      scrollTop: 0
+    }
+    const row = {
+      closest: (selector: string) => (selector === '[data-worktree-virtual-row]' ? row : null),
+      getBoundingClientRect: () => ({ top: 42 })
+    }
+    const option = {
+      dataset: { worktreeId: 'wt-1' },
+      closest: (selector: string) => (selector === '[data-worktree-virtual-row]' ? row : null)
+    }
+    vi.stubGlobal('document', {
+      querySelector: (selector: string) =>
+        selector === '[data-worktree-sidebar]' ? scroller : null,
+      querySelectorAll: (selector: string) => (selector === '[data-worktree-id]' ? [option] : [])
+    })
+    vi.stubGlobal('window', { requestAnimationFrame })
+    mocks.state.activeWorktreeId = 'wt-1'
+
+    await runSleepWorktree('wt-1')
+
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1)
   })
 
   it('leaves activeWorktreeId alone when sleeping a background worktree', async () => {
