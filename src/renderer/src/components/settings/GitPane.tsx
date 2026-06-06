@@ -10,6 +10,7 @@ import { GitHubRateLimitPanel } from '../github/github-rate-limit-display'
 import { AutoRenameBranchFromWorkSetting } from './AutoRenameBranchFromWorkSetting'
 import { AUTO_RENAME_BRANCH_SEARCH_ENTRIES } from './auto-rename-branch-search'
 import { GitLabRateLimitPanel } from '../gitlab/gitlab-rate-limit-display'
+import { SettingsSegmentedControl } from './SettingsFormControls'
 
 export { GIT_PANE_SEARCH_ENTRIES }
 
@@ -160,6 +161,35 @@ export function GitPane({
             }`}
           />
         </button>
+      </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: 'Default Source Control Tab',
+      description: 'Choose which Source Control sub-tab opens when you switch to Source Control.',
+      keywords: ['source control', 'default tab', 'all', 'uncommitted', 'changes']
+    }) ? (
+      <SearchableSetting
+        key="source-control-default-tab"
+        title="Default Source Control Tab"
+        description="Choose which Source Control sub-tab opens when you switch to Source Control."
+        keywords={['source control', 'default tab', 'all', 'uncommitted', 'changes']}
+        className="flex items-center justify-between gap-4 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Default Source Control Tab</Label>
+          <p className="text-xs text-muted-foreground">
+            Choose which Source Control sub-tab opens when you switch to Source Control.
+          </p>
+        </div>
+        <SettingsSegmentedControl
+          ariaLabel="Default Source Control Tab"
+          value={settings.sourceControlDefaultTab ?? 'all'}
+          onChange={(option) => updateSettings({ sourceControlDefaultTab: option })}
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'uncommitted', label: 'Uncommitted' }
+          ]}
+        />
       </SearchableSetting>
     ) : null,
     shouldShowAutoRenameBranchSetting(searchQuery, hasUnsavedBranchPromptChanges) ? (

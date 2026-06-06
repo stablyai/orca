@@ -372,6 +372,10 @@ export function normalizeSourceControlViewMode(value: unknown): SourceControlVie
   return value === 'tree' || value === 'list' ? value : 'list'
 }
 
+export function normalizeSourceControlDefaultTab(value: unknown): SourceControlScope {
+  return value === 'all' || value === 'uncommitted' ? value : 'all'
+}
+
 type GitStatusSourceControlTreeNode = SourceControlTreeNode<
   GitStatusEntry,
   (typeof SECTION_ORDER)[number]
@@ -1224,7 +1228,15 @@ function SourceControlInner(): React.JSX.Element {
     pendingDiffCommentsClearCount
   ])
 
-  const [scope, setScope] = useState<SourceControlScope>('all')
+  const defaultSourceControlTab = normalizeSourceControlDefaultTab(
+    settings?.sourceControlDefaultTab
+  )
+  const [scope, setScope] = useState<SourceControlScope>(defaultSourceControlTab)
+  const defaultSourceControlTabRef = useRef(defaultSourceControlTab)
+  useEffect(() => {
+    defaultSourceControlTabRef.current = defaultSourceControlTab
+    setScope(defaultSourceControlTab)
+  }, [defaultSourceControlTab])
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
     createDefaultCollapsedSections
   )
@@ -1923,7 +1935,7 @@ function SourceControlInner(): React.JSX.Element {
   // Instead, reset worktree-specific local state here so the previous
   // worktree's UI state doesn't leak into the new one.
   useEffect(() => {
-    setScope('all')
+    setScope(defaultSourceControlTabRef.current)
     setCollapsedSections(createDefaultCollapsedSections())
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
