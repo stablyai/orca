@@ -5,7 +5,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type * as ReactModule from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { AddRepoLocalStartStep } from './AddRepoStartSteps'
+import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { getAddRepoLocalStartActions } from './add-repo-local-start-actions'
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -29,6 +31,23 @@ function renderLocalStartStep(isSshLikely: boolean): string {
       onOpenCreateStep={vi.fn()}
       onStopNestedScan={vi.fn()}
     />
+  )
+}
+
+function renderServerPathStartStep(runtimeEnvironmentId: string | null): string {
+  return renderToStaticMarkup(
+    <TooltipProvider>
+      <AddRepoServerPathStartStep
+        serverPath=""
+        runtimeEnvironmentId={runtimeEnvironmentId}
+        isAddingServerPath={false}
+        addProjectBusyLabel={null}
+        onServerPathChange={vi.fn()}
+        onAddServerPath={vi.fn()}
+        onOpenCloneStep={vi.fn()}
+        onOpenCreateStep={vi.fn()}
+      />
+    </TooltipProvider>
   )
 }
 
@@ -162,5 +181,25 @@ describe('AddRepoLocalStartStep', () => {
     await act(async () => {
       root.unmount()
     })
+  })
+})
+
+describe('AddRepoServerPathStartStep', () => {
+  it('uses native-style project entry cards in server mode', () => {
+    const markup = renderServerPathStartStep('env-1')
+
+    expect(markup).toContain('Add a project')
+    expect(markup).toContain('Add another project from the selected runtime server.')
+    expect(markup).toContain('Browse server')
+    expect(markup).toContain('Clone from URL')
+    expect(markup).toContain('Create on server')
+    expect(markup).toContain('Want to import many repos at once?')
+    expect(markup).toContain('Or enter a server path manually')
+  })
+
+  it('disables server entry cards without an active runtime environment', () => {
+    const markup = renderServerPathStartStep(null)
+
+    expect(markup).toContain('disabled=""')
   })
 })

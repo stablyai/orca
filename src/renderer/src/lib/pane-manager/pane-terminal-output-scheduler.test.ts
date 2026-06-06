@@ -281,6 +281,65 @@ describe('pane terminal output scheduler', () => {
     expect(terminal.write).not.toHaveBeenCalled()
   })
 
+  it('does not hold latency-sensitive input behind a synchronized restore fallback', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?25h\x1b[?2026l', {
+      foreground: true,
+      stripTransientCursorShows: true,
+      coalesceForeground: true
+    })
+
+    writeTerminalOutput(terminal, 'typed', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true
+    })
+
+    vi.advanceTimersByTime(31)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+
+    expect(terminal.write).toHaveBeenCalledWith(
+      '\x1b[?2026h\x1b[?25l\x1b[10;8H\x1b[?25h\x1b[?2026ltyped',
+      expect.any(Function)
+    )
+  })
+
+  it('does not hold latency-sensitive synchronized endings behind the restore fallback', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[?25h', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true,
+      holdForeground: true
+    })
+    writeTerminalOutput(terminal, '\x1b[?2026l', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true,
+      coalesceForeground: true
+    })
+
+    vi.advanceTimersByTime(31)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+
+    expect(terminal.write).toHaveBeenCalledWith(
+      '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[?25h\x1b[?2026l',
+      expect.any(Function)
+    )
+  })
+
   it('keeps transient cursor shows unless the caller opts into stripping', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
@@ -360,6 +419,28 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(1)
     vi.runOnlyPendingTimers()
     expect(terminal.write).toHaveBeenCalledWith('\x1b[?2026h\x1b[?25lpartial', expect.any(Function))
+  })
+
+  it('safety-flushes latency-sensitive synchronized holds without a visible input delay', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[?25linput redraw', {
+      foreground: true,
+      holdForeground: true,
+      latencySensitive: true
+    })
+
+    vi.advanceTimersByTime(31)
+    expect(terminal.write).not.toHaveBeenCalled()
+
+    vi.advanceTimersByTime(1)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledWith(
+      '\x1b[?2026h\x1b[?25linput redraw',
+      expect.any(Function)
+    )
   })
 
   it('drains a synchronized foreground ending after the restore coalescing window', async () => {

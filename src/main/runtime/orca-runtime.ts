@@ -19,7 +19,8 @@ import {
   getClonePathComparisonKey
 } from '../git/repo-clone-path'
 import { createHash, randomUUID } from 'crypto'
-import { isAbsolute, join } from 'path'
+import { homedir } from 'os'
+import { isAbsolute, join, resolve } from 'path'
 import { mkdir, readFile, readdir, rm, stat } from 'fs/promises'
 import { OrchestrationDb } from './orchestration/db'
 import { formatMessagesForInjection } from './orchestration/formatter'
@@ -70,8 +71,11 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab,
   TuiAgent,
-  WorkspaceCreateTelemetrySource
+  WorkspaceCreateTelemetrySource,
+  DirEntry
 } from '../../shared/types'
+import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
+import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from '../../shared/worktree-id'
@@ -786,14 +790,14 @@ type RuntimeNotifier = {
     worktreeId: string,
     filePath: string,
     relativePath: string,
-    runtimeEnvironmentId: string
+    runtimeEnvironmentId?: string | null
   ): void
   openDiff?(
     worktreeId: string,
     filePath: string,
     relativePath: string,
     staged: boolean,
-    runtimeEnvironmentId: string
+    runtimeEnvironmentId?: string | null
   ): void
   readMobileMarkdownTab?(worktreeId: string, tabId: string): Promise<RuntimeMarkdownReadTabResult>
   saveMobileMarkdownTab?(
@@ -1095,6 +1099,25 @@ async function pathExists(pathValue: string): Promise<boolean> {
   }
 }
 
+function resolveServerBrowsePath(pathValue: string): string {
+  const trimmed = pathValue.trim() || '~'
+  if (trimmed.includes('\0')) {
+    throw new Error('Path cannot contain null bytes')
+  }
+  if (trimmed === '~') {
+    return homedir()
+  }
+  if (/^~[\\/]/.test(trimmed)) {
+    return resolve(homedir(), trimmed.slice(2))
+  }
+  if (isAbsolute(trimmed)) {
+    return resolve(trimmed)
+  }
+  // Why: remote clients do not share the server process cwd; relative browse
+  // inputs are anchored to the server user's home to match the `~` picker root.
+  return resolve(homedir(), trimmed)
+}
+
 type ResolvedWorktree = Worktree & {
   parentWorktreeId: string | null
   childWorktreeIds: string[]
@@ -1253,6 +1276,7 @@ export class OrcaRuntimeService {
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
   private ptyController: RuntimePtyController | null = null
   private notifier: RuntimeNotifier | null = null
+  private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
   private forkBackfillStarted = false
   private agentBrowserBridge: AgentBrowserBridge | null = null
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
@@ -1881,6 +1905,42 @@ export class OrcaRuntimeService {
       this.forkBackfillStarted = true
       void this.backfillForkUpstreams()
     }
+  }
+
+  onClientEvent(listener: (event: RuntimeClientEvent) => void): () => void {
+    this.clientEventListeners.add(listener)
+    return () => {
+      this.clientEventListeners.delete(listener)
+    }
+  }
+
+  private emitClientEvent(event: RuntimeClientEvent): void {
+    for (const listener of this.clientEventListeners) {
+      listener(event)
+    }
+  }
+
+  private notifyWorktreesChanged(repoId: string): void {
+    this.notifier?.worktreesChanged(repoId)
+    this.emitClientEvent({ type: 'worktreesChanged', repoId })
+  }
+
+  private notifyReposChanged(): void {
+    this.notifier?.reposChanged()
+    this.emitClientEvent({ type: 'reposChanged' })
+  }
+
+  private notifyActivateWorktree(
+    repoId: string,
+    worktreeId: string,
+    setup?: CreateWorktreeResult['setup'],
+    startup?: WorktreeStartupLaunch,
+    defaultTabs?: CreateWorktreeResult['defaultTabs']
+  ): void {
+    this.notifier?.activateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    this.emitClientEvent(
+      toRuntimeActivateWorktreeEvent(repoId, worktreeId, setup, startup, defaultTabs)
+    )
   }
 
   setAgentBrowserBridge(bridge: AgentBrowserBridge | null): void {
@@ -5835,7 +5895,7 @@ export class OrcaRuntimeService {
       parentGroupId: input.parentGroupId ?? null,
       createdFrom: input.createdFrom ?? 'manual'
     })
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return group
   }
 
@@ -5848,7 +5908,7 @@ export class OrcaRuntimeService {
     }
     const updated = this.store.updateProjectGroup(groupId, updates)
     if (updated) {
-      this.notifier?.reposChanged()
+      this.notifyReposChanged()
     }
     return updated
   }
@@ -5859,7 +5919,7 @@ export class OrcaRuntimeService {
     }
     const deleted = this.store.deleteProjectGroup(groupId)
     if (deleted) {
-      this.notifier?.reposChanged()
+      this.notifyReposChanged()
     }
     return { deleted }
   }
@@ -5877,7 +5937,7 @@ export class OrcaRuntimeService {
     if (!moved) {
       throw new Error('repo_not_found')
     }
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return moved
   }
 
@@ -5886,6 +5946,29 @@ export class OrcaRuntimeService {
       throw new Error('Project path must be an absolute path')
     }
     return scanNestedRepos({ path, options: { timeoutMs: 15_000 } })
+  }
+
+  async browseServerDir(pathValue: string): Promise<{ resolvedPath: string; entries: DirEntry[] }> {
+    const dirPath = resolveServerBrowsePath(pathValue)
+    const dirStat = await stat(dirPath)
+    if (!dirStat.isDirectory()) {
+      throw new Error(`${dirPath} is not a directory`)
+    }
+    const entries = await readdir(dirPath, { withFileTypes: true })
+    const mapped = entries
+      .filter((entry) => entry.name !== '.' && entry.name !== '..')
+      .map((entry) => ({
+        name: entry.name,
+        isDirectory: entry.isDirectory(),
+        isSymlink: entry.isSymbolicLink()
+      }))
+    mapped.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) {
+        return a.isDirectory ? -1 : 1
+      }
+      return a.name.localeCompare(b.name)
+    })
+    return { resolvedPath: dirPath, entries: mapped }
   }
 
   async importNestedRepos(args: {
@@ -5970,7 +6053,7 @@ export class OrcaRuntimeService {
       }
     }
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     const rootGroup = groupResolver.getRootGroup()
     return {
       ...(rootGroup && importedCount + alreadyKnownCount > 0 ? { group: rootGroup } : {}),
@@ -6049,7 +6132,7 @@ export class OrcaRuntimeService {
     }
     this.store.addRepo(repo)
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
   }
 
@@ -6166,7 +6249,7 @@ export class OrcaRuntimeService {
     this.store.addRepo(repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return { repo: this.store.getRepo(repo.id) ?? repo }
   }
 
@@ -6285,7 +6368,7 @@ export class OrcaRuntimeService {
       if (isFolderRepo(existing)) {
         const updated = this.store.updateRepo(existing.id, { kind: 'git' })
         if (updated) {
-          this.notifier?.reposChanged()
+          this.notifyReposChanged()
           return updated
         }
       }
@@ -6307,7 +6390,7 @@ export class OrcaRuntimeService {
     this.store.addRepo(repo)
     invalidateAuthorizedRootsCache()
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return this.store.getRepo(repo.id) ?? repo
   }
 
@@ -6328,7 +6411,7 @@ export class OrcaRuntimeService {
       throw new Error('repo_not_found')
     }
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return updated
   }
 
@@ -6371,7 +6454,7 @@ export class OrcaRuntimeService {
       invalidateAuthorizedRootsCache()
     }
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return updated
   }
 
@@ -6383,7 +6466,7 @@ export class OrcaRuntimeService {
     this.store.removeProject(repo.id)
     this.invalidateResolvedWorktreeCache()
     invalidateAuthorizedRootsCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return { removed: true }
   }
 
@@ -6412,7 +6495,7 @@ export class OrcaRuntimeService {
       return { status: 'rejected' }
     }
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return { status: 'applied' }
   }
 
@@ -6586,7 +6669,7 @@ export class OrcaRuntimeService {
         changed = true
       }
       if (changed) {
-        this.notifier?.reposChanged()
+        this.notifyReposChanged()
       }
     } catch {
       // Best-effort startup backfill; never disrupt launch.
@@ -7889,7 +7972,7 @@ export class OrcaRuntimeService {
 
     // Why: inactive worktree terminal panes are renderer-owned and may not have
     // live PTYs until the desktop activates the worktree and mounts them.
-    this.notifier?.activateWorktree(repo.id, worktree.id)
+    this.notifyActivateWorktree(repo.id, worktree.id)
     return { repoId: repo.id, worktreeId: worktree.id, activated: true }
   }
 
@@ -8358,7 +8441,7 @@ export class OrcaRuntimeService {
       })
       const worktree = mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
       this.invalidateResolvedWorktreeCache()
-      this.notifier?.worktreesChanged(repo.id)
+      this.notifyWorktreesChanged(repo.id)
       const shouldActivate = args.activate === true || args.runHooks === true
       let warning: string | undefined
       let didSpawnStartup = false
@@ -8388,9 +8471,9 @@ export class OrcaRuntimeService {
       }
       if (shouldActivate) {
         if (effectiveStartup && !didSpawnStartup) {
-          this.notifier?.activateWorktree(repo.id, worktree.id, undefined, effectiveStartup)
+          this.notifyActivateWorktree(repo.id, worktree.id, undefined, effectiveStartup)
         } else {
-          this.notifier?.activateWorktree(repo.id, worktree.id)
+          this.notifyActivateWorktree(repo.id, worktree.id)
         }
       } else if (this.ptyController?.spawn && !didSpawnStartup) {
         try {
@@ -8765,7 +8848,7 @@ export class OrcaRuntimeService {
     // unknown repository or worktree path".
     invalidateAuthorizedRootsCache()
 
-    this.notifier?.worktreesChanged(repo.id)
+    this.notifyWorktreesChanged(repo.id)
     const shouldActivate = args.activate === true || args.runHooks === true
     let didSpawnStartup = false
     let didSpawnSetup = false
@@ -8844,7 +8927,7 @@ export class OrcaRuntimeService {
       // the user can watch prompts/output in a visible pane.
       const activationSetup = didSpawnSetup ? undefined : setup
       if (effectiveStartup && !didSpawnStartup) {
-        this.notifier?.activateWorktree(
+        this.notifyActivateWorktree(
           repo.id,
           worktree.id,
           activationSetup,
@@ -8852,13 +8935,7 @@ export class OrcaRuntimeService {
           defaultTabs
         )
       } else {
-        this.notifier?.activateWorktree(
-          repo.id,
-          worktree.id,
-          activationSetup,
-          undefined,
-          defaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, worktree.id, activationSetup, undefined, defaultTabs)
       }
     } else if (this.ptyController?.spawn) {
       try {
@@ -8991,7 +9068,7 @@ export class OrcaRuntimeService {
     }
 
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.worktreesChanged(repo.id)
+    this.notifyWorktreesChanged(repo.id)
 
     let warning = result.warning
     let didSpawnStartup = false
@@ -9070,7 +9147,7 @@ export class OrcaRuntimeService {
     if (shouldActivate) {
       const activationSetup = didSpawnSetup ? undefined : result.setup
       if (args.startup && !didSpawnStartup) {
-        this.notifier?.activateWorktree(
+        this.notifyActivateWorktree(
           repo.id,
           result.worktree.id,
           activationSetup,
@@ -9078,7 +9155,7 @@ export class OrcaRuntimeService {
           result.defaultTabs
         )
       } else {
-        this.notifier?.activateWorktree(
+        this.notifyActivateWorktree(
           repo.id,
           result.worktree.id,
           activationSetup,
@@ -9587,7 +9664,7 @@ export class OrcaRuntimeService {
     // Why: unlike renderer-initiated optimistic updates, CLI callers need an
     // explicit push so the editor refreshes metadata changed outside the UI.
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.worktreesChanged(worktree.repoId)
+    this.notifyWorktreesChanged(worktree.repoId)
     return await this.showManagedWorktree(`id:${worktree.id}`)
   }
 
@@ -9602,7 +9679,7 @@ export class OrcaRuntimeService {
       updated++
     }
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.reposChanged()
+    this.notifyReposChanged()
     return { updated }
   }
 
@@ -10037,7 +10114,7 @@ export class OrcaRuntimeService {
         this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
         this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
         this.invalidateResolvedWorktreeCache()
-        this.notifier?.worktreesChanged(repo.id)
+        this.notifyWorktreesChanged(repo.id)
         return {}
       }
       const provider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
@@ -10111,7 +10188,7 @@ export class OrcaRuntimeService {
           this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
           this.invalidateResolvedWorktreeCache()
           invalidateAuthorizedRootsCache()
-          this.notifier?.worktreesChanged(repo.id)
+          this.notifyWorktreesChanged(repo.id)
           return {}
         }
         if (await isRuntimeWorktreePathMissing(repo, removalTarget.path)) {
@@ -10137,7 +10214,7 @@ export class OrcaRuntimeService {
           this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
           this.invalidateResolvedWorktreeCache()
           invalidateAuthorizedRootsCache()
-          this.notifier?.worktreesChanged(repo.id)
+          this.notifyWorktreesChanged(repo.id)
           return {}
         }
         throw new Error(`Refusing to delete unregistered worktree path: ${removalTarget.path}`)
@@ -10169,7 +10246,7 @@ export class OrcaRuntimeService {
         this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
         this.invalidateResolvedWorktreeCache()
         invalidateAuthorizedRootsCache()
-        this.notifier?.worktreesChanged(repo.id)
+        this.notifyWorktreesChanged(repo.id)
         return removalResult ?? {}
       }
 
@@ -10259,7 +10336,7 @@ export class OrcaRuntimeService {
           this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
           this.invalidateResolvedWorktreeCache()
           invalidateAuthorizedRootsCache()
-          this.notifier?.worktreesChanged(repo.id)
+          this.notifyWorktreesChanged(repo.id)
           return {
             ...(warning ? { warning } : {})
           }
@@ -10283,7 +10360,7 @@ export class OrcaRuntimeService {
       this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
       this.invalidateResolvedWorktreeCache()
       invalidateAuthorizedRootsCache()
-      this.notifier?.worktreesChanged(repo.id)
+      this.notifyWorktreesChanged(repo.id)
       return {
         ...removalResult,
         ...(warning ? { warning } : {})
@@ -11802,7 +11879,7 @@ export class OrcaRuntimeService {
    *  name surfaces without waiting for the next ambient refresh. */
   notifyBranchRenamed(repoId: string): void {
     this.invalidateResolvedWorktreeCache()
-    this.notifier?.worktreesChanged(repoId)
+    this.notifyWorktreesChanged(repoId)
   }
 
   private recordPtyWorktree(

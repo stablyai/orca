@@ -73,10 +73,10 @@ describe('getFeatureWallSetupProgress', () => {
       'two-worktrees',
       'notifications',
       'default-agent',
+      'agent-capabilities',
       'task-sources',
       'setup-script',
-      'add-two-repos',
-      'agent-capabilities'
+      'add-two-repos'
     ])
   })
 
@@ -88,10 +88,10 @@ describe('getFeatureWallSetupProgress', () => {
     expect(getFeatureWallSetupStepsForSection('setup').map((step) => step.id)).toEqual([
       'notifications',
       'default-agent',
+      'agent-capabilities',
       'task-sources',
       'setup-script',
-      'add-two-repos',
-      'agent-capabilities'
+      'add-two-repos'
     ])
   })
 

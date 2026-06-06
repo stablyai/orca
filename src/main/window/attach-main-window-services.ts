@@ -272,14 +272,14 @@ function registerRuntimeWindowLifecycle(
     closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId) =>
+    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
       send('ui:openFileFromMobile', {
         worktreeId,
         filePath,
         relativePath,
         runtimeEnvironmentId
       }),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId) =>
+    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?) =>
       send('ui:openDiffFromMobile', {
         worktreeId,
         filePath,

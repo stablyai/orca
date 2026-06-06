@@ -50,6 +50,13 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
     description: 'Start new work faster with your preferred agent already selected.'
   },
   {
+    id: 'agent-capabilities',
+    name: 'Enable Orca CLI',
+    subtitle: 'Enable Orca CLI',
+    description:
+      'Register the Orca shell command and install agent skills for browser, computer, and orchestration workflows.'
+  },
+  {
     id: 'task-sources',
     name: 'Connect integrations',
     subtitle: 'Connect integrations',
@@ -68,12 +75,6 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
     subtitle: 'Start work in multiple repos',
     description:
       'Bring your key repos into Orca so you can start agent work without hunting for folders.'
-  },
-  {
-    id: 'agent-capabilities',
-    name: 'Enable Orca CLI',
-    subtitle: 'Enable Orca CLI',
-    description: 'Let agents use the browser, computer, and orchestration tools.'
   }
 ] as const
 

@@ -123,6 +123,7 @@ function FileExplorerInner(): React.JSX.Element {
     setSelectedPaths,
     resetSelection,
     selectRowWithModifiers,
+    moveSelection,
     preserveSelectionForContextMenu,
     copyPathsForNode
   } = useFileExplorerSelection(rowProjection, isMac)
@@ -322,17 +323,6 @@ function FileExplorerInner(): React.JSX.Element {
     () => rowProjection.getRowsByPaths(selectedPaths),
     [rowProjection, selectedPaths]
   )
-  useFileExplorerKeys({
-    containerRef: explorerShellRef,
-    rowProjection,
-    inlineInput,
-    selectedPaths,
-    selectedNode,
-    startRename,
-    requestDelete,
-    requestDeleteAll
-  })
-
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
     activeWorktreeId,
     openFile,
@@ -343,6 +333,38 @@ function FileExplorerInner(): React.JSX.Element {
     markPathAsDirectory,
     setSelectedPath: setSingleSelectedPath,
     scrollRef
+  })
+
+  // Why: pass a stable activator so arrow-key navigation can hand the same
+  // activate-toggles-folder / open-file-preview behavior the click handler
+  // already uses, without the keyboard path re-implementing symlink handling.
+  const activateNode = useCallback(
+    (node: TreeNode) => {
+      void handleClick(node)
+    },
+    [handleClick]
+  )
+  const scrollToIndex = useCallback(
+    (index: number) => {
+      virtualizer.scrollToIndex(index, { align: 'auto' })
+    },
+    [virtualizer]
+  )
+
+  useFileExplorerKeys({
+    containerRef: explorerShellRef,
+    rowProjection,
+    inlineInput,
+    selectedPaths,
+    selectedNode,
+    activateNode,
+    moveSelection,
+    toggleDir,
+    startRename,
+    requestDelete,
+    requestDeleteAll,
+    scrollToIndex,
+    activeWorktreeId
   })
 
   // Why: context-menu Delete should respect the multi-selection — if the

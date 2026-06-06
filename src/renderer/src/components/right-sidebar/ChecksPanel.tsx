@@ -50,6 +50,7 @@ import type {
   PRComment
 } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
+import { openHttpLink } from '@/lib/http-link-routing'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
@@ -2100,9 +2101,12 @@ export default function ChecksPanel(): React.JSX.Element {
   // Open hosted review in browser
   const handleOpenPR = useCallback(() => {
     if (activeReview?.url) {
-      window.api.shell.openUrl(activeReview.url)
+      // Why: route through openHttpLink so the PR/MR link honors the "open links
+      // in app" setting and lands in the Orca browser, matching terminal/editor
+      // links — instead of always launching the system browser.
+      openHttpLink(activeReview.url, { worktreeId: activeWorktreeId })
     }
-  }, [activeReview])
+  }, [activeReview, activeWorktreeId])
 
   const handleUnlinkPullRequest = useCallback(() => {
     if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {

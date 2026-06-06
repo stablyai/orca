@@ -301,6 +301,7 @@ const AddRepoDialog = React.memo(function AddRepoDialog() {
         <AddRepoDialogStepContent
           step={step}
           isRuntimeEnvironmentActive={isRuntimeEnvironmentActive}
+          activeRuntimeEnvironmentId={settings?.activeRuntimeEnvironmentId}
           isSshLikely={isSshLikely}
           repoCount={repos.length}
           isAdding={isAdding}

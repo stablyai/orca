@@ -2,7 +2,8 @@ import type { Dispatch, SetStateAction } from 'react'
 import { CloneStep } from './AddRepoSteps'
 import { RemoteStep } from './AddRepoRemoteStep'
 import { CreateStep } from './AddRepoCreateStep'
-import { AddRepoLocalStartStep, AddRepoServerPathStartStep } from './AddRepoStartSteps'
+import { AddRepoLocalStartStep } from './AddRepoStartSteps'
+import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from './AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import type { NestedRepoScanResult } from '../../../../shared/types'
@@ -11,6 +12,7 @@ import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types
 type AddRepoDialogStepContentProps = {
   step: AddRepoDialogStep
   isRuntimeEnvironmentActive: boolean
+  activeRuntimeEnvironmentId: string | null | undefined
   isSshLikely: boolean
   repoCount: number
   isAdding: boolean
@@ -68,6 +70,7 @@ type AddRepoDialogStepContentProps = {
 export function AddRepoDialogStepContent({
   step,
   isRuntimeEnvironmentActive,
+  activeRuntimeEnvironmentId,
   isSshLikely,
   repoCount,
   isAdding,
@@ -125,6 +128,7 @@ export function AddRepoDialogStepContent({
     return (
       <AddRepoServerPathStartStep
         serverPath={serverPath}
+        runtimeEnvironmentId={activeRuntimeEnvironmentId}
         isAddingServerPath={isAddingServerPath}
         addProjectBusyLabel={addProjectBusyLabel}
         onServerPathChange={onServerPathChange}
@@ -181,6 +185,7 @@ export function AddRepoDialogStepContent({
         cloneProgress={cloneProgress}
         isCloning={isCloning}
         disableDestinationPicker={isRuntimeEnvironmentActive}
+        runtimeEnvironmentId={activeRuntimeEnvironmentId}
         onUrlChange={onCloneUrlChange}
         onDestChange={onCloneDestinationChange}
         onPickDestination={onPickCloneDestination}
@@ -215,6 +220,7 @@ export function AddRepoDialogStepContent({
         createError={createError}
         isCreating={isCreating}
         manualParentEntry={isRuntimeEnvironmentActive}
+        runtimeEnvironmentId={activeRuntimeEnvironmentId}
         onNameChange={onCreateNameChange}
         onParentChange={onCreateParentChange}
         onKindChange={onCreateKindChange}

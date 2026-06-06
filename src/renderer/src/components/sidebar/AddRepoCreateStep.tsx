@@ -1,7 +1,7 @@
 // Step for AddRepoDialog (orca#763), split out so create-project state stays scoped.
 import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Folder, GitBranch, Home, Pencil } from 'lucide-react'
+import { Folder, GitBranch } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -12,6 +12,10 @@ import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/types'
+import {
+  CreateProjectLocationField,
+  CreateProjectParentBrowser
+} from './CreateProjectLocationField'
 
 type RepoKind = 'git' | 'folder'
 
@@ -256,6 +260,7 @@ type CreateStepProps = {
   createError: string | null
   isCreating: boolean
   manualParentEntry?: boolean
+  runtimeEnvironmentId?: string | null
   onNameChange: (value: string) => void
   onParentChange: (value: string) => void
   onKindChange: (kind: RepoKind) => void
@@ -270,6 +275,7 @@ export function CreateStep({
   createError,
   isCreating,
   manualParentEntry = false,
+  runtimeEnvironmentId,
   onNameChange,
   onParentChange,
   onKindChange,
@@ -278,6 +284,7 @@ export function CreateStep({
 }: CreateStepProps): React.JSX.Element {
   const radioGroupRef = useRef<HTMLDivElement>(null)
   const radioFocusFrameRef = useRef<number | null>(null)
+  const [browsingParent, setBrowsingParent] = useState(false)
 
   const cancelRadioFocusFrame = useCallback((): void => {
     if (radioFocusFrameRef.current === null) {
@@ -313,6 +320,17 @@ export function CreateStep({
   }, [cancelRadioFocusFrame, createKind, onKindChange])
 
   const canSubmit = createName.trim().length > 0 && createParent.trim().length > 0 && !isCreating
+
+  if (browsingParent && runtimeEnvironmentId) {
+    return (
+      <CreateProjectParentBrowser
+        runtimeEnvironmentId={runtimeEnvironmentId}
+        createParent={createParent}
+        onParentChange={onParentChange}
+        onClose={() => setBrowsingParent(false)}
+      />
+    )
+  }
 
   return (
     <>
@@ -378,54 +396,16 @@ export function CreateStep({
           />
         </div>
 
-        {/* Location. The local flow uses a folder picker; runtime servers need
-          manual server-path entry because the client cannot browse that filesystem yet. */}
-        <div className="space-y-1">
-          <span className="text-[11px] font-medium text-muted-foreground block">Location</span>
-
-          {manualParentEntry ? (
-            <Input
-              value={createParent}
-              onChange={(e) => onParentChange(e.target.value)}
-              placeholder="/home/user/projects"
-              className="h-11 text-sm font-mono"
-              disabled={isCreating}
-              spellCheck={false}
-            />
-          ) : createParent ? (
-            <div className="group flex items-center gap-2.5 rounded-md border border-border bg-background/40 h-11 min-w-0 px-3 text-sm">
-              <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/50 text-muted-foreground">
-                <Home className="size-3.5" />
-              </span>
-              <span className="flex-1 min-w-0 truncate font-mono text-[12px]" title={createParent}>
-                {createParent}
-              </span>
-              <button
-                type="button"
-                onClick={onPickParent}
-                disabled={isCreating}
-                className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:cursor-not-allowed"
-                aria-label="Change parent folder"
-              >
-                <Pencil className="size-3" />
-                Change
-              </button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onPickParent}
-              disabled={isCreating}
-              className="w-full h-11 justify-start text-sm text-muted-foreground font-normal gap-2.5"
-            >
-              <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/40">
-                <Folder className="size-3.5" />
-              </span>
-              Choose parent folder…
-            </Button>
-          )}
-        </div>
+        {/* The local picker returns client paths; runtime servers browse host paths via RPC. */}
+        <CreateProjectLocationField
+          createParent={createParent}
+          isCreating={isCreating}
+          manualParentEntry={manualParentEntry}
+          runtimeEnvironmentId={runtimeEnvironmentId}
+          onParentChange={onParentChange}
+          onPickParent={onPickParent}
+          onBrowseServer={() => setBrowsingParent(true)}
+        />
 
         {createError && (
           <p className="text-[11px] text-destructive" role="alert">
