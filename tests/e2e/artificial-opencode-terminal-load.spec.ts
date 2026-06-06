@@ -1,0 +1,420 @@
+import type { Page, TestInfo } from '@stablyai/playwright-test'
+import { randomUUID } from 'node:crypto'
+import { rmSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { test, expect } from './helpers/orca-app'
+import {
+  ensureTerminalVisible,
+  getActiveWorktreeId,
+  getAllWorktreeIds,
+  switchToWorktree,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from './helpers/store'
+import {
+  execInTerminal,
+  getTerminalContent,
+  sendToTerminal,
+  splitActiveTerminalPane,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot,
+  waitForTerminalOutput
+} from './helpers/terminal'
+
+type TerminalLoadPane = {
+  paneKey: string
+  ptyId: string
+}
+
+type TypingMeasurement = {
+  latencies: number[]
+  medianLatencyMs: number
+  worstLatencyMs: number
+  maxTimerDriftMs: number
+  frameCount: number
+}
+
+type SyntheticOpenCodeWindow = Window & {
+  __terminalPtyDataInjection?: {
+    inject: (paneKey: string, data: string) => boolean
+  }
+}
+
+const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
+const DEFAULT_SAME_WORKSPACE_PANES = 5
+const DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE = 3
+const DEFAULT_FRAME_COUNT = 180
+const DEFAULT_FRAME_INTERVAL_MS = 6
+const TIMER_SAMPLE_MS = 16
+const MAX_MEDIAN_KEY_LATENCY_MS = 300
+const MAX_WORST_KEY_LATENCY_MS = 1_200
+const MAX_TIMER_DRIFT_MS = 300
+
+function readPositiveInt(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (!raw) {
+    return fallback
+  }
+  const value = Number(raw)
+  return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+const SAME_WORKSPACE_PANES = readPositiveInt(
+  'ORCA_E2E_OPENCODE_SAME_WORKSPACE_PANES',
+  DEFAULT_SAME_WORKSPACE_PANES
+)
+const CROSS_WORKSPACE_PANES_PER_WORKTREE = readPositiveInt(
+  'ORCA_E2E_OPENCODE_CROSS_WORKSPACE_PANES',
+  DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE
+)
+const FRAME_COUNT = readPositiveInt('ORCA_E2E_OPENCODE_FRAME_COUNT', DEFAULT_FRAME_COUNT)
+const FRAME_INTERVAL_MS = readPositiveInt(
+  'ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS',
+  DEFAULT_FRAME_INTERVAL_MS
+)
+
+function interactivePromptScript(runId: string): string {
+  return `
+process.stdin.setEncoding('utf8')
+if (process.stdin.isTTY) process.stdin.setRawMode(true)
+process.stdin.resume()
+let seq = 0
+const interrupt = String.fromCharCode(3)
+process.stdout.write('\\x1b]0;OpenCode load typing benchmark\\x07')
+process.stdout.write('OPENCODE_TYPING_READY_${runId}\\n')
+process.stdin.on('data', (chunk) => {
+  if (chunk.includes(interrupt)) {
+    process.exit(0)
+  }
+  for (const char of chunk) {
+    if (char === '\\r' || char === '\\n') continue
+    seq += 1
+    process.stdout.write('\\r\\x1b[2KOpenCode load prompt ' + seq + ': ' + char + ' OPENCODE_TYPING_KEY_${runId}_' + seq + '\\n')
+  }
+})
+`
+}
+
+function syntheticOpenCodeNodeCommand(runId: string, paneIndex: number): string {
+  const script = `
+let frame = 0
+const frames = ${FRAME_COUNT}
+const timer = setInterval(() => {
+  const row = frame % 18 + 4
+  const spinner = ['|','/','-','\\\\'][frame % 4]
+  process.stdout.write('\\x1b[?2026h\\x1b[?25l')
+  process.stdout.write('\\x1b[1;2H\\x1b[38;2;255;138;0m' + spinner + ' OpenCode hidden agent ${paneIndex}\\x1b[0m')
+  process.stdout.write('\\x1b[' + row + ';4H\\x1b[38;2;231;237;247m' + ('opencode '.repeat(10) + 'hidden=${paneIndex} frame=' + frame).padEnd(118, '#') + '\\x1b[0m')
+  process.stdout.write('\\x1b[23;2H\\x1b[38;2;106;169;255m${runId} ' + String(frame).padStart(4, '0') + ' ' + '#'.repeat(96) + '\\x1b[0m')
+  process.stdout.write('\\x1b[?2026l')
+  frame += 1
+  if (frame >= frames) {
+    clearInterval(timer)
+    process.stdout.write('\\nOPENCODE_HIDDEN_DONE_${runId}_${paneIndex}\\n')
+  }
+}, ${FRAME_INTERVAL_MS})
+`
+  return `node -e ${JSON.stringify(script)}`
+}
+
+async function focusActiveTerminalInput(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const textarea = pane?.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+    if (!pane || !textarea) {
+      throw new Error('Active terminal input is unavailable')
+    }
+    pane.terminal.focus()
+    textarea.focus()
+  })
+}
+
+async function focusPane(page: Page, paneKey: string): Promise<void> {
+  const separator = paneKey.indexOf(':')
+  const tabId = paneKey.slice(0, separator)
+  const leafId = paneKey.slice(separator + 1)
+  await page.evaluate(
+    ({ tabId, leafId }) => {
+      const manager = window.__paneManagers?.get(tabId)
+      const pane = manager?.getPanes?.().find((candidate) => candidate.leafId === leafId)
+      if (!manager || !pane) {
+        throw new Error(`Unable to focus pane ${tabId}:${leafId}`)
+      }
+      manager.setActivePane?.(pane.id, { focus: true })
+    },
+    { tabId, leafId }
+  )
+}
+
+async function ensureActiveWorktreePaneLoad(
+  page: Page,
+  paneCount: number
+): Promise<TerminalLoadPane[]> {
+  await ensureTerminalVisible(page)
+  await waitForActiveTerminalManager(page, 30_000)
+  let snapshot = await waitForPaneIdentitySnapshot(page, 1)
+  while (snapshot.panes.length < paneCount) {
+    await splitActiveTerminalPane(page, snapshot.panes.length % 2 === 0 ? 'horizontal' : 'vertical')
+    snapshot = await waitForPaneIdentitySnapshot(page, snapshot.panes.length + 1)
+  }
+  return snapshot.panes.slice(0, paneCount).map((pane) => ({
+    paneKey: `${snapshot.tabId}:${pane.leafId}`,
+    ptyId: pane.ptyId ?? ''
+  }))
+}
+
+async function waitForMarkerLatency(
+  page: Page,
+  marker: string,
+  timeoutMs: number
+): Promise<number> {
+  const start = performance.now()
+  while (performance.now() - start < timeoutMs) {
+    if ((await getTerminalContent(page, 12_000)).includes(marker)) {
+      return performance.now() - start
+    }
+    await page.waitForTimeout(5)
+  }
+  throw new Error(`Timed out waiting for terminal marker ${marker}`)
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b)
+  return sorted[Math.floor(sorted.length / 2)] ?? 0
+}
+
+async function startSyntheticOpenCodeInjection(
+  page: Page,
+  paneKeys: string[]
+): Promise<{ stop: () => Promise<void> }> {
+  await page.evaluate(
+    ({ paneKeys, frameCount, intervalMs }) => {
+      const target = window as SyntheticOpenCodeWindow & {
+        __syntheticOpenCodeLoadTimer?: number
+      }
+      const injector = target.__terminalPtyDataInjection
+      if (!injector) {
+        throw new Error('terminal PTY data injection API is unavailable')
+      }
+      let frameIndex = 0
+      target.__syntheticOpenCodeLoadTimer = window.setInterval(() => {
+        for (const [paneIndex, paneKey] of paneKeys.entries()) {
+          const injected = injector.inject(
+            paneKey,
+            syntheticOpenCodeFrameSource(paneIndex, frameIndex)
+          )
+          if (!injected) {
+            throw new Error(`no PTY data injector registered for pane key ${paneKey}`)
+          }
+        }
+        frameIndex += 1
+        if (frameIndex >= frameCount && target.__syntheticOpenCodeLoadTimer != null) {
+          window.clearInterval(target.__syntheticOpenCodeLoadTimer)
+          delete target.__syntheticOpenCodeLoadTimer
+        }
+      }, intervalMs)
+
+      function syntheticOpenCodeFrameSource(paneIndex: number, frame: number): string {
+        const row = (frame % 18) + 4
+        const spinner = ['|', '/', '-', '\\'][frame % 4]
+        const body = `${'opencode '.repeat(10)}pane=${paneIndex} frame=${frame}`
+        return [
+          '\x1b[?2026h',
+          '\x1b[?25l',
+          `\x1b[1;2H\x1b[38;2;255;138;0m${spinner} OpenCode synthetic agent ${paneIndex}\x1b[0m`,
+          `\x1b[${row};4H\x1b[38;2;231;237;247m${body.padEnd(118, '#')}\x1b[0m`,
+          `\x1b[23;2H\x1b[38;2;106;169;255mstream ${String(frame).padStart(4, '0')} ${'#'.repeat(96)}\x1b[0m`,
+          '\x1b[?2026l'
+        ].join('')
+      }
+    },
+    { paneKeys, frameCount: FRAME_COUNT, intervalMs: FRAME_INTERVAL_MS }
+  )
+  return {
+    stop: async () => {
+      await page.evaluate(() => {
+        const target = window as SyntheticOpenCodeWindow & {
+          __syntheticOpenCodeLoadTimer?: number
+        }
+        if (target.__syntheticOpenCodeLoadTimer != null) {
+          window.clearInterval(target.__syntheticOpenCodeLoadTimer)
+          delete target.__syntheticOpenCodeLoadTimer
+        }
+      })
+    }
+  }
+}
+
+async function measureTypingDuringLoad(
+  page: Page,
+  scriptPath: string,
+  ptyId: string,
+  runId: string
+): Promise<TypingMeasurement> {
+  await sendToTerminal(page, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+  await waitForTerminalOutput(page, `OPENCODE_TYPING_READY_${runId}`, 10_000)
+  await focusActiveTerminalInput(page)
+
+  const eventLoop = await page.evaluateHandle((sampleMs) => {
+    let maxTimerDriftMs = 0
+    let lastTick = performance.now()
+    const timer = window.setInterval(() => {
+      const now = performance.now()
+      maxTimerDriftMs = Math.max(maxTimerDriftMs, now - lastTick - sampleMs)
+      lastTick = now
+    }, sampleMs)
+    return {
+      stop: () => {
+        window.clearInterval(timer)
+        return maxTimerDriftMs
+      }
+    }
+  }, TIMER_SAMPLE_MS)
+
+  const latencies: number[] = []
+  for (const [index, char] of [...KEY_LATENCY_SAMPLES].entries()) {
+    const marker = `OPENCODE_TYPING_KEY_${runId}_${index + 1}`
+    const start = performance.now()
+    await page.keyboard.type(char)
+    await waitForMarkerLatency(page, marker, MAX_WORST_KEY_LATENCY_MS)
+    latencies.push(performance.now() - start)
+  }
+
+  const maxTimerDriftMs = await eventLoop.evaluate((watcher) => watcher.stop())
+  await eventLoop.dispose()
+  return {
+    latencies,
+    medianLatencyMs: median(latencies),
+    worstLatencyMs: Math.max(...latencies),
+    maxTimerDriftMs,
+    frameCount: FRAME_COUNT
+  }
+}
+
+function annotateTypingMeasurement(
+  testInfo: TestInfo,
+  type: string,
+  paneCount: number,
+  measurement: TypingMeasurement
+): void {
+  testInfo.annotations.push({
+    type,
+    description: `panes=${paneCount} frames=${measurement.frameCount} median=${measurement.medianLatencyMs.toFixed(
+      1
+    )}ms worst=${measurement.worstLatencyMs.toFixed(
+      1
+    )}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(1)}ms samples=${measurement.latencies
+      .map((value) => value.toFixed(1))
+      .join(',')}`
+  })
+}
+
+test.describe('Artificial OpenCode terminal load', () => {
+  test('keeps typing responsive while same-workspace panes redraw simultaneously', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    const panes = await ensureActiveWorktreePaneLoad(orcaPage, SAME_WORKSPACE_PANES)
+    const [typingPane, ...loadPanes] = panes
+    await focusPane(orcaPage, typingPane.paneKey)
+
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-opencode-typing-${runId}.mjs`)
+    writeFileSync(scriptPath, interactivePromptScript(runId))
+    const load = await startSyntheticOpenCodeInjection(
+      orcaPage,
+      loadPanes.map((pane) => pane.paneKey)
+    )
+    try {
+      const measurement = await measureTypingDuringLoad(
+        orcaPage,
+        scriptPath,
+        typingPane.ptyId,
+        runId
+      )
+      annotateTypingMeasurement(
+        testInfo,
+        'opencode-same-workspace-typing',
+        panes.length,
+        measurement
+      )
+      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
+    } finally {
+      await load.stop()
+      await sendToTerminal(orcaPage, typingPane.ptyId, '\x03').catch(() => undefined)
+      rmSync(scriptPath, { force: true })
+    }
+  })
+
+  test('keeps typing responsive while another workspace streams OpenCode-style output', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+    const allWorktreeIds = await getAllWorktreeIds(orcaPage)
+    const secondWorktreeId = allWorktreeIds.find((id) => id !== firstWorktreeId)
+    test.skip(
+      !secondWorktreeId,
+      'OpenCode cross-workspace load needs the seeded secondary worktree'
+    )
+    if (!secondWorktreeId) {
+      return
+    }
+
+    await switchToWorktree(orcaPage, secondWorktreeId)
+    const hiddenPanes = await ensureActiveWorktreePaneLoad(
+      orcaPage,
+      CROSS_WORKSPACE_PANES_PER_WORKTREE
+    )
+    const hiddenRunId = randomUUID()
+    for (const [index, pane] of hiddenPanes.entries()) {
+      await execInTerminal(orcaPage, pane.ptyId, syntheticOpenCodeNodeCommand(hiddenRunId, index))
+    }
+
+    await switchToWorktree(orcaPage, firstWorktreeId)
+    await expect
+      .poll(() => getActiveWorktreeId(orcaPage), { timeout: 10_000 })
+      .toBe(firstWorktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const typingPtyId = await waitForActivePanePtyId(orcaPage)
+
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-opencode-cross-typing-${runId}.mjs`)
+    writeFileSync(scriptPath, interactivePromptScript(runId))
+    try {
+      const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
+      annotateTypingMeasurement(
+        testInfo,
+        'opencode-cross-workspace-typing',
+        hiddenPanes.length + 1,
+        measurement
+      )
+      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
+    } finally {
+      await sendToTerminal(orcaPage, typingPtyId, '\x03').catch(() => undefined)
+      for (const pane of hiddenPanes) {
+        await sendToTerminal(orcaPage, pane.ptyId, '\x03').catch(() => undefined)
+      }
+      rmSync(scriptPath, { force: true })
+    }
+  })
+})
