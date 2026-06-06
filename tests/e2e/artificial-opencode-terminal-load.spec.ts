@@ -12,7 +12,6 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import {
-  execInTerminal,
   getTerminalContent,
   sendToTerminal,
   splitActiveTerminalPane,
@@ -39,6 +38,16 @@ type SyntheticOpenCodeWindow = Window & {
   __terminalPtyDataInjection?: {
     inject: (paneKey: string, data: string) => boolean
   }
+  __terminalPtyOutputDebug?: {
+    reset: () => void
+    snapshot: () => TerminalPtyOutputDebugSnapshot
+  }
+}
+
+type TerminalPtyOutputDebugSnapshot = {
+  hiddenRendererSkipCount: number
+  hiddenRendererSkippedChars: number
+  hiddenRendererMode2031ReplyCount: number
 }
 
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
@@ -94,28 +103,6 @@ process.stdin.on('data', (chunk) => {
   }
 })
 `
-}
-
-function syntheticOpenCodeNodeCommand(runId: string, paneIndex: number): string {
-  const script = `
-let frame = 0
-const frames = ${FRAME_COUNT}
-const timer = setInterval(() => {
-  const row = frame % 18 + 4
-  const spinner = ['|','/','-','\\\\'][frame % 4]
-  process.stdout.write('\\x1b[?2026h\\x1b[?25l')
-  process.stdout.write('\\x1b[1;2H\\x1b[38;2;255;138;0m' + spinner + ' OpenCode hidden agent ${paneIndex}\\x1b[0m')
-  process.stdout.write('\\x1b[' + row + ';4H\\x1b[38;2;231;237;247m' + ('opencode '.repeat(10) + 'hidden=${paneIndex} frame=' + frame).padEnd(118, '#') + '\\x1b[0m')
-  process.stdout.write('\\x1b[23;2H\\x1b[38;2;106;169;255m${runId} ' + String(frame).padStart(4, '0') + ' ' + '#'.repeat(96) + '\\x1b[0m')
-  process.stdout.write('\\x1b[?2026l')
-  frame += 1
-  if (frame >= frames) {
-    clearInterval(timer)
-    process.stdout.write('\\nOPENCODE_HIDDEN_DONE_${runId}_${paneIndex}\\n')
-  }
-}, ${FRAME_INTERVAL_MS})
-`
-  return `node -e ${JSON.stringify(script)}`
 }
 
 async function focusActiveTerminalInput(page: Page): Promise<void> {
@@ -302,12 +289,30 @@ async function measureTypingDuringLoad(
   }
 }
 
+async function resetTerminalPtyOutputDebug(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(window as SyntheticOpenCodeWindow).__terminalPtyOutputDebug?.reset()
+  })
+}
+
+async function readTerminalPtyOutputDebug(
+  page: Page
+): Promise<TerminalPtyOutputDebugSnapshot | null> {
+  return page.evaluate(() => {
+    return (window as SyntheticOpenCodeWindow).__terminalPtyOutputDebug?.snapshot() ?? null
+  })
+}
+
 function annotateTypingMeasurement(
   testInfo: TestInfo,
   type: string,
   paneCount: number,
-  measurement: TypingMeasurement
+  measurement: TypingMeasurement,
+  debug: TerminalPtyOutputDebugSnapshot | null = null
 ): void {
+  const hiddenSkipSummary = debug
+    ? ` hiddenSkips=${debug.hiddenRendererSkipCount} hiddenSkippedChars=${debug.hiddenRendererSkippedChars} mode2031Replies=${debug.hiddenRendererMode2031ReplyCount}`
+    : ''
   testInfo.annotations.push({
     type,
     description: `panes=${paneCount} frames=${measurement.frameCount} median=${measurement.medianLatencyMs.toFixed(
@@ -316,11 +321,40 @@ function annotateTypingMeasurement(
       1
     )}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(1)}ms samples=${measurement.latencies
       .map((value) => value.toFixed(1))
-      .join(',')}`
+      .join(',')}${hiddenSkipSummary}`
   })
 }
 
 test.describe('Artificial OpenCode terminal load', () => {
+  test.describe.configure({ mode: 'serial' })
+
+  test('measures baseline typing responsiveness with one active terminal', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const typingPtyId = await waitForActivePanePtyId(orcaPage)
+
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-opencode-baseline-typing-${runId}.mjs`)
+    writeFileSync(scriptPath, interactivePromptScript(runId))
+    await resetTerminalPtyOutputDebug(orcaPage)
+    try {
+      const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
+      const debug = await readTerminalPtyOutputDebug(orcaPage)
+      annotateTypingMeasurement(testInfo, 'opencode-baseline-typing', 1, measurement, debug)
+      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
+    } finally {
+      await sendToTerminal(orcaPage, typingPtyId, '\x03').catch(() => undefined)
+      rmSync(scriptPath, { force: true })
+    }
+  })
+
   test('keeps typing responsive while same-workspace panes redraw simultaneously', async ({
     orcaPage,
     testRepoPath
@@ -334,6 +368,7 @@ test.describe('Artificial OpenCode terminal load', () => {
     const runId = randomUUID()
     const scriptPath = path.join(testRepoPath, `.orca-opencode-typing-${runId}.mjs`)
     writeFileSync(scriptPath, interactivePromptScript(runId))
+    await resetTerminalPtyOutputDebug(orcaPage)
     const load = await startSyntheticOpenCodeInjection(
       orcaPage,
       loadPanes.map((pane) => pane.paneKey)
@@ -349,7 +384,8 @@ test.describe('Artificial OpenCode terminal load', () => {
         testInfo,
         'opencode-same-workspace-typing',
         panes.length,
-        measurement
+        measurement,
+        await readTerminalPtyOutputDebug(orcaPage)
       )
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
@@ -382,10 +418,6 @@ test.describe('Artificial OpenCode terminal load', () => {
       orcaPage,
       CROSS_WORKSPACE_PANES_PER_WORKTREE
     )
-    const hiddenRunId = randomUUID()
-    for (const [index, pane] of hiddenPanes.entries()) {
-      await execInTerminal(orcaPage, pane.ptyId, syntheticOpenCodeNodeCommand(hiddenRunId, index))
-    }
 
     await switchToWorktree(orcaPage, firstWorktreeId)
     await expect
@@ -398,22 +430,26 @@ test.describe('Artificial OpenCode terminal load', () => {
     const runId = randomUUID()
     const scriptPath = path.join(testRepoPath, `.orca-opencode-cross-typing-${runId}.mjs`)
     writeFileSync(scriptPath, interactivePromptScript(runId))
+    await resetTerminalPtyOutputDebug(orcaPage)
+    const load = await startSyntheticOpenCodeInjection(
+      orcaPage,
+      hiddenPanes.map((pane) => pane.paneKey)
+    )
     try {
       const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
       annotateTypingMeasurement(
         testInfo,
         'opencode-cross-workspace-typing',
         hiddenPanes.length + 1,
-        measurement
+        measurement,
+        await readTerminalPtyOutputDebug(orcaPage)
       )
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
       expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
     } finally {
+      await load.stop()
       await sendToTerminal(orcaPage, typingPtyId, '\x03').catch(() => undefined)
-      for (const pane of hiddenPanes) {
-        await sendToTerminal(orcaPage, pane.ptyId, '\x03').catch(() => undefined)
-      }
       rmSync(scriptPath, { force: true })
     }
   })

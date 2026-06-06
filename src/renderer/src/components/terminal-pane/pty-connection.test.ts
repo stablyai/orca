@@ -996,7 +996,7 @@ describe('connectPanePty', () => {
       const { connectPanePty } = await import('./pty-connection')
 
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      const transport = createMockTransport()
+      const transport = createMockTransport('pty-id')
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
@@ -2283,7 +2283,7 @@ describe('connectPanePty', () => {
       const capturedDataCallback: { current: ((data: string) => void) | null } = {
         current: null
       }
-      const transport = createMockTransport()
+      const transport = createMockTransport('pty-id')
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
@@ -2835,10 +2835,9 @@ describe('connectPanePty', () => {
   })
 
   // Regression for foreground input lag with many background terminals:
-  // hidden panes still feed xterm, but their writes are scheduled through
-  // the shared output drain so 100 panes cannot all start xterm WriteBuffer
-  // setTimeout handlers in the same event-loop burst.
-  it('queues non-visible PTY bytes before writing them into xterm', async () => {
+  // hidden local panes keep reading PTY bytes, but avoid xterm parse/write
+  // work until the pane returns and can hydrate from main-owned terminal state.
+  it('skips non-visible local PTY bytes instead of writing them into xterm', async () => {
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
@@ -2848,7 +2847,7 @@ describe('connectPanePty', () => {
 
     try {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -2875,7 +2874,7 @@ describe('connectPanePty', () => {
         fn()
       }
 
-      expect(pane.terminal.write).toHaveBeenCalledWith('hello\r\n')
+      expect(pane.terminal.write).not.toHaveBeenCalledWith('hello\r\n')
     } finally {
       globalThis.setTimeout = originalSetTimeout
     }
@@ -3055,7 +3054,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('writes mode 2031 through hidden xterm parsing', async () => {
+  it('answers mode 2031 while hidden without xterm parsing', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -3078,14 +3077,62 @@ describe('connectPanePty', () => {
     )
     await flushAsyncTicks(6)
 
-    vi.useFakeTimers()
     capturedDataCallback.current?.('\x1b[?2031h')
-    vi.advanceTimersByTime(50)
 
-    expect(transport.sendInput).not.toHaveBeenCalledWith('\x1b[?997;2n')
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?2031h')
+    expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;2n')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith('\x1b[?2031h')
 
     binding.dispose()
+  })
+
+  it('restores proactively skipped hidden output from the main terminal snapshot', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-id')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+    const hidden = 'small-hidden-output\r\n'
+    const live = 'visible-after-hidden\r\n'
+    getMainBufferSnapshot.mockResolvedValue({
+      data: `snapshot-with-${hidden}`,
+      cols: 100,
+      rows: 30,
+      seq: hidden.length + live.length
+    })
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      isVisibleRef: { current: false }
+    })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
+
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(live, {
+      seq: hidden.length + live.length,
+      rawLength: live.length
+    })
+    await flushAsyncTicks(20)
+
+    expect(getMainBufferSnapshot).toHaveBeenCalledWith('pty-id', { scrollbackRows: 5000 })
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      `snapshot-with-${hidden}`,
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(live, expect.any(Function))
+    disposable.dispose()
   })
 
   it('restores hidden backlog overflow from the main terminal snapshot on foreground output', async () => {

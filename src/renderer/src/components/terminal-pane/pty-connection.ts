@@ -101,10 +101,10 @@ const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
 // collectively starve timers unless foreground writes have a rolling budget.
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
 const FOREGROUND_BUDGET_WINDOW_MS = 500
-// Why: this is only shown if renderer backlog overflowed and main-owned
+// Why: this is only shown if hidden renderer output was skipped and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
-  '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog exceeded 2 MB and main recovery was unavailable.]\r\n'
+  '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because main recovery was unavailable.]\r\n'
 
 type E2eTerminalPtyDataInjectionApi = {
   inject: (paneKey: string, data: string) => boolean
@@ -116,6 +116,61 @@ type E2eTerminalPtyDataInjectionWindow = Window & {
 }
 
 const e2eTerminalPtyDataInjectors = new Map<string, (data: string) => void>()
+
+type E2eTerminalPtyOutputDebugSnapshot = {
+  hiddenRendererSkipCount: number
+  hiddenRendererSkippedChars: number
+  hiddenRendererMode2031ReplyCount: number
+}
+
+type E2eTerminalPtyOutputDebugApi = {
+  reset: () => void
+  snapshot: () => E2eTerminalPtyOutputDebugSnapshot
+}
+
+type E2eTerminalPtyOutputDebugWindow = Window & {
+  __terminalPtyOutputDebug?: E2eTerminalPtyOutputDebugApi
+}
+
+const e2eTerminalPtyOutputDebugState: E2eTerminalPtyOutputDebugSnapshot = {
+  hiddenRendererSkipCount: 0,
+  hiddenRendererSkippedChars: 0,
+  hiddenRendererMode2031ReplyCount: 0
+}
+
+function resetE2eTerminalPtyOutputDebug(): void {
+  e2eTerminalPtyOutputDebugState.hiddenRendererSkipCount = 0
+  e2eTerminalPtyOutputDebugState.hiddenRendererSkippedChars = 0
+  e2eTerminalPtyOutputDebugState.hiddenRendererMode2031ReplyCount = 0
+}
+
+function exposeE2eTerminalPtyOutputDebug(): void {
+  if (!e2eConfig.exposeStore || typeof window === 'undefined') {
+    return
+  }
+  const target = window as E2eTerminalPtyOutputDebugWindow
+  target.__terminalPtyOutputDebug ??= {
+    reset: resetE2eTerminalPtyOutputDebug,
+    snapshot: () => ({ ...e2eTerminalPtyOutputDebugState })
+  }
+}
+
+function recordHiddenRendererSkip(chars: number): void {
+  if (!e2eConfig.exposeStore) {
+    return
+  }
+  exposeE2eTerminalPtyOutputDebug()
+  e2eTerminalPtyOutputDebugState.hiddenRendererSkipCount += 1
+  e2eTerminalPtyOutputDebugState.hiddenRendererSkippedChars += chars
+}
+
+function recordHiddenMode2031Reply(): void {
+  if (!e2eConfig.exposeStore) {
+    return
+  }
+  exposeE2eTerminalPtyOutputDebug()
+  e2eTerminalPtyOutputDebugState.hiddenRendererMode2031ReplyCount += 1
+}
 
 function exposeE2eTerminalPtyDataInjection(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
@@ -467,6 +522,7 @@ export function connectPanePty(
   manager: PaneManager,
   deps: PtyConnectionDeps
 ): PanePtyBinding {
+  exposeE2eTerminalPtyOutputDebug()
   let disposed = false
   let connectFrame: number | null = null
   let unregisterBacklogRecovery: (() => void) | null = null
@@ -1751,6 +1807,7 @@ export function connectPanePty(
       // mode 2031 out-of-band so TUIs still render the snapshot with the same
       // theme-dependent styling they would have used in a visible pane.
       transport.sendInput(mode2031SequenceFor(mode))
+      recordHiddenMode2031Reply()
     }
     function beforeTerminalOutputWrite(chunk: string): void {
       // Why: hidden tab output is coalesced by the scheduler. Run per-byte
@@ -1910,6 +1967,24 @@ export function connectPanePty(
       if (shouldWritePtyOutputForeground(deps.isVisibleRef.current)) {
         requestHiddenOutputRestoreIfNeeded()
       }
+    }
+
+    function shouldSkipHiddenRendererOutput(foreground: boolean): boolean {
+      return (
+        !foreground &&
+        !deps.isVisibleRef.current &&
+        canUseMainBufferSnapshot(transport.getPtyId()) &&
+        !isHiddenStartupRendererQueryWindowActive()
+      )
+    }
+
+    function skipHiddenRendererOutput(data: string): void {
+      respondToSkippedMode2031Subscribe(data)
+      markHiddenOutputRestoreNeeded()
+      if (hiddenOutputRestoreInFlight) {
+        hiddenOutputRestoreFreshSnapshotNeeded = true
+      }
+      recordHiddenRendererSkip(data.length)
     }
 
     function queueLiveChunkDuringRestore(data: string, meta?: PtyDataMeta): void {
@@ -2226,7 +2301,9 @@ export function connectPanePty(
       const foreground = shouldWritePtyOutputForeground(deps.isVisibleRef.current)
       const restoreAppliesToCurrentPty =
         hiddenOutputRestorePtyId !== null && transport.getPtyId() === hiddenOutputRestorePtyId
-      if (
+      if (shouldSkipHiddenRendererOutput(foreground)) {
+        skipHiddenRendererOutput(data)
+      } else if (
         (hiddenOutputRestoreNeeded || hiddenOutputRestoreInFlight) &&
         restoreAppliesToCurrentPty
       ) {
