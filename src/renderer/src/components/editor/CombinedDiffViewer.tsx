@@ -50,6 +50,11 @@ import {
   createCombinedDiffSectionIndexMap,
   handleCombinedDiffFileTreeNavigation
 } from './CombinedDiffFileTree'
+import { getCombinedDiffFileTreeSectionKey } from './combined-diff-file-tree-model'
+import {
+  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  type EditorPathMutationTarget
+} from './editor-autosave'
 import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
 import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
@@ -227,6 +232,7 @@ export default function CombinedDiffViewer({
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
+  const retrySectionRef = useRef<(index: number) => void>(() => {})
   const updateCombinedDiffScrollbar = useCallback(() => {
     const container = scrollContainerRef.current
     if (!container || container.scrollHeight <= container.clientHeight + 1) {
@@ -640,6 +646,7 @@ export default function CombinedDiffViewer({
     },
     [loadSection]
   )
+  retrySectionRef.current = retrySection
 
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
 
@@ -692,6 +699,17 @@ export default function CombinedDiffViewer({
     () => createCombinedDiffSectionIndexMap(sections),
     [sections]
   )
+  const sectionIndexByKeyRef = useRef(sectionIndexByKey)
+  sectionIndexByKeyRef.current = sectionIndexByKey
+  const requestCombinedDiffSectionReload = useCallback((index: number): void => {
+    const section = sectionsRef.current[index]
+    if (section?.dirty) {
+      return
+    }
+    if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
+      retrySectionRef.current(index)
+    }
+  }, [])
   const [activeTreeSectionState, setActiveTreeSectionState] = useState<{
     entrySignature: string
     key: string | null
@@ -718,14 +736,60 @@ export default function CombinedDiffViewer({
         scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
       })
       if (navigatedIndex !== null) {
+        // Why: tree navigation is also the user's explicit "show me this diff"
+        // affordance. Re-selecting an already-loaded row must refetch in case
+        // the file or git index changed while the section stayed mounted.
+        requestCombinedDiffSectionReload(navigatedIndex)
         setActiveTreeSectionState({
           entrySignature,
           key: sectionsRef.current[navigatedIndex]?.key ?? null
         })
       }
     },
-    [entrySignature, sectionIndexByKey, toggleSection, treeMode, virtualizer]
+    [
+      entrySignature,
+      requestCombinedDiffSectionReload,
+      sectionIndexByKey,
+      toggleSection,
+      treeMode,
+      virtualizer
+    ]
   )
+
+  useEffect(() => {
+    if (treeMode !== 'uncommitted') {
+      return
+    }
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
+      if (!detail || detail.worktreeId !== file.worktreeId) {
+        return
+      }
+      const hasRuntimeOwnerFilter = Object.prototype.hasOwnProperty.call(
+        detail,
+        'runtimeEnvironmentId'
+      )
+      const targetRuntimeOwner = detail.runtimeEnvironmentId?.trim() || null
+      const fileRuntimeOwner = file.runtimeEnvironmentId?.trim() || null
+      if (hasRuntimeOwnerFilter && targetRuntimeOwner !== fileRuntimeOwner) {
+        return
+      }
+      for (const area of ['unstaged', 'staged', 'untracked'] as const) {
+        const key = getCombinedDiffFileTreeSectionKey('uncommitted', {
+          path: detail.relativePath,
+          status: 'modified',
+          area
+        })
+        const index = sectionIndexByKeyRef.current.get(key)
+        if (index !== undefined) {
+          requestCombinedDiffSectionReload(index)
+        }
+      }
+    }
+    window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+    return () =>
+      window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+  }, [file.runtimeEnvironmentId, file.worktreeId, requestCombinedDiffSectionReload, treeMode])
 
   const setAllSectionsCollapsed = useCallback((collapsed: boolean) => {
     combinedDiffCollapsedPreference = collapsed

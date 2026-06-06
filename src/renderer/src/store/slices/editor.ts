@@ -182,6 +182,10 @@ export type OpenFile = {
   // a strikethrough label plus a "deleted"/"renamed" suffix. Cleared if the
   // file reappears on disk at its original path.
   externalMutation?: 'deleted' | 'renamed'
+  /** Why: diff bodies are cached in EditorPanel. Re-selecting an existing diff
+   * tab from the tree bumps this so the panel refetches instead of reusing a
+   * stale snapshot. */
+  diffContentReloadNonce?: number
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
 }
 
@@ -792,6 +796,13 @@ function buildDiffEditorFileId(
   return runtimeKey
     ? `editor-diff:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(diffSource)}:${encodeURIComponent(relativePath)}`
     : legacyId
+}
+
+function withDiffContentReloadRequest(file: OpenFile): OpenFile {
+  return {
+    ...file,
+    diffContentReloadNonce: (file.diffContentReloadNonce ?? 0) + 1
+  }
 }
 
 function isEditorFileIdOccupiedByOtherOwner(
@@ -2291,28 +2302,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
-        const needsUpdate =
-          existing.mode !== 'diff' ||
-          existing.diffSource !== diffSource ||
-          existing.isPreview !== updatedPreview ||
-          existing.runtimeEnvironmentId !== runtimeEnvironmentId
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
+        })
         return {
-          openFiles: needsUpdate
-            ? s.openFiles.map((f) =>
-                f.id === id
-                  ? {
-                      ...f,
-                      mode: 'diff' as const,
-                      diffSource,
-                      conflict: undefined,
-                      skippedConflicts: undefined,
-                      conflictReview: undefined,
-                      isPreview: updatedPreview,
-                      runtimeEnvironmentId
-                    }
-                  : f
-              )
-            : s.openFiles,
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2383,22 +2384,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource: 'branch' as const,
+          branchCompare,
+          branchOldPath: entry.oldPath,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview
+        })
         return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === id
-              ? {
-                  ...f,
-                  mode: 'diff' as const,
-                  diffSource: 'branch' as const,
-                  branchCompare,
-                  branchOldPath: entry.oldPath,
-                  conflict: undefined,
-                  skippedConflicts: undefined,
-                  conflictReview: undefined,
-                  isPreview: updatedPreview
-                }
-              : f
-          ),
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2470,22 +2468,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource: 'commit' as const,
+          commitCompare,
+          branchOldPath: entry.oldPath,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview
+        })
         return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === id
-              ? {
-                  ...f,
-                  mode: 'diff' as const,
-                  diffSource: 'commit' as const,
-                  commitCompare,
-                  branchOldPath: entry.oldPath,
-                  conflict: undefined,
-                  skippedConflicts: undefined,
-                  conflictReview: undefined,
-                  isPreview: updatedPreview
-                }
-              : f
-          ),
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
