@@ -2319,6 +2319,15 @@ export type GlobalSettings = {
    *  effectively present at runtime — the renderer should still fall back to
    *  defaults when reading optional sub-fields. */
   voice?: VoiceSettings
+  /** agentcookie integration. When the optional agentcookie CLI is installed,
+   *  keep the embedded browser signed in automatically by pulling the user's
+   *  session from `agentcookie export` instead of a manual cookie import. On by
+   *  default; completely inert when agentcookie is not installed. */
+  agentcookieSyncEnabled?: boolean
+  /** Runtime status set by the sync loop, surfaced in Settings. */
+  agentcookieDetected?: boolean
+  agentcookieLastSyncAt?: number | null
+  agentcookieLastImported?: number | null
 }
 
 export type OrcaWorkspaceLayout = {

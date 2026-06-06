@@ -35,6 +35,8 @@ import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
+import { AgentcookieSessionSync } from './browser/agentcookie-session-sync'
+import { ORCA_BROWSER_PARTITION } from '../shared/constants'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
 import {
@@ -152,6 +154,7 @@ let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
+let agentcookieSync: AgentcookieSessionSync | null = null
 let starNag: StarNagService | null = null
 let agentAwakeService: AgentAwakeService | null = null
 let crashReports: CrashReportStore | null = null
@@ -408,6 +411,27 @@ function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget):
     )
   }
   return runtimeHomePath
+}
+
+// Why: starts the agentcookie session sync once (guarded), wiring the loop's
+// detected/last-sync status back into settings so the Settings UI can show it.
+function startAgentcookieSessionSync(): void {
+  if (agentcookieSync || !store) {
+    return
+  }
+  const settingsStore = store
+  agentcookieSync = new AgentcookieSessionSync({
+    targetPartition: ORCA_BROWSER_PARTITION,
+    isEnabled: () => settingsStore.getSettings().agentcookieSyncEnabled !== false,
+    onStatus: (status) => {
+      settingsStore.updateSettings({
+        agentcookieDetected: status.detected,
+        ...(status.lastSyncAt !== null ? { agentcookieLastSyncAt: status.lastSyncAt } : {}),
+        ...(status.lastImported !== null ? { agentcookieLastImported: status.lastImported } : {})
+      })
+    }
+  })
+  agentcookieSync.start()
 }
 
 function openMainWindow(): BrowserWindow {
@@ -1365,6 +1389,11 @@ app.whenReady().then(async () => {
     })
   ])
 
+  // Why: when the optional agentcookie CLI is installed, keep the embedded
+  // browser signed in automatically by pulling the session from it. Inert when
+  // agentcookie is not installed or the setting is off.
+  startAgentcookieSessionSync()
+
   // Why: the macOS notification permission dialog must fire after the window
   // is visible and focused. If it fires before the window exists, the system
   // dialog either doesn't appear or gets immediately covered by the maximized
@@ -1418,6 +1447,7 @@ app.on('will-quit', (e) => {
   // agent_start events with no matching stops.
   starNag?.stop()
   automations?.stop()
+  agentcookieSync?.stop()
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
   stats?.flush()
