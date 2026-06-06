@@ -67,6 +67,7 @@ import {
 
 type CachedCombinedDiffViewState = {
   entrySignature: string
+  gitStatusSignature: string
   sections: DiffSection[]
   sectionHeights: Record<number, number>
   loadedIndices: number[]
@@ -82,6 +83,42 @@ type CombinedDiffScrollThumb = {
 
 const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
 const combinedDiffScrollTopCache = new Map<string, number>()
+
+function buildCombinedGitStatusSignature(
+  sections: readonly { path: string }[],
+  gitStatusEntries: readonly GitStatusEntry[]
+): string {
+  const sectionPaths = new Set(sections.map((section) => section.path))
+  const matching = gitStatusEntries.filter((entry) => sectionPaths.has(entry.path))
+  return JSON.stringify(
+    matching.map((entry) => ({
+      path: entry.path,
+      area: entry.area,
+      status: entry.status,
+      added: entry.added ?? null,
+      removed: entry.removed ?? null
+    }))
+  )
+}
+
+function invalidateCombinedDiffCachesForRelativePath(relativePath: string): void {
+  for (const [key, cached] of combinedDiffViewStateCache.entries()) {
+    if (cached.sections.some((section) => section.path === relativePath)) {
+      combinedDiffViewStateCache.delete(key)
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, (event) => {
+    const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
+    if (detail?.relativePath) {
+      // Why: inactive combined-diff tabs are unmounted, so only a module-level
+      // cache bust can prevent a remount from replaying stale section bodies.
+      invalidateCombinedDiffCachesForRelativePath(detail.relativePath)
+    }
+  })
+}
 const COMBINED_DIFF_OVERSCAN = 5
 const COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT = 64
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
@@ -407,6 +444,8 @@ export default function CombinedDiffViewer({
     const canRestoreCachedSections =
       cached &&
       cached.entrySignature === entrySignature &&
+      (cached.gitStatusSignature ?? '') ===
+        buildCombinedGitStatusSignature(cached.sections, gitStatusEntries) &&
       (cached.sections.length > 0 || entries.length === 0)
     if (canRestoreCachedSections && cached) {
       const collapsedPreference = combinedDiffCollapsedPreference
@@ -454,7 +493,7 @@ export default function CombinedDiffViewer({
     loadSchedulerRef.current.reset()
     generationRef.current += 1
     setGeneration((prev) => prev + 1)
-  }, [entries, entrySignature, file.diffSource, viewStateKey])
+  }, [entries, entrySignature, file.diffSource, gitStatusEntries, viewStateKey])
 
   const loadSectionNow = useCallback(
     async (index: number) => {
@@ -624,27 +663,37 @@ export default function CombinedDiffViewer({
     }
   }, [entrySignature, loadSection, sections.length])
 
+  const invalidateCombinedDiffViewStateCache = useCallback((): void => {
+    combinedDiffViewStateCache.delete(viewStateKey)
+  }, [viewStateKey])
+
   const retrySection = useCallback(
     (index: number) => {
+      const collapsed = sectionsRef.current[index]?.collapsed ?? false
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
+      invalidateCombinedDiffViewStateCache()
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
             ? {
                 ...section,
-                loading: true,
+                loading: !collapsed,
                 error: undefined,
                 diffResult: null,
                 originalContent: '',
-                modifiedContent: ''
+                modifiedContent: '',
+                contentGeneration: (section.contentGeneration ?? 0) + 1
               }
             : section
         )
       )
-      loadSection(index)
+      if (collapsed) {
+        return
+      }
+      loadSchedulerRef.current.rerequest(index)
     },
-    [loadSection]
+    [invalidateCombinedDiffViewStateCache]
   )
   retrySectionRef.current = retrySection
 
@@ -703,12 +752,10 @@ export default function CombinedDiffViewer({
   sectionIndexByKeyRef.current = sectionIndexByKey
   const requestCombinedDiffSectionReload = useCallback((index: number): void => {
     const section = sectionsRef.current[index]
-    if (section?.dirty) {
+    if (!section || section.dirty) {
       return
     }
-    if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
-      retrySectionRef.current(index)
-    }
+    retrySectionRef.current(index)
   }, [])
   const [activeTreeSectionState, setActiveTreeSectionState] = useState<{
     entrySignature: string
@@ -755,6 +802,32 @@ export default function CombinedDiffViewer({
       virtualizer
     ]
   )
+
+  const combinedGitStatusSignature = React.useMemo(() => {
+    if (treeMode !== 'uncommitted') {
+      return ''
+    }
+    return buildCombinedGitStatusSignature(sections, gitStatusEntries)
+  }, [gitStatusEntries, sections, treeMode])
+  const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (treeMode !== 'uncommitted') {
+      prevCombinedGitStatusSignatureRef.current = null
+      return
+    }
+    if (prevCombinedGitStatusSignatureRef.current === null) {
+      prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
+      return
+    }
+    if (prevCombinedGitStatusSignatureRef.current === combinedGitStatusSignature) {
+      return
+    }
+    prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
+    for (const index of loadedIndicesRef.current) {
+      requestCombinedDiffSectionReload(index)
+    }
+  }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, treeMode])
 
   useEffect(() => {
     if (treeMode !== 'uncommitted') {
@@ -926,6 +999,7 @@ export default function CombinedDiffViewer({
       combinedDiffScrollTopCache.get(viewStateKey) ?? scrollContainerRef.current?.scrollTop ?? 0
     setWithLRU(combinedDiffViewStateCache, viewStateKey, {
       entrySignature,
+      gitStatusSignature: combinedGitStatusSignature,
       sections,
       sectionHeights,
       loadedIndices: Array.from(loadedIndicesRef.current).filter(
@@ -934,7 +1008,15 @@ export default function CombinedDiffViewer({
       scrollTop: preservedScrollTop,
       sideBySide
     })
-  }, [entries.length, entrySignature, sectionHeights, sections, sideBySide, viewStateKey])
+  }, [
+    combinedGitStatusSignature,
+    entries.length,
+    entrySignature,
+    sectionHeights,
+    sections,
+    sideBySide,
+    viewStateKey
+  ])
 
   useLayoutEffect(() => {
     const container = scrollContainerRef.current

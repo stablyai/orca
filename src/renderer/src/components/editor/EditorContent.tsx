@@ -26,6 +26,7 @@ import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
 import { RichMarkdownErrorBoundary } from './RichMarkdownErrorBoundary'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 import { findGitConflictBlocks } from './monaco-conflict-decorations'
+import { getDiffContentSignature } from './diff-content-signature'
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -845,10 +846,18 @@ export function EditorContent({
       </div>
     )
   }
+  // Why: kept Monaco models ignore refreshed git blobs unless the model identity
+  // rotates. Key off fetched diff content and explicit reload nonce, not live
+  // edit-buffer text, so editable unstaged diffs keep their undo stack.
+  const diffReloadNonce = activeFile.diffContentReloadNonce ?? 0
+  const originalModelKey = `${diffViewStateKey}:original:${getDiffContentSignature(dc.originalContent)}`
+  const modifiedModelKey = `${diffViewStateKey}:modified:${getDiffContentSignature(dc.modifiedContent)}:${diffReloadNonce}`
   return (
     <DiffViewer
-      key={viewStateScopeId}
+      key={`${viewStateScopeId}:${diffReloadNonce}:${getDiffContentSignature(dc.modifiedContent)}`}
       modelKey={diffViewStateKey}
+      originalModelKey={originalModelKey}
+      modifiedModelKey={modifiedModelKey}
       originalContent={dc.originalContent}
       modifiedContent={modifiedDiffContent}
       language={monacoLanguage}
