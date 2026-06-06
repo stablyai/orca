@@ -42,12 +42,27 @@ type SyntheticOpenCodeWindow = Window & {
     reset: () => void
     snapshot: () => TerminalPtyOutputDebugSnapshot
   }
+  __terminalOutputSchedulerDebug?: {
+    reset: () => void
+    snapshot: () => TerminalOutputSchedulerDebugSnapshot
+  }
 }
 
 type TerminalPtyOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
   hiddenRendererSkippedChars: number
   hiddenRendererMode2031ReplyCount: number
+}
+
+type TerminalOutputSchedulerDebugSnapshot = {
+  backgroundEnqueueCount: number
+  deferredForegroundEnqueueCount: number
+  foregroundWriteCount: number
+  backgroundWriteCount: number
+  deferredForegroundWriteCount: number
+  flushWriteCount: number
+  scheduledDrainCount: number
+  drainWrites: number[]
 }
 
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
@@ -292,6 +307,7 @@ async function measureTypingDuringLoad(
 async function resetTerminalPtyOutputDebug(page: Page): Promise<void> {
   await page.evaluate(() => {
     ;(window as SyntheticOpenCodeWindow).__terminalPtyOutputDebug?.reset()
+    ;(window as SyntheticOpenCodeWindow).__terminalOutputSchedulerDebug?.reset()
   })
 }
 
@@ -303,15 +319,27 @@ async function readTerminalPtyOutputDebug(
   })
 }
 
+async function readTerminalOutputSchedulerDebug(
+  page: Page
+): Promise<TerminalOutputSchedulerDebugSnapshot | null> {
+  return page.evaluate(() => {
+    return (window as SyntheticOpenCodeWindow).__terminalOutputSchedulerDebug?.snapshot() ?? null
+  })
+}
+
 function annotateTypingMeasurement(
   testInfo: TestInfo,
   type: string,
   paneCount: number,
   measurement: TypingMeasurement,
-  debug: TerminalPtyOutputDebugSnapshot | null = null
+  debug: TerminalPtyOutputDebugSnapshot | null = null,
+  scheduler: TerminalOutputSchedulerDebugSnapshot | null = null
 ): void {
   const hiddenSkipSummary = debug
     ? ` hiddenSkips=${debug.hiddenRendererSkipCount} hiddenSkippedChars=${debug.hiddenRendererSkippedChars} mode2031Replies=${debug.hiddenRendererMode2031ReplyCount}`
+    : ''
+  const schedulerSummary = scheduler
+    ? ` deferredForegroundEnqueue=${scheduler.deferredForegroundEnqueueCount} deferredForegroundWrite=${scheduler.deferredForegroundWriteCount} scheduledDrains=${scheduler.scheduledDrainCount}`
     : ''
   testInfo.annotations.push({
     type,
@@ -321,7 +349,7 @@ function annotateTypingMeasurement(
       1
     )}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(1)}ms samples=${measurement.latencies
       .map((value) => value.toFixed(1))
-      .join(',')}${hiddenSkipSummary}`
+      .join(',')}${hiddenSkipSummary}${schedulerSummary}`
   })
 }
 
@@ -345,7 +373,15 @@ test.describe('Artificial OpenCode terminal load', () => {
     try {
       const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
       const debug = await readTerminalPtyOutputDebug(orcaPage)
-      annotateTypingMeasurement(testInfo, 'opencode-baseline-typing', 1, measurement, debug)
+      const scheduler = await readTerminalOutputSchedulerDebug(orcaPage)
+      annotateTypingMeasurement(
+        testInfo,
+        'opencode-baseline-typing',
+        1,
+        measurement,
+        debug,
+        scheduler
+      )
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
       expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
@@ -385,7 +421,8 @@ test.describe('Artificial OpenCode terminal load', () => {
         'opencode-same-workspace-typing',
         panes.length,
         measurement,
-        await readTerminalPtyOutputDebug(orcaPage)
+        await readTerminalPtyOutputDebug(orcaPage),
+        await readTerminalOutputSchedulerDebug(orcaPage)
       )
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
@@ -442,7 +479,8 @@ test.describe('Artificial OpenCode terminal load', () => {
         'opencode-cross-workspace-typing',
         hiddenPanes.length + 1,
         measurement,
-        await readTerminalPtyOutputDebug(orcaPage)
+        await readTerminalPtyOutputDebug(orcaPage),
+        await readTerminalOutputSchedulerDebug(orcaPage)
       )
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)

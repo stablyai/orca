@@ -101,6 +101,7 @@ const FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS = 150
 // collectively starve timers unless foreground writes have a rolling budget.
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
 const FOREGROUND_BUDGET_WINDOW_MS = 500
+const INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS = 32 * 1024
 // Why: this is only shown if hidden renderer output was skipped and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
@@ -240,6 +241,8 @@ let codexRestartNoticePresenceSource: Record<
   { previousAccountLabel: string; nextAccountLabel: string }
 > | null = null
 let codexRestartNoticePresence = false
+let inactiveForegroundImmediateBudgetChars = 0
+let inactiveForegroundImmediateBudgetWindowStart = 0
 
 type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
@@ -369,6 +372,22 @@ function isSshSessionExpiredError(err: unknown): boolean {
 
 function isRemoteRuntimePtyId(ptyId: string | null | undefined): boolean {
   return typeof ptyId === 'string' && ptyId.startsWith(REMOTE_PTY_ID_PREFIX)
+}
+
+function consumeInactiveForegroundImmediateBudget(dataLength: number): boolean {
+  const now = performance.now()
+  if (now - inactiveForegroundImmediateBudgetWindowStart > FOREGROUND_BUDGET_WINDOW_MS) {
+    inactiveForegroundImmediateBudgetChars = 0
+    inactiveForegroundImmediateBudgetWindowStart = now
+  }
+  if (
+    inactiveForegroundImmediateBudgetChars + dataLength >
+    INACTIVE_FOREGROUND_IMMEDIATE_BUDGET_CHARS
+  ) {
+    return false
+  }
+  inactiveForegroundImmediateBudgetChars += dataLength
+  return true
 }
 
 function hasCodexRestartNotices(
@@ -1832,7 +1851,24 @@ export function connectPanePty(
       return true
     }
 
+    function isActiveSplitPane(): boolean {
+      if (!deps.isActiveRef.current) {
+        return false
+      }
+      const activePane = manager.getActivePane?.() ?? null
+      return activePane ? activePane.id === pane.id : true
+    }
+
     function isLatencySensitiveForegroundOutput(data: string): boolean {
+      if (!isActiveSplitPane()) {
+        // Why: many visible split panes can each emit tiny TUI frames. A shared
+        // budget keeps watched panes live while preventing aggregate xterm work
+        // from starving typing in the active pane.
+        if (data.includes('\x1b[')) {
+          return false
+        }
+        return consumeInactiveForegroundImmediateBudget(data.length)
+      }
       if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
         return consumeForegroundImmediateBudget(data.length)
       }

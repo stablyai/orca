@@ -2880,7 +2880,7 @@ describe('connectPanePty', () => {
     }
   })
 
-  it('writes visible split-pane PTY bytes immediately even when the tab is not active', async () => {
+  it('queues visible split-pane PTY bytes when the pane is not active', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -2901,12 +2901,46 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
-    capturedDataCallback.current?.('visible split output\r\n')
+    vi.useFakeTimers()
+    const redraw = '\x1b[2J\x1b[Hvisible split output\r\n'
+    capturedDataCallback.current?.(redraw)
 
-    expect(pane.terminal.write).toHaveBeenCalledWith(
-      'visible split output\r\n',
-      expect.any(Function)
-    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(redraw, expect.any(Function))
+    vi.advanceTimersByTime(0)
+    expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
+  })
+
+  it('queues visible ANSI redraws when only another split pane is active', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'pty-id'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = {
+      ...createManager(2),
+      getActivePane: vi.fn(() => ({ id: 2 }))
+    }
+    const deps = createDeps({
+      isActiveRef: { current: true },
+      isVisibleRef: { current: true }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    expect(capturedDataCallback.current).not.toBeNull()
+    vi.useFakeTimers()
+    const redraw = '\x1b[2J\x1b[Hvisible inactive split output\r\n'
+    capturedDataCallback.current?.(redraw)
+
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(redraw, expect.any(Function))
+    vi.advanceTimersByTime(0)
+    expect(pane.terminal.write).toHaveBeenCalledWith(redraw, expect.any(Function))
   })
 
   it('routes visible pane PTY bytes through the background scheduler when the document is hidden', async () => {
