@@ -8,7 +8,7 @@ import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/components/dashboard/useNow'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
-import { useSleepingAgentSessions, useWorktreeAgentRows } from './useWorktreeAgentRows'
+import { useWorktreeAgentRows } from './useWorktreeAgentRows'
 import { cn } from '@/lib/utils'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -22,11 +22,6 @@ import {
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
-import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
-import { RotateCcw, X } from 'lucide-react'
-import { resumeSleepingAgentSession } from '@/lib/resume-sleeping-agent-session'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -65,98 +60,30 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   className
 }: Props) {
   const agents = useWorktreeAgentRows(worktreeId)
-  const sleepingAgents = useSleepingAgentSessions(worktreeId)
-  if (agents.length === 0 && sleepingAgents.length === 0) {
+  if (agents.length === 0) {
     return null
   }
   // Why: gate the 30s tick behind non-empty rows by mounting the inner body
   // only when there's something to show. The setInterval lives in the inner
   // component's useNow, so idle worktrees don't pay per-card timer cost.
-  return (
-    <WorktreeCardAgentsBody
-      worktreeId={worktreeId}
-      agents={agents}
-      sleepingAgents={sleepingAgents}
-      className={className}
-    />
-  )
+  return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
 })
 
 type BodyProps = {
   worktreeId: string
   agents: DashboardAgentRowData[]
-  sleepingAgents: SleepingAgentSessionRecord[]
   className?: string
-}
-
-function SleepingAgentResumeRows({
-  records,
-  onResume,
-  onDismiss
-}: {
-  records: SleepingAgentSessionRecord[]
-  onResume: (paneKey: string) => void
-  onDismiss: (paneKey: string) => void
-}): React.JSX.Element | null {
-  if (records.length === 0) {
-    return null
-  }
-  return (
-    <div className="flex flex-col gap-0.5">
-      {records.map((record) => {
-        const label = formatAgentTypeLabel(record.agent)
-        const prompt = record.prompt.trim()
-        return (
-          <div
-            key={record.paneKey}
-            className="group/sleeping-agent-row -ml-2 flex items-center gap-1.5 rounded-sm px-2 py-1 text-[11px] leading-snug text-muted-foreground worktree-agent-row-hover"
-          >
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
-              onClick={() => onResume(record.paneKey)}
-              aria-label={`Resume ${label}`}
-              title={`Resume ${label}`}
-            >
-              <RotateCcw className="size-3.5 shrink-0 text-muted-foreground/70" />
-              <span className="inline-flex shrink-0">
-                <AgentIcon agent={agentTypeToIconAgent(record.agent)} size={14} />
-              </span>
-              <span className="min-w-0 flex-1 truncate">
-                <span className="font-medium text-foreground/85">Resume {label}</span>
-                {prompt ? <span className="text-muted-foreground"> · {prompt}</span> : null}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="inline-flex shrink-0 items-center justify-center text-muted-foreground/70 opacity-0 transition-opacity duration-150 hover:text-foreground group-hover/sleeping-agent-row:opacity-100 focus-visible:opacity-100"
-              onClick={(event) => {
-                event.stopPropagation()
-                onDismiss(record.paneKey)
-              }}
-              aria-label={`Dismiss ${label} resume`}
-              title="Dismiss"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )
-      })}
-    </div>
-  )
 }
 
 const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   worktreeId,
   agents,
-  sleepingAgents,
   className
 }: BodyProps) {
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
   const dismissRetainedAgent = useAppStore((s) => s.dismissRetainedAgent)
-  const clearSleepingAgentSession = useAppStore((s) => s.clearSleepingAgentSession)
   const agentSendPopoverTargetMode = useAppStore((s) => s.agentSendPopoverTargetMode)
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
@@ -326,17 +253,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     e.stopPropagation()
   }, [])
 
-  const handleResumeSleepingAgent = useCallback((paneKey: string) => {
-    resumeSleepingAgentSession(paneKey)
-  }, [])
-
-  const handleDismissSleepingAgent = useCallback(
-    (paneKey: string) => {
-      clearSleepingAgentSession(paneKey)
-    },
-    [clearSleepingAgentSession]
-  )
-
   // Why: when any root row has a disclosure chevron, root leaf siblings reserve
   // a matching leading spacer so the state-dot column stays aligned across the
   // card. Descendants already have the child rail indent, so adding this spacer
@@ -480,11 +396,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         aria-label="Agents"
         data-compact-agent-list="true"
       >
-        <SleepingAgentResumeRows
-          records={sleepingAgents}
-          onResume={handleResumeSleepingAgent}
-          onDismiss={handleDismissSleepingAgent}
-        />
         {agents.length === 0 ? null : shouldUseSummaryRow ? (
           // Why: the worktree card is already the surface. Expanded compact
           // agents stay a quiet tree; only the collapsed summary reads as a pill.
@@ -526,11 +437,6 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       role={hasLineage ? 'tree' : 'group'}
       aria-label="Agents"
     >
-      <SleepingAgentResumeRows
-        records={sleepingAgents}
-        onResume={handleResumeSleepingAgent}
-        onDismiss={handleDismissSleepingAgent}
-      />
       {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
     </div>
   )

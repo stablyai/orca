@@ -1,11 +1,11 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 
 function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
   const state = useAppStore.getState()
@@ -35,12 +35,8 @@ function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
   state.setTabBarOrder(worktreeId, order)
 }
 
-export function resumeSleepingAgentSession(paneKey: string): boolean {
+function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean {
   const state = useAppStore.getState()
-  const record = state.sleepingAgentSessionsByPaneKey[paneKey]
-  if (!record) {
-    return false
-  }
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -66,6 +62,19 @@ export function resumeSleepingAgentSession(paneKey: string): boolean {
   state.clearSleepingAgentSession(record.paneKey)
   state.setActiveTabType('terminal')
   appendTabToWorktreeOrder(record.worktreeId, tab.id)
-  activateAndRevealWorktree(record.worktreeId, { sidebarRevealBehavior: 'auto' })
   return true
+}
+
+export function resumeSleepingAgentSessionsForWorktree(worktreeId: string): number {
+  const records = Object.values(useAppStore.getState().sleepingAgentSessionsByPaneKey)
+    .filter((record) => record.worktreeId === worktreeId)
+    .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
+
+  let launched = 0
+  for (const record of records) {
+    if (launchSleepingAgentSession(record)) {
+      launched += 1
+    }
+  }
+  return launched
 }
