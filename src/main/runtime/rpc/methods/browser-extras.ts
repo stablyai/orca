@@ -4,6 +4,7 @@ import {
   ClipboardWrite,
   CookieDelete,
   CookieGet,
+  CookieImport,
   CookieSet,
   DialogAccept,
   Geolocation,
@@ -38,6 +39,11 @@ export const BROWSER_EXTRA_METHODS: RpcMethod[] = [
     name: 'browser.cookie.delete',
     params: CookieDelete,
     handler: async (params, { runtime }) => runtime.browserCookieDelete(params)
+  }),
+  defineMethod({
+    name: 'browser.cookie.import',
+    params: CookieImport,
+    handler: async (params, { runtime }) => runtime.browserCookieImport(params)
   }),
   defineMethod({
     name: 'browser.viewport',

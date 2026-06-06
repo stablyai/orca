@@ -34,6 +34,17 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = [
       'orca cookie delete --name <n> [--domain <d>] [--url <u>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'name', 'domain', 'url', 'worktree']
   },
+  {
+    path: ['cookie', 'import'],
+    summary: 'Bulk-import cookies into the browser session from a JSON array on stdin',
+    usage: 'orca cookie import [--json]   (reads a JSON array of cookies from stdin)',
+    allowedFlags: [...GLOBAL_FLAGS],
+    examples: ['cat cookies.json | orca cookie import'],
+    notes: [
+      'Reads a JSON array of {name,value,domain,path,secure,httpOnly,sameSite,expirationDate} from stdin.',
+      'Seeds the default browser session (persist:orca-browser); no open tab required.'
+    ]
+  },
   // ── Viewport ──
   {
     path: ['viewport'],

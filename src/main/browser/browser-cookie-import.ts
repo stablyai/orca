@@ -645,12 +645,22 @@ export async function importCookiesFromFile(
   } catch {
     return { ok: false, reason: 'Could not read the selected file.' }
   }
+  return importCookiesFromJson(rawContent, targetPartition)
+}
 
+// Why: shared by the Settings file import and the `orca cookie import` CLI/RPC
+// command, which receives the same JSON array of cookies on stdin instead of a
+// file. Both funnel through the one validated-import pipeline so a bulk CLI
+// import gets identical __Host-/host-only shaping and per-cookie validation.
+export async function importCookiesFromJson(
+  rawContent: string,
+  targetPartition: string
+): Promise<BrowserCookieImportResult> {
   let parsed: unknown
   try {
     parsed = JSON.parse(rawContent)
   } catch {
-    return { ok: false, reason: 'File is not valid JSON.' }
+    return { ok: false, reason: 'Input is not valid JSON.' }
   }
 
   if (!Array.isArray(parsed)) {
@@ -658,7 +668,7 @@ export async function importCookiesFromFile(
   }
 
   if (parsed.length === 0) {
-    return { ok: false, reason: 'Cookie file is empty.' }
+    return { ok: false, reason: 'Cookie array is empty.' }
   }
 
   const validated: ValidatedCookie[] = []

@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 import {
   buildChromiumCookieInsertParams,
   importCookiesFromFile,
+  importCookiesFromJson,
   importCookiesFromBrowser,
   detectInstalledBrowsers,
   type ChromiumCookieColumnInfo,
@@ -277,6 +278,65 @@ describe('importCookiesFromFile', () => {
     }
     expect(result.summary.importedCookies).toBe(1)
     expect(result.summary.skippedCookies).toBe(1)
+  })
+})
+
+describe('importCookiesFromJson', () => {
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    sessionFromPartitionMock.mockReset()
+    sessionFromPartitionMock.mockReturnValue({
+      cookies: { set: cookiesSetMock }
+    })
+  })
+
+  it('imports a valid JSON array (the CLI stdin path)', async () => {
+    const json = JSON.stringify([
+      {
+        domain: '.github.com',
+        name: 'user_session',
+        value: 'tok',
+        path: '/',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax'
+      }
+    ])
+
+    const result = await importCookiesFromJson(json, 'persist:orca-browser')
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.summary.importedCookies).toBe(1)
+    expect(result.summary.domains).toContain('github.com')
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith('persist:orca-browser')
+    expect(cookiesSetMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects non-JSON input', async () => {
+    const result = await importCookiesFromJson('not json', 'persist:orca-browser')
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      return
+    }
+    expect(result.reason).toContain('not valid JSON')
+  })
+
+  it('rejects a non-array', async () => {
+    const result = await importCookiesFromJson('{"domain":"x.com"}', 'persist:orca-browser')
+    expect(result.ok).toBe(false)
+    if (result.ok) {
+      return
+    }
+    expect(result.reason).toContain('JSON array')
+  })
+
+  it('rejects an empty array', async () => {
+    const result = await importCookiesFromJson('[]', 'persist:orca-browser')
+    expect(result.ok).toBe(false)
   })
 })
 

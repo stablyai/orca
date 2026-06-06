@@ -3,11 +3,27 @@ import type {
   BrowserCookieGetResult,
   BrowserCookieSetResult
 } from '../../shared/runtime-types'
+import type { BrowserCookieImportResult } from '../../shared/types'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
 import { getBrowserCommandTarget } from '../selectors'
+
+// Why: `cookie import` ingests a full cookie set piped on stdin (e.g. from a
+// cookie exporter) rather than via flags, since a session is far larger than
+// an argv can carry.
+function readStdin(): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    let data = ''
+    process.stdin.setEncoding('utf-8')
+    process.stdin.on('data', (chunk) => {
+      data += chunk
+    })
+    process.stdin.on('end', () => resolve(data))
+    process.stdin.on('error', reject)
+  })
+}
 
 function getOptionalCookieExpiry(flags: Map<string, string | boolean>): number | undefined {
   if (!flags.has('expires')) {
@@ -85,5 +101,21 @@ export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
     Object.assign(params, await getBrowserCommandTarget(flags, cwd, client))
     const result = await client.call<BrowserCookieDeleteResult>('browser.cookie.delete', params)
     printResult(result, json, () => `Cookie "${name}" deleted`)
+  },
+  'cookie import': async ({ client, json }) => {
+    const data = await readStdin()
+    if (data.trim().length === 0) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'No cookie JSON on stdin. Pipe a JSON array of cookies, e.g. `cat cookies.json | orca cookie import`.'
+      )
+    }
+    const result = await client.call<BrowserCookieImportResult>('browser.cookie.import', { data })
+    printResult(result, json, (v) =>
+      v.ok
+        ? `Imported ${v.summary.importedCookies}/${v.summary.totalCookies} cookies ` +
+          `(${v.summary.skippedCookies} skipped) across ${v.summary.domains.length} domains`
+        : v.reason
+    )
   }
 }

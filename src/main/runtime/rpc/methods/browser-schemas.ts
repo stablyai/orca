@@ -270,6 +270,13 @@ export const CookieDelete = BrowserTarget.extend({
   url: OptionalPlainString
 })
 
+// Why: bulk cookie import is partition-level (seeds persist:orca-browser), not
+// tied to a live pane, so it does not extend BrowserTarget. `data` is the raw
+// JSON array of cookies piped to the CLI on stdin.
+export const CookieImport = z.object({
+  data: requiredString('Missing cookie JSON. Pipe a JSON array of cookies to stdin.')
+})
+
 export const Viewport = BrowserTarget.extend({
   width: z.custom<number>((v) => typeof v === 'number' && v > 0, {
     message: 'Width and height must be positive numbers'

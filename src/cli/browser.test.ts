@@ -35,6 +35,7 @@ vi.mock('./runtime-client', () => {
   }
 })
 
+import { Readable } from 'node:stream'
 import { main } from './index'
 import { RuntimeClientError } from './runtime-client'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
@@ -586,6 +587,55 @@ describe('orca cli browser cookies', () => {
 
     expect(callMock).not.toHaveBeenCalled()
     expect(errorSpy.mock.calls.flat().join('\n')).toContain('Missing value for --expires.')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('pipes a JSON array on stdin to browser.cookie.import', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_import', {
+        ok: true,
+        profileId: '',
+        summary: { totalCookies: 1, importedCookies: 1, skippedCookies: 0, domains: ['github.com'] }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const json = JSON.stringify([{ domain: '.github.com', name: 'user_session', value: 'tok' }])
+
+    const stdinStub = new Readable({ read() {} })
+    const originalStdin = process.stdin
+    Object.defineProperty(process, 'stdin', { value: stdinStub, configurable: true })
+    try {
+      const run = main(['cookie', 'import', '--json'], '/tmp/not-an-orca-worktree')
+      stdinStub.push(json)
+      stdinStub.push(null)
+      await run
+    } finally {
+      Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true })
+    }
+
+    expect(callMock).toHaveBeenCalledWith('browser.cookie.import', { data: json })
+  })
+
+  it('rejects empty stdin before RPC dispatch', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    const stdinStub = new Readable({ read() {} })
+    const originalStdin = process.stdin
+    Object.defineProperty(process, 'stdin', { value: stdinStub, configurable: true })
+    try {
+      const run = main(['cookie', 'import'], '/tmp/not-an-orca-worktree')
+      stdinStub.push(null)
+      await run
+    } finally {
+      Object.defineProperty(process, 'stdin', { value: originalStdin, configurable: true })
+    }
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain('No cookie JSON on stdin')
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode

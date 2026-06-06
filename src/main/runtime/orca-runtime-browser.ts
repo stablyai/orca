@@ -60,9 +60,11 @@ import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
+  importCookiesFromJson,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
 import { waitForTabRegistration, waitForWorktreeTabRegistration } from '../ipc/browser'
+import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 
 export type BrowserCommandTargetParams = {
   worktree?: string
@@ -830,6 +832,17 @@ export class RuntimeBrowserCommands {
       target.worktreeId,
       target.browserPageId
     )
+  }
+
+  // Why: bulk import seeds the persist:orca-browser partition directly (the
+  // same pipeline as the Settings file import), so it needs no live pane and
+  // no agent-browser bridge -- panes opened later inherit the session. Lets a
+  // tool pipe a full decrypted cookie set in one call instead of one
+  // browser.cookie.set round-trip per cookie.
+  async browserCookieImport(params: {
+    data: string
+  }): Promise<BrowserProfileImportFromBrowserResult> {
+    return importCookiesFromJson(params.data, ORCA_BROWSER_PARTITION)
   }
 
   // ── Viewport ──
