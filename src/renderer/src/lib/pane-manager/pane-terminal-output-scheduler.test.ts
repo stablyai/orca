@@ -298,7 +298,7 @@ describe('pane terminal output scheduler', () => {
       stripTransientCursorShows: true
     })
 
-    vi.advanceTimersByTime(31)
+    vi.advanceTimersByTime(15)
     expect(terminal.write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
@@ -328,7 +328,7 @@ describe('pane terminal output scheduler', () => {
       coalesceForeground: true
     })
 
-    vi.advanceTimersByTime(31)
+    vi.advanceTimersByTime(15)
     expect(terminal.write).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(1)
@@ -338,6 +338,51 @@ describe('pane terminal output scheduler', () => {
       '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[?25h\x1b[?2026l',
       expect.any(Function)
     )
+  })
+
+  it('does not batch repeated latency-sensitive synchronized frames across key-repeat ticks', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;3Hx\x1b[?25h', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true,
+      holdForeground: true
+    })
+    writeTerminalOutput(terminal, '\x1b[?2026l', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true,
+      coalesceForeground: true
+    })
+
+    vi.advanceTimersByTime(16)
+    vi.runOnlyPendingTimers()
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+
+    writeTerminalOutput(terminal, '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;4Hx\x1b[?25h', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true,
+      holdForeground: true
+    })
+    writeTerminalOutput(terminal, '\x1b[?2026l', {
+      foreground: true,
+      latencySensitive: true,
+      stripTransientCursorShows: true,
+      coalesceForeground: true
+    })
+
+    vi.advanceTimersByTime(16)
+    vi.runOnlyPendingTimers()
+
+    expect(terminal.write).toHaveBeenCalledTimes(2)
+    expect(terminal.write.mock.calls.map(([data]) => data)).toEqual([
+      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;3Hx\x1b[?25h\x1b[?2026l',
+      '\x1b[?2026h\x1b[0 q\x1b[?25l\x1b[19;4Hx\x1b[?25h\x1b[?2026l'
+    ])
   })
 
   it('keeps transient cursor shows unless the caller opts into stripping', async () => {

@@ -71,7 +71,9 @@ const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
 const PARSE_SETTLE_TIMEOUT_MS = 250
 const FOREGROUND_COALESCE_DELAY_MS = 1000
 const FOREGROUND_HOLD_SAFETY_DELAY_MS = 250
-const LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS = 32
+// Why: key repeat can tick every 30-50ms; one frame catches split restores
+// without batching multiple typed-character redraws behind the fallback.
+const LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS = 16
 const LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS = 32
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
