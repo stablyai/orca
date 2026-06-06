@@ -560,13 +560,18 @@ async function importValidatedCookies(
 
   for (const cookie of cookies) {
     try {
+      // Why: Chromium rejects a __Host--prefixed cookie that carries a Domain;
+      // it must be host-only (no domain) with path '/' and Secure. Without this
+      // the most important session cookies (e.g. GitHub's __Host- pair) silently
+      // fail cookies.set() and the imported session reads as logged out.
+      const isHostPrefixed = cookie.name.startsWith('__Host-')
       await targetSession.cookies.set({
         url: cookie.url,
         name: cookie.name,
         value: stripNonPrintable(cookie.value),
-        domain: cookie.domain,
-        path: cookie.path,
-        secure: cookie.secure,
+        ...(isHostPrefixed ? {} : { domain: cookie.domain }),
+        path: isHostPrefixed ? '/' : cookie.path,
+        secure: isHostPrefixed ? true : cookie.secure,
         httpOnly: cookie.httpOnly,
         sameSite: cookie.sameSite,
         expirationDate: cookie.expirationDate

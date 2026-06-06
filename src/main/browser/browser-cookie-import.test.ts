@@ -316,6 +316,29 @@ describe('importCookiesFromJson', () => {
     expect(cookiesSetMock).toHaveBeenCalledTimes(1)
   })
 
+  it('shapes __Host- cookies host-only (no domain, path /, secure)', async () => {
+    const json = JSON.stringify([
+      {
+        domain: 'github.com',
+        name: '__Host-user_session_same_site',
+        value: 'tok',
+        path: '/',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax'
+      }
+    ])
+
+    const result = await importCookiesFromJson(json, 'persist:orca-browser')
+    expect(result.ok).toBe(true)
+
+    // Chromium rejects a __Host- cookie with a Domain; it must be host-only.
+    const setArg = cookiesSetMock.mock.calls[0][0]
+    expect(setArg.domain).toBeUndefined()
+    expect(setArg.path).toBe('/')
+    expect(setArg.secure).toBe(true)
+  })
+
   it('rejects non-JSON input', async () => {
     const result = await importCookiesFromJson('not json', 'persist:orca-browser')
     expect(result.ok).toBe(false)
