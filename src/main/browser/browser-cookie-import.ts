@@ -560,13 +560,18 @@ async function importValidatedCookies(
 
   for (const cookie of cookies) {
     try {
+      // Why: Chromium rejects a __Host--prefixed cookie that carries a Domain;
+      // it must be host-only (no domain) with path '/' and Secure. Without this
+      // the most important session cookies (e.g. GitHub's __Host- pair) silently
+      // fail cookies.set() and the imported session reads as logged out.
+      const isHostPrefixed = cookie.name.startsWith('__Host-')
       await targetSession.cookies.set({
         url: cookie.url,
         name: cookie.name,
         value: stripNonPrintable(cookie.value),
-        domain: cookie.domain,
-        path: cookie.path,
-        secure: cookie.secure,
+        ...(isHostPrefixed ? {} : { domain: cookie.domain }),
+        path: isHostPrefixed ? '/' : cookie.path,
+        secure: isHostPrefixed ? true : cookie.secure,
         httpOnly: cookie.httpOnly,
         sameSite: cookie.sameSite,
         expirationDate: cookie.expirationDate
@@ -645,12 +650,22 @@ export async function importCookiesFromFile(
   } catch {
     return { ok: false, reason: 'Could not read the selected file.' }
   }
+  return importCookiesFromJson(rawContent, targetPartition)
+}
 
+// Why: shared by the Settings file import and the agentcookie session sync,
+// which feeds the same JSON array of cookies from `agentcookie export`. Both
+// funnel through the one validated-import pipeline so an automatic agentcookie
+// pull gets identical __Host-/host-only shaping and per-cookie validation.
+export async function importCookiesFromJson(
+  rawContent: string,
+  targetPartition: string
+): Promise<BrowserCookieImportResult> {
   let parsed: unknown
   try {
     parsed = JSON.parse(rawContent)
   } catch {
-    return { ok: false, reason: 'File is not valid JSON.' }
+    return { ok: false, reason: 'Input is not valid JSON.' }
   }
 
   if (!Array.isArray(parsed)) {
@@ -658,7 +673,7 @@ export async function importCookiesFromFile(
   }
 
   if (parsed.length === 0) {
-    return { ok: false, reason: 'Cookie file is empty.' }
+    return { ok: false, reason: 'Cookie array is empty.' }
   }
 
   const validated: ValidatedCookie[] = []

@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 import {
   buildChromiumCookieInsertParams,
   importCookiesFromFile,
+  importCookiesFromJson,
   importCookiesFromBrowser,
   detectInstalledBrowsers,
   type ChromiumCookieColumnInfo,
@@ -277,6 +278,53 @@ describe('importCookiesFromFile', () => {
     }
     expect(result.summary.importedCookies).toBe(1)
     expect(result.summary.skippedCookies).toBe(1)
+  })
+})
+
+describe('importCookiesFromJson', () => {
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    sessionFromPartitionMock.mockReset()
+    sessionFromPartitionMock.mockReturnValue({ cookies: { set: cookiesSetMock } })
+  })
+
+  it('imports a valid JSON array (the agentcookie pull path)', async () => {
+    const json = JSON.stringify([
+      { domain: '.github.com', name: 'user_session', value: 'tok', path: '/', secure: true }
+    ])
+    const result = await importCookiesFromJson(json, 'persist:orca-browser')
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.summary.importedCookies).toBe(1)
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith('persist:orca-browser')
+  })
+
+  it('rejects non-JSON and non-array input', async () => {
+    expect((await importCookiesFromJson('nope', 'persist:test')).ok).toBe(false)
+    expect((await importCookiesFromJson('{"a":1}', 'persist:test')).ok).toBe(false)
+    expect((await importCookiesFromJson('[]', 'persist:test')).ok).toBe(false)
+  })
+
+  it('shapes __Host- cookies host-only (no domain, path /, secure)', async () => {
+    const json = JSON.stringify([
+      {
+        domain: 'github.com',
+        name: '__Host-user_session_same_site',
+        value: 'tok',
+        path: '/',
+        secure: true
+      }
+    ])
+    const result = await importCookiesFromJson(json, 'persist:orca-browser')
+    expect(result.ok).toBe(true)
+    const setArg = cookiesSetMock.mock.calls[0][0]
+    expect(setArg.domain).toBeUndefined()
+    expect(setArg.path).toBe('/')
+    expect(setArg.secure).toBe(true)
   })
 })
 
