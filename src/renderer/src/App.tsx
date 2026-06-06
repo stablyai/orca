@@ -214,6 +214,9 @@ function WindowControls(): React.JSX.Element {
 }
 
 const Landing = lazy(() => import('./components/Landing'))
+const WorktreeCreationPanel = lazy(
+  () => import('./components/worktree-creation/WorktreeCreationPanel')
+)
 const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
@@ -325,6 +328,7 @@ function App(): React.JSX.Element {
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
   // that remount so the left workspace list doesn't restart at scrollTop 0.
@@ -1797,7 +1801,7 @@ function App(): React.JSX.Element {
                     <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                       <div
                         className={
-                          activeView !== 'terminal' || !activeWorktreeId
+                          activeView !== 'terminal' || !activeWorktreeId || activePendingCreationId
                             ? 'hidden flex-1 min-w-0 min-h-0'
                             : 'flex flex-1 min-w-0 min-h-0'
                         }
@@ -1827,7 +1831,14 @@ function App(): React.JSX.Element {
                           {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                           {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                           {activeView === 'mobile' ? <MobilePage /> : null}
-                          {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
+                          {activeView === 'terminal' && activePendingCreationId ? (
+                            <WorktreeCreationPanel creationId={activePendingCreationId} />
+                          ) : null}
+                          {activeView === 'terminal' &&
+                          !activeWorktreeId &&
+                          !activePendingCreationId ? (
+                            <Landing />
+                          ) : null}
                         </RecoverableRenderErrorBoundary>
                       </Suspense>
                     </div>

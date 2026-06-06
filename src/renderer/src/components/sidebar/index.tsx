@@ -5,6 +5,7 @@ import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
+import PendingWorktreeCreationsStrip from './PendingWorktreeCreationsStrip'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
 import WorktreeMetaDialog from './WorktreeMetaDialog'
@@ -77,6 +78,8 @@ function Sidebar({
             {/* Fixed controls */}
             <SidebarNav />
             <SidebarHeader />
+
+            <PendingWorktreeCreationsStrip />
 
             <WorktreeList
               scrollOffsetRef={worktreeScrollOffsetRef}

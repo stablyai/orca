@@ -819,6 +819,13 @@ export type PreloadApi = {
     listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
+    /** Two-phase progress for a background `create`, correlated by
+     *  `creationId`. Renderer routes each event to its pending creation's
+     *  status surface; the remote/runtime create path emits nothing, so the
+     *  surface falls back to an indeterminate spinner. */
+    onCreateProgress: (
+      callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
+    ) => () => void
     prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
     resolvePrBase: (args: {
       repoId: string

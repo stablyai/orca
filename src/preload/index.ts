@@ -544,6 +544,17 @@ const api = {
 
     create: (args) => ipcRenderer.invoke('worktrees:create', args),
 
+    onCreateProgress: (
+      callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
+    ): (() => void) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: { creationId?: string; phase: 'fetching' | 'creating' }
+      ) => callback(data)
+      ipcRenderer.on('createWorktree:progress', listener)
+      return () => ipcRenderer.removeListener('createWorktree:progress', listener)
+    },
+
     prefetchCreateBase: (args) => ipcRenderer.invoke('worktrees:prefetchCreateBase', args),
 
     resolvePrBase: (args) => ipcRenderer.invoke('worktrees:resolvePrBase', args),

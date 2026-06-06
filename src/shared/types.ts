@@ -1634,6 +1634,10 @@ export type CreateWorktreeArgs = {
   /** Optional startup command for callers that want the backend to spawn the
    *  first terminal as soon as the worktree is registered. */
   startup?: WorktreeStartupLaunch
+  /** Correlates `createWorktree:progress` events back to a specific pending
+   *  creation in the renderer, so concurrent background creates each drive
+   *  their own status surface. Omitted by synchronous callers. */
+  creationId?: string
 }
 
 export type CreateWorktreeResult = {

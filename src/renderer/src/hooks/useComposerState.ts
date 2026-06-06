@@ -14,8 +14,9 @@ import {
   normalizeGitHubLinkQuery
 } from '@/lib/github-links'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
+import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -2292,91 +2293,50 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
               }
             : undefined
-        const result = await createWorktree(
+        const request: WorktreeCreationRequest = {
           repoId,
-          workspaceName,
-          selectedRepoIsGit ? baseBranch : undefined,
-          effectiveSetupDecision,
-          selectedRepoIsGit && sparseEnabled
+          name: workspaceName,
+          ...(createDisplayName ? { displayName: createDisplayName } : {}),
+          ...(selectedRepoIsGit && baseBranch ? { baseBranch } : {}),
+          setupDecision: effectiveSetupDecision,
+          ...(selectedRepoIsGit && sparseEnabled
             ? {
-                directories: normalizedSparseDirectories,
-                ...(effectivePresetId ? { presetId: effectivePresetId } : {})
-              }
-            : undefined,
-          telemetrySource,
-          createDisplayName,
-          submitLinkedIssueNumber ?? undefined,
-          submitLinkedPR ?? undefined,
-          pushTarget,
-          agent ?? undefined,
-          linkedLinearIssue,
-          effectiveBranchNameOverride,
-          resolvedInitialWorkspaceStatus,
-          linkedGitLabMR ?? undefined,
-          linkedGitLabIssue ?? undefined,
-          backendStartup,
-          pendingFirstAgentMessageRename
-        )
-        const worktree = result.worktree
-
-        await applyWorktreeMeta(worktree.id, trimmedNote ? { comment: trimmedNote } : {})
-
-        // Why: agents that gate first-launch behind a "Do you trust this
-        // folder?" menu (cursor-agent, copilot) consume the bracketed paste
-        // as menu input. Pre-write the trust artifact so the menu is
-        // skipped — best-effort, errors swallowed by main. Guard the IPC
-        // presence so a stale preload bundle doesn't crash the launch with
-        // "Cannot read properties of undefined".
-        if (agent && worktree.path && window.api.agentTrust?.markTrusted) {
-          const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-          if (preflight) {
-            try {
-              await window.api.agentTrust.markTrusted({
-                preset: preflight,
-                workspacePath: worktree.path
-              })
-            } catch {
-              // Best-effort: continue with launch.
-            }
-          }
-        }
-
-        const backendSpawnedStartup = result.startupTerminal?.spawned === true
-        const activation = activateAndRevealWorktree(worktree.id, {
-          sidebarRevealBehavior: 'auto',
-          setup: result.setup,
-          defaultTabs: result.defaultTabs,
-          ...(startupPlan && !backendSpawnedStartup
-            ? {
-                startup: {
-                  command: startupPlan.launchCommand,
-                  ...(startupPlan.env ? { env: startupPlan.env } : {}),
-                  ...(agent === 'command-code' && quickPrompt.trim().length > 0
-                    ? {
-                        initialAgentStatus: {
-                          agent,
-                          prompt: quickPrompt.trim()
-                        }
-                      }
-                    : {}),
-                  ...(quickTelemetry ? { telemetry: quickTelemetry } : {})
+                sparseCheckout: {
+                  directories: normalizedSparseDirectories,
+                  ...(effectivePresetId ? { presetId: effectivePresetId } : {})
                 }
               }
-            : {})
-        })
-        if (startupPlan && !backendSpawnedStartup) {
-          void ensureAgentStartupInTerminal({
-            worktreeId: worktree.id,
-            primaryTabId: activation === false ? null : activation.primaryTabId,
-            startup: startupPlan
-          })
+            : {}),
+          ...(telemetrySource ? { telemetrySource } : {}),
+          ...(submitLinkedIssueNumber != null ? { linkedIssue: submitLinkedIssueNumber } : {}),
+          ...(submitLinkedPR != null ? { linkedPR: submitLinkedPR } : {}),
+          ...(pushTarget ? { pushTarget } : {}),
+          agent,
+          ...(linkedLinearIssue ? { linkedLinearIssue } : {}),
+          ...(effectiveBranchNameOverride
+            ? { branchNameOverride: effectiveBranchNameOverride }
+            : {}),
+          ...(resolvedInitialWorkspaceStatus
+            ? { workspaceStatus: resolvedInitialWorkspaceStatus }
+            : {}),
+          ...(linkedGitLabMR != null ? { linkedGitLabMR } : {}),
+          ...(linkedGitLabIssue != null ? { linkedGitLabIssue } : {}),
+          ...(backendStartup ? { startup: backendStartup } : {}),
+          pendingFirstAgentMessageRename,
+          note: trimmedNote,
+          startupPlan,
+          quickPrompt,
+          quickTelemetry
         }
-        setSidebarOpen(true)
+
+        // Why: git fetch + `git worktree add` can take 10–15s; holding the modal
+        // hostage to that made it feel frozen, so hand off to a background flow and
+        // close the modal immediately.
         if (persistDraft) {
           clearNewWorkspaceDraft()
         }
         onCreated?.()
-        queueNewWorkspaceTerminalFocus(worktree.id, activation)
+        runBackgroundWorktreeCreation(request)
       } catch (error) {
         const formattedError = formatWorkspaceCreateError(error)
         setCreateError(formattedError)
@@ -2387,12 +2347,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [
       agentPrompt,
-      applyWorktreeMeta,
       baseBranch,
       branchNameOverride,
       branchNameOverridePreservesNameEdits,
       clearNewWorkspaceDraft,
-      createWorktree,
       fallbackCreatureName,
       effectiveLinkedPR,
       linkedGitLabIssue,
@@ -2417,7 +2375,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       settings?.agentCmdOverrides,
       settings?.autoRenameBranchFromWork,
       disabledTuiAgents,
-      setSidebarOpen,
       setupDecision,
       sparseEnabled,
       sparseError,

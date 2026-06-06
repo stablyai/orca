@@ -1035,6 +1035,9 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         manualOrder: args.manualOrder
       })
     },
+    // Why: the runtime create path emits no two-phase progress, so the web
+    // client's creation panel simply falls back to an indeterminate spinner.
+    onCreateProgress: () => noopUnsubscribe,
     prefetchCreateBase: async ({ repoId, baseBranch }) => {
       await callRuntimeResult('worktree.prefetchCreateBase', {
         repo: repoId,

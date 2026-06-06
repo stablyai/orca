@@ -1031,10 +1031,11 @@ export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string
 // "Creating worktree..." label if no event arrives.
 export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
-  phase: 'fetching' | 'creating'
+  phase: 'fetching' | 'creating',
+  creationId?: string
 ): void {
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('createWorktree:progress', { phase })
+    mainWindow.webContents.send('createWorktree:progress', { creationId, phase })
   }
 }
 
@@ -1452,7 +1453,7 @@ export async function createLocalWorktree(
     remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, baseBranch)
     if (remoteTrackingBase) {
       const hasLocalBaseRef = await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)
-      emitCreateWorktreeProgress(mainWindow, 'fetching')
+      emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
       remoteTrackingRefresh = {
         base: remoteTrackingBase,
         hadLocalBaseRef: hasLocalBaseRef,
@@ -1469,14 +1470,14 @@ export async function createLocalWorktree(
         .fetchRemoteWithCache(repo.path, fallbackRemote)
         .then(() => undefined)
         .catch(() => undefined)
-      emitCreateWorktreeProgress(mainWindow, 'fetching')
+      emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
     const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     legacyFetchPromise = gitExecFileAsync(['fetch', remote], { cwd: repo.path })
       .then(() => undefined)
       .catch(() => undefined)
-    emitCreateWorktreeProgress(mainWindow, 'fetching')
+    emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
   }
   const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
 
@@ -1662,7 +1663,7 @@ export async function createLocalWorktree(
       await legacyFetchPromise
     })
   }
-  emitCreateWorktreeProgress(mainWindow, 'creating')
+  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
 
   let preparedPushTarget: GitPushTarget | undefined
   if (args.pushTarget) {

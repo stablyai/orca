@@ -859,6 +859,18 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: drive each background creation's status panel by routing the main
+    // process's two-phase progress to its pending entry via the correlation id.
+    // Guarded with `?.` so a stale preload bundle doesn't crash the listener set.
+    unsubs.push(
+      window.api.worktrees.onCreateProgress?.((data) => {
+        if (!data.creationId) {
+          return
+        }
+        useAppStore.getState().updatePendingWorktreeCreation(data.creationId, { phase: data.phase })
+      }) ?? (() => {})
+    )
+
     if (window.api.gh?.onPRRefreshEvent) {
       unsubs.push(
         window.api.gh.onPRRefreshEvent((event) => {

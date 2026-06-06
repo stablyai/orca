@@ -698,6 +698,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   detectedWorktreesByRepo: {},
   worktreeLineageById: {},
   activeWorktreeId: null,
+  pendingWorktreeCreations: {},
+  activePendingCreationId: null,
   renamingWorktreeId: null,
   deleteStateByWorktreeId: {},
   baseStatusByWorktreeId: {},
@@ -1025,7 +1027,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     linkedGitLabMR,
     linkedGitLabIssue,
     startup,
-    pendingFirstAgentMessageRename
+    pendingFirstAgentMessageRename,
+    creationId
   ) => {
     const retryableConflictPatterns = [
       /already exists locally/i,
@@ -1072,7 +1075,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
             ...(linkedGitLabMR !== undefined ? { linkedGitLabMR } : {}),
             ...(linkedGitLabIssue !== undefined ? { linkedGitLabIssue } : {}),
-            ...(startup ? { startup } : {})
+            ...(startup ? { startup } : {}),
+            ...(creationId ? { creationId } : {})
           }
           const target = getActiveRuntimeTarget(get().settings)
           const result =
@@ -1156,6 +1160,62 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       console.error('Failed to create worktree:', err)
       throw err
     }
+  },
+
+  beginPendingWorktreeCreation: (entry) => {
+    set((s) => ({
+      pendingWorktreeCreations: { ...s.pendingWorktreeCreations, [entry.creationId]: entry },
+      activePendingCreationId: entry.creationId
+    }))
+  },
+
+  updatePendingWorktreeCreation: (creationId, patch) => {
+    set((s) => {
+      const entry = s.pendingWorktreeCreations[creationId]
+      if (!entry) {
+        return {}
+      }
+      // Why: the main process re-emits the same phase across mutually-exclusive
+      // fetch paths; skip the write when nothing changes so the strip and panel
+      // don't re-render on a no-op progress event.
+      const hasChange = (Object.keys(patch) as (keyof typeof patch)[]).some(
+        (key) => patch[key] !== entry[key]
+      )
+      if (!hasChange) {
+        return {}
+      }
+      return {
+        pendingWorktreeCreations: {
+          ...s.pendingWorktreeCreations,
+          [creationId]: { ...entry, ...patch }
+        }
+      }
+    })
+  },
+
+  removePendingWorktreeCreation: (creationId) => {
+    set((s) => {
+      if (!s.pendingWorktreeCreations[creationId]) {
+        return {}
+      }
+      const { [creationId]: _removed, ...rest } = s.pendingWorktreeCreations
+      return {
+        pendingWorktreeCreations: rest,
+        // Why: only clear the active surface if it pointed here, so dismissing a
+        // background creation the user already navigated away from doesn't yank
+        // them off whatever they're now looking at.
+        ...(s.activePendingCreationId === creationId ? { activePendingCreationId: null } : {})
+      }
+    })
+  },
+
+  setActivePendingWorktreeCreation: (creationId) => {
+    set((s) => {
+      if (creationId !== null && !s.pendingWorktreeCreations[creationId]) {
+        return {}
+      }
+      return { activePendingCreationId: creationId }
+    })
   },
 
   removeWorktree: async (worktreeId, force) => {
@@ -2057,7 +2117,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     set((s) => {
       if (!worktreeId) {
         return {
-          activeWorktreeId: null
+          activeWorktreeId: null,
+          // Why: activating any real worktree (or clearing it) must dismiss the
+          // background-creation panel so the user isn't stranded on it.
+          activePendingCreationId: null
         }
       }
 
@@ -2249,6 +2312,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
+        // Why: a pending-creation panel can be showing while activeWorktreeId is
+        // still the prior worktree. Re-selecting that same worktree must clear
+        // the panel, so a non-null activePendingCreationId counts as a change.
+        s.activePendingCreationId !== null ||
         s.activeFileId !== activeFileId ||
         s.activeBrowserTabId !== activeBrowserTabId ||
         s.activeTabType !== activeTabType ||
@@ -2266,6 +2333,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
       return {
         activeWorktreeId: worktreeId,
+        activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
         activeTabType,

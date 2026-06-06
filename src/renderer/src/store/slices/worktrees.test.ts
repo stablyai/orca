@@ -77,6 +77,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createWorktreeSlice } from './worktrees'
+import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import {
@@ -3296,5 +3297,113 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[2].isPinned).toBe(true)
+  })
+})
+
+function makePendingCreation(
+  creationId: string,
+  overrides: Partial<PendingWorktreeCreation> = {}
+): PendingWorktreeCreation {
+  return {
+    creationId,
+    phase: 'fetching',
+    status: 'creating',
+    indeterminate: false,
+    request: {
+      repoId: 'repo1',
+      name: 'feature',
+      setupDecision: 'inherit',
+      agent: null,
+      pendingFirstAgentMessageRename: false,
+      note: '',
+      startupPlan: null,
+      quickPrompt: '',
+      quickTelemetry: null
+    },
+    ...overrides
+  }
+}
+
+describe('pending worktree creation state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  it('beginPendingWorktreeCreation registers the entry and makes it the active surface', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    expect(store.getState().pendingWorktreeCreations.c1).toBeDefined()
+    expect(store.getState().activePendingCreationId).toBe('c1')
+  })
+
+  it('updatePendingWorktreeCreation skips the write when the patch changes nothing', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+    const before = store.getState().pendingWorktreeCreations
+
+    store.getState().updatePendingWorktreeCreation('c1', { phase: 'fetching' })
+
+    // Same map reference => no subscriber notification on a no-op progress event.
+    expect(store.getState().pendingWorktreeCreations).toBe(before)
+  })
+
+  it('updatePendingWorktreeCreation applies a real phase change', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    store.getState().updatePendingWorktreeCreation('c1', { phase: 'creating' })
+
+    expect(store.getState().pendingWorktreeCreations.c1.phase).toBe('creating')
+  })
+
+  it('updatePendingWorktreeCreation is a no-op for an unknown id', () => {
+    const store = createTestStore()
+    const before = store.getState().pendingWorktreeCreations
+
+    store.getState().updatePendingWorktreeCreation('missing', { status: 'error', error: 'x' })
+
+    expect(store.getState().pendingWorktreeCreations).toBe(before)
+  })
+
+  it('removePendingWorktreeCreation clears the active surface only when it points at the removed entry', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c2'))
+    // c2 is active now; removing the background c1 must not steal the surface.
+    store.getState().removePendingWorktreeCreation('c1')
+
+    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
+    expect(store.getState().activePendingCreationId).toBe('c2')
+
+    store.getState().removePendingWorktreeCreation('c2')
+    expect(store.getState().activePendingCreationId).toBeNull()
+  })
+
+  it('setActivePendingWorktreeCreation ignores unknown ids but always accepts null', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    store.getState().setActivePendingWorktreeCreation('missing')
+    expect(store.getState().activePendingCreationId).toBe('c1')
+
+    store.getState().setActivePendingWorktreeCreation(null)
+    expect(store.getState().activePendingCreationId).toBeNull()
+  })
+
+  it('setActiveWorktree dismisses the creation panel even when re-selecting the already-active worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/a', repoId: 'repo1' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: wt.id,
+      activePendingCreationId: 'c1',
+      pendingWorktreeCreations: { c1: makePendingCreation('c1') }
+    } as unknown as Partial<AppState>)
+
+    store.getState().setActiveWorktree(wt.id)
+
+    expect(store.getState().activePendingCreationId).toBeNull()
   })
 })
