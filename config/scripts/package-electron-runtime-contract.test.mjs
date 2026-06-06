@@ -50,6 +50,11 @@ describe('Electron runtime package contract', () => {
     expect(scripts['build:release']).not.toContain('build:computer-macos')
   })
 
+  it('runs the web build through the heap-sized Vite wrapper', () => {
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/run-vite-web-build.mjs')
+    expect(packageJson.scripts['build:web']).toContain('node config/scripts/verify-web-build.mjs')
+  })
+
   it('guards release publishing before electron-builder runs', () => {
     const releaseWorkflow = readFileSync(
       join(projectDir, '.github/workflows/release-cut.yml'),
@@ -63,7 +68,7 @@ describe('Electron runtime package contract', () => {
       ])
     )
 
-    expect([...releaseCommands.keys()].sort()).toEqual(['linux', 'mac', 'win'])
+    expect([...releaseCommands.keys()].sort()).toEqual(['linux-arm64', 'linux-x64', 'mac', 'win'])
     for (const command of releaseCommands.values()) {
       expect(command).toContain('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
       expect(command).toContain('electron-builder')
@@ -72,7 +77,10 @@ describe('Electron runtime package contract', () => {
       )
     }
     expect(releaseCommands.get('mac')).toContain(' && ORCA_MAC_RELEASE=1 ')
-    expect(releaseCommands.get('linux')).toContain(' && pnpm exec electron-builder ')
+    expect(releaseCommands.get('linux-x64')).toContain(' && pnpm exec electron-builder ')
+    expect(releaseCommands.get('linux-x64')).toContain('--linux AppImage deb rpm --x64')
+    expect(releaseCommands.get('linux-arm64')).toContain('ORCA_LINUX_ARM64_RELEASE=1')
+    expect(releaseCommands.get('linux-arm64')).toContain('--linux AppImage deb rpm --arm64')
     expect(releaseCommands.get('win')).toContain(
       '; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder '
     )
