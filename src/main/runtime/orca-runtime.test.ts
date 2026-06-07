@@ -3434,6 +3434,19 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('returns OSC titles from headless main terminal snapshots', async () => {
+    const runtime = createRuntime()
+    syncSinglePty(runtime, 'pty-1')
+
+    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07hello\n', 100)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    expect(snapshot).toMatchObject({
+      source: 'headless',
+      lastTitle: 'Codex working'
+    })
+  })
+
   it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
     const runtime = new OrcaRuntimeService(store, undefined, {

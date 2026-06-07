@@ -1,6 +1,7 @@
 import './xterm-env-polyfill'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
+import { extractLastOscTitle } from '../../shared/agent-detection'
 import type { TerminalSnapshot, TerminalModes } from './types'
 
 export type HeadlessEmulatorOptions = {
@@ -51,6 +52,7 @@ export class HeadlessEmulator {
   private terminal: Terminal
   private serializer: SerializeAddon
   private cwd: string | null = null
+  private lastTitle: string | null = null
   private privateModeScanTail = ''
   private mouseTrackingMode: MouseTrackingMode = 'none'
   private sgrMouseMode = false
@@ -87,6 +89,10 @@ export class HeadlessEmulator {
     }
 
     this.scanOsc7(data)
+    const lastTitle = extractLastOscTitle(data)
+    if (lastTitle !== null) {
+      this.lastTitle = lastTitle
+    }
     return new Promise<void>((resolve) => {
       this.terminal.write(data, () => {
         // Why: snapshots combine serialized xterm state with mirrored mouse
@@ -118,7 +124,8 @@ export class HeadlessEmulator {
       modes,
       cols: this.terminal.cols,
       rows: this.terminal.rows,
-      scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows
+      scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
+      lastTitle: this.lastTitle ?? undefined
     }
   }
 

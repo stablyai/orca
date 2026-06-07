@@ -3291,6 +3291,7 @@ export class OrcaRuntimeService {
     data: string
     cols: number
     rows: number
+    lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
   } | null> {
@@ -3304,6 +3305,7 @@ export class OrcaRuntimeService {
     data: string
     cols: number
     rows: number
+    lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
   } | null> {
@@ -3505,6 +3507,7 @@ export class OrcaRuntimeService {
     data: string
     cols: number
     rows: number
+    lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
   } | null> {
@@ -3546,6 +3549,7 @@ export class OrcaRuntimeService {
     data: string
     cols: number
     rows: number
+    lastTitle?: string
     seq?: number
     source?: 'headless'
   } | null> {
@@ -3570,6 +3574,7 @@ export class OrcaRuntimeService {
           data,
           cols: snapshot.cols,
           rows: snapshot.rows,
+          lastTitle: snapshot.lastTitle,
           seq: state.outputSequence,
           source: 'headless'
         }

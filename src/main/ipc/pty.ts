@@ -1766,6 +1766,7 @@ export function registerPtyHandlers(
       data: string
       cols: number
       rows: number
+      lastTitle?: string
       seq?: number
       source?: 'headless' | 'renderer'
     } | null> => {

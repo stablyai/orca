@@ -111,6 +111,24 @@ describe('HeadlessEmulator', () => {
     })
   })
 
+  describe('OSC title tracking', () => {
+    it('captures the latest OSC window title in snapshots', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]0;Codex working\x07hello')
+
+      expect(emulator.getSnapshot().lastTitle).toBe('Codex working')
+    })
+
+    it('uses the last OSC title when a chunk contains multiple title updates', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]0;Codex working\x07output\x1b]2;Codex idle\x1b\\')
+
+      expect(emulator.getSnapshot().lastTitle).toBe('Codex idle')
+    })
+  })
+
   describe('resize', () => {
     it('updates dimensions', () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
