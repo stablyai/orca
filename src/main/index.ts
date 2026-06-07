@@ -1161,13 +1161,6 @@ app.whenReady().then(async () => {
     getLocalProvider: () => getLocalPtyProvider(),
     onPtyStopped: clearProviderPtyState,
     onTerminalAgentStatus: (event) => {
-      if (event.source !== 'pty-record') {
-        return
-      }
-      // Why: mounted panes already apply OSC 9999 through renderer
-      // pty-transport. Runtime fanout is enabled first for rendererless PTYs
-      // so background/model-owned terminals get status without duplicate UI
-      // updates on visible xterm panes.
       agentHookServer.ingestTerminalStatus(event)
     }
   })

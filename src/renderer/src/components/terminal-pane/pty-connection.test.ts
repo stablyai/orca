@@ -343,6 +343,16 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
+  mockStoreState = {
+    ...mockStoreState,
+    settings: {
+      ...mockStoreState.settings,
+      activeRuntimeEnvironmentId: environmentId
+    }
+  } as StoreState
+}
+
 function createKeyboardEventTarget() {
   const handlers = new Set<(event: KeyboardEvent) => void>()
   return {
@@ -4772,6 +4782,7 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-hook')
     transportFactoryQueue.push(transport)
+    enableActiveRuntimeEnvironment()
 
     vi.useFakeTimers()
     const pane = createPane(1)
@@ -4809,10 +4820,25 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('leaves local IPC OSC 9999 status ownership in the main runtime', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-local')
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(createdTransportOptions[0]?.onAgentStatus).toBeUndefined()
+  })
+
   it('lets delayed hook completion notifications win over concurrent terminal bells', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-hook')
     transportFactoryQueue.push(transport)
+    enableActiveRuntimeEnvironment()
 
     vi.useFakeTimers()
     const pane = createPane(1)
@@ -4881,6 +4907,7 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-hook')
     transportFactoryQueue.push(transport)
+    enableActiveRuntimeEnvironment()
 
     vi.useFakeTimers()
     const pane = createPane(1)
@@ -4938,6 +4965,7 @@ describe('connectPanePty', () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-hook')
     transportFactoryQueue.push(transport)
+    enableActiveRuntimeEnvironment()
 
     vi.useFakeTimers()
     const pane = createPane(1)
