@@ -24,6 +24,12 @@ import {
   runHiddenRealPtyPressureScenario,
   writePressureOutputScript
 } from './artificial-opencode-hidden-pressure-scenario'
+import {
+  annotateScrollMeasurement,
+  measureActiveTerminalWheelScroll,
+  scrollActiveTerminalToBottom,
+  seedActiveTerminalScrollback
+} from './artificial-opencode-scroll-scenario'
 
 type TerminalLoadPane = {
   paneKey: string
@@ -112,6 +118,7 @@ const TIMER_SAMPLE_MS = 16
 const MAX_MEDIAN_KEY_LATENCY_MS = 75
 const MAX_WORST_KEY_LATENCY_MS = 300
 const MAX_TIMER_DRIFT_MS = 150
+const MAX_SCROLL_LATENCY_MS = 150
 
 function readPositiveInt(name: string, fallback: number): number {
   const raw = process.env[name]
@@ -648,8 +655,10 @@ test.describe('Artificial OpenCode terminal load', () => {
     await focusPane(orcaPage, typingPane.paneKey)
 
     const runId = randomUUID()
+    const scrollRunId = randomUUID()
     const typingScriptPath = path.join(testRepoPath, `.orca-opencode-pressure-typing-${runId}.mjs`)
     const pressureScriptPath = path.join(testRepoPath, `.orca-opencode-pressure-load-${runId}.mjs`)
+    await seedActiveTerminalScrollback(orcaPage, typingPane.ptyId, scrollRunId)
     writeInteractivePromptScript(typingScriptPath, runId)
     writePressureOutputScript(pressureScriptPath, runId)
     await resetTerminalPtyOutputDebug(orcaPage)
@@ -668,6 +677,21 @@ test.describe('Artificial OpenCode terminal load', () => {
         )
       )
       const pressureBeforeTyping = await waitForMainPtyPressureBacklog(orcaPage)
+      const scrollMeasurement = await measureActiveTerminalWheelScroll(orcaPage)
+      const mainPressureAfterScroll = await readMainPtyPressureDebug(orcaPage)
+      const ackGateAfterScroll = await readTerminalAckGateDebug(orcaPage)
+      annotateScrollMeasurement(
+        testInfo,
+        'opencode-main-pressure-active-scroll',
+        panes.length,
+        scrollMeasurement,
+        mainPressureAfterScroll,
+        ackGateAfterScroll
+      )
+      expect(scrollMeasurement.afterViewportY).toBeLessThan(scrollMeasurement.beforeViewportY)
+      expect(scrollMeasurement.scrollLatencyMs).toBeLessThan(MAX_SCROLL_LATENCY_MS)
+      expect(scrollMeasurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
+      await scrollActiveTerminalToBottom(orcaPage)
       const measurement = await measureTypingDuringLoad(
         orcaPage,
         typingScriptPath,
