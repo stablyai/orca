@@ -901,6 +901,7 @@ export type PreloadApi = {
     signal: (id: string, signal: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
+    ackData: (id: string, charCount: number) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>

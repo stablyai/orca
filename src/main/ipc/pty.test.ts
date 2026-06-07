@@ -381,6 +381,17 @@ describe('registerPtyHandlers', () => {
     return writeCall[1] as (event: unknown, args: { id: string; data: string }) => void
   }
 
+  function getPtyAckDataListener(): (
+    event: unknown,
+    args: { id: string; charCount: number }
+  ) => void {
+    const ackCall = onMock.mock.calls.find((call: unknown[]) => call[0] === 'pty:ackData')
+    if (!ackCall) {
+      throw new Error('missing pty:ackData listener')
+    }
+    return ackCall[1] as (event: unknown, args: { id: string; charCount: number }) => void
+  }
+
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
@@ -4163,6 +4174,147 @@ describe('registerPtyHandlers', () => {
         id: firstSpawn.id,
         data: firstRemainder
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for renderer ACKs before sending more output for a saturated PTY', async () => {
+    vi.useFakeTimers()
+    const firstProc = createMockProc()
+    const secondProc = createMockProc()
+    spawnMock.mockReturnValueOnce(firstProc.proc).mockReturnValueOnce(secondProc.proc)
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const firstSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const secondSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      firstProc.emitData('x'.repeat(600 * 1024))
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 31; index++) {
+        vi.advanceTimersByTime(1)
+      }
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
+      vi.advanceTimersByTime(1)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
+      expect(vi.getTimerCount()).toBe(0)
+
+      secondProc.emitData('second-terminal-output')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(33)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(33, 'pty:data', {
+        id: secondSpawn.id,
+        data: 'second-terminal-output'
+      })
+
+      ackData(null, { id: firstSpawn.id, charCount: 16 * 1024 })
+      vi.advanceTimersByTime(1)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(34)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(34, 'pty:data', {
+        id: firstSpawn.id,
+        data: 'x'.repeat(16 * 1024)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps interactive output buffered when the renderer budget is saturated', async () => {
+    vi.useFakeTimers()
+    const bulkProcs = Array.from({ length: 16 }, () => createMockProc())
+    const interactiveProc = createMockProc()
+    for (const proc of [...bulkProcs, interactiveProc]) {
+      spawnMock.mockReturnValueOnce(proc.proc)
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      for (const _proc of bulkProcs) {
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/tmp'
+        })
+      }
+      const interactiveSpawn = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp'
+      })) as { id: string }
+      const writeListener = getPtyWriteListener()
+      mainWindow.webContents.send.mockClear()
+
+      for (const proc of bulkProcs) {
+        proc.emitData('x'.repeat(600 * 1024))
+      }
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 400; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
+      expect(vi.getTimerCount()).toBe(0)
+
+      writeListener(null, {
+        id: interactiveSpawn.id,
+        data: 'a'
+      })
+      interactiveProc.emitData('\x1b[20;2Hredraw')
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('caps total renderer in-flight output across many PTYs', async () => {
+    vi.useFakeTimers()
+    const procs = Array.from({ length: 17 }, () => createMockProc())
+    for (const proc of procs) {
+      spawnMock.mockReturnValueOnce(proc.proc)
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawns: { id: string }[] = []
+      for (const _proc of procs) {
+        spawns.push(
+          (await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            cwd: '/tmp'
+          })) as { id: string }
+        )
+      }
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      for (const proc of procs) {
+        proc.emitData('x'.repeat(600 * 1024))
+      }
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 400; index++) {
+        vi.advanceTimersByTime(1)
+      }
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
+      ackData(null, { id: spawns[0].id, charCount: 16 * 1024 })
+      vi.advanceTimersByTime(1)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
     } finally {
       vi.useRealTimers()
     }

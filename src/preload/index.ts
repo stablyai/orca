@@ -683,6 +683,9 @@ const api = {
     ackColdRestore: (id: string): void => {
       ipcRenderer.send('pty:ackColdRestore', { id })
     },
+    ackData: (id: string, charCount: number): void => {
+      ipcRenderer.send('pty:ackData', { id, charCount })
+    },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
