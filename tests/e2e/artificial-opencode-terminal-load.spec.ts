@@ -22,6 +22,7 @@ import {
 } from './helpers/terminal'
 import { runHiddenRealPtyPressureScenario } from './artificial-opencode-hidden-pressure-scenario'
 import { runMainPressureScenario } from './artificial-opencode-main-pressure-scenario'
+import { startSyntheticOpenCodeInjection } from './artificial-opencode-synthetic-injection'
 
 type TerminalLoadPane = {
   paneKey: string
@@ -279,68 +280,6 @@ function median(values: number[]): number {
   return sorted[Math.floor(sorted.length / 2)] ?? 0
 }
 
-async function startSyntheticOpenCodeInjection(
-  page: Page,
-  paneKeys: string[]
-): Promise<{ stop: () => Promise<void> }> {
-  await page.evaluate(
-    ({ paneKeys, frameCount, intervalMs }) => {
-      const target = window as SyntheticOpenCodeWindow & {
-        __syntheticOpenCodeLoadTimer?: number
-      }
-      const injector = target.__terminalPtyDataInjection
-      if (!injector) {
-        throw new Error('terminal PTY data injection API is unavailable')
-      }
-      let frameIndex = 0
-      target.__syntheticOpenCodeLoadTimer = window.setInterval(() => {
-        for (const [paneIndex, paneKey] of paneKeys.entries()) {
-          const injected = injector.inject(
-            paneKey,
-            syntheticOpenCodeFrameSource(paneIndex, frameIndex)
-          )
-          if (!injected) {
-            throw new Error(`no PTY data injector registered for pane key ${paneKey}`)
-          }
-        }
-        frameIndex += 1
-        if (frameIndex >= frameCount && target.__syntheticOpenCodeLoadTimer != null) {
-          window.clearInterval(target.__syntheticOpenCodeLoadTimer)
-          delete target.__syntheticOpenCodeLoadTimer
-        }
-      }, intervalMs)
-
-      function syntheticOpenCodeFrameSource(paneIndex: number, frame: number): string {
-        const row = (frame % 18) + 4
-        const spinner = ['|', '/', '-', '\\'][frame % 4]
-        const body = `${'opencode '.repeat(10)}pane=${paneIndex} frame=${frame}`
-        return [
-          '\x1b[?2026h',
-          '\x1b[?25l',
-          `\x1b[1;2H\x1b[38;2;255;138;0m${spinner} OpenCode synthetic agent ${paneIndex}\x1b[0m`,
-          `\x1b[${row};4H\x1b[38;2;231;237;247m${body.padEnd(118, '#')}\x1b[0m`,
-          `\x1b[23;2H\x1b[38;2;106;169;255mstream ${String(frame).padStart(4, '0')} ${'#'.repeat(96)}\x1b[0m`,
-          '\x1b[?2026l'
-        ].join('')
-      }
-    },
-    { paneKeys, frameCount: FRAME_COUNT, intervalMs: FRAME_INTERVAL_MS }
-  )
-  return {
-    stop: async () => {
-      await page.evaluate(() => {
-        const target = window as SyntheticOpenCodeWindow & {
-          __syntheticOpenCodeLoadTimer?: number
-        }
-        if (target.__syntheticOpenCodeLoadTimer != null) {
-          window.clearInterval(target.__syntheticOpenCodeLoadTimer)
-          delete target.__syntheticOpenCodeLoadTimer
-        }
-      })
-    }
-  }
-}
-
 async function measureTypingDuringLoad(
   page: Page,
   scriptPath: string,
@@ -532,10 +471,12 @@ async function measureCrossWorkspaceTypingDuringHiddenLoad({
   const scriptPath = path.join(testRepoPath, `.orca-opencode-cross-${hiddenPaneCount}-${runId}.mjs`)
   writeInteractivePromptScript(scriptPath, runId)
   await resetTerminalPtyOutputDebug(orcaPage)
-  const load = await startSyntheticOpenCodeInjection(
-    orcaPage,
-    hiddenPanes.map((pane) => pane.paneKey)
-  )
+  const load = await startSyntheticOpenCodeInjection({
+    frameCount: FRAME_COUNT,
+    intervalMs: FRAME_INTERVAL_MS,
+    page: orcaPage,
+    paneKeys: hiddenPanes.map((pane) => pane.paneKey)
+  })
   try {
     const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
     const debug = await readTerminalPtyOutputDebug(orcaPage)
@@ -660,10 +601,12 @@ test.describe('Artificial OpenCode terminal load', () => {
     const scriptPath = path.join(testRepoPath, `.orca-opencode-typing-${runId}.mjs`)
     writeInteractivePromptScript(scriptPath, runId)
     await resetTerminalPtyOutputDebug(orcaPage)
-    const load = await startSyntheticOpenCodeInjection(
-      orcaPage,
-      loadPanes.map((pane) => pane.paneKey)
-    )
+    const load = await startSyntheticOpenCodeInjection({
+      frameCount: FRAME_COUNT,
+      intervalMs: FRAME_INTERVAL_MS,
+      page: orcaPage,
+      paneKeys: loadPanes.map((pane) => pane.paneKey)
+    })
     try {
       const measurement = await measureTypingDuringLoad(
         orcaPage,
@@ -733,10 +676,12 @@ test.describe('Artificial OpenCode terminal load', () => {
       const scriptPath = path.join(testRepoPath, `.orca-opencode-scale-${paneCount}-${runId}.mjs`)
       writeInteractivePromptScript(scriptPath, runId)
       await resetTerminalPtyOutputDebug(orcaPage)
-      const load = await startSyntheticOpenCodeInjection(
-        orcaPage,
-        loadPanes.map((pane) => pane.paneKey)
-      )
+      const load = await startSyntheticOpenCodeInjection({
+        frameCount: FRAME_COUNT,
+        intervalMs: FRAME_INTERVAL_MS,
+        page: orcaPage,
+        paneKeys: loadPanes.map((pane) => pane.paneKey)
+      })
       try {
         const measurement = await measureTypingDuringLoad(
           orcaPage,
