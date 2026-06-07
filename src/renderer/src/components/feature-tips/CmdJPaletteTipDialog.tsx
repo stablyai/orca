@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
 
@@ -28,6 +29,16 @@ export function CmdJPaletteTipDialog({
   onSkip: () => void
   onRebindClick: () => void
 }): JSX.Element {
+  // Why: read the live binding so the title chip stays correct after a rebind
+  // and on Linux/Windows (Ctrl+Shift+J) — matching the visual's key chips.
+  const worktreePaletteShortcutLabel = useShortcutLabel('worktree.palette')
+  // The tip's title uses "<shortcut>" as a placeholder token; split it so we
+  // can render the live label as a styled <kbd> chip inline. Missing token
+  // degrades to the plain title.
+  const titleParts = tip.title.split('<shortcut>')
+  const titlePrefix = titleParts[0]
+  const titleSuffix = titleParts.slice(1).join('<shortcut>')
+
   // Why: match the horizontal layout (text left, visual/animation right) used by the
   // CLI tip for a consistent "feature education" presentation; keeps the palette demo
   // prominent on the right.
@@ -37,11 +48,19 @@ export function CmdJPaletteTipDialog({
         className="!flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))] sm:max-w-4xl md:!h-[min(27rem,calc(100vh-2rem))] md:!flex-row"
         showCloseButton
       >
-        <div className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 md:shrink-0 md:basis-[47.5%]">
+        <div className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 md:shrink-0 md:basis-1/2">
           <DialogHeader className="gap-4 text-left">
             <div>
-              <DialogTitle className="text-3xl font-semibold leading-tight tracking-tight max-w-[22rem]">
-                {tip.title}
+              <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
+                <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 md:flex-nowrap">
+                  <span>{titlePrefix.trimEnd()}</span>
+                  {worktreePaletteShortcutLabel ? (
+                    <kbd className="inline-flex shrink-0 items-center rounded-md border border-border bg-card px-2 py-0.5 font-mono text-base font-medium text-foreground">
+                      {worktreePaletteShortcutLabel}
+                    </kbd>
+                  ) : null}
+                  {titleSuffix ? <span>{titleSuffix}</span> : null}
+                </span>
               </DialogTitle>
               <DialogDescription className="mt-3 max-w-2xl text-sm leading-relaxed">
                 {tip.description}
@@ -71,8 +90,8 @@ export function CmdJPaletteTipDialog({
             />
           </DialogFooter>
         </div>
-        <div className="min-h-0 min-w-0 shrink-0 overflow-hidden md:basis-[52.5%]">
-          <div className="h-full md:w-[29.4rem]">
+        <div className="flex min-h-0 min-w-0 shrink-0 self-stretch overflow-hidden bg-muted/60 md:basis-1/2 md:border-l md:border-border/70">
+          <div className="h-full min-h-[23rem] w-full md:w-[29.4rem]">
             <CmdJPaletteFeatureTipVisual />
           </div>
         </div>

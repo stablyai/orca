@@ -1,19 +1,19 @@
 import { useEffect, useState, type JSX } from 'react'
-import { Loader2, Plus, Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { useShortcutKeys } from '@/hooks/useShortcutLabel'
 
-const TYPED_QUERY = 'auth-pr'
+const TYPED_QUERY = 'auth'
 // Why: one finished + one still running mirrors what a user actually sees in
 // the palette (mixed agent states), making the tip's value visible at a glance.
 const WORKTREE_RESULTS: readonly {
   key: string
   name: string
+  branch: string
   status: 'done' | 'running'
-  chip: string | null
 }[] = [
-  { key: '1', name: 'auth-pr-1', status: 'done', chip: 'Current' },
-  { key: '2', name: 'auth-pr-2', status: 'running', chip: 'Running' }
+  { key: '1', name: 'auth-redirect', branch: 'fix/auth-redirect', status: 'done' },
+  { key: '2', name: 'oauth-callback', branch: 'fix/oauth-callback', status: 'running' }
 ]
 
 // Why: cycle phases are sequenced so the keypress visibly precedes the palette
@@ -23,7 +23,10 @@ type CyclePhase = 'idle' | 'pressed' | 'open' | 'typing' | 'results'
 
 // Per-character typing interval. Kept tight and constant so the cursor advances
 // at an even cadence instead of feeling staggered.
-const TYPE_INTERVAL_MS = 90
+const TYPE_INTERVAL_MS = 120
+// Short beat after the query is complete before results appear — fast enough to
+// feel responsive, slow enough to read the finished search term.
+const RESULT_REVEAL_DELAY_MS = 150
 // Pause on the final, fully-populated state before the cycle resets, so the
 // user has time to actually read the matched worktrees + create option.
 const HOLD_AFTER_RESULTS_MS = 3200
@@ -53,7 +56,6 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
 
     let cancelled = false
     const timeouts: number[] = []
-    const intervals: number[] = []
     const later = (fn: () => void, ms: number): void => {
       timeouts.push(window.setTimeout(() => !cancelled && fn(), ms))
     }
@@ -70,42 +72,36 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
       // Beat 3: user starts typing the worktree name.
       later(() => {
         setPhase('typing')
-        // Drive typing from a single interval so the cadence is uniform, not
-        // drift-prone like a stack of setTimeouts.
         let i = 0
-        const id = window.setInterval(() => {
+        const typeNext = (): void => {
           if (cancelled) {
-            window.clearInterval(id)
             return
           }
           i += 1
           setTypedLength(i)
           if (i >= TYPED_QUERY.length) {
-            window.clearInterval(id)
+            later(() => {
+              setPhase('results')
+              later(runOnce, HOLD_AFTER_RESULTS_MS)
+            }, RESULT_REVEAL_DELAY_MS)
+            return
           }
-        }, TYPE_INTERVAL_MS)
-        intervals.push(id)
+          timeouts.push(window.setTimeout(typeNext, TYPE_INTERVAL_MS))
+        }
+        later(typeNext, TYPE_INTERVAL_MS)
       }, 1300)
-
-      // Beat 4: once typing finishes, the filtered results appear together —
-      // matching how the real palette renders incremental search.
-      const typingEnd = 1300 + TYPE_INTERVAL_MS * TYPED_QUERY.length
-      later(() => setPhase('results'), typingEnd + 220)
-      // Beat 5: hold on the final state long enough to read, then loop.
-      later(runOnce, typingEnd + 220 + HOLD_AFTER_RESULTS_MS)
     }
 
     runOnce()
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
-      intervals.forEach((id) => window.clearInterval(id))
     }
   }, [reducedMotion])
 
   return (
     <div
-      className="relative flex min-h-[23rem] flex-col items-center justify-center overflow-hidden bg-muted/60 px-6 py-7"
+      className="relative flex h-full min-h-[23rem] flex-col items-center justify-center overflow-hidden px-6 py-7"
       aria-hidden="true"
     >
       {shortcutKeys.length > 0 ? (
@@ -127,72 +123,69 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
       ) : null}
 
       <div
-        className={`mt-3 w-full max-w-[21rem] overflow-hidden rounded-xl border border-border bg-card text-left shadow-lg transition-[opacity,transform] duration-300 ease-out ${
-          showPaletteOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'
+        className={`relative mt-3 h-[12.75rem] w-full max-w-[21rem] overflow-hidden rounded-xl border border-border bg-card text-left shadow-lg transition-opacity duration-300 ease-out ${
+          showPaletteOpen ? 'opacity-100' : 'opacity-0'
         }`}
       >
-        {/* Animated input area showing the user typing a worktree name. */}
-        <div className="flex items-center gap-2 border-b border-border bg-muted/20 px-3 py-2.5">
+        {/* Why: search and results are absolutely positioned so row content
+            changes during the demo never reflow the input bar mid-animation. */}
+        <div className="absolute inset-x-0 top-0 flex h-11 items-center gap-2 border-b border-border bg-muted/20 px-3">
           <Search className="size-4 shrink-0 text-muted-foreground/70" />
-          <div className="min-w-0 flex-1 truncate text-[13px] text-foreground/90">
-            {currentQuery ? (
-              currentQuery
-            ) : (
-              <span className="text-muted-foreground/60">Search workspaces, settings, tabs…</span>
-            )}
-            {!reducedMotion && (
-              <span className="ml-px inline-block h-[14px] w-px -translate-y-px align-middle bg-foreground/75 animate-cmd-j-tip-caret" />
-            )}
+          <div className="h-5 min-w-0 flex-1 overflow-hidden text-[13px] leading-5 text-foreground/90">
+            <span className="block truncate">
+              {currentQuery}
+              {!reducedMotion && phase !== 'idle' && phase !== 'pressed' ? (
+                <span className="ml-px inline-block h-[14px] w-px -translate-y-px align-middle bg-foreground/75 animate-cmd-j-tip-caret" />
+              ) : null}
+            </span>
           </div>
         </div>
 
-        {/* Results area: the two matching worktrees + create-new option appear
-            together once typing completes, like the real palette filtering. */}
-        <div className="flex min-h-[7.25rem] flex-col gap-0.5 p-1.5">
-          {showResults && (
-            <>
-              {WORKTREE_RESULTS.map((result) => (
-                <div
-                  key={result.key}
-                  className="flex items-center gap-2.5 rounded-lg border border-transparent bg-accent/50 px-2.5 py-1.5 animate-cmd-j-tip-result-in"
-                >
-                  <span className="flex w-4 shrink-0 items-center justify-center">
-                    {result.status === 'done' ? (
-                      <span className="size-2.5 rounded-full bg-green-500" aria-hidden="true" />
-                    ) : (
-                      <Loader2
-                        className="size-3 animate-spin text-foreground/60"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
-                        {result.name}
-                      </span>
-                      {result.chip && (
-                        <span className="shrink-0 rounded-[6px] border border-border/60 bg-background/45 px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88">
-                          {result.chip}
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-muted-foreground/70">main</span>
-                  </div>
-                </div>
-              ))}
-              <div className="mt-0.5 flex items-center gap-2.5 rounded-lg border border-dashed border-border/60 bg-muted/10 px-2.5 py-1.5 animate-cmd-j-tip-result-in">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
-                  <Plus size={13} aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
-                    {`Create workspace "${currentQuery || TYPED_QUERY}"`}
-                  </div>
-                </div>
+        <div
+          className={`absolute inset-x-0 top-11 bottom-0 flex flex-col gap-0.5 overflow-hidden p-1.5 transition-opacity duration-150 ease-out ${
+            showResults ? 'opacity-100' : 'opacity-0'
+          }`}
+          aria-hidden={!showResults}
+        >
+          {WORKTREE_RESULTS.map((result) => (
+            <div
+              key={result.key}
+              className={`flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-1.5 ${
+                showResults ? 'animate-cmd-j-tip-result-in' : ''
+              }`}
+            >
+              <span className="flex w-4 shrink-0 items-center justify-center">
+                {result.status === 'done' ? (
+                  <span className="size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                ) : (
+                  // Why: yellow border spinner mirrors StatusIndicator's
+                  // 'working' affordance, so users connect the icon to the
+                  // same running-workspace state they see in the sidebar.
+                  <span className="block size-2.5 rounded-full border-[1.5px] border-yellow-500 border-t-transparent animate-spin" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
+                  {result.name}
+                </span>
+                <span className="block truncate text-[10px] text-muted-foreground/70">
+                  {result.branch}
+                </span>
               </div>
-            </>
-          )}
+            </div>
+          ))}
+          <div
+            className={`mt-0.5 flex shrink-0 items-center gap-2.5 rounded-lg border border-dashed border-border/60 bg-muted/10 px-2.5 py-1.5 ${
+              showResults ? 'animate-cmd-j-tip-result-in' : ''
+            }`}
+          >
+            <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
+              <Plus size={13} aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1 truncate text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
+              {`Create workspace "${TYPED_QUERY}"`}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1790,7 +1790,7 @@
 }
 
 .animate-cmd-j-tip-result-in {
-  animation: cmd-j-tip-result-in 200ms ease-out both;
+  animation: cmd-j-tip-result-in 120ms ease-out both;
 }
 
 /* ── Feature wall: agents-orchestration animations ───────────────── */

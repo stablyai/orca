@@ -43,9 +43,11 @@ export const FEATURE_TIPS = [
     id: 'cmd-j-palette',
     priority: 'new',
     eyebrow: 'Tip',
-    title: 'Jump anywhere with the command palette',
+    // Why: "<shortcut>" is a placeholder token; the cmd-j dialog splits the
+    // title on it and inlines the live, platform-correct keybinding as a <kbd>.
+    title: 'Jump to a worktree with <shortcut>',
     description:
-      'Open the palette to search across worktrees, settings, tabs, and quick actions — or type a name to create a new worktree.',
+      'Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.',
     action: 'learn-cmd-j-palette',
     ctaLabel: 'Got it',
     completedByFeatureInteractions: []
