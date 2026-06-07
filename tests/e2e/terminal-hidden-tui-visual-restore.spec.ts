@@ -139,6 +139,44 @@ async function readMainSnapshotSource(
   }, ptyId)
 }
 
+async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      return []
+    }
+    return Object.keys(store.getState().unreadTerminalTabs)
+  })
+}
+
+async function getRuntimePaneTitle(
+  page: Page,
+  tabId: string,
+  numericPaneId: number
+): Promise<string | null> {
+  return page.evaluate(
+    ({ tabId, numericPaneId }) => {
+      const store = window.__store
+      if (!store) {
+        return null
+      }
+      return store.getState().runtimePaneTitlesByTabId[tabId]?.[numericPaneId] ?? null
+    },
+    { tabId, numericPaneId }
+  )
+}
+
+async function writeHiddenSideEffectBurst(
+  page: Page,
+  ptyId: string,
+  title: string,
+  marker: string
+): Promise<void> {
+  const payload = `\x07\x1b]0;${title}\x07${marker}\n`
+  const script = `process.stdout.write(${JSON.stringify(payload)}); setTimeout(() => process.exit(0), 30000)`
+  await sendToTerminal(page, ptyId, `node -e ${JSON.stringify(script)}\r`)
+}
+
 test.describe('Hidden terminal TUI visual restore', () => {
   test('restores skipped hidden full-screen TUI output without visible corruption', async ({
     orcaPage,
@@ -301,5 +339,77 @@ test.describe('Hidden terminal TUI visual restore', () => {
     } finally {
       await clearDelayedMainSnapshot(orcaPage, hiddenPane.ptyId)
     }
+  })
+
+  test('keeps hidden terminal side effects live while renderer output is skipped', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+    const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
+      (id) => id !== firstWorktreeId
+    )
+    test.skip(!secondWorktreeId, 'hidden side-effect guard needs the seeded secondary worktree')
+    if (!secondWorktreeId) {
+      return
+    }
+
+    await switchToWorktree(orcaPage, secondWorktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const hiddenSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    const hiddenPane = hiddenSnapshot.panes[0]
+    if (!hiddenPane?.ptyId) {
+      throw new Error('hidden side-effect pane did not bind a PTY')
+    }
+
+    await switchToWorktree(orcaPage, firstWorktreeId)
+    await expect
+      .poll(() => getActiveWorktreeId(orcaPage), {
+        timeout: 10_000,
+        message: 'first worktree did not become active before hidden side-effect burst'
+      })
+      .toBe(firstWorktreeId)
+
+    const runId = randomUUID()
+    const hiddenTitle = `Hidden model side effects ${runId}`
+    const marker = `HIDDEN_SIDE_EFFECT_MARKER_${runId}`
+    await resetHiddenDebug(orcaPage)
+    await writeHiddenSideEffectBurst(orcaPage, hiddenPane.ptyId, hiddenTitle, marker)
+
+    await expect
+      .poll(async () => (await readHiddenDebug(orcaPage))?.hiddenRendererSkipCount ?? 0, {
+        timeout: 10_000,
+        message: 'hidden side-effect output did not exercise the skipped-renderer path'
+      })
+      .toBeGreaterThan(0)
+    await expect
+      .poll(() => getRuntimePaneTitle(orcaPage, hiddenSnapshot.tabId, hiddenPane.numericPaneId), {
+        timeout: 10_000,
+        message: 'hidden OSC title did not update renderer-visible model state'
+      })
+      .toBe(hiddenTitle)
+    await expect
+      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(hiddenSnapshot.tabId), {
+        timeout: 10_000,
+        message: 'hidden BEL did not mark the hidden terminal tab unread'
+      })
+      .toBe(true)
+    await expect
+      .poll(() => readMainSnapshotSource(orcaPage, hiddenPane.ptyId!), {
+        timeout: 10_000,
+        message: 'hidden side-effect restore did not use the runtime headless snapshot'
+      })
+      .toBe('headless')
+
+    await switchToWorktree(orcaPage, secondWorktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await expect
+      .poll(() => getTerminalContent(orcaPage, 12_000), {
+        timeout: 10_000,
+        message: 'hidden side-effect marker did not restore when the workspace became visible'
+      })
+      .toContain(marker)
   })
 })
