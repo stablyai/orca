@@ -188,7 +188,10 @@ describe('reportActiveRendererPtyForPane', () => {
     expect(mocks.setActiveTerminalOutputTarget).toHaveBeenCalledWith(terminalA, false)
     expect(mocks.setActiveTerminalOutputTarget).toHaveBeenCalledWith(terminalB, true)
     expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-1', false)
-    expect(window.api.pty.setActiveRendererPty).not.toHaveBeenCalledWith('remote:env@@pty-2', true)
+    expect(window.api.pty.setActiveRendererPty).not.toHaveBeenCalledWith(
+      'remote:env@@pty-2',
+      expect.anything()
+    )
   })
 
   it('clears every renderer output target while hidden or inactive', () => {
