@@ -84,6 +84,19 @@ function readPositiveInt(name: string, fallback: number): number {
   return Number.isInteger(value) && value > 0 ? value : fallback
 }
 
+function readPositiveIntList(name: string): number[] {
+  const raw = process.env[name]
+  if (!raw) {
+    return []
+  }
+  return raw
+    .split(',')
+    .map((part) => Number(part.trim()))
+    .filter((value, index, values) => {
+      return Number.isInteger(value) && value > 1 && values.indexOf(value) === index
+    })
+}
+
 const SAME_WORKSPACE_PANES = readPositiveInt(
   'ORCA_E2E_OPENCODE_SAME_WORKSPACE_PANES',
   DEFAULT_SAME_WORKSPACE_PANES
@@ -97,6 +110,7 @@ const FRAME_INTERVAL_MS = readPositiveInt(
   'ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS',
   DEFAULT_FRAME_INTERVAL_MS
 )
+const SCALE_SAME_WORKSPACE_PANES = readPositiveIntList('ORCA_E2E_OPENCODE_SCALE_PANES')
 
 function interactivePromptScript(runId: string): string {
   return `
@@ -433,6 +447,51 @@ test.describe('Artificial OpenCode terminal load', () => {
       rmSync(scriptPath, { force: true })
     }
   })
+
+  for (const paneCount of SCALE_SAME_WORKSPACE_PANES) {
+    test(`keeps typing responsive at ${paneCount} same-workspace OpenCode panes`, async ({
+      orcaPage,
+      testRepoPath
+    }, testInfo) => {
+      await waitForSessionReady(orcaPage)
+      await waitForActiveWorktree(orcaPage)
+      const panes = await ensureActiveWorktreePaneLoad(orcaPage, paneCount)
+      const [typingPane, ...loadPanes] = panes
+      await focusPane(orcaPage, typingPane.paneKey)
+
+      const runId = randomUUID()
+      const scriptPath = path.join(testRepoPath, `.orca-opencode-scale-${paneCount}-${runId}.mjs`)
+      writeFileSync(scriptPath, interactivePromptScript(runId))
+      await resetTerminalPtyOutputDebug(orcaPage)
+      const load = await startSyntheticOpenCodeInjection(
+        orcaPage,
+        loadPanes.map((pane) => pane.paneKey)
+      )
+      try {
+        const measurement = await measureTypingDuringLoad(
+          orcaPage,
+          scriptPath,
+          typingPane.ptyId,
+          runId
+        )
+        annotateTypingMeasurement(
+          testInfo,
+          `opencode-scale-same-workspace-${paneCount}`,
+          panes.length,
+          measurement,
+          await readTerminalPtyOutputDebug(orcaPage),
+          await readTerminalOutputSchedulerDebug(orcaPage)
+        )
+        expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+        expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+        expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
+      } finally {
+        await load.stop()
+        await sendToTerminal(orcaPage, typingPane.ptyId, '\x03').catch(() => undefined)
+        rmSync(scriptPath, { force: true })
+      }
+    })
+  }
 
   test('keeps typing responsive while another workspace streams OpenCode-style output', async ({
     orcaPage,

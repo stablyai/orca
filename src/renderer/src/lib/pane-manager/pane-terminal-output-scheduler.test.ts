@@ -620,6 +620,26 @@ describe('pane terminal output scheduler', () => {
     setActiveTerminalOutputTarget(terminals[2], false)
   })
 
+  it('still drains the active terminal first with one hundred queued terminals', async () => {
+    vi.useFakeTimers()
+    const { setActiveTerminalOutputTarget, writeTerminalOutput } = await loadScheduler()
+    const terminals = Array.from({ length: 100 }, () => createTerminal())
+    const activeTerminal = terminals[99]
+
+    terminals.forEach((terminal, index) => {
+      writeTerminalOutput(terminal, `pane-${index}`, { foreground: false })
+    })
+    setActiveTerminalOutputTarget(activeTerminal, true)
+
+    vi.advanceTimersByTime(50)
+
+    expect(activeTerminal.write).toHaveBeenCalledWith('pane-99')
+    expect(terminals[0].write).toHaveBeenCalledWith('pane-0')
+    expect(activeTerminal.write.mock.invocationCallOrder[0]).toBeLessThan(
+      terminals[0].write.mock.invocationCallOrder[0]
+    )
+  })
+
   it('rotates terminals with remaining backlog behind untouched queued terminals', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
