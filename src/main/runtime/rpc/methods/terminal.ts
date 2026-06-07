@@ -26,7 +26,10 @@ const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
 const TERMINAL_OUTPUT_BATCH_MAX_CHARS = 64 * 1024
-const TERMINAL_MULTIPLEX_PENDING_MAX_CHARS = 256 * 1024
+// Why: pending output is held for later binary frames, so cap the encoded
+// payload bytes rather than UTF-16 code units.
+const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
+const terminalStreamTextEncoder = new TextEncoder()
 let nextTerminalStreamId = 1
 
 type SnapshotFrameOptions = {
@@ -66,7 +69,7 @@ type TerminalMultiplexStream = {
   isMobile: boolean
   buffering: boolean
   pendingOutput: TerminalOutputChunk[]
-  pendingOutputChars: number
+  pendingOutputBytes: number
   pendingOutputOverflowed: boolean
   outputBatcher: ReturnType<typeof createTerminalOutputBatcher>
   unsubscribeData: () => void
@@ -182,29 +185,33 @@ function appendPendingMultiplexOutput(
   meta?: { seq?: number; rawLength?: number }
 ): void {
   stream.pendingOutput.push({ data, meta })
-  stream.pendingOutputChars += data.length
-  const trimmed = trimPendingOutputToBudget(stream.pendingOutput, stream.pendingOutputChars)
-  stream.pendingOutputChars = trimmed.chars
+  stream.pendingOutputBytes += terminalStreamByteLength(data)
+  const trimmed = trimPendingOutputToBudget(stream.pendingOutput, stream.pendingOutputBytes)
+  stream.pendingOutputBytes = trimmed.bytes
   stream.pendingOutputOverflowed ||= trimmed.overflowed
 }
 
 function trimPendingOutputToBudget(
   pendingOutput: (string | TerminalOutputChunk)[],
-  pendingOutputChars: number
-): { chars: number; overflowed: boolean } {
+  pendingOutputBytes: number
+): { bytes: number; overflowed: boolean } {
   let omittedChunkCount = 0
   while (
-    pendingOutputChars > TERMINAL_MULTIPLEX_PENDING_MAX_CHARS &&
+    pendingOutputBytes > TERMINAL_MULTIPLEX_PENDING_MAX_BYTES &&
     omittedChunkCount < pendingOutput.length
   ) {
     const chunk = pendingOutput[omittedChunkCount]
-    pendingOutputChars -= typeof chunk === 'string' ? chunk.length : chunk.data.length
+    pendingOutputBytes -= terminalStreamByteLength(typeof chunk === 'string' ? chunk : chunk.data)
     omittedChunkCount += 1
   }
   if (omittedChunkCount > 0) {
     pendingOutput.splice(0, omittedChunkCount)
   }
-  return { chars: pendingOutputChars, overflowed: omittedChunkCount > 0 }
+  return { bytes: pendingOutputBytes, overflowed: omittedChunkCount > 0 }
+}
+
+function terminalStreamByteLength(data: string): number {
+  return terminalStreamTextEncoder.encode(data).byteLength
 }
 
 function isTerminalReadPayloadIncomplete(read: { truncated: boolean; limited?: boolean }): boolean {
@@ -238,7 +245,7 @@ async function serializeBudgetedRequestedSnapshot(
     if (!serialized) {
       return null
     }
-    const bytes = new TextEncoder().encode(serialized.data).byteLength
+    const bytes = terminalStreamByteLength(serialized.data)
     if (bytes <= REQUESTED_SNAPSHOT_BYTE_BUDGET || rows === 0) {
       return {
         ...serialized,
@@ -297,7 +304,7 @@ async function serializeBudgetedMobileSnapshot(
     if (!serialized) {
       return null
     }
-    const bytes = new TextEncoder().encode(serialized.data).byteLength
+    const bytes = terminalStreamByteLength(serialized.data)
     if (bytes <= MOBILE_SNAPSHOT_BYTE_BUDGET || rows === 0) {
       return {
         ...serialized,
@@ -931,7 +938,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             // Why: the overflowed tail is newer than the first snapshot. Retry
             // so hidden restore receives a current terminal image instead of null.
             stream.pendingOutput.splice(0)
-            stream.pendingOutputChars = 0
+            stream.pendingOutputBytes = 0
             stream.pendingOutputOverflowed = false
             serialized = await serializeBudgetedRequestedSnapshot(
               runtime,
@@ -984,7 +991,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
                 stream.outputBatcher.push(chunk.data, chunk.meta)
               }
             }
-            stream.pendingOutputChars = 0
+            stream.pendingOutputBytes = 0
             stream.pendingOutputOverflowed = false
             stream.outputBatcher.flush()
           }
@@ -1027,7 +1034,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           isMobile,
           buffering: true,
           pendingOutput: [],
-          pendingOutputChars: 0,
+          pendingOutputBytes: 0,
           pendingOutputOverflowed: false,
           outputBatcher: createTerminalOutputBatcher((data, meta) => {
             sendFrame(
@@ -1143,7 +1150,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           for (const chunk of stream.pendingOutput.splice(0)) {
             stream.outputBatcher.push(chunk.data, chunk.meta)
           }
-          stream.pendingOutputChars = 0
+          stream.pendingOutputBytes = 0
           stream.pendingOutputOverflowed = false
           stream.outputBatcher.flush()
 
@@ -1310,7 +1317,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       let closed = false
       let buffering = true
       const pendingOutput: string[] = []
-      let pendingOutputChars = 0
+      let pendingOutputBytes = 0
       let unsubscribeData = (): void => {}
       let unsubscribeResize = (): void => {}
       let unsubscribeFit = (): void => {}
@@ -1416,8 +1423,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           }
           if (buffering) {
             pendingOutput.push(data)
-            pendingOutputChars += data.length
-            pendingOutputChars = trimPendingOutputToBudget(pendingOutput, pendingOutputChars).chars
+            pendingOutputBytes += terminalStreamByteLength(data)
+            pendingOutputBytes = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes).bytes
             return
           }
           outputBatcher?.push(data)
@@ -1468,7 +1475,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         for (const item of pendingOutput.splice(0)) {
           outputBatcher.push(item)
         }
-        pendingOutputChars = 0
+        pendingOutputBytes = 0
         outputBatcher.flush()
 
         unsubscribeResize = runtime.subscribeToTerminalResize(ptyId, (event) => {
