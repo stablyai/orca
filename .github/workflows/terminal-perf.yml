@@ -15,6 +15,34 @@ on:
         description: Path for the generated terminal perf JSON report
         required: false
         type: string
+      frame_count:
+        description: Number of prompt redraw frames per typing measurement
+        required: false
+        type: string
+      frame_interval_ms:
+        description: Milliseconds between synthetic OpenCode redraw frames
+        required: false
+        type: string
+      pressure_output_chars:
+        description: Bytes/chars each ACK-backpressured real PTY should emit
+        required: false
+        type: string
+      scale_panes:
+        description: Comma-separated same-workspace pane counts
+        required: false
+        type: string
+      scale_cross_workspace_panes:
+        description: Comma-separated hidden cross-workspace pane counts
+        required: false
+        type: string
+      scale_pressure_panes:
+        description: Comma-separated active real-PTY pressure pane counts
+        required: false
+        type: string
+      scale_hidden_pressure_panes:
+        description: Comma-separated hidden real-PTY pressure pane counts
+        required: false
+        type: string
   schedule:
     # Why: keep the expensive scale run off PRs, but exercise it daily so
     # terminal throughput regressions are caught before users report typing lag.
@@ -65,11 +93,39 @@ jobs:
       - name: Run terminal scale perf report gate
         env:
           ORCA_TERMINAL_PERF_GREP: ${{ inputs.grep }}
+          ORCA_TERMINAL_PERF_FRAME_COUNT: ${{ inputs.frame_count }}
+          ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS: ${{ inputs.frame_interval_ms }}
+          ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS: ${{ inputs.pressure_output_chars }}
+          ORCA_TERMINAL_PERF_SCALE_PANES: ${{ inputs.scale_panes }}
+          ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES: ${{ inputs.scale_cross_workspace_panes }}
+          ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES: ${{ inputs.scale_pressure_panes }}
+          ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES: ${{ inputs.scale_hidden_pressure_panes }}
         run: |
           set -euo pipefail
           args=()
           if [ -n "${ORCA_TERMINAL_PERF_GREP:-}" ]; then
             args+=(--grep "$ORCA_TERMINAL_PERF_GREP")
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_FRAME_COUNT:-}" ]; then
+            export ORCA_E2E_OPENCODE_FRAME_COUNT="$ORCA_TERMINAL_PERF_FRAME_COUNT"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS:-}" ]; then
+            export ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS="$ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS:-}" ]; then
+            export ORCA_E2E_OPENCODE_PRESSURE_OUTPUT_CHARS="$ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_SCALE_PANES:-}" ]; then
+            export ORCA_E2E_OPENCODE_SCALE_PANES="$ORCA_TERMINAL_PERF_SCALE_PANES"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES:-}" ]; then
+            export ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES="$ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES:-}" ]; then
+            export ORCA_E2E_OPENCODE_SCALE_PRESSURE_PANES="$ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES"
+          fi
+          if [ -n "${ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES:-}" ]; then
+            export ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES="$ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES"
           fi
           xvfb-run --auto-servernum env SKIP_BUILD=1 pnpm run test:e2e:terminal-perf:scale:report -- "${args[@]}"
 

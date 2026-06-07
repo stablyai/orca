@@ -175,6 +175,39 @@ describe('Electron runtime package contract', () => {
     )
     expect(runStep.run).toContain('pnpm run test:e2e:terminal-perf:scale:report')
     expect(runStep.run).toContain('xvfb-run --auto-servernum')
+    const manualProfileKnobs = [
+      ['ORCA_TERMINAL_PERF_FRAME_COUNT', 'frame_count', 'ORCA_E2E_OPENCODE_FRAME_COUNT'],
+      [
+        'ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS',
+        'frame_interval_ms',
+        'ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS'
+      ],
+      [
+        'ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS',
+        'pressure_output_chars',
+        'ORCA_E2E_OPENCODE_PRESSURE_OUTPUT_CHARS'
+      ],
+      ['ORCA_TERMINAL_PERF_SCALE_PANES', 'scale_panes', 'ORCA_E2E_OPENCODE_SCALE_PANES'],
+      [
+        'ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES',
+        'scale_cross_workspace_panes',
+        'ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES'
+      ],
+      [
+        'ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES',
+        'scale_pressure_panes',
+        'ORCA_E2E_OPENCODE_SCALE_PRESSURE_PANES'
+      ],
+      [
+        'ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES',
+        'scale_hidden_pressure_panes',
+        'ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES'
+      ]
+    ]
+    for (const [workflowEnv, inputName, runnerEnv] of manualProfileKnobs) {
+      expect(runStep.env[workflowEnv]).toBe(`\${{ inputs.${inputName} }}`)
+      expect(runStep.run).toContain(runnerEnv)
+    }
     expect(uploadStep.uses).toBe('actions/upload-artifact@v7')
     expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
   })
