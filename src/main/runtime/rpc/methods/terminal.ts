@@ -85,6 +85,11 @@ type TerminalOutputChunk = {
   meta?: { seq?: number; rawLength?: number }
 }
 
+type TerminalOutputFrameChunk = {
+  bytes: Uint8Array<ArrayBufferLike>
+  seq?: number
+}
+
 function createTerminalOutputBatcher(
   onFlush: (data: string, meta?: { seq?: number; rawLength?: number }) => void
 ): {
@@ -148,6 +153,52 @@ function createTerminalOutputBatcher(
       bytes = 0
     }
   }
+}
+
+function splitTerminalOutputFrameChunks(
+  data: string,
+  meta?: { seq?: number; rawLength?: number }
+): TerminalOutputFrameChunk[] {
+  const bytes = encodeTerminalStreamText(data)
+  if (bytes.byteLength <= TERMINAL_STREAM_CHUNK_BYTES) {
+    return [{ bytes, seq: meta?.seq }]
+  }
+  const chunks: TerminalOutputFrameChunk[] = []
+  const rawLength = meta?.rawLength ?? data.length
+  const canPreserveChunkSeq = typeof meta?.seq === 'number' && rawLength === data.length
+  const startSeq = canPreserveChunkSeq ? meta.seq! - rawLength : undefined
+  let chunk = ''
+  let chunkBytes = 0
+  let chunkStartOffset = 0
+  let offset = 0
+
+  const flushChunk = (): void => {
+    if (!chunk) {
+      return
+    }
+    const chunkSeq = canPreserveChunkSeq ? startSeq! + chunkStartOffset + chunk.length : undefined
+    chunks.push({ bytes: encodeTerminalStreamText(chunk), seq: chunkSeq })
+    chunk = ''
+    chunkBytes = 0
+    chunkStartOffset = offset
+  }
+
+  for (const part of data) {
+    const partBytes = terminalStreamByteLength(part)
+    if (chunkBytes > 0 && chunkBytes + partBytes > TERMINAL_STREAM_CHUNK_BYTES) {
+      flushChunk()
+    }
+    chunk += part
+    chunkBytes += partBytes
+    offset += part.length
+  }
+  flushChunk()
+  if (!canPreserveChunkSeq && typeof meta?.seq === 'number' && chunks.length > 0) {
+    // Why: if a future caller reports rawLength that cannot be mapped back to
+    // UTF-16 offsets, only the final frame can safely carry the high-water mark.
+    chunks.at(-1)!.seq = meta.seq
+  }
+  return chunks
 }
 
 function isTerminalInputLockedForClient(
@@ -1038,12 +1089,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           pendingOutputBytes: 0,
           pendingOutputOverflowed: false,
           outputBatcher: createTerminalOutputBatcher((data, meta) => {
-            sendFrame(
-              request.streamId,
-              TerminalStreamOpcode.Output,
-              encodeTerminalStreamText(data),
-              meta?.seq
-            )
+            for (const chunk of splitTerminalOutputFrameChunks(data, meta)) {
+              sendFrame(request.streamId, TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
+            }
           }),
           unsubscribeData: () => {},
           unsubscribeResize: () => {},
@@ -1364,7 +1412,9 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: cursor++, payload }))
       }
       outputBatcher = createTerminalOutputBatcher((data) => {
-        sendFrame(TerminalStreamOpcode.Output, encodeTerminalStreamText(data))
+        for (const chunk of splitTerminalOutputFrameChunks(data)) {
+          sendFrame(TerminalStreamOpcode.Output, chunk.bytes)
+        }
       })
       unregisterBinaryHandler =
         registerBinaryStreamHandler?.(streamId, (frame) => {

@@ -37,7 +37,9 @@ describe('terminal multiplex RPC', () => {
         (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
       >()
       const cleanups = new Map<string, () => void>()
-      const dataListenerRef: { current?: (data: string) => void } = {}
+      const dataListenerRef: {
+        current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+      } = {}
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -49,10 +51,15 @@ describe('terminal multiplex RPC', () => {
         getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
         getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
-        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
-          dataListenerRef.current = listener
-          return vi.fn()
-        }),
+        subscribeToTerminalData: vi.fn(
+          (
+            _: string,
+            listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+          ) => {
+            dataListenerRef.current = listener
+            return vi.fn()
+          }
+        ),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
@@ -242,7 +249,9 @@ describe('terminal multiplex RPC', () => {
         (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
       >()
       const cleanups = new Map<string, () => void>()
-      const dataListenerRef: { current?: (data: string) => void } = {}
+      const dataListenerRef: {
+        current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+      } = {}
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -254,10 +263,15 @@ describe('terminal multiplex RPC', () => {
         getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
         getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
-        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
-          dataListenerRef.current = listener
-          return vi.fn()
-        }),
+        subscribeToTerminalData: vi.fn(
+          (
+            _: string,
+            listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+          ) => {
+            dataListenerRef.current = listener
+            return vi.fn()
+          }
+        ),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
@@ -309,15 +323,22 @@ describe('terminal multiplex RPC', () => {
       binaryFrames.splice(0)
 
       const multibyteOutput = '界'.repeat(22_000)
-      dataListenerRef.current?.(multibyteOutput)
+      dataListenerRef.current?.(multibyteOutput, {
+        seq: multibyteOutput.length,
+        rawLength: multibyteOutput.length
+      })
 
       const outputFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
-      expect(outputFrames).toHaveLength(1)
-      expect(outputFrames[0] ? decodeTerminalStreamText(outputFrames[0].payload) : '').toBe(
-        multibyteOutput
+      expect(outputFrames.length).toBeGreaterThan(1)
+      expect(outputFrames.every((frame) => (frame?.payload.byteLength ?? 0) <= 48 * 1024)).toBe(
+        true
       )
+      expect(outputFrames.map((frame) => frame?.seq)).toEqual([16_384, 22_000])
+      expect(
+        outputFrames.map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : '')).join('')
+      ).toBe(multibyteOutput)
 
       cleanups.get('terminal-multiplex:conn-multibyte-output-batch')?.()
       await dispatchPromise
@@ -796,6 +817,92 @@ describe('terminal multiplex RPC', () => {
 
     runtime.cleanupSubscription('terminal-1:desktop-1')
     await dispatchPromise
+  })
+
+  it('bounds oversized live output frames for subscribed binary streams', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const handlers = new Map<
+        number,
+        (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+      >()
+      const cleanups = new Map<string, () => void>()
+      const dataListenerRef: { current?: (data: string) => void } = {}
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn().mockResolvedValue({
+          data: 'snapshot',
+          cols: 120,
+          rows: 40
+        }),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        cleanupSubscription: vi.fn((id: string) => {
+          const cleanup = cleanups.get(id)
+          cleanups.delete(id)
+          cleanup?.()
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+        updateDesktopViewport: vi.fn().mockResolvedValue(true)
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.subscribe', {
+          terminal: 'terminal-1',
+          client: { id: 'desktop-1', type: 'desktop' },
+          capabilities: { terminalBinaryStream: 1 }
+        }),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-subscribe-output-chunking',
+          sendBinary: (bytes) => binaryFrames.push(bytes),
+          registerBinaryStreamHandler: (streamId, handler) => {
+            handlers.set(streamId, handler)
+            return () => handlers.delete(streamId)
+          }
+        }
+      )
+
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      binaryFrames.splice(0)
+
+      const output = 'output-line\n'.repeat(8_000)
+      dataListenerRef.current?.(output)
+
+      const outputFrames = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      expect(outputFrames.length).toBeGreaterThan(1)
+      expect(outputFrames.every((frame) => (frame?.payload.byteLength ?? 0) <= 48 * 1024)).toBe(
+        true
+      )
+      expect(
+        outputFrames.map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : '')).join('')
+      ).toBe(output)
+
+      runtime.cleanupSubscription('terminal-1:desktop-1')
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('settles mobile multiplex PTY waits when the stream signal aborts before PTY spawn', async () => {
