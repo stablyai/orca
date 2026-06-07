@@ -105,6 +105,12 @@ type TerminalOutputSchedulerDebugSnapshot = {
   deferredForegroundWriteCount: number
   flushWriteCount: number
   scheduledDrainCount: number
+  queuedTerminalCount: number
+  queuedChars: number
+  peakQueuedTerminalCount: number
+  peakQueuedChars: number
+  peakQueuedCharsByTerminal: number
+  droppedBacklogCount: number
   drainWrites: number[]
 }
 
@@ -121,6 +127,12 @@ const debugState: TerminalOutputSchedulerDebugSnapshot = {
   deferredForegroundWriteCount: 0,
   flushWriteCount: 0,
   scheduledDrainCount: 0,
+  queuedTerminalCount: 0,
+  queuedChars: 0,
+  peakQueuedTerminalCount: 0,
+  peakQueuedChars: 0,
+  peakQueuedCharsByTerminal: 0,
+  droppedBacklogCount: 0,
   drainWrites: []
 }
 
@@ -132,7 +144,49 @@ function resetDebugState(): void {
   debugState.deferredForegroundWriteCount = 0
   debugState.flushWriteCount = 0
   debugState.scheduledDrainCount = 0
+  debugState.queuedTerminalCount = 0
+  debugState.queuedChars = 0
+  debugState.peakQueuedTerminalCount = 0
+  debugState.peakQueuedChars = 0
+  debugState.peakQueuedCharsByTerminal = 0
+  debugState.droppedBacklogCount = 0
   debugState.drainWrites = []
+}
+
+function readQueueDebugSnapshot(): {
+  queuedTerminalCount: number
+  queuedChars: number
+  queuedCharsByTerminal: number
+} {
+  let queuedChars = 0
+  let queuedCharsByTerminal = 0
+  for (const entry of queuedByTerminal.values()) {
+    queuedChars += entry.queuedChars
+    queuedCharsByTerminal = Math.max(queuedCharsByTerminal, entry.queuedChars)
+  }
+  return {
+    queuedTerminalCount: queuedByTerminal.size,
+    queuedChars,
+    queuedCharsByTerminal
+  }
+}
+
+function recordQueueDebugPressure(): void {
+  if (!debugEnabled) {
+    return
+  }
+  const current = readQueueDebugSnapshot()
+  debugState.queuedTerminalCount = current.queuedTerminalCount
+  debugState.queuedChars = current.queuedChars
+  debugState.peakQueuedTerminalCount = Math.max(
+    debugState.peakQueuedTerminalCount,
+    current.queuedTerminalCount
+  )
+  debugState.peakQueuedChars = Math.max(debugState.peakQueuedChars, current.queuedChars)
+  debugState.peakQueuedCharsByTerminal = Math.max(
+    debugState.peakQueuedCharsByTerminal,
+    current.queuedCharsByTerminal
+  )
 }
 
 function exposeDebugApi(): void {
@@ -146,10 +200,13 @@ function exposeDebugApi(): void {
   }
   target.__terminalOutputSchedulerDebug ??= {
     reset: resetDebugState,
-    snapshot: () => ({
-      ...debugState,
-      drainWrites: [...debugState.drainWrites]
-    })
+    snapshot: () => {
+      recordQueueDebugPressure()
+      return {
+        ...debugState,
+        drainWrites: [...debugState.drainWrites]
+      }
+    }
   }
 }
 
@@ -368,6 +425,7 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   if (entry.queuedChars < 0) {
     entry.queuedChars = 0
   }
+  recordQueueDebugPressure()
   return data
     ? {
         data,
@@ -412,6 +470,7 @@ function enqueueChunk(
     stripTransientCursorShows: options?.stripTransientCursorShows === true
   })
   entry.queuedChars += data.length
+  recordQueueDebugPressure()
 }
 
 function replaceBacklogWithWarning(entry: QueueEntry): void {
@@ -431,7 +490,11 @@ function replaceBacklogWithWarning(entry: QueueEntry): void {
   entry.backgroundBacklogDropped = true
   entry.highPriority = true
   entry.foregroundHold = false
+  if (debugEnabled && shouldNotify) {
+    debugState.droppedBacklogCount++
+  }
   clearForegroundCoalesce(entry)
+  recordQueueDebugPressure()
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
   }
@@ -510,6 +573,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
     entry.queuedChars = 0
     clearForegroundHoldSafety(entry)
     clearForegroundCoalesce(entry)
+    recordQueueDebugPressure()
     return null
   }
   return queuedWrite.foreground ? 'foreground' : 'background'
@@ -552,6 +616,7 @@ function drainQueuedOutput(): void {
   if (debugEnabled && writes > 0) {
     debugState.drainWrites.push(writes)
   }
+  recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
     scheduleDrain(
       hasHighPriorityBacklog() ? HIGH_PRIORITY_DRAIN_INTERVAL_MS : BACKGROUND_DRAIN_INTERVAL_MS
@@ -760,6 +825,7 @@ export function flushTerminalOutput(
     entry.highPriority = false
     clearForegroundHoldSafety(entry)
     clearForegroundCoalesce(entry)
+    recordQueueDebugPressure()
     return
   }
 
@@ -792,6 +858,7 @@ export function flushTerminalOutput(
       // the scheduler for other panes still draining.
       clearForegroundHoldSafety(entry)
       clearForegroundCoalesce(entry)
+      recordQueueDebugPressure()
       return
     }
     if (options?.maxChars !== undefined && flushedChars >= options.maxChars) {
@@ -808,6 +875,7 @@ export function flushTerminalOutput(
     clearForegroundCoalesce(entry)
     clearForegroundHoldSafety(entry)
   }
+  recordQueueDebugPressure()
 }
 
 function requestRegisteredTerminalBacklogRecovery(terminal: TerminalOutputTarget): boolean {
@@ -865,6 +933,7 @@ export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   queuedByTerminal.delete(terminal)
   activeOutputTargets.delete(terminal)
   discardForegroundRenderSettle(terminal)
+  recordQueueDebugPressure()
 }
 
 exposeDebugApi()

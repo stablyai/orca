@@ -1,5 +1,9 @@
 /* eslint-disable max-lines -- Why: the scheduler tests cover one queue state machine; keeping ordering and overflow cases together makes regressions easier to audit. */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/e2e-config', () => ({
+  e2eConfig: { exposeStore: true }
+}))
 
 function createTerminal() {
   const classes = new Set<string>()
@@ -45,8 +49,15 @@ async function loadScheduler() {
 }
 
 describe('pane terminal output scheduler', () => {
+  beforeEach(() => {
+    vi.stubGlobal('window', globalThis)
+  })
+
   afterEach(() => {
     vi.useRealTimers()
+    delete (globalThis as { __terminalOutputSchedulerDebug?: unknown })
+      .__terminalOutputSchedulerDebug
+    vi.unstubAllGlobals()
   })
 
   it('writes foreground output immediately', async () => {
@@ -661,6 +672,50 @@ describe('pane terminal output scheduler', () => {
     vi.advanceTimersByTime(16)
     expect(terminals[2].write).toHaveBeenCalledWith('pane-2')
     expect(terminals[0].write).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports current and peak queued renderer backlog in debug snapshots', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminalA = createTerminal()
+    const terminalB = createTerminal()
+    const debug = (
+      window as unknown as {
+        __terminalOutputSchedulerDebug?: {
+          snapshot: () => {
+            queuedTerminalCount: number
+            queuedChars: number
+            peakQueuedTerminalCount: number
+            peakQueuedChars: number
+            peakQueuedCharsByTerminal: number
+            droppedBacklogCount: number
+          }
+        }
+      }
+    ).__terminalOutputSchedulerDebug
+
+    writeTerminalOutput(terminalA, 'a'.repeat(10), { foreground: false })
+    writeTerminalOutput(terminalB, 'b'.repeat(20), { foreground: false })
+
+    expect(debug?.snapshot()).toMatchObject({
+      queuedTerminalCount: 2,
+      queuedChars: 30,
+      peakQueuedTerminalCount: 2,
+      peakQueuedChars: 30,
+      peakQueuedCharsByTerminal: 20,
+      droppedBacklogCount: 0
+    })
+
+    vi.advanceTimersByTime(50)
+
+    expect(debug?.snapshot()).toMatchObject({
+      queuedTerminalCount: 0,
+      queuedChars: 0,
+      peakQueuedTerminalCount: 2,
+      peakQueuedChars: 30,
+      peakQueuedCharsByTerminal: 20,
+      droppedBacklogCount: 0
+    })
   })
 
   it('keeps draining background chunks without per-write parse callback backpressure', async () => {
