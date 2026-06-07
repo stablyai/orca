@@ -686,6 +686,9 @@ const api = {
     ackData: (id: string, charCount: number): void => {
       ipcRenderer.send('pty:ackData', { id, charCount })
     },
+    setActiveRendererPty: (id: string, active: boolean): void => {
+      ipcRenderer.send('pty:setActiveRendererPty', { id, active })
+    },
 
     kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
       ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),

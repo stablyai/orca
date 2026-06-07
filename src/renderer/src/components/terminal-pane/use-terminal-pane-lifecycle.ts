@@ -93,6 +93,19 @@ function extractUncHost(value: string | undefined): string | null {
   return match?.[1] || null
 }
 
+function reportActiveRendererPtyForPane(
+  paneTransports: Map<number, PtyTransport>,
+  activePaneId: number | null
+): void {
+  for (const [paneId, transport] of paneTransports) {
+    const ptyId = transport.getPtyId()
+    if (!ptyId || ptyId.startsWith('remote:')) {
+      continue
+    }
+    window.api.pty.setActiveRendererPty?.(ptyId, activePaneId === paneId)
+  }
+}
+
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
@@ -930,6 +943,7 @@ export function useTerminalPaneLifecycle({
         // stay stuck on the closed pane's last title.
         const newActivePane = managerRef.current?.getActivePane()
         if (newActivePane) {
+          reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
           const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
           const activeTitle = paneTitles[newActivePane.id]
           if (activeTitle) {
@@ -943,6 +957,7 @@ export function useTerminalPaneLifecycle({
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
         }
+        reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
         // Why: when the user switches focus between split panes, update the
         // tab title to the newly active pane's last-known title so the tab
         // label reflects the focused agent — not a stale title from the

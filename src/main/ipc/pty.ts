@@ -84,6 +84,7 @@ const ptySizes = new Map<string, { cols: number; rows: number }>()
 // daemon shutdowns that do not flow through the local provider exit listener.
 const lastInputAtByPty = new Map<string, number>()
 const interactiveOutputCharsByPty = new Map<string, number>()
+const activeRendererPtys = new Set<string>()
 // Why: the agent-hooks server caches per-paneKey state (last prompt, last
 // tool) that otherwise grows unbounded as panes come and go. Track the
 // spawn-time paneKey so clearProviderPtyState can clear that cache on PTY
@@ -801,6 +802,7 @@ export function clearProviderPtyState(id: string): void {
   ptySizes.delete(id)
   lastInputAtByPty.delete(id)
   interactiveOutputCharsByPty.delete(id)
+  activeRendererPtys.delete(id)
   const paneKey = ptyPaneKey.get(id)
   const stillOwnsPaneKey = paneKey ? paneKeyPtyId.get(paneKey) === id : false
   // Why: drop the memory-collector registration so a dead PTY does not keep
@@ -1101,6 +1103,20 @@ export function registerPtyHandlers(
     mainWindow.webContents.send('pty:data', payload)
   }
 
+  function getPendingPtyFlushEntries(): [string, PendingPtyData][] {
+    const entries = Array.from(pendingData.entries())
+    const active: [string, PendingPtyData][] = []
+    const background: [string, PendingPtyData][] = []
+    for (const entry of entries) {
+      if (activeRendererPtys.has(entry[0])) {
+        active.push(entry)
+      } else {
+        background.push(entry)
+      }
+    }
+    return [...active, ...background]
+  }
+
   function appendPendingPtyData(
     existing: PendingPtyData | undefined,
     data: string,
@@ -1134,11 +1150,11 @@ export function registerPtyHandlers(
       return
     }
     let writes = 0
-    for (const [id, pending] of Array.from(pendingData.entries())) {
+    for (const [id, pending] of getPendingPtyFlushEntries()) {
       if (writes >= PTY_BATCH_FLUSH_MAX_WRITES) {
         break
       }
-      if (!canSendPtyDataToRenderer(id)) {
+      if (!canSendPtyDataToRenderer(id, { interactive: activeRendererPtys.has(id) })) {
         continue
       }
       pendingData.delete(id)
@@ -2461,6 +2477,24 @@ export function registerPtyHandlers(
       rendererInFlightCharsByPty.set(args.id, next)
     }
     tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, charCount)
+    if (pendingData.size > 0 && !flushTimer) {
+      schedulePendingDataFlush(0)
+    }
+  })
+
+  ipcMain.removeAllListeners('pty:setActiveRendererPty')
+  ipcMain.on('pty:setActiveRendererPty', (_event, args: { id: string; active: boolean }) => {
+    if (typeof args.id !== 'string' || !args.id) {
+      return
+    }
+    // Why: this is a renderer scheduling hint only. PTY reads, runtime state,
+    // and notifications continue for inactive terminals; active panes merely
+    // get first chance at the bounded renderer output reserve.
+    if (args.active) {
+      activeRendererPtys.add(args.id)
+    } else {
+      activeRendererPtys.delete(args.id)
+    }
     if (pendingData.size > 0 && !flushTimer) {
       schedulePendingDataFlush(0)
     }

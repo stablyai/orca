@@ -392,6 +392,19 @@ describe('registerPtyHandlers', () => {
     return ackCall[1] as (event: unknown, args: { id: string; charCount: number }) => void
   }
 
+  function getPtySetActiveRendererPtyListener(): (
+    event: unknown,
+    args: { id: string; active: boolean }
+  ) => void {
+    const activeCall = onMock.mock.calls.find(
+      (call: unknown[]) => call[0] === 'pty:setActiveRendererPty'
+    )
+    if (!activeCall) {
+      throw new Error('missing pty:setActiveRendererPty listener')
+    }
+    return activeCall[1] as (event: unknown, args: { id: string; active: boolean }) => void
+  }
+
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
   async function spawnAndGetEnv(
     argsEnv?: Record<string, string>,
@@ -4337,6 +4350,54 @@ describe('registerPtyHandlers', () => {
       vi.advanceTimersByTime(1)
 
       expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('prioritizes active PTY pending output during renderer backpressure', async () => {
+    vi.useFakeTimers()
+    const procs = Array.from({ length: 18 }, () => createMockProc())
+    for (const proc of procs) {
+      spawnMock.mockReturnValueOnce(proc.proc)
+    }
+
+    try {
+      registerPtyHandlers(mainWindow as never)
+      const spawns: { id: string }[] = []
+      for (const _proc of procs) {
+        spawns.push(
+          (await handlers.get('pty:spawn')!(null, {
+            cols: 80,
+            rows: 24,
+            cwd: '/tmp'
+          })) as { id: string }
+        )
+      }
+      const ackData = getPtyAckDataListener()
+      const setActiveRendererPty = getPtySetActiveRendererPtyListener()
+      mainWindow.webContents.send.mockClear()
+
+      for (let index = 0; index < procs.length - 1; index++) {
+        procs[index]!.emitData('x'.repeat(600 * 1024))
+      }
+      vi.advanceTimersByTime(8)
+      for (let index = 0; index < 400; index++) {
+        vi.advanceTimersByTime(1)
+      }
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
+
+      const activeIndex = procs.length - 1
+      procs[activeIndex]!.emitData('active-output')
+      setActiveRendererPty(null, { id: spawns[activeIndex]!.id, active: true })
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(513, 'pty:data', {
+        id: spawns[activeIndex]!.id,
+        data: 'active-output'
+      })
+      ackData(null, { id: spawns[0]!.id, charCount: 16 * 1024 })
     } finally {
       vi.useRealTimers()
     }
