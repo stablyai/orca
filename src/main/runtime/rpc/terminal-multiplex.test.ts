@@ -232,6 +232,100 @@ describe('terminal multiplex RPC', () => {
     }
   })
 
+  it('flushes multibyte live output when encoded bytes reach the batch budget', async () => {
+    vi.useFakeTimers()
+    try {
+      const messages: string[] = []
+      const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+      const handlers = new Map<
+        number,
+        (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
+      >()
+      const cleanups = new Map<string, () => void>()
+      const dataListenerRef: { current?: (data: string) => void } = {}
+      const runtime = stubRuntime({
+        resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
+        serializeTerminalBuffer: vi.fn().mockResolvedValue({
+          data: 'snapshot',
+          cols: 120,
+          rows: 40
+        }),
+        getTerminalSize: vi.fn().mockReturnValue({ cols: 120, rows: 40 }),
+        getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
+        getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
+          dataListenerRef.current = listener
+          return vi.fn()
+        }),
+        subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
+        subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
+        getTerminalFitOverride: vi.fn().mockReturnValue(null),
+        getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
+          cleanups.set(id, cleanup)
+        }),
+        waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
+        sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+        updateDesktopViewport: vi.fn().mockResolvedValue(true)
+      })
+      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+      const dispatchPromise = dispatcher.dispatchStreaming(
+        makeRequest('terminal.multiplex', {}),
+        (msg) => messages.push(msg),
+        {
+          connectionId: 'conn-multibyte-output-batch',
+          sendBinary: (bytes) => binaryFrames.push(bytes),
+          registerBinaryStreamHandler: (streamId, handler) => {
+            handlers.set(streamId, handler)
+            return () => handlers.delete(streamId)
+          }
+        }
+      )
+
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
+      )
+      handlers.get(0)?.(
+        decodeTerminalStreamFrame(
+          encodeTerminalStreamFrame({
+            opcode: TerminalStreamOpcode.Subscribe,
+            streamId: 0,
+            seq: 1,
+            payload: encodeTerminalStreamJson({
+              streamId: 6,
+              terminal: 'terminal-1',
+              client: { id: 'desktop-1', type: 'desktop' },
+              viewport: { cols: 120, rows: 40 }
+            })
+          })
+        )!
+      )
+      await vi.waitFor(() =>
+        expect(messages.some((msg) => JSON.parse(msg).result?.type === 'subscribed')).toBe(true)
+      )
+      binaryFrames.splice(0)
+
+      const multibyteOutput = '界'.repeat(22_000)
+      dataListenerRef.current?.(multibyteOutput)
+
+      const outputFrames = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      expect(outputFrames).toHaveLength(1)
+      expect(outputFrames[0] ? decodeTerminalStreamText(outputFrames[0].payload) : '').toBe(
+        multibyteOutput
+      )
+
+      cleanups.get('terminal-multiplex:conn-multibyte-output-batch')?.()
+      await dispatchPromise
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('marks multiplex fallback snapshots truncated when the uncursored read is limited', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []

@@ -25,7 +25,8 @@ const MOBILE_SNAPSHOT_BYTE_BUDGET = 512 * 1024
 const REQUESTED_SNAPSHOT_BYTE_BUDGET = 2 * 1024 * 1024
 const TERMINAL_STREAM_CHUNK_BYTES = 48 * 1024
 const TERMINAL_OUTPUT_FLUSH_MS = 5
-const TERMINAL_OUTPUT_BATCH_MAX_CHARS = 64 * 1024
+// Why: output batches become binary stream payloads; byte size is the transport cost.
+const TERMINAL_OUTPUT_BATCH_MAX_BYTES = 64 * 1024
 // Why: pending output is held for later binary frames, so cap the encoded
 // payload bytes rather than UTF-16 code units.
 const TERMINAL_MULTIPLEX_PENDING_MAX_BYTES = 256 * 1024
@@ -92,7 +93,7 @@ function createTerminalOutputBatcher(
   dispose: () => void
 } {
   let chunks: string[] = []
-  let chars = 0
+  let bytes = 0
   let lastSeq: number | undefined
   let timer: ReturnType<typeof setTimeout> | null = null
 
@@ -112,7 +113,7 @@ function createTerminalOutputBatcher(
     const data = chunks.length === 1 ? chunks[0]! : chunks.join('')
     const meta = typeof lastSeq === 'number' ? { seq: lastSeq, rawLength: data.length } : undefined
     chunks = []
-    chars = 0
+    bytes = 0
     lastSeq = undefined
     onFlush(data, meta)
   }
@@ -123,11 +124,11 @@ function createTerminalOutputBatcher(
         return
       }
       chunks.push(data)
-      chars += data.length
+      bytes += terminalStreamByteLength(data)
       if (typeof meta?.seq === 'number') {
         lastSeq = meta.seq
       }
-      if (chars >= TERMINAL_OUTPUT_BATCH_MAX_CHARS) {
+      if (bytes >= TERMINAL_OUTPUT_BATCH_MAX_BYTES) {
         flush()
         return
       }
@@ -144,7 +145,7 @@ function createTerminalOutputBatcher(
     dispose(): void {
       clearTimer()
       chunks = []
-      chars = 0
+      bytes = 0
     }
   }
 }
