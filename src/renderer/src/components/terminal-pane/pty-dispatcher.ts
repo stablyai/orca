@@ -18,6 +18,14 @@ export type PtyDataMeta = {
   rawLength?: number
 }
 
+export type PtyBufferSnapshot = {
+  data: string
+  cols: number
+  rows: number
+  seq?: number
+  source?: 'headless' | 'renderer'
+}
+
 export const ptyDataHandlers = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 /** Sidecar subscriptions that observe PTY data without owning the primary
  *  handler. Used by features that need to react to the live byte stream
@@ -323,6 +331,7 @@ export type PtyTransport = {
   ) => boolean
   isConnected: () => boolean
   getPtyId: () => string | null
+  serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
   preserve?: () => void
   /** Unregister PTY handlers without killing the process, so a remounted
    *  pane can reattach to the same running shell. */

@@ -4920,7 +4920,8 @@ describe('registerPtyHandlers', () => {
           data: 'snapshot\r\n',
           cols: 120,
           rows: 40,
-          seq: 42
+          seq: 42,
+          source: 'headless'
         })
       }
       handlers.clear()
@@ -4934,7 +4935,13 @@ describe('registerPtyHandlers', () => {
       expect(runtime.serializeMainTerminalBuffer).toHaveBeenCalledWith('pty-1', {
         scrollbackRows: 50_000
       })
-      expect(result).toEqual({ data: 'snapshot\r\n', cols: 120, rows: 40, seq: 42 })
+      expect(result).toEqual({
+        data: 'snapshot\r\n',
+        cols: 120,
+        rows: 40,
+        seq: 42,
+        source: 'headless'
+      })
     })
   })
 })

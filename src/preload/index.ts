@@ -693,8 +693,13 @@ const api = {
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
-    ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> =>
-      ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
+    ): Promise<{
+      data: string
+      cols: number
+      rows: number
+      seq?: number
+      source?: 'headless' | 'renderer'
+    } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     /** Check if a PTY's shell has child processes (e.g. a running command).
      *  Returns false for an idle shell prompt. */

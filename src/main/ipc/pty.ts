@@ -1715,7 +1715,13 @@ export function registerPtyHandlers(
     async (
       _event,
       args: { id?: unknown; opts?: { scrollbackRows?: unknown } }
-    ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> => {
+    ): Promise<{
+      data: string
+      cols: number
+      rows: number
+      seq?: number
+      source?: 'headless' | 'renderer'
+    } | null> => {
       if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
         return null
       }

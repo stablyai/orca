@@ -1289,7 +1289,10 @@ export class OrcaRuntimeService {
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
   // without polling. Keyed by ptyId for O(1) lookup per data event.
-  private dataListeners = new Map<string, Set<(data: string) => void>>()
+  private dataListeners = new Map<
+    string,
+    Set<(data: string, meta?: { seq?: number; rawLength?: number }) => void>
+  >()
   // Why: startup draft paste can subscribe after the agent already emitted its
   // ready marker. Keep a bounded raw buffer so fast startup output is replayed.
   private recentPtyOutputById = new Map<string, string>()
@@ -3106,8 +3109,9 @@ export class OrcaRuntimeService {
 
     const listeners = this.dataListeners.get(ptyId)
     if (listeners) {
+      const meta = { seq: outputSequence, rawLength: data.length }
       for (const listener of listeners) {
-        listener(data)
+        listener(data, meta)
       }
     }
     return outputSequence
@@ -3117,7 +3121,10 @@ export class OrcaRuntimeService {
     return this.ptyOutputSequenceById.get(ptyId) ?? 0
   }
 
-  subscribeToTerminalData(ptyId: string, listener: (data: string) => void): () => void {
+  subscribeToTerminalData(
+    ptyId: string,
+    listener: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+  ): () => void {
     let listeners = this.dataListeners.get(ptyId)
     if (!listeners) {
       listeners = new Set()
@@ -3183,14 +3190,26 @@ export class OrcaRuntimeService {
   serializeTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
+  ): Promise<{
+    data: string
+    cols: number
+    rows: number
+    seq?: number
+    source?: 'headless' | 'renderer'
+  } | null> {
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
 
   serializeMainTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
+  ): Promise<{
+    data: string
+    cols: number
+    rows: number
+    seq?: number
+    source?: 'headless' | 'renderer'
+  } | null> {
     return this.serializeHeadlessTerminalBuffer(ptyId, { ...opts, includeEmpty: true })
   }
 
@@ -3385,7 +3404,13 @@ export class OrcaRuntimeService {
   private async serializeTerminalBufferFromAvailableState(
     ptyId: string,
     opts: { scrollbackRows?: number } = {}
-  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
+  ): Promise<{
+    data: string
+    cols: number
+    rows: number
+    seq?: number
+    source?: 'headless' | 'renderer'
+  } | null> {
     const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
     if (headlessSnapshot) {
       return headlessSnapshot
@@ -3412,15 +3437,21 @@ export class OrcaRuntimeService {
       // below can still preserve colored terminal state.
     }
     if (rendererSnapshot && rendererSnapshot.data.length > 0) {
-      return rendererSnapshot
+      return { ...rendererSnapshot, source: 'renderer' }
     }
-    return rendererSnapshot
+    return rendererSnapshot ? { ...rendererSnapshot, source: 'renderer' } : null
   }
 
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
-  ): Promise<{ data: string; cols: number; rows: number; seq?: number } | null> {
+  ): Promise<{
+    data: string
+    cols: number
+    rows: number
+    seq?: number
+    source?: 'headless'
+  } | null> {
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return null
@@ -3438,7 +3469,13 @@ export class OrcaRuntimeService {
     const snapshot = state.emulator.getSnapshot({ scrollbackRows })
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
     return data.length > 0 || opts.includeEmpty === true
-      ? { data, cols: snapshot.cols, rows: snapshot.rows, seq: state.outputSequence }
+      ? {
+          data,
+          cols: snapshot.cols,
+          rows: snapshot.rows,
+          seq: state.outputSequence,
+          source: 'headless'
+        }
       : null
   }
 

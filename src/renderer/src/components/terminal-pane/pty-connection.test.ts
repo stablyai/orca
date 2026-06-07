@@ -104,6 +104,7 @@ type MockTransport = {
   sendInputAccepted?: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
   getPtyId: ReturnType<typeof vi.fn>
+  serializeBuffer?: ReturnType<typeof vi.fn>
 }
 
 const scheduleRuntimeGraphSync = vi.fn()
@@ -221,7 +222,8 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
     }),
     sendInput: vi.fn(() => true),
     resize: vi.fn(() => true),
-    getPtyId: vi.fn(() => ptyId)
+    getPtyId: vi.fn(() => ptyId),
+    serializeBuffer: undefined
   } as MockTransport
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
@@ -3166,6 +3168,110 @@ describe('connectPanePty', () => {
       expect.any(Function)
     )
     expect(pane.terminal.write).not.toHaveBeenCalledWith(live, expect.any(Function))
+    disposable.dispose()
+  })
+
+  it('restores skipped hidden remote runtime output from the transport snapshot', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'remote snapshot\r\n',
+      cols: 120,
+      rows: 40,
+      seq: 40,
+      source: 'headless'
+    })
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'remote:env-1@@terminal-1'
+    })
+    transportFactoryQueue.push(transport)
+    const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+      typeof vi.fn
+    >
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({ isVisibleRef: { current: false } })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    const hidden = 'hidden remote output\r\n'
+    const live = 'visible remote output\r\n'
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(hidden, expect.any(Function))
+
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(live, {
+      seq: 40 + live.length,
+      rawLength: live.length
+    })
+    await flushAsyncTicks(20)
+
+    expect(getMainBufferSnapshot).not.toHaveBeenCalled()
+    expect(transport.serializeBuffer).toHaveBeenCalledWith({ scrollbackRows: 5000 })
+    expect(pane.terminal.write).toHaveBeenCalledWith('remote snapshot\r\n', expect.any(Function))
+    expect(pane.terminal.write).toHaveBeenCalledWith(live, expect.any(Function))
+    disposable.dispose()
+  })
+
+  it('retries hidden remote runtime restore after a null transport snapshot', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedDataCallback: {
+      current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
+    } = { current: null }
+    transport.serializeBuffer = vi.fn().mockResolvedValueOnce(null).mockResolvedValueOnce({
+      data: 'remote recovered snapshot\r\n',
+      cols: 120,
+      rows: 40,
+      seq: 80,
+      source: 'headless'
+    })
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedDataCallback.current = callbacks.onData ?? null
+      return 'remote:env-1@@terminal-1'
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({ isVisibleRef: { current: false } })
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    const hidden = 'hidden remote output\r\n'
+    const firstLive = 'first visible output\r\n'
+    capturedDataCallback.current?.(hidden, { seq: hidden.length, rawLength: hidden.length })
+
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    capturedDataCallback.current?.(firstLive, {
+      seq: hidden.length + firstLive.length,
+      rawLength: firstLive.length
+    })
+    await flushAsyncTicks(20)
+
+    expect(transport.serializeBuffer).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('Orca skipped hidden terminal output'),
+      expect.any(Function)
+    )
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(
+      'remote recovered snapshot\r\n',
+      expect.any(Function)
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 80))
+    await flushAsyncTicks(20)
+
+    expect(transport.serializeBuffer).toHaveBeenCalledTimes(2)
+    expect(pane.terminal.write).toHaveBeenCalledWith(
+      'remote recovered snapshot\r\n',
+      expect.any(Function)
+    )
     disposable.dispose()
   })
 

@@ -908,7 +908,13 @@ export type PreloadApi = {
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
-    ) => Promise<{ data: string; cols: number; rows: number; seq?: number } | null>
+    ) => Promise<{
+      data: string
+      cols: number
+      rows: number
+      seq?: number
+      source?: 'headless' | 'renderer'
+    } | null>
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
     ) => () => void

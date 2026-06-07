@@ -624,6 +624,26 @@ describe('pane terminal output scheduler', () => {
     expect(terminals[0].write).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps draining background chunks without per-write parse callback backpressure', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+    const chunk = 'x'.repeat(16 * 1024)
+
+    for (let i = 0; i < 6; i++) {
+      writeTerminalOutput(terminal, chunk, { foreground: false })
+    }
+
+    vi.advanceTimersByTime(50)
+    vi.advanceTimersByTime(16)
+
+    expect(terminal.write).toHaveBeenCalledTimes(4)
+
+    vi.advanceTimersByTime(16)
+
+    expect(terminal.write).toHaveBeenCalledTimes(6)
+  })
+
   it('promotes large background backlogs to high-priority drains', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()

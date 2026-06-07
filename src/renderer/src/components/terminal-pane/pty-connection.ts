@@ -9,7 +9,7 @@ import {
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import type { PtyConnectResult } from './pty-transport'
+import type { PtyBufferSnapshot, PtyConnectResult } from './pty-transport'
 import { createIpcPtyTransport } from './pty-transport'
 import { createRemoteRuntimePtyTransport } from './remote-runtime-pty-transport'
 import { shouldSeedCacheTimerOnInitialTitle } from './cache-timer-seeding'
@@ -88,6 +88,8 @@ const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 const HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS = 5000
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
+const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
+const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX = 3
 const HIDDEN_STARTUP_RENDERER_QUERY_WINDOW_MS = 10_000
 const STARTUP_COMMAND_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
@@ -108,15 +110,29 @@ const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because main recovery was unavailable.]\r\n'
 
 type E2eTerminalPtyDataInjectionApi = {
-  inject: (paneKey: string, data: string) => boolean
+  inject: (paneKey: string, data: string, meta?: PtyDataMeta) => boolean
   keys: () => string[]
 }
 
 type E2eTerminalPtyDataInjectionWindow = Window & {
   __terminalPtyDataInjection?: E2eTerminalPtyDataInjectionApi
+  __terminalHiddenSnapshotOverride?: E2eTerminalHiddenSnapshotOverrideApi
 }
 
-const e2eTerminalPtyDataInjectors = new Map<string, (data: string) => void>()
+const e2eTerminalPtyDataInjectors = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
+
+type E2eTerminalHiddenSnapshotOverrideApi = {
+  setPending: (ptyId: string, snapshot: PtyBufferSnapshot) => void
+  resolve: (ptyId: string) => void
+  clear: (ptyId: string) => void
+}
+
+type E2eTerminalHiddenSnapshotOverride = {
+  promise: Promise<PtyBufferSnapshot | null>
+  resolve: () => void
+}
+
+const e2eTerminalHiddenSnapshotOverrides = new Map<string, E2eTerminalHiddenSnapshotOverride>()
 
 type E2eTerminalPtyOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
@@ -181,21 +197,39 @@ function exposeE2eTerminalPtyDataInjection(): void {
   // e2e-only seam lets tests replay the renderer-side data callback exactly.
   const target = window as E2eTerminalPtyDataInjectionWindow
   target.__terminalPtyDataInjection ??= {
-    inject: (paneKey, data) => {
+    inject: (paneKey, data, meta) => {
       const inject = e2eTerminalPtyDataInjectors.get(paneKey)
       if (!inject) {
         return false
       }
-      inject(data)
+      inject(data, meta)
       return true
     },
     keys: () => [...e2eTerminalPtyDataInjectors.keys()]
+  }
+  target.__terminalHiddenSnapshotOverride ??= {
+    setPending: (ptyId, snapshot) => {
+      let resolve = (): void => {}
+      const wait = new Promise<void>((nextResolve) => {
+        resolve = nextResolve
+      })
+      e2eTerminalHiddenSnapshotOverrides.set(ptyId, {
+        promise: wait.then(() => snapshot),
+        resolve
+      })
+    },
+    resolve: (ptyId) => {
+      e2eTerminalHiddenSnapshotOverrides.get(ptyId)?.resolve()
+    },
+    clear: (ptyId) => {
+      e2eTerminalHiddenSnapshotOverrides.delete(ptyId)
+    }
   }
 }
 
 function registerE2eTerminalPtyDataInjection(
   paneKey: string,
-  inject: (data: string) => void
+  inject: (data: string, meta?: PtyDataMeta) => void
 ): () => void {
   if (!e2eConfig.exposeStore) {
     return () => {}
@@ -207,6 +241,23 @@ function registerE2eTerminalPtyDataInjection(
       e2eTerminalPtyDataInjectors.delete(paneKey)
     }
   }
+}
+
+function readE2eHiddenSnapshotOverride(ptyId: string): Promise<PtyBufferSnapshot | null> | null {
+  if (!e2eConfig.exposeStore) {
+    return null
+  }
+  const override = e2eTerminalHiddenSnapshotOverrides.get(ptyId)
+  if (!override) {
+    return null
+  }
+  // Why: visual E2E needs to hold a hidden restore snapshot in flight so a
+  // newer live TUI frame can race it deterministically.
+  return override.promise.finally(() => {
+    if (e2eTerminalHiddenSnapshotOverrides.get(ptyId) === override) {
+      e2eTerminalHiddenSnapshotOverrides.delete(ptyId)
+    }
+  })
 }
 
 function firstStartupCommandToken(command: string): string {
@@ -546,6 +597,7 @@ export function connectPanePty(
   let connectFrame: number | null = null
   let unregisterBacklogRecovery: (() => void) | null = null
   let unregisterDocumentVisibilityRecovery: (() => void) | null = null
+  let cleanupHiddenOutputRestoreDeferredRetry = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
   let agentTaskCompleteNotificationGraceTimer: ReturnType<typeof setTimeout> | null = null
@@ -1791,6 +1843,9 @@ export function connectPanePty(
     let hiddenOutputRestorePendingChars = 0
     let hiddenOutputRestorePendingOverflow = false
     let hiddenOutputRestoreFreshSnapshotNeeded = false
+    let hiddenOutputRestoreRetryDeferred = false
+    let hiddenOutputRestoreDeferredRetryTimer: ReturnType<typeof setTimeout> | null = null
+    let hiddenOutputRestoreDeferredRetryAttempts = 0
     // Why: hidden recovery state belongs to one PTY stream. Reattach/restart
     // can reuse the pane object for a different session before visibility.
     let hiddenOutputRestorePtyId: string | null = null
@@ -1804,6 +1859,33 @@ export function connectPanePty(
 
     function canUseMainBufferSnapshot(ptyId: string | null): ptyId is string {
       return Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
+    }
+
+    function canUseHiddenOutputSnapshot(ptyId: string | null): ptyId is string {
+      if (!ptyId) {
+        return false
+      }
+      if (canUseMainBufferSnapshot(ptyId)) {
+        return true
+      }
+      return transport.getPtyId() === ptyId && typeof transport.serializeBuffer === 'function'
+    }
+
+    async function serializeHiddenOutputSnapshot(
+      ptyId: string,
+      opts: { scrollbackRows?: number }
+    ): Promise<PtyBufferSnapshot | null> {
+      const e2eSnapshot = readE2eHiddenSnapshotOverride(ptyId)
+      if (e2eSnapshot) {
+        return e2eSnapshot
+      }
+      if (canUseMainBufferSnapshot(ptyId)) {
+        return window.api.pty.getMainBufferSnapshot(ptyId, opts)
+      }
+      if (transport.getPtyId() !== ptyId || typeof transport.serializeBuffer !== 'function') {
+        return null
+      }
+      return transport.serializeBuffer(opts)
     }
 
     function isHiddenStartupRendererQueryWindowActive(): boolean {
@@ -1936,7 +2018,7 @@ export function connectPanePty(
       }
       const parseHiddenStartupOutput =
         !foreground &&
-        canUseMainBufferSnapshot(transport.getPtyId()) &&
+        canUseHiddenOutputSnapshot(transport.getPtyId()) &&
         isHiddenStartupRendererQueryWindowActive()
       const synchronizedOutputStarted =
         shouldProtectNativeWindowsSynchronizedOutput &&
@@ -1992,7 +2074,7 @@ export function connectPanePty(
 
     function markHiddenOutputRestoreNeeded(): void {
       const ptyId = transport.getPtyId()
-      if (!canUseMainBufferSnapshot(ptyId)) {
+      if (!canUseHiddenOutputSnapshot(ptyId)) {
         return
       }
       if (hiddenOutputRestorePtyId !== null && hiddenOutputRestorePtyId !== ptyId) {
@@ -2009,7 +2091,7 @@ export function connectPanePty(
       return (
         !foreground &&
         !deps.isVisibleRef.current &&
-        canUseMainBufferSnapshot(transport.getPtyId()) &&
+        canUseHiddenOutputSnapshot(transport.getPtyId()) &&
         !isHiddenStartupRendererQueryWindowActive()
       )
     }
@@ -2028,7 +2110,7 @@ export function connectPanePty(
         return
       }
       const ptyId = transport.getPtyId()
-      if (!canUseMainBufferSnapshot(ptyId)) {
+      if (!canUseHiddenOutputSnapshot(ptyId)) {
         return
       }
       if (hiddenOutputRestorePtyId !== null && hiddenOutputRestorePtyId !== ptyId) {
@@ -2115,6 +2197,44 @@ export function connectPanePty(
       hiddenOutputRestorePendingChars = 0
       hiddenOutputRestorePendingOverflow = false
       hiddenOutputRestoreFreshSnapshotNeeded = false
+      hiddenOutputRestoreRetryDeferred = false
+      clearHiddenOutputRestoreDeferredRetryTimer()
+      hiddenOutputRestoreDeferredRetryAttempts = 0
+    }
+
+    function clearHiddenOutputRestoreDeferredRetryTimer(): void {
+      if (hiddenOutputRestoreDeferredRetryTimer === null) {
+        return
+      }
+      clearTimeout(hiddenOutputRestoreDeferredRetryTimer)
+      hiddenOutputRestoreDeferredRetryTimer = null
+    }
+    cleanupHiddenOutputRestoreDeferredRetry = clearHiddenOutputRestoreDeferredRetryTimer
+
+    function scheduleHiddenOutputRestoreDeferredRetry(): void {
+      if (
+        disposed ||
+        hiddenOutputRestoreDeferredRetryTimer !== null ||
+        !shouldWritePtyOutputForeground(deps.isVisibleRef.current)
+      ) {
+        return
+      }
+      if (hiddenOutputRestoreDeferredRetryAttempts >= HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX) {
+        clearHiddenOutputRestoreState()
+        writeRestoreUnavailableWarning()
+        return
+      }
+      hiddenOutputRestoreDeferredRetryAttempts += 1
+      // Why: null requested snapshots usually mean remote output was still
+      // mutating. Retry after one quiet tick instead of spinning synchronously.
+      hiddenOutputRestoreDeferredRetryTimer = setTimeout(() => {
+        hiddenOutputRestoreDeferredRetryTimer = null
+        if (disposed || !hiddenOutputRestoreNeeded) {
+          return
+        }
+        hiddenOutputRestoreRetryDeferred = false
+        requestHiddenOutputRestoreIfNeeded()
+      }, HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS)
     }
 
     function clearHiddenOutputRestoreState(): void {
@@ -2214,13 +2334,15 @@ export function connectPanePty(
       if (!hiddenOutputRestoreNeeded && hiddenOutputRestorePendingChunks.length === 0) {
         return false
       }
-      if (!canUseMainBufferSnapshot(ptyId)) {
+      if (!canUseHiddenOutputSnapshot(ptyId)) {
         return false
       }
       hiddenOutputRestorePtyId = ptyId
       if (hiddenOutputRestoreInFlight) {
         return true
       }
+      clearHiddenOutputRestoreDeferredRetryTimer()
+      hiddenOutputRestoreRetryDeferred = false
 
       hiddenOutputRestoreInFlight = (async () => {
         while (!disposed) {
@@ -2229,7 +2351,7 @@ export function connectPanePty(
             clearHiddenOutputRestoreState()
             return
           }
-          if (!canUseMainBufferSnapshot(currentPtyId)) {
+          if (!canUseHiddenOutputSnapshot(currentPtyId)) {
             if (hiddenOutputRestorePtyId === currentPtyId) {
               clearHiddenOutputRestoreState()
             }
@@ -2244,9 +2366,9 @@ export function connectPanePty(
           }
           const restoreGeneration = hiddenOutputRestoreGeneration
           hiddenOutputRestoreNeeded = false
-          let snapshot: { data: string; cols: number; rows: number; seq?: number } | null = null
+          let snapshot: PtyBufferSnapshot | null = null
           try {
-            snapshot = await window.api.pty.getMainBufferSnapshot(currentPtyId, {
+            snapshot = await serializeHiddenOutputSnapshot(currentPtyId, {
               scrollbackRows: HIDDEN_OUTPUT_RESTORE_SCROLLBACK_ROWS
             })
           } catch {
@@ -2268,10 +2390,13 @@ export function connectPanePty(
             return
           }
           if (!snapshot) {
-            clearHiddenOutputRestoreState()
-            writeRestoreUnavailableWarning()
+            hiddenOutputRestoreNeeded = true
+            hiddenOutputRestoreFreshSnapshotNeeded = false
+            hiddenOutputRestoreRetryDeferred = true
+            scheduleHiddenOutputRestoreDeferredRetry()
             return
           }
+          hiddenOutputRestoreDeferredRetryAttempts = 0
           applyMainBufferSnapshot(snapshot)
           const needsFreshSnapshot = hiddenOutputRestoreFreshSnapshotNeeded
           hiddenOutputRestoreFreshSnapshotNeeded = false
@@ -2295,6 +2420,7 @@ export function connectPanePty(
           hiddenOutputRestoreNeeded = true
         }
         if (
+          !hiddenOutputRestoreRetryDeferred &&
           hiddenOutputRestoreNeeded &&
           shouldWritePtyOutputForeground(deps.isVisibleRef.current)
         ) {
@@ -2384,9 +2510,9 @@ export function connectPanePty(
         }, 50)
       }
     }
-    unregisterE2ePtyDataInjection = registerE2eTerminalPtyDataInjection(cacheKey, (data) => {
+    unregisterE2ePtyDataInjection = registerE2eTerminalPtyDataInjection(cacheKey, (data, meta) => {
       if (!disposed) {
-        dataCallback(data)
+        dataCallback(data, meta)
       }
     })
 
@@ -2998,6 +3124,7 @@ export function connectPanePty(
       pendingTerminalBellNotification = false
       clearTerminalBellNotificationTimer()
       clearReattachIdleAgentCursorResetTimer()
+      cleanupHiddenOutputRestoreDeferredRetry()
       unregisterBacklogRecovery?.()
       unregisterBacklogRecovery = null
       unregisterDocumentVisibilityRecovery?.()

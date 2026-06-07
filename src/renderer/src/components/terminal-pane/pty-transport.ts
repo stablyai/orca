@@ -38,6 +38,7 @@ export {
 export type {
   EagerPtyHandle,
   PtyTransport,
+  PtyBufferSnapshot,
   PtyConnectResult,
   IpcPtyTransportOptions
 } from './pty-dispatcher'

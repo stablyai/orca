@@ -71,7 +71,7 @@ export async function subscribeToRuntimeTerminalData(
     terminal,
     client: { id: clientId, type: 'desktop' },
     callbacks: {
-      onData: watcher,
+      onData: (data) => watcher(data),
       onSnapshot: watcher
     }
   })
