@@ -798,7 +798,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
-  it('adds the default-on Ports status item once for older persisted UI', () => {
+  it('adds default-on status items once for older persisted UI', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -810,14 +810,15 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports'])
+    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports', 'kimi'])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports'],
-      _portsStatusBarDefaultAdded: true
+      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true
     })
   })
 
-  it('preserves a user-hidden Ports status item after the one-shot migration ran', () => {
+  it('preserves user-hidden default-on status items after one-shot migrations ran', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -825,7 +826,8 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(
       makePersistedUI({
         statusBarItems: ['claude', 'resource-usage'],
-        _portsStatusBarDefaultAdded: true
+        _portsStatusBarDefaultAdded: true,
+        _kimiStatusBarDefaultAdded: true
       })
     )
 

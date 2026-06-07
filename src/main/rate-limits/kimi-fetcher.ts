@@ -29,16 +29,41 @@ type KimiCredentials = {
   expires_at?: number
 }
 
-function readCredentials(): KimiCredentials | null {
-  const path = getCredentialsPath()
-  if (!existsSync(path)) {
+type CredentialsReadResult =
+  | { status: 'missing' }
+  | { status: 'error'; error: string }
+  | { status: 'ok'; credentials: KimiCredentials }
+
+function parseCredentials(value: unknown): KimiCredentials | null {
+  if (typeof value !== 'object' || value === null) {
     return null
   }
+  const credentials: KimiCredentials = {}
+  if ('access_token' in value && typeof value.access_token === 'string') {
+    credentials.access_token = value.access_token
+  }
+  if ('expires_at' in value && typeof value.expires_at === 'number') {
+    credentials.expires_at = value.expires_at
+  }
+  return credentials
+}
+
+function readCredentials(): CredentialsReadResult {
+  const path = getCredentialsPath()
+  if (!existsSync(path)) {
+    return { status: 'missing' }
+  }
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown
-    return typeof parsed === 'object' && parsed !== null ? (parsed as KimiCredentials) : null
-  } catch {
-    return null
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    const credentials = parseCredentials(parsed)
+    return credentials
+      ? { status: 'ok', credentials }
+      : { status: 'error', error: 'Kimi credentials file is invalid' }
+  } catch (err) {
+    return {
+      status: 'error',
+      error: err instanceof Error ? err.message : 'Unable to read Kimi credentials'
+    }
   }
 }
 
@@ -178,8 +203,8 @@ function mapUsageResponse(data: KimiUsageResponse): ProviderRateLimits {
     session,
     weekly,
     updatedAt: Date.now(),
-    error: null,
-    status: 'ok'
+    error: session || weekly ? null : 'Kimi usage response did not include quota windows',
+    status: session || weekly ? 'ok' : 'error'
   }
 }
 
@@ -199,9 +224,16 @@ function result(status: ProviderRateLimits['status'], error: string | null): Pro
  * approved coding agents) is never touched here.
  */
 export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
-  const creds = readCredentials()
-  if (!creds || typeof creds.access_token !== 'string' || creds.access_token.length === 0) {
+  const readResult = readCredentials()
+  if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Kimi Code')
+  }
+  if (readResult.status === 'error') {
+    return result('error', readResult.error)
+  }
+  const creds = readResult.credentials
+  if (typeof creds.access_token !== 'string' || creds.access_token.length === 0) {
+    return result('error', 'Kimi credentials file is missing an access token')
   }
   if (!isAccessTokenFresh(creds)) {
     // Why: don't refresh — the CLI owns the token lifecycle. Report a transient
@@ -225,7 +257,8 @@ export async function fetchKimiRateLimits(): Promise<ProviderRateLimits> {
     if (!res.ok) {
       return result('error', `Kimi usage request failed (HTTP ${res.status})`)
     }
-    return mapUsageResponse((await res.json()) as KimiUsageResponse)
+    const data: unknown = await res.json()
+    return mapUsageResponse(typeof data === 'object' && data !== null ? data : {})
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Kimi usage request failed')
   } finally {

@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
-const fsState = vi.hoisted(() => ({ credentials: null as string | null }))
+const fsState = vi.hoisted<{ credentials: string | null; readError: Error | null }>(() => ({
+  credentials: null,
+  readError: null
+}))
 
 vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
@@ -10,6 +13,9 @@ vi.mock('electron', () => ({
 vi.mock('node:fs', () => ({
   existsSync: () => fsState.credentials !== null,
   readFileSync: () => {
+    if (fsState.readError) {
+      throw fsState.readError
+    }
     if (fsState.credentials === null) {
       throw new Error('ENOENT')
     }
@@ -53,6 +59,7 @@ describe('fetchKimiRateLimits', () => {
   beforeEach(() => {
     netFetchMock.mockReset()
     fsState.credentials = null
+    fsState.readError = null
   })
 
   afterEach(() => {
@@ -94,6 +101,36 @@ describe('fetchKimiRateLimits', () => {
     const result = await fetchKimiRateLimits()
     expect(result.status).toBe('error')
     expect(result.session).toBeNull()
+  })
+
+  it('surfaces an error when the credentials file cannot be parsed', async () => {
+    fsState.credentials = '{'
+
+    const result = await fetchKimiRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toMatch(/json/i)
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('surfaces an error when the credentials file cannot be read', async () => {
+    fsState.credentials = freshCredentials()
+    fsState.readError = new Error('EACCES')
+
+    const result = await fetchKimiRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toMatch(/EACCES/)
+    expect(netFetchMock).not.toHaveBeenCalled()
+  })
+
+  it('treats an empty usage payload as an error', async () => {
+    fsState.credentials = freshCredentials()
+    netFetchMock.mockResolvedValueOnce(jsonResponse({}))
+
+    const result = await fetchKimiRateLimits()
+    expect(result.status).toBe('error')
+    expect(result.error).toMatch(/quota windows/)
+    expect(result.session).toBeNull()
+    expect(result.weekly).toBeNull()
   })
 
   it('does NOT refresh or call the API when the token is expired (read-only)', async () => {
