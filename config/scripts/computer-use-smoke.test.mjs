@@ -88,6 +88,34 @@ describe('computer-use smoke script', () => {
     expect(result.stdout).toContain('computer-use smoke: no preferred apps are running (TestApp)')
   })
 
+  it('skips background apps that report window_not_found instead of failing smoke', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'orca-computer-smoke-test-'))
+    const cliPath = writeFakeSnapshotCli(
+      root,
+      [
+        { name: 'Edge', bundleId: 'com.microsoft.edgemac' },
+        { name: 'Notepad', bundleId: null }
+      ],
+      {
+        windowNotFoundApps: ['Edge']
+      }
+    )
+
+    const result = spawnSync(process.execPath, [smokeScript, '--require-target'], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        ORCA_COMPUTER_SMOKE_CLI_PATH: cliPath,
+        ORCA_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data'),
+        ORCA_COMPUTER_SMOKE_APPS: 'Edge,Notepad'
+      }
+    })
+
+    expect(result.status).toBe(0)
+    expect(result.stdout).toContain('computer-use smoke: Edge: skipped')
+    expect(result.stdout).toContain('computer-use smoke: Notepad')
+  })
+
   it('uses cross-platform default app targets for smoke snapshots', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'orca-computer-smoke-test-'))
     const cliPath = writeFakeSnapshotCli(root, [{ name: 'Notepad', bundleId: null }])
@@ -125,18 +153,25 @@ function writeFakeListAppsCli(root, apps) {
   return cliPath
 }
 
-function writeFakeSnapshotCli(root, apps) {
+function writeFakeSnapshotCli(root, apps, options = {}) {
   const cliPath = path.join(root, 'fake-cli.cjs')
   writeFileSync(
     cliPath,
     [
       'const args = process.argv.slice(2);',
+      `const windowNotFoundApps = new Set(${JSON.stringify(options.windowNotFoundApps ?? [])});`,
       'if (args.join(" ") === "computer list-apps --json") {',
       `  console.log(JSON.stringify({ result: { apps: ${JSON.stringify(apps)} } }));`,
       '} else if (args[0] === "computer" && args[1] === "get-app-state") {',
+      '  const appIndex = args.indexOf("--app");',
+      '  const app = appIndex >= 0 ? args[appIndex + 1] : "Unknown";',
+      '  if (windowNotFoundApps.has(app)) {',
+      '    console.log(JSON.stringify({ ok: false, error: { code: "window_not_found", message: `app \'${app}\' has no on-screen window` } }));',
+      '    process.exit(1);',
+      '  }',
       '  console.log(JSON.stringify({ result: {',
       '    snapshot: {',
-      '      app: { name: "Notepad" },',
+      '      app: { name: app },',
       '      elementCount: 1,',
       '      treeText: "[1] text area settable",',
       '      window: { title: "Untitled" }',

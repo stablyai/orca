@@ -18,6 +18,7 @@ import {
 import { getComputerCommandTarget } from '../selectors'
 import {
   getComputerActionObserveFlags,
+  getComputerObserveFlags,
   getComputerClickActionFlags,
   getComputerDragActionFlags,
   getComputerHotkeyActionFlags,
@@ -25,8 +26,7 @@ import {
   getComputerScrollActionFlags,
   getComputerSecondaryActionFlags,
   getComputerSetValueActionFlags,
-  getComputerTextActionFlags,
-  getComputerWindowTargetFlags
+  getComputerTextActionFlags
 } from './computer-action-flags'
 
 export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
@@ -77,13 +77,11 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatListWindows)
   },
   'computer get-app-state': async ({ flags, client, cwd, json }) => {
-    const windowTarget = getComputerWindowTargetFlags(flags)
+    const observeFlags = getComputerObserveFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
     const result = await client.call<ComputerSnapshotResult>('computer.getAppState', {
       ...target,
-      noScreenshot: flags.has('no-screenshot') ? true : undefined,
-      restoreWindow: flags.has('restore-window') ? true : undefined,
-      ...windowTarget
+      ...observeFlags
     })
     printResult(result, json, formatGetAppState)
   },

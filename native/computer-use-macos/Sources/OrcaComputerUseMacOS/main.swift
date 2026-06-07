@@ -296,6 +296,22 @@ final class Provider {
             .map { $0.lowercased() }
         let namespace = snapshotNamespace(params)
         var storedKeys: [String] = []
+        let canonicalWindowKey = snapshotCanonicalWindowIdKey(cachedSnapshot.windowId)
+        if !isExplicitSnapshotNamespace(namespace) {
+            snapshots[canonicalWindowKey.lowercased()] = cachedSnapshot
+            storedKeys.append(canonicalWindowKey.lowercased())
+        }
+        snapshots[namespacedSnapshotKey(namespace, canonicalWindowKey)] = cachedSnapshot
+        storedKeys.append(namespacedSnapshotKey(namespace, canonicalWindowKey))
+        if let windowIndex {
+            let canonicalWindowIndexKey = snapshotCanonicalWindowIndexKey(windowIndex)
+            if !isExplicitSnapshotNamespace(namespace) {
+                snapshots[canonicalWindowIndexKey.lowercased()] = cachedSnapshot
+                storedKeys.append(canonicalWindowIndexKey.lowercased())
+            }
+            snapshots[namespacedSnapshotKey(namespace, canonicalWindowIndexKey)] = cachedSnapshot
+            storedKeys.append(namespacedSnapshotKey(namespace, canonicalWindowIndexKey))
+        }
         for key in keys {
             if !isExplicitSnapshotNamespace(namespace) {
                 snapshots[key] = cachedSnapshot
@@ -365,14 +381,38 @@ final class Provider {
         guard let query = params["app"]?.string, !query.isEmpty else { return nil }
         let namespace = snapshotNamespace(params)
         if let targetWindowId = try requestedWindowId(params) {
+            let canonicalKey = snapshotCanonicalWindowIdKey(targetWindowId)
+            if let cached = snapshots[namespacedSnapshotKey(namespace, canonicalKey)] {
+                return cached
+            }
+            if !isExplicitSnapshotNamespace(namespace), let cached = snapshots[canonicalKey.lowercased()] {
+                return cached
+            }
             let windowKey = snapshotWindowKey(query.lowercased(), targetWindowId)
-            return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
-                (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
+            if let cached = snapshots[namespacedSnapshotKey(namespace, windowKey)] {
+                return cached
+            }
+            if !isExplicitSnapshotNamespace(namespace), let cached = snapshots[windowKey] {
+                return cached
+            }
+            return nil
         }
         if let targetWindowIndex = try requestedWindowIndex(params) {
+            let canonicalKey = snapshotCanonicalWindowIndexKey(targetWindowIndex)
+            if let cached = snapshots[namespacedSnapshotKey(namespace, canonicalKey)] {
+                return cached
+            }
+            if !isExplicitSnapshotNamespace(namespace), let cached = snapshots[canonicalKey.lowercased()] {
+                return cached
+            }
             let windowKey = snapshotWindowIndexKey(query.lowercased(), targetWindowIndex)
-            return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
-                (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
+            if let cached = snapshots[namespacedSnapshotKey(namespace, windowKey)] {
+                return cached
+            }
+            if !isExplicitSnapshotNamespace(namespace), let cached = snapshots[windowKey] {
+                return cached
+            }
+            return nil
         }
         let key = query.lowercased()
         return snapshots[namespacedSnapshotKey(namespace, key)] ??
@@ -1157,8 +1197,16 @@ private func snapshotWindowKey(_ query: String, _ windowId: CGWindowID) -> Strin
     "\(query.lowercased())#window:\(Int(windowId))"
 }
 
+private func snapshotCanonicalWindowIdKey(_ windowId: CGWindowID) -> String {
+    "window-id:\(Int(windowId))"
+}
+
 private func snapshotWindowIndexKey(_ query: String, _ windowIndex: Int) -> String {
     "\(query.lowercased())#windowIndex:\(windowIndex)"
+}
+
+private func snapshotCanonicalWindowIndexKey(_ windowIndex: Int) -> String {
+    "window-index:\(windowIndex)"
 }
 
 private func snapshotNamespace(_ params: [String: JSONValue]) -> String {

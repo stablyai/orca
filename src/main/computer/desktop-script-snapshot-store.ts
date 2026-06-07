@@ -1,15 +1,11 @@
 import { optionalNumberParam } from './desktop-script-provider-params'
 import type { BridgeSnapshot } from './desktop-script-provider-types'
 import {
-  isExplicitSnapshotNamespace,
+  lookupCachedSnapshotKey,
   MAX_CACHED_DESKTOP_SNAPSHOT_AGE_MS,
   MAX_CACHED_DESKTOP_SNAPSHOTS,
-  namespacedSnapshotKey,
   snapshotCacheKeys,
   type CachedSnapshotEntry,
-  snapshotNamespace,
-  snapshotWindowIndexKey,
-  snapshotWindowKey,
   staleWindowTargetKeys
 } from './desktop-script-snapshot-cache'
 import { snapshotWithoutScreenshot } from './desktop-script-snapshot-rendering'
@@ -46,31 +42,24 @@ export class DesktopScriptSnapshotStore {
     params: Record<string, unknown>
   ): BridgeSnapshot | null {
     this.prune()
-    const namespace = snapshotNamespace(params)
-    if (windowId !== undefined) {
-      const windowKey = snapshotWindowKey(app, windowId)
-      return (
-        this.snapshots.get(namespacedSnapshotKey(namespace, windowKey)) ??
-        (isExplicitSnapshotNamespace(namespace) ? undefined : this.snapshots.get(windowKey)) ??
-        null
-      )
-    }
     const windowIndex = optionalNumberParam(params, 'windowIndex')
-    if (windowIndex !== undefined) {
-      const windowIndexKey = snapshotWindowIndexKey(app, windowIndex)
-      return (
-        this.snapshots.get(namespacedSnapshotKey(namespace, windowIndexKey)) ??
-        (isExplicitSnapshotNamespace(namespace) ? undefined : this.snapshots.get(windowIndexKey)) ??
-        null
-      )
+    const keys = lookupCachedSnapshotKey(app, params, windowId, windowIndex)
+    const hasExplicitWindowTarget = windowId !== undefined || windowIndex !== undefined
+    for (const key of keys) {
+      if (
+        hasExplicitWindowTarget &&
+        !key.includes('#window') &&
+        !key.includes('window-id:') &&
+        !key.includes('window-index:')
+      ) {
+        continue
+      }
+      const cached = this.snapshots.get(key)
+      if (cached) {
+        return cached
+      }
     }
-    return (
-      this.snapshots.get(namespacedSnapshotKey(namespace, app)) ??
-      (isExplicitSnapshotNamespace(namespace)
-        ? undefined
-        : this.snapshots.get(app.toLowerCase())) ??
-      null
-    )
+    return null
   }
 
   forgetWindowTarget(

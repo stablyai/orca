@@ -55,26 +55,20 @@ if (targets.length === 0) {
 }
 
 let failures = 0
+let successes = 0
 for (const app of targets) {
-  const result = runCli(
-    [
-      'computer',
-      'get-app-state',
-      '--session',
-      session,
-      '--app',
-      app,
-      ...(includeScreenshot ? [] : ['--no-screenshot']),
-      '--json'
-    ],
-    { allowFailure: true }
-  )
+  const result = runSnapshotSmoke(app)
 
   if (!result.ok) {
+    if (result.skipped) {
+      console.log(`computer-use smoke: ${app}: skipped (${result.reason})`)
+      continue
+    }
     failures += 1
     console.log(`computer-use smoke: ${app}: failed: ${result.error}`)
     continue
   }
+  successes += 1
 
   const state = unwrapResult(result.value)
   const snapshot = state.snapshot
@@ -99,6 +93,44 @@ for (const app of targets) {
 
 if (failures > 0) {
   fail(`${failures} app snapshot smoke check(s) failed`)
+}
+if (requireTarget && successes === 0) {
+  fail('no preferred app snapshots succeeded')
+}
+
+function runSnapshotSmoke(app) {
+  const baseArgs = [
+    'computer',
+    'get-app-state',
+    '--session',
+    session,
+    '--app',
+    app,
+    '--restore-window',
+    ...(includeScreenshot ? [] : ['--no-screenshot']),
+    '--json'
+  ]
+  const initial = runCli(baseArgs, { allowFailure: true })
+  if (initial.ok) {
+    return initial
+  }
+  const error = parseCliFailure(initial.error)
+  if (error?.code === 'window_not_found') {
+    return { ok: false, skipped: true, reason: error.message }
+  }
+  return initial
+}
+
+function parseCliFailure(raw) {
+  if (!raw) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed.error ?? null
+  } catch {
+    return { code: 'runtime_error', message: String(raw) }
+  }
 }
 
 function valueFlag(name) {

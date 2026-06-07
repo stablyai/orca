@@ -240,6 +240,42 @@ describe('DesktopScriptProviderClient snapshot cache', () => {
     expect(cached.every((snapshot) => snapshot.screenshotPngBase64 === null)).toBe(true)
   })
 
+  it('targets cached elements by session and window id after observe without a window selector', async () => {
+    mockBridgeResponse({
+      ok: true,
+      snapshot: sampleBridgeSnapshot('Text Editor', 'initial')
+    })
+    mockBridgeResponse({
+      ok: true,
+      capabilities: sampleCapabilities()
+    })
+    mockBridgeResponse(
+      {
+        ok: true,
+        snapshot: sampleBridgeSnapshot('Text Editor', 'changed')
+      },
+      (operation) => {
+        expect(operation).toMatchObject({
+          tool: 'click',
+          app: 'Text Editor',
+          windowId: 99,
+          element: expect.objectContaining({ index: 0 })
+        })
+      }
+    )
+
+    const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
+
+    await client.snapshot({ app: 'Text Editor', session: 'agent-a' })
+    await client.action('click', {
+      app: 'Text Editor',
+      session: 'agent-a',
+      windowId: 99,
+      elementIndex: 0,
+      noScreenshot: true
+    })
+  })
+
   it('targets cached elements by session and explicit window index without forwarding window id', async () => {
     mockBridgeResponse({
       ok: true,

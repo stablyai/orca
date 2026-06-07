@@ -20,6 +20,16 @@ export function snapshotCacheKeys(
   const namespace = snapshotNamespace(params)
   const pidKeys = snapshotPidKeys(snapshot.app.pid)
   const keys = new Set<string>()
+  if (snapshot.windowId !== null && snapshot.windowId !== undefined) {
+    keys.add(canonicalWindowIdKey(snapshot.windowId))
+    keys.add(namespacedSnapshotKey(namespace, canonicalWindowIdKey(snapshot.windowId)))
+  }
+  const resolvedWindowIndex = optionalNumberParam(params, 'windowIndex') ?? snapshot.windowIndex
+  if (resolvedWindowIndex !== null && resolvedWindowIndex !== undefined) {
+    keys.add(canonicalWindowIndexKey(resolvedWindowIndex))
+    keys.add(namespacedSnapshotKey(namespace, canonicalWindowIndexKey(resolvedWindowIndex)))
+  }
+
   for (const key of [
     query,
     snapshot.app.name,
@@ -64,6 +74,14 @@ export function snapshotWindowKey(query: string, windowId: number): string {
   return `${query.toLowerCase()}#window:${windowId}`
 }
 
+export function canonicalWindowIdKey(windowId: number): string {
+  return `window-id:${windowId}`
+}
+
+export function canonicalWindowIndexKey(windowIndex: number): string {
+  return `window-index:${windowIndex}`
+}
+
 function snapshotKeysForWindowIndex(
   query: string,
   snapshot: BridgeSnapshot,
@@ -102,6 +120,14 @@ export function staleWindowTargetKeys(
   }
 
   const keys = new Set<string>()
+  if (windowId !== undefined) {
+    keys.add(canonicalWindowIdKey(windowId))
+    keys.add(namespacedSnapshotKey(namespace, canonicalWindowIdKey(windowId)))
+  }
+  if (windowIndex !== undefined) {
+    keys.add(canonicalWindowIndexKey(windowIndex))
+    keys.add(namespacedSnapshotKey(namespace, canonicalWindowIndexKey(windowIndex)))
+  }
   for (const appKey of snapshotAppKeys(query, snapshot)) {
     const targetKey =
       windowId !== undefined
@@ -113,6 +139,39 @@ export function staleWindowTargetKeys(
     keys.add(namespacedSnapshotKey(namespace, targetKey))
   }
   return [...keys]
+}
+
+export function lookupCachedSnapshotKey(
+  app: string,
+  params: Record<string, unknown>,
+  windowId: number | undefined,
+  windowIndex: number | undefined
+): string[] {
+  const namespace = snapshotNamespace(params)
+  const keys: string[] = []
+  if (windowId !== undefined) {
+    keys.push(
+      namespacedSnapshotKey(namespace, canonicalWindowIdKey(windowId)),
+      namespacedSnapshotKey(namespace, snapshotWindowKey(app, windowId))
+    )
+    if (!isExplicitSnapshotNamespace(namespace)) {
+      keys.push(canonicalWindowIdKey(windowId), snapshotWindowKey(app, windowId))
+    }
+  }
+  if (windowIndex !== undefined) {
+    keys.push(
+      namespacedSnapshotKey(namespace, canonicalWindowIndexKey(windowIndex)),
+      namespacedSnapshotKey(namespace, snapshotWindowIndexKey(app, windowIndex))
+    )
+    if (!isExplicitSnapshotNamespace(namespace)) {
+      keys.push(canonicalWindowIndexKey(windowIndex), snapshotWindowIndexKey(app, windowIndex))
+    }
+  }
+  keys.push(namespacedSnapshotKey(namespace, app))
+  if (!isExplicitSnapshotNamespace(namespace)) {
+    keys.push(app.toLowerCase())
+  }
+  return keys
 }
 
 function snapshotAppKeys(query: string, snapshot: BridgeSnapshot | null): string[] {
