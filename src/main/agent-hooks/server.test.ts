@@ -6176,3 +6176,116 @@ describe('AgentHookServer ingestRemote', () => {
     expect(event.payload.prompt.length).toBe(200)
   })
 })
+
+describe('AgentHookServer ingestTerminalStatus', () => {
+  it('forwards runtime terminal status through the normal listener and snapshot path', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        }
+      })
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          payload: {
+            state: 'working',
+            prompt: 'ship it',
+            agentType: 'codex'
+          }
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: null,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        })
+      ])
+      expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses exact duplicate runtime terminal status observations', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+      const event = {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: {
+          state: 'working' as const,
+          prompt: 'same turn',
+          agentType: 'codex' as const
+        }
+      }
+
+      server.ingestTerminalStatus(event)
+      vi.setSystemTime(1_250)
+      server.ingestTerminalStatus(event)
+
+      expect(listener).toHaveBeenCalledTimes(1)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          receivedAt: 1_000,
+          stateStartedAt: 1_000,
+          state: 'working',
+          prompt: 'same turn'
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects runtime terminal status with mismatched tab identity', () => {
+    const server = new AgentHookServer()
+    const listener = vi.fn()
+    server.setListener(listener)
+
+    server.ingestTerminalStatus({
+      paneKey: PANE,
+      tabId: 'other-tab',
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'bad tab',
+        agentType: 'codex'
+      }
+    })
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+})
