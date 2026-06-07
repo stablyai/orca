@@ -1148,6 +1148,7 @@ function RemoteBrowserPagePane({
     if (!element) {
       return
     }
+    let rafId: number | null = null
     const scheduleSync = (): void => {
       readRemoteViewportSize()
       if (remoteViewportTimerRef.current !== null) {
@@ -1164,11 +1165,25 @@ function RemoteBrowserPagePane({
           .catch(() => {})
       }, 150)
     }
+    const scheduleObservedSync = (): void => {
+      if (rafId !== null) {
+        return
+      }
+      // Why: viewport sync reads layout and can restart browser media; keep it
+      // out of ResizeObserver delivery to avoid browser-pane feedback loops.
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        scheduleSync()
+      })
+    }
     scheduleSync()
-    const observer = new ResizeObserver(scheduleSync)
+    const observer = new ResizeObserver(scheduleObservedSync)
     observer.observe(element)
     return () => {
       observer.disconnect()
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null

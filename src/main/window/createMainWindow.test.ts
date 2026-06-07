@@ -2198,6 +2198,35 @@ describe('createMainWindow', () => {
     consoleError.mockRestore()
   })
 
+  it('does not loop renderer recovery reloads inside the cooldown window', () => {
+    vi.useFakeTimers()
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+
+    createMainWindow(null)
+
+    const details = {
+      reason: 'crashed',
+      exitCode: 5
+    } as Electron.RenderProcessGoneDetails
+    windowHandlers['render-process-gone']?.({} as never, details)
+    vi.advanceTimersByTime(250)
+    windowHandlers['did-finish-load']?.()
+    windowHandlers['render-process-gone']?.({} as never, details)
+    vi.advanceTimersByTime(250)
+
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(30_000)
+    windowHandlers['render-process-gone']?.({} as never, details)
+    vi.advanceTimersByTime(250)
+
+    expect(browserWindowInstance.loadFile).toHaveBeenCalledTimes(3)
+
+    consoleError.mockRestore()
+  })
+
   it('does not reload after a clean renderer exit', () => {
     vi.useFakeTimers()
 

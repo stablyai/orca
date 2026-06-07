@@ -8,6 +8,7 @@ const MAX_BREADCRUMBS = 30
 
 let breadcrumbs: CrashReportBreadcrumb[] = []
 let coalescedBreadcrumbs = new Map<string, { recordedAt: number; suppressed: number }>()
+let lastRendererHeartbeatAt: number | null = null
 
 export function recordCrashBreadcrumb(name: string, data?: CrashReportBreadcrumbData): void {
   const sanitized = sanitizeCrashReportBreadcrumbs([
@@ -59,7 +60,16 @@ export function getCrashBreadcrumbSnapshot(): CrashReportBreadcrumb[] {
   }))
 }
 
+export function recordRendererHeartbeat(now = Date.now()): void {
+  lastRendererHeartbeatAt = now
+}
+
+export function getLastRendererHeartbeatAgeMs(now = Date.now()): number | null {
+  return lastRendererHeartbeatAt === null ? null : Math.max(0, now - lastRendererHeartbeatAt)
+}
+
 export function clearCrashBreadcrumbsForTest(): void {
   breadcrumbs = []
   coalescedBreadcrumbs = new Map()
+  lastRendererHeartbeatAt = null
 }

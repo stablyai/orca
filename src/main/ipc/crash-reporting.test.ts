@@ -7,13 +7,15 @@ const {
   listeners,
   clipboardWriteTextMock,
   submitFeedbackMock,
-  recordCrashBreadcrumbMock
+  recordCrashBreadcrumbMock,
+  recordRendererHeartbeatMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   listeners: new Map<string, (_event: unknown, args?: unknown) => void>(),
   clipboardWriteTextMock: vi.fn(),
   submitFeedbackMock: vi.fn(),
-  recordCrashBreadcrumbMock: vi.fn()
+  recordCrashBreadcrumbMock: vi.fn(),
+  recordRendererHeartbeatMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -37,7 +39,8 @@ vi.mock('./feedback', () => ({
 
 vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
   getCrashBreadcrumbSnapshot: vi.fn(() => []),
-  recordCrashBreadcrumb: (...args: unknown[]) => recordCrashBreadcrumbMock(...args)
+  recordCrashBreadcrumb: (...args: unknown[]) => recordCrashBreadcrumbMock(...args),
+  recordRendererHeartbeat: (...args: unknown[]) => recordRendererHeartbeatMock(...args)
 }))
 
 import {
@@ -75,6 +78,7 @@ describe('registerCrashReportingHandlers', () => {
     clipboardWriteTextMock.mockReset()
     submitFeedbackMock.mockReset()
     recordCrashBreadcrumbMock.mockReset()
+    recordRendererHeartbeatMock.mockReset()
     submitFeedbackMock.mockResolvedValue({ ok: true })
     _resetRendererErrorReportDedupeForTests()
   })
@@ -428,6 +432,7 @@ describe('registerCrashReportingHandlers', () => {
       ok: true,
       empty: null
     })
+    expect(recordRendererHeartbeatMock).toHaveBeenCalledOnce()
   })
 
   it('ignores renderer breadcrumbs without a string name', () => {

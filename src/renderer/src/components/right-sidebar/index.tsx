@@ -398,11 +398,16 @@ function computeMaxRightSidebarWidth(): number {
 
 function useMeasuredWidth(onWidth: (width: number | null) => void) {
   const observerRef = React.useRef<ResizeObserver | null>(null)
+  const rafRef = React.useRef<number | null>(null)
 
   return React.useCallback(
     (node: HTMLDivElement | null) => {
       observerRef.current?.disconnect()
       observerRef.current = null
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
 
       if (!node || typeof ResizeObserver === 'undefined') {
         onWidth(node ? node.getBoundingClientRect().width : null)
@@ -412,8 +417,19 @@ function useMeasuredWidth(onWidth: (width: number | null) => void) {
       const updateWidth = (): void => {
         onWidth(node.getBoundingClientRect().width)
       }
+      const scheduleUpdateWidth = (): void => {
+        if (rafRef.current !== null) {
+          return
+        }
+        // Why: sidebar measurement drives React state; schedule it after
+        // ResizeObserver delivery to avoid shell layout feedback loops.
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null
+          updateWidth()
+        })
+      }
       updateWidth()
-      const observer = new ResizeObserver(updateWidth)
+      const observer = new ResizeObserver(scheduleUpdateWidth)
       observer.observe(node)
       observerRef.current = observer
     },

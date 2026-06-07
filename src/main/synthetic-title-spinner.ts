@@ -14,6 +14,7 @@ export function advanceSyntheticTitleSpinnerEntries<TProfile>(args: {
   entries: Map<string, SyntheticTitleSpinnerEntry<TProfile>>
   frameCount: number
   getPtyIdForPaneKey: (paneKey: string) => string | null | undefined
+  shouldKeepPaneKey?: (paneKey: string) => boolean
 }): SyntheticTitleSpinnerTick<TProfile>[] {
   if (args.frameCount <= 0) {
     return []
@@ -21,6 +22,10 @@ export function advanceSyntheticTitleSpinnerEntries<TProfile>(args: {
 
   const ticks: SyntheticTitleSpinnerTick<TProfile>[] = []
   for (const [paneKey, entry] of args.entries) {
+    if (args.shouldKeepPaneKey && !args.shouldKeepPaneKey(paneKey)) {
+      args.entries.delete(paneKey)
+      continue
+    }
     const ptyId = args.getPtyIdForPaneKey(paneKey)
     if (!ptyId) {
       args.entries.delete(paneKey)

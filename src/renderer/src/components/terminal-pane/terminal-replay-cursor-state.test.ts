@@ -4,7 +4,8 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
-  RESET_KITTY_KEYBOARD_PROTOCOL
+  RESET_KITTY_KEYBOARD_PROTOCOL,
+  RESET_TERMINAL_INTERACTIVE_MODES
 } from './layout-serialization'
 
 const OLD_REATTACH_RESET_WITHOUT_CURSOR_STYLE = '\x1b[?25h\x1b[?1004l'
@@ -59,12 +60,53 @@ function writeTerminal(term: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => term.write(data, resolve))
 }
 
+const OPENCODE_WSL_CAPTURED_ENABLE_MODES = [
+  '1049',
+  '1000',
+  '1002',
+  '1003',
+  '1006',
+  '2004',
+  '2026',
+  '2027'
+]
+
 describe('terminal replay state reset', () => {
   it('includes Kitty keyboard protocol reset in replay reset bundles', () => {
     expect(RESET_KITTY_KEYBOARD_PROTOCOL).toBe('\x1b[<99u\x1b[=0u')
     expect(POST_REPLAY_MODE_RESET).toContain(RESET_KITTY_KEYBOARD_PROTOCOL)
     expect(POST_REPLAY_REATTACH_RESET).toContain(RESET_KITTY_KEYBOARD_PROTOCOL)
     expect(POST_REPLAY_LIVE_SNAPSHOT_RESET).not.toContain(RESET_KITTY_KEYBOARD_PROTOCOL)
+  })
+
+  it('uses the full interactive-mode reset for cold replay and interrupts', () => {
+    expect(POST_REPLAY_MODE_RESET).toBe(RESET_TERMINAL_INTERACTIVE_MODES)
+    for (const mode of [
+      '1049',
+      '1000',
+      '1002',
+      '1003',
+      '1005',
+      '1006',
+      '1015',
+      '1016',
+      '2026',
+      '2027',
+      '2031'
+    ]) {
+      expect(RESET_TERMINAL_INTERACTIVE_MODES).toContain(`\x1b[?${mode}l`)
+    }
+    expect(RESET_TERMINAL_INTERACTIVE_MODES).toContain('\x1b[?2004l')
+    expect(RESET_TERMINAL_INTERACTIVE_MODES).toContain('\x1b[>4;0m')
+  })
+
+  it('disables the OpenCode WSL interactive modes captured before Ctrl+C exit', () => {
+    for (const mode of OPENCODE_WSL_CAPTURED_ENABLE_MODES) {
+      expect(RESET_TERMINAL_INTERACTIVE_MODES).toContain(`\x1b[?${mode}l`)
+    }
+    expect(RESET_TERMINAL_INTERACTIVE_MODES).toContain('\x1b[<99u')
+    expect(RESET_TERMINAL_INTERACTIVE_MODES).toContain('\x1b[=0u')
+    expect(RESET_TERMINAL_INTERACTIVE_MODES).toContain('\x1b[>4;0m')
   })
 
   it('clears stale DECSCUSR cursor overrides after live reattach replay', async () => {

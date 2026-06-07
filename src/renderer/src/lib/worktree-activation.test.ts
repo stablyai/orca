@@ -4,6 +4,12 @@ import type { SetupScriptLaunchMode } from '../../../shared/types'
 import { ensureWorktreeHasInitialTerminal } from './worktree-activation'
 import { useAppStore } from '@/store'
 
+const mockRecordAgentLaunchCrashBreadcrumb = vi.hoisted(() => vi.fn())
+
+vi.mock('@/lib/agent-launch-crash-breadcrumb', () => ({
+  recordAgentLaunchCrashBreadcrumb: mockRecordAgentLaunchCrashBreadcrumb
+}))
+
 function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
   useAppStore.setState((state) => ({
     settings: state.settings
@@ -15,6 +21,7 @@ function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
 }
 
 afterEach(() => {
+  vi.clearAllMocks()
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   useAppStore.setState((state) => ({
     settings: state.settings
@@ -244,6 +251,13 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         launch_source: 'new_workspace_composer',
         request_kind: 'new'
       }
+    })
+    expect(mockRecordAgentLaunchCrashBreadcrumb).toHaveBeenCalledWith({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      launchPlatform: expect.any(String),
+      launchSource: 'new_workspace_composer',
+      requestKind: 'new'
     })
   })
 

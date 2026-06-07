@@ -1005,6 +1005,28 @@ describe('AgentHookServer listener replay', () => {
     )
   })
 
+  it('can attach the renderer fanout listener without replaying cached statuses', () => {
+    const server = new AgentHookServer()
+    for (let index = 0; index < 250; index += 1) {
+      const tabId = `tab-${index}`
+      server.ingestRemote(
+        {
+          paneKey: `${tabId}:11111111-1111-4111-8111-${String(index).padStart(12, '0')}`,
+          tabId,
+          worktreeId: 'wt-1',
+          payload: { state: 'working', prompt: 'cached task', agentType: 'opencode' }
+        },
+        'conn-1'
+      )
+    }
+    const listener = vi.fn()
+
+    server.setListener(listener, { replayExisting: false })
+
+    expect(listener).not.toHaveBeenCalled()
+    expect(server.getStatusSnapshot()).toHaveLength(250)
+  })
+
   it('unsubscribes status-change listeners without removing the remaining listeners', () => {
     const server = new AgentHookServer()
     const removed = vi.fn()

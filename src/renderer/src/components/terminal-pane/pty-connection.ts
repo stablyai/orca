@@ -3,6 +3,7 @@ import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
 import type { IDisposable } from '@xterm/xterm'
 import {
   detectAgentStatusFromTitle,
+  getAgentLabel,
   isGeminiTerminalTitle,
   isClaudeAgent
 } from '@/lib/agent-status'
@@ -28,6 +29,7 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
+  RESET_TERMINAL_INTERACTIVE_MODES,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
@@ -673,6 +675,59 @@ export function connectPanePty(
       titleOnlyInterruptTimer = null
     }
   }
+  const titlesDescribeSameWorkingAgent = (
+    baselineTitle: string | null | undefined,
+    currentTitle: string | null | undefined
+  ): boolean => {
+    if (!baselineTitle || !currentTitle) {
+      return false
+    }
+    if (
+      detectAgentStatusFromTitle(baselineTitle) !== 'working' ||
+      detectAgentStatusFromTitle(currentTitle) !== 'working'
+    ) {
+      return false
+    }
+    const baselineLabel = getAgentLabel(baselineTitle)
+    return Boolean(baselineLabel) && baselineLabel === getAgentLabel(currentTitle)
+  }
+  const titleOnlyWorkingAgentHasExited = async (): Promise<boolean> => {
+    const state = useAppStore.getState()
+    const ptyId = (state.tabsByWorktree[deps.worktreeId] ?? []).find(
+      (entry) => entry.id === deps.tabId
+    )?.ptyId
+    if (!ptyId) {
+      return true
+    }
+    try {
+      const process = await inspectRuntimeTerminalProcess(state.settings, ptyId)
+      return !process.foregroundProcess && !process.hasChildProcesses
+    } catch {
+      return false
+    }
+  }
+  let postInterruptModeResetTimer: ReturnType<typeof setTimeout> | null = null
+  const clearPostInterruptModeResetTimer = (): void => {
+    if (postInterruptModeResetTimer !== null) {
+      clearTimeout(postInterruptModeResetTimer)
+      postInterruptModeResetTimer = null
+    }
+  }
+  const schedulePostInterruptModeResetIfProcessExited = (): void => {
+    clearPostInterruptModeResetTimer()
+    postInterruptModeResetTimer = setTimeout(() => {
+      void (async () => {
+        postInterruptModeResetTimer = null
+        if (disposed || !(await titleOnlyWorkingAgentHasExited())) {
+          return
+        }
+        // Why: broad TUI mode resets are safe only after the foreground app is
+        // gone; applying them while a surviving TUI still owns the screen would
+        // desynchronize xterm from the process.
+        pane.terminal.write(RESET_TERMINAL_INTERACTIVE_MODES)
+      })()
+    }, AGENT_INTERRUPT_SETTLE_MS)
+  }
   const observeTitleOnlyInterrupt = (): void => {
     const state = useAppStore.getState()
     if (state.agentStatusByPaneKey[cacheKey]) {
@@ -688,24 +743,31 @@ export function connectPanePty(
     }
     clearTitleOnlyInterruptTimer()
     titleOnlyInterruptTimer = setTimeout(() => {
-      titleOnlyInterruptTimer = null
-      if (useAppStore.getState().agentStatusByPaneKey[cacheKey]) {
-        return
-      }
-      const currentState = useAppStore.getState()
-      const currentRuntimeTitle = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
-      const currentTabTitle = (currentState.tabsByWorktree[deps.worktreeId] ?? []).find(
-        (entry) => entry.id === deps.tabId
-      )?.title
-      const currentTitle = currentRuntimeTitle ?? currentTabTitle
-      if (
-        currentTitle === baselineTitle &&
-        detectAgentStatusFromTitle(currentTitle ?? '') === 'working'
-      ) {
-        // Why: title-only agents such as Pi can miss their own idle title after
-        // Ctrl+C. Clear only an unchanged, acknowledged working title.
-        clearInferredInterruptWorkingTitle()
-      }
+      void (async () => {
+        titleOnlyInterruptTimer = null
+        if (useAppStore.getState().agentStatusByPaneKey[cacheKey]) {
+          return
+        }
+        const currentState = useAppStore.getState()
+        const currentRuntimeTitle = currentState.runtimePaneTitlesByTabId?.[deps.tabId]?.[pane.id]
+        const currentTabTitle = (currentState.tabsByWorktree[deps.worktreeId] ?? []).find(
+          (entry) => entry.id === deps.tabId
+        )?.title
+        const currentTitle = currentRuntimeTitle ?? currentTabTitle
+        const titleUnchanged = currentTitle === baselineTitle
+        const sameWorkingAgent = titlesDescribeSameWorkingAgent(baselineTitle, currentTitle)
+        if (titleUnchanged && detectAgentStatusFromTitle(currentTitle ?? '') === 'working') {
+          // Why: title-only agents such as Pi can miss their own idle title after
+          // Ctrl+C. Clear only an unchanged, acknowledged working title.
+          clearInferredInterruptWorkingTitle()
+          return
+        }
+        if (sameWorkingAgent && (await titleOnlyWorkingAgentHasExited())) {
+          // Why: spinner titles change every frame, so exact-title comparison
+          // misses OpenCode/Codex exits that leave only a stale working spinner.
+          clearInferredInterruptWorkingTitle()
+        }
+      })()
     }, AGENT_INTERRUPT_SETTLE_MS)
   }
   const clearReattachIdleAgentCursorResetTimer = (): void => {
@@ -844,6 +906,7 @@ export function connectPanePty(
   ): void => {
     if (intent === 'ctrl-c' || data === '\x03') {
       markTerminalBracketedPasteInterrupted(pane.terminal)
+      schedulePostInterruptModeResetIfProcessExited()
     }
   }
   let pendingTerminalInputWrite: Promise<void> | null = null
@@ -3114,6 +3177,7 @@ export function connectPanePty(
       pendingTerminalInputWrite = null
       interruptInference.dispose()
       clearTitleOnlyInterruptTimer()
+      clearPostInterruptModeResetTimer()
       clearCommandCodeOutputDoneTimer()
       // Why: actively resolve any in-flight passphrase-gate waits so their
       // zustand subscribers + async IIFEs don't hang for the rest of the

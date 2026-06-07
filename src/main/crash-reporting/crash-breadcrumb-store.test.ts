@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   clearCrashBreadcrumbsForTest,
   getCrashBreadcrumbSnapshot,
+  getLastRendererHeartbeatAgeMs,
   recordCoalescedCrashBreadcrumb,
-  recordCrashBreadcrumb
+  recordCrashBreadcrumb,
+  recordRendererHeartbeat
 } from './crash-breadcrumb-store'
 
 afterEach(() => {
@@ -80,6 +82,22 @@ describe('crash breadcrumb store', () => {
       { agentType: 'claude', state: 'working' },
       { agentType: 'claude', state: 'working', suppressedSinceLast: 1 }
     ])
+
+    vi.useRealTimers()
+  })
+
+  it('tracks renderer heartbeat age separately from breadcrumb retention', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+
+    recordRendererHeartbeat()
+    for (let index = 0; index < 32; index += 1) {
+      recordCrashBreadcrumb(`main_event_${index}`)
+    }
+    vi.advanceTimersByTime(16_000)
+
+    expect(getCrashBreadcrumbSnapshot()[0].name).toBe('main_event_2')
+    expect(getLastRendererHeartbeatAgeMs()).toBe(16_000)
 
     vi.useRealTimers()
   })

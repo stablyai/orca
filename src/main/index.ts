@@ -117,9 +117,14 @@ import {
 } from './crash-reporting/process-gone-classification'
 import {
   buildProcessGoneCrashDetails,
-  buildSuppressedProcessGoneBreadcrumbData
+  buildSuppressedProcessGoneBreadcrumbData,
+  rememberProcessGoneForDiagnostics
 } from './crash-reporting/process-gone-diagnostics'
-import { getProcessGoneDedupeKey, processGoneDedupe } from './crash-reporting/process-gone-dedupe'
+import {
+  getProcessGoneDedupeKey,
+  processGoneDedupe,
+  processGoneIncidentDedupe
+} from './crash-reporting/process-gone-dedupe'
 import {
   advanceSyntheticTitleSpinnerEntries,
   type SyntheticTitleSpinnerEntry
@@ -132,6 +137,7 @@ import {
   type SyntheticAgentTitleProfile
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
+import { agentStatusRendererDedupe } from './agent-status-renderer-dedupe'
 import { KeybindingService } from './keybindings/keybinding-service'
 import { applyElectronProxySettings } from './network/proxy-settings'
 
@@ -615,7 +621,7 @@ function openMainWindow(): BrowserWindow {
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
-      mainWindow?.webContents.send('agentStatus:set', {
+      const statusMessage = {
         ...payload,
         paneKey,
         ...(terminalHandle ? { terminalHandle } : {}),
@@ -625,7 +631,10 @@ function openMainWindow(): BrowserWindow {
         receivedAt,
         stateStartedAt,
         ...(orchestration ? { orchestration } : {})
-      })
+      }
+      if (agentStatusRendererDedupe.shouldSend(statusMessage)) {
+        mainWindow?.webContents.send('agentStatus:set', statusMessage)
+      }
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)
       // Why: some native OSC titles miss terminal idle/permission frames.
       // Inject hook-derived frames so the renderer title tracker updates too.
@@ -633,9 +642,14 @@ function openMainWindow(): BrowserWindow {
       if (profile && shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state)) {
         driveSyntheticTitleFromHook(paneKey, payload.state, profile)
       }
-    }
+    },
+    { replayExisting: false }
   )
   agentHookServer.setPaneStatusClearListener((paneKey) => {
+    agentStatusRendererDedupe.clearPane(paneKey)
+    // Why: Ctrl+C/process-exit clears can remove the hook status without a
+    // final non-working hook, so the synthetic title source must stop here too.
+    stopSyntheticTitleSpinner(paneKey)
     if (mainWindow?.isDestroyed()) {
       return
     }
@@ -686,6 +700,8 @@ function recordProcessGoneCrash(
   if (!crashReports || !isCrashReportReason(reason)) {
     return
   }
+  rememberProcessGoneForDiagnostics({ source, processType, reason, exitCode })
+  const expectedTeardown = getExpectedTeardownScope(webContentsId)
   if (
     !shouldRecordProcessGoneCrash({
       source,
@@ -693,7 +709,7 @@ function recordProcessGoneCrash(
       serviceName: typeof details.serviceName === 'string' ? details.serviceName : undefined,
       reason,
       exitCode,
-      expectedTeardown: getExpectedTeardownScope(webContentsId)
+      expectedTeardown
     })
   ) {
     recordCrashBreadcrumb(
@@ -712,7 +728,31 @@ function recordProcessGoneCrash(
   if (!processGoneDedupe.shouldRecord(key)) {
     return
   }
-  const crashDetails = buildProcessGoneCrashDetails(details)
+  const crashDetails = buildProcessGoneCrashDetails({
+    ...details,
+    expectedTeardown,
+    ...(webContentsId !== undefined ? { webContentsId } : {})
+  })
+  if (
+    !processGoneIncidentDedupe.shouldRecord({
+      source,
+      processType,
+      reason,
+      exitCode,
+      details: crashDetails
+    })
+  ) {
+    recordCrashBreadcrumb('process_gone_incident_deduped', {
+      source,
+      processType,
+      reason,
+      exitCode,
+      ...(typeof crashDetails.processMetricsLargestPid === 'number'
+        ? { processMetricsLargestPid: crashDetails.processMetricsLargestPid }
+        : {})
+    })
+    return
+  }
   const span = startSpan('electron.process_gone', {
     attributes: {
       'crash.source': source,
@@ -976,7 +1016,10 @@ function tickSyntheticTitleSpinners(): void {
   const ticks = advanceSyntheticTitleSpinnerEntries({
     entries: syntheticTitleSpinnerByPaneKey,
     frameCount: SPINNER_FRAMES.length,
-    getPtyIdForPaneKey
+    getPtyIdForPaneKey,
+    // Why: a missed final hook/clear race must not let decorative title frames
+    // outlive the authoritative hook-status cache for the pane.
+    shouldKeepPaneKey: (paneKey) => agentHookServer.hasPaneStatus(paneKey)
   })
   for (const tick of ticks) {
     sendSyntheticTitle(

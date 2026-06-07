@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
+  RESET_TERMINAL_INTERACTIVE_MODES,
   RESET_TERMINAL_CURSOR_STYLE
 } from './layout-serialization'
 import type * as UseNotificationDispatchModule from './use-notification-dispatch'
@@ -1238,6 +1239,109 @@ describe('connectPanePty', () => {
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Terminal')
     expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Terminal')
+  })
+
+  it('clears changed title-only working indicators for the same agent after the process exits', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    vi.setSystemTime(1_100)
+    mockStoreState.runtimePaneTitlesByTabId = {
+      'tab-1': {
+        1: 'Codex working'
+      }
+    }
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const deps = createDeps({
+      setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
+        mockStoreState.runtimePaneTitlesByTabId = {
+          ...mockStoreState.runtimePaneTitlesByTabId,
+          [tabId]: {
+            ...mockStoreState.runtimePaneTitlesByTabId[tabId],
+            [paneId]: title
+          }
+        }
+      })
+    })
+
+    const manager = createManager(1)
+    manager.getActivePane.mockReturnValue({ id: 1 })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x03')
+    await flushAsyncTicks()
+    mockStoreState.runtimePaneTitlesByTabId = {
+      'tab-1': {
+        1: 'Codex working on files'
+      }
+    }
+    vi.advanceTimersByTime(500)
+    await flushAsyncTicks()
+
+    expect(window.api.pty.getForegroundProcess).toHaveBeenCalledWith('tab-pty')
+    expect(window.api.pty.hasChildProcesses).toHaveBeenCalledWith('tab-pty')
+    expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, 'Terminal')
+    expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', 'Terminal')
+    expect(pane.terminal.write).toHaveBeenCalledWith(RESET_TERMINAL_INTERACTIVE_MODES)
+  })
+
+  it('keeps changed title-only working indicators for the same agent while the process is alive', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    vi.useFakeTimers()
+    vi.setSystemTime(1_100)
+    ;(window.api.pty.getForegroundProcess as ReturnType<typeof vi.fn>).mockResolvedValue(
+      'opencode.exe'
+    )
+    ;(window.api.pty.hasChildProcesses as ReturnType<typeof vi.fn>).mockResolvedValue(true)
+    mockStoreState.runtimePaneTitlesByTabId = {
+      'tab-1': {
+        1: 'Codex working'
+      }
+    }
+    const terminalTarget = createKeyboardEventTarget()
+    const pane = createPane(1)
+    ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
+    let onDataHandler: ((data: string) => void) | null = null
+    pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
+      onDataHandler = handler
+      return { dispose: vi.fn() }
+    }) as typeof pane.terminal.onData)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    if (!onDataHandler) {
+      throw new Error('expected onData handler to be registered')
+    }
+    terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
+    ;(onDataHandler as unknown as (data: string) => void)('\x03')
+    await flushAsyncTicks()
+    mockStoreState.runtimePaneTitlesByTabId = {
+      'tab-1': {
+        1: 'Codex working on files'
+      }
+    }
+    vi.advanceTimersByTime(500)
+    await flushAsyncTicks()
+
+    expect(window.api.pty.getForegroundProcess).toHaveBeenCalledWith('tab-pty')
+    expect(window.api.pty.hasChildProcesses).toHaveBeenCalledWith('tab-pty')
+    expect(deps.setRuntimePaneTitle).not.toHaveBeenCalledWith('tab-1', 1, 'Terminal')
+    expect(deps.updateTabTitle).not.toHaveBeenCalledWith('tab-1', 'Terminal')
+    expect(pane.terminal.write).not.toHaveBeenCalledWith(RESET_TERMINAL_INTERACTIVE_MODES)
   })
 
   it('does not clear title-only working indicators when interrupt writes are unacknowledged', async () => {

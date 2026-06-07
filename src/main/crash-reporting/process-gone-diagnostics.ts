@@ -4,6 +4,7 @@ import {
   type CrashReportBreadcrumbData,
   type CrashReportDetailValue
 } from '../../shared/crash-reporting'
+import { getLastRendererHeartbeatAgeMs } from './crash-breadcrumb-store'
 
 type ProcessMetricLike = {
   pid?: unknown
@@ -20,8 +21,17 @@ type ProcessMetricBucket = {
 }
 
 const PROCESS_METRIC_BUCKETS = ['browser', 'renderer', 'gpu', 'utility', 'other'] as const
+const RECENT_GPU_PROCESS_GONE_WINDOW_MS = 10 * 60_000
 
 type ProcessMetricBucketName = (typeof PROCESS_METRIC_BUCKETS)[number]
+type RecentGpuProcessGone = {
+  recordedAt: number
+  reason: string
+  exitCode: number | null
+  processType: string
+}
+
+let recentGpuProcessGone: RecentGpuProcessGone[] = []
 
 function safeString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
@@ -109,12 +119,60 @@ function getProcessGoneMetricDetails(): CrashReportDetails {
   }
 }
 
+function pruneRecentGpuProcessGone(now: number): void {
+  recentGpuProcessGone = recentGpuProcessGone.filter(
+    (event) => now - event.recordedAt <= RECENT_GPU_PROCESS_GONE_WINDOW_MS
+  )
+}
+
+export function rememberProcessGoneForDiagnostics({
+  source,
+  processType,
+  reason,
+  exitCode,
+  now = Date.now()
+}: {
+  source: 'renderer' | 'child'
+  processType: string
+  reason: string
+  exitCode: number | null
+  now?: number
+}): void {
+  pruneRecentGpuProcessGone(now)
+  if (source !== 'child' || processType.toLowerCase() !== 'gpu') {
+    return
+  }
+  recentGpuProcessGone.push({ recordedAt: now, reason, exitCode, processType })
+}
+
+export function collectRecentGpuProcessGoneDetails(now = Date.now()): CrashReportDetails {
+  pruneRecentGpuProcessGone(now)
+  const latest = recentGpuProcessGone.at(-1)
+  return {
+    recentGpuProcessGoneCount: recentGpuProcessGone.length,
+    ...(latest
+      ? {
+          latestGpuProcessGoneReason: latest.reason,
+          latestGpuProcessGoneExitCode: latest.exitCode,
+          latestGpuProcessGoneAgeMs: Math.max(0, now - latest.recordedAt)
+        }
+      : {})
+  }
+}
+
+export function clearProcessGoneDiagnosticsForTest(): void {
+  recentGpuProcessGone = []
+}
+
 export function buildProcessGoneCrashDetails(details: Record<string, unknown>): CrashReportDetails {
   const sanitizedDetails = sanitizeCrashReportDetails(details)
+  const lastRendererHeartbeatAgeMs = getLastRendererHeartbeatAgeMs()
   // Why: low-JS-heap renderer kills can still be native/process memory pressure.
   // Capture Electron process buckets at process-gone time before recovery reloads.
   return {
     ...sanitizedDetails,
+    ...(lastRendererHeartbeatAgeMs !== null ? { lastRendererHeartbeatAgeMs } : {}),
+    ...collectRecentGpuProcessGoneDetails(),
     ...getProcessGoneMetricDetails()
   }
 }

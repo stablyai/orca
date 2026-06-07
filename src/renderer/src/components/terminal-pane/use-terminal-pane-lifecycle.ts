@@ -649,8 +649,9 @@ export function useTerminalPaneLifecycle({
               // ETX must stay transport-agnostic through the existing onData path.
               pendingTerminalInterruptKeyup = true
               pane.terminal.input(TERMINAL_INTERRUPT_INPUT)
-              // Why: CLIs such as Codex can die on SIGINT before restoring
-              // xterm's renderer-side Kitty flags, leaving the shell corrupted.
+              // Why: this immediate path can run while a TUI stays alive after
+              // Ctrl+C. Keep it to renderer-local Kitty cleanup; broader mode
+              // resets are gated on confirmed process exit in pty-connection.
               pane.terminal.write(RESET_KITTY_KEYBOARD_PROTOCOL)
             } else {
               pendingTerminalInterruptKeyup = false

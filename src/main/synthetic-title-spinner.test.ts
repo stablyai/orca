@@ -43,4 +43,24 @@ describe('advanceSyntheticTitleSpinnerEntries', () => {
     expect(entries.has('live-pane')).toBe(true)
     expect(entries.has('stale-pane')).toBe(false)
   })
+
+  it('drops panes the caller no longer considers active', () => {
+    const entries = new Map<string, SyntheticTitleSpinnerEntry<{ label: string }>>([
+      ['active-pane', { frame: 0, profile: { label: 'active' } }],
+      ['cleared-pane', { frame: 0, profile: { label: 'cleared' } }]
+    ])
+
+    const ticks = advanceSyntheticTitleSpinnerEntries({
+      entries,
+      frameCount: 4,
+      getPtyIdForPaneKey: (paneKey) => `pty-${paneKey}`,
+      shouldKeepPaneKey: (paneKey) => paneKey !== 'cleared-pane'
+    })
+
+    expect(ticks).toEqual([
+      { paneKey: 'active-pane', ptyId: 'pty-active-pane', frame: 1, profile: { label: 'active' } }
+    ])
+    expect(entries.has('active-pane')).toBe(true)
+    expect(entries.has('cleared-pane')).toBe(false)
+  })
 })

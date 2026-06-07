@@ -645,19 +645,34 @@ function TabBarInner({
     // Seed based on initial position.
     onScroll()
 
-    const ro = new ResizeObserver(() => {
+    let rafId: number | null = null
+    const scrollToEnd = (): void => {
       // If the user is pinned to the right edge, keep it pinned even as tab
       // labels (e.g. \"Terminal 5\" → branch name) expand and change scrollWidth.
       if (!stickToEndRef.current) {
         return
       }
       el.scrollLeft = Math.max(0, el.scrollWidth - el.clientWidth)
+    }
+    const ro = new ResizeObserver(() => {
+      if (rafId !== null) {
+        return
+      }
+      // Why: scroll anchoring mutates layout state; defer it out of
+      // ResizeObserver delivery so Chromium does not report a resize loop.
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        scrollToEnd()
+      })
     })
     ro.observe(el)
 
     return () => {
       el.removeEventListener('scroll', onScroll)
       ro.disconnect()
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
     }
   }, [])
 

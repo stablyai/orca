@@ -5,6 +5,8 @@ import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
 import { getAppIconPath } from '../app-icon'
 import { browserManager } from '../browser/browser-manager'
+
+const RENDERER_RECOVERY_COOLDOWN_MS = 30_000
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
   normalizeBrowserNavigationUrl,
@@ -583,6 +585,7 @@ export function createMainWindow(
   }
   let rendererProcessGone = false
   let rendererRecoveryTimer: ReturnType<typeof setTimeout> | null = null
+  let lastRendererRecoveryAt = 0
   const clearRendererRecoveryTimer = (): void => {
     if (rendererRecoveryTimer) {
       clearTimeout(rendererRecoveryTimer)
@@ -592,6 +595,7 @@ export function createMainWindow(
   const scheduleRendererRecovery = (details: Electron.RenderProcessGoneDetails): void => {
     if (
       rendererRecoveryTimer ||
+      Date.now() - lastRendererRecoveryAt < RENDERER_RECOVERY_COOLDOWN_MS ||
       !details ||
       !isCrashReportReason(details.reason) ||
       windowClosing ||
@@ -613,7 +617,9 @@ export function createMainWindow(
       }
       // Why: a transient Network Service / renderer loss can leave Chromium
       // showing a blank shell. Reload the app document once so the user gets
-      // back to a usable window instead of needing a full relaunch.
+      // back to a usable window instead of needing a full relaunch. Cool down
+      // retries so a bad restore path cannot loop renderer crashes.
+      lastRendererRecoveryAt = Date.now()
       loadMainWindow(mainWindow)
     }, 250)
   }

@@ -10,6 +10,7 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { recordAgentLaunchCrashBreadcrumb } from '@/lib/agent-launch-crash-breadcrumb'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
@@ -214,6 +215,15 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       launch_source: launchSource ?? 'tab_bar_quick_launch',
       request_kind: 'new'
     }
+  })
+  recordAgentLaunchCrashBreadcrumb({
+    agent,
+    worktreeId,
+    launchPlatform,
+    launchSource: launchSource ?? 'tab_bar_quick_launch',
+    requestKind: 'new',
+    promptDelivery,
+    hasPrompt
   })
   // Why: schedule the bracketed-paste-after-ready follow-up immediately after
   // the startup command is queued. Fire-and-forget so callers keep their

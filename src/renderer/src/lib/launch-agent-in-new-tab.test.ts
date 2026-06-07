@@ -7,6 +7,7 @@ const mockSetTabBarOrder = vi.fn()
 const mockSetAgentStatus = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockTrack = vi.fn()
+const mockRecordAgentLaunchCrashBreadcrumb = vi.fn()
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -48,6 +49,10 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
 
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
+}))
+
+vi.mock('@/lib/agent-launch-crash-breadcrumb', () => ({
+  recordAgentLaunchCrashBreadcrumb: mockRecordAgentLaunchCrashBreadcrumb
 }))
 
 vi.mock('@/lib/telemetry', () => ({
@@ -145,6 +150,26 @@ describe('launchAgentInNewTab', () => {
         command: "claude --prefill 'review Bob''s change'"
       })
     )
+  })
+
+  it('records sanitized launch context for WSL OpenCode sessions', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'opencode',
+      worktreeId: 'wt-1',
+      launchPlatform: 'linux'
+    })
+
+    expect(mockRecordAgentLaunchCrashBreadcrumb).toHaveBeenCalledWith({
+      agent: 'opencode',
+      worktreeId: 'wt-1',
+      launchPlatform: 'linux',
+      launchSource: 'tab_bar_quick_launch',
+      requestKind: 'new',
+      promptDelivery: 'auto-submit',
+      hasPrompt: false
+    })
   })
 
   it('falls back to post-ready draft paste when a Windows inline draft would be too large', async () => {

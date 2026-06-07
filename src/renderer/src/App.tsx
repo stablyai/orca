@@ -1436,17 +1436,34 @@ function App(): React.JSX.Element {
     if (!controls) {
       return
     }
+    let rafId: number | null = null
 
     const updateWidth = (): void => {
-      setCollapsedSidebarHeaderWidth(controls.getBoundingClientRect().width)
+      const width = controls.getBoundingClientRect().width
+      setCollapsedSidebarHeaderWidth((current) => (current === width ? current : width))
+    }
+    const scheduleUpdateWidth = (): void => {
+      if (rafId !== null) {
+        return
+      }
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        updateWidth()
+      })
     }
 
     updateWidth()
-    const observer = new ResizeObserver(() => {
-      updateWidth()
-    })
+    // Why: ResizeObserver callbacks run during layout delivery; defer React
+    // state writes to the next frame so shell measurements cannot create a
+    // browser/webview ResizeObserver feedback loop.
+    const observer = new ResizeObserver(scheduleUpdateWidth)
     observer.observe(controls)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+      }
+    }
   }, [isFullScreen, settings?.showTitlebarAppName, showSidebar, workspaceActive, sidebarOpen])
 
   const resolvedMountedLazyModalIds = resolveMountedLazyModalIds(activeModal, mountedLazyModalIds)

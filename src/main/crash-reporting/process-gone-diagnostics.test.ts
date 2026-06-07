@@ -1,9 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildProcessGoneCrashDetails,
   buildSuppressedProcessGoneBreadcrumbData,
-  collectProcessGoneMetricDetails
+  clearProcessGoneDiagnosticsForTest,
+  collectRecentGpuProcessGoneDetails,
+  collectProcessGoneMetricDetails,
+  rememberProcessGoneForDiagnostics
 } from './process-gone-diagnostics'
+import { clearCrashBreadcrumbsForTest, recordRendererHeartbeat } from './crash-breadcrumb-store'
 
 type MetricFixture = {
   pid: number
@@ -22,6 +26,12 @@ vi.mock('electron', () => ({
 }))
 
 describe('process gone diagnostics', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    clearProcessGoneDiagnosticsForTest()
+    clearCrashBreadcrumbsForTest()
+  })
+
   it('summarizes Electron process memory by crash-report-friendly buckets', () => {
     const details = collectProcessGoneMetricDetails([
       { pid: 10, type: 'Browser', memory: { workingSetSize: 1024 * 200 } },
@@ -59,8 +69,44 @@ describe('process gone diagnostics', () => {
     expect(buildProcessGoneCrashDetails({ processType: 'renderer' })).toMatchObject({
       processType: 'renderer',
       processMetricsCount: 2,
+      recentGpuProcessGoneCount: 0,
       processMetricsRendererWorkingSetMB: 400,
       processMetricsLargestPid: 22
+    })
+  })
+
+  it('reproduces the GPU-adjacent OOM evidence by carrying recent GPU child exits into renderer details', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+    rememberProcessGoneForDiagnostics({
+      source: 'child',
+      processType: 'GPU',
+      reason: 'crashed',
+      exitCode: 34,
+      now: 1_000
+    })
+
+    expect(collectRecentGpuProcessGoneDetails(10_000)).toEqual({
+      recentGpuProcessGoneCount: 1,
+      latestGpuProcessGoneReason: 'crashed',
+      latestGpuProcessGoneExitCode: 34,
+      latestGpuProcessGoneAgeMs: 9_000
+    })
+    expect(buildProcessGoneCrashDetails({ processType: 'renderer' })).toMatchObject({
+      recentGpuProcessGoneCount: 1,
+      latestGpuProcessGoneReason: 'crashed',
+      latestGpuProcessGoneExitCode: 34
+    })
+  })
+
+  it('adds main-owned renderer heartbeat age to process-gone details', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-04T19:20:25.153Z'))
+    recordRendererHeartbeat()
+    vi.setSystemTime(new Date('2026-06-04T19:23:16.800Z'))
+
+    expect(buildProcessGoneCrashDetails({ processType: 'renderer' })).toMatchObject({
+      lastRendererHeartbeatAgeMs: 171_647
     })
   })
 

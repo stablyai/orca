@@ -14,6 +14,7 @@ import { CLIENT_PLATFORM } from './new-workspace'
 import { tuiAgentToAgentKind } from './telemetry'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
+import { recordAgentLaunchCrashBreadcrumb } from '@/lib/agent-launch-crash-breadcrumb'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import {
   activateWebRuntimeSessionWorktree,
@@ -296,6 +297,15 @@ export function ensureWorktreeHasInitialTerminal(
   // opening to an idle shell and forcing the user to repeat the same prompt.
   if (startup) {
     store.queueTabStartupCommand(terminalTab.id, startup)
+    if (launchAgent && startup.telemetry) {
+      recordAgentLaunchCrashBreadcrumb({
+        agent: launchAgent,
+        worktreeId,
+        launchPlatform: CLIENT_PLATFORM,
+        launchSource: startup.telemetry.launch_source,
+        requestKind: startup.telemetry.request_kind
+      })
+    }
   }
   queueSetupAndIssueCommands(store, worktreeId, terminalTab.id, setup, issueCommand)
 
@@ -352,6 +362,18 @@ function applyDefaultTerminalTabs(
   store.setActiveTab(firstTabId)
   if (startup) {
     store.queueTabStartupCommand(firstTabId, startup)
+    const launchAgent = startup.telemetry
+      ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
+      : undefined
+    if (launchAgent && startup.telemetry) {
+      recordAgentLaunchCrashBreadcrumb({
+        agent: launchAgent,
+        worktreeId,
+        launchPlatform: CLIENT_PLATFORM,
+        launchSource: startup.telemetry.launch_source,
+        requestKind: startup.telemetry.request_kind
+      })
+    }
   }
   queueSetupAndIssueCommands(store, worktreeId, firstTabId, setup, issueCommand)
   return firstTabId

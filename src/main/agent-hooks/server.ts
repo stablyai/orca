@@ -434,9 +434,15 @@ export class AgentHookServer {
   // re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
 
-  setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
+  setListener(
+    listener: ((payload: EnrichedAgentHookEventPayload) => void) | null,
+    options: { replayExisting?: boolean } = {}
+  ): void {
     this.onAgentStatus = listener
     if (!listener) {
+      return
+    }
+    if (options.replayExisting === false) {
       return
     }
     // Why: replay is best-effort per pane so one throwing listener call can't
@@ -464,6 +470,10 @@ export class AgentHookServer {
 
   setPaneStatusClearListener(listener: PaneStatusClearListener | null): void {
     this.onPaneStatusCleared = listener
+  }
+
+  hasPaneStatus(paneKey: string): boolean {
+    return this.state.lastStatusByPaneKey.has(paneKey)
   }
 
   /** Snapshot of the current cached statuses, in the IPC-shaped form the

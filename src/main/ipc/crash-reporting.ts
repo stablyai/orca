@@ -14,7 +14,8 @@ import { submitFeedback } from './feedback'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
 import {
   getCrashBreadcrumbSnapshot,
-  recordCrashBreadcrumb
+  recordCrashBreadcrumb,
+  recordRendererHeartbeat
 } from '../crash-reporting/crash-breadcrumb-store'
 
 const inFlightSubmissions = new Set<string>()
@@ -281,6 +282,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       if (!args || typeof args.name !== 'string') {
         return
       }
+      recordRendererHeartbeat()
       recordCrashBreadcrumb(args.name, sanitizeRendererBreadcrumbData(args.data))
     }
   )

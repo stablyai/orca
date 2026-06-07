@@ -39,14 +39,18 @@ export const EMPTY_LAYOUT: TerminalLayoutSnapshot = {
 //                         `?25l` when the cursor was hidden at snapshot time;
 //                         without an explicit `?25h` here the cursor stays
 //                         invisible in the restored terminal)
-//   1000/1002/1003/1006 — mouse reporting variants
+//   1049                — alternate screen buffer
+//   1000/1002/1003/1005/1006/1015/1016 — mouse reporting variants
 //   1004                — focus event reporting (the actual bug source)
 //   2004                — bracketed paste
+//   2026                — synchronized output
+//   2027/2031           — OpenTUI keyboard/terminal private modes
 //   <99u/=0u            — Kitty keyboard flags pushed by TUIs such as Codex
 export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
 export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
+export const RESET_TERMINAL_INTERACTIVE_MODES = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[>4;0m\x1b[?25h\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l\x1b[?2004l\x1b[?2026l\x1b[?2027l\x1b[?2031l`
 
-export const POST_REPLAY_MODE_RESET = `${RESET_TERMINAL_CURSOR_STYLE}${RESET_KITTY_KEYBOARD_PROTOCOL}\x1b[?25h\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1004l\x1b[?1006l\x1b[?2004l`
+export const POST_REPLAY_MODE_RESET = RESET_TERMINAL_INTERACTIVE_MODES
 
 // Why: hidden-output recovery replays a snapshot of the same live renderer
 // session. Keep cursor/focus cleanup, but preserve Kitty keyboard flags that
