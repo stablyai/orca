@@ -548,7 +548,7 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
-  it('does not fall back to raw agent stdout or stderr on failures', async () => {
+  it('prefers stderr over stdout when both are present on CLI failure', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -575,11 +575,11 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed: raw failure output with /secret/repo'
     })
   })
 
-  it('does not expose extracted agent error details to the renderer', async () => {
+  it('formats nonzero exit failures as agent CLI command failed messages', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -606,11 +606,11 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed: ERROR: fatal: /secret/repo/config failed'
     })
   })
 
-  it('treats empty stdout plus an error on stderr as an agent failure', async () => {
+  it('treats empty stdout plus stderr on exit 0 as an agent CLI failure', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -637,7 +637,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed: \u001b[91m\u001b[1mError: \u001b[0mNo payment method'
     })
   })
 
@@ -772,7 +772,7 @@ describe('generateCommitMessageFromContext', () => {
 
     await expect(pending).resolves.toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed with code null.'
     })
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })
