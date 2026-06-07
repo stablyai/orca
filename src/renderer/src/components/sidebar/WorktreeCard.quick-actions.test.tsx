@@ -171,7 +171,7 @@ describe('WorktreeCard quick actions', () => {
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
-  it('renders the pending first-agent rename title button', () => {
+  it('does not render a pending first-agent rename title button', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree({ pendingFirstAgentMessageRename: true })}
@@ -180,9 +180,7 @@ describe('WorktreeCard quick actions', () => {
       />
     )
 
-    expect(markup).toContain('aria-label="Will be renamed from first agent message"')
-    expect(markup).toContain('rename pending')
-    expect(markup).toContain('Will be renamed from first agent message')
+    expect(markup).not.toMatch(/Will be renamed from first agent message|rename pending/)
   })
 
   it('renders the repeated branch metadata row in detailed cards', () => {

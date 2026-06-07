@@ -12,7 +12,6 @@ import {
   LoaderCircle,
   Server,
   ServerOff,
-  Sparkles,
   Star,
   Trash2,
   Workflow
@@ -496,14 +495,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     [showDeleteQuickAction, worktree.id]
   )
-  const handlePendingFirstAgentMessageRenameInfo = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault()
-      event.stopPropagation()
-    },
-    []
-  )
-
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
   const childWorkspaceLabel = `${lineageChildCount} child ${
     lineageChildCount === 1 ? 'workspace' : 'workspaces'
@@ -866,28 +857,6 @@ const WorktreeCard = React.memo(function WorktreeCard({
               beginEditing={renamingWorktreeId === worktree.id}
               onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
             />
-
-            {worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onPointerDown={stopQuickActionPointerPropagation}
-                    onClick={handlePendingFirstAgentMessageRenameInfo}
-                    onDoubleClick={handlePendingFirstAgentMessageRenameInfo}
-                    className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-muted-foreground border border-sidebar-border/60 bg-sidebar-accent/45 hover:bg-sidebar-accent hover:text-foreground has-[>svg]:!px-0.5"
-                    aria-label="Will be renamed from first agent message"
-                  >
-                    <Sparkles className="size-2.5" />
-                    rename pending
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  Will be renamed from first agent message
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
 
             {!compactCards && worktree.isMainWorktree && !isFolder && (
               <Tooltip>
