@@ -3472,6 +3472,7 @@ describe('OrcaRuntimeService', () => {
     expect(statuses).toEqual([
       {
         ptyId: 'pty-1',
+        source: 'mounted-leaf',
         paneKey,
         tabId: 'tab-1',
         worktreeId: TEST_WORKTREE_ID,
@@ -3511,6 +3512,7 @@ describe('OrcaRuntimeService', () => {
     expect(statuses).toEqual([
       {
         ptyId: 'pty-bg',
+        source: 'pty-record',
         paneKey,
         tabId: spawnedEnv.ORCA_TAB_ID,
         worktreeId: TEST_WORKTREE_ID,

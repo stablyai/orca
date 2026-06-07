@@ -683,6 +683,7 @@ type RuntimePtyWorktreeRecord = {
 
 export type RuntimeTerminalAgentStatusEvent = {
   ptyId: string
+  source: 'mounted-leaf' | 'pty-record'
   paneKey: string
   tabId?: string
   worktreeId?: string
@@ -3162,6 +3163,7 @@ export class OrcaRuntimeService {
     const targets = new Map<
       string,
       {
+        source: 'mounted-leaf' | 'pty-record'
         paneKey: string
         tabId?: string
         worktreeId?: string
@@ -3170,6 +3172,7 @@ export class OrcaRuntimeService {
     for (const leaf of this.getLeavesForPty(ptyId)) {
       const paneKey = this.makeRuntimePaneKey(leaf)
       targets.set(paneKey, {
+        source: 'mounted-leaf',
         paneKey,
         tabId: leaf.tabId,
         worktreeId: leaf.worktreeId
@@ -3178,6 +3181,7 @@ export class OrcaRuntimeService {
     const pty = this.ptysById.get(ptyId)
     if (targets.size === 0 && pty?.paneKey) {
       targets.set(pty.paneKey, {
+        source: 'pty-record',
         paneKey: pty.paneKey,
         tabId: pty.tabId ?? undefined,
         worktreeId: pty.worktreeId
