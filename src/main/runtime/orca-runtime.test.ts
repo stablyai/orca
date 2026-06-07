@@ -3447,6 +3447,37 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('adopts renderer-seeded titles into headless main terminal snapshots', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'renderer scrollback\n',
+      cols: 100,
+      rows: 30,
+      lastTitle: 'Renderer seeded Codex'
+    })
+    const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeBuffer,
+      hasRendererSerializer: () => true,
+      getSize: () => ({ cols: 100, rows: 30 })
+    })
+    syncSinglePty(runtime, 'pty-1')
+
+    runtime.onPtyData('pty-1', 'live output without title\n', 100)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    expect(snapshot).toMatchObject({
+      source: 'headless',
+      lastTitle: 'Renderer seeded Codex'
+    })
+    expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: expect.any(Number),
+      altScreenForcesZeroRows: true
+    })
+  })
+
   it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
     const runtime = new OrcaRuntimeService(store, undefined, {

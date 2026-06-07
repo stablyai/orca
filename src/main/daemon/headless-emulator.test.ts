@@ -127,6 +127,14 @@ describe('HeadlessEmulator', () => {
 
       expect(emulator.getSnapshot().lastTitle).toBe('Codex idle')
     })
+
+    it('adopts title metadata seeded from an external serializer', () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      emulator.setLastTitle('Seeded renderer title')
+
+      expect(emulator.getSnapshot().lastTitle).toBe('Seeded renderer title')
+    })
   })
 
   describe('resize', () => {

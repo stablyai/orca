@@ -137,6 +137,10 @@ export class HeadlessEmulator {
     return this.cwd
   }
 
+  setLastTitle(title: string): void {
+    this.lastTitle = title
+  }
+
   clearScrollback(): void {
     this.terminal.clear()
   }

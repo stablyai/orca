@@ -3423,6 +3423,7 @@ export class OrcaRuntimeService {
           state.emulator.resize(ptyDims.cols, ptyDims.rows)
         }
         if (rendered.lastTitle) {
+          state.emulator.setLastTitle(rendered.lastTitle)
           this.applySeededAgentStatus(ptyId, rendered.lastTitle)
         }
       } catch {
