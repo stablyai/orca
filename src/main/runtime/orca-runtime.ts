@@ -439,7 +439,8 @@ import {
   findRegisteredDeletableWorktree,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
-  stripOrcaProvenanceMetaUpdates
+  stripOrcaProvenanceMetaUpdates,
+  UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../worktree-removal-safety'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
@@ -10192,6 +10193,11 @@ export class OrcaRuntimeService {
           return {}
         }
         if (await isRuntimeWorktreePathMissing(repo, removalTarget.path)) {
+          if (!force && !removedMeta) {
+            // Why: without persisted metadata, require the renderer recovery
+            // path before deleting Orca-only state for an unregistered path.
+            throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
+          }
           // Why: a manually deleted worktree is already gone from Git and disk.
           // Finish runtime metadata cleanup without requiring force or touching
           // any unregistered path that still exists.

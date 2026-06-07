@@ -18,6 +18,15 @@ export function getDeleteWorktreeToastCopy(
         isDestructive: false
       }
     }
+    if (
+      error.includes('Worktree is no longer registered with Git and its directory is already gone.')
+    ) {
+      return {
+        title: `Failed to delete workspace ${worktreeName}`,
+        description: 'Git already removed this workspace. Use Force Delete to clear it from Orca.',
+        isDestructive: false
+      }
+    }
     return {
       title: `Failed to delete workspace ${worktreeName}`,
       description: 'It has changed files. Use Force Delete to delete it anyway.',
