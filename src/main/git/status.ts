@@ -138,6 +138,7 @@ export async function getStatus(
         // Changed entries: "1 XY sub mH mI mW hH path" or "2 XY sub mH mI mW hH X\tscore\tpath\torigPath"
         const parts = line.split(' ')
         const xy = parts[1]
+        const submodule = parseSubmoduleStatus(parts[2])
         const indexStatus = xy[0]
         const worktreeStatus = xy[1]
 
@@ -149,24 +150,41 @@ export async function getStatus(
           const path = decodeGitCQuotedPath(tabParts[0].split(' ').slice(9).join(' '))
           const oldPath = decodeGitCQuotedPath(tabParts.slice(1).join('\t'))
           if (indexStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged', oldPath })
+            entries.push({
+              path,
+              status: parseStatusChar(indexStatus),
+              area: 'staged',
+              oldPath,
+              ...(submodule ? { submodule } : {})
+            })
           }
           if (worktreeStatus !== '.') {
             entries.push({
               path,
               status: parseStatusChar(worktreeStatus),
               area: 'unstaged',
-              oldPath
+              oldPath,
+              ...(submodule ? { submodule } : {})
             })
           }
         } else {
           // Regular change entry
           const path = decodeGitCQuotedPath(parts.slice(8).join(' '))
           if (indexStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged' })
+            entries.push({
+              path,
+              status: parseStatusChar(indexStatus),
+              area: 'staged',
+              ...(submodule ? { submodule } : {})
+            })
           }
           if (worktreeStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(worktreeStatus), area: 'unstaged' })
+            entries.push({
+              path,
+              status: parseStatusChar(worktreeStatus),
+              area: 'unstaged',
+              ...(submodule ? { submodule } : {})
+            })
           }
         }
       } else if (line.startsWith('? ')) {
@@ -426,6 +444,17 @@ function parseStatusChar(char: string): GitFileStatus {
       return 'copied'
     default:
       return 'modified'
+  }
+}
+
+function parseSubmoduleStatus(submoduleField: string | undefined): GitStatusEntry['submodule'] {
+  if (!submoduleField?.startsWith('S')) {
+    return undefined
+  }
+  return {
+    commitChanged: submoduleField[1] === 'C',
+    trackedChanges: submoduleField[2] === 'M',
+    untrackedChanges: submoduleField[3] === 'U'
   }
 }
 

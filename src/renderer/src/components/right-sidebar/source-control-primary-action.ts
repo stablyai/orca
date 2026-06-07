@@ -50,6 +50,7 @@ export type PrimaryAction = {
 export type PrimaryActionInputs = {
   stagedCount: number
   hasUnstagedChanges: boolean
+  hasStageableChanges: boolean
   hasPartiallyStagedChanges: boolean
   hasMessage: boolean
   hasUnresolvedConflicts: boolean
@@ -130,6 +131,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   const {
     stagedCount,
     hasUnstagedChanges,
+    hasStageableChanges,
     hasPartiallyStagedChanges,
     hasMessage,
     hasUnresolvedConflicts,
@@ -253,7 +255,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   //     with uncommitted changes; push/publish skips the actual user need).
   //     Sits before the upstream-status checks so it works regardless of
   //     whether upstream has resolved yet.
-  if (!hasStaged && hasUnstagedChanges) {
+  if (!hasStaged && hasStageableChanges) {
     return {
       kind: 'stage',
       label: 'Stage All',

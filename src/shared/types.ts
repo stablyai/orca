@@ -39,6 +39,7 @@ export type {
   GitStagingArea,
   GitStatusEntry,
   GitStatusResult,
+  GitSubmoduleStatus,
   GitUncommittedEntry,
   GitUpstreamStatus
 } from './git-status-types'

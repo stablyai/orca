@@ -8,6 +8,7 @@ function inputs(overrides: Partial<DropdownActionInputs> = {}): DropdownActionIn
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
     hasPartiallyStagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,

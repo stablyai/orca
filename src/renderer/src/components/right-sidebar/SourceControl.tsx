@@ -67,6 +67,8 @@ import {
   getDiscardAllPaths,
   getStageAllPaths,
   getUnstageAllPaths,
+  isStageableStatusEntry,
+  isSubmoduleWorktreeOnlyChange,
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
@@ -259,6 +261,8 @@ const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
+const SUBMODULE_WORKTREE_ONLY_LABEL = 'Submodule changes - stage inside submodule'
+const SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP = 'Stage these changes inside the submodule'
 
 function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
@@ -2847,19 +2851,28 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
+  const stageableUnstagedPaths = useMemo(
+    () => [
+      ...getStageAllPaths(grouped.unstaged, 'unstaged'),
+      ...getStageAllPaths(grouped.untracked, 'untracked')
+    ],
+    [grouped.unstaged, grouped.untracked]
+  )
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
+  const hasStageableChanges = stageableUnstagedPaths.length > 0
   const hasPartiallyStagedChanges = useMemo(() => {
-    if (grouped.staged.length === 0 || grouped.unstaged.length === 0) {
+    if (grouped.staged.length === 0 || stageableUnstagedPaths.length === 0) {
       return false
     }
-    const unstagedPaths = new Set(grouped.unstaged.map((entry) => entry.path))
+    const unstagedPaths = new Set(stageableUnstagedPaths)
     return grouped.staged.some((entry) => unstagedPaths.has(entry.path))
-  }, [grouped.staged, grouped.unstaged])
+  }, [grouped.staged, stageableUnstagedPaths])
 
   const primaryAction: PrimaryAction = useMemo(() => {
     const action = resolvePrimaryAction({
       stagedCount: grouped.staged.length,
       hasUnstagedChanges,
+      hasStageableChanges,
       hasPartiallyStagedChanges,
       hasMessage: commitMessage.trim().length > 0,
       hasUnresolvedConflicts: unresolvedConflicts.length > 0,
@@ -2884,6 +2897,7 @@ function SourceControlInner(): React.JSX.Element {
     commitMessage,
     grouped.staged.length,
     hasUnstagedChanges,
+    hasStageableChanges,
     hasPartiallyStagedChanges,
     isCommitting,
     isAbortingOperation,
@@ -2905,6 +2919,7 @@ function SourceControlInner(): React.JSX.Element {
       resolveDropdownItems({
         stagedCount: grouped.staged.length,
         hasUnstagedChanges,
+        hasStageableChanges,
         hasPartiallyStagedChanges,
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
@@ -2925,6 +2940,7 @@ function SourceControlInner(): React.JSX.Element {
       commitMessage,
       grouped.staged.length,
       hasUnstagedChanges,
+      hasStageableChanges,
       hasPartiallyStagedChanges,
       isCommitting,
       conflictOperation,
@@ -3106,11 +3122,7 @@ function SourceControlInner(): React.JSX.Element {
   const bulkStagePaths = useMemo(
     () =>
       selectedEntries
-        .filter(
-          (entry) =>
-            (entry.area === 'unstaged' || entry.area === 'untracked') &&
-            entry.entry.conflictStatus !== 'unresolved'
-        )
+        .filter((entry) => isStageableStatusEntry(entry.entry))
         .map((entry) => entry.entry.path),
     [selectedEntries]
   )
@@ -6590,6 +6602,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const dirPath = parentDir === '.' ? '' : parentDir
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
   const isResolvedLocally = entry.conflictStatus === 'resolved_locally'
+  const isSubmoduleWorktreeOnly = isSubmoduleWorktreeOnlyChange(entry)
   const conflictLabel = entry.conflictKind ? CONFLICT_KIND_LABELS[entry.conflictKind] : null
   // Why: the hint text ("Open and edit…", "Decide whether to…") was removed
   // from the sidebar because it's not actionable here — the user can only
@@ -6607,8 +6620,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     !isUnresolvedConflict &&
     !isResolvedLocally &&
     (entry.area === 'unstaged' || entry.area === 'untracked')
-  const canStage =
-    !isUnresolvedConflict && (entry.area === 'unstaged' || entry.area === 'untracked')
+  const canStage = isStageableStatusEntry(entry)
   const canUnstage = entry.area === 'staged'
 
   return (
@@ -6662,8 +6674,10 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
             )}
           </span>
-          {conflictLabel && (
-            <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
+          {(conflictLabel || isSubmoduleWorktreeOnly) && (
+            <div className="truncate text-[11px] text-muted-foreground">
+              {conflictLabel ?? SUBMODULE_WORKTREE_ONLY_LABEL}
+            </div>
           )}
         </div>
         {commentCount > 0 && (
@@ -6708,14 +6722,15 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               }}
             />
           )}
-          {canStage && (
+          {(canStage || isSubmoduleWorktreeOnly) && (
             <ActionButton
               icon={Plus}
-              title="Stage"
+              title={isSubmoduleWorktreeOnly ? SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP : 'Stage'}
               onClick={(event) => {
                 event.stopPropagation()
                 void onStage(entry.path)
               }}
+              disabled={isSubmoduleWorktreeOnly}
             />
           )}
           {canUnstage && (
