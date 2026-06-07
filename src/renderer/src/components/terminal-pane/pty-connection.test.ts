@@ -343,6 +343,8 @@ function createDeps(overrides: Record<string, unknown> = {}) {
   }
 }
 
+// Why: setting activeRuntimeEnvironmentId in mockStoreState exercises the
+// remote-runtime path where the renderer still owns OSC 9999 status.
 function enableActiveRuntimeEnvironment(environmentId = 'env-1'): void {
   mockStoreState = {
     ...mockStoreState,
