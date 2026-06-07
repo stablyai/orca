@@ -2860,6 +2860,14 @@ describe('Store', () => {
     expect(ui.lastUpdateCheckAt).toBe(1234)
   })
 
+  it('normalizes default browser zoom UI writes', async () => {
+    const store = await createStore()
+
+    store.updateUI({ browserDefaultZoomLevel: 1.26 })
+
+    expect(store.getUI().browserDefaultZoomLevel).toBe(1.5)
+  })
+
   it('encrypts the Kagi session link on disk and decrypts it on load', async () => {
     const sessionLink = 'https://kagi.com/search?token=secret'
     const store = await createStore()

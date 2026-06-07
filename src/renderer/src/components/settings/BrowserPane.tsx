@@ -18,6 +18,7 @@ import {
 import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
 import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-pane-search'
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
+import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
 import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
 import { KagiSessionLinkForm } from './KagiSessionLinkForm'
@@ -52,6 +53,8 @@ export function BrowserPane({
   const setBrowserDefaultUrl = useAppStore((s) => s.setBrowserDefaultUrl)
   const browserDefaultSearchEngine = useAppStore((s) => s.browserDefaultSearchEngine)
   const setBrowserDefaultSearchEngine = useAppStore((s) => s.setBrowserDefaultSearchEngine)
+  const browserDefaultZoomLevel = useAppStore((s) => s.browserDefaultZoomLevel)
+  const setBrowserDefaultZoomLevel = useAppStore((s) => s.setBrowserDefaultZoomLevel)
   const browserSessionProfiles = useAppStore((s) => s.browserSessionProfiles)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
@@ -96,8 +99,9 @@ export function BrowserPane({
 
   const showHomePage = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[0]])
   const showSearchEngine = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[1]])
-  const showLinkRouting = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[2]])
-  const showCookies = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[3]])
+  const showDefaultZoom = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[2]])
+  const showLinkRouting = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[3]])
+  const showCookies = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[4]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, BROWSER_USE_PANE_SEARCH_ENTRIES)
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription({ isMac })
@@ -207,6 +211,13 @@ export function BrowserPane({
             {selectedSearchEngine === 'kagi' ? <KagiSessionLinkForm /> : null}
           </div>
         </SearchableSetting>
+      ) : null}
+
+      {showDefaultZoom ? (
+        <BrowserDefaultZoomSetting
+          value={browserDefaultZoomLevel}
+          onChange={setBrowserDefaultZoomLevel}
+        />
       ) : null}
 
       {showLinkRouting ? (

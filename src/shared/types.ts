@@ -2606,6 +2606,8 @@ export type PersistedUIState = {
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null
   browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
+  /** Electron browser zoom level applied when a new local browser tab is created. */
+  browserDefaultZoomLevel?: number
   /** Optional Kagi private-session link used only when Kagi is the search engine. */
   browserKagiSessionLink?: string | null
   /** Saved window bounds so the app restores to the user's last position/size

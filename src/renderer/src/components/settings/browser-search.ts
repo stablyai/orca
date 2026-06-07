@@ -46,6 +46,11 @@ export function getBrowserPaneSearchEntries(
       ]
     },
     {
+      title: 'Default Zoom',
+      description: 'Zoom level applied to newly opened browser tabs.',
+      keywords: ['browser', 'zoom', 'scale', 'default', 'page zoom', 'new tab', 'percentage']
+    },
+    {
       title: 'Link Routing',
       description: getBrowserLinkRoutingDescription(platform),
       keywords: [

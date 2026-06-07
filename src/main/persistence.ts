@@ -124,6 +124,7 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
@@ -3127,6 +3128,9 @@ export class Store {
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
       ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        this.state.ui?.browserDefaultZoomLevel
+      ),
       showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
         this.state.ui?.showDotfilesByWorktree
       ),
@@ -3167,6 +3171,9 @@ export class Store {
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+      ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
       showDotfilesByWorktree:
         updates.showDotfilesByWorktree !== undefined

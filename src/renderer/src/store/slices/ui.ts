@@ -57,6 +57,10 @@ import {
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
+  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  normalizeBrowserPageZoomLevel
+} from '../../../../shared/browser-page-zoom'
+import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -816,6 +820,8 @@ export type UISlice = {
   setBrowserDefaultUrl: (url: string | null) => void
   browserDefaultSearchEngine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
   setBrowserDefaultSearchEngine: (engine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null) => void
+  browserDefaultZoomLevel: number
+  setBrowserDefaultZoomLevel: (level: number) => void
   browserKagiSessionLink: string | null
   setBrowserKagiSessionLink: (link: string | null) => void
 }
@@ -1924,6 +1930,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
@@ -2034,6 +2041,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setBrowserDefaultSearchEngine: (engine) => {
     void window.api.ui.set({ browserDefaultSearchEngine: engine }).catch(console.error)
     set({ browserDefaultSearchEngine: engine })
+  },
+  browserDefaultZoomLevel: DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  setBrowserDefaultZoomLevel: (level) => {
+    const normalized = normalizeBrowserPageZoomLevel(level)
+    void window.api.ui.set({ browserDefaultZoomLevel: normalized }).catch(console.error)
+    set({ browserDefaultZoomLevel: normalized })
   },
   browserKagiSessionLink: null,
   setBrowserKagiSessionLink: (link) => {

@@ -857,6 +857,29 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().browserKagiSessionLink).toBe('https://kagi.com/search?token=secret')
   })
 
+  it('hydrates and normalizes the default browser zoom level', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        browserDefaultZoomLevel: 1.26
+      })
+    )
+
+    expect(store.getState().browserDefaultZoomLevel).toBe(1.5)
+  })
+
+  it('persists normalized default browser zoom changes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setBrowserDefaultZoomLevel(10)
+
+    expect(store.getState().browserDefaultZoomLevel).toBe(5)
+    expect(setUI).toHaveBeenCalledWith({ browserDefaultZoomLevel: 5 })
+  })
+
   it('drops an invalid Kagi session link during hydration', () => {
     const store = createUIStore()
 
