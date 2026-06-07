@@ -1,6 +1,6 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
-import { rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import {
@@ -71,9 +71,12 @@ const DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE = 3
 const DEFAULT_FRAME_COUNT = 180
 const DEFAULT_FRAME_INTERVAL_MS = 6
 const TIMER_SAMPLE_MS = 16
-const MAX_MEDIAN_KEY_LATENCY_MS = 300
-const MAX_WORST_KEY_LATENCY_MS = 1_200
-const MAX_TIMER_DRIFT_MS = 300
+// Why: these are regression budgets, not observed baselines. Repeated local
+// 100-pane OpenCode-scale runs are below 50ms worst-key latency; keep enough
+// CI headroom while still failing changes that make typing visibly sluggish.
+const MAX_MEDIAN_KEY_LATENCY_MS = 75
+const MAX_WORST_KEY_LATENCY_MS = 300
+const MAX_TIMER_DRIFT_MS = 150
 
 function readPositiveInt(name: string, fallback: number): number {
   const raw = process.env[name]
@@ -135,6 +138,13 @@ process.stdin.on('data', (chunk) => {
   }
 })
 `
+}
+
+function writeInteractivePromptScript(scriptPath: string, runId: string): void {
+  // Why: long scale runs can outlive temporary repo cleanup races in the test
+  // harness; the prompt script only needs a writable directory, not git state.
+  mkdirSync(path.dirname(scriptPath), { recursive: true })
+  writeFileSync(scriptPath, interactivePromptScript(runId))
 }
 
 async function focusActiveTerminalInput(page: Page): Promise<void> {
@@ -403,7 +413,7 @@ async function measureCrossWorkspaceTypingDuringHiddenLoad({
 
   const runId = randomUUID()
   const scriptPath = path.join(testRepoPath, `.orca-opencode-cross-${hiddenPaneCount}-${runId}.mjs`)
-  writeFileSync(scriptPath, interactivePromptScript(runId))
+  writeInteractivePromptScript(scriptPath, runId)
   await resetTerminalPtyOutputDebug(orcaPage)
   const load = await startSyntheticOpenCodeInjection(
     orcaPage,
@@ -448,7 +458,7 @@ test.describe('Artificial OpenCode terminal load', () => {
 
     const runId = randomUUID()
     const scriptPath = path.join(testRepoPath, `.orca-opencode-baseline-typing-${runId}.mjs`)
-    writeFileSync(scriptPath, interactivePromptScript(runId))
+    writeInteractivePromptScript(scriptPath, runId)
     await resetTerminalPtyOutputDebug(orcaPage)
     try {
       const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
@@ -483,7 +493,7 @@ test.describe('Artificial OpenCode terminal load', () => {
 
     const runId = randomUUID()
     const scriptPath = path.join(testRepoPath, `.orca-opencode-typing-${runId}.mjs`)
-    writeFileSync(scriptPath, interactivePromptScript(runId))
+    writeInteractivePromptScript(scriptPath, runId)
     await resetTerminalPtyOutputDebug(orcaPage)
     const load = await startSyntheticOpenCodeInjection(
       orcaPage,
@@ -527,7 +537,7 @@ test.describe('Artificial OpenCode terminal load', () => {
 
       const runId = randomUUID()
       const scriptPath = path.join(testRepoPath, `.orca-opencode-scale-${paneCount}-${runId}.mjs`)
-      writeFileSync(scriptPath, interactivePromptScript(runId))
+      writeInteractivePromptScript(scriptPath, runId)
       await resetTerminalPtyOutputDebug(orcaPage)
       const load = await startSyntheticOpenCodeInjection(
         orcaPage,
