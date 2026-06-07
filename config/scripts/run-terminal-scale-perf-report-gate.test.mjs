@@ -1,6 +1,6 @@
+import { dirname, join } from 'node:path'
 import { mkdtempSync, readFileSync, rmSync, writeSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   parseReportGateArgs,
@@ -15,11 +15,12 @@ function tempReportPath() {
   return join(dir, 'report.json')
 }
 
-function makeSpawnSync({ scaleStatus = 0 } = {}) {
+function makeSpawnSync({ onScaleRun, scaleStatus = 0 } = {}) {
   const calls = []
   const spawnSyncImpl = vi.fn((command, args, options) => {
     calls.push({ args, command, options })
     if (args[0] === 'config/scripts/run-terminal-scale-perf-e2e.mjs') {
+      onScaleRun?.()
       writeSync(options.stdio[1], '{"suites":[]}')
       return { signal: null, status: scaleStatus }
     }
@@ -104,6 +105,23 @@ describe('run-terminal-scale-perf-report-gate', () => {
 
     expect(status).toBe(0)
     expect(calls[1].args).toEqual(['config/scripts/summarize-terminal-perf-report.mjs', reportPath])
+  })
+
+  it('preserves the report when Playwright clears the target report directory', () => {
+    const reportPath = tempReportPath()
+    const { spawnSyncImpl } = makeSpawnSync({
+      onScaleRun: () => {
+        rmSync(dirname(reportPath), { force: true, recursive: true })
+      }
+    })
+
+    const status = runTerminalScalePerfReportGate({
+      argv: ['--report', reportPath],
+      spawnSyncImpl
+    })
+
+    expect(status).toBe(0)
+    expect(readFileSync(reportPath, 'utf8')).toBe('{"suites":[]}')
   })
 
   it('stops before summarize and budget checks when the scale run fails', () => {

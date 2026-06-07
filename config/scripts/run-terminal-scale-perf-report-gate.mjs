@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { closeSync, mkdirSync, openSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { closeSync, copyFileSync, mkdirSync, mkdtempSync, openSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const DEFAULT_REPORT_PATH = 'test-results/terminal-scale-perf-report.json'
@@ -63,23 +64,32 @@ export function runTerminalScalePerfReportGate({
   spawnSyncImpl = spawnSync
 } = {}) {
   const { passthroughArgs, reportPath } = parseReportGateArgs(argv, env)
-  mkdirSync(dirname(reportPath), { recursive: true })
+  const tempDir = mkdtempSync(join(tmpdir(), 'orca-terminal-scale-perf-'))
+  const tempReportPath = join(tempDir, 'report.json')
 
-  const reportFd = openSync(reportPath, 'w')
-  let scaleResult
+  let scaleExitCode
   try {
-    scaleResult = runNodeScript(
-      'config/scripts/run-terminal-scale-perf-e2e.mjs',
-      ['--', '--reporter=json', ...passthroughArgs],
-      ['inherit', reportFd, 'inherit'],
-      spawnSyncImpl,
-      env
-    )
+    const reportFd = openSync(tempReportPath, 'w')
+    let scaleResult
+    try {
+      scaleResult = runNodeScript(
+        'config/scripts/run-terminal-scale-perf-e2e.mjs',
+        ['--', '--reporter=json', ...passthroughArgs],
+        ['inherit', reportFd, 'inherit'],
+        spawnSyncImpl,
+        env
+      )
+    } finally {
+      closeSync(reportFd)
+    }
+
+    scaleExitCode = exitCode(scaleResult)
+    mkdirSync(dirname(reportPath), { recursive: true })
+    copyFileSync(tempReportPath, reportPath)
   } finally {
-    closeSync(reportFd)
+    rmSync(tempDir, { force: true, recursive: true })
   }
 
-  const scaleExitCode = exitCode(scaleResult)
   if (scaleExitCode !== 0) {
     console.error(`Terminal scale perf report saved to ${reportPath}`)
     return scaleExitCode
