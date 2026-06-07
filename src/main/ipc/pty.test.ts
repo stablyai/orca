@@ -4233,7 +4233,7 @@ describe('registerPtyHandlers', () => {
     }
   })
 
-  it('keeps interactive output buffered when the renderer budget is saturated', async () => {
+  it('reserves a bounded renderer lane for interactive output when bulk output is saturated', async () => {
     vi.useFakeTimers()
     const bulkProcs = Array.from({ length: 16 }, () => createMockProc())
     const interactiveProc = createMockProc()
@@ -4274,7 +4274,29 @@ describe('registerPtyHandlers', () => {
       })
       interactiveProc.emitData('\x1b[20;2Hredraw')
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(513, 'pty:data', {
+        id: interactiveSpawn.id,
+        data: '\x1b[20;2Hredraw'
+      })
+
+      const reservePrefix = '\x1b[20;2H'
+      const reserveChunk = `${reservePrefix}${'r'.repeat(16 * 1024 - reservePrefix.length)}`
+      for (let index = 0; index < 16; index++) {
+        writeListener(null, {
+          id: interactiveSpawn.id,
+          data: 'a'
+        })
+        interactiveProc.emitData(reserveChunk)
+      }
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(529)
+
+      writeListener(null, {
+        id: interactiveSpawn.id,
+        data: 'a'
+      })
+      interactiveProc.emitData(reserveChunk)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(529)
     } finally {
       vi.useRealTimers()
     }

@@ -1023,6 +1023,7 @@ export function registerPtyHandlers(
   const PTY_BATCH_FLUSH_MAX_WRITES = 2
   const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 512 * 1024
   const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 8 * 1024 * 1024
+  const PTY_RENDERER_INTERACTIVE_RESERVE_CHARS = 256 * 1024
   // Why: keep the immediate path bounded to keystroke-sized TUI redraws;
   // large output and non-interactive output must still use the batcher.
   const INTERACTIVE_OUTPUT_WINDOW_MS = 100
@@ -1080,10 +1081,13 @@ export function registerPtyHandlers(
     return Math.max(0, payload.rawLength ?? payload.data.length)
   }
 
-  function canSendPtyDataToRenderer(id: string): boolean {
+  function canSendPtyDataToRenderer(id: string, options: { interactive?: boolean } = {}): boolean {
+    const totalLimit =
+      PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS +
+      (options.interactive === true ? PTY_RENDERER_INTERACTIVE_RESERVE_CHARS : 0)
     return (
       (rendererInFlightCharsByPty.get(id) ?? 0) < PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS &&
-      rendererInFlightTotalChars < PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS
+      rendererInFlightTotalChars < totalLimit
     )
   }
 
@@ -1209,7 +1213,10 @@ export function registerPtyHandlers(
         performance.now()
       )
       if (isInteractiveOutput) {
-        if (!canSendPtyDataToRenderer(payload.id)) {
+        // Why: user-input echo should not be pinned behind unrelated bulk
+        // terminal output already handed to the renderer. The reserve is
+        // bounded, and the per-PTY cap still prevents an active TUI runaway.
+        if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
           pendingData.set(payload.id, pending)
           return
         }
