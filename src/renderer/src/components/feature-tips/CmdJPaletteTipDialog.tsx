@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 import type { FeatureTip } from '../../../../shared/feature-tips'
+import { Badge } from '@/components/ui/badge'
 import {
   Dialog,
   DialogContent,
@@ -55,6 +56,13 @@ export function CmdJPaletteTipDialog({
         <div className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 md:shrink-0 md:basis-1/2">
           <DialogHeader className="gap-4 text-left">
             <div>
+              {/* Why: uppercase eyebrow reads as a category label, not a feature launch. */}
+              <Badge
+                variant="outline"
+                className="mb-3 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+              >
+                {tip.eyebrow.toUpperCase()}
+              </Badge>
               <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
                 <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 md:flex-nowrap">
                   <span>{titlePrefix.trimEnd()}</span>

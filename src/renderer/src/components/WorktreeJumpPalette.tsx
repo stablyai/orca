@@ -665,7 +665,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         entries.push({
           id: '__header_worktrees__',
           type: 'section-header',
-          label: hasQuery ? 'Workspaces' : 'Recent Workspaces'
+          label: hasQuery ? 'Worktrees' : 'Recent Worktrees'
         })
       }
       appendPaletteListEntries(entries, visibleWorktreeItems)
@@ -678,7 +678,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
         entries.push({
           id: '__hint_worktree_cap__',
           type: 'hint',
-          label: `Type to see all ${worktreeItems.length} workspaces`
+          label: `Type to see all ${worktreeItems.length} worktrees`
         })
       }
     }
@@ -1150,7 +1150,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     if ((hasAnySearchableWorktrees || hasAnyMiddleResults || hasAnyBrowserPages) && hasQuery) {
       return {
         title: 'No results match your search',
-        subtitle: 'Try a workspace, setting, action, page title, URL, PR, or port.'
+        subtitle: 'Try a worktree, setting, action, page title, URL, PR, or port.'
       }
     }
     // Why: empty-query rows exclude the current worktree, so a single-worktree
@@ -1160,12 +1160,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     if (!hasQuery && hasAnyWorktrees && !hasAnyBrowserPages) {
       return {
         title: 'No other worktrees to switch to',
-        subtitle: 'Type to search workspaces, settings, tabs, and actions.'
+        subtitle: 'Type to search worktrees, settings, tabs, and actions.'
       }
     }
     return {
       title: 'No active worktrees, settings, actions, or browser tabs',
-      subtitle: 'Create a workspace or open a page in Orca to get started.'
+      subtitle: 'Create a worktree or open a page in Orca to get started.'
     }
   })()
 
@@ -1177,7 +1177,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       onOpenAutoFocus={handleOpenAutoFocus}
       onCloseAutoFocus={handleCloseAutoFocus}
       title="Jump to..."
-      description="Search workspaces, settings, tabs, and actions"
+      description="Search worktrees, settings, tabs, and actions"
       overlayClassName="bg-black/55 backdrop-blur-[2px]"
       contentClassName="top-[13%] w-[736px] max-w-[94vw] overflow-hidden rounded-xl border border-border/70 bg-background/96 shadow-[0_26px_84px_rgba(0,0,0,0.32)] backdrop-blur-xl"
       commandProps={{
@@ -1188,7 +1188,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       }}
     >
       <CommandInput
-        placeholder="Search workspaces, settings, tabs, and actions..."
+        placeholder="Search worktrees, settings, tabs, and actions..."
         value={query}
         onValueChange={handleQueryChange}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
@@ -1245,7 +1245,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">
-                        {`Create workspace "${createWorktreeName}"`}
+                        {`Create worktree "${createWorktreeName}"`}
                       </div>
                     </div>
                   </CommandItem>
@@ -1492,8 +1492,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       </div>
       <div aria-live="polite" className="sr-only">
         {deferredQuery.trim()
-          ? `${resultCount} results found${showCreateAction ? ', create workspace action available' : ''}`
-          : `${resultCount} items available${showCreateAction ? ', create workspace action available' : ''}`}
+          ? `${resultCount} results found${showCreateAction ? ', create worktree action available' : ''}`
+          : `${resultCount} items available${showCreateAction ? ', create worktree action available' : ''}`}
       </div>
     </CommandDialog>
   )

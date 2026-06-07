@@ -51,6 +51,7 @@ describe('CmdJPaletteFeatureTipVisual', () => {
 
     expect(html).toContain('auth')
     expect(html).toContain('auth-redirect')
+    expect(html).not.toContain('payments-api')
     expect(html).not.toContain('animate-spin')
     expect(html).not.toContain('animate-cmd-j-tip-result-in')
   })
@@ -82,13 +83,33 @@ describe('CmdJPaletteFeatureTipVisual', () => {
     expect(clearTimeoutSpy).toHaveBeenCalled()
   })
 
-  it('falls back to default shortcut keys when the live binding is disabled', () => {
+  it('falls back to default per-key chips when the live binding is unassigned', () => {
     shortcutKeysMock.mockReturnValue([])
+    formatShortcutKeysMock.mockReturnValue(['Ctrl', 'Shift', 'J'])
 
     const html = renderToStaticMarkup(<CmdJPaletteFeatureTipVisual />)
 
     expect(formatShortcutKeysMock).toHaveBeenCalledWith('worktree.palette')
+    expect(html).toContain('Ctrl')
+    expect(html).toContain('Shift')
+    expect(html).toContain('J')
+  })
+
+  it('shows the create-worktree row only once the demo query is non-empty', () => {
+    prefersReducedMotionMock.mockReturnValue(true)
+    const html = renderToStaticMarkup(<CmdJPaletteFeatureTipVisual />)
+
+    expect(html).toContain('Create worktree')
+    expect(html).toContain('auth')
+  })
+
+  it('renders the live binding as separate shortcut key chips with plus separators', () => {
+    shortcutKeysMock.mockReturnValue(['⌘', 'J'])
+
+    const html = renderToStaticMarkup(<CmdJPaletteFeatureTipVisual />)
+
     expect(html).toContain('⌘')
     expect(html).toContain('J')
+    expect(html).toContain('+')
   })
 })

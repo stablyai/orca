@@ -49,6 +49,12 @@ function renderDialog(): string {
 }
 
 describe('CmdJPaletteTipDialog', () => {
+  it('shows a tip badge so the dialog reads as education, not a new feature', () => {
+    const html = renderDialog()
+
+    expect(html).toContain('TIP')
+  })
+
   it('inlines the live shortcut label in the title', () => {
     shortcutLabelMock.mockReturnValue('⌘J')
 

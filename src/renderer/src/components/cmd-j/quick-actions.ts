@@ -88,10 +88,10 @@ export const CMD_J_QUICK_ACTIONS: readonly CmdJQuickAction[] = [
   {
     id: CREATE_WORKSPACE_QUICK_ACTION_ID,
     kind: 'action',
-    title: 'Create Workspace',
-    description: 'Start a new workspace.',
+    title: 'Create Worktree',
+    description: 'Start a new worktree.',
     icon: FolderPlus,
-    verbKeywords: ['create workspace', 'add workspace', 'new workspace'],
+    verbKeywords: ['create worktree', 'add worktree', 'new worktree'],
     isAvailable: () => ({ available: true }),
     run: async (ctx) => {
       ctx.openCreateWorkspace()
@@ -101,16 +101,14 @@ export const CMD_J_QUICK_ACTIONS: readonly CmdJQuickAction[] = [
   {
     id: 'delete-workspace',
     kind: 'action',
-    title: 'Delete Workspace',
-    description: 'Delete the current workspace.',
+    title: 'Delete Worktree',
+    description: 'Delete the current worktree.',
     icon: Trash2,
     verbKeywords: [
-      'delete workspace',
-      'delete current workspace',
       'delete worktree',
-      'remove workspace',
+      'delete current worktree',
       'remove worktree',
-      'trash workspace'
+      'trash worktree'
     ],
     isAvailable: currentWorkspaceActionAvailability,
     run: async (ctx) => {

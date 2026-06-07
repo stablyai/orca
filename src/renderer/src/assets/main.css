@@ -1776,8 +1776,8 @@
   animation: cmd-j-tip-caret 1s step-end infinite;
 }
 
-/* Results fade in together once typing completes — mirrors the real palette,
-   which filters synchronously rather than dropping rows one at a time. */
+/* Worktree rows fade in when the palette opens — mirrors the real palette,
+   which shows recent worktrees on empty query and filters synchronously. */
 @keyframes cmd-j-tip-result-in {
   0% {
     opacity: 0;
