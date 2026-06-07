@@ -4836,7 +4836,7 @@ describe('connectPanePty', () => {
     expect(createdTransportOptions[0]?.onAgentStatus).toBeUndefined()
   })
 
-  it('keeps SSH IPC OSC 9999 status ownership in the renderer', async () => {
+  it('leaves SSH IPC OSC 9999 status ownership in the main runtime', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-ssh')
     transportFactoryQueue.push(transport)
@@ -4852,7 +4852,7 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
 
-    expect(createdTransportOptions[0]?.onAgentStatus).toEqual(expect.any(Function))
+    expect(createdTransportOptions[0]?.onAgentStatus).toBeUndefined()
   })
 
   it('lets delayed hook completion notifications win over concurrent terminal bells', async () => {

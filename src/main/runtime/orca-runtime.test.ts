@@ -3476,12 +3476,100 @@ describe('OrcaRuntimeService', () => {
         paneKey,
         tabId: 'tab-1',
         worktreeId: TEST_WORKTREE_ID,
+        connectionId: null,
         payload: {
           state: 'working',
           prompt: 'ship it',
           agentType: 'codex'
         }
       }
+    ])
+  })
+
+  it('stamps SSH connection identity on runtime terminal status', () => {
+    const statuses: RuntimeTerminalAgentStatusEvent[] = []
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      onTerminalAgentStatus: (event) => statuses.push(event)
+    })
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-ssh'
+        }
+      ]
+    })
+    runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-conn-1')
+
+    runtime.onPtyData('pty-ssh', '\x1b]9999;{"state":"working","agentType":"codex"}\x07', 123)
+
+    expect(statuses).toEqual([
+      expect.objectContaining({
+        ptyId: 'pty-ssh',
+        source: 'mounted-leaf',
+        connectionId: 'ssh-conn-1',
+        payload: expect.objectContaining({
+          state: 'working',
+          agentType: 'codex'
+        })
+      })
+    ])
+  })
+
+  it('infers restored SSH connection identity from app-scoped PTY ids', () => {
+    const statuses: RuntimeTerminalAgentStatusEvent[] = []
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      onTerminalAgentStatus: (event) => statuses.push(event)
+    })
+    const ptyId = 'ssh:ssh-restored@@relay-pty'
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId
+        }
+      ]
+    })
+
+    runtime.onPtyData(ptyId, '\x1b]9999;{"state":"working","agentType":"codex"}\x07', 123)
+
+    expect(statuses).toEqual([
+      expect.objectContaining({
+        ptyId,
+        connectionId: 'ssh-restored',
+        payload: expect.objectContaining({
+          state: 'working',
+          agentType: 'codex'
+        })
+      })
     ])
   })
 
@@ -3516,6 +3604,7 @@ describe('OrcaRuntimeService', () => {
         paneKey,
         tabId: spawnedEnv.ORCA_TAB_ID,
         worktreeId: TEST_WORKTREE_ID,
+        connectionId: null,
         payload: {
           state: 'done',
           prompt: 'ok'

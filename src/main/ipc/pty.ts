@@ -1595,7 +1595,7 @@ export function registerPtyHandlers(
         runtime?.registerPreAllocatedHandleForPty(result.id, args.preAllocatedHandle)
       }
       if (args.worktreeId) {
-        runtime?.registerPty(result.id, args.worktreeId)
+        runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
       }
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)
@@ -2231,7 +2231,7 @@ export function registerPtyHandlers(
         args.worktreeId.length > 0 &&
         args.worktreeId.length <= 512
       ) {
-        runtime?.registerPty(result.id, args.worktreeId)
+        runtime?.registerPty(result.id, args.worktreeId, args.connectionId ?? null)
       }
       if (isClaudeLaunch) {
         markClaudePtySpawned(result.id)

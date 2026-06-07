@@ -6269,6 +6269,52 @@ describe('AgentHookServer ingestTerminalStatus', () => {
     }
   })
 
+  it('preserves runtime terminal status connection identity', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    try {
+      const server = new AgentHookServer()
+      const listener = vi.fn()
+      server.setListener(listener)
+
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-conn-1',
+        payload: {
+          state: 'working',
+          prompt: 'ship it',
+          agentType: 'codex'
+        }
+      })
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          connectionId: 'ssh-conn-1',
+          payload: {
+            state: 'working',
+            prompt: 'ship it',
+            agentType: 'codex'
+          }
+        })
+      )
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          connectionId: 'ssh-conn-1',
+          state: 'working',
+          prompt: 'ship it'
+        })
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('rejects runtime terminal status with mismatched tab identity', () => {
     const server = new AgentHookServer()
     const listener = vi.fn()

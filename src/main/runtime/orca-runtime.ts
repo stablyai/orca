@@ -663,6 +663,7 @@ function isCursorAgentTitle(title: string | null | undefined): boolean {
 type RuntimePtyWorktreeRecord = {
   ptyId: string
   worktreeId: string
+  connectionId: string | null
   // Why: background CLI PTYs can outlive a failed renderer reveal. Preserve the
   // spawn-time tab/pane identity so later reveals can adopt under the env key.
   tabId: string | null
@@ -687,6 +688,7 @@ export type RuntimeTerminalAgentStatusEvent = {
   paneKey: string
   tabId?: string
   worktreeId?: string
+  connectionId?: string | null
   payload: ParsedAgentStatusPayload
 }
 
@@ -2987,8 +2989,8 @@ export class OrcaRuntimeService {
     }
   }
 
-  registerPty(ptyId: string, worktreeId: string): void {
-    this.recordPtyWorktree(ptyId, worktreeId, { connected: true })
+  registerPty(ptyId: string, worktreeId: string, connectionId: string | null = null): void {
+    this.recordPtyWorktree(ptyId, worktreeId, { connected: true, connectionId })
   }
 
   onPtyData(ptyId: string, data: string, at: number): number {
@@ -3167,24 +3169,28 @@ export class OrcaRuntimeService {
         paneKey: string
         tabId?: string
         worktreeId?: string
+        connectionId?: string | null
       }
     >()
+    const pty = this.ptysById.get(ptyId)
+    const connectionId = pty?.connectionId ?? null
     for (const leaf of this.getLeavesForPty(ptyId)) {
       const paneKey = this.makeRuntimePaneKey(leaf)
       targets.set(paneKey, {
         source: 'mounted-leaf',
         paneKey,
         tabId: leaf.tabId,
-        worktreeId: leaf.worktreeId
+        worktreeId: leaf.worktreeId,
+        connectionId
       })
     }
-    const pty = this.ptysById.get(ptyId)
     if (targets.size === 0 && pty?.paneKey) {
       targets.set(pty.paneKey, {
         source: 'pty-record',
         paneKey: pty.paneKey,
         tabId: pty.tabId ?? undefined,
-        worktreeId: pty.worktreeId
+        worktreeId: pty.worktreeId,
+        connectionId
       })
     }
     for (const payload of chunk.payloads) {
@@ -10597,7 +10603,7 @@ export class OrcaRuntimeService {
         ...(opts.persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
       })
       this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-      this.registerPty(result.id, worktree.id)
+      this.registerPty(result.id, worktree.id, repo?.connectionId ?? null)
       const pty = this.getOrCreatePtyWorktreeRecord(result.id)
       if (pty) {
         pty.title = opts.title ?? null
@@ -11203,7 +11209,7 @@ export class OrcaRuntimeService {
       preAllocatedHandle
     })
     this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-    this.registerPty(result.id, worktree.id)
+    this.registerPty(result.id, worktree.id, repo?.connectionId ?? null)
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (createdPty) {
       createdPty.tabId = parentTabId
@@ -12017,7 +12023,7 @@ export class OrcaRuntimeService {
     state: Partial<
       Pick<
         RuntimePtyWorktreeRecord,
-        'connected' | 'lastOutputAt' | 'preview' | 'tabId' | 'paneKey' | 'title'
+        'connected' | 'lastOutputAt' | 'preview' | 'tabId' | 'paneKey' | 'title' | 'connectionId'
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
@@ -12026,6 +12032,7 @@ export class OrcaRuntimeService {
       pty = {
         ptyId,
         worktreeId,
+        connectionId: state.connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null,
         tabId: state.tabId ?? null,
         paneKey: state.paneKey ?? null,
         connected: state.connected ?? true,
@@ -12049,6 +12056,9 @@ export class OrcaRuntimeService {
     }
 
     pty.worktreeId = worktreeId
+    if (state.connectionId !== undefined) {
+      pty.connectionId = state.connectionId
+    }
     if (state.tabId !== undefined) {
       pty.tabId = state.tabId
     }

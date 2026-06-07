@@ -913,6 +913,7 @@ export class AgentHookServer {
     paneKey: string
     tabId?: string
     worktreeId?: string
+    connectionId?: string | null
     payload: ParsedAgentStatusPayload
   }): void {
     const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
@@ -933,11 +934,15 @@ export class AgentHookServer {
       event.worktreeId !== undefined && event.worktreeId.trim().length > 0
         ? event.worktreeId.trim()
         : undefined
+    const connectionId =
+      typeof event.connectionId === 'string' && event.connectionId.trim().length > 0
+        ? event.connectionId.trim()
+        : null
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
     if (
-      previous?.connectionId === null &&
+      previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
       previous.worktreeId === worktreeId &&
       equivalentParsedAgentStatusPayload(previous.payload, event.payload)
@@ -950,7 +955,7 @@ export class AgentHookServer {
       paneKey,
       tabId,
       worktreeId,
-      connectionId: null,
+      connectionId,
       payload: event.payload
     })
   }
