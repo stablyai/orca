@@ -92,7 +92,10 @@ function printMarkdownTable(rows) {
     ['Main Peak Max Pending', 'mainPeakMaxPendingChars'],
     ['Main Peak In-Flight', 'mainPeakInFlightChars'],
     ['Main Peak Max In-Flight', 'mainPeakMaxInFlightChars'],
-    ['Main ACK-Gated Skips', 'mainAckGatedFlushSkips']
+    ['Main ACK-Gated Skips', 'mainAckGatedFlushSkips'],
+    ['Held ACK PTYs', 'heldAckPtys'],
+    ['Held ACK Chars', 'heldAckChars'],
+    ['Gated ACK PTYs', 'gatedAckPtys']
   ]
 
   console.log(`| ${columns.map(([label]) => label).join(' | ')} |`)

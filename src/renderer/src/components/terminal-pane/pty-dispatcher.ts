@@ -7,6 +7,7 @@
  */
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { EventProps } from '../../../../shared/telemetry-events'
+import { ackPtyData, exposeE2eTerminalPtyAckGate } from './terminal-pty-ack-gate'
 
 // ── Singleton PTY event dispatcher ───────────────────────────────────
 // One global IPC listener per channel, routes events to transports by
@@ -93,6 +94,7 @@ export function ensurePtyDispatcher(): void {
     return
   }
   ptyDispatcherAttached = true
+  exposeE2eTerminalPtyAckGate()
   window.api.pty.onData((payload) => {
     try {
       let meta: PtyDataMeta | undefined
@@ -123,7 +125,7 @@ export function ensurePtyDispatcher(): void {
       // Why: main budgets renderer-bound terminal output by bytes accepted
       // into this dispatcher. ACK in finally so a bad sidecar cannot leave
       // a PTY permanently backpressured.
-      window.api.pty.ackData?.(payload.id, payload.rawLength ?? payload.data.length)
+      ackPtyData(payload.id, payload.rawLength ?? payload.data.length)
     }
   })
   window.api.pty.onReplay((payload) => {

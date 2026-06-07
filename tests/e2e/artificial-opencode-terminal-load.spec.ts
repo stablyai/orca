@@ -38,6 +38,11 @@ type SyntheticOpenCodeWindow = Window & {
   __terminalPtyDataInjection?: {
     inject: (paneKey: string, data: string) => boolean
   }
+  __terminalPtyAckGate?: {
+    hold: (ptyIds: string[]) => void
+    release: () => void
+    snapshot: () => TerminalPtyAckGateSnapshot
+  }
   __terminalPtyOutputDebug?: {
     reset: () => void
     snapshot: () => TerminalPtyOutputDebugSnapshot
@@ -65,6 +70,12 @@ type TerminalOutputSchedulerDebugSnapshot = {
   drainWrites: number[]
 }
 
+type TerminalPtyAckGateSnapshot = {
+  gatedPtyCount: number
+  heldAckCount: number
+  heldAckChars: number
+}
+
 type MainPtyPressureDebugSnapshot = {
   pendingPtyCount: number
   pendingChars: number
@@ -84,6 +95,8 @@ type MainPtyPressureDebugSnapshot = {
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
 const DEFAULT_SAME_WORKSPACE_PANES = 5
 const DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE = 3
+const DEFAULT_PRESSURE_BACKGROUND_PANES = 17
+const DEFAULT_PRESSURE_OUTPUT_CHARS = 768 * 1024
 const DEFAULT_FRAME_COUNT = 180
 const DEFAULT_FRAME_INTERVAL_MS = 6
 const TIMER_SAMPLE_MS = 16
@@ -124,6 +137,14 @@ const CROSS_WORKSPACE_PANES_PER_WORKTREE = readPositiveInt(
   'ORCA_E2E_OPENCODE_CROSS_WORKSPACE_PANES',
   DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE
 )
+const PRESSURE_BACKGROUND_PANES = readPositiveInt(
+  'ORCA_E2E_OPENCODE_PRESSURE_BACKGROUND_PANES',
+  DEFAULT_PRESSURE_BACKGROUND_PANES
+)
+const PRESSURE_OUTPUT_CHARS = readPositiveInt(
+  'ORCA_E2E_OPENCODE_PRESSURE_OUTPUT_CHARS',
+  DEFAULT_PRESSURE_OUTPUT_CHARS
+)
 const FRAME_COUNT = readPositiveInt('ORCA_E2E_OPENCODE_FRAME_COUNT', DEFAULT_FRAME_COUNT)
 const FRAME_INTERVAL_MS = readPositiveInt(
   'ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS',
@@ -161,6 +182,37 @@ function writeInteractivePromptScript(scriptPath: string, runId: string): void {
   // harness; the prompt script only needs a writable directory, not git state.
   mkdirSync(path.dirname(scriptPath), { recursive: true })
   writeFileSync(scriptPath, interactivePromptScript(runId))
+}
+
+function pressureOutputScript(runId: string): string {
+  return `
+const paneIndex = process.argv[2] ?? '0'
+const targetChars = Number(process.argv[3] ?? '0')
+const header = 'OPENCODE_PRESSURE_START_${runId}_' + paneIndex + '\\n'
+const chunkBody = '#'.repeat(8192)
+let written = 0
+process.stdout.write(header)
+function writeMore() {
+  let canContinue = true
+  while (canContinue && written < targetChars) {
+    const frame = String(written).padStart(8, '0')
+    const chunk = '\\x1b[?2026h\\x1b[1;1Hpressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\x1b[?2026l\\n'
+    written += chunk.length
+    canContinue = process.stdout.write(chunk)
+  }
+  if (written < targetChars) {
+    process.stdout.once('drain', writeMore)
+    return
+  }
+  process.stdout.write('OPENCODE_PRESSURE_DONE_${runId}_' + paneIndex + '\\n')
+}
+writeMore()
+`
+}
+
+function writePressureOutputScript(scriptPath: string, runId: string): void {
+  mkdirSync(path.dirname(scriptPath), { recursive: true })
+  writeFileSync(scriptPath, pressureOutputScript(runId))
 }
 
 async function focusActiveTerminalInput(page: Page): Promise<void> {
@@ -377,6 +429,52 @@ async function readMainPtyPressureDebug(page: Page): Promise<MainPtyPressureDebu
   })
 }
 
+async function holdTerminalAckGate(page: Page, ptyIds: string[]): Promise<void> {
+  await page.evaluate((ids) => {
+    const gate = (window as SyntheticOpenCodeWindow).__terminalPtyAckGate
+    if (!gate) {
+      throw new Error('terminal PTY ACK gate is unavailable')
+    }
+    gate.hold(ids)
+  }, ptyIds)
+}
+
+async function releaseTerminalAckGate(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    ;(window as SyntheticOpenCodeWindow).__terminalPtyAckGate?.release()
+  })
+}
+
+async function readTerminalAckGateDebug(page: Page): Promise<TerminalPtyAckGateSnapshot | null> {
+  return page.evaluate(() => {
+    return (window as SyntheticOpenCodeWindow).__terminalPtyAckGate?.snapshot() ?? null
+  })
+}
+
+async function waitForMainPtyPressureBacklog(page: Page): Promise<MainPtyPressureDebugSnapshot> {
+  let lastSnapshot: MainPtyPressureDebugSnapshot | null = null
+  await expect
+    .poll(
+      async () => {
+        lastSnapshot = await readMainPtyPressureDebug(page)
+        return (
+          (lastSnapshot?.peakRendererInFlightChars ?? 0) >= 8 * 1024 * 1024 &&
+          (lastSnapshot?.peakPendingChars ?? 0) > 0 &&
+          (lastSnapshot?.ackGatedFlushSkipCount ?? 0) > 0
+        )
+      },
+      {
+        timeout: 20_000,
+        message: 'Main PTY renderer delivery pressure did not build up'
+      }
+    )
+    .toBe(true)
+  if (!lastSnapshot) {
+    throw new Error('Main PTY pressure snapshot unavailable')
+  }
+  return lastSnapshot
+}
+
 function annotateTypingMeasurement(
   testInfo: TestInfo,
   type: string,
@@ -384,7 +482,8 @@ function annotateTypingMeasurement(
   measurement: TypingMeasurement,
   debug: TerminalPtyOutputDebugSnapshot | null = null,
   scheduler: TerminalOutputSchedulerDebugSnapshot | null = null,
-  mainPressure: MainPtyPressureDebugSnapshot | null = null
+  mainPressure: MainPtyPressureDebugSnapshot | null = null,
+  ackGate: TerminalPtyAckGateSnapshot | null = null
 ): void {
   const hiddenSkipSummary = debug
     ? ` hiddenSkips=${debug.hiddenRendererSkipCount} hiddenSkippedChars=${debug.hiddenRendererSkippedChars} mode2031Replies=${debug.hiddenRendererMode2031ReplyCount}`
@@ -395,6 +494,9 @@ function annotateTypingMeasurement(
   const mainPressureSummary = mainPressure
     ? ` mainPendingPtys=${mainPressure.pendingPtyCount} mainPendingChars=${mainPressure.pendingChars} mainMaxPendingChars=${mainPressure.maxPendingCharsByPty} mainInFlightPtys=${mainPressure.rendererInFlightPtyCount} mainInFlightChars=${mainPressure.rendererInFlightChars} mainMaxInFlightChars=${mainPressure.maxRendererInFlightCharsByPty} mainActivePtys=${mainPressure.activeRendererPtyCount} mainFlushScheduled=${mainPressure.flushScheduled} mainPeakPendingChars=${mainPressure.peakPendingChars} mainPeakMaxPendingChars=${mainPressure.peakMaxPendingCharsByPty} mainPeakInFlightChars=${mainPressure.peakRendererInFlightChars} mainPeakMaxInFlightChars=${mainPressure.peakMaxRendererInFlightCharsByPty} mainAckGatedFlushSkips=${mainPressure.ackGatedFlushSkipCount}`
     : ''
+  const ackGateSummary = ackGate
+    ? ` heldAckPtys=${ackGate.heldAckCount} heldAckChars=${ackGate.heldAckChars} gatedAckPtys=${ackGate.gatedPtyCount}`
+    : ''
   testInfo.annotations.push({
     type,
     description: `panes=${paneCount} frames=${measurement.frameCount} median=${measurement.medianLatencyMs.toFixed(
@@ -403,7 +505,7 @@ function annotateTypingMeasurement(
       1
     )}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(1)}ms samples=${measurement.latencies
       .map((value) => value.toFixed(1))
-      .join(',')}${hiddenSkipSummary}${schedulerSummary}${mainPressureSummary}`
+      .join(',')}${hiddenSkipSummary}${schedulerSummary}${mainPressureSummary}${ackGateSummary}`
   })
 }
 
@@ -553,6 +655,73 @@ test.describe('Artificial OpenCode terminal load', () => {
       await load.stop()
       await sendToTerminal(orcaPage, typingPane.ptyId, '\x03').catch(() => undefined)
       rmSync(scriptPath, { force: true })
+    }
+  })
+
+  test('keeps active typing responsive while background PTYs are ACK-backpressured', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    const panes = await ensureActiveWorktreePaneLoad(orcaPage, PRESSURE_BACKGROUND_PANES + 1)
+    const [typingPane, ...loadPanes] = panes
+    await focusPane(orcaPage, typingPane.paneKey)
+
+    const runId = randomUUID()
+    const typingScriptPath = path.join(testRepoPath, `.orca-opencode-pressure-typing-${runId}.mjs`)
+    const pressureScriptPath = path.join(testRepoPath, `.orca-opencode-pressure-load-${runId}.mjs`)
+    writeInteractivePromptScript(typingScriptPath, runId)
+    writePressureOutputScript(pressureScriptPath, runId)
+    await resetTerminalPtyOutputDebug(orcaPage)
+    await holdTerminalAckGate(
+      orcaPage,
+      loadPanes.map((pane) => pane.ptyId)
+    )
+    try {
+      await Promise.all(
+        loadPanes.map((pane, paneIndex) =>
+          sendToTerminal(
+            orcaPage,
+            pane.ptyId,
+            `node ${JSON.stringify(pressureScriptPath)} ${paneIndex} ${PRESSURE_OUTPUT_CHARS}\r`
+          )
+        )
+      )
+      const pressureBeforeTyping = await waitForMainPtyPressureBacklog(orcaPage)
+      const measurement = await measureTypingDuringLoad(
+        orcaPage,
+        typingScriptPath,
+        typingPane.ptyId,
+        runId
+      )
+      const mainPressure = await readMainPtyPressureDebug(orcaPage)
+      const ackGate = await readTerminalAckGateDebug(orcaPage)
+      annotateTypingMeasurement(
+        testInfo,
+        'opencode-main-pressure-active-typing',
+        panes.length,
+        measurement,
+        await readTerminalPtyOutputDebug(orcaPage),
+        await readTerminalOutputSchedulerDebug(orcaPage),
+        mainPressure,
+        ackGate
+      )
+      expect(pressureBeforeTyping.peakPendingChars).toBeGreaterThan(0)
+      expect(pressureBeforeTyping.ackGatedFlushSkipCount).toBeGreaterThan(0)
+      expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeGreaterThanOrEqual(8 * 1024 * 1024)
+      expect(ackGate?.heldAckChars ?? 0).toBeGreaterThan(0)
+      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
+    } finally {
+      await releaseTerminalAckGate(orcaPage)
+      await sendToTerminal(orcaPage, typingPane.ptyId, '\x03').catch(() => undefined)
+      await Promise.all(
+        loadPanes.map((pane) => sendToTerminal(orcaPage, pane.ptyId, '\x03').catch(() => undefined))
+      )
+      rmSync(typingScriptPath, { force: true })
+      rmSync(pressureScriptPath, { force: true })
     }
   })
 
