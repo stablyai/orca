@@ -19,7 +19,6 @@ const makeHeaderRow = (
   type: 'header',
   key,
   label: key,
-  count: 0,
   tone: 'text-foreground',
   ...overrides
 })

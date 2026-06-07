@@ -170,6 +170,10 @@ import {
 } from './worktree-sidebar-drop-preview'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import {
+  REPO_HEADER_ACTION_BUTTON_CLASS,
+  REPO_HEADER_ACTION_REVEAL_CLASS
+} from './repo-header-action-button-class'
+import {
   areWorktreeSelectionsEqual,
   getWorktreeSelectionIntent,
   pruneWorktreeSelection,
@@ -434,32 +438,6 @@ type VirtualizedWorktreeViewportProps = {
 }
 
 type WorktreeItemRow = Extract<Row, { type: 'item' }>
-
-function formatSectionActivityLabel(count: number, label: string): string {
-  return `${count} ${label}${count === 1 ? '' : 's'}`
-}
-
-function SectionMetricsBadge({ count }: { count: number }): React.JSX.Element {
-  const totalLabel = formatSectionActivityLabel(count, 'workspace')
-
-  return (
-    <span
-      className="inline-flex h-4 shrink-0 overflow-hidden rounded-full border border-sidebar-border bg-sidebar-accent text-[9px] font-medium leading-none text-muted-foreground/90"
-      aria-label={totalLabel}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="inline-flex h-full min-w-4 items-center justify-center px-1.5">
-            {count}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom" sideOffset={6}>
-          {totalLabel}
-        </TooltipContent>
-      </Tooltip>
-    </span>
-  )
-}
 
 type WorktreeRowDragState = {
   draggingWorktreeId: string | null
@@ -2827,7 +2805,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 isRepoHeader || isProjectGroupHeader
                   ? getProjectGroupHeaderPaddingLeft(projectGroupDepth)
                   : WORKTREE_SECTION_HEADER_PADDING_LEFT
-              const isCollapsed = collapsedGroups.has(row.key)
               return (
                 <div
                   key={vItem.key}
@@ -2933,17 +2910,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           {row.label}
                         </div>
                         <RepoForkIndicator upstream={row.repo?.upstream} />
-                        <SectionMetricsBadge count={row.count} />
                       </div>
-                    </div>
-
-                    <div className="flex size-4 shrink-0 cursor-pointer items-center justify-center text-muted-foreground/60 opacity-0 transition-opacity group-hover:opacity-100">
-                      <ChevronDown
-                        className={cn(
-                          'size-3.5 cursor-pointer transition-transform [&_path]:cursor-pointer',
-                          isCollapsed && '-rotate-90'
-                        )}
-                      />
                     </div>
 
                     {isProjectGroupHeader && !row.repo && row.projectGroup?.id ? (
@@ -2953,7 +2920,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             type="button"
                             variant="ghost"
                             size="icon-xs"
-                            className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                            className={REPO_HEADER_ACTION_BUTTON_CLASS}
                             aria-label={`Group actions for ${row.label}`}
                             onClick={(event) => event.stopPropagation()}
                             onKeyDown={stopRepoHeaderKeyboardToggle}
@@ -3000,7 +2967,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 type="button"
                                 variant="ghost"
                                 size="icon-xs"
-                                className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                                className={REPO_HEADER_ACTION_BUTTON_CLASS}
                                 aria-label={`Project actions for ${row.label}`}
                                 onClick={(event) => event.stopPropagation()}
                                 onKeyDown={stopRepoHeaderKeyboardToggle}
@@ -3121,7 +3088,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <TooltipTrigger asChild>
                           {createState?.disabled ? (
                             <span
-                              className="inline-flex cursor-not-allowed opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
+                              className={cn(
+                                'inline-flex cursor-not-allowed transition-[margin,max-width,opacity]',
+                                REPO_HEADER_ACTION_REVEAL_CLASS
+                              )}
                               tabIndex={0}
                               aria-label={createState.ariaLabel}
                               onKeyDown={stopRepoHeaderKeyboardToggle}
@@ -3144,7 +3114,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               type="button"
                               variant="ghost"
                               size="icon-xs"
-                              className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+                              className={REPO_HEADER_ACTION_BUTTON_CLASS}
                               aria-label={
                                 createState?.ariaLabel ?? `Create workspace for ${row.label}`
                               }

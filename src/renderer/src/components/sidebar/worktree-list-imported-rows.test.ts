@@ -20,7 +20,6 @@ const makeHeaderRow = (key: string): Extract<Row, { type: 'header' }> => ({
   type: 'header',
   key,
   label: key,
-  count: 0,
   tone: 'text-foreground'
 })
 

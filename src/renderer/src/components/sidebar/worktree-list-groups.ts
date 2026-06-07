@@ -46,7 +46,6 @@ export type GroupHeaderRow = {
   type: 'header'
   key: string
   label: string
-  count: number
   tone: string
   icon?: React.ComponentType<{ className?: string }>
   repo?: Repo
@@ -242,7 +241,6 @@ function emitPinnedGroup(
     type: 'header',
     key: PINNED_GROUP_KEY,
     label: PINNED_GROUP_META.label,
-    count: pinned.length,
     tone: PINNED_GROUP_META.tone,
     icon: PINNED_GROUP_META.icon
   })
@@ -460,7 +458,6 @@ export function buildRows(
         type: 'header',
         key: ALL_GROUP_KEY,
         label: ALL_GROUP_META.label,
-        count: unpinned.length,
         tone: ALL_GROUP_META.tone,
         icon: ALL_GROUP_META.icon
       })
@@ -585,7 +582,6 @@ export function buildRows(
               type: 'header' as const,
               key,
               label: group.label,
-              count: group.items.length,
               tone: PROJECT_GROUP_META.tone,
               icon: PROJECT_GROUP_META.icon,
               repo,
@@ -603,7 +599,6 @@ export function buildRows(
                   type: 'header' as const,
                   key,
                   label: definition?.label ?? workspaceStatus,
-                  count: group.items.length,
                   tone: meta.tone,
                   icon: meta.icon
                 }
@@ -615,7 +610,6 @@ export function buildRows(
                   type: 'header' as const,
                   key,
                   label: meta.label,
-                  count: group.items.length,
                   tone: meta.tone,
                   icon: meta.icon
                 }
@@ -689,15 +683,6 @@ export function buildRows(
     )
   }
 
-  const getProjectGroupSubtreeCount = (groupId: string): number => {
-    const directCount = groupByProjectGroupId.get(groupId)?.length ?? 0
-    const children = childGroupsByParentId.get(groupId) ?? []
-    return children.reduce(
-      (count, child) => count + getProjectGroupSubtreeCount(child.id),
-      directCount
-    )
-  }
-
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
@@ -706,7 +691,6 @@ export function buildRows(
       type: 'header',
       key,
       label: projectGroup.name,
-      count: getProjectGroupSubtreeCount(projectGroup.id),
       tone: PROJECT_GROUP_META.tone,
       icon: PROJECT_GROUP_META.icon,
       projectGroup,
