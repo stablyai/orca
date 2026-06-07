@@ -673,6 +673,8 @@ export default function CombinedDiffViewer({
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
       invalidateCombinedDiffViewStateCache()
+      generationRef.current += 1
+      setGeneration((prev) => prev + 1)
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
