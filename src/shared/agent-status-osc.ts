@@ -1,5 +1,5 @@
-import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import { parseAgentStatusPayload } from '../../../../shared/agent-status-types'
+import type { ParsedAgentStatusPayload } from './agent-status-types'
+import { parseAgentStatusPayload } from './agent-status-types'
 
 const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 
@@ -28,8 +28,8 @@ function findAgentStatusTerminator(
 
 /**
  * Stateful OSC 9999 parser for PTY streams.
- * Why: automation background launches need the same agent-status parsing as
- * mounted terminal panes, even when no terminal has been rendered yet.
+ * Why: hidden/model-owned terminal output needs the same agent-status parsing
+ * as mounted terminal panes, even when no terminal view is rendered.
  */
 export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgentStatusChunk {
   const MAX_PENDING = 64 * 1024
