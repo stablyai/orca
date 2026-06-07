@@ -160,4 +160,22 @@ describe('Electron runtime package contract', () => {
       'node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked'
     )
   })
+
+  it('keeps terminal scale perf wired to the report budget gate', () => {
+    const packageScripts = packageJson.scripts
+    const terminalPerfWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/terminal-perf.yml'), 'utf8')
+    )
+    const steps = terminalPerfWorkflow.jobs['terminal-perf'].steps
+    const runStep = steps.find((step) => step.name === 'Run terminal scale perf report gate')
+    const uploadStep = steps.find((step) => step.name === 'Upload terminal perf report')
+
+    expect(packageScripts['test:e2e:terminal-perf:scale:report']).toContain(
+      'run-terminal-scale-perf-report-gate.mjs'
+    )
+    expect(runStep.run).toContain('pnpm run test:e2e:terminal-perf:scale:report')
+    expect(runStep.run).toContain('xvfb-run --auto-servernum')
+    expect(uploadStep.uses).toBe('actions/upload-artifact@v7')
+    expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
+  })
 })
