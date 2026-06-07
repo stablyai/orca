@@ -5,6 +5,7 @@ import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 const captureScrollState = vi.hoisted(() => vi.fn())
 const wrapInSplit = vi.hoisted(() => vi.fn())
 const openTerminal = vi.hoisted(() => vi.fn())
+const disposePane = vi.hoisted(() => vi.fn())
 const disposeWebgl = vi.hoisted(() => vi.fn())
 const clearPendingSplitScrollRestore = vi.hoisted(() => vi.fn())
 const scheduleSplitScrollRestore = vi.hoisted(() => vi.fn())
@@ -22,7 +23,7 @@ vi.mock('./pane-tree-ops', () => ({
 }))
 
 vi.mock('./pane-lifecycle', () => ({
-  disposePane: vi.fn(),
+  disposePane,
   openTerminal
 }))
 
@@ -45,6 +46,7 @@ vi.mock('./pane-divider', () => ({
 }))
 
 import { splitManagedPane } from './pane-split-close'
+import { closeManagedPane } from './pane-split-close'
 
 const TEST_LEAF_ID = '11111111-1111-4111-8111-111111111111' as TerminalLeafId
 
@@ -53,6 +55,7 @@ class MockElement {
   dataset: Record<string, string> = {}
   parentElement: MockElement | null = null
   style: Record<string, string> = {}
+  remove = vi.fn()
   private descendants: MockElement[] = []
 
   constructor(private readonly classNames: string[]) {
@@ -116,6 +119,11 @@ function createPane(id: number, webglAddon: unknown): ManagedPaneInternal {
 describe('splitManagedPane', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    disposePane.mockImplementation(
+      (pane: ManagedPaneInternal, panes: Map<number, ManagedPaneInternal>) => {
+        panes.delete(pane.id)
+      }
+    )
   })
 
   it('prepares every pane under a moved mounted subtree for split reparenting', () => {
@@ -191,5 +199,46 @@ describe('splitManagedPane', () => {
       expect.any(Function),
       expect.any(Function)
     )
+  })
+})
+
+describe('closeManagedPane', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    disposePane.mockImplementation(
+      (pane: ManagedPaneInternal, panes: Map<number, ManagedPaneInternal>) => {
+        panes.delete(pane.id)
+      }
+    )
+  })
+
+  it('reports the closed terminal in the close callback', () => {
+    const closedPane = createPane(1, null)
+    const siblingPane = createPane(2, null)
+    const root = new MockElement(['root'])
+    ;(closedPane.container as unknown as MockElement).parentElement = root
+    const panes = new Map<number, ManagedPaneInternal>([
+      [closedPane.id, closedPane],
+      [siblingPane.id, siblingPane]
+    ])
+    const onPaneClosed = vi.fn()
+
+    closeManagedPane({
+      paneId: closedPane.id,
+      activePaneId: closedPane.id,
+      panes,
+      root: root as unknown as HTMLElement,
+      styleOptions: {},
+      managerOptions: { onPaneClosed },
+      getDragCallbacks: () => ({}) as never,
+      releasePaneIdentity: vi.fn(),
+      setActivePaneId: vi.fn()
+    })
+
+    expect(onPaneClosed).toHaveBeenCalledWith(closedPane.id, {
+      paneId: closedPane.id,
+      leafId: closedPane.leafId,
+      terminal: closedPane.terminal
+    })
   })
 })

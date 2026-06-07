@@ -61,6 +61,7 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-str
 import { getConnectionId } from '@/lib/connection-context'
 import { isPaneReplaying, type ReplayingPanesRef } from './replay-guard'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
+import { setActiveTerminalOutputTarget } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { registerRuntimeTerminalTab, scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { e2eConfig } from '@/lib/e2e-config'
 import {
@@ -93,16 +94,22 @@ function extractUncHost(value: string | undefined): string | null {
   return match?.[1] || null
 }
 
-function reportActiveRendererPtyForPane(
+export function reportActiveRendererPtyForPane(
   paneTransports: Map<number, PtyTransport>,
-  activePaneId: number | null
+  manager: PaneManager | null,
+  activePaneId: number | null,
+  activeAllowed: boolean
 ): void {
+  const activeTargetPaneId = activeAllowed ? activePaneId : null
+  for (const pane of manager?.getPanes() ?? []) {
+    setActiveTerminalOutputTarget(pane.terminal, activeTargetPaneId === pane.id)
+  }
   for (const [paneId, transport] of paneTransports) {
     const ptyId = transport.getPtyId()
     if (!ptyId || ptyId.startsWith('remote:')) {
       continue
     }
-    window.api.pty.setActiveRendererPty?.(ptyId, activePaneId === paneId)
+    window.api.pty.setActiveRendererPty?.(ptyId, activeTargetPaneId === paneId)
   }
 }
 
@@ -822,6 +829,9 @@ export function useTerminalPaneLifecycle({
         queueResizeAll(true)
       },
       onPaneClosed: (paneId, closedPane) => {
+        if (closedPane?.terminal) {
+          setActiveTerminalOutputTarget(closedPane.terminal, false)
+        }
         const linkProviderDisposable = linkProviderDisposablesRef.current.get(paneId)
         if (linkProviderDisposable) {
           linkProviderDisposable.dispose()
@@ -881,6 +891,7 @@ export function useTerminalPaneLifecycle({
           mouseHideDisposablesRef.current.delete(paneId)
         }
         const transport = paneTransportsRef.current.get(paneId)
+        const closingPtyId = transport?.getPtyId() ?? null
         const panePtyBinding = panePtyBindings.get(paneId)
         if (panePtyBinding) {
           panePtyBinding.dispose()
@@ -903,6 +914,9 @@ export function useTerminalPaneLifecycle({
             transport,
             useAppStore.getState().suppressPtyExit
           )
+          if (closingPtyId && !closingPtyId.startsWith('remote:')) {
+            window.api.pty.setActiveRendererPty?.(closingPtyId, false)
+          }
           if (ptyId) {
             // Why: user/CLI pane closes intentionally tear down this PTY after
             // PaneManager has already promoted the sibling. Suppress that exit
@@ -943,12 +957,19 @@ export function useTerminalPaneLifecycle({
         // stay stuck on the closed pane's last title.
         const newActivePane = managerRef.current?.getActivePane()
         if (newActivePane) {
-          reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
+          reportActiveRendererPtyForPane(
+            paneTransportsRef.current,
+            managerRef.current,
+            newActivePane.id,
+            isActiveRef.current && isVisibleRef.current
+          )
           const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
           const activeTitle = paneTitles[newActivePane.id]
           if (activeTitle) {
             updateTabTitle(tabId, activeTitle)
           }
+        } else {
+          reportActiveRendererPtyForPane(paneTransportsRef.current, managerRef.current, null, false)
         }
         scheduleRuntimeGraphSync()
       },
@@ -957,7 +978,12 @@ export function useTerminalPaneLifecycle({
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
         }
-        reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
+        reportActiveRendererPtyForPane(
+          paneTransportsRef.current,
+          managerRef.current,
+          pane.id,
+          isActiveRef.current && isVisibleRef.current
+        )
         // Why: when the user switches focus between split panes, update the
         // tab title to the newly active pane's last-known title so the tab
         // label reflects the focused agent — not a stale title from the
