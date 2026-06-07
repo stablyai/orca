@@ -33,7 +33,20 @@ type MainPressureAckGate = {
   heldAckChars: number
 }
 
-type MainPressureDeps<TMeasurement, TDebug, TScheduler, TMainPressure, TAckGate> = {
+type MainPressureSchedulerSnapshot = {
+  peakQueuedChars: number
+  droppedBacklogCount: number
+}
+
+const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 2 * 1024 * 1024
+
+type MainPressureDeps<
+  TMeasurement,
+  TDebug,
+  TScheduler extends MainPressureSchedulerSnapshot,
+  TMainPressure,
+  TAckGate
+> = {
   annotateTypingMeasurement: (
     testInfo: TestInfo,
     type: string,
@@ -70,7 +83,7 @@ export async function runMainPressureScenario<
   TMainPressure extends MainPressureSnapshot,
   TAckGate extends MainPressureAckGate,
   TDebug,
-  TScheduler
+  TScheduler extends MainPressureSchedulerSnapshot
 >({
   annotationSuffix,
   backgroundPaneCount,
@@ -139,13 +152,14 @@ export async function runMainPressureScenario<
     )
     const mainPressure = await deps.readMainPtyPressureDebug(orcaPage)
     const ackGate = await deps.readTerminalAckGateDebug(orcaPage)
+    const scheduler = await deps.readTerminalOutputSchedulerDebug(orcaPage)
     deps.annotateTypingMeasurement(
       testInfo,
       `opencode-main-pressure-active-typing${annotationSuffix}`,
       panes.length,
       measurement,
       await deps.readTerminalPtyOutputDebug(orcaPage),
-      await deps.readTerminalOutputSchedulerDebug(orcaPage),
+      scheduler,
       mainPressure,
       ackGate
     )
@@ -156,7 +170,8 @@ export async function runMainPressureScenario<
       maxTimerDriftMs,
       maxWorstKeyLatencyMs,
       measurement,
-      pressureBeforeTyping
+      pressureBeforeTyping,
+      scheduler
     })
   } finally {
     await deps.releaseTerminalAckGate(orcaPage)
@@ -191,7 +206,13 @@ async function startPressureCommands({
   )
 }
 
-async function measureAndAnnotateScroll<TMeasurement, TDebug, TScheduler, TMainPressure, TAckGate>({
+async function measureAndAnnotateScroll<
+  TMeasurement,
+  TDebug,
+  TScheduler extends MainPressureSchedulerSnapshot,
+  TMainPressure,
+  TAckGate
+>({
   annotationSuffix,
   deps,
   maxScrollLatencyMs,
@@ -232,7 +253,8 @@ function expectMainPressureAndTyping<TMeasurement extends MainPressureMeasuremen
   maxTimerDriftMs,
   maxWorstKeyLatencyMs,
   measurement,
-  pressureBeforeTyping
+  pressureBeforeTyping,
+  scheduler
 }: {
   ackGate: MainPressureAckGate | null
   mainPressure: MainPressureSnapshot | null
@@ -241,11 +263,16 @@ function expectMainPressureAndTyping<TMeasurement extends MainPressureMeasuremen
   maxWorstKeyLatencyMs: number
   measurement: TMeasurement
   pressureBeforeTyping: MainPressureSnapshot
+  scheduler: MainPressureSchedulerSnapshot | null
 }): void {
   expect(pressureBeforeTyping.peakPendingChars).toBeGreaterThan(0)
   expect(pressureBeforeTyping.ackGatedFlushSkipCount).toBeGreaterThan(0)
   expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeGreaterThanOrEqual(8 * 1024 * 1024)
   expect(ackGate?.heldAckChars ?? 0).toBeGreaterThan(0)
+  expect(scheduler?.droppedBacklogCount ?? Number.POSITIVE_INFINITY).toBe(0)
+  expect(scheduler?.peakQueuedChars ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+    MAX_RENDERER_SCHEDULER_QUEUED_CHARS
+  )
   expect(measurement.medianLatencyMs).toBeLessThan(maxMedianKeyLatencyMs)
   expect(measurement.worstLatencyMs).toBeLessThan(maxWorstKeyLatencyMs)
   expect(measurement.maxTimerDriftMs).toBeLessThan(maxTimerDriftMs)
