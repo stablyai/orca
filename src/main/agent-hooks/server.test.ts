@@ -3894,24 +3894,24 @@ describe('Cursor hook normalization', () => {
     expect(result?.payload.interrupted).toBe(true)
   })
 
-  it('beforeShellExecution maps to waiting with the pending command as toolInput', () => {
+  it('beforeShellExecution maps to working with the pending command as toolInput', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'beforeShellExecution', command: 'rm -rf /tmp/foo' }),
       'production'
     )
-    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('Shell')
     expect(result?.payload.toolInput).toBe('rm -rf /tmp/foo')
   })
 
-  it('beforeMCPExecution maps to waiting', () => {
+  it('beforeMCPExecution maps to working', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'beforeMCPExecution', tool_name: 'fetch', url: 'https://x' }),
       'production'
     )
-    expect(result?.payload.state).toBe('waiting')
+    expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('fetch')
   })
 
@@ -4008,6 +4008,37 @@ describe('Cursor hook normalization', () => {
         lastAssistantMessage: 'All set.'
       })
     ])
+  })
+
+  it('tool-heavy turn keeps working across shell and generic tool hooks until stop', () => {
+    _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'run checks' }),
+      'production'
+    )
+    const shell = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'beforeShellExecution', command: 'pnpm test' }),
+      'production'
+    )
+    expect(shell?.payload.state).toBe('working')
+    const tool = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({
+        hook_event_name: 'preToolUse',
+        tool_name: 'Read',
+        tool_input: { file_path: '/repo/src/app.ts' }
+      }),
+      'production'
+    )
+    expect(tool?.payload.state).toBe('working')
+    const stop = _internals.normalizeHookPayload(
+      'cursor',
+      buildBody({ hook_event_name: 'stop', status: 'completed' }),
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+    expect(stop?.payload.prompt).toBe('run checks')
   })
 
   it('beforeSubmitPrompt clears the cached tool state from a prior turn', () => {
