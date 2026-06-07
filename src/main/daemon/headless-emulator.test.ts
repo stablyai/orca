@@ -109,6 +109,24 @@ describe('HeadlessEmulator', () => {
 
       expect(emulator.getSnapshot().cwd).toBe('/path/here')
     })
+
+    it('tracks OSC-7 CWD across split PTY chunks', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]7;file:///split')
+      await emulator.write('/project\x07')
+
+      expect(emulator.getSnapshot().cwd).toBe('/split/project')
+    })
+
+    it('tracks OSC-7 CWD when ESC and OSC marker arrive in separate chunks', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b')
+      await emulator.write(']7;file:///split-escape\x07')
+
+      expect(emulator.getSnapshot().cwd).toBe('/split-escape')
+    })
   })
 
   describe('OSC title tracking', () => {
@@ -126,6 +144,15 @@ describe('HeadlessEmulator', () => {
       await emulator.write('\x1b]0;Codex working\x07output\x1b]2;Codex idle\x1b\\')
 
       expect(emulator.getSnapshot().lastTitle).toBe('Codex idle')
+    })
+
+    it('tracks OSC titles across split PTY chunks', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]0;Codex work')
+      await emulator.write('ing\x07')
+
+      expect(emulator.getSnapshot().lastTitle).toBe('Codex working')
     })
 
     it('adopts title metadata seeded from an external serializer', () => {
