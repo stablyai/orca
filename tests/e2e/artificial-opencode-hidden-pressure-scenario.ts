@@ -112,6 +112,7 @@ export async function runHiddenRealPtyPressureScenario<
   TScheduler
 >({
   deps,
+  annotationSuffix,
   hiddenPaneCount,
   pressureOutputChars,
   pressureStartDelayMs,
@@ -120,6 +121,7 @@ export async function runHiddenRealPtyPressureScenario<
   orcaPage
 }: {
   deps: HiddenPressureDeps<TMeasurement, TDebug, TScheduler, TMainPressure, TAckGate>
+  annotationSuffix?: string
   hiddenPaneCount: number
   pressureOutputChars: number
   pressureStartDelayMs: number
@@ -181,7 +183,7 @@ export async function runHiddenRealPtyPressureScenario<
     const ackGate = await deps.readTerminalAckGateDebug(orcaPage)
     deps.annotateTypingMeasurement(
       testInfo,
-      'opencode-hidden-real-pty-pressure-typing',
+      `opencode-hidden-real-pty-pressure-typing${annotationSuffix ?? ''}`,
       hiddenPanes.length + 1,
       measurement,
       debug,
@@ -207,7 +209,7 @@ export async function runHiddenRealPtyPressureScenario<
       runId
     )
     testInfo.annotations.push({
-      type: 'opencode-hidden-real-pty-restore',
+      type: `opencode-hidden-real-pty-restore${annotationSuffix ?? ''}`,
       description: `panes=${hiddenPanes.length + 1} restore=${restoreLatencyMs.toFixed(
         1
       )}ms hiddenSkippedChars=${debug?.hiddenRendererSkippedChars ?? 0} mainPeakInFlightChars=${

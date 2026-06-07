@@ -170,6 +170,9 @@ const SCALE_CROSS_WORKSPACE_PANES = readPositiveIntList(
   'ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES'
 )
 const SCALE_PRESSURE_PANES = readPositiveIntList('ORCA_E2E_OPENCODE_SCALE_PRESSURE_PANES')
+const SCALE_HIDDEN_PRESSURE_PANES = readPositiveIntList(
+  'ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES'
+)
 
 function interactivePromptScript(runId: string): string {
   return `
@@ -773,15 +776,18 @@ test.describe('Artificial OpenCode terminal load', () => {
       testInfo
     })
   })
-
-  test('keeps typing responsive while hidden real PTYs are ACK-backpressured', async ({
-    orcaPage,
-    testRepoPath
-  }, testInfo) => {
+  async function runConfiguredHiddenRealPtyPressureScenario(
+    orcaPage: Page,
+    testRepoPath: string,
+    testInfo: TestInfo,
+    hiddenPaneCount: number,
+    annotationSuffix?: string
+  ): Promise<void> {
     await runHiddenRealPtyPressureScenario({
       orcaPage,
       testRepoPath,
-      hiddenPaneCount: HIDDEN_PRESSURE_PANES,
+      annotationSuffix,
+      hiddenPaneCount,
       pressureOutputChars: PRESSURE_OUTPUT_CHARS,
       pressureStartDelayMs: HIDDEN_PRESSURE_START_DELAY_MS,
       testInfo,
@@ -800,7 +806,32 @@ test.describe('Artificial OpenCode terminal load', () => {
         writeInteractivePromptScript
       }
     })
+  }
+  test('keeps typing responsive while hidden real PTYs are ACK-backpressured', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await runConfiguredHiddenRealPtyPressureScenario(
+      orcaPage,
+      testRepoPath,
+      testInfo,
+      HIDDEN_PRESSURE_PANES
+    )
   })
+  for (const paneCount of SCALE_HIDDEN_PRESSURE_PANES) {
+    test(`keeps hidden restore responsive with ${paneCount} ACK-backpressured real PTYs`, async ({
+      orcaPage,
+      testRepoPath
+    }, testInfo) => {
+      await runConfiguredHiddenRealPtyPressureScenario(
+        orcaPage,
+        testRepoPath,
+        testInfo,
+        paneCount,
+        `-${paneCount}`
+      )
+    })
+  }
 
   for (const paneCount of SCALE_CROSS_WORKSPACE_PANES) {
     test(`keeps typing responsive with ${paneCount} hidden cross-workspace OpenCode panes`, async ({
