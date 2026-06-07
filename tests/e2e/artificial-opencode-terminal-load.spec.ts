@@ -20,6 +20,10 @@ import {
   waitForPaneIdentitySnapshot,
   waitForTerminalOutput
 } from './helpers/terminal'
+import {
+  runHiddenRealPtyPressureScenario,
+  writePressureOutputScript
+} from './artificial-opencode-hidden-pressure-scenario'
 
 type TerminalLoadPane = {
   paneKey: string
@@ -97,6 +101,8 @@ const DEFAULT_SAME_WORKSPACE_PANES = 5
 const DEFAULT_CROSS_WORKSPACE_PANES_PER_WORKTREE = 3
 const DEFAULT_PRESSURE_BACKGROUND_PANES = 17
 const DEFAULT_PRESSURE_OUTPUT_CHARS = 768 * 1024
+const DEFAULT_HIDDEN_PRESSURE_PANES = 17
+const HIDDEN_PRESSURE_START_DELAY_MS = 1200
 const DEFAULT_FRAME_COUNT = 180
 const DEFAULT_FRAME_INTERVAL_MS = 6
 const TIMER_SAMPLE_MS = 16
@@ -145,6 +151,10 @@ const PRESSURE_OUTPUT_CHARS = readPositiveInt(
   'ORCA_E2E_OPENCODE_PRESSURE_OUTPUT_CHARS',
   DEFAULT_PRESSURE_OUTPUT_CHARS
 )
+const HIDDEN_PRESSURE_PANES = readPositiveInt(
+  'ORCA_E2E_OPENCODE_HIDDEN_PRESSURE_PANES',
+  DEFAULT_HIDDEN_PRESSURE_PANES
+)
 const FRAME_COUNT = readPositiveInt('ORCA_E2E_OPENCODE_FRAME_COUNT', DEFAULT_FRAME_COUNT)
 const FRAME_INTERVAL_MS = readPositiveInt(
   'ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS',
@@ -182,37 +192,6 @@ function writeInteractivePromptScript(scriptPath: string, runId: string): void {
   // harness; the prompt script only needs a writable directory, not git state.
   mkdirSync(path.dirname(scriptPath), { recursive: true })
   writeFileSync(scriptPath, interactivePromptScript(runId))
-}
-
-function pressureOutputScript(runId: string): string {
-  return `
-const paneIndex = process.argv[2] ?? '0'
-const targetChars = Number(process.argv[3] ?? '0')
-const header = 'OPENCODE_PRESSURE_START_${runId}_' + paneIndex + '\\n'
-const chunkBody = '#'.repeat(8192)
-let written = 0
-process.stdout.write(header)
-function writeMore() {
-  let canContinue = true
-  while (canContinue && written < targetChars) {
-    const frame = String(written).padStart(8, '0')
-    const chunk = '\\x1b[?2026h\\x1b[1;1Hpressure pane=' + paneIndex + ' frame=' + frame + ' ' + chunkBody + '\\x1b[?2026l\\n'
-    written += chunk.length
-    canContinue = process.stdout.write(chunk)
-  }
-  if (written < targetChars) {
-    process.stdout.once('drain', writeMore)
-    return
-  }
-  process.stdout.write('OPENCODE_PRESSURE_DONE_${runId}_' + paneIndex + '\\n')
-}
-writeMore()
-`
-}
-
-function writePressureOutputScript(scriptPath: string, runId: string): void {
-  mkdirSync(path.dirname(scriptPath), { recursive: true })
-  writeFileSync(scriptPath, pressureOutputScript(runId))
 }
 
 async function focusActiveTerminalInput(page: Page): Promise<void> {
@@ -781,6 +760,34 @@ test.describe('Artificial OpenCode terminal load', () => {
       hiddenPaneCount: CROSS_WORKSPACE_PANES_PER_WORKTREE,
       annotationType: 'opencode-cross-workspace-typing',
       testInfo
+    })
+  })
+
+  test('keeps typing responsive while hidden real PTYs are ACK-backpressured', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo) => {
+    await runHiddenRealPtyPressureScenario({
+      orcaPage,
+      testRepoPath,
+      hiddenPaneCount: HIDDEN_PRESSURE_PANES,
+      pressureOutputChars: PRESSURE_OUTPUT_CHARS,
+      pressureStartDelayMs: HIDDEN_PRESSURE_START_DELAY_MS,
+      testInfo,
+      deps: {
+        annotateTypingMeasurement,
+        ensureActiveWorktreePaneLoad,
+        holdTerminalAckGate,
+        measureTypingDuringLoad,
+        readMainPtyPressureDebug,
+        readTerminalAckGateDebug,
+        readTerminalOutputSchedulerDebug,
+        readTerminalPtyOutputDebug,
+        releaseTerminalAckGate,
+        resetTerminalPtyOutputDebug,
+        waitForMainPtyPressureBacklog,
+        writeInteractivePromptScript
+      }
     })
   })
 
