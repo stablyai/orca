@@ -700,6 +700,7 @@ const api = {
       data: string
       cols: number
       rows: number
+      cwd?: string | null
       seq?: number
       source?: 'headless' | 'renderer'
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),

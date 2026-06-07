@@ -135,6 +135,14 @@ describe('HeadlessEmulator', () => {
 
       expect(emulator.getSnapshot().lastTitle).toBe('Seeded renderer title')
     })
+
+    it('adopts cwd metadata seeded from persisted terminal history', () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      emulator.setCwd('/projects/restored')
+
+      expect(emulator.getSnapshot().cwd).toBe('/projects/restored')
+    })
   })
 
   describe('resize', () => {

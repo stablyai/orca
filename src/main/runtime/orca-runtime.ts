@@ -700,6 +700,10 @@ type RuntimeHeadlessTerminal = {
   writeChain: Promise<void>
 }
 
+type HeadlessSeedMetadata = {
+  cwd?: string | null
+}
+
 type RuntimePtyController = {
   spawn?(opts: {
     cols: number
@@ -3291,6 +3295,7 @@ export class OrcaRuntimeService {
     data: string
     cols: number
     rows: number
+    cwd?: string | null
     lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
@@ -3305,6 +3310,7 @@ export class OrcaRuntimeService {
     data: string
     cols: number
     rows: number
+    cwd?: string | null
     lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
@@ -3338,7 +3344,12 @@ export class OrcaRuntimeService {
   // wins over the renderer-path fallback. Seeding the emulator with the
   // adapter's snapshot/cold-restore data makes mobile and desktop agree on
   // what scrollback is available.
-  seedHeadlessTerminal(ptyId: string, data: string, size?: { cols: number; rows: number }): void {
+  seedHeadlessTerminal(
+    ptyId: string,
+    data: string,
+    size?: { cols: number; rows: number },
+    metadata: HeadlessSeedMetadata = {}
+  ): void {
     if (!data) {
       return
     }
@@ -3356,7 +3367,12 @@ export class OrcaRuntimeService {
     }
     this.headlessTerminals.set(ptyId, state)
     state.writeChain = state.writeChain
-      .then(() => state.emulator.write(data))
+      .then(async () => {
+        await state.emulator.write(data)
+        if (metadata.cwd !== undefined) {
+          state.emulator.setCwd(metadata.cwd)
+        }
+      })
       .catch(() => {
         // Seeding is best-effort; live data will continue to populate the
         // emulator even if the snapshot replay fails.
@@ -3508,6 +3524,7 @@ export class OrcaRuntimeService {
     data: string
     cols: number
     rows: number
+    cwd?: string | null
     lastTitle?: string
     seq?: number
     source?: 'headless' | 'renderer'
@@ -3521,6 +3538,7 @@ export class OrcaRuntimeService {
       data: string
       cols: number
       rows: number
+      cwd?: string | null
       lastTitle?: string
     } | null = null
     try {
@@ -3550,6 +3568,7 @@ export class OrcaRuntimeService {
     data: string
     cols: number
     rows: number
+    cwd?: string | null
     lastTitle?: string
     seq?: number
     source?: 'headless'
@@ -3575,6 +3594,7 @@ export class OrcaRuntimeService {
           data,
           cols: snapshot.cols,
           rows: snapshot.rows,
+          cwd: snapshot.cwd,
           lastTitle: snapshot.lastTitle,
           seq: state.outputSequence,
           source: 'headless'

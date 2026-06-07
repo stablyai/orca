@@ -913,6 +913,7 @@ export type PreloadApi = {
       data: string
       cols: number
       rows: number
+      cwd?: string | null
       seq?: number
       source?: 'headless' | 'renderer'
     } | null>

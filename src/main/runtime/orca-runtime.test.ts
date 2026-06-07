@@ -3478,6 +3478,25 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('returns cwd metadata from seeded headless main terminal snapshots', async () => {
+    const runtime = createRuntime()
+
+    runtime.seedHeadlessTerminal(
+      'pty-1',
+      'restored scrollback\n',
+      { cols: 100, rows: 30 },
+      {
+        cwd: '/projects/restored'
+      }
+    )
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
+    expect(snapshot).toMatchObject({
+      source: 'headless',
+      cwd: '/projects/restored'
+    })
+  })
+
   it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
     const statuses: RuntimeTerminalAgentStatusEvent[] = []
     const runtime = new OrcaRuntimeService(store, undefined, {

@@ -1766,6 +1766,7 @@ export function registerPtyHandlers(
       data: string
       cols: number
       rows: number
+      cwd?: string | null
       lastTitle?: string
       seq?: number
       source?: 'headless' | 'renderer'
@@ -2231,7 +2232,9 @@ export function registerPtyHandlers(
           typeof result.coldRestore.scrollback === 'string' &&
           result.coldRestore.scrollback.length > 0
         ) {
-          runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize)
+          runtime.seedHeadlessTerminal(result.id, result.coldRestore.scrollback, seedSize, {
+            cwd: result.coldRestore.cwd
+          })
         }
       }
       if (

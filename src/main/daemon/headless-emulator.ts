@@ -137,6 +137,10 @@ export class HeadlessEmulator {
     return this.cwd
   }
 
+  setCwd(cwd: string | null): void {
+    this.cwd = cwd
+  }
+
   setLastTitle(title: string): void {
     this.lastTitle = title
   }
