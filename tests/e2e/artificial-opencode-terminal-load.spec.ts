@@ -74,6 +74,11 @@ type MainPtyPressureDebugSnapshot = {
   maxRendererInFlightCharsByPty: number
   activeRendererPtyCount: number
   flushScheduled: boolean
+  peakPendingChars: number
+  peakMaxPendingCharsByPty: number
+  peakRendererInFlightChars: number
+  peakMaxRendererInFlightCharsByPty: number
+  ackGatedFlushSkipCount: number
 }
 
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
@@ -343,9 +348,10 @@ async function measureTypingDuringLoad(
 }
 
 async function resetTerminalPtyOutputDebug(page: Page): Promise<void> {
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     ;(window as SyntheticOpenCodeWindow).__terminalPtyOutputDebug?.reset()
     ;(window as SyntheticOpenCodeWindow).__terminalOutputSchedulerDebug?.reset()
+    await window.api.pty.resetRendererDeliveryDebug()
   })
 }
 
@@ -387,7 +393,7 @@ function annotateTypingMeasurement(
     ? ` deferredForegroundEnqueue=${scheduler.deferredForegroundEnqueueCount} deferredForegroundWrite=${scheduler.deferredForegroundWriteCount} scheduledDrains=${scheduler.scheduledDrainCount}`
     : ''
   const mainPressureSummary = mainPressure
-    ? ` mainPendingPtys=${mainPressure.pendingPtyCount} mainPendingChars=${mainPressure.pendingChars} mainMaxPendingChars=${mainPressure.maxPendingCharsByPty} mainInFlightPtys=${mainPressure.rendererInFlightPtyCount} mainInFlightChars=${mainPressure.rendererInFlightChars} mainMaxInFlightChars=${mainPressure.maxRendererInFlightCharsByPty} mainActivePtys=${mainPressure.activeRendererPtyCount} mainFlushScheduled=${mainPressure.flushScheduled}`
+    ? ` mainPendingPtys=${mainPressure.pendingPtyCount} mainPendingChars=${mainPressure.pendingChars} mainMaxPendingChars=${mainPressure.maxPendingCharsByPty} mainInFlightPtys=${mainPressure.rendererInFlightPtyCount} mainInFlightChars=${mainPressure.rendererInFlightChars} mainMaxInFlightChars=${mainPressure.maxRendererInFlightCharsByPty} mainActivePtys=${mainPressure.activeRendererPtyCount} mainFlushScheduled=${mainPressure.flushScheduled} mainPeakPendingChars=${mainPressure.peakPendingChars} mainPeakMaxPendingChars=${mainPressure.peakMaxPendingCharsByPty} mainPeakInFlightChars=${mainPressure.peakRendererInFlightChars} mainPeakMaxInFlightChars=${mainPressure.peakMaxRendererInFlightCharsByPty} mainAckGatedFlushSkips=${mainPressure.ackGatedFlushSkipCount}`
     : ''
   testInfo.annotations.push({
     type,

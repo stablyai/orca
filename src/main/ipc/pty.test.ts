@@ -152,6 +152,7 @@ import {
   clearProviderPtyState,
   deletePtyOwnership,
   getPtyRendererDeliveryDebugSnapshot,
+  resetPtyRendererDeliveryDebug,
   getPtyIdForPaneKey,
   hasPendingRendererSerializerForPaneKey,
   setPtyOwnership,
@@ -4231,7 +4232,12 @@ describe('registerPtyHandlers', () => {
         rendererInFlightPtyCount: 1,
         rendererInFlightChars: 512 * 1024,
         maxRendererInFlightCharsByPty: 512 * 1024,
-        flushScheduled: false
+        flushScheduled: false,
+        peakPendingChars: 600 * 1024,
+        peakMaxPendingCharsByPty: 600 * 1024,
+        peakRendererInFlightChars: 512 * 1024,
+        peakMaxRendererInFlightCharsByPty: 512 * 1024,
+        ackGatedFlushSkipCount: 1
       })
 
       secondProc.emitData('second-terminal-output')
@@ -4254,7 +4260,20 @@ describe('registerPtyHandlers', () => {
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
         pendingChars: 72 * 1024,
-        rendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length
+        rendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length,
+        peakPendingChars: 600 * 1024,
+        peakRendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length
+      })
+
+      resetPtyRendererDeliveryDebug()
+
+      expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
+        pendingPtyCount: 1,
+        pendingChars: 72 * 1024,
+        rendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length,
+        peakPendingChars: 72 * 1024,
+        peakRendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length,
+        ackGatedFlushSkipCount: 0
       })
     } finally {
       vi.useRealTimers()

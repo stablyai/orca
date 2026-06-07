@@ -902,6 +902,11 @@ export type PtyRendererDeliveryDebugSnapshot = {
   maxRendererInFlightCharsByPty: number
   activeRendererPtyCount: number
   flushScheduled: boolean
+  peakPendingChars: number
+  peakMaxPendingCharsByPty: number
+  peakRendererInFlightChars: number
+  peakMaxRendererInFlightCharsByPty: number
+  ackGatedFlushSkipCount: number
 }
 
 const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapshot = {
@@ -912,15 +917,25 @@ const EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT: PtyRendererDeliveryDebugSnapsh
   rendererInFlightChars: 0,
   maxRendererInFlightCharsByPty: 0,
   activeRendererPtyCount: 0,
-  flushScheduled: false
+  flushScheduled: false,
+  peakPendingChars: 0,
+  peakMaxPendingCharsByPty: 0,
+  peakRendererInFlightChars: 0,
+  peakMaxRendererInFlightCharsByPty: 0,
+  ackGatedFlushSkipCount: 0
 }
 
 let readPtyRendererDeliveryDebugSnapshot = (): PtyRendererDeliveryDebugSnapshot => ({
   ...EMPTY_PTY_RENDERER_DELIVERY_DEBUG_SNAPSHOT
 })
+let resetPtyRendererDeliveryDebugSnapshot = (): void => {}
 
 export function getPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
   return readPtyRendererDeliveryDebugSnapshot()
+}
+
+export function resetPtyRendererDeliveryDebug(): void {
+  resetPtyRendererDeliveryDebugSnapshot()
 }
 
 function clearDidFinishLoadHandler(): void {
@@ -966,6 +981,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:clearPendingPaneSerializer')
   ipcMain.removeHandler('pty:getMainBufferSnapshot')
   ipcMain.removeHandler('pty:getRendererDeliveryDebugSnapshot')
+  ipcMain.removeHandler('pty:resetRendererDeliveryDebug')
   ipcMain.removeHandler('pty:writeAccepted')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
@@ -1063,6 +1079,11 @@ export function registerPtyHandlers(
   const INTERACTIVE_OUTPUT_MAX_CHARS = 1024
   const INTERACTIVE_REDRAW_MAX_CHARS = PTY_BATCH_FLUSH_CHUNK_CHARS
   const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
+  let peakPendingChars = 0
+  let peakMaxPendingCharsByPty = 0
+  let peakRendererInFlightChars = 0
+  let peakMaxRendererInFlightCharsByPty = 0
+  let ackGatedFlushSkipCount = 0
 
   function getMaxMapValue(values: Iterable<number>): number {
     let max = 0
@@ -1072,7 +1093,7 @@ export function registerPtyHandlers(
     return max
   }
 
-  readPtyRendererDeliveryDebugSnapshot = () => {
+  function readCurrentPtyRendererDeliveryDebugSnapshot(): PtyRendererDeliveryDebugSnapshot {
     let pendingChars = 0
     let maxPendingCharsByPty = 0
     for (const pending of pendingData.values()) {
@@ -1088,8 +1109,34 @@ export function registerPtyHandlers(
       rendererInFlightChars: rendererInFlightTotalChars,
       maxRendererInFlightCharsByPty: getMaxMapValue(rendererInFlightCharsByPty.values()),
       activeRendererPtyCount: activeRendererPtys.size,
-      flushScheduled: flushTimer !== null
+      flushScheduled: flushTimer !== null,
+      peakPendingChars,
+      peakMaxPendingCharsByPty,
+      peakRendererInFlightChars,
+      peakMaxRendererInFlightCharsByPty,
+      ackGatedFlushSkipCount
     }
+  }
+
+  function recordPtyRendererDeliveryPressure(): void {
+    const current = readCurrentPtyRendererDeliveryDebugSnapshot()
+    peakPendingChars = Math.max(peakPendingChars, current.pendingChars)
+    peakMaxPendingCharsByPty = Math.max(peakMaxPendingCharsByPty, current.maxPendingCharsByPty)
+    peakRendererInFlightChars = Math.max(peakRendererInFlightChars, current.rendererInFlightChars)
+    peakMaxRendererInFlightCharsByPty = Math.max(
+      peakMaxRendererInFlightCharsByPty,
+      current.maxRendererInFlightCharsByPty
+    )
+  }
+
+  readPtyRendererDeliveryDebugSnapshot = readCurrentPtyRendererDeliveryDebugSnapshot
+  resetPtyRendererDeliveryDebugSnapshot = () => {
+    peakPendingChars = 0
+    peakMaxPendingCharsByPty = 0
+    peakRendererInFlightChars = 0
+    peakMaxRendererInFlightCharsByPty = 0
+    ackGatedFlushSkipCount = 0
+    recordPtyRendererDeliveryPressure()
   }
 
   function isLikelyInteractiveRedraw(data: string): boolean {
@@ -1159,6 +1206,7 @@ export function registerPtyHandlers(
     const charCount = getPtyPayloadCharCount(payload)
     rendererInFlightCharsByPty.set(id, (rendererInFlightCharsByPty.get(id) ?? 0) + charCount)
     rendererInFlightTotalChars += charCount
+    recordPtyRendererDeliveryPressure()
     mainWindow.webContents.send('pty:data', payload)
   }
 
@@ -1206,6 +1254,7 @@ export function registerPtyHandlers(
       pendingData.clear()
       rendererInFlightCharsByPty.clear()
       rendererInFlightTotalChars = 0
+      recordPtyRendererDeliveryPressure()
       return
     }
     let writes = 0
@@ -1230,6 +1279,10 @@ export function registerPtyHandlers(
       sendPtyDataToRenderer(id, makePtyDataPayload(id, chunk, pending.startSeq))
       writes++
     }
+    if (pendingData.size > 0 && writes === 0) {
+      ackGatedFlushSkipCount++
+    }
+    recordPtyRendererDeliveryPressure()
     if (pendingData.size > 0 && writes > 0) {
       // Why: a background terminal can dump megabytes at once. Yield between
       // small IPC slices so keystroke writes are not stuck behind one flush.
@@ -1277,6 +1330,7 @@ export function registerPtyHandlers(
         pendingData.clear()
         rendererInFlightCharsByPty.clear()
         rendererInFlightTotalChars = 0
+        recordPtyRendererDeliveryPressure()
         return
       }
       const existing = pendingData.get(payload.id)
@@ -1293,6 +1347,7 @@ export function registerPtyHandlers(
         // bounded, and the per-PTY cap still prevents an active TUI runaway.
         if (!canSendPtyDataToRenderer(payload.id, { interactive: true })) {
           pendingData.set(payload.id, pending)
+          recordPtyRendererDeliveryPressure()
           return
         }
         pendingData.delete(payload.id)
@@ -1309,6 +1364,7 @@ export function registerPtyHandlers(
         return
       }
       pendingData.set(payload.id, pending)
+      recordPtyRendererDeliveryPressure()
       if (!flushTimer) {
         schedulePendingDataFlush(PTY_BATCH_INTERVAL_MS)
       }
@@ -1339,6 +1395,7 @@ export function registerPtyHandlers(
           rendererInFlightTotalChars - (rendererInFlightCharsByPty.get(payload.id) ?? 0)
         )
         rendererInFlightCharsByPty.delete(payload.id)
+        recordPtyRendererDeliveryPressure()
         mainWindow.webContents.send('pty:exit', payload)
       }
     })
@@ -1860,6 +1917,9 @@ export function registerPtyHandlers(
 
   ipcMain.handle('pty:getRendererDeliveryDebugSnapshot', (): PtyRendererDeliveryDebugSnapshot => {
     return getPtyRendererDeliveryDebugSnapshot()
+  })
+  ipcMain.handle('pty:resetRendererDeliveryDebug', (): void => {
+    resetPtyRendererDeliveryDebug()
   })
 
   ipcMain.handle(
@@ -2540,6 +2600,7 @@ export function registerPtyHandlers(
       rendererInFlightCharsByPty.set(args.id, next)
     }
     tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, acknowledged)
+    recordPtyRendererDeliveryPressure()
     if (pendingData.size > 0 && !flushTimer) {
       schedulePendingDataFlush(0)
     }

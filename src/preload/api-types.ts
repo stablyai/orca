@@ -927,7 +927,13 @@ export type PreloadApi = {
       maxRendererInFlightCharsByPty: number
       activeRendererPtyCount: number
       flushScheduled: boolean
+      peakPendingChars: number
+      peakMaxPendingCharsByPty: number
+      peakRendererInFlightChars: number
+      peakMaxRendererInFlightCharsByPty: number
+      ackGatedFlushSkipCount: number
     }>
+    resetRendererDeliveryDebug: () => Promise<void>
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
     ) => () => void

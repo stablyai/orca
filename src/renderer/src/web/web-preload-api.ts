@@ -2160,6 +2160,23 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     getCwd: () => Promise.resolve('~'),
     listSessions: () => Promise.resolve([]),
     getMainBufferSnapshot: () => Promise.resolve(null),
+    getRendererDeliveryDebugSnapshot: () =>
+      Promise.resolve({
+        pendingPtyCount: 0,
+        pendingChars: 0,
+        maxPendingCharsByPty: 0,
+        rendererInFlightPtyCount: 0,
+        rendererInFlightChars: 0,
+        maxRendererInFlightCharsByPty: 0,
+        activeRendererPtyCount: 0,
+        flushScheduled: false,
+        peakPendingChars: 0,
+        peakMaxPendingCharsByPty: 0,
+        peakRendererInFlightChars: 0,
+        peakMaxRendererInFlightCharsByPty: 0,
+        ackGatedFlushSkipCount: 0
+      }),
+    resetRendererDeliveryDebug: () => Promise.resolve(),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
