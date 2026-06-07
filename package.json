@@ -61,6 +61,7 @@
     "build:linux": "pnpm run build:desktop && pnpm run ensure:electron-runtime && electron-builder --config config/electron-builder.config.cjs --linux",
     "test:e2e": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headless",
     "test:e2e:terminal-perf": "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/terminal-typing-latency.spec.ts tests/e2e/terminal-foreground-redraw-freeze.spec.ts tests/e2e/terminal-output-scheduler.spec.ts tests/e2e/terminal-hidden-tui-visual-restore.spec.ts tests/e2e/artificial-opencode-terminal-load.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=2",
+    "test:e2e:ssh-docker-perf": "node config/scripts/run-ssh-docker-perf-e2e.mjs",
     "test:e2e:headful": "pnpm run ensure:electron-runtime && npx playwright test --config tests/playwright.config.ts --project electron-headful",
     "test:e2e:computer": "vitest run --config tests/e2e/vitest.config.ts"
   },
