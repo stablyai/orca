@@ -4834,6 +4834,25 @@ describe('connectPanePty', () => {
     expect(createdTransportOptions[0]?.onAgentStatus).toBeUndefined()
   })
 
+  it('keeps SSH IPC OSC 9999 status ownership in the renderer', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-ssh')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      repos: [{ id: 'repo1', connectionId: 'conn-1' }],
+      sshConnectionStates: new Map([['conn-1', { status: 'connected' }]])
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    expect(createdTransportOptions[0]?.onAgentStatus).toEqual(expect.any(Function))
+  })
+
   it('lets delayed hook completion notifications win over concurrent terminal bells', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-hook')

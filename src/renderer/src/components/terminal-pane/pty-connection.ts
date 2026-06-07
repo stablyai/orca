@@ -1395,6 +1395,7 @@ export function connectPanePty(
       : null) ?? (tab?.ptyId ? getRemoteRuntimePtyEnvironmentId(tab.ptyId) : null)
   const activeRuntimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim() || null
   const runtimeEnvironmentId = remoteRuntimeOwnerForTransport ?? activeRuntimeEnvironmentId
+  const shouldOwnAgentStatusInRenderer = runtimeEnvironmentId !== null || connectionId !== null
   const shouldDeliverStartupViaTerminalPaste = paneStartup?.delivery === 'terminal-paste'
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
   const markTerminalInputSent = (): void => {
@@ -1422,12 +1423,11 @@ export function connectPanePty(
     onAgentBecameIdle,
     onAgentBecameWorking,
     onAgentExited,
-    // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
-    // parses OSC 9999 before renderer delivery and forwards through the hook
-    // server. Remote-runtime streams do not pass through local main, so the
-    // renderer remains their status owner until remote runtimes expose the
-    // same model-side fanout.
-    ...(runtimeEnvironmentId
+    // Why: local non-SSH IPC terminals are now model-owned in main:
+    // OrcaRuntimeService parses OSC 9999 before renderer delivery and forwards
+    // through the hook server. Remote-runtime and SSH-connection streams stay
+    // renderer-owned until their model-side fanout can preserve remote identity.
+    ...(shouldOwnAgentStatusInRenderer
       ? {
           onAgentStatus: (payload) => {
             // Why: capture the store snapshot once so the title lookup and the
