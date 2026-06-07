@@ -1,9 +1,30 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  setActiveTerminalOutputTarget: vi.fn()
+}))
+
+vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
+  setActiveTerminalOutputTarget: mocks.setActiveTerminalOutputTarget
+}))
+
 import {
+  reportActiveRendererPtyForPane,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
 } from './use-terminal-pane-lifecycle'
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  ;(globalThis as unknown as { window: unknown }).window = {
+    api: {
+      pty: {
+        setActiveRendererPty: vi.fn()
+      }
+    }
+  }
+})
 
 describe('splitPaneWithOneShotStartup', () => {
   it('only exposes startup to the intentional split and clears it afterwards', () => {
@@ -144,5 +165,54 @@ describe('suppressIntentionalPaneCloseExit', () => {
 
     expect(suppressIntentionalPaneCloseExit(transport, suppressPtyExit)).toBeNull()
     expect(suppressPtyExit).not.toHaveBeenCalled()
+  })
+})
+
+describe('reportActiveRendererPtyForPane', () => {
+  it('marks the active visible pane as the renderer output target', () => {
+    const terminalA = { name: 'terminal-a' }
+    const terminalB = { name: 'terminal-b' }
+    const manager = {
+      getPanes: vi.fn(() => [
+        { id: 1, terminal: terminalA },
+        { id: 2, terminal: terminalB }
+      ])
+    }
+    const paneTransports = new Map([
+      [1, { getPtyId: vi.fn(() => 'pty-1') }],
+      [2, { getPtyId: vi.fn(() => 'remote:env@@pty-2') }]
+    ])
+
+    reportActiveRendererPtyForPane(paneTransports as never, manager as never, 2, true)
+
+    expect(mocks.setActiveTerminalOutputTarget).toHaveBeenCalledWith(terminalA, false)
+    expect(mocks.setActiveTerminalOutputTarget).toHaveBeenCalledWith(terminalB, true)
+    expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-1', false)
+    expect(window.api.pty.setActiveRendererPty).not.toHaveBeenCalledWith(
+      'remote:env@@pty-2',
+      expect.anything()
+    )
+  })
+
+  it('clears every renderer output target while hidden or inactive', () => {
+    const terminalA = { name: 'terminal-a' }
+    const terminalB = { name: 'terminal-b' }
+    const manager = {
+      getPanes: vi.fn(() => [
+        { id: 1, terminal: terminalA },
+        { id: 2, terminal: terminalB }
+      ])
+    }
+    const paneTransports = new Map([
+      [1, { getPtyId: vi.fn(() => 'pty-1') }],
+      [2, { getPtyId: vi.fn(() => 'pty-2') }]
+    ])
+
+    reportActiveRendererPtyForPane(paneTransports as never, manager as never, 2, false)
+
+    expect(mocks.setActiveTerminalOutputTarget).toHaveBeenCalledWith(terminalA, false)
+    expect(mocks.setActiveTerminalOutputTarget).toHaveBeenCalledWith(terminalB, false)
+    expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-1', false)
+    expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-2', false)
   })
 })

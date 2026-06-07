@@ -318,6 +318,45 @@ describe('agent hook completion notifications', () => {
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
   })
 
+  it('does not notify on each Cursor shell tool hook during a working turn', async () => {
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
+
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'fix the bug',
+        agentType: 'cursor'
+      }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'fix the bug',
+        agentType: 'cursor',
+        toolName: 'Shell',
+        toolInput: 'pnpm test'
+      }
+    })
+    observeAgentHookCompletionForNotification({
+      paneKey,
+      worktreeId: 'wt-1',
+      payload: {
+        state: 'working',
+        prompt: 'fix the bug',
+        agentType: 'cursor',
+        toolName: 'Read',
+        toolInput: '/repo/src/app.ts'
+      }
+    })
+
+    expect(dispatchTerminalNotification).not.toHaveBeenCalled()
+  })
+
   it('suppresses an internal milestone completion when hook work resumes before quiet', async () => {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')

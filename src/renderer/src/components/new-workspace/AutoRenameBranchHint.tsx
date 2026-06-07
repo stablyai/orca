@@ -19,8 +19,8 @@ export default function AutoRenameBranchHint(): React.JSX.Element {
   const closeModal = useAppStore((s) => s.closeModal)
 
   const handleOpenSettings = React.useCallback((): void => {
-    // Why: the setting lives in the Git pane; closing the composer first keeps
-    // the settings page from rendering behind the modal.
+    // Why: the toggle lives in the Git settings page (Git AI Author pane);
+    // closing the composer first keeps it from rendering behind the modal.
     closeModal()
     openSettingsTarget({ pane: 'git', repoId: null })
     openSettingsPage()

@@ -8,6 +8,7 @@ function inputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActionInpu
   return {
     stagedCount: 0,
     hasUnstagedChanges: false,
+    hasStageableChanges: false,
     hasPartiallyStagedChanges: false,
     hasMessage: false,
     hasUnresolvedConflicts: false,
@@ -287,6 +288,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 }
       })
     )
@@ -302,6 +304,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
       })
     )
@@ -314,6 +317,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
       })
     )
@@ -322,7 +326,7 @@ describe('resolvePrimaryAction', () => {
 
   it('returns Stage All on a dirty tree while upstream status is still loading', () => {
     const result = resolvePrimaryAction(
-      inputs({ hasUnstagedChanges: true, upstreamStatus: undefined })
+      inputs({ hasUnstagedChanges: true, hasStageableChanges: true, upstreamStatus: undefined })
     )
     expect(result.kind).toBe('stage')
     expect(result.disabled).toBe(false)
@@ -333,6 +337,7 @@ describe('resolvePrimaryAction', () => {
       inputs({
         stagedCount: 1,
         hasUnstagedChanges: true,
+        hasStageableChanges: true,
         hasPartiallyStagedChanges: true,
         hasMessage: true,
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
@@ -357,6 +362,22 @@ describe('resolvePrimaryAction', () => {
     expect(result.disabled).toBe(false)
   })
 
+  it('does not return Stage All when dirty rows cannot be staged from the parent repo', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        hasUnstagedChanges: true,
+        hasStageableChanges: false,
+        upstreamStatus: upstreamInSync
+      })
+    )
+    expect(result).toEqual({
+      kind: 'commit',
+      label: 'Commit',
+      title: 'Stage at least one file to commit',
+      disabled: true
+    })
+  })
+
   it('still disables Commit (needs message) when staged+dirty without a message', () => {
     const result = resolvePrimaryAction(
       inputs({ stagedCount: 1, hasUnstagedChanges: true, hasMessage: false })
@@ -368,7 +389,11 @@ describe('resolvePrimaryAction', () => {
 
   it('returns Stage All when unstaged changes exist on an in-sync branch', () => {
     const result = resolvePrimaryAction(
-      inputs({ hasUnstagedChanges: true, upstreamStatus: upstreamInSync })
+      inputs({
+        hasUnstagedChanges: true,
+        hasStageableChanges: true,
+        upstreamStatus: upstreamInSync
+      })
     )
     expect(result).toEqual({
       kind: 'stage',

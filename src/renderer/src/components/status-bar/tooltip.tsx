@@ -1,4 +1,5 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   }
   if (provider === 'opencode-go') {
     return <OpenCodeGoIcon size={13} />
+  }
+  if (provider === 'kimi') {
+    return <AgentIcon agent="kimi" size={13} />
   }
   return <ClaudeIcon size={13} />
 }
@@ -151,7 +155,9 @@ export function ProviderPanel({
           ? 'Gemini'
           : p.provider === 'opencode-go'
             ? 'OpenCode Go'
-            : p.provider
+            : p.provider === 'kimi'
+              ? 'Kimi'
+              : p.provider
 
   if (p.status === 'unavailable') {
     return (

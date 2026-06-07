@@ -57,6 +57,10 @@ import {
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
+  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  normalizeBrowserPageZoomLevel
+} from '../../../../shared/browser-page-zoom'
+import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -232,6 +236,9 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
   }
   return out as StatusBarItem[]
 }
+
+const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
+const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 
 function normalizePersistedRightSidebarTab(
   tab: PersistedUIState['rightSidebarTab'] | unknown
@@ -816,6 +823,8 @@ export type UISlice = {
   setBrowserDefaultUrl: (url: string | null) => void
   browserDefaultSearchEngine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
   setBrowserDefaultSearchEngine: (engine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null) => void
+  browserDefaultZoomLevel: number
+  setBrowserDefaultZoomLevel: (level: number) => void
   browserKagiSessionLink: string | null
   setBrowserKagiSessionLink: (link: string | null) => void
 }
@@ -1850,13 +1859,24 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       //     'recent' sort keep it across restarts.
       const sortBy = ui.sortBy
       const migratedStatusBarItems = migrateStatusBarItems(ui.statusBarItems)
-      const statusBarItems =
+      const statusBarItemsWithPorts =
         ui._portsStatusBarDefaultAdded || migratedStatusBarItems.includes('ports')
           ? migratedStatusBarItems
-          : [...migratedStatusBarItems, 'ports' as const]
-      if (!ui._portsStatusBarDefaultAdded && typeof window !== 'undefined') {
+          : [...migratedStatusBarItems, DEFAULT_ON_PORTS_STATUS_BAR_ITEM]
+      const statusBarItems =
+        ui._kimiStatusBarDefaultAdded || statusBarItemsWithPorts.includes('kimi')
+          ? statusBarItemsWithPorts
+          : [...statusBarItemsWithPorts, DEFAULT_ON_KIMI_STATUS_BAR_ITEM]
+      if (
+        (!ui._portsStatusBarDefaultAdded || !ui._kimiStatusBarDefaultAdded) &&
+        typeof window !== 'undefined'
+      ) {
         window.api.ui
-          .set({ statusBarItems, _portsStatusBarDefaultAdded: true })
+          .set({
+            statusBarItems,
+            _portsStatusBarDefaultAdded: true,
+            _kimiStatusBarDefaultAdded: true
+          })
           .catch(console.error)
       }
       return {
@@ -1924,6 +1944,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
@@ -2034,6 +2055,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setBrowserDefaultSearchEngine: (engine) => {
     void window.api.ui.set({ browserDefaultSearchEngine: engine }).catch(console.error)
     set({ browserDefaultSearchEngine: engine })
+  },
+  browserDefaultZoomLevel: DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  setBrowserDefaultZoomLevel: (level) => {
+    const normalized = normalizeBrowserPageZoomLevel(level)
+    void window.api.ui.set({ browserDefaultZoomLevel: normalized }).catch(console.error)
+    set({ browserDefaultZoomLevel: normalized })
   },
   browserKagiSessionLink: null,
   setBrowserKagiSessionLink: (link) => {

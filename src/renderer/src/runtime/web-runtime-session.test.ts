@@ -15,6 +15,7 @@ import {
 const mocks = vi.hoisted(() => ({
   getState: vi.fn(),
   setState: vi.fn(),
+  setActiveWorktree: vi.fn(),
   createBrowserTab: vi.fn(),
   setRemoteBrowserPageHandle: vi.fn(),
   focusBrowserTabInWorktree: vi.fn(),
@@ -66,7 +67,8 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       remoteBrowserPageHandlesByPageId: {},
       createBrowserTab: mocks.createBrowserTab,
       setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
-      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree
+      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
+      setActiveWorktree: mocks.setActiveWorktree
     })
     mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
       updater({
@@ -199,7 +201,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
     await vi.waitFor(() => expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
 
-    expect(setStateResults[0]).toEqual({ activeWorktreeId: WORKTREE_ID })
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(WORKTREE_ID)
     expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledWith(
       { state: 'before-stage', activeWorktreeId: 'other-worktree' },
       snapshot,
@@ -246,7 +248,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       })
     ).resolves.toBe(true)
 
-    expect(setStateResults).not.toContainEqual({ activeWorktreeId: WORKTREE_ID })
+    expect(mocks.setActiveWorktree).not.toHaveBeenCalled()
     expect(mocks.focusBrowserTabInWorktree).not.toHaveBeenCalled()
   })
 
@@ -261,7 +263,8 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       remoteBrowserPageHandlesByPageId: {},
       createBrowserTab: mocks.createBrowserTab,
       setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
-      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree
+      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
+      setActiveWorktree: mocks.setActiveWorktree
     }))
     const runtimeCall = vi
       .fn()
@@ -295,7 +298,8 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     ).resolves.toBe(true)
 
     expect(mocks.focusBrowserTabInWorktree).not.toHaveBeenCalled()
-    expect(mocks.setState).toHaveBeenCalledTimes(2)
+    expect(mocks.setActiveWorktree).toHaveBeenCalledWith(WORKTREE_ID)
+    await vi.waitFor(() => expect(mocks.setState).toHaveBeenCalledTimes(1))
   })
 
   it('does not require a staged browser page before the host snapshot catches up', async () => {
@@ -347,7 +351,8 @@ describe('createWebRuntimeSessionTerminal', () => {
       remoteBrowserPageHandlesByPageId: {},
       createBrowserTab: mocks.createBrowserTab,
       setRemoteBrowserPageHandle: mocks.setRemoteBrowserPageHandle,
-      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree
+      focusBrowserTabInWorktree: mocks.focusBrowserTabInWorktree,
+      setActiveWorktree: mocks.setActiveWorktree
     })
     mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
       updater({
@@ -506,13 +511,8 @@ describe('moveWebRuntimeSessionTab', () => {
     mocks.getState.mockReturnValue({
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
-      }
-    })
-    mocks.setState.mockImplementation((updater: (state: unknown) => unknown) => {
-      updater({
-        state: 'before',
-        activeWorktreeId: WORKTREE_ID
-      })
+      },
+      setActiveWorktree: mocks.setActiveWorktree
     })
     mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
   })
@@ -615,6 +615,7 @@ describe('moveWebRuntimeSessionTab', () => {
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
       },
+      setActiveWorktree: mocks.setActiveWorktree,
       groupsByWorktree: {
         [WORKTREE_ID]: [
           {
@@ -710,7 +711,8 @@ describe('web runtime session tab actions', () => {
     mocks.getState.mockReturnValue({
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID
-      }
+      },
+      setActiveWorktree: mocks.setActiveWorktree
     })
     mocks.resolveHostSessionTabIdForWebSessionTab.mockImplementation(
       (_state, args: { tabId: string }) =>
@@ -724,11 +726,23 @@ describe('web runtime session tab actions', () => {
   })
 
   it('maps mirrored local browser unified ids for activate and close', async () => {
-    const runtimeCall = vi.fn().mockResolvedValue({
-      id: 'action',
-      ok: true,
-      result: {}
-    })
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'activate',
+        ok: true,
+        result: {}
+      })
+      .mockResolvedValueOnce({
+        id: 'close',
+        ok: true,
+        result: {}
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: true,
+        result: makeSnapshot()
+      })
 
     vi.stubGlobal('window', {
       api: {
@@ -769,6 +783,15 @@ describe('web runtime session tab actions', () => {
       },
       timeoutMs: 15_000
     })
+    expect(runtimeCall).toHaveBeenNthCalledWith(3, {
+      selector: ENVIRONMENT_ID,
+      method: 'session.tabs.list',
+      params: {
+        worktree: `id:${WORKTREE_ID}`
+      },
+      timeoutMs: 15_000
+    })
+    expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalled()
   })
 })
 

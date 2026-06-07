@@ -145,6 +145,7 @@ describe('mobile subscribe integration', () => {
     runtime.onPtyData('pty-1', first, Date.now())
     const initialSnapshot = await runtime.serializeMainTerminalBuffer('pty-1')
     expect(initialSnapshot?.seq).toBe(first.length)
+    expect(initialSnapshot?.source).toBe('headless')
 
     type HeadlessStateForTest = {
       emulator: { write: (data: string) => Promise<void> | void }
@@ -179,12 +180,14 @@ describe('mobile subscribe integration', () => {
 
       const snapshot = await racedSnapshot
       expect(snapshot?.seq).toBe(first.length + second.length)
+      expect(snapshot?.source).toBe('headless')
       expect(runtime.getPtyOutputSequence('pty-1')).toBe(
         first.length + second.length + third.length
       )
 
       const finalSnapshot = await runtime.serializeMainTerminalBuffer('pty-1')
       expect(finalSnapshot?.seq).toBe(first.length + second.length + third.length)
+      expect(finalSnapshot?.source).toBe('headless')
     } finally {
       headless!.emulator.write = originalWrite
       secondWriteGate.release?.()
@@ -222,7 +225,8 @@ describe('mobile subscribe integration', () => {
       data: '',
       cols: 90,
       rows: 30,
-      seq: 17
+      seq: 17,
+      source: 'headless'
     })
     await expect(runtime.serializeTerminalBuffer('pty-empty')).resolves.toBeNull()
   })

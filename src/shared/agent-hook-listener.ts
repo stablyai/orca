@@ -2343,7 +2343,12 @@ function normalizeCursorEvent(
     eventName === 'sessionStart' ||
     eventName === 'preToolUse' ||
     eventName === 'postToolUse' ||
-    eventName === 'postToolUseFailure'
+    eventName === 'postToolUseFailure' ||
+    // Why: these fire for every shell/MCP invocation as pre-execution gates,
+    // not only when the user is blocked on approval. Treat them like PreToolUse
+    // so a tool-heavy turn does not spam waiting-state notifications.
+    eventName === 'beforeShellExecution' ||
+    eventName === 'beforeMCPExecution'
       ? 'working'
       : eventName === 'afterAgentResponse'
         ? previousStatus?.state === 'done' && previousStatus.agentType === 'cursor'
@@ -2351,9 +2356,7 @@ function normalizeCursorEvent(
           : 'working'
         : eventName === 'stop' || eventName === 'sessionEnd'
           ? 'done'
-          : eventName === 'beforeShellExecution' || eventName === 'beforeMCPExecution'
-            ? 'waiting'
-            : null
+          : null
 
   if (!stateName) {
     return null

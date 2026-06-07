@@ -61,12 +61,15 @@ export function runQuickCommandInNewTab({
       groupId: targetGroupId,
       launchSource: 'quick_command'
     })
-    if (result) {
+    if (result?.tabId) {
       const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
       if (launchedGroupId) {
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, command.id)
       }
       return { tabId: result.tabId }
+    }
+    if (result) {
+      return null
     }
     return null
   }

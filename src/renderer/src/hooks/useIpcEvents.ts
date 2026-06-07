@@ -102,6 +102,7 @@ import {
 } from './agent-hook-completion-notifications'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
+import { titleHasAgentName } from '../../../shared/agent-detection'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -745,7 +746,10 @@ export function useIpcEvents(): void {
         ...(setup ? { setup } : {}),
         ...(startup ? { startup } : {}),
         ...(defaultTabs ? { defaultTabs } : {}),
-        ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {})
+        ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
+        // Why: this activation already came from the host runtime event stream.
+        // Echoing it back as worktree.activate can create a selection loop.
+        notifyHostRuntime: false
       })
     }
 
@@ -2915,7 +2919,11 @@ function resolveHookPayloadAgentType(
   payload: ParsedAgentStatusPayload,
   terminalTitle: string | undefined
 ): ParsedAgentStatusPayload {
-  if (payload.agentType !== 'claude' || !terminalTitle?.toLowerCase().includes('openclaude')) {
+  if (
+    payload.agentType !== 'claude' ||
+    !terminalTitle ||
+    !titleHasAgentName(terminalTitle, 'openclaude')
+  ) {
     return payload
   }
   // Why: OpenClaude emits Claude-compatible hooks, so title identity is the

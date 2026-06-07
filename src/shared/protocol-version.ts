@@ -19,7 +19,7 @@
 
 export const RUNTIME_PROTOCOL_VERSION = 3
 export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
-export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
+export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 3
 
 export const RUNTIME_CAPABILITIES = [
   'runtime.status.compat.v1',

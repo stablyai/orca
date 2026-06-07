@@ -50,6 +50,11 @@ import {
   createCombinedDiffSectionIndexMap,
   handleCombinedDiffFileTreeNavigation
 } from './CombinedDiffFileTree'
+import { getCombinedDiffFileTreeSectionKey } from './combined-diff-file-tree-model'
+import {
+  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  type EditorPathMutationTarget
+} from './editor-autosave'
 import { getCombinedBranchEntries, getCombinedUncommittedEntries } from './combined-diff-entries'
 import { getDiffSectionEstimatedHeight, isIntrinsicHeightImageDiff } from './diff-section-layout'
 import type { DiffSection } from './diff-section-types'
@@ -62,6 +67,7 @@ import {
 
 type CachedCombinedDiffViewState = {
   entrySignature: string
+  gitStatusSignature: string
   sections: DiffSection[]
   sectionHeights: Record<number, number>
   loadedIndices: number[]
@@ -77,6 +83,42 @@ type CombinedDiffScrollThumb = {
 
 const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
 const combinedDiffScrollTopCache = new Map<string, number>()
+
+function buildCombinedGitStatusSignature(
+  sections: readonly { path: string }[],
+  gitStatusEntries: readonly GitStatusEntry[]
+): string {
+  const sectionPaths = new Set(sections.map((section) => section.path))
+  const matching = gitStatusEntries.filter((entry) => sectionPaths.has(entry.path))
+  return JSON.stringify(
+    matching.map((entry) => ({
+      path: entry.path,
+      area: entry.area,
+      status: entry.status,
+      added: entry.added ?? null,
+      removed: entry.removed ?? null
+    }))
+  )
+}
+
+function invalidateCombinedDiffCachesForRelativePath(relativePath: string): void {
+  for (const [key, cached] of combinedDiffViewStateCache.entries()) {
+    if (cached.sections.some((section) => section.path === relativePath)) {
+      combinedDiffViewStateCache.delete(key)
+    }
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, (event) => {
+    const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
+    if (detail?.relativePath) {
+      // Why: inactive combined-diff tabs are unmounted, so only a module-level
+      // cache bust can prevent a remount from replaying stale section bodies.
+      invalidateCombinedDiffCachesForRelativePath(detail.relativePath)
+    }
+  })
+}
 const COMBINED_DIFF_OVERSCAN = 5
 const COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT = 64
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
@@ -227,6 +269,7 @@ export default function CombinedDiffViewer({
   const sectionsRef = useRef<DiffSection[]>([])
   const generationRef = useRef(0)
   const loadSectionRef = useRef<(index: number) => Promise<void>>(async () => {})
+  const retrySectionRef = useRef<(index: number) => void>(() => {})
   const updateCombinedDiffScrollbar = useCallback(() => {
     const container = scrollContainerRef.current
     if (!container || container.scrollHeight <= container.clientHeight + 1) {
@@ -401,6 +444,8 @@ export default function CombinedDiffViewer({
     const canRestoreCachedSections =
       cached &&
       cached.entrySignature === entrySignature &&
+      (cached.gitStatusSignature ?? '') ===
+        buildCombinedGitStatusSignature(cached.sections, gitStatusEntries) &&
       (cached.sections.length > 0 || entries.length === 0)
     if (canRestoreCachedSections && cached) {
       const collapsedPreference = combinedDiffCollapsedPreference
@@ -448,7 +493,7 @@ export default function CombinedDiffViewer({
     loadSchedulerRef.current.reset()
     generationRef.current += 1
     setGeneration((prev) => prev + 1)
-  }, [entries, entrySignature, file.diffSource, viewStateKey])
+  }, [entries, entrySignature, file.diffSource, gitStatusEntries, viewStateKey])
 
   const loadSectionNow = useCallback(
     async (index: number) => {
@@ -618,28 +663,41 @@ export default function CombinedDiffViewer({
     }
   }, [entrySignature, loadSection, sections.length])
 
+  const invalidateCombinedDiffViewStateCache = useCallback((): void => {
+    combinedDiffViewStateCache.delete(viewStateKey)
+  }, [viewStateKey])
+
   const retrySection = useCallback(
     (index: number) => {
+      const collapsed = sectionsRef.current[index]?.collapsed ?? false
       loadedIndicesRef.current.delete(index)
       loadingIndicesRef.current.delete(index)
+      invalidateCombinedDiffViewStateCache()
+      generationRef.current += 1
+      setGeneration((prev) => prev + 1)
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
           sectionIndex === index
             ? {
                 ...section,
-                loading: true,
+                loading: !collapsed,
                 error: undefined,
                 diffResult: null,
                 originalContent: '',
-                modifiedContent: ''
+                modifiedContent: '',
+                contentGeneration: (section.contentGeneration ?? 0) + 1
               }
             : section
         )
       )
-      loadSection(index)
+      if (collapsed) {
+        return
+      }
+      loadSchedulerRef.current.rerequest(index)
     },
-    [loadSection]
+    [invalidateCombinedDiffViewStateCache]
   )
+  retrySectionRef.current = retrySection
 
   const modifiedEditorsRef = useRef<Map<number, monacoEditor.IStandaloneCodeEditor>>(new Map())
 
@@ -692,6 +750,15 @@ export default function CombinedDiffViewer({
     () => createCombinedDiffSectionIndexMap(sections),
     [sections]
   )
+  const sectionIndexByKeyRef = useRef(sectionIndexByKey)
+  sectionIndexByKeyRef.current = sectionIndexByKey
+  const requestCombinedDiffSectionReload = useCallback((index: number): void => {
+    const section = sectionsRef.current[index]
+    if (!section || section.dirty) {
+      return
+    }
+    retrySectionRef.current(index)
+  }, [])
   const [activeTreeSectionState, setActiveTreeSectionState] = useState<{
     entrySignature: string
     key: string | null
@@ -718,14 +785,86 @@ export default function CombinedDiffViewer({
         scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
       })
       if (navigatedIndex !== null) {
+        // Why: tree navigation is also the user's explicit "show me this diff"
+        // affordance. Re-selecting an already-loaded row must refetch in case
+        // the file or git index changed while the section stayed mounted.
+        requestCombinedDiffSectionReload(navigatedIndex)
         setActiveTreeSectionState({
           entrySignature,
           key: sectionsRef.current[navigatedIndex]?.key ?? null
         })
       }
     },
-    [entrySignature, sectionIndexByKey, toggleSection, treeMode, virtualizer]
+    [
+      entrySignature,
+      requestCombinedDiffSectionReload,
+      sectionIndexByKey,
+      toggleSection,
+      treeMode,
+      virtualizer
+    ]
   )
+
+  const combinedGitStatusSignature = React.useMemo(() => {
+    if (treeMode !== 'uncommitted') {
+      return ''
+    }
+    return buildCombinedGitStatusSignature(sections, gitStatusEntries)
+  }, [gitStatusEntries, sections, treeMode])
+  const prevCombinedGitStatusSignatureRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (treeMode !== 'uncommitted') {
+      prevCombinedGitStatusSignatureRef.current = null
+      return
+    }
+    if (prevCombinedGitStatusSignatureRef.current === null) {
+      prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
+      return
+    }
+    if (prevCombinedGitStatusSignatureRef.current === combinedGitStatusSignature) {
+      return
+    }
+    prevCombinedGitStatusSignatureRef.current = combinedGitStatusSignature
+    for (const index of loadedIndicesRef.current) {
+      requestCombinedDiffSectionReload(index)
+    }
+  }, [combinedGitStatusSignature, requestCombinedDiffSectionReload, treeMode])
+
+  useEffect(() => {
+    if (treeMode !== 'uncommitted') {
+      return
+    }
+    const handler = (event: Event): void => {
+      const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
+      if (!detail || detail.worktreeId !== file.worktreeId) {
+        return
+      }
+      const hasRuntimeOwnerFilter = Object.prototype.hasOwnProperty.call(
+        detail,
+        'runtimeEnvironmentId'
+      )
+      const targetRuntimeOwner = detail.runtimeEnvironmentId?.trim() || null
+      const fileRuntimeOwner = file.runtimeEnvironmentId?.trim() || null
+      if (hasRuntimeOwnerFilter && targetRuntimeOwner !== fileRuntimeOwner) {
+        return
+      }
+      for (const area of ['unstaged', 'staged', 'untracked'] as const) {
+        const key = getCombinedDiffFileTreeSectionKey('uncommitted', {
+          path: detail.relativePath,
+          status: 'modified',
+          area
+        })
+        const index = sectionIndexByKeyRef.current.get(key)
+        if (index !== undefined) {
+          requestCombinedDiffSectionReload(index)
+        }
+      }
+    }
+    window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+    return () =>
+      window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
+  }, [file.runtimeEnvironmentId, file.worktreeId, requestCombinedDiffSectionReload, treeMode])
 
   const setAllSectionsCollapsed = useCallback((collapsed: boolean) => {
     combinedDiffCollapsedPreference = collapsed
@@ -862,6 +1001,7 @@ export default function CombinedDiffViewer({
       combinedDiffScrollTopCache.get(viewStateKey) ?? scrollContainerRef.current?.scrollTop ?? 0
     setWithLRU(combinedDiffViewStateCache, viewStateKey, {
       entrySignature,
+      gitStatusSignature: combinedGitStatusSignature,
       sections,
       sectionHeights,
       loadedIndices: Array.from(loadedIndicesRef.current).filter(
@@ -870,7 +1010,15 @@ export default function CombinedDiffViewer({
       scrollTop: preservedScrollTop,
       sideBySide
     })
-  }, [entries.length, entrySignature, sectionHeights, sections, sideBySide, viewStateKey])
+  }, [
+    combinedGitStatusSignature,
+    entries.length,
+    entrySignature,
+    sectionHeights,
+    sections,
+    sideBySide,
+    viewStateKey
+  ])
 
   useLayoutEffect(() => {
     const container = scrollContainerRef.current

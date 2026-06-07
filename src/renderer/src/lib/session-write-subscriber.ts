@@ -93,6 +93,10 @@ export function createSessionWriteSubscriber({
         pendingChangedFields.clear()
         return
       }
+      if (shouldSchedulePersist && !shouldSchedulePersist()) {
+        pendingChangedFields.clear()
+        return
+      }
       const changed = new Set(pendingChangedFields)
       pendingChangedFields.clear()
       const patch = buildWorkspaceSessionPatch(fresh, changed)

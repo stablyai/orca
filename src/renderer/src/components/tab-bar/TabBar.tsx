@@ -348,7 +348,11 @@ function TabBarInner({
       toast.error(`Could not build launch command for ${option?.label ?? agent}.`)
       return
     }
-    queueTerminalTabFocusAfterNewTabMenuClose(result.tabId)
+    if (result.tabId) {
+      queueTerminalTabFocusAfterNewTabMenuClose(result.tabId)
+      return
+    }
+    queueNewActiveTerminalFocusAfterNewTabMenuClose()
   }
   const runPendingNewTabMenuFocusAfterClose = (): void => {
     const pendingFocus = pendingNewTabMenuFocusRef.current

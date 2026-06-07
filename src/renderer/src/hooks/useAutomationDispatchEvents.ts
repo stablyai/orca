@@ -378,14 +378,18 @@ export function useAutomationDispatchEvents(): void {
         if (!result) {
           throw new Error('Unable to build an agent launch plan.')
         }
-        observeAgentStatus(result.tabId, dispatchStartedAt)
+        if (!result.tabId) {
+          throw new Error('Host-backed agent tabs are not yet trackable for automation dispatch.')
+        }
+        const launchedTabId = result.tabId
+        observeAgentStatus(launchedTabId, dispatchStartedAt)
         try {
           await markDispatchResult({
             runId: run.id,
             status: 'dispatched',
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
-            terminalSessionId: result.tabId,
+            terminalSessionId: launchedTabId,
             precheckResult,
             error: null
           })

@@ -39,6 +39,7 @@ export type {
   GitStagingArea,
   GitStatusEntry,
   GitStatusResult,
+  GitSubmoduleStatus,
   GitUncommittedEntry,
   GitUpstreamStatus
 } from './git-status-types'
@@ -2507,6 +2508,7 @@ export type StatusBarItem =
   | 'codex'
   | 'gemini'
   | 'opencode-go'
+  | 'kimi'
   | 'ssh'
   | 'resource-usage'
   | 'ports'
@@ -2578,6 +2580,8 @@ export type PersistedUIState = {
   _workspaceStatusesDefaultVisualsMigrated?: boolean
   /** One-shot migration flag for adding the default-on Ports status item. */
   _portsStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Kimi status item. */
+  _kimiStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   dismissedUpdateVersion: string | null
@@ -2606,6 +2610,8 @@ export type PersistedUIState = {
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null
   browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
+  /** Electron browser zoom level applied when a new local browser tab is created. */
+  browserDefaultZoomLevel?: number
   /** Optional Kagi private-session link used only when Kagi is the search engine. */
   browserKagiSessionLink?: string | null
   /** Saved window bounds so the app restores to the user's last position/size

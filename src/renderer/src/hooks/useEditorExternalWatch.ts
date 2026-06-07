@@ -9,6 +9,7 @@ import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/us
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import {
   getOpenFilesForExternalFileChange,
+  isExternalReloadableEditorTab,
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
 import {
@@ -651,7 +652,7 @@ export function getOverflowExternalReloadTargets(
     if (
       file.worktreeId !== target.worktreeId ||
       openFileRuntimeOwner(file) !== (target.runtimeEnvironmentId ?? null) ||
-      (file.mode !== 'edit' && file.mode !== 'markdown-preview') ||
+      !isExternalReloadableEditorTab(file) ||
       file.isDirty
     ) {
       continue

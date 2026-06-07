@@ -24,7 +24,10 @@ import type {
   PtyDataMeta
 } from './pty-dispatcher'
 import { createBellDetector } from './bell-detector'
-import { createAgentStatusOscProcessor, type ProcessedAgentStatusChunk } from './agent-status-osc'
+import {
+  createAgentStatusOscProcessor,
+  type ProcessedAgentStatusChunk
+} from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
 // Re-export public API so existing consumers keep working.
@@ -38,6 +41,7 @@ export {
 export type {
   EagerPtyHandle,
   PtyTransport,
+  PtyBufferSnapshot,
   PtyConnectResult,
   IpcPtyTransportOptions
 } from './pty-dispatcher'
@@ -372,9 +376,9 @@ export function createPtyOutputProcessor({
   ): void {
     const rawLength = meta?.rawLength ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
-    // Why: OSC 9999 is a renderer-only control protocol. Parse it before
-    // xterm sees the bytes, and keep parser state across chunks so partial
-    // PTY reads do not drop valid status updates or print escape garbage.
+    // Why: OSC 9999 is an Orca control protocol. Parse it before xterm sees
+    // the bytes, and keep parser state across chunks so partial PTY reads do
+    // not drop valid status updates or print escape garbage.
     const processed = processAgentStatusChunk(data)
     data = processed.cleanData
     // Why: mirror the onBell / onAgentBecameIdle guard below — during eager-buffer

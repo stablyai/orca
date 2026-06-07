@@ -310,7 +310,7 @@ export function createRemoteRuntimePtyTransport(
       client: { id: clientId, type: 'desktop' },
       viewport: desiredViewport ?? undefined,
       callbacks: {
-        onData: (data) => outputProcessor.processData(data, storedCallbacks),
+        onData: (data, meta) => outputProcessor.processData(data, storedCallbacks, undefined, meta),
         onSnapshot: (data) => {
           if (data) {
             outputProcessor.processData(data, storedCallbacks, {
@@ -504,6 +504,13 @@ export function createRemoteRuntimePtyTransport(
 
     getPtyId() {
       return remotePtyId
+    },
+
+    async serializeBuffer(opts) {
+      if (!connected || !multiplexedStream) {
+        return null
+      }
+      return multiplexedStream.serializeBuffer(opts)
     },
 
     destroy() {

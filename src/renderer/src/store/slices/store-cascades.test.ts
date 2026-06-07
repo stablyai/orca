@@ -320,6 +320,33 @@ describe('removeWorktree cascade', () => {
     })
   })
 
+  it('offers force delete when Git already removed an unregistered worktree', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/workspace/deleted-wt'
+    const error =
+      "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone."
+
+    mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1' })]
+      },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      terminalLayoutsByTabId: {}
+    })
+
+    const result = await store.getState().removeWorktree(worktreeId)
+
+    expect(result).toEqual({ ok: false, error })
+    expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
+      isDeleting: false,
+      error,
+      canForceDelete: true
+    })
+  })
+
   it('sets canForceDelete=false when force=true removal fails', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'

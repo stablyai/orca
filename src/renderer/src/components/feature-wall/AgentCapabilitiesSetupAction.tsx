@@ -162,7 +162,7 @@ function AgentCapabilitySetupControls(props: {
         installStatus={props.installStatus}
       />
       {showSetupAction ? (
-        <div className="mt-4 flex items-center">
+        <div className="mt-6 flex items-center">
           <Button
             type="button"
             variant="default"

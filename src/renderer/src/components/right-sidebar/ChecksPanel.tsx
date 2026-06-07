@@ -1837,7 +1837,9 @@ export default function ChecksPanel(): React.JSX.Element {
         toast.error('Could not build the agent launch command.')
         return
       }
-      focusTerminalTabSurface(result.tabId)
+      if (result.tabId) {
+        focusTerminalTabSurface(result.tabId)
+      }
       toast.success('Started an AI agent for the conflicts.')
     } finally {
       setIsResolvingConflictsWithAI(false)
@@ -1939,7 +1941,9 @@ export default function ChecksPanel(): React.JSX.Element {
         toast.error('Could not build the agent launch command.')
         return
       }
-      focusTerminalTabSurface(result.tabId)
+      if (result.tabId) {
+        focusTerminalTabSurface(result.tabId)
+      }
     } finally {
       setIsFixingChecksWithAI(false)
     }

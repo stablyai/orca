@@ -4320,7 +4320,7 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('rejects unregistered delete paths before teardown, hooks, or git removal', async () => {
+  it('reports already-missing unregistered delete paths before teardown, hooks, or git removal', async () => {
     mockKnownFeatureWorktree('/workspace/real-feature')
     getEffectiveHooksMock.mockReturnValue({
       scripts: {
@@ -4332,7 +4332,9 @@ describe('registerWorktreeHandlers', () => {
       handlers['worktrees:remove'](null, {
         worktreeId: 'repo-1::/workspace/not-a-worktree'
       })
-    ).rejects.toThrow('Refusing to delete unregistered worktree path')
+    ).rejects.toThrow(
+      'Worktree is no longer registered with Git and its directory is already gone.'
+    )
 
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(runHookMock).not.toHaveBeenCalled()
@@ -4358,6 +4360,27 @@ describe('registerWorktreeHandlers', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(
       'repo-1::/workspace/already-deleted-wt'
     )
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
+
+  it('cleans up an already-missing unregistered worktree after force recovery', async () => {
+    const worktreeId = 'repo-1::/workspace/already-deleted-wt'
+    mockKnownFeatureWorktree('/workspace/real-feature')
+
+    await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.toThrow(
+      'Worktree is no longer registered with Git and its directory is already gone.'
+    )
+
+    await handlers['worktrees:remove'](null, { worktreeId, force: true })
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
     })

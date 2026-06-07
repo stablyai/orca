@@ -12,7 +12,8 @@ import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
 import {
   flushTerminalOutput,
-  requestTerminalBacklogRecovery
+  requestTerminalBacklogRecovery,
+  setActiveTerminalOutputTarget
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
@@ -134,6 +135,36 @@ export function useTerminalPaneGlobalEffects({
     wasVisibleRef.current = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, isVisible])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    const syncActiveOutputTargets = (activePaneId: number | null): void => {
+      for (const pane of manager?.getPanes() ?? []) {
+        setActiveTerminalOutputTarget(pane.terminal, pane.id === activePaneId)
+      }
+      for (const [paneId, transport] of paneTransportsRef.current) {
+        const ptyId = transport.getPtyId()
+        if (!ptyId || ptyId.startsWith('remote:')) {
+          continue
+        }
+        window.api.pty.setActiveRendererPty?.(ptyId, paneId === activePaneId)
+      }
+    }
+
+    if (!isActive || !isVisible || !manager) {
+      syncActiveOutputTargets(null)
+      return
+    }
+
+    const activePane = manager.getActivePane()
+    const activePaneId = activePane?.id ?? null
+    // Why: active output hints must clear every pane when a tab hides; split
+    // focus can change after this effect's active-pane snapshot.
+    syncActiveOutputTargets(activePaneId)
+    return () => {
+      syncActiveOutputTargets(null)
+    }
+  }, [isActive, isVisible, managerRef, paneTransportsRef])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {

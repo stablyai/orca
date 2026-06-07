@@ -342,6 +342,19 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().activeFileId).toBe('wt-1::diff::staged::file.ts')
   })
 
+  it('bumps diffContentReloadNonce when re-opening an existing diff tab', () => {
+    const store = createEditorStore()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBeUndefined()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(1)
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(2)
+  })
+
   it('opens the visible diff tab in the requested split group', () => {
     const store = createEditorTabsStore()
     const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })

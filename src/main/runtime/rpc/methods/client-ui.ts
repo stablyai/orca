@@ -169,6 +169,7 @@ const UiUpdate = z
       .enum(['google', 'duckduckgo', 'bing', 'kagi'])
       .nullable()
       .optional(),
+    browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
     windowBounds: z
       .object({

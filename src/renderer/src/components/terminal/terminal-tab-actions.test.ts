@@ -5,13 +5,17 @@ const {
   closeWebRuntimeSessionTabMock,
   createWebRuntimeSessionTerminalMock,
   getStateMock,
-  isWebRuntimeSessionActiveMock
+  isWebRuntimeSessionActiveMock,
+  isWebTerminalSurfaceTabIdMock,
+  resolveHostSessionTabIdForWebSessionTabMock
 } = vi.hoisted(() => ({
   activateWebRuntimeSessionTabMock: vi.fn(),
   closeWebRuntimeSessionTabMock: vi.fn(),
   createWebRuntimeSessionTerminalMock: vi.fn(),
   getStateMock: vi.fn(),
-  isWebRuntimeSessionActiveMock: vi.fn()
+  isWebRuntimeSessionActiveMock: vi.fn(),
+  isWebTerminalSurfaceTabIdMock: vi.fn(() => false),
+  resolveHostSessionTabIdForWebSessionTabMock: vi.fn<() => string | null>(() => null)
 }))
 
 vi.mock('@/store', () => ({
@@ -24,11 +28,17 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   activateWebRuntimeSessionTab: activateWebRuntimeSessionTabMock,
   closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock,
   createWebRuntimeSessionTerminal: createWebRuntimeSessionTerminalMock,
-  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
+  isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock,
+  isWebTerminalSurfaceTabId: isWebTerminalSurfaceTabIdMock
+}))
+
+vi.mock('@/runtime/web-session-tabs-sync', () => ({
+  resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
 import {
   closeOtherTerminalTabs,
+  closeTerminalTab,
   closeTerminalTabsToRight,
   createNewTerminalTab
 } from './terminal-tab-actions'
@@ -85,6 +95,99 @@ describe('createNewTerminalTab', () => {
     })
     expect(createTab).not.toHaveBeenCalled()
     expect(setActiveTabType).not.toHaveBeenCalled()
+  })
+})
+
+describe('closeTerminalTab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    isWebRuntimeSessionActiveMock.mockReturnValue(false)
+    resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue(null)
+    isWebTerminalSurfaceTabIdMock.mockReturnValue(false)
+  })
+
+  it('delegates host-backed terminal closes to the paired runtime', () => {
+    const closeTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    resolveHostSessionTabIdForWebSessionTabMock.mockReturnValue('host-tab-1')
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'local-tab-1' }, { id: 'local-tab-2' }]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'local-tab-1',
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('local-tab-1')
+
+    expect(closeTab).toHaveBeenCalledWith('local-tab-1')
+    expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'local-tab-1',
+      environmentId: 'web-runtime'
+    })
+  })
+
+  it('closes unified-only terminal tabs when tabsByWorktree is missing the row', () => {
+    const closeUnifiedTab = vi.fn()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'unified-tab-1',
+            entityId: 'terminal-entity-1',
+            contentType: 'terminal',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            label: 'Claude',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            isPreview: false,
+            isPinned: false
+          }
+        ]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'terminal-entity-1',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab: vi.fn(),
+      closeUnifiedTab,
+      setActiveTab: vi.fn(),
+      setActiveWorktree: vi.fn()
+    })
+
+    closeTerminalTab('terminal-entity-1')
+
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-tab-1')
+  })
+
+  it('closes local-only agent tabs locally when they have no host session binding', () => {
+    const closeTab = vi.fn()
+    isWebRuntimeSessionActiveMock.mockReturnValue(true)
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'web-runtime' },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'local-agent-tab' }, { id: 'local-tab-2' }]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'local-agent-tab',
+      openFiles: [],
+      closeTab,
+      setActiveTab: vi.fn()
+    })
+
+    closeTerminalTab('local-agent-tab')
+
+    expect(closeWebRuntimeSessionTabMock).not.toHaveBeenCalled()
+    expect(closeTab).toHaveBeenCalledWith('local-agent-tab')
   })
 })
 

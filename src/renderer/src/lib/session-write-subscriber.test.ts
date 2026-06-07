@@ -189,6 +189,28 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('re-checks shouldSchedulePersist when a pending debounce fires', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let shouldSchedule = true
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => shouldSchedule
+    })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    useAppStore.setState({ activeWorktreeId: 'wt-before-remote-pull' })
+    vi.advanceTimersByTime(50)
+    shouldSchedule = false
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
+
   it('coalesces multiple relevant mutations within a debounce window', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })

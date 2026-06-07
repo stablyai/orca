@@ -341,8 +341,21 @@ export default function SortableTab({
           className="h-5 w-[72px] min-w-[72px] max-w-[72px] mr-1 px-1 py-0 text-xs"
           spellCheck={false}
         />
-      ) : (
+      ) : isEditing || menuOpen ? (
         <span className="truncate max-w-[72px] mr-1">{displayTitle}</span>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="truncate max-w-[72px] mr-1">{displayTitle}</span>
+          </TooltipTrigger>
+          <TooltipContent
+            side="bottom"
+            sideOffset={6}
+            className="max-w-80 whitespace-normal break-words text-left"
+          >
+            {displayTitle}
+          </TooltipContent>
+        </Tooltip>
       )}
       {tab.color && !isEditing && (
         <span
@@ -370,7 +383,7 @@ export default function SortableTab({
       )}
       {!isEditing && !isPinned && (
         <button
-          className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+          className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
             isActive
               ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
@@ -381,8 +394,20 @@ export default function SortableTab({
           // the store — a store-only assertion would pass even if this
           // button had been accidentally unmounted.
           aria-label={`Close tab ${tabTitle}`}
-          onPointerDown={(e) => e.stopPropagation()}
+          type="button"
+          data-tab-close-button="true"
+          onPointerDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
+          onMouseDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
           onClick={(e) => {
+            e.preventDefault()
             e.stopPropagation()
             onClose(tab.id)
           }}
@@ -403,20 +428,7 @@ export default function SortableTab({
           setMenuOpen(true)
         }}
       >
-        {isEditing || menuOpen ? (
-          tabRoot
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              sideOffset={6}
-              className="max-w-80 whitespace-normal break-words text-left"
-            >
-              {displayTitle}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        {tabRoot}
       </div>
 
       <SortableTabContextMenu
