@@ -74,6 +74,7 @@ function printMarkdownTable(rows) {
     ['Frames', 'frames'],
     ['Median', 'median'],
     ['Worst', 'worst'],
+    ['Restore', 'restore'],
     ['Max Drift', 'maxTimerDrift'],
     ['Hidden Skips', 'hiddenSkips'],
     ['Hidden Chars', 'hiddenSkippedChars'],
