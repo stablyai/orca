@@ -5,6 +5,8 @@ const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 const env = {
   ...process.env,
   ORCA_E2E_OPENCODE_SCALE_PANES: process.env.ORCA_E2E_OPENCODE_SCALE_PANES ?? '10,25,50,100',
+  ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES:
+    process.env.ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES ?? '10,25,50,100',
   ORCA_E2E_OPENCODE_FRAME_COUNT: process.env.ORCA_E2E_OPENCODE_FRAME_COUNT ?? '60'
 }
 const extraArgs = process.argv.slice(2)

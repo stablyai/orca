@@ -111,6 +111,9 @@ const FRAME_INTERVAL_MS = readPositiveInt(
   DEFAULT_FRAME_INTERVAL_MS
 )
 const SCALE_SAME_WORKSPACE_PANES = readPositiveIntList('ORCA_E2E_OPENCODE_SCALE_PANES')
+const SCALE_CROSS_WORKSPACE_PANES = readPositiveIntList(
+  'ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES'
+)
 
 function interactivePromptScript(runId: string): string {
   return `
@@ -367,6 +370,69 @@ function annotateTypingMeasurement(
   })
 }
 
+async function measureCrossWorkspaceTypingDuringHiddenLoad({
+  orcaPage,
+  testRepoPath,
+  hiddenPaneCount,
+  annotationType,
+  testInfo
+}: {
+  orcaPage: Page
+  testRepoPath: string
+  hiddenPaneCount: number
+  annotationType: string
+  testInfo: TestInfo
+}): Promise<void> {
+  await waitForSessionReady(orcaPage)
+  const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+  const allWorktreeIds = await getAllWorktreeIds(orcaPage)
+  const secondWorktreeId = allWorktreeIds.find((id) => id !== firstWorktreeId)
+  test.skip(!secondWorktreeId, 'OpenCode cross-workspace load needs the seeded secondary worktree')
+  if (!secondWorktreeId) {
+    return
+  }
+
+  await switchToWorktree(orcaPage, secondWorktreeId)
+  const hiddenPanes = await ensureActiveWorktreePaneLoad(orcaPage, hiddenPaneCount)
+
+  await switchToWorktree(orcaPage, firstWorktreeId)
+  await expect.poll(() => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(firstWorktreeId)
+  await ensureTerminalVisible(orcaPage)
+  await waitForActiveTerminalManager(orcaPage, 30_000)
+  const typingPtyId = await waitForActivePanePtyId(orcaPage)
+
+  const runId = randomUUID()
+  const scriptPath = path.join(testRepoPath, `.orca-opencode-cross-${hiddenPaneCount}-${runId}.mjs`)
+  writeFileSync(scriptPath, interactivePromptScript(runId))
+  await resetTerminalPtyOutputDebug(orcaPage)
+  const load = await startSyntheticOpenCodeInjection(
+    orcaPage,
+    hiddenPanes.map((pane) => pane.paneKey)
+  )
+  try {
+    const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
+    const debug = await readTerminalPtyOutputDebug(orcaPage)
+    const scheduler = await readTerminalOutputSchedulerDebug(orcaPage)
+    annotateTypingMeasurement(
+      testInfo,
+      annotationType,
+      hiddenPanes.length + 1,
+      measurement,
+      debug,
+      scheduler
+    )
+    expect(debug?.hiddenRendererSkipCount ?? 0).toBeGreaterThan(0)
+    expect(debug?.hiddenRendererSkippedChars ?? 0).toBeGreaterThan(0)
+    expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
+    expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+    expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
+  } finally {
+    await load.stop()
+    await sendToTerminal(orcaPage, typingPtyId, '\x03').catch(() => undefined)
+    rmSync(scriptPath, { force: true })
+  }
+}
+
 test.describe('Artificial OpenCode terminal load', () => {
   test.describe.configure({ mode: 'serial' })
 
@@ -497,61 +563,27 @@ test.describe('Artificial OpenCode terminal load', () => {
     orcaPage,
     testRepoPath
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    const firstWorktreeId = await waitForActiveWorktree(orcaPage)
-    const allWorktreeIds = await getAllWorktreeIds(orcaPage)
-    const secondWorktreeId = allWorktreeIds.find((id) => id !== firstWorktreeId)
-    test.skip(
-      !secondWorktreeId,
-      'OpenCode cross-workspace load needs the seeded secondary worktree'
-    )
-    if (!secondWorktreeId) {
-      return
-    }
-
-    await switchToWorktree(orcaPage, secondWorktreeId)
-    const hiddenPanes = await ensureActiveWorktreePaneLoad(
+    await measureCrossWorkspaceTypingDuringHiddenLoad({
       orcaPage,
-      CROSS_WORKSPACE_PANES_PER_WORKTREE
-    )
-
-    await switchToWorktree(orcaPage, firstWorktreeId)
-    await expect
-      .poll(() => getActiveWorktreeId(orcaPage), { timeout: 10_000 })
-      .toBe(firstWorktreeId)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    const typingPtyId = await waitForActivePanePtyId(orcaPage)
-
-    const runId = randomUUID()
-    const scriptPath = path.join(testRepoPath, `.orca-opencode-cross-typing-${runId}.mjs`)
-    writeFileSync(scriptPath, interactivePromptScript(runId))
-    await resetTerminalPtyOutputDebug(orcaPage)
-    const load = await startSyntheticOpenCodeInjection(
-      orcaPage,
-      hiddenPanes.map((pane) => pane.paneKey)
-    )
-    try {
-      const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
-      const debug = await readTerminalPtyOutputDebug(orcaPage)
-      const scheduler = await readTerminalOutputSchedulerDebug(orcaPage)
-      annotateTypingMeasurement(
-        testInfo,
-        'opencode-cross-workspace-typing',
-        hiddenPanes.length + 1,
-        measurement,
-        debug,
-        scheduler
-      )
-      expect(debug?.hiddenRendererSkipCount ?? 0).toBeGreaterThan(0)
-      expect(debug?.hiddenRendererSkippedChars ?? 0).toBeGreaterThan(0)
-      expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
-      expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
-      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
-    } finally {
-      await load.stop()
-      await sendToTerminal(orcaPage, typingPtyId, '\x03').catch(() => undefined)
-      rmSync(scriptPath, { force: true })
-    }
+      testRepoPath,
+      hiddenPaneCount: CROSS_WORKSPACE_PANES_PER_WORKTREE,
+      annotationType: 'opencode-cross-workspace-typing',
+      testInfo
+    })
   })
+
+  for (const paneCount of SCALE_CROSS_WORKSPACE_PANES) {
+    test(`keeps typing responsive with ${paneCount} hidden cross-workspace OpenCode panes`, async ({
+      orcaPage,
+      testRepoPath
+    }, testInfo) => {
+      await measureCrossWorkspaceTypingDuringHiddenLoad({
+        orcaPage,
+        testRepoPath,
+        hiddenPaneCount: paneCount,
+        annotationType: `opencode-scale-cross-workspace-${paneCount}`,
+        testInfo
+      })
+    })
+  }
 })
