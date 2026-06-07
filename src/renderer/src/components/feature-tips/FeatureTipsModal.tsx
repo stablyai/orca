@@ -27,6 +27,7 @@ import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
   getOrcaCliFeatureTipTelemetrySource,
+  trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
@@ -157,6 +158,9 @@ export default function FeatureTipsModal(): JSX.Element | null {
       case 'learn-cmd-j-palette': {
         // Why: passive education tip — acknowledging just dismisses; the rebind
         // path lives in Settings and is reachable from the palette itself.
+        trackCmdJPaletteFeatureTipAcknowledged(
+          getOrcaCliFeatureTipTelemetrySource(modalData.source)
+        )
         closeModal()
         break
       }
@@ -357,8 +361,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
             primaryBusy={primaryBusy}
             onPrimaryAction={() => void handlePrimaryAction()}
             onSkip={handleSkip}
-            // Why: passive education tips acknowledge with a single CTA; a
-            // secondary "Maybe Later" would be semantically wrong here.
             showSkip
           />
         </DialogFooter>

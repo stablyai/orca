@@ -1793,6 +1793,19 @@
   animation: cmd-j-tip-result-in 120ms ease-out both;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-cmd-j-tip-caret {
+    animation: none;
+    opacity: 1;
+  }
+
+  .animate-cmd-j-tip-result-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ── Feature wall: agents-orchestration animations ───────────────── */
 
 /* Why: drives the supported-agents marquee on page 1 of the agents tile.

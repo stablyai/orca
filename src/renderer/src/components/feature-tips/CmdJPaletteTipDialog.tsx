@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
 
@@ -32,6 +32,10 @@ export function CmdJPaletteTipDialog({
   // Why: read the live binding so the title chip stays correct after a rebind
   // and on Linux/Windows (Ctrl+Shift+J) — matching the visual's key chips.
   const worktreePaletteShortcutLabel = useShortcutLabel('worktree.palette')
+  const displayShortcutLabel =
+    worktreePaletteShortcutLabel !== 'Unassigned'
+      ? worktreePaletteShortcutLabel
+      : formatShortcutLabel('worktree.palette')
   // The tip's title uses "<shortcut>" as a placeholder token; split it so we
   // can render the live label as a styled <kbd> chip inline. Missing token
   // degrades to the plain title.
@@ -54,28 +58,28 @@ export function CmdJPaletteTipDialog({
               <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
                 <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 md:flex-nowrap">
                   <span>{titlePrefix.trimEnd()}</span>
-                  {worktreePaletteShortcutLabel ? (
+                  {displayShortcutLabel ? (
                     <kbd className="inline-flex shrink-0 items-center rounded-md border border-border bg-card px-2 py-0.5 font-mono text-base font-medium text-foreground">
-                      {worktreePaletteShortcutLabel}
+                      {displayShortcutLabel}
                     </kbd>
                   ) : null}
                   {titleSuffix ? <span>{titleSuffix}</span> : null}
                 </span>
               </DialogTitle>
-              <DialogDescription className="mt-3 max-w-2xl text-sm leading-relaxed">
-                {tip.description}
+              <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
+                <span className="block">{tip.description}</span>
+                <span className="block text-muted-foreground">
+                  Rebind the shortcut anytime in{' '}
+                  <button
+                    type="button"
+                    onClick={onRebindClick}
+                    className="font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:decoration-foreground"
+                  >
+                    Settings → Shortcuts
+                  </button>
+                  .
+                </span>
               </DialogDescription>
-              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Rebind the shortcut anytime in{' '}
-                <button
-                  type="button"
-                  onClick={onRebindClick}
-                  className="font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:decoration-foreground"
-                >
-                  Settings → Shortcuts
-                </button>
-                .
-              </p>
             </div>
           </DialogHeader>
 

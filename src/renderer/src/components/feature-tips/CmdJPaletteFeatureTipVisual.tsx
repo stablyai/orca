@@ -1,7 +1,7 @@
 import { useEffect, useState, type JSX } from 'react'
 import { Plus, Search } from 'lucide-react'
-import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
-import { useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
+import { formatShortcutKeys, useShortcutKeys } from '@/hooks/useShortcutLabel'
 
 const TYPED_QUERY = 'auth'
 // Why: one finished + one still running mirrors what a user actually sees in
@@ -36,6 +36,10 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   // Why: render the live binding so the cue stays correct after a rebind and on
   // platforms where Cmd+J is not the default (Linux/Windows use Ctrl+Shift+J).
   const shortcutKeys = useShortcutKeys('worktree.palette')
+  // Why: when the user disables the binding, fall back to the platform default
+  // so the demo still teaches which keys open the palette.
+  const displayShortcutKeys =
+    shortcutKeys.length > 0 ? shortcutKeys : formatShortcutKeys('worktree.palette')
 
   const [phase, setPhase] = useState<CyclePhase>('idle')
   const [typedLength, setTypedLength] = useState(0)
@@ -48,6 +52,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
   const showResults = reducedMotion || phase === 'results'
 
   const currentQuery = TYPED_QUERY.slice(0, effectiveTypedLength)
+  const resultEnterClass = showResults && !reducedMotion ? 'animate-cmd-j-tip-result-in' : ''
 
   useEffect(() => {
     if (reducedMotion) {
@@ -104,9 +109,9 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
       className="relative flex h-full min-h-[23rem] flex-col items-center justify-center overflow-hidden px-6 py-7"
       aria-hidden="true"
     >
-      {shortcutKeys.length > 0 ? (
+      {displayShortcutKeys.length > 0 ? (
         <div className="inline-flex items-center gap-1.5">
-          {shortcutKeys.map((key, index) => (
+          {displayShortcutKeys.map((key, index) => (
             <span
               key={`${key}-${index}`}
               className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-border/80 px-2 text-xs font-semibold text-muted-foreground shadow-xs transition-[transform,background-color] duration-150 ease-out ${
@@ -150,9 +155,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
           {WORKTREE_RESULTS.map((result) => (
             <div
               key={result.key}
-              className={`flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-1.5 ${
-                showResults ? 'animate-cmd-j-tip-result-in' : ''
-              }`}
+              className={`flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-1.5 ${resultEnterClass}`}
             >
               <span className="flex w-4 shrink-0 items-center justify-center">
                 {result.status === 'done' ? (
@@ -161,7 +164,11 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                   // Why: yellow border spinner mirrors StatusIndicator's
                   // 'working' affordance, so users connect the icon to the
                   // same running-workspace state they see in the sidebar.
-                  <span className="block size-2.5 rounded-full border-[1.5px] border-yellow-500 border-t-transparent animate-spin" />
+                  <span
+                    className={`block size-2.5 rounded-full border-[1.5px] border-yellow-500 ${
+                      reducedMotion ? 'border-t-yellow-500' : 'animate-spin border-t-transparent'
+                    }`}
+                  />
                 )}
               </span>
               <div className="min-w-0 flex-1">
@@ -175,9 +182,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
             </div>
           ))}
           <div
-            className={`mt-0.5 flex shrink-0 items-center gap-2.5 rounded-lg border border-dashed border-border/60 bg-muted/10 px-2.5 py-1.5 ${
-              showResults ? 'animate-cmd-j-tip-result-in' : ''
-            }`}
+            className={`mt-0.5 flex shrink-0 items-center gap-2.5 rounded-lg border border-dashed border-border/60 bg-muted/10 px-2.5 py-1.5 ${resultEnterClass}`}
           >
             <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
               <Plus size={13} aria-hidden="true" />

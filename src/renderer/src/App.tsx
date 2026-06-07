@@ -124,7 +124,10 @@ import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted
 } from './components/feature-tips/feature-tip-startup-gate'
-import { trackOrcaCliFeatureTipShown } from './components/feature-tips/feature-tip-telemetry'
+import {
+  trackCmdJPaletteFeatureTipShown,
+  trackOrcaCliFeatureTipShown
+} from './components/feature-tips/feature-tip-telemetry'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -578,6 +581,8 @@ function App(): React.JSX.Element {
     featureTipsPromptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
+    } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
+      trackCmdJPaletteFeatureTipShown('app_open')
     }
     // Why: once a tip is visible, app quit/crash should not make it reappear
     // on the next launch just because the user never clicked a dismiss button.

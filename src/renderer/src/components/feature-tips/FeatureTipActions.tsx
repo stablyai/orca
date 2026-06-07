@@ -1,7 +1,14 @@
 import type { JSX } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { FeatureTip } from '../../../../shared/feature-tips'
+import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
+
+function getPrimaryBusyLabel(action: FeatureTipAction): string {
+  if (action === 'setup-cli') {
+    return 'Installing...'
+  }
+  return 'Working...'
+}
 
 export function FeatureTipActions({
   currentTip,
@@ -33,7 +40,7 @@ export function FeatureTipActions({
         {primaryBusy ? (
           <>
             <Loader2 className="size-4 animate-spin" />
-            Installing...
+            {getPrimaryBusyLabel(currentTip.action)}
           </>
         ) : (
           currentTip.ctaLabel
