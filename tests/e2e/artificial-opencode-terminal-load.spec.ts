@@ -474,14 +474,18 @@ test.describe('Artificial OpenCode terminal load', () => {
     )
     try {
       const measurement = await measureTypingDuringLoad(orcaPage, scriptPath, typingPtyId, runId)
+      const debug = await readTerminalPtyOutputDebug(orcaPage)
+      const scheduler = await readTerminalOutputSchedulerDebug(orcaPage)
       annotateTypingMeasurement(
         testInfo,
         'opencode-cross-workspace-typing',
         hiddenPanes.length + 1,
         measurement,
-        await readTerminalPtyOutputDebug(orcaPage),
-        await readTerminalOutputSchedulerDebug(orcaPage)
+        debug,
+        scheduler
       )
+      expect(debug?.hiddenRendererSkipCount ?? 0).toBeGreaterThan(0)
+      expect(debug?.hiddenRendererSkippedChars ?? 0).toBeGreaterThan(0)
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
       expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_TIMER_DRIFT_MS)
