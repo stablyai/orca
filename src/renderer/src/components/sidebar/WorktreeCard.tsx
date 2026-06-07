@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
-  AlertCircle,
   AlertTriangle,
   ChevronDown,
   GitMerge,
@@ -868,31 +867,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
               onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
             />
 
-            {typeof worktree.firstAgentMessageRenameError === 'string' &&
-            worktree.firstAgentMessageRenameError.length > 0 &&
-            !titleRenaming ? (
-              // The auto-rename generation step failed — surface it (red) rather
-              // than the silent "rename pending" so the user can act on it.
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onPointerDown={stopQuickActionPointerPropagation}
-                    onClick={handlePendingFirstAgentMessageRenameInfo}
-                    onDoubleClick={handlePendingFirstAgentMessageRenameInfo}
-                    className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-destructive border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:text-destructive has-[>svg]:!px-0.5"
-                    aria-label="Auto-rename failed"
-                  >
-                    <AlertCircle className="size-2.5" />
-                    rename failed
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>
-                  {worktree.firstAgentMessageRenameError}
-                </TooltipContent>
-              </Tooltip>
-            ) : worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
+            {worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

@@ -9656,11 +9656,7 @@ export class OrcaRuntimeService {
       stripOrcaProvenanceMetaUpdates(
         omitUndefinedProperties(
           metaUpdates.displayName !== undefined
-            ? {
-                ...metaUpdates,
-                pendingFirstAgentMessageRename: false,
-                firstAgentMessageRenameError: null
-              }
+            ? { ...metaUpdates, pendingFirstAgentMessageRename: false }
             : metaUpdates
         )
       )
