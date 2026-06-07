@@ -2476,7 +2476,7 @@ export function registerPtyHandlers(
     } else {
       rendererInFlightCharsByPty.set(args.id, next)
     }
-    tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, charCount)
+    tryGetProviderForPty(args.id)?.acknowledgeDataEvent(args.id, acknowledged)
     if (pendingData.size > 0 && !flushTimer) {
       schedulePendingDataFlush(0)
     }

@@ -4246,6 +4246,66 @@ describe('registerPtyHandlers', () => {
     }
   })
 
+  it('forwards only actually in-flight bytes to provider ACK backpressure', async () => {
+    vi.useFakeTimers()
+    const acknowledgeDataEvent = vi.fn()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+
+    try {
+      setLocalPtyProvider({
+        spawn: vi.fn(async () => ({ id: 'remote-like-pty' })),
+        write: vi.fn(),
+        resize: vi.fn(),
+        shutdown: vi.fn(),
+        sendSignal: vi.fn(),
+        getCwd: vi.fn(),
+        getInitialCwd: vi.fn(),
+        clearBuffer: vi.fn(),
+        acknowledgeDataEvent,
+        hasChildProcesses: vi.fn(),
+        getForegroundProcess: vi.fn(),
+        serialize: vi.fn(),
+        revive: vi.fn(),
+        onData: vi.fn((callback) => {
+          mockProc.proc.onData((data: string) => callback({ id: 'remote-like-pty', data }))
+          return () => {}
+        }),
+        onReplay: vi.fn(() => () => {}),
+        onExit: vi.fn(() => () => {}),
+        listProcesses: vi.fn(async () => []),
+        attach: vi.fn(),
+        getDefaultShell: vi.fn(),
+        getProfiles: vi.fn()
+      } as never)
+      registerPtyHandlers(mainWindow as never)
+      const ackData = getPtyAckDataListener()
+      mainWindow.webContents.send.mockClear()
+
+      mockProc.emitData('remote-output')
+      vi.advanceTimersByTime(8)
+
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: 'remote-like-pty',
+        data: 'remote-output'
+      })
+
+      // Why: stale or duplicated renderer ACKs must not over-credit SSH/relay
+      // flow control beyond the bytes main actually sent to the renderer.
+      ackData(null, { id: 'remote-like-pty', charCount: 1024 })
+      ackData(null, { id: 'remote-like-pty', charCount: 1024 })
+
+      expect(acknowledgeDataEvent).toHaveBeenNthCalledWith(
+        1,
+        'remote-like-pty',
+        'remote-output'.length
+      )
+      expect(acknowledgeDataEvent).toHaveBeenNthCalledWith(2, 'remote-like-pty', 0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reserves a bounded renderer lane for interactive output when bulk output is saturated', async () => {
     vi.useFakeTimers()
     const bulkProcs = Array.from({ length: 16 }, () => createMockProc())
