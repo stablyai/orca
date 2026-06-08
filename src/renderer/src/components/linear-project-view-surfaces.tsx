@@ -20,7 +20,6 @@ import { Progress } from '@/components/ui/progress'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type {
-  LinearCustomViewModel,
   LinearCustomViewSummary,
   LinearProjectDetail,
   LinearProjectSummary,
@@ -56,7 +55,6 @@ type LinearProjectTableProps = {
 
 type LinearCustomViewTableProps = {
   views: LinearCustomViewSummary[]
-  model: LinearCustomViewModel
   loading: boolean
   hasError?: boolean
   selectedViewId?: string | null
@@ -388,7 +386,6 @@ export function LinearProjectTable({
 
 export function LinearCustomViewTable({
   views,
-  model,
   loading,
   hasError,
   selectedViewId,
@@ -420,7 +417,7 @@ export function LinearCustomViewTable({
     return (
       <div className="px-4 py-10 text-center">
         <p className="text-sm font-medium text-foreground">
-          {hasError ? `Unable to load ${model} views` : `No ${model} views found`}
+          {hasError ? 'Unable to load views' : 'No views found'}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
           {hasError

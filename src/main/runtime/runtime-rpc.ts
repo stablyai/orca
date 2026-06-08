@@ -227,6 +227,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'linear.addIssueComment',
   'linear.connect',
   'linear.createIssue',
+  'linear.createProject',
   'linear.issueComments',
   'linear.listCustomViewIssues',
   'linear.listCustomViewProjects',

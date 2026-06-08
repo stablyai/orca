@@ -1433,6 +1433,19 @@ export type PreloadApi = {
       workspaceId?: LinearWorkspaceSelection
       force?: boolean
     }) => Promise<LinearCollectionResult<LinearProjectSummary>>
+    createProject: (args: {
+      name: string
+      description?: string
+      content?: string
+      teamIds: string[]
+      workspaceId?: string
+      leadId?: string | null
+      memberIds?: string[]
+      labelIds?: string[]
+      priority?: number
+      startDate?: string
+      targetDate?: string
+    }) => Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }>
     getProject: (args: {
       id: string
       workspaceId: string
