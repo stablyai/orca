@@ -74,8 +74,8 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@linear/sdk": "^82.1.0",
     "@parcel/watcher": "^2.5.6",
-    "@xterm/addon-serialize": "0.15.0-beta.220",
-    "@xterm/headless": "6.1.0-beta.220",
+    "@xterm/addon-serialize": "0.15.0-beta.285",
+    "@xterm/headless": "6.1.0-beta.285",
     "agent-browser": "~0.27.0",
     "electron-updater": "^6.8.3",
     "node-pty": "^1.1.0",
@@ -123,13 +123,13 @@
     "@types/ws": "^8.18.1",
     "@typescript/native-preview": "7.0.0-dev.20260421.2",
     "@vitejs/plugin-react": "^5.2.0",
-    "@xterm/addon-fit": "0.12.0-beta.220",
-    "@xterm/addon-ligatures": "0.11.0-beta.220",
-    "@xterm/addon-search": "0.17.0-beta.220",
-    "@xterm/addon-unicode11": "0.10.0-beta.220",
-    "@xterm/addon-web-links": "0.13.0-beta.220",
-    "@xterm/addon-webgl": "0.20.0-beta.219",
-    "@xterm/xterm": "6.1.0-beta.220",
+    "@xterm/addon-fit": "0.12.0-beta.285",
+    "@xterm/addon-ligatures": "0.11.0-beta.285",
+    "@xterm/addon-search": "0.17.0-beta.285",
+    "@xterm/addon-unicode11": "0.10.0-beta.285",
+    "@xterm/addon-web-links": "0.13.0-beta.285",
+    "@xterm/addon-webgl": "0.20.0-beta.284",
+    "@xterm/xterm": "6.1.0-beta.285",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -223,8 +223,7 @@
     ],
     "patchedDependencies": {
       "node-pty@1.1.0": "config/patches/node-pty@1.1.0.patch",
-      "@xterm/addon-ligatures@0.11.0-beta.220": "config/patches/@xterm__addon-ligatures@0.11.0-beta.220.patch",
-      "@xterm/addon-webgl@0.20.0-beta.219": "config/patches/@xterm__addon-webgl@0.20.0-beta.219.patch"
+      "@xterm/addon-ligatures@0.11.0-beta.285": "config/patches/@xterm__addon-ligatures@0.11.0-beta.285.patch"
     }
   },
   "reactDoctor": {

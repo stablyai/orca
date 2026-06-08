@@ -21,6 +21,11 @@ export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
   if (pane.terminalGpuAcceleration === 'on') {
     return true
   }
+  if (pane.terminalGpuAcceleration === 'auto') {
+    // Why: WebGL and DOM report different cell metrics on current xterm beta;
+    // switching renderers after emoji/table output rewraps completed TUI rows.
+    return false
+  }
   if (isLinuxRenderer()) {
     // Why: multiple Linux/Wayland GPU stacks corrupt xterm's WebGL glyph atlas
     // without raising context loss; tab switching only masks it by rebuilding WebGL.

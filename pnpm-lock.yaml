@@ -5,12 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@xterm/addon-ligatures@0.11.0-beta.220':
-    hash: df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634
-    path: config/patches/@xterm__addon-ligatures@0.11.0-beta.220.patch
-  '@xterm/addon-webgl@0.20.0-beta.219':
-    hash: c76ae4cd585a6b2ea39a39e3c021f125f42afdafeffd3b1a767a3200deb4ffb2
-    path: config/patches/@xterm__addon-webgl@0.20.0-beta.219.patch
+  '@xterm/addon-ligatures@0.11.0-beta.285':
+    hash: 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
+    path: config/patches/@xterm__addon-ligatures@0.11.0-beta.285.patch
   node-pty@1.1.0:
     hash: 407ae07e1e0e2ff2e8b58696449c54c31e51d87535bc6aa4a7a7b0b561407282
     path: config/patches/node-pty@1.1.0.patch
@@ -32,11 +29,11 @@ importers:
         specifier: ^2.5.6
         version: 2.5.6
       '@xterm/addon-serialize':
-        specifier: 0.15.0-beta.220
-        version: 0.15.0-beta.220(@xterm/xterm@6.1.0-beta.220)
+        specifier: 0.15.0-beta.285
+        version: 0.15.0-beta.285(@xterm/xterm@6.1.0-beta.285)
       '@xterm/headless':
-        specifier: 6.1.0-beta.220
-        version: 6.1.0-beta.220
+        specifier: 6.1.0-beta.285
+        version: 6.1.0-beta.285
       agent-browser:
         specifier: ~0.27.0
         version: 0.27.0
@@ -174,26 +171,26 @@ importers:
         specifier: ^5.2.0
         version: 5.2.0(vite@7.3.2(@types/node@25.6.0)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.8.4))
       '@xterm/addon-fit':
-        specifier: 0.12.0-beta.220
-        version: 0.12.0-beta.220(@xterm/xterm@6.1.0-beta.220)
+        specifier: 0.12.0-beta.285
+        version: 0.12.0-beta.285(@xterm/xterm@6.1.0-beta.285)
       '@xterm/addon-ligatures':
-        specifier: 0.11.0-beta.220
-        version: 0.11.0-beta.220(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.220)
+        specifier: 0.11.0-beta.285
+        version: 0.11.0-beta.285(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.285)
       '@xterm/addon-search':
-        specifier: 0.17.0-beta.220
-        version: 0.17.0-beta.220(@xterm/xterm@6.1.0-beta.220)
+        specifier: 0.17.0-beta.285
+        version: 0.17.0-beta.285(@xterm/xterm@6.1.0-beta.285)
       '@xterm/addon-unicode11':
-        specifier: 0.10.0-beta.220
-        version: 0.10.0-beta.220(@xterm/xterm@6.1.0-beta.220)
+        specifier: 0.10.0-beta.285
+        version: 0.10.0-beta.285(@xterm/xterm@6.1.0-beta.285)
       '@xterm/addon-web-links':
-        specifier: 0.13.0-beta.220
-        version: 0.13.0-beta.220(@xterm/xterm@6.1.0-beta.220)
+        specifier: 0.13.0-beta.285
+        version: 0.13.0-beta.285(@xterm/xterm@6.1.0-beta.285)
       '@xterm/addon-webgl':
-        specifier: 0.20.0-beta.219
-        version: 0.20.0-beta.219(patch_hash=c76ae4cd585a6b2ea39a39e3c021f125f42afdafeffd3b1a767a3200deb4ffb2)(@xterm/xterm@6.1.0-beta.220)
+        specifier: 0.20.0-beta.284
+        version: 0.20.0-beta.284(@xterm/xterm@6.1.0-beta.285)
       '@xterm/xterm':
-        specifier: 6.1.0-beta.220
-        version: 6.1.0-beta.220
+        specifier: 6.1.0-beta.285
+        version: 6.1.0-beta.285
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -3061,47 +3058,47 @@ packages:
     resolution: {integrity: sha512-A9gOqLdi6cV4ibazAjcQufGj0B1y/vDqYrcuP6d/6x8P27gRS8643Dj9o1dEKtB6O7fwxb2FgBmJS2mX7gpvdw==}
     engines: {node: '>=14.6'}
 
-  '@xterm/addon-fit@0.12.0-beta.220':
-    resolution: {integrity: sha512-lTiEjsdJBYTvIdA8USs90j+pu7/9oCQEh8JYBDJoRxzzAcvk4V1GlEA++Ztspbfk4nSh2HVxwJvdeTD6ffAQlg==}
+  '@xterm/addon-fit@0.12.0-beta.285':
+    resolution: {integrity: sha512-rSVi0nMbK+9sgL1QXmJlv3nWvktj0AZeRd52yVzyNhl5mxxEkvxiwFJZlcEBRg27ipeWVAs1PeuCz0A9QnNnAQ==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.220
+      '@xterm/xterm': ^6.1.0-beta.285
 
-  '@xterm/addon-ligatures@0.11.0-beta.220':
-    resolution: {integrity: sha512-fw/mSPqwgBNVX2ejW3rKhXablP3pelKJWYlt1QIr40+zZ//ERcHZWZNLB1I9fojiGW++tCnIHKh0GPpI2h5HgA==}
+  '@xterm/addon-ligatures@0.11.0-beta.285':
+    resolution: {integrity: sha512-ZBqrv60zrIKGspVfv5+m3lRGHeAGDW2U/imu6vER8D2vhxs75FXh/bA+X2/oSdDJQVgpygsN8G3gNQqt16v3eg==}
     engines: {node: '>8.0.0'}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.220
+      '@xterm/xterm': ^6.1.0-beta.285
 
-  '@xterm/addon-search@0.17.0-beta.220':
-    resolution: {integrity: sha512-2QwmGiZ8sn1ISYLuHIt0heUYN0wR6d+AWFZRGsekXbLCvRw/qjclCSKsDsIO1bTMBjey5K1MeZbse6kTKx+kDg==}
+  '@xterm/addon-search@0.17.0-beta.285':
+    resolution: {integrity: sha512-cGjvwxsCnzlLbDWhMaHF9ZxTbYt6foAvUlURe63XyonXR2DVYH6/sr4YoUhM4S5tUMtdIhPxJhtQ8uF6r+ch3g==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.220
+      '@xterm/xterm': ^6.1.0-beta.285
 
-  '@xterm/addon-serialize@0.15.0-beta.220':
-    resolution: {integrity: sha512-ssZ8rnSU0EOdDsFS5cI5LHKy/T0rQfZBE9iPph7rUxSAwZXbMGz0Vrsob79IKRvfE6oMZlFn+NE0Gg/mKq62Iw==}
+  '@xterm/addon-serialize@0.15.0-beta.285':
+    resolution: {integrity: sha512-ae1Fi0Rceby+Ctf39aCjVlJ5+K3OJMEdeU3LIw0Su4z58k6Yz577laM4OJ7CIAUQTCp7K7WliYaTo29vNVCdBw==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.220
+      '@xterm/xterm': ^6.1.0-beta.285
 
-  '@xterm/addon-unicode11@0.10.0-beta.220':
-    resolution: {integrity: sha512-83VMUPOp7VKWsVlw+a6TrZP38VAQM7xigu0JcSj2gVO1xsYRyme9wlgKDX+lmgWrfJPSjgB0vfXpcxI4dt/Wvw==}
+  '@xterm/addon-unicode11@0.10.0-beta.285':
+    resolution: {integrity: sha512-rfijFu7UcYpaFx5wzxvTpQbIyyq/amf2PuS9pktywcFQr4ITxRgid5EVzKLRG1vchkApNcQplWeYxGEtjiw0Cw==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.220
+      '@xterm/xterm': ^6.1.0-beta.285
 
-  '@xterm/addon-web-links@0.13.0-beta.220':
-    resolution: {integrity: sha512-XILFvFY0lOpTafIQxUOkS6x/MfZzarW3WbHZ40KEzAE8ImJqwOQiiqG17noLMUDD6rSOv7BRWNJACq4FflBNvg==}
+  '@xterm/addon-web-links@0.13.0-beta.285':
+    resolution: {integrity: sha512-deEjcrV/LQFM031l6Jop2mVK79RJru6SlNCjtFXb0Ex5GwIcPZCGW4VdZYMU5toQ3mMDR6yrzWDsb9SFtDrMeA==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.220
+      '@xterm/xterm': ^6.1.0-beta.285
 
-  '@xterm/addon-webgl@0.20.0-beta.219':
-    resolution: {integrity: sha512-IaAcDDP0lhHIdYJuTFKZIMsRqlN8iR5U8lW9MiTK4mUAjettqZN2z/tkSsl4yV3GZ9/siOZofDl+GO1TK7y7ww==}
+  '@xterm/addon-webgl@0.20.0-beta.284':
+    resolution: {integrity: sha512-tzkUiEfdpHCY8mXCbuIaP9V67QDfBJvDr9jdxs5jjxNCIQvw+NCoKD97y5sUrQhrIlr7xrDGniPgPYThQ/1FWg==}
     peerDependencies:
-      '@xterm/xterm': ^6.1.0-beta.220
+      '@xterm/xterm': ^6.1.0-beta.285
 
-  '@xterm/headless@6.1.0-beta.220':
-    resolution: {integrity: sha512-oc+cI28eP/ktv91ddk1MxsEdfS41dnNvB3eMjNxfP7v+SaM7aXgXAL8Kj0/zzbpX/dG0nbA9wi3YvsybzCN3OQ==}
+  '@xterm/headless@6.1.0-beta.285':
+    resolution: {integrity: sha512-NJud+XEUjKMT2LwPqcIh/gazktV+R2AHjEPMQsn/l6+53rgFusuifmJjVkWLwZ228YYsUaN5+lJELeExS26q4A==}
 
-  '@xterm/xterm@6.1.0-beta.220':
-    resolution: {integrity: sha512-rwEKE75wfwfNWeGnjl0iQRA1W50HigKoGcGMeF3o5CqDSdI9IjmwzpV9xHXqLH6CYj6s9N1g6bbKFVDou9dJ/A==}
+  '@xterm/xterm@6.1.0-beta.285':
+    resolution: {integrity: sha512-S3K58tepMkbpWRBzOGKd0In6AVvt9QPAnNs8DJ8rPUPODYtsCYWAtINHKYtC2OpXcE5EBKM35dl+Dgv03OoE/w==}
 
   abbrev@4.0.0:
     resolution: {integrity: sha512-a1wflyaL0tHtJSmLSOVybYhy22vRih4eduhhrkcjgrWGnRfrZtovJ2FRjxuTtkkj47O/baf0R86QU5OuYpz8fA==}
@@ -4771,6 +4768,10 @@ packages:
   lowlight@3.3.0:
     resolution: {integrity: sha512-0JNhgFoPvP6U6lE/UdVsSq99tn6DhjjpAj5MxG49ewd2mOBVtwWYIT8ClyABhq198aXXODMU6Ox8DrGy/CpTZQ==}
 
+  lru-cache@11.5.1:
+    resolution: {integrity: sha512-RPimw/7aMdv2oqRrxKwvZXcPfwBrn/JZ2xYcY9Hus/6LaS3VOAKVWKWgNLCFSiOm1ESXinjsDlidVU7JlnCN2A==}
+    engines: {node: 20 || >=22}
+
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
@@ -5168,8 +5169,8 @@ packages:
     resolution: {integrity: sha512-smsWv2LzFjP03xmvFoJ331ss6h+jixfA4UUV/Bsiyuu4YJPfN+FIQGOIiv4w9/+MoHkfkJ22UIaQWRVFRfH6Vw==}
     engines: {node: '>=20'}
 
-  opentype.js@0.8.0:
-    resolution: {integrity: sha512-FQHR4oGP+a0m/f6yHoRpBOIbn/5ZWxKd4D/djHVJu8+KpBTYrJda0b7mLcgDEMWXE9xBCJm+qb0yv6FcvPjukg==}
+  opentype.js@2.0.0:
+    resolution: {integrity: sha512-kCyjv6xdDY1W/jLWZ/L3QhhTlKUqDZMQ5+Jdlw12b3dXkKNpYBqqlMMj0YDQPShWFTMwgZI1hG14kN3XUDSg/A==}
     hasBin: true
 
   ora@8.2.0:
@@ -5984,9 +5985,6 @@ packages:
 
   tiny-async-pool@1.3.0:
     resolution: {integrity: sha512-01EAw5EDrcVrdgyCLgoSPvqznC0sVxDSVeiOz09FUpjh71G79VCqneOr+xvt7T1r76CF6ZZfPjHorN2+d+3mqA==}
-
-  tiny-inflate@1.0.3:
-    resolution: {integrity: sha512-pkY1fj1cKHb2seWDy0B16HeWyczlJA9/WW3u3c4z/NiWDsO3DOU5D7nhTLE9CF0yXv/QZFY7sEJmj24dK+Rrqw==}
 
   tiny-invariant@1.3.3:
     resolution: {integrity: sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==}
@@ -8971,39 +8969,39 @@ snapshots:
   '@xmldom/xmldom@0.9.10':
     optional: true
 
-  '@xterm/addon-fit@0.12.0-beta.220(@xterm/xterm@6.1.0-beta.220)':
+  '@xterm/addon-fit@0.12.0-beta.285(@xterm/xterm@6.1.0-beta.285)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.220
+      '@xterm/xterm': 6.1.0-beta.285
 
-  '@xterm/addon-ligatures@0.11.0-beta.220(patch_hash=df21db050a4d85552cafbe583ece863d7fa19ed634a1219210a0455b986b6634)(@xterm/xterm@6.1.0-beta.220)':
+  '@xterm/addon-ligatures@0.11.0-beta.285(patch_hash=47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920)(@xterm/xterm@6.1.0-beta.285)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.220
-      lru-cache: 6.0.0
-      opentype.js: 0.8.0
+      '@xterm/xterm': 6.1.0-beta.285
+      lru-cache: 11.5.1
+      opentype.js: 2.0.0
 
-  '@xterm/addon-search@0.17.0-beta.220(@xterm/xterm@6.1.0-beta.220)':
+  '@xterm/addon-search@0.17.0-beta.285(@xterm/xterm@6.1.0-beta.285)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.220
+      '@xterm/xterm': 6.1.0-beta.285
 
-  '@xterm/addon-serialize@0.15.0-beta.220(@xterm/xterm@6.1.0-beta.220)':
+  '@xterm/addon-serialize@0.15.0-beta.285(@xterm/xterm@6.1.0-beta.285)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.220
+      '@xterm/xterm': 6.1.0-beta.285
 
-  '@xterm/addon-unicode11@0.10.0-beta.220(@xterm/xterm@6.1.0-beta.220)':
+  '@xterm/addon-unicode11@0.10.0-beta.285(@xterm/xterm@6.1.0-beta.285)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.220
+      '@xterm/xterm': 6.1.0-beta.285
 
-  '@xterm/addon-web-links@0.13.0-beta.220(@xterm/xterm@6.1.0-beta.220)':
+  '@xterm/addon-web-links@0.13.0-beta.285(@xterm/xterm@6.1.0-beta.285)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.220
+      '@xterm/xterm': 6.1.0-beta.285
 
-  '@xterm/addon-webgl@0.20.0-beta.219(patch_hash=c76ae4cd585a6b2ea39a39e3c021f125f42afdafeffd3b1a767a3200deb4ffb2)(@xterm/xterm@6.1.0-beta.220)':
+  '@xterm/addon-webgl@0.20.0-beta.284(@xterm/xterm@6.1.0-beta.285)':
     dependencies:
-      '@xterm/xterm': 6.1.0-beta.220
+      '@xterm/xterm': 6.1.0-beta.285
 
-  '@xterm/headless@6.1.0-beta.220': {}
+  '@xterm/headless@6.1.0-beta.285': {}
 
-  '@xterm/xterm@6.1.0-beta.220': {}
+  '@xterm/xterm@6.1.0-beta.285': {}
 
   abbrev@4.0.0: {}
 
@@ -10827,6 +10825,8 @@ snapshots:
       devlop: 1.1.0
       highlight.js: 11.11.1
 
+  lru-cache@11.5.1: {}
+
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
@@ -11473,9 +11473,7 @@ snapshots:
       powershell-utils: 0.1.0
       wsl-utils: 0.3.1
 
-  opentype.js@0.8.0:
-    dependencies:
-      tiny-inflate: 1.0.3
+  opentype.js@2.0.0: {}
 
   ora@8.2.0:
     dependencies:
@@ -12514,8 +12512,6 @@ snapshots:
   tiny-async-pool@1.3.0:
     dependencies:
       semver: 5.7.2
-
-  tiny-inflate@1.0.3: {}
 
   tiny-invariant@1.3.3: {}
 

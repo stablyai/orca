@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -46,6 +46,11 @@ type LongTableDebugWindow = Window & {
     }
   }
 }
+
+const EMOJI_TABLE_FIXTURE = readFileSync(
+  path.join(__dirname, 'fixtures', 'terminal-emoji-table.md'),
+  'utf8'
+)
 
 function longMarkdownTableScript(runId: string): string {
   const names = [
@@ -129,6 +134,177 @@ const timer = setInterval(() => {
 `
 }
 
+function emojiFixtureMarkdownTableScript(table: string, runId: string): string {
+  const marker = `EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
+  return `
+const table = ${JSON.stringify(table)}
+const minimumWidths = [2, 5, 4, 7, 7, 4, 3, 4]
+const preferredWidths = [5, 17, 10, 18, 30, 12, 10, 10]
+const tableOverhead = preferredWidths.length * 3 + 1
+const widthBudget = Math.max(
+  minimumWidths.reduce((sum, width) => sum + width, 0),
+  Math.min(
+    preferredWidths.reduce((sum, width) => sum + width, 0),
+    (process.stdout.columns || 100) - tableOverhead - 1
+  )
+)
+let remaining = widthBudget
+let remainingPreferred = preferredWidths.reduce((sum, width) => sum + width, 0)
+const widths = preferredWidths.map((preferred, index) => {
+  const minimum = minimumWidths[index]
+  const width = Math.max(minimum, Math.floor((remaining * preferred) / remainingPreferred))
+  remaining -= width
+  remainingPreferred -= preferred
+  return width
+})
+const border = {
+  top: ['┌', '┬', '┐'],
+  middle: ['├', '┼', '┤'],
+  bottom: ['└', '┴', '┘'],
+  vertical: '│',
+  horizontal: '─'
+}
+function splitMarkdownRow(row) {
+  return row.trim().slice(1, -1).split('|').map((cell) => cell.trim())
+}
+function isSeparatorRow(row) {
+  return /^\\|(?:\\s*:?-+:?\\s*\\|)+\\s*$/.test(row)
+}
+function cellWidth(text) {
+  let width = 0
+  for (const char of String(text)) {
+    const codePoint = char.codePointAt(0)
+    if (codePoint === undefined || (codePoint >= 0x0300 && codePoint <= 0x036f)) continue
+    if (codePoint === 0xfe0f || codePoint === 0x200d) continue
+    width += codePoint > 0xffff || (codePoint >= 0x1100 && codePoint <= 0x115f) ? 2 : 1
+  }
+  return width
+}
+function padCell(value, width) {
+  const text = String(value)
+  return text + ' '.repeat(Math.max(0, width - cellWidth(text)))
+}
+function splitToWidth(text, width) {
+  const parts = []
+  let line = ''
+  for (const char of String(text)) {
+    const next = line + char
+    if (line && cellWidth(next) > width) {
+      parts.push(line)
+      line = char
+    } else {
+      line = next
+    }
+  }
+  if (line) parts.push(line)
+  return parts
+}
+function wrapCell(value, width) {
+  const words = String(value).split(/\\s+/)
+  const lines = []
+  let line = ''
+  for (const word of words) {
+    if (cellWidth(word) > width) {
+      if (line) {
+        lines.push(line)
+        line = ''
+      }
+      lines.push(...splitToWidth(word, width))
+      continue
+    }
+    const next = line ? line + ' ' + word : word
+    if (line && cellWidth(next) > width) {
+      lines.push(line)
+      line = word
+    } else {
+      line = next
+    }
+  }
+  if (line) lines.push(line)
+  return lines.length ? lines : ['']
+}
+function rule(parts) {
+  return parts[0] + widths.map((width) => border.horizontal.repeat(width + 2)).join(parts[1]) + parts[2]
+}
+function renderRow(cells) {
+  const wrappedCells = widths.map((width, index) => wrapCell(cells[index] ?? '', width))
+  const height = Math.max(...wrappedCells.map((cell) => cell.length))
+  const rows = []
+  for (let line = 0; line < height; line += 1) {
+    rows.push(
+      border.vertical +
+        widths
+          .map((width, index) => ' ' + padCell(wrappedCells[index][line] ?? '', width) + ' ')
+          .join(border.vertical) +
+        border.vertical
+    )
+  }
+  return rows
+}
+const parsedRows = table
+  .split(/\\r?\\n/)
+  .filter((row) => row.trim().startsWith('|') && !isSeparatorRow(row))
+  .map(splitMarkdownRow)
+const rendered = [rule(border.top)]
+for (const [index, row] of parsedRows.entries()) {
+  rendered.push(...renderRow(row))
+  rendered.push(rule(index === parsedRows.length - 1 ? border.bottom : border.middle))
+}
+process.stdout.write('\\x1b[?2026h\\x1b[2J\\x1b[H')
+process.stdout.write(rendered.join('\\r\\n'))
+process.stdout.write('\\r\\n')
+process.stdout.write('\\r\\n${marker}\\r\\n')
+process.stdout.write('\\x1b[?2026l')
+`
+}
+
+function narrowSignerMarkdownTableScript(runId: string): string {
+  const marker = `NARROW_SIGNER_TABLE_RESTORE_${runId}`
+  const rows = [
+    '| # | Status | Signer | Action |',
+    '| ---: | --- | --- | --- |',
+    '| 1 | signed | did:key:z6Mkuw5kQqz1QvZ9f3d2aB7f19f0cAC7B4F3c9E725aD19cD12e6A8B3F4c5D6e7F8a9B0c1D2e3F4a5B6c7D8e9F0a1B2c3D4e5F6a7B8c9D0e1F2 | approve deployment |',
+    '| 2 | waiting | did:web:example.signing.service:teams:release:prod:primary-key-2026-06-08-with-extra-qualifiers-and-long-human-readable-suffix | counter-sign |',
+    '| 3 | signed | 0x742d35Cc6634C0532925a3b844Bc454e4438f44e9E8F12A7C4D9B6530F9D2C8E7A6B5C4D3E2F1A0B998877665544332211 | archive receipt |'
+  ]
+  const repeatedRows = Array.from({ length: 8 }, (_, index) =>
+    rows.concat(`| ${index + 4} | signed | signer-row-${index}-${'a'.repeat(96)} | verify |`)
+  ).flat()
+  return `
+const rows = ${JSON.stringify(repeatedRows)}
+process.stdout.write('\\x1b[?2026h\\x1b[2J\\x1b[H')
+for (const row of rows) {
+  process.stdout.write(row + '\\r\\n')
+}
+process.stdout.write('${marker}\\r\\n')
+process.stdout.write('\\x1b[?2026l')
+`
+}
+
+async function setNarrowTerminalViewport(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 920, height: 820 })
+  await page.waitForTimeout(250)
+  await page.evaluate(() => {
+    const store = window.__store
+    if (store?.getState().rightSidebarOpen) {
+      store.setState({ rightSidebarOpen: false })
+    }
+  })
+  await page.waitForTimeout(250)
+}
+
+async function setRenderedTableViewport(page: Page): Promise<void> {
+  await page.setViewportSize({ width: 1180, height: 820 })
+  await page.waitForTimeout(250)
+  await page.evaluate(() => {
+    const store = window.__store
+    if (store?.getState().rightSidebarOpen) {
+      store.setState({ rightSidebarOpen: false })
+    }
+  })
+  await page.waitForTimeout(250)
+}
+
 async function scrollActiveTerminalLikeUser(page: Page): Promise<void> {
   const target = await page.evaluate(() => {
     const store = window.__store
@@ -162,6 +338,185 @@ async function scrollActiveTerminalLikeUser(page: Page): Promise<void> {
   await page.mouse.move(target.x, target.y)
   await page.mouse.wheel(0, -1800)
   await page.waitForTimeout(250)
+}
+
+async function scrollActiveTerminalToText(page: Page, text: string): Promise<void> {
+  const target = await page.evaluate(() => {
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane unavailable')
+    }
+    pane.terminal.focus()
+    pane.terminal.scrollToBottom()
+    const viewport =
+      pane.container.querySelector<HTMLElement>('.xterm-viewport') ??
+      pane.container.querySelector<HTMLElement>('.xterm')
+    if (!viewport) {
+      throw new Error('Active terminal viewport unavailable')
+    }
+    const rect = viewport.getBoundingClientRect()
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    }
+  })
+  await page.mouse.move(target.x, target.y)
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    if ((await readActiveTerminalVisibleText(page)).includes(text)) {
+      return
+    }
+    await page.mouse.wheel(0, -600)
+    await page.waitForTimeout(50)
+  }
+  throw new Error(`Text not visible after scrolling terminal: ${text}`)
+}
+
+async function readActiveTerminalVisibleText(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane unavailable')
+    }
+    const buffer = pane.terminal.buffer.active
+    return Array.from({ length: pane.terminal.rows }, (_, row) => {
+      const line = buffer.getLine(buffer.viewportY + row)
+      return line?.translateToString(true) ?? ''
+    }).join('\n')
+  })
+}
+
+async function forceDarkTerminalRendererPath(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store unavailable')
+    }
+    const state = store.getState()
+    store.setState({
+      settings: {
+        ...state.settings!,
+        terminalGpuAcceleration: 'auto',
+        theme: 'dark'
+      }
+    })
+  })
+  await page.waitForTimeout(250)
+}
+
+async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
+  screenRight: number
+  offenderCount: number
+  offenders: { text: string; right: number; width: number }[]
+}> {
+  return page.evaluate(() => {
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const screen = pane?.container.querySelector<HTMLElement>('.xterm-screen')
+    const rows = pane?.container.querySelector<HTMLElement>('.xterm-rows')
+    if (!pane || !screen || !rows) {
+      throw new Error('Active terminal DOM unavailable')
+    }
+
+    const screenRect = screen.getBoundingClientRect()
+    const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+    const maxRight = screenRect.right + Math.max(1, cellWidth * 0.5)
+    const offenders = Array.from(rows.querySelectorAll<HTMLElement>('span'))
+      .map((span) => {
+        const rect = span.getBoundingClientRect()
+        return {
+          text: span.textContent ?? '',
+          right: rect.right,
+          width: rect.width
+        }
+      })
+      .filter((span) => span.width > 0 && span.right > maxRight)
+      .slice(0, 12)
+
+    return {
+      screenRight: screenRect.right,
+      offenderCount: offenders.length,
+      offenders
+    }
+  })
+}
+
+async function readTerminalBoxTableWrapDiagnostics(page: Page): Promise<{
+  cols: number
+  rows: number
+  baseY: number
+  viewportY: number
+  wrappedBoxLines: { index: number; text: string }[]
+  nearSinger: { index: number; isWrapped: boolean; text: string }[]
+}> {
+  return page.evaluate(() => {
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane unavailable')
+    }
+    const buffer = pane.terminal.buffer.active
+    const lineCount = buffer.baseY + buffer.length
+    const lines = Array.from({ length: lineCount }, (_, index) => {
+      const line = buffer.getLine(index)
+      return {
+        index,
+        isWrapped: line?.isWrapped === true,
+        text: line?.translateToString(true) ?? ''
+      }
+    })
+    const wrappedBoxLines = lines
+      .filter((line) => line.isWrapped && /[┌┬┐├┼┤└┴┘│─]/.test(line.text))
+      .slice(0, 20)
+    const singerIndex = lines.findIndex((line) => line.text.includes('Singer'))
+    const nearSinger =
+      singerIndex === -1 ? [] : lines.slice(Math.max(0, singerIndex - 4), singerIndex + 7)
+    return {
+      cols: pane.terminal.cols,
+      rows: pane.terminal.rows,
+      baseY: buffer.baseY,
+      viewportY: buffer.viewportY,
+      wrappedBoxLines,
+      nearSinger
+    }
+  })
 }
 
 async function closeFeatureTips(page: Page): Promise<void> {
@@ -298,6 +653,164 @@ test.describe('Terminal long table scroll restore repro', () => {
         path: screenshotPath,
         contentType: 'image/png'
       })
+    } finally {
+      rmSync(scriptPath, { force: true })
+    }
+  })
+
+  test('keeps narrow wrapped signer markdown table coherent after restore and scroll', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo: TestInfo) => {
+    await waitForSessionReady(orcaPage)
+    await orcaPage.evaluate(() => {
+      window.__store
+        ?.getState()
+        .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+      ;(window as LongTableDebugWindow).__terminalPtyOutputDebug?.reset()
+    })
+    const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+    const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
+      (id) => id !== firstWorktreeId
+    )
+    test.skip(!secondWorktreeId, 'narrow signer table repro needs the seeded secondary worktree')
+    if (!secondWorktreeId) {
+      return
+    }
+
+    await setRenderedTableViewport(orcaPage)
+    await forceDarkTerminalRendererPath(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID()
+    const marker = `NARROW_SIGNER_TABLE_RESTORE_${runId}`
+    const scriptPath = path.join(testRepoPath, `.orca-narrow-signer-table-${runId}.mjs`)
+    writeFileSync(scriptPath, narrowSignerMarkdownTableScript(runId))
+
+    try {
+      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await orcaPage.waitForTimeout(80)
+      await switchToWorktree(orcaPage, secondWorktreeId)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      await orcaPage.waitForTimeout(1_000)
+      await switchToWorktree(orcaPage, firstWorktreeId)
+      await ensureTerminalVisible(orcaPage)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      await expect
+        .poll(() => getTerminalContent(orcaPage, 30_000), {
+          timeout: 10_000,
+          message: 'narrow signer table marker did not survive workspace switch'
+        })
+        .toContain(marker)
+
+      await scrollActiveTerminalLikeUser(orcaPage)
+      await closeFeatureTips(orcaPage)
+      const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+      const hiddenDebug = await orcaPage.evaluate(() =>
+        (window as LongTableDebugWindow).__terminalPtyOutputDebug?.snapshot()
+      )
+      expect(hiddenDebug?.hiddenRendererSkipCount).toBe(0)
+      expect(diagnostics.cols).toBeLessThanOrEqual(110)
+      expect(diagnostics.hasWebgl).toBe(false)
+      expect(diagnostics.cursorHidden).toBe(false)
+
+      const content = await getTerminalContent(orcaPage, 30_000)
+      expect(content).toContain('Signer')
+      expect(content).toContain('did:key:z6Mkuw5kQqz1QvZ9f3d2aB7f19f0cAC7B4F3c9E725')
+      expect(content).toContain(marker)
+
+      const screenshotPath = testInfo.outputPath('narrow-signer-table-after-switch-scroll.png')
+      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
+      await testInfo.attach('narrow-signer-table-after-switch-scroll.png', {
+        path: screenshotPath,
+        contentType: 'image/png'
+      })
+    } finally {
+      rmSync(scriptPath, { force: true })
+    }
+  })
+
+  test('keeps real emoji markdown table right edge clean after restore and scroll', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo: TestInfo) => {
+    await waitForSessionReady(orcaPage)
+    await orcaPage.evaluate(() => {
+      window.__store
+        ?.getState()
+        .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+      ;(window as LongTableDebugWindow).__terminalPtyOutputDebug?.reset()
+    })
+    const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+    const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
+      (id) => id !== firstWorktreeId
+    )
+    test.skip(!secondWorktreeId, 'real emoji table repro needs the seeded secondary worktree')
+    if (!secondWorktreeId) {
+      return
+    }
+
+    await setNarrowTerminalViewport(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const runId = randomUUID()
+    const marker = `EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
+    const scriptPath = path.join(testRepoPath, `.orca-emoji-fixture-table-${runId}.mjs`)
+    writeFileSync(scriptPath, emojiFixtureMarkdownTableScript(EMOJI_TABLE_FIXTURE, runId))
+
+    try {
+      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await orcaPage.waitForTimeout(80)
+      await switchToWorktree(orcaPage, secondWorktreeId)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      await orcaPage.waitForTimeout(1_000)
+      await switchToWorktree(orcaPage, firstWorktreeId)
+      await ensureTerminalVisible(orcaPage)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      await expect
+        .poll(() => getTerminalContent(orcaPage, 30_000), {
+          timeout: 10_000,
+          message: 'real emoji table marker did not survive workspace switch'
+        })
+        .toContain(marker)
+
+      await scrollActiveTerminalToText(orcaPage, 'Singer')
+      await closeFeatureTips(orcaPage)
+      await expect
+        .poll(() => readActiveTerminalVisibleText(orcaPage), {
+          timeout: 5_000,
+          message: 'Singer row should be visible before screenshot'
+        })
+        .toContain('Singer')
+      const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+      const overpaint = await readTerminalRightEdgeOverpaint(orcaPage)
+      const wrapDiagnostics = await readTerminalBoxTableWrapDiagnostics(orcaPage)
+      const hiddenDebug = await orcaPage.evaluate(() =>
+        (window as LongTableDebugWindow).__terminalPtyOutputDebug?.snapshot()
+      )
+      expect(hiddenDebug?.hiddenRendererSkipCount).toBe(0)
+      expect(diagnostics.cols).toBeLessThan(100)
+      expect(diagnostics.hasWebgl).toBe(false)
+      expect(diagnostics.cursorHidden).toBe(false)
+      testInfo.annotations.push({
+        type: 'real-emoji-table-overpaint',
+        description: JSON.stringify(overpaint)
+      })
+      testInfo.annotations.push({
+        type: 'real-emoji-table-wrap-diagnostics',
+        description: JSON.stringify(wrapDiagnostics)
+      })
+
+      const screenshotPath = testInfo.outputPath('real-emoji-table-after-switch-scroll.png')
+      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
+      await testInfo.attach('real-emoji-table-after-switch-scroll.png', {
+        path: screenshotPath,
+        contentType: 'image/png'
+      })
+      expect(overpaint.offenders).toEqual([])
+      expect(wrapDiagnostics.wrappedBoxLines).toEqual([])
     } finally {
       rmSync(scriptPath, { force: true })
     }
