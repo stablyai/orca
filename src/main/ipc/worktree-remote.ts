@@ -29,6 +29,7 @@ import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
+import { detectUntrackedNestedRepos } from '../git/nested-repo-warning'
 import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RemoteFetchResult, RemoteTrackingBase } from '../runtime/orca-runtime'
@@ -1415,6 +1416,10 @@ export async function createLocalWorktree(
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
+  // Why: launched before the first await so the scan overlaps the create; the
+  // .catch lives at the launch site because intermediate throws would leave the
+  // promise un-awaited and a rejection would otherwise surface as unhandled.
+  const nestedReposPromise = detectUntrackedNestedRepos(repo.path).catch(() => null)
   const settings = store.getSettings()
   const worktreePathSettings = getWorktreePathSettings(repo, settings)
 
@@ -1870,8 +1875,10 @@ export async function createLocalWorktree(
   )
 
   notifyWorktreesChanged(mainWindow, repo.id)
+  const nestedRepos = await nestedReposPromise
   return {
     worktree,
+    ...(nestedRepos ? { nestedRepos } : {}),
     ...(setup && !stagedStartup.didSpawnSetup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(addResult.localBaseRefRefresh

@@ -15,7 +15,7 @@ type NestedRepoDirectoryEntry = {
   isSymlink?: boolean
 }
 
-type NestedRepoScanFilesystem = {
+export type NestedRepoScanFilesystem = {
   readDirectory: (dirPath: string) => Promise<NestedRepoDirectoryEntry[]>
   readTextFile?: (filePath: string) => Promise<string>
   joinPath: (parentPath: string, childName: string) => string
@@ -206,6 +206,20 @@ async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryE
   }))
 }
 
+// Why: exported so callers that scan INSIDE a git repo (e.g. the worktree-create
+// nested-repo warning) can reuse the local filesystem while overriding individual
+// hooks such as `isSelectedPathGitRepo` or `readTextFile`.
+export function createLocalNestedRepoScanFilesystem(): NestedRepoScanFilesystem {
+  return {
+    readDirectory: readLocalDirectory,
+    readTextFile: (path: string) => readFile(path, 'utf8'),
+    joinPath: join,
+    basename,
+    hasGitMarker,
+    isSelectedPathGitRepo: async (path: string) => isGitRepo(path) || (await hasGitMarker(path))
+  }
+}
+
 export async function scanNestedRepos(args: {
   path: string
   options?: unknown
@@ -219,14 +233,7 @@ export async function scanNestedRepos(args: {
   let truncated = false
   let timedOut = false
   let stopped = false
-  const filesystem = args.filesystem ?? {
-    readDirectory: readLocalDirectory,
-    readTextFile: (path: string) => readFile(path, 'utf8'),
-    joinPath: join,
-    basename,
-    hasGitMarker,
-    isSelectedPathGitRepo: async (path: string) => isGitRepo(path) || (await hasGitMarker(path))
-  }
+  const filesystem = args.filesystem ?? createLocalNestedRepoScanFilesystem()
   const buildResult = (selectedPathKind: NestedRepoScanResult['selectedPathKind']) => ({
     selectedPath: args.path,
     selectedPathKind,
