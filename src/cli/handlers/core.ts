@@ -52,7 +52,7 @@ function getOptionalServePort(flags: Map<string, string | boolean>): string | nu
 }
 
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
-  'claude-teams': async ({ client }) => {
+  'claude-teams': async ({ client, rawArgs }) => {
     if (process.platform === 'win32') {
       throw new RuntimeClientError(
         'unsupported_platform',
@@ -78,7 +78,7 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
         ...envRecord(),
         ...response.result.launch.env
       },
-      []
+      rawArgs ?? []
     )
   },
   open: async ({ client, json }) => {

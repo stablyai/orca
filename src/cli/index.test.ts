@@ -290,6 +290,71 @@ describe('orca cli worktree awareness', () => {
     }
   )
 
+  it.skipIf(process.platform === 'win32')(
+    'passes Claude Agent Teams arguments through to Claude Code',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(
+        ['claude-teams', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
+        '/tmp/repo'
+      )
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'auto', '--resume', 'session-1', '--model', 'sonnet', 'review this'],
+        {
+          stdio: 'inherit',
+          env: expect.objectContaining({
+            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+            TMUX_PANE: '%1'
+          })
+        }
+      )
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'does not duplicate an explicit Claude teammate mode',
+    async () => {
+      process.env.ORCA_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+      queueFixtures(
+        callMock,
+        okFixture('req_agent_teams_prepare', {
+          launch: {
+            env: {
+              CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
+              TMUX: '/tmp/orca-claude-agent-teams/team-1,0,1',
+              TMUX_PANE: '%1',
+              PATH: '/tmp/orca-shim:/usr/bin'
+            }
+          }
+        })
+      )
+
+      await main(['claude-teams', '--teammate-mode', 'in-process'], '/tmp/repo')
+
+      expect(spawnMock).toHaveBeenCalledWith(
+        'claude',
+        ['--teammate-mode', 'in-process'],
+        expect.objectContaining({ stdio: 'inherit' })
+      )
+    }
+  )
+
   it('rejects remote `worktree current` without listing worktrees from client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
