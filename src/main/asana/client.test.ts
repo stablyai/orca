@@ -6,15 +6,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let tempHome = ''
 
-async function loadClientModule() {
+type SafeStorageStub = {
+  isEncryptionAvailable: () => boolean
+  encryptString: (value: string) => Buffer
+  decryptString: (value: Buffer) => string
+}
+
+const plaintextSafeStorage: SafeStorageStub = {
+  isEncryptionAvailable: () => false,
+  encryptString: (value: string) => Buffer.from(value),
+  decryptString: (value: Buffer) => value.toString('utf-8')
+}
+
+// Marker-prefixed transform proves the encrypt/decrypt branch actually ran rather
+// than silently falling through to the plaintext path.
+const encryptedSafeStorage: SafeStorageStub = {
+  isEncryptionAvailable: () => true,
+  encryptString: (value: string) => Buffer.from(`enc:${value}`),
+  decryptString: (value: Buffer) => value.toString('utf-8').replace(/^enc:/, '')
+}
+
+async function loadClientModule(safeStorage: SafeStorageStub = plaintextSafeStorage) {
   vi.resetModules()
-  vi.doMock('electron', () => ({
-    safeStorage: {
-      isEncryptionAvailable: () => false,
-      encryptString: (value: string) => Buffer.from(value),
-      decryptString: (value: Buffer) => value.toString('utf-8')
-    }
-  }))
+  vi.doMock('electron', () => ({ safeStorage }))
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof Os>('os')
     return { ...actual, homedir: () => tempHome }
@@ -94,5 +108,41 @@ describe('Asana client workspace storage', () => {
     expect(clients).toHaveLength(1)
     expect(clients[0].authorization).toBe('Bearer pat-1')
     expect(clients[0].workspace.id).toBe('ws-1')
+  })
+
+  it('encrypts the token at rest and decrypts it on a fresh load', async () => {
+    const writer = await loadClientModule(encryptedSafeStorage)
+    mockFetchOnce({
+      data: { gid: 'user-1', name: 'Ada', workspaces: [{ gid: 'ws-1', name: 'Alpha' }] }
+    })
+    await writer.connect({ apiToken: 'pat-1' })
+
+    // Fresh module instance: in-memory token cache is empty, so this exercises the
+    // real on-disk encrypted round-trip (decryptString) rather than the cache hit.
+    const reader = await loadClientModule(encryptedSafeStorage)
+    const clients = reader.getClients('ws-1')
+    expect(clients).toHaveLength(1)
+    expect(clients[0].authorization).toBe('Bearer pat-1')
+  })
+
+  it('treats a token that cannot be decrypted as having no usable client', async () => {
+    const writer = await loadClientModule(encryptedSafeStorage)
+    mockFetchOnce({
+      data: { gid: 'user-1', name: 'Ada', workspaces: [{ gid: 'ws-1', name: 'Alpha' }] }
+    })
+    await writer.connect({ apiToken: 'pat-1' })
+
+    // A foreign-key-encrypted or corrupted token file: decryptString throws.
+    const reader = await loadClientModule({
+      isEncryptionAvailable: () => true,
+      encryptString: (value: string) => Buffer.from(value),
+      decryptString: () => {
+        throw new Error('decryption failed')
+      }
+    })
+    // readToken swallows the failure and yields null, so no client is built.
+    expect(reader.getClients('ws-1')).toEqual([])
+    // The file still exists, so status reports connected — only usability degrades.
+    expect(reader.getStatus().connected).toBe(true)
   })
 })

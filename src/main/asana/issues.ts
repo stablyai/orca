@@ -228,10 +228,12 @@ export async function searchTasks(
       )
       return (response.data ?? []).map((task) => mapAsanaTask(entry.workspace, task))
     } catch (error) {
-      // Why: typeahead/search is a premium-only endpoint. On non-auth failures
-      // (e.g. 402 Payment Required on free tiers) fall back to filtering the
-      // assigned task list locally so search still returns something useful.
-      if (error instanceof AsanaApiError && error.status !== 401 && error.status !== 403) {
+      // Why: typeahead/search is a premium-only endpoint that returns 402 on free
+      // tiers. Only that status means "search unavailable" — fall back to filtering
+      // the assigned task list locally. Every other status (429/5xx/400) is a real
+      // failure that must propagate, not be masked by plausible-but-wrong results.
+      if (error instanceof AsanaApiError && error.status === 402) {
+        console.warn('[asana] search endpoint unavailable (402), using local title filter')
         const tasks = await fetchTasksForClient(entry, 'all', 100)
         const lowered = text.toLowerCase()
         return tasks.filter((task) => task.title.toLowerCase().includes(lowered))

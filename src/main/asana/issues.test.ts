@@ -26,11 +26,11 @@ vi.mock('./client', () => ({
   asanaRequest: (...args: unknown[]) => asanaRequestMock(...args)
 }))
 
-function makeEntry(): AsanaClientForWorkspace {
+function makeEntry(id = 'ws-1', name = 'Example Workspace'): AsanaClientForWorkspace {
   return {
     workspace: {
-      id: 'ws-1',
-      name: 'Example Workspace',
+      id,
+      name,
       userGid: 'user-1',
       userName: 'Ada',
       userEmail: 'ada@example.com'
@@ -194,5 +194,97 @@ describe('Asana task operations', () => {
 
     const tasks = await searchTasks('login', 30, 'ws-1')
     expect(tasks.map((task) => task.gid)).toEqual(['1'])
+  })
+
+  it('does not mask non-premium API errors with the local title filter', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // A 5xx (also 429/400) must NOT trigger the premium-only fallback, which would
+    // return a plausible-but-wrong title-filtered slice of assigned tasks.
+    asanaRequestMock.mockRejectedValueOnce(new FakeAsanaApiError('Internal Server Error', 500))
+
+    const { searchTasks } = await import('./issues')
+
+    // The error degrades to the contract-standard empty result + warning (same as
+    // listTasks), never the fabricated local-filter list.
+    await expect(searchTasks('login', 30, 'ws-1')).resolves.toEqual([])
+    // The fallback fetch must not have been attempted — only the failed search call.
+    expect(asanaRequestMock).toHaveBeenCalledTimes(1)
+    expect(warnSpy).toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('clears the token and propagates the auth error when a single workspace is selected', async () => {
+    asanaRequestMock.mockRejectedValueOnce(new FakeAsanaApiError('Unauthorized', 401))
+
+    const { listTasks } = await import('./issues')
+
+    await expect(listTasks('assigned', 30, 'ws-1')).rejects.toMatchObject({ status: 401 })
+    expect(clearTokenMock).toHaveBeenCalledWith('ws-1')
+  })
+
+  it('swallows one workspace auth error and still returns surviving tasks when selecting all', async () => {
+    getClientsMock.mockReturnValue([makeEntry('ws-1', 'First'), makeEntry('ws-2', 'Second')])
+    asanaRequestMock.mockImplementation((entry: AsanaClientForWorkspace) => {
+      if (entry.workspace.id === 'ws-1') {
+        return Promise.reject(new FakeAsanaApiError('Unauthorized', 401))
+      }
+      return Promise.resolve({ data: [{ gid: '2', name: 'Survivor', completed: false }] })
+    })
+
+    const { listTasks } = await import('./issues')
+
+    const tasks = await listTasks('assigned', 30, 'all')
+    expect(tasks.map((task) => task.gid)).toEqual(['2'])
+    // The revoked workspace's token is cleared, but the error does not blank the aggregate.
+    expect(clearTokenMock).toHaveBeenCalledWith('ws-1')
+    expect(clearTokenMock).not.toHaveBeenCalledWith('ws-2')
+  })
+
+  it('merges and sorts tasks across workspaces by updatedAt descending when selecting all', async () => {
+    getClientsMock.mockReturnValue([makeEntry('ws-1', 'First'), makeEntry('ws-2', 'Second')])
+    asanaRequestMock.mockImplementation((entry: AsanaClientForWorkspace) => {
+      if (entry.workspace.id === 'ws-1') {
+        return Promise.resolve({
+          data: [
+            {
+              gid: 'older',
+              name: 'Older',
+              completed: false,
+              modified_at: '2026-06-01T00:00:00.000Z'
+            }
+          ]
+        })
+      }
+      return Promise.resolve({
+        data: [
+          { gid: 'newer', name: 'Newer', completed: false, modified_at: '2026-06-05T00:00:00.000Z' }
+        ]
+      })
+    })
+
+    const { listTasks } = await import('./issues')
+
+    const tasks = await listTasks('assigned', 30, 'all')
+    // Cross-workspace results are sorted by recency, not by workspace fan-out order.
+    expect(tasks.map((task) => task.gid)).toEqual(['newer', 'older'])
+  })
+
+  it('respects the limit when merging tasks across workspaces', async () => {
+    getClientsMock.mockReturnValue([makeEntry('ws-1', 'First'), makeEntry('ws-2', 'Second')])
+    asanaRequestMock.mockImplementation((entry: AsanaClientForWorkspace) => {
+      const stamp =
+        entry.workspace.id === 'ws-1' ? '2026-06-01T00:00:00.000Z' : '2026-06-05T00:00:00.000Z'
+      return Promise.resolve({
+        data: [
+          { gid: `${entry.workspace.id}-a`, name: 'A', completed: false, modified_at: stamp },
+          { gid: `${entry.workspace.id}-b`, name: 'B', completed: false, modified_at: stamp }
+        ]
+      })
+    })
+
+    const { listTasks } = await import('./issues')
+
+    const tasks = await listTasks('assigned', 3, 'all')
+    expect(tasks).toHaveLength(3)
   })
 })
