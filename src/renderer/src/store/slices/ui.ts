@@ -295,6 +295,11 @@ const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'all',
   'done'
 ])
+const VALID_ASANA_PRESETS = new Set<NonNullable<TaskResumeState['asanaPreset']>>([
+  'assigned',
+  'all',
+  'done'
+])
 
 function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
@@ -501,6 +506,15 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   }
   if (typeof input.jiraQuery === 'string') {
     next.jiraQuery = input.jiraQuery
+  }
+  if (
+    typeof input.asanaPreset === 'string' &&
+    VALID_ASANA_PRESETS.has(input.asanaPreset as NonNullable<TaskResumeState['asanaPreset']>)
+  ) {
+    next.asanaPreset = input.asanaPreset as NonNullable<TaskResumeState['asanaPreset']>
+  }
+  if (typeof input.asanaQuery === 'string') {
+    next.asanaQuery = input.asanaQuery
   }
 
   return Object.keys(next).length > 0 ? next : undefined

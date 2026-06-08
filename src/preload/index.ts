@@ -1432,6 +1432,76 @@ const api = {
       ipcRenderer.invoke('jira:listTransitions', args)
   },
 
+  asana: {
+    connect: (args: {
+      apiToken: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('asana:connect', args),
+
+    disconnect: (args?: { workspaceId?: string }): Promise<void> =>
+      ipcRenderer.invoke('asana:disconnect', args),
+
+    selectWorkspace: (args: { workspaceId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('asana:selectWorkspace', args),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('asana:status'),
+
+    testConnection: (args?: {
+      workspaceId?: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('asana:testConnection', args),
+
+    searchTasks: (args: {
+      query: string
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('asana:searchTasks', args),
+
+    listTasks: (args?: {
+      filter?: 'assigned' | 'all' | 'done'
+      limit?: number
+      workspaceId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('asana:listTasks', args),
+
+    getTask: (args: { gid: string; workspaceId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('asana:getTask', args),
+
+    createTask: (args: {
+      workspaceId?: string
+      projectId?: string
+      title: string
+      notes?: string
+      assigneeGid?: string
+    }): Promise<{ ok: true; gid: string; url: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('asana:createTask', args),
+
+    updateTask: (args: {
+      gid: string
+      updates: unknown
+      workspaceId?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('asana:updateTask', args),
+
+    addTaskComment: (args: {
+      gid: string
+      text: string
+      workspaceId?: string
+    }): Promise<{ ok: true; id: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('asana:addTaskComment', args),
+
+    taskComments: (args: { gid: string; workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('asana:taskComments', args),
+
+    listProjects: (args?: { workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('asana:listProjects', args),
+
+    listSections: (args: { projectGid: string; workspaceId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('asana:listSections', args),
+
+    listAssignableUsers: (args?: { workspaceId?: string; query?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('asana:listAssignableUsers', args)
+  },
+
   starNag: {
     onShow: (callback: () => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent): void => callback()

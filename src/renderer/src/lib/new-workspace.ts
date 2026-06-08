@@ -51,12 +51,13 @@ export { getLinkedWorkItemProvider, isGitLabIssueUrl } from './linked-work-item-
 
 export type LinkedWorkItemSummary = {
   type: 'issue' | 'pr' | 'mr'
-  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'asana'
   number: number
   title: string
   url: string
   linearIdentifier?: string
   jiraIdentifier?: string
+  asanaIdentifier?: string
   linkedContext?: LinkedWorkItemContext
 }
 
