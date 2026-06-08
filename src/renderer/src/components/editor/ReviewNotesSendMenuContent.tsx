@@ -1,6 +1,5 @@
-import React, { useCallback } from 'react'
-import { SquareTerminal } from 'lucide-react'
-import { toast } from 'sonner'
+import React, { useCallback, useState } from 'react'
+import { SquareArrowOutUpRight } from 'lucide-react'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import {
   DropdownMenuItem,
@@ -8,11 +7,8 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import {
-  activeAgentNotesSendFailureMessage,
-  sendNotesToActiveAgentSession,
-  useCanSendNotesToActiveTerminal
-} from '@/lib/active-agent-note-send'
+import { sendNotesToMostRecentAgentSession } from '@/lib/most-recent-agent-note-send'
+import { cn } from '@/lib/utils'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 
 export function ReviewNotesSendMenuContent({
@@ -31,41 +27,39 @@ export function ReviewNotesSendMenuContent({
   onPromptDelivered?: () => void
 }): React.JSX.Element {
   const hasPrompt = prompt.trim().length > 0
-  const canSendToActiveAgent = useCanSendNotesToActiveTerminal(worktreeId)
+  const [sendingToExistingSession, setSendingToExistingSession] = useState(false)
 
-  const sendToActiveAgent = useCallback(() => {
-    if (!hasPrompt || !canSendToActiveAgent) {
+  const sendToExistingAgentSession = useCallback(() => {
+    if (!hasPrompt || sendingToExistingSession) {
       return
     }
-    const pending = toast.loading('Sending notes to active agent...')
-    void sendNotesToActiveAgentSession({ worktreeId, prompt })
-      .then((result) => {
-        if (result.status === 'sent') {
-          onPromptDelivered?.()
-          toast.success('Notes sent to active agent.')
-          return
-        }
-        toast.message(activeAgentNotesSendFailureMessage(result.status))
-      })
+    setSendingToExistingSession(true)
+    void sendNotesToMostRecentAgentSession({
+      worktreeId,
+      prompt,
+      launchSource,
+      onPromptDelivered
+    })
       .catch((error) => {
-        console.error('Failed to send notes to active agent:', error)
-        toast.error('Could not send notes to the active agent.')
+        console.error('Failed to send notes to an existing agent session:', error)
       })
       .finally(() => {
-        toast.dismiss(pending)
+        setSendingToExistingSession(false)
       })
-  }, [canSendToActiveAgent, hasPrompt, worktreeId, prompt, onPromptDelivered])
+  }, [hasPrompt, launchSource, onPromptDelivered, prompt, sendingToExistingSession, worktreeId])
 
   return (
     <>
       <DropdownMenuLabel>Send notes to</DropdownMenuLabel>
       <DropdownMenuItem
-        disabled={!hasPrompt || !canSendToActiveAgent}
-        onSelect={sendToActiveAgent}
+        disabled={!hasPrompt || sendingToExistingSession}
+        onSelect={sendToExistingAgentSession}
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
-        <SquareTerminal className="size-3.5" />
-        Active agent session
+        <SquareArrowOutUpRight
+          className={cn('size-3.5', sendingToExistingSession && 'text-violet-500')}
+        />
+        {sendingToExistingSession ? 'Sending...' : 'Existing agent session'}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuLabel>New agent</DropdownMenuLabel>

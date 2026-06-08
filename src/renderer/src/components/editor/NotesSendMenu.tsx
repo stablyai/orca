@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { Send, Sparkles } from 'lucide-react'
-import { useAppStore } from '@/store'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui'
 import {
   DropdownMenu,
@@ -51,11 +50,8 @@ export function buildNotesSendTargetModeId(modeIdParts: readonly string[]): stri
 export function NotesSendMenu<TNote>({
   worktreeId,
   groupId,
-  modeIdParts,
   scopes,
   defaultScopeId,
-  source = 'diff-notes',
-  targetModeLabel,
   triggerClassName,
   triggerLabel,
   triggerCount,
@@ -65,11 +61,7 @@ export function NotesSendMenu<TNote>({
   align = 'end',
   onDelivered
 }: NotesSendMenuProps<TNote>): React.JSX.Element {
-  const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
-  const closeAgentSendPopoverTargetMode = useAppStore((s) => s.closeAgentSendPopoverTargetMode)
-  const activeTargetModeId = useAppStore((s) => s.agentSendPopoverTargetMode?.id ?? null)
   const [sendMenuOpen, setSendMenuOpen] = useState(false)
-  const targetModeId = useMemo(() => buildNotesSendTargetModeId(modeIdParts), [modeIdParts])
   const enabledScopes = useMemo(() => scopes.filter((scope) => scope.notes.length > 0), [scopes])
   const defaultScope = useMemo(() => {
     const requested = enabledScopes.find((scope) => scope.id === defaultScopeId)
@@ -84,61 +76,12 @@ export function NotesSendMenu<TNote>({
     [onDelivered]
   )
 
-  const openTargetMode = useCallback(
-    (scope: NotesSendMenuScope<TNote>) => {
-      if (scope.notes.length === 0) {
-        return
-      }
-      openAgentSendPopoverTargetMode({
-        id: targetModeId,
-        worktreeId,
-        source,
-        prompt: scope.prompt,
-        label: targetModeLabel ?? scope.label,
-        launchSource: 'notes_send',
-        onPromptDelivered: () => markDelivered(scope.notes)
-      })
-    },
-    [
-      markDelivered,
-      openAgentSendPopoverTargetMode,
-      source,
-      targetModeId,
-      targetModeLabel,
-      worktreeId
-    ]
-  )
-
-  const handleOpenChange = useCallback(
-    (open: boolean) => {
-      setSendMenuOpen(open)
-      if (open) {
-        if (defaultScope) {
-          openTargetMode(defaultScope)
-        }
-      } else {
-        closeAgentSendPopoverTargetMode(targetModeId)
-      }
-    },
-    [closeAgentSendPopoverTargetMode, defaultScope, openTargetMode, targetModeId]
-  )
-
-  const effectiveSendMenuOpen = sendMenuOpen && activeTargetModeId === targetModeId
-  if (sendMenuOpen && activeTargetModeId !== targetModeId) {
-    // Why: avoid rendering a stale menu for one paint after another send target
-    // wins; the local open bit is only meaningful while this target is active.
-    setSendMenuOpen(false)
-  }
-
-  useEffect(
-    () => () => {
-      closeAgentSendPopoverTargetMode(targetModeId)
-    },
-    [closeAgentSendPopoverTargetMode, targetModeId]
-  )
+  const handleOpenChange = useCallback((open: boolean) => {
+    setSendMenuOpen(open)
+  }, [])
 
   return (
-    <DropdownMenu modal={false} open={effectiveSendMenuOpen} onOpenChange={handleOpenChange}>
+    <DropdownMenu modal={false} open={sendMenuOpen} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -175,12 +118,7 @@ export function NotesSendMenu<TNote>({
           {hasDeliverableNotes ? ENABLED_SEND_TOOLTIP : disabledTooltip}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent
-        align={align}
-        className="min-w-[220px]"
-        onInteractOutside={preventAgentSendTargetOutsideDismiss}
-        onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
-      >
+      <DropdownMenuContent align={align} className="min-w-[220px]">
         {scopes.length > 1 ? (
           <>
             <DropdownMenuLabel>Send notes</DropdownMenuLabel>
@@ -189,8 +127,6 @@ export function NotesSendMenu<TNote>({
                 <DropdownMenuSubTrigger
                   disabled={scope.notes.length === 0}
                   className="[&>svg:last-child]:ml-0"
-                  onPointerEnter={() => openTargetMode(scope)}
-                  onFocus={() => openTargetMode(scope)}
                 >
                   <NoteScopeMenuRow label={scope.label} count={scope.notes.length} />
                 </DropdownMenuSubTrigger>
@@ -224,20 +160,6 @@ export function NotesSendMenu<TNote>({
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
-
-function preventAgentSendTargetOutsideDismiss(event: CustomEvent<{ originalEvent: Event }>) {
-  const target = event.detail.originalEvent.target
-  if (!(target instanceof Element)) {
-    return
-  }
-  if (
-    target.closest(
-      '[data-agent-send-target="eligible"], [data-agent-send-target="disabled"], [data-agent-send-target="sending"]'
-    )
-  ) {
-    event.preventDefault()
-  }
 }
 
 function NoteScopeMenuRow({ label, count }: { label: string; count: number }): React.JSX.Element {

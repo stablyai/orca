@@ -18,11 +18,7 @@ const hookRuntime = vi.hoisted(() => ({
 }))
 
 const storeMocks = vi.hoisted(() => ({
-  openAgentSendPopoverTargetMode: vi.fn(),
-  closeAgentSendPopoverTargetMode: vi.fn(),
-  state: {
-    agentSendPopoverTargetMode: null as { id: string } | null
-  }
+  sendNotesToMostRecentAgentSession: vi.fn()
 }))
 
 vi.mock('react', async () => {
@@ -58,13 +54,8 @@ vi.mock('react', async () => {
   }
 })
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      openAgentSendPopoverTargetMode: storeMocks.openAgentSendPopoverTargetMode,
-      closeAgentSendPopoverTargetMode: storeMocks.closeAgentSendPopoverTargetMode,
-      agentSendPopoverTargetMode: storeMocks.state.agentSendPopoverTargetMode
-    })
+vi.mock('@/lib/most-recent-agent-note-send', () => ({
+  sendNotesToMostRecentAgentSession: storeMocks.sendNotesToMostRecentAgentSession
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
@@ -115,20 +106,8 @@ vi.mock('@/components/tab-bar/QuickLaunchButton', () => ({
   }
 }))
 
-vi.mock('@/lib/active-agent-note-send', () => ({
-  activeAgentNotesSendFailureMessage: (status: string) => status,
-  sendNotesToActiveAgentSession: vi.fn(),
-  useCanSendNotesToActiveTerminal: () => false
-}))
-
-vi.mock('sonner', () => ({
-  toast: {
-    dismiss: vi.fn(),
-    error: vi.fn(),
-    loading: vi.fn(),
-    message: vi.fn(),
-    success: vi.fn()
-  }
+vi.mock('@/lib/focus-terminal-tab-surface', () => ({
+  focusTerminalTabSurface: vi.fn()
 }))
 
 function resetHookRuntime(): void {
@@ -255,9 +234,8 @@ describe('buildNotesSendTargetModeId', () => {
 describe('NotesSendMenu', () => {
   beforeEach(() => {
     resetHookRuntime()
-    storeMocks.openAgentSendPopoverTargetMode.mockReset()
-    storeMocks.closeAgentSendPopoverTargetMode.mockReset()
-    storeMocks.state.agentSendPopoverTargetMode = null
+    storeMocks.sendNotesToMostRecentAgentSession.mockReset()
+    storeMocks.sendNotesToMostRecentAgentSession.mockResolvedValue(true)
   })
 
   it('disables the trigger when no scope has deliverable notes', () => {
@@ -267,7 +245,7 @@ describe('NotesSendMenu', () => {
 
     expect(findByType(tree, 'button').props.disabled).toBe(true)
     expect(findByType(tree, 'button').props.title).toBe('All notes sent')
-    expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+    expect(storeMocks.sendNotesToMostRecentAgentSession).not.toHaveBeenCalled()
   })
 
   it('uses caller-provided disabled tooltip copy for disabled note actions', () => {
@@ -279,40 +257,43 @@ describe('NotesSendMenu', () => {
     expect(findByType(tree, 'button').props.title).toBe('Note already sent')
   })
 
-  it('opens and closes target mode with the default scope', () => {
-    const onDelivered = vi.fn()
-    const tree = renderMenu({ onDelivered })
-    expect(findByType(tree, 'button').props.title).toBe('Send notes to an agent')
+  it('opens the menu without sending notes or activating sidebar send mode', () => {
+    const tree = renderMenu()
     const dropdown = findByType(tree, 'DropdownMenu')
 
     ;(dropdown.props.onOpenChange as (open: boolean) => void)(true)
 
-    expect(storeMocks.openAgentSendPopoverTargetMode).toHaveBeenCalledWith(
+    expect(hookRuntime.states[0]).toBe(true)
+    expect(storeMocks.sendNotesToMostRecentAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('sends the default scope to the most recent existing agent session', () => {
+    const onDelivered = vi.fn()
+    const tree = renderMenu({ onDelivered })
+    expect(findByType(tree, 'button').props.title).toBe('Send notes to an agent')
+    const existingAgentItem = findByType(tree, 'DropdownMenuItem')
+
+    ;(existingAgentItem.props.onSelect as () => void)()
+
+    expect(storeMocks.sendNotesToMostRecentAgentSession).toHaveBeenCalledWith(
       expect.objectContaining({
-        id: buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail']),
         worktreeId: 'wt-1',
-        source: 'diff-notes',
         prompt: 'prompt-all',
-        label: 'All unsent notes',
-        launchSource: 'notes_send'
+        launchSource: 'notes_send',
+        onPromptDelivered: expect.any(Function)
       })
     )
 
-    const delivered = storeMocks.openAgentSendPopoverTargetMode.mock.calls[0][0]
+    const delivered = storeMocks.sendNotesToMostRecentAgentSession.mock.calls[0][0]
       .onPromptDelivered as () => void
     delivered()
     expect(onDelivered).toHaveBeenCalledWith([{ id: 'note-1' }])
-
-    ;(dropdown.props.onOpenChange as (open: boolean) => void)(false)
-    expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
-    )
   })
 
-  it('offers the active session action alongside new agent launchers', () => {
+  it('offers the existing-session action alongside new agent launchers', () => {
     const tree = renderMenu()
 
-    expect(findByType(tree, 'DropdownMenuItem').props.disabled).toBe(true)
+    expect(findByType(tree, 'DropdownMenuItem').props.disabled).toBe(false)
     expect(findByType(tree, 'QuickLaunchAgentMenuItems').props).toMatchObject({
       worktreeId: 'wt-1',
       groupId: 'group-1',
@@ -322,7 +303,7 @@ describe('NotesSendMenu', () => {
     })
   })
 
-  it('switches running-agent target mode when a different scope is focused', () => {
+  it('sends the selected note scope from its existing-session action', () => {
     const tree = renderMenu({
       defaultScopeId: 'file',
       scopes: [
@@ -331,33 +312,23 @@ describe('NotesSendMenu', () => {
       ]
     })
     const [fileTrigger, allTrigger] = findAllByType(tree, 'DropdownMenuSubTrigger')
+    const [, allExistingAgentItem] = findAllByType(tree, 'DropdownMenuItem')
 
-    ;(fileTrigger.props.onFocus as () => void)()
-    ;(allTrigger.props.onPointerEnter as () => void)()
+    expect(fileTrigger.props.onFocus).toBeUndefined()
+    expect(allTrigger.props.onPointerEnter).toBeUndefined()
+    ;(allExistingAgentItem.props.onSelect as () => void)()
 
-    expect(storeMocks.openAgentSendPopoverTargetMode).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ prompt: 'prompt-file', label: 'This file' })
-    )
-    expect(storeMocks.openAgentSendPopoverTargetMode).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ prompt: 'prompt-all', label: 'All unsent notes' })
+    expect(storeMocks.sendNotesToMostRecentAgentSession).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'wt-1', prompt: 'prompt-all' })
     )
   })
 
-  it('closes when another target mode becomes active and cleans up on unmount', () => {
+  it('keeps the menu open independently from sidebar target modes', () => {
     hookRuntime.states[0] = true
-    storeMocks.state.agentSendPopoverTargetMode = { id: 'some-other-menu' }
 
     const tree = renderMenu()
 
-    expect(hookRuntime.states[0]).toBe(false)
-    expect(findByType(tree, 'DropdownMenu').props.open).toBe(false)
-    for (const cleanup of hookRuntime.cleanups) {
-      cleanup()
-    }
-    expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
-      buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
-    )
+    expect(hookRuntime.states[0]).toBe(true)
+    expect(findByType(tree, 'DropdownMenu').props.open).toBe(true)
   })
 })
