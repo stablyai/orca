@@ -734,15 +734,16 @@ export function buildRows(
 
       result.push(header)
       if (!isCollapsed) {
-        if (groupBy === 'repo' && repo) {
-          const candidate = importedWorktreesByRepo.get(repo.id)
+        if (groupBy === 'repo') {
+          const repoId = repo?.id ?? key.slice('repo:'.length)
+          const candidate = importedWorktreesByRepo.get(repoId)
           if (candidate) {
             result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
           }
           // Why: surface in-progress creates at the top of their own repo so the
           // new workspace appears where it will land, not flashed to the very top
           // of the sidebar.
-          for (const creation of pendingByRepo.get(repo.id) ?? []) {
+          for (const creation of pendingByRepo.get(repoId) ?? []) {
             result.push(buildPendingCreationRow(creation, repoMap))
           }
         }

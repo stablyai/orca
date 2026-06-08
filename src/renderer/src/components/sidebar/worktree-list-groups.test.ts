@@ -1724,6 +1724,32 @@ describe('buildRows pending creations', () => {
     expect(rows.map((row) => row.type)).toEqual(['header', 'pending-creation'])
   })
 
+  it('keeps a pending creation visible when its repo metadata is temporarily missing', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [makePendingCreation('c1', repo.id)]
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: `repo:${repo.id}`, label: 'Unknown' },
+      { type: 'pending-creation', creationId: 'c1', repo: undefined }
+    ])
+  })
+
   it('surfaces pending creations at the top for non-repo groupings', () => {
     const rows = buildRows(
       'none',
