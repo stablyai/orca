@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react'
-import { BarChart3 } from 'lucide-react'
+import { BarChart3, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
@@ -14,6 +15,7 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const dismissUsageEmptyState = useAppStore((s) => s.dismissUsageEmptyState)
 
   // Why: the accounts pane lists every provider, so we don't preselect a
   // section ID — a brand-new user has no "Claude" or "Codex" yet.
@@ -22,6 +24,10 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
     openSettingsTarget({ pane: 'accounts', repoId: null })
     openSettingsPage()
   }, [openSettingsPage, openSettingsTarget, recordFeatureInteraction])
+
+  const handleHide = useCallback(() => {
+    dismissUsageEmptyState()
+  }, [dismissUsageEmptyState])
 
   return (
     <HoverCard openDelay={150} closeDelay={80}>
@@ -38,7 +44,26 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
       </HoverCardTrigger>
       <HoverCardContent side="top" align="start" sideOffset={8} className="w-[260px] p-2.5">
         <div className="space-y-2 text-xs leading-[1.45]">
-          <div className="font-semibold text-foreground">Agent usage limits</div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="font-semibold text-foreground">Agent usage limits</div>
+            {/* Why: permanently hide the teaching CTA — styling mirrors the
+                SetupGuideSidebarEntry hover-state icon (muted → foreground). */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={handleHide}
+                  aria-label="Hide from status bar"
+                  className="-mr-1 -mt-0.5 inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+                >
+                  <EyeOff className="size-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                Hide from status bar
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <p className="text-muted-foreground">
             Connect your AI provider accounts to see their usage in real time and easily switch
             between accounts.

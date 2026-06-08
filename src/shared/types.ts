@@ -2632,6 +2632,10 @@ export type PersistedUIState = {
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean
+  /** User-hidden empty-state usage CTA in the status bar. Permanently hides the
+   *  "Connect AI accounts to see usage" prompt even if all providers are later
+   *  disconnected — a dismissed teaching nudge stays dismissed. */
+  usageEmptyStateDismissed?: boolean
   /** URL to navigate to when a new browser tab is opened. Null means blank tab.
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null

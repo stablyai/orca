@@ -1519,6 +1519,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // purely by the experimentalPet settings flag.
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
+  const usageEmptyStateDismissed = useAppStore((s) => s.usageEmptyStateDismissed)
   const containerRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -1633,6 +1634,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     !isProviderConfigured(gemini) &&
     !isProviderConfigured(opencodeGo) &&
     !isProviderConfigured(kimi)
+  // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
+  // hidden even after providers are disconnected again.
+  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
@@ -1669,7 +1673,9 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     >
       <div className="flex items-center gap-3">
         {isEmptyUsageState ? (
-          <StatusBarUsageEmptyCta />
+          showEmptyUsageCta ? (
+            <StatusBarUsageEmptyCta />
+          ) : null
         ) : (
           <>
             {showClaude && (
