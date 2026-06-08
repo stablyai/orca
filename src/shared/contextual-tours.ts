@@ -120,7 +120,8 @@ export const CONTEXTUAL_TOURS = [
         // item only once the user has dismissed the import hint.
         targetSelector:
           '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]',
-        preferredPlacement: 'left'
+        // Sit below the Import button with the arrow pointing up at it.
+        preferredPlacement: 'bottom'
       }
     ]
   },

@@ -121,7 +121,7 @@ describe('contextual tour definitions', () => {
       // menu's Import Cookies row once the hint button is dismissed.
       targetSelector:
         '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]',
-      preferredPlacement: 'left'
+      preferredPlacement: 'bottom'
     })
   })
 
