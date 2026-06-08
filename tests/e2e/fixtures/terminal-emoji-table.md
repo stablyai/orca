@@ -96,4 +96,3 @@
 | 🥅 | Goal Net | Sports | U+1F945 | A soccer/hockey goal | Scoring | 44 | 2017 |
 | 🦺 | Safety Vest | Objects | U+1F9BA | A high-visibility vest | Protected | 51 | 2019 |
 | ✈️ | Airplane | Travel | U+2708 | A flying commercial jet | Traveling | 94 | 2010 |
-
