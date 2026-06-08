@@ -760,10 +760,17 @@ export class SshConnection {
 }
 
 export function shouldUseSystemSshTransport(
-  _target: SshTarget,
-  resolved: Pick<SshResolvedConfig, 'proxyUseFdpass'> | null
+  target: SshTarget,
+  resolved: Pick<SshResolvedConfig, 'proxyUseFdpass' | 'proxyCommand' | 'proxyJump'> | null
 ): boolean {
-  return process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' || resolved?.proxyUseFdpass === true
+  return (
+    process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
+    target.proxyCommand != null ||
+    target.jumpHost != null ||
+    resolved?.proxyUseFdpass === true ||
+    resolved?.proxyCommand != null ||
+    resolved?.proxyJump != null
+  )
 }
 
 export { SshConnectionManager } from './ssh-connection-manager'
