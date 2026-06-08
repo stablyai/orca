@@ -8213,6 +8213,28 @@ describe('OrcaRuntimeService', () => {
     await waitPromise
   })
 
+  it('does not resolve type-filtered message waiters for unrelated message types', async () => {
+    const runtime = new OrcaRuntimeService(store)
+
+    const waitPromise = runtime.waitForMessage('term_abc', {
+      typeFilter: ['worker_done', 'escalation'],
+      timeoutMs: 5000
+    })
+    let settled = false
+    void waitPromise.then(() => {
+      settled = true
+    })
+
+    runtime.notifyMessageArrived('term_abc', 'heartbeat')
+    await Promise.resolve()
+
+    expect(settled).toBe(false)
+
+    runtime.notifyMessageArrived('term_abc', 'worker_done')
+    await waitPromise
+    expect(settled).toBe(true)
+  })
+
   it('removes message waiter abort listeners after message arrival', async () => {
     const runtime = new OrcaRuntimeService(store)
     const controller = new AbortController()

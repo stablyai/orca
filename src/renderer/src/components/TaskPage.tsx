@@ -203,6 +203,7 @@ import {
   useTeamLabels
 } from '@/hooks/useIssueMetadata'
 import {
+  linearCreateProject,
   linearCreateIssue,
   linearGetIssue,
   linearTeamStates,
@@ -498,10 +499,7 @@ const LINEAR_MODE_OPTIONS: { id: LinearMode; label: string }[] = [
   { id: 'views', label: 'Views' }
 ]
 
-const LINEAR_CUSTOM_VIEW_MODEL_OPTIONS: { id: LinearCustomViewModel; label: string }[] = [
-  { id: 'issue', label: 'Issues' },
-  { id: 'project', label: 'Projects' }
-]
+const LINEAR_CUSTOM_VIEW_MODELS = ['issue', 'project'] satisfies readonly LinearCustomViewModel[]
 
 const LINEAR_VIEW_OPTIONS: {
   id: LinearViewMode
@@ -511,6 +509,17 @@ const LINEAR_VIEW_OPTIONS: {
   { id: 'list', label: 'List', Icon: List },
   { id: 'board', label: 'Board', Icon: LayoutGrid }
 ]
+
+function mergeLinearCollectionResults<T>(
+  results: LinearCollectionResult<T>[]
+): LinearCollectionResult<T> {
+  const errors = results.flatMap((result) => result.errors ?? [])
+  return {
+    items: results.flatMap((result) => result.items),
+    ...(errors.length > 0 ? { errors } : {}),
+    ...(results.some((result) => result.hasMore) ? { hasMore: true } : {})
+  }
+}
 
 const LINEAR_GROUP_OPTIONS: { id: LinearGroupBy; label: string }[] = [
   { id: 'none', label: 'No grouping' },
@@ -3200,7 +3209,6 @@ export default function TaskPage(): React.JSX.Element {
   >(null)
   const [linearProjectIssuesLoading, setLinearProjectIssuesLoading] = useState(false)
   const [linearProjectIssuesError, setLinearProjectIssuesError] = useState<string | null>(null)
-  const [linearCustomViewModel, setLinearCustomViewModel] = useState<LinearCustomViewModel>('issue')
   const [linearCustomViewsResult, setLinearCustomViewsResult] = useState<
     LinearCollectionResult<LinearCustomViewSummary>
   >({ items: [] })
@@ -3442,7 +3450,6 @@ export default function TaskPage(): React.JSX.Element {
     }
 
     if (context.kind === 'view' && context.model) {
-      setLinearCustomViewModel(context.model)
       setLinearMode('views')
       setLinearCustomViewsLoading(true)
       setLinearCustomViewsError(null)
@@ -4246,6 +4253,41 @@ export default function TaskPage(): React.JSX.Element {
     [jiraIssues, jiraCacheSnapshot.issueCache, jiraCacheSnapshot.searchCache]
   )
 
+  // New Linear project dialog state
+  const [newLinearProjectOpen, setNewLinearProjectOpen] = useState(false)
+  const [newLinearProjectName, setNewLinearProjectName] = useState('')
+  const [newLinearProjectDescription, setNewLinearProjectDescription] = useState('')
+  const [newLinearProjectContent, setNewLinearProjectContent] = useState('')
+  const [newLinearProjectTeamId, setNewLinearProjectTeamId] = useState<string | null>(null)
+  const [newLinearProjectLeadId, setNewLinearProjectLeadId] = useState<string | null>(null)
+  const [newLinearProjectMemberIds, setNewLinearProjectMemberIds] = useState<string[]>([])
+  const [newLinearProjectLabelIds, setNewLinearProjectLabelIds] = useState<string[]>([])
+  const [newLinearProjectPriority, setNewLinearProjectPriority] = useState<number>(0)
+  const [newLinearProjectStartDate, setNewLinearProjectStartDate] = useState('')
+  const [newLinearProjectTargetDate, setNewLinearProjectTargetDate] = useState('')
+  const [newLinearProjectSubmitting, setNewLinearProjectSubmitting] = useState(false)
+
+  const newLinearProjectTargetTeam = useMemo(
+    () => availableTeams.find((t) => t.id === newLinearProjectTeamId) ?? availableTeams[0] ?? null,
+    [availableTeams, newLinearProjectTeamId]
+  )
+  const newLinearProjectMembers = useTeamMembers(
+    newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
+    settings,
+    newLinearProjectTargetTeam?.workspaceId
+  )
+  const newLinearProjectLabels = useTeamLabels(
+    newLinearProjectOpen ? (newLinearProjectTargetTeam?.id ?? null) : null,
+    settings,
+    newLinearProjectTargetTeam?.workspaceId
+  )
+
+  useEffect(() => {
+    setNewLinearProjectLeadId(null)
+    setNewLinearProjectMemberIds([])
+    setNewLinearProjectLabelIds([])
+  }, [newLinearProjectTargetTeam?.id, newLinearProjectTargetTeam?.workspaceId])
+
   // New Linear issue dialog state
   const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
   const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
@@ -4347,6 +4389,7 @@ export default function TaskPage(): React.JSX.Element {
       !gitlabDialogItem &&
       !selectedLinearIssue &&
       !newIssueOpen &&
+      !newLinearProjectOpen &&
       !newLinearIssueOpen &&
       !linearConnectOpen &&
       activeModal === 'none',
@@ -5112,6 +5155,7 @@ export default function TaskPage(): React.JSX.Element {
       githubMode !== 'items' ||
       dialogWorkItem ||
       newIssueOpen ||
+      newLinearProjectOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
       activeModal !== 'none'
@@ -5154,6 +5198,7 @@ export default function TaskPage(): React.JSX.Element {
     dialogWorkItem,
     githubMode,
     newIssueOpen,
+    newLinearProjectOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
     taskSource
@@ -5348,6 +5393,81 @@ export default function TaskPage(): React.JSX.Element {
     newIssueTitle,
     openGitHubDetailPage,
     setDialogWorkItem
+  ])
+
+  const handleCreateNewLinearProject = useCallback(async (): Promise<void> => {
+    if (!newLinearProjectTargetTeam) {
+      return
+    }
+    const name = newLinearProjectName.trim()
+    if (!name || newLinearProjectSubmitting) {
+      return
+    }
+    setNewLinearProjectSubmitting(true)
+    try {
+      const result = await linearCreateProject(settings, {
+        name,
+        description: newLinearProjectDescription.trim() || undefined,
+        content: newLinearProjectContent.trim() || undefined,
+        teamIds: [newLinearProjectTargetTeam.id],
+        workspaceId: newLinearProjectTargetTeam.workspaceId,
+        leadId: newLinearProjectLeadId || undefined,
+        memberIds: newLinearProjectMemberIds.length > 0 ? newLinearProjectMemberIds : undefined,
+        labelIds: newLinearProjectLabelIds.length > 0 ? newLinearProjectLabelIds : undefined,
+        priority: newLinearProjectPriority,
+        startDate: newLinearProjectStartDate || undefined,
+        targetDate: newLinearProjectTargetDate || undefined
+      })
+      if (!result.ok) {
+        toast.error(result.error || 'Failed to create project.')
+        return
+      }
+      toast.success(`Created ${result.project.name}`, {
+        action: result.project.url
+          ? {
+              label: 'View',
+              onClick: () => window.open(result.project.url, '_blank')
+            }
+          : undefined
+      })
+      setNewLinearProjectOpen(false)
+      setNewLinearProjectName('')
+      setNewLinearProjectDescription('')
+      setNewLinearProjectContent('')
+      setNewLinearProjectLeadId(null)
+      setNewLinearProjectMemberIds([])
+      setNewLinearProjectLabelIds([])
+      setNewLinearProjectPriority(0)
+      setNewLinearProjectStartDate('')
+      setNewLinearProjectTargetDate('')
+      setAppliedLinearProjectSearch('')
+      setLinearProjectSearchInput('')
+      setLinearProjectsResult((current) => ({
+        ...current,
+        items: [result.project, ...current.items.filter((item) => item.id !== result.project.id)]
+      }))
+      setSelectedLinearProjectDetail(result.project)
+      openLinearProjectContext(result.project)
+      setLinearRefreshNonce((n) => n + 1)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create project.')
+    } finally {
+      setNewLinearProjectSubmitting(false)
+    }
+  }, [
+    newLinearProjectContent,
+    newLinearProjectDescription,
+    newLinearProjectLabelIds,
+    newLinearProjectLeadId,
+    newLinearProjectMemberIds,
+    newLinearProjectName,
+    newLinearProjectPriority,
+    newLinearProjectStartDate,
+    newLinearProjectSubmitting,
+    newLinearProjectTargetDate,
+    newLinearProjectTargetTeam,
+    openLinearProjectContext,
+    settings
   ])
 
   const handleCreateNewLinearIssue = useCallback(async (): Promise<void> => {
@@ -5884,17 +6004,28 @@ export default function TaskPage(): React.JSX.Element {
       return
     }
     let cancelled = false
-    const cached = getCachedLinearCustomViews(linearCustomViewModel, LINEAR_ITEM_LIMIT)
-    if (cached) {
-      setLinearCustomViewsResult(cached)
+    const cachedResults = LINEAR_CUSTOM_VIEW_MODELS.map((model) =>
+      getCachedLinearCustomViews(model, LINEAR_ITEM_LIMIT)
+    )
+    const allCached = cachedResults.every(
+      (result): result is LinearCollectionResult<LinearCustomViewSummary> => result !== null
+    )
+    if (allCached) {
+      setLinearCustomViewsResult(mergeLinearCollectionResults(cachedResults))
     }
     const force = linearRefreshNonce > 0
-    setLinearCustomViewsLoading(force || cached === null)
+    setLinearCustomViewsLoading(force || !allCached)
     setLinearCustomViewsError(null)
-    void listLinearCustomViews(linearCustomViewModel, LINEAR_ITEM_LIMIT, undefined, { force })
+    // Why: the Views tab already has a Model column, so listing both view
+    // models avoids a second, redundant Issues/Projects switch.
+    void Promise.all(
+      LINEAR_CUSTOM_VIEW_MODELS.map((model) =>
+        listLinearCustomViews(model, LINEAR_ITEM_LIMIT, undefined, { force })
+      )
+    )
       .then((result) => {
         if (!cancelled) {
-          setLinearCustomViewsResult(result)
+          setLinearCustomViewsResult(mergeLinearCollectionResults(result))
           setLinearCustomViewsLoading(false)
         }
       })
@@ -5917,9 +6048,9 @@ export default function TaskPage(): React.JSX.Element {
     linearStatus.connected,
     selectedLinearWorkspaceId,
     selectedLinearCustomView,
-    linearCustomViewModel,
     linearRefreshNonce,
-    getCachedLinearCustomViews
+    getCachedLinearCustomViews,
+    listLinearCustomViews
   ])
 
   useEffect(() => {
@@ -6755,6 +6886,20 @@ export default function TaskPage(): React.JSX.Element {
                               variant="outline"
                               size="icon"
                               onClick={() => {
+                                if (linearMode === 'projects' && !selectedLinearProject) {
+                                  setNewLinearProjectName('')
+                                  setNewLinearProjectDescription('')
+                                  setNewLinearProjectContent('')
+                                  setNewLinearProjectTeamId(availableTeams[0]?.id ?? null)
+                                  setNewLinearProjectLeadId(null)
+                                  setNewLinearProjectMemberIds([])
+                                  setNewLinearProjectLabelIds([])
+                                  setNewLinearProjectPriority(0)
+                                  setNewLinearProjectStartDate('')
+                                  setNewLinearProjectTargetDate('')
+                                  setNewLinearProjectOpen(true)
+                                  return
+                                }
                                 setNewLinearIssueTitle('')
                                 setNewLinearIssueBody('')
                                 const projectTeamId =
@@ -6770,14 +6915,20 @@ export default function TaskPage(): React.JSX.Element {
                                 setNewLinearIssueOpen(true)
                               }}
                               disabled={availableTeams.length === 0}
-                              aria-label="New Linear issue"
+                              aria-label={
+                                linearMode === 'projects' && !selectedLinearProject
+                                  ? 'New Linear project'
+                                  : 'New Linear issue'
+                              }
                               className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               <Plus className="size-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            New Linear issue
+                            {linearMode === 'projects' && !selectedLinearProject
+                              ? 'New Linear project'
+                              : 'New Linear issue'}
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip>
@@ -6889,38 +7040,6 @@ export default function TaskPage(): React.JSX.Element {
                             </button>
                           ) : null}
                         </div>
-                      </div>
-                    ) : linearMode === 'views' && !selectedLinearCustomView ? (
-                      <div
-                        className="mt-3 flex min-w-0 flex-wrap items-center gap-2"
-                        role="group"
-                        aria-label="Linear view type"
-                      >
-                        {LINEAR_CUSTOM_VIEW_MODEL_OPTIONS.map((option) => {
-                          const active = option.id === linearCustomViewModel
-                          return (
-                            <button
-                              key={option.id}
-                              type="button"
-                              aria-pressed={active}
-                              onClick={() => {
-                                setSelectedLinearCustomView(null)
-                                setLinearCustomViewModel(option.id)
-                                setLinearCustomViewsResult({ items: [] })
-                                setLinearCustomViewsError(null)
-                                setLinearRefreshNonce((n) => n + 1)
-                              }}
-                              className={cn(
-                                'rounded-md border px-2 py-1 text-xs transition',
-                                active
-                                  ? 'border-border/50 bg-foreground/90 text-background backdrop-blur-md'
-                                  : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
-                              )}
-                            >
-                              {option.label}
-                            </button>
-                          )
-                        })}
                       </div>
                     ) : null}
                   </div>
@@ -8256,7 +8375,6 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
                 <LinearCustomViewTable
                   views={linearCustomViewsResult.items}
-                  model={linearCustomViewModel}
                   loading={linearCustomViewsLoading}
                   hasError={!!linearCustomViewsResult.errors?.length}
                   workspaceSelection={selectedLinearWorkspaceId}
@@ -8272,7 +8390,7 @@ export default function TaskPage(): React.JSX.Element {
                 errors={linearCustomViewsResult.errors}
                 hasMore={linearCustomViewsResult.hasMore}
                 count={linearCustomViewsResult.items.length}
-                label={`${linearCustomViewModel} views`}
+                label="views"
               />
             </div>
           ) : selectedLinearCustomView?.model === 'project' && !selectedLinearProject ? (
@@ -9160,6 +9278,440 @@ export default function TaskPage(): React.JSX.Element {
                 </>
               ) : (
                 'Create issue'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={newLinearProjectOpen}
+        onOpenChange={(open) => {
+          if (!newLinearProjectSubmitting) {
+            setNewLinearProjectOpen(open)
+          }
+        }}
+      >
+        <DialogContent
+          showCloseButton={false}
+          className="flex max-h-[88vh] flex-col gap-0 overflow-hidden rounded-xl border-border bg-background p-0 shadow-2xl sm:max-w-3xl"
+          onKeyDown={(event) => {
+            if (isScreenSubmitShortcut(event)) {
+              event.preventDefault()
+              void handleCreateNewLinearProject()
+            }
+          }}
+        >
+          <DialogTitle className="sr-only">New Linear project</DialogTitle>
+          <DialogDescription className="sr-only">
+            Create a Linear project for the selected team.
+          </DialogDescription>
+          <div className="flex items-center justify-between border-b border-border/60 bg-muted/10 px-5 py-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                New Project
+              </span>
+              <span className="text-xs text-muted-foreground/40">/</span>
+              {availableTeams.length > 1 ? (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="h-7 max-w-56 gap-1 px-2 text-xs font-medium text-foreground hover:bg-muted"
+                    >
+                      <span className="truncate">
+                        {newLinearProjectTargetTeam
+                          ? `${newLinearProjectTargetTeam.key} - ${newLinearProjectTargetTeam.name}`
+                          : 'Select team'}
+                      </span>
+                      <ChevronDown className="size-3 flex-none text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 p-1">
+                    <div className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Team
+                    </div>
+                    <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                      {availableTeams.map((team) => (
+                        <button
+                          key={team.id}
+                          type="button"
+                          onClick={() => setNewLinearProjectTeamId(team.id)}
+                          className={cn(
+                            'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                            newLinearProjectTargetTeam?.id === team.id
+                              ? 'bg-muted font-medium text-foreground'
+                              : 'text-foreground/80'
+                          )}
+                        >
+                          <span className="truncate">
+                            {team.key} - {team.name}
+                          </span>
+                          {newLinearProjectTargetTeam?.id === team.id ? (
+                            <Check className="size-3 flex-none" />
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <span className="truncate text-xs font-medium text-foreground">
+                  {newLinearProjectTargetTeam
+                    ? `${newLinearProjectTargetTeam.key} - ${newLinearProjectTargetTeam.name}`
+                    : ''}
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setNewLinearProjectOpen(false)}
+              className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+              disabled={newLinearProjectSubmitting}
+              aria-label="Close"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5 scrollbar-sleek">
+            <input
+              autoFocus
+              value={newLinearProjectName}
+              onChange={(event) => setNewLinearProjectName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                  event.preventDefault()
+                  void handleCreateNewLinearProject()
+                }
+              }}
+              placeholder="Project name"
+              disabled={newLinearProjectSubmitting}
+              className="w-full border-none bg-transparent p-0 text-xl font-semibold text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
+            />
+
+            <input
+              value={newLinearProjectDescription}
+              onChange={(event) => setNewLinearProjectDescription(event.target.value)}
+              placeholder="Add a short summary..."
+              disabled={newLinearProjectSubmitting}
+              className="w-full border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 focus:outline-none focus:ring-0 focus-visible:ring-0"
+            />
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={newLinearProjectSubmitting}
+                    className="flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/15 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+                  >
+                    <LinearPriorityIcon priority={newLinearProjectPriority} className="size-3.5" />
+                    <span>{getLinearPriorityLabel(newLinearProjectPriority)}</span>
+                    <ChevronDown className="size-3 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-48 p-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Priority
+                  </div>
+                  {[0, 1, 2, 3, 4].map((priority) => (
+                    <button
+                      key={priority}
+                      type="button"
+                      onClick={() => setNewLinearProjectPriority(priority)}
+                      className={cn(
+                        'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                        newLinearProjectPriority === priority
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-foreground/80'
+                      )}
+                    >
+                      <span className="flex items-center gap-2">
+                        <LinearPriorityIcon priority={priority} className="size-3.5" />
+                        {getLinearPriorityLabel(priority)}
+                      </span>
+                      {newLinearProjectPriority === priority ? (
+                        <Check className="size-3 text-foreground" />
+                      ) : null}
+                    </button>
+                  ))}
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={newLinearProjectSubmitting}
+                    className="flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/15 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+                  >
+                    <UserRound className="size-3.5 text-muted-foreground/70" />
+                    <span className="max-w-[120px] truncate">
+                      {newLinearProjectMembers.data.find(
+                        (member) => member.id === newLinearProjectLeadId
+                      )?.displayName ?? 'Lead'}
+                    </span>
+                    <ChevronDown className="size-3 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Lead
+                  </div>
+                  {newLinearProjectMembers.loading ? (
+                    <div className="flex items-center justify-center p-4">
+                      <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                      <button
+                        type="button"
+                        onClick={() => setNewLinearProjectLeadId(null)}
+                        className={cn(
+                          'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                          newLinearProjectLeadId === null
+                            ? 'bg-muted font-medium text-foreground'
+                            : 'text-foreground/80'
+                        )}
+                      >
+                        <span className="flex items-center gap-2">
+                          <UserRound className="size-3.5 text-muted-foreground/50" />
+                          No lead
+                        </span>
+                        {newLinearProjectLeadId === null ? <Check className="size-3" /> : null}
+                      </button>
+                      {newLinearProjectMembers.data.map((member) => (
+                        <button
+                          key={member.id}
+                          type="button"
+                          onClick={() => setNewLinearProjectLeadId(member.id)}
+                          className={cn(
+                            'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                            newLinearProjectLeadId === member.id
+                              ? 'bg-muted font-medium text-foreground'
+                              : 'text-foreground/80'
+                          )}
+                        >
+                          <span className="flex min-w-0 items-center gap-2">
+                            {member.avatarUrl ? (
+                              <img
+                                src={member.avatarUrl}
+                                alt={member.displayName}
+                                className="size-3.5 flex-none rounded-full"
+                              />
+                            ) : (
+                              <UserRound className="size-3.5 flex-none text-muted-foreground/70" />
+                            )}
+                            <span className="truncate">{member.displayName}</span>
+                          </span>
+                          {newLinearProjectLeadId === member.id ? (
+                            <Check className="size-3 flex-none" />
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={newLinearProjectSubmitting}
+                    className="flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/15 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+                  >
+                    <Users className="size-3.5 text-muted-foreground/70" />
+                    <span>
+                      {newLinearProjectMemberIds.length === 0
+                        ? 'Members'
+                        : `${newLinearProjectMemberIds.length} member${newLinearProjectMemberIds.length > 1 ? 's' : ''}`}
+                    </span>
+                    <ChevronDown className="size-3 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Members
+                  </div>
+                  {newLinearProjectMembers.loading ? (
+                    <div className="flex items-center justify-center p-4">
+                      <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                      {newLinearProjectMembers.data.map((member) => {
+                        const selected = newLinearProjectMemberIds.includes(member.id)
+                        return (
+                          <button
+                            key={member.id}
+                            type="button"
+                            onClick={() =>
+                              setNewLinearProjectMemberIds((current) =>
+                                selected
+                                  ? current.filter((id) => id !== member.id)
+                                  : [...current, member.id]
+                              )
+                            }
+                            className={cn(
+                              'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                              selected
+                                ? 'bg-muted font-medium text-foreground'
+                                : 'text-foreground/80'
+                            )}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              {member.avatarUrl ? (
+                                <img
+                                  src={member.avatarUrl}
+                                  alt={member.displayName}
+                                  className="size-3.5 flex-none rounded-full"
+                                />
+                              ) : (
+                                <UserRound className="size-3.5 flex-none text-muted-foreground/70" />
+                              )}
+                              <span className="truncate">{member.displayName}</span>
+                            </span>
+                            {selected ? <Check className="size-3 flex-none" /> : null}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={newLinearProjectSubmitting}
+                    className="flex items-center gap-1.5 rounded-md border border-border/80 bg-muted/15 px-2 py-1 text-xs text-foreground/80 transition-colors hover:bg-muted/50 active:bg-muted disabled:opacity-50"
+                  >
+                    <Tag className="size-3.5 text-muted-foreground/70" />
+                    <span>
+                      {newLinearProjectLabelIds.length === 0
+                        ? 'Labels'
+                        : `${newLinearProjectLabelIds.length} label${newLinearProjectLabelIds.length > 1 ? 's' : ''}`}
+                    </span>
+                    <ChevronDown className="size-3 text-muted-foreground/70" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-1">
+                  <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Labels
+                  </div>
+                  {newLinearProjectLabels.loading ? (
+                    <div className="flex items-center justify-center p-4">
+                      <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+                      {newLinearProjectLabels.data.length === 0 ? (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">No labels</div>
+                      ) : (
+                        newLinearProjectLabels.data.map((label) => {
+                          const selected = newLinearProjectLabelIds.includes(label.id)
+                          return (
+                            <button
+                              key={label.id}
+                              type="button"
+                              onClick={() =>
+                                setNewLinearProjectLabelIds((current) =>
+                                  selected
+                                    ? current.filter((id) => id !== label.id)
+                                    : [...current, label.id]
+                                )
+                              }
+                              className={cn(
+                                'flex w-full items-center justify-between rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted',
+                                selected
+                                  ? 'bg-muted font-medium text-foreground'
+                                  : 'text-foreground/80'
+                              )}
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <span
+                                  className="size-2 flex-none rounded-full bg-muted-foreground/40"
+                                  style={label.color ? { backgroundColor: label.color } : undefined}
+                                />
+                                <span className="truncate">{label.name}</span>
+                              </span>
+                              {selected ? <Check className="size-3 flex-none" /> : null}
+                            </button>
+                          )
+                        })
+                      )}
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                <Clock3 className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="shrink-0 text-muted-foreground">Start</span>
+                <input
+                  type="date"
+                  value={newLinearProjectStartDate}
+                  onChange={(event) => setNewLinearProjectStartDate(event.target.value)}
+                  disabled={newLinearProjectSubmitting}
+                  className="h-5 min-w-[6.75rem] cursor-pointer border-none bg-transparent p-0 text-xs text-foreground outline-none disabled:cursor-not-allowed"
+                  aria-label="Start date"
+                />
+              </label>
+
+              <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted/50 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50">
+                <Clock3 className="size-3.5 shrink-0 text-muted-foreground" />
+                <span className="shrink-0 text-muted-foreground">Target</span>
+                <input
+                  type="date"
+                  value={newLinearProjectTargetDate}
+                  onChange={(event) => setNewLinearProjectTargetDate(event.target.value)}
+                  disabled={newLinearProjectSubmitting}
+                  className="h-5 min-w-[6.75rem] cursor-pointer border-none bg-transparent p-0 text-xs text-foreground outline-none disabled:cursor-not-allowed"
+                  aria-label="Target date"
+                />
+              </label>
+            </div>
+
+            <div className="border-t border-border/40 pt-4">
+              <textarea
+                value={newLinearProjectContent}
+                onChange={(event) => setNewLinearProjectContent(event.target.value)}
+                placeholder="Write a description, project brief, or collect ideas..."
+                rows={8}
+                disabled={newLinearProjectSubmitting}
+                className="max-h-72 min-h-40 w-full min-w-0 resize-none overflow-y-auto border-none bg-transparent p-0 text-sm text-foreground outline-none placeholder:text-muted-foreground/45 scrollbar-sleek focus:outline-none focus:ring-0 focus-visible:ring-0"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
+          </div>
+
+          <DialogFooter className="border-t border-border/60 bg-muted/10 px-5 py-3">
+            <Button
+              variant="outline"
+              onClick={() => setNewLinearProjectOpen(false)}
+              disabled={newLinearProjectSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void handleCreateNewLinearProject()}
+              disabled={
+                !newLinearProjectTargetTeam ||
+                !newLinearProjectName.trim() ||
+                newLinearProjectSubmitting
+              }
+            >
+              {newLinearProjectSubmitting ? (
+                <>
+                  <LoaderCircle className="size-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create project'
               )}
             </Button>
           </DialogFooter>

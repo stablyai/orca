@@ -63,6 +63,8 @@ Rules:
 
 - Omit `--from` unless impersonating another terminal; Orca auto-resolves it from the current terminal.
 - While supervising workers manually, use `check --wait --types worker_done,escalation,decision_gate --timeout-ms <n>` instead of sleep/poll loops. Reply to `decision_gate` messages with `orca orchestration reply --id <msg_id> --body <answer> --json`, then keep waiting.
+- Treat a `check --wait` timeout or `{count:0}` as a checkpoint, not a worker failure. Long coding tasks routinely run 15-60 minutes; keep using rolling waits unless you receive `worker_done`/`escalation`, the terminal exits or disappears, or the user explicitly asks you to stop.
+- Heartbeats and visible terminal activity mean the worker is alive, not done. Do not stop, close, kill, or restart a worker just because it has not produced a completion message yet.
 - Use `ask` when a worker needs a blocking answer from the coordinator; it waits for the reply and returns the answer directly.
 - `check --wait` returns one message at a time. If N workers may finish together, loop N times and dispatch newly ready tasks after each completion.
 - Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, and `@worktree:<id>`.
@@ -130,7 +132,7 @@ orca terminal send --terminal <handle> --text <text> --enter --json
 
 If an older CLI rejects `worktree create --agent`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "codex" --json` or `--command "claude"`.
 
-Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding tasks can take 15-60 minutes. If `check --wait` times out with no `worker_done` or `escalation`, fall back to `terminal wait --for tui-idle`, then `terminal read`.
+Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding tasks can take 15-60 minutes. During supervision, use rolling `check --wait` windows. If a window returns no matching message, inspect `task-list`, `terminal read`, or `terminal wait --for tui-idle` as a liveness checkpoint; if the terminal is still working or producing activity, keep waiting instead of retrying the task.
 
 ## Agent Guidance
 
@@ -151,7 +153,7 @@ orca terminal list --worktree id:<newWorktreeId> --json
 orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
 orca orchestration task-create --spec "Fix the login button CSS" --json
 orca orchestration dispatch --task <task_id> --to <handle> --inject --json
-orca orchestration check --wait --types worker_done,escalation,decision_gate --timeout-ms 300000 --json
+orca orchestration check --wait --types worker_done,escalation,decision_gate --timeout-ms 900000 --json
 ```
 
 ## Next Action

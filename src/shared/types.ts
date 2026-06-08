@@ -24,6 +24,7 @@ import type {
   SourceControlAiSettings
 } from './source-control-ai-types'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
+import type { SleepingAgentSessionRecord } from './agent-session-resume'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -298,6 +299,8 @@ export type GitHubPrStartPoint = {
   headSha?: string
   /** Exact local branch name to create/reuse when the PR head is a safe same-repo branch. */
   branchNameOverride?: string
+  /** Fork PRs: false when "Allow edits from maintainers" is off; a push to the fork may be rejected. */
+  maintainerCanModify?: boolean
 }
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -726,6 +729,8 @@ export type WorkspaceSessionState = {
    *  considered. Persisted so closing all tabs and re-opening the workspace
    *  does not recreate the template. */
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
+  /** Provider-session resume records captured when workspaces sleep. */
+  sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

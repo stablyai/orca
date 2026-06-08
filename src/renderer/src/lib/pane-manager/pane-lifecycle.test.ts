@@ -87,6 +87,10 @@ describe('buildDefaultTerminalOptions', () => {
     // silently breaks enhanced chords, especially inside tmux.
     expect(buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard).toBe(true)
   })
+
+  it('uses xterm scrollbar options for the slimmer terminal scrollbar', () => {
+    expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
+  })
 })
 
 describe('attachWebgl', () => {

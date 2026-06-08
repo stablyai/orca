@@ -32,6 +32,7 @@ import {
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -215,6 +216,11 @@ export function activateAndRevealWorktree(
   if (!isPlainAlreadyActiveTerminal && !state.isNavigatingHistory) {
     state.recordWorktreeVisit(worktreeId)
   }
+
+  // Why: sleeping an agent destroys the local PTY but preserves the provider
+  // session id. Waking the workspace should restore those CLI sessions without
+  // making the user click a separate sidebar row.
+  resumeSleepingAgentSessionsForWorktree(worktreeId)
 
   // 4. Ensure a focusable surface exists for externally-created worktrees
   const primaryTabId = ensureWorktreeHasInitialTerminal(

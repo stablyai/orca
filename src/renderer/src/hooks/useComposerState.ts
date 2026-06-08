@@ -81,6 +81,7 @@ import { getComposerEligibleRepos, resolveComposerRepoId } from '@/lib/new-works
 import { queueNewWorkspaceTerminalFocus } from '@/lib/new-workspace-terminal-focus'
 import { getSuggestedCreatureName } from '@/components/sidebar/worktree-name-suggestions'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/SmartWorkspaceNameField'
+import { getForkPushWarning } from './fork-push-warning'
 import { CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT } from '@/components/contextual-tours/contextual-tour-composer-events'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { normalizeSparseDirectoryLines, sparseDirectoriesMatch } from '@/lib/sparse-paths'
@@ -211,6 +212,9 @@ export type ComposerCardProps = {
   /** Transient inline hint shown next to the Start-from trigger after a repo
    *  switch resets a prior selection (e.g. "was PR #8778"). Null when none. */
   startFromResetHint: string | null
+  /** Warning shown when a selected fork PR has "Allow edits from maintainers"
+   *  off, so a push to the fork may be rejected. Null when none. */
+  forkPushWarning: string | null
   setupConfig: SetupConfig | null
   requiresExplicitSetupChoice: boolean
   setupDecision: 'run' | 'skip' | null
@@ -415,6 +419,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // reset inline (e.g. "was PR #8778") so the change is recoverable visually
   // instead of slipping past the user. Cleared on any subsequent selection.
   const [startFromResetHint, setStartFromResetHint] = useState<string | null>(null)
+  // Why: a fork PR with "Allow edits from maintainers" off can't be pushed to;
+  // warn (but don't block) so the maintainer isn't surprised by a rejected push.
+  const [forkPushWarning, setForkPushWarning] = useState<string | null>(null)
   const disabledTuiAgentKey = (settings?.disabledTuiAgents ?? []).join('\u0000')
   const disabledTuiAgents = useMemo<TuiAgent[]>(
     () => settings?.disabledTuiAgents ?? [],
@@ -1276,6 +1283,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setLinkedWorkItem(null)
     setLinkedIssue('')
     setLinkedPR(null)
+    setForkPushWarning(null)
     if (name === lastAutoNameRef.current) {
       lastAutoNameRef.current = ''
     }
@@ -1560,6 +1568,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBaseBranch(undefined)
       setPushTarget(undefined)
       setBranchNameOverride(undefined)
+      setForkPushWarning(null)
       setStartFromResetHint(hint)
     },
     [baseBranch, linkedWorkItem, repoId, setRepoId]
@@ -1581,6 +1590,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setBaseBranch(next)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
+    setForkPushWarning(null)
     branchAutoNameRef.current = ''
     setStartFromResetHint(null)
   }, [])
@@ -1645,6 +1655,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     (item: GitHubWorkItem): void => {
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
+      setForkPushWarning(null)
       branchAutoNameRef.current = ''
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
       applyLinkedWorkItem(item)
@@ -1691,6 +1702,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             result.pushTarget,
             result.branchNameOverride
           )
+          // Why: a fork PR push lands on the contributor's fork; if they didn't
+          // allow maintainer edits, GitHub will reject it. Warn up front.
+          setForkPushWarning(getForkPushWarning(result))
         })
         .catch((error: unknown) => {
           setBaseBranch(undefined)
@@ -1711,6 +1725,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       applyLinkedGitLabWorkItem(item)
       setStartFromResetHint(null)
       setBranchNameOverride(undefined)
+      setForkPushWarning(null)
       branchAutoNameRef.current = ''
       const repoForItem = eligibleRepos.find((repo) => repo.id === item.repoId) ?? selectedRepo
       if (item.type !== 'mr' || !repoForItem) {
@@ -1746,6 +1761,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBaseBranch(selection.baseBranch)
       setPushTarget(undefined)
       setStartFromResetHint(null)
+      setForkPushWarning(null)
       setBranchNameOverridePreservesNameEdits(false)
       if (selection.name !== undefined && selection.lastAutoName !== undefined) {
         setName(selection.name)
@@ -1771,6 +1787,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         lastAutoNameRef.current = suggestedName
       }
       setBranchNameOverride(undefined)
+      setForkPushWarning(null)
       branchAutoNameRef.current = ''
       // Why: match the GitHub issue/PR flow by drafting linked context for
       // review instead of auto-submitting. Auto-filling the note here would
@@ -1786,6 +1803,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     setBaseBranch(undefined)
     setPushTarget(undefined)
     setBranchNameOverride(undefined)
+    setForkPushWarning(null)
     branchAutoNameRef.current = ''
     setStartFromResetHint(null)
     if (name === lastAutoNameRef.current) {
@@ -2483,6 +2501,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     selectedRepoConnectInProgress,
     onConnectSelectedRepo,
     startFromResetHint,
+    forkPushWarning,
     note,
     onNoteChange: setNote,
     setupConfig,

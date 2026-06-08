@@ -4,13 +4,14 @@ import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-sessio
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
-  buildLastVisitedAtByWorktreeId,
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree,
   buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
+import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
+import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -132,6 +133,10 @@ export function buildWorkspaceSessionPatch(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
+  }
+  if (changed.has('sleepingAgentSessionsByPaneKey')) {
+    patch.sleepingAgentSessionsByPaneKey =
+      buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey
   }
 
   return patch

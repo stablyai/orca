@@ -3,6 +3,7 @@ composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   CornerDownLeft,
@@ -62,6 +63,8 @@ type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
+  forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: () => void
   advancedOpen: boolean
@@ -228,6 +231,7 @@ export default function NewWorkspaceComposerCard({
   onSmartLinearIssueSelect,
   smartNameSelection,
   onClearSmartNameSelection,
+  forkPushWarning,
   detectedAgentIds,
   onOpenAgentSettings,
   advancedOpen,
@@ -495,6 +499,12 @@ export default function NewWorkspaceComposerCard({
               agentTrigger?.focus()
             }}
           />
+          {forkPushWarning ? (
+            <p className="flex items-start gap-1.5 text-[11px] text-yellow-600 dark:text-yellow-500">
+              <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+              <span>{forkPushWarning}</span>
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">

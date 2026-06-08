@@ -30,6 +30,10 @@ import { join } from 'path'
 import { parseAgentStatusPayload, type ParsedAgentStatusPayload } from './agent-status-types'
 import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
+import {
+  extractAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from './agent-session-resume'
 import { parsePaneKey } from './stable-pane-id'
 
 /** Maximum request body size accepted by the listener (1 MB). */
@@ -177,6 +181,8 @@ export type AgentHookEventPayload = {
   toolAgentId?: string
   /** Agent/subagent type from the source hook payload, when present. */
   toolAgentType?: string
+  /** Provider-owned conversation/session id needed to resume a sleeping agent. */
+  providerSession?: AgentProviderSessionMetadata
   /** True when this event is a relay cache replay rather than a live hook. */
   isReplay?: boolean
   payload: ParsedAgentStatusPayload
@@ -2891,6 +2897,7 @@ export function normalizeHookPayload(
   // it null; the relay forwards null on the wire and Orca's `ingestRemote`
   // stamps the real value from `mux` identity on receive. See
   // docs/design/agent-status-over-ssh.md §5.
+  const providerSession = extractAgentProviderSession(source, hookPayloadRecord)
   return payload
     ? {
         paneKey,
@@ -2914,6 +2921,7 @@ export function normalizeHookPayload(
         toolUseId: readFirstString(hookPayloadRecord, ['tool_use_id', 'toolUseId']),
         toolAgentId: readFirstString(hookPayloadRecord, ['agent_id', 'agentId']),
         toolAgentType: readString(hookPayloadRecord, 'agent_type'),
+        ...(providerSession ? { providerSession } : {}),
         payload
       }
     : null

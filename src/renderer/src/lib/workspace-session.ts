@@ -9,6 +9,8 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-s
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
+import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
+import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 
 /** Why (issue #1158): the debounced + shutdown session writers share this
  *  gate so a hydration failure cannot overwrite orca-data.json with the
@@ -55,7 +57,9 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
->
+> & {
+  sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
+}
 
 // Why: the App-level Zustand subscriber that debounces session writes uses
 // this list as a shallow-equality gate so it only resets the timer when a
@@ -89,7 +93,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'worktreesByRepo',
   'lastKnownRelayPtyIdByTabId',
   'lastVisitedAtByWorktreeId',
-  'defaultTerminalTabsAppliedByWorktreeId'
+  'defaultTerminalTabsAppliedByWorktreeId',
+  'sleepingAgentSessionsByPaneKey'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<
@@ -320,15 +325,6 @@ export function buildActiveConnectionIdsAtShutdown(
   return connectedTargetIds.length > 0 ? connectedTargetIds : undefined
 }
 
-export function buildLastVisitedAtByWorktreeId(
-  snapshot: WorkspaceSessionSnapshot
-): WorkspaceSessionState['lastVisitedAtByWorktreeId'] {
-  return snapshot.lastVisitedAtByWorktreeId &&
-    Object.keys(snapshot.lastVisitedAtByWorktreeId).length > 0
-    ? snapshot.lastVisitedAtByWorktreeId
-    : undefined
-}
-
 export function buildWorkspaceSessionPayload(
   snapshot: WorkspaceSessionSnapshot
 ): WorkspaceSessionState {
@@ -376,7 +372,8 @@ export function buildWorkspaceSessionPayload(
       snapshot.defaultTerminalTabsAppliedByWorktreeId &&
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
-        : undefined
+        : undefined,
+    ...buildSleepingAgentSessionData(snapshot)
   }
 
   return pruneLocalTerminalScrollbackBuffers(payload, snapshot.repos)

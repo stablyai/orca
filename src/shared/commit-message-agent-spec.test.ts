@@ -10,6 +10,7 @@ import {
   isCustomAgentId,
   listCommitMessageAgentCapabilities,
   listCommitMessageAgentIds,
+  parseAntigravityModels,
   parseCodexModels,
   parseCursorModels,
   parseLineModels,
@@ -20,7 +21,17 @@ import {
 describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('exposes the installed local agents as commit-message agents', () => {
     const ids = listCommitMessageAgentIds().sort()
-    expect(ids).toEqual(['amp', 'claude', 'codex', 'copilot', 'cursor', 'kimi', 'opencode', 'pi'])
+    expect(ids).toEqual([
+      'amp',
+      'antigravity',
+      'claude',
+      'codex',
+      'copilot',
+      'cursor',
+      'kimi',
+      'opencode',
+      'pi'
+    ])
   })
 
   it('uses the strongest available defaults for core agents', () => {
@@ -255,6 +266,30 @@ describe('model discovery parsers', () => {
       }
     ])
   })
+
+  it('parses Antigravity model output', () => {
+    const output = [
+      'Gemini 3.5 Flash (Medium)',
+      'Gemini 3.5 Flash (High)',
+      'Gemini 3.5 Flash (Low)',
+      'Gemini 3.1 Pro (Low)',
+      'Gemini 3.1 Pro (High)',
+      'Claude Sonnet 4.6 (Thinking)',
+      'Claude Opus 4.6 (Thinking)',
+      'GPT-OSS 120B (Medium)'
+    ].join('\n')
+
+    expect(parseAntigravityModels(output)).toEqual([
+      { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' },
+      { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash (High)' },
+      { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' },
+      { id: 'Gemini 3.1 Pro (Low)', label: 'Gemini 3.1 Pro (Low)' },
+      { id: 'Gemini 3.1 Pro (High)', label: 'Gemini 3.1 Pro (High)' },
+      { id: 'Claude Sonnet 4.6 (Thinking)', label: 'Claude Sonnet 4.6 (Thinking)' },
+      { id: 'Claude Opus 4.6 (Thinking)', label: 'Claude Opus 4.6 (Thinking)' },
+      { id: 'GPT-OSS 120B (Medium)', label: 'GPT-OSS 120B (Medium)' }
+    ])
+  })
 })
 
 describe('buildArgs (Codex)', () => {
@@ -347,5 +382,25 @@ describe('buildArgs (OpenCode)', () => {
     })
 
     expect(args).not.toContain('--variant')
+  })
+})
+
+describe('buildArgs (Antigravity)', () => {
+  const spec = getCommitMessageAgentSpec('antigravity')!
+
+  it('runs agy with --print, --sandbox, and --model flags', () => {
+    const args = spec.buildArgs({ prompt: '', model: 'Gemini 3.5 Flash (Medium)' })
+    expect(args).toEqual(['--print', '--sandbox', '--model', 'Gemini 3.5 Flash (Medium)'])
+    expect(spec.promptDelivery).toBe('stdin')
+  })
+
+  it('uses dynamic model discovery via agy models', () => {
+    expect(spec.modelSource).toBe('dynamic')
+    expect(spec.modelDiscovery?.binary).toBe('agy')
+    expect(spec.modelDiscovery?.args).toEqual(['models'])
+  })
+
+  it('uses Gemini 3.5 Flash (Medium) as default model', () => {
+    expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.5 Flash (Medium)')
   })
 })

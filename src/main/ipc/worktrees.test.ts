@@ -1335,9 +1335,11 @@ describe('registerWorktreeHandlers', () => {
 
   it('returns the PR head push target when resolving a fork PR base', async () => {
     getPullRequestPushTargetMock.mockResolvedValue({
-      remoteName: 'pr-prateek-orca',
-      branchName: 'prateek/fix-sidebar-agents-toggle',
-      remoteUrl: 'git@github.com:prateek/orca.git'
+      pushTarget: {
+        remoteName: 'pr-prateek-orca',
+        branchName: 'prateek/fix-sidebar-agents-toggle',
+        remoteUrl: 'git@github.com:prateek/orca.git'
+      }
     })
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'rev-parse') {
@@ -1358,6 +1360,8 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(result).toMatchObject({
       baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'prateek/fix-sidebar-agents-toggle',
       pushTarget: {
         remoteName: 'pr-prateek-orca',
         branchName: 'prateek/fix-sidebar-agents-toggle',
@@ -1420,7 +1424,11 @@ describe('registerWorktreeHandlers', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'], {
       cwd: '/workspace/repo'
     })
-    expect(result).toMatchObject({ baseBranch: 'abc123' })
+    expect(result).toEqual({
+      baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'feat/onboarding-model-choice-782'
+    })
   })
 
   it('falls back to refs/pull/<N>/head when branch fetch fails for a PR', async () => {
@@ -1457,7 +1465,11 @@ describe('registerWorktreeHandlers', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'], {
       cwd: '/workspace/repo'
     })
-    expect(result).toMatchObject({ baseBranch: 'abc123' })
+    expect(result).toEqual({
+      baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'feat/onboarding-model-choice-782'
+    })
   })
 
   it('does not fall back to refs/pull/<N>/head when branch fetch hits a network failure', async () => {

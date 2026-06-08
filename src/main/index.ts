@@ -607,6 +607,7 @@ function openMainWindow(): BrowserWindow {
       payload,
       receivedAt,
       stateStartedAt,
+      providerSession,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -624,6 +625,7 @@ function openMainWindow(): BrowserWindow {
         connectionId,
         receivedAt,
         stateStartedAt,
+        ...(providerSession ? { providerSession } : {}),
         ...(orchestration ? { orchestration } : {})
       })
       recordAgentStateCrashBreadcrumb(payload.agentType ?? 'unknown', payload.state)

@@ -1682,6 +1682,12 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
     })
 
+    if (keepIdentifiers) {
+      get().captureSleepingAgentSessionsByWorktree(worktreeId)
+    } else {
+      get().clearSleepingAgentSessionsByWorktree(worktreeId)
+    }
+
     // Why: sleep/remove fold the whole worktree surface. The live PTY bindings
     // were cleared above and kill is about to run, so live rows are stale;
     // retained rows are folded too so a grey slept card does not keep a green
@@ -2002,6 +2008,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           .flat()
           .map((tab) => tab.id)
       )
+      const sleepingAgentSessionsByPaneKey = Object.fromEntries(
+        Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).filter(([, record]) =>
+          validWorktreeIds.has(record.worktreeId)
+        )
+      )
       const activeWorktreeId =
         session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)
           ? session.activeWorktreeId
@@ -2169,6 +2180,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
         defaultTerminalTabsAppliedByWorktreeId:
           session.defaultTerminalTabsAppliedByWorktreeId ?? {},
+        sleepingAgentSessionsByPaneKey,
         pendingReconnectWorktreeIds,
         pendingReconnectTabByWorktree,
         pendingReconnectPtyIdByTabId,
