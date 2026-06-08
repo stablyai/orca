@@ -297,6 +297,7 @@ export class RelayAgentHookServer {
       toolUseId: event.toolUseId,
       toolAgentId: event.toolAgentId,
       toolAgentType: event.toolAgentType,
+      ...(event.providerSession ? { providerSession: event.providerSession } : {}),
       isReplay: options.isReplay === true ? true : undefined,
       env,
       version,

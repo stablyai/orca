@@ -7,6 +7,17 @@
  * Duplicating this logic would risk drift between the two detection paths.
  */
 
+import {
+  AGY_AGENT_NAME_RE,
+  DROID_AGENT_NAME_RE,
+  HERMES_AGENT_NAME_RE,
+  titleHasAgentName,
+  titleHasAnyLegacyAgentName
+} from './agent-name-token-match'
+
+// Re-export so existing `agent-detection` importers keep working.
+export { AGENT_NAMES, titleHasAgentName } from './agent-name-token-match'
+
 export type AgentStatus = 'working' | 'permission' | 'idle'
 
 const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Code idle prefix)
@@ -15,35 +26,6 @@ const GEMINI_WORKING = '\u2726' // ✦
 const GEMINI_SILENT_WORKING = '\u23F2' // ⏲
 const GEMINI_IDLE = '\u25C7' // ◇
 const GEMINI_PERMISSION = '\u270B' // ✋
-
-// Why: this list is for OSC-title detection only. It is intentionally narrower
-// than the full set of launchable agents because short names like "amp" are
-// unsafe under the substring-based detector and would classify ordinary shell
-// titles like "timestamp ready" as agent activity. Product telemetry uses the
-// explicit launch/session facts Orca owns, not this inference path.
-export const AGENT_NAMES = [
-  'claude',
-  'openclaude',
-  'codex',
-  'copilot',
-  'cursor',
-  'gemini',
-  'antigravity',
-  'opencode',
-  'openclaw',
-  'aider',
-  'grok'
-]
-
-// Why: `android` contains `droid`; unlike the legacy agent names above, Droid
-// must be token-matched so Android terminal titles do not become agent status.
-const DROID_AGENT_NAME_RE = /(?<![\w./\\-])droid(?![\w./\\-])/i
-
-// Why: Hermes is safe to token-match but unsafe to add to the legacy
-// substring list because cwd/path titles like `~/hermes/working` would
-// otherwise count as agent activity.
-const HERMES_AGENT_NAME_RE = /(?<![\w./\\-])hermes(?![\w./\\-])/i
-const AGY_AGENT_NAME_RE = /(?<![\w./\\-])agy(?![\w./\\-])/i
 
 // Why: idle keywords used inside `detectAgentStatusFromTitle` to map titles
 // like "Codex done", "OpenCode ready", "Aider idle" to AgentStatus 'idle'.
@@ -176,8 +158,7 @@ function containsBrailleSpinner(title: string): boolean {
 }
 
 function containsLegacyAgentName(title: string): boolean {
-  const lower = title.toLowerCase()
-  return AGENT_NAMES.some((name) => lower.includes(name))
+  return titleHasAnyLegacyAgentName(title)
 }
 
 function containsAgentName(title: string): boolean {
@@ -341,9 +322,13 @@ export function isClaudeAgent(title: string): boolean {
     return !lower.includes('cursor') && !lower.includes('openclaude')
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
-  // Requiring "claude" at the start avoids false positives from other agents
-  // whose task text merely mentions Claude.
-  if (lower.startsWith('claude')) {
+  // Token-match so cwd/worktree titles like "claude-scratch" do not become
+  // Claude tabs, while task text that merely mentions Claude still stays out.
+  const trimmedTitle = title.trimStart()
+  if (
+    trimmedTitle.toLowerCase().startsWith('claude') &&
+    titleHasAgentName(trimmedTitle, 'claude')
+  ) {
     return true
   }
 
@@ -351,8 +336,6 @@ export function isClaudeAgent(title: string): boolean {
 }
 
 export function getAgentLabel(title: string): string | null {
-  const lower = title.toLowerCase()
-
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'
   }
@@ -363,26 +346,28 @@ export function getAgentLabel(title: string): string | null {
   }
   // Why: Codex/OpenCode/Aider can also use braille spinner prefixes while
   // working. Prefer explicit name matches before Claude's generic spinner
-  // heuristic so mixed-agent hovercards stay truthful.
-  if (lower.includes('codex')) {
+  // heuristic so mixed-agent hovercards stay truthful. Token-match (not
+  // substring) so cwd/worktree titles like "opencode-blinker" don't mint a
+  // false agent identity.
+  if (titleHasAgentName(title, 'codex')) {
     return 'Codex'
   }
-  if (lower.includes('openclaude')) {
+  if (titleHasAgentName(title, 'openclaude')) {
     return 'OpenClaude'
   }
-  if (lower.includes('copilot')) {
+  if (titleHasAgentName(title, 'copilot')) {
     return 'GitHub Copilot'
   }
-  if (lower.includes('grok')) {
+  if (titleHasAgentName(title, 'grok')) {
     return 'Grok'
   }
-  if (lower.includes('antigravity') || AGY_AGENT_NAME_RE.test(title)) {
+  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
   }
-  if (lower.includes('opencode')) {
+  if (titleHasAgentName(title, 'opencode')) {
     return 'OpenCode'
   }
-  if (lower.includes('aider')) {
+  if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
   // Why: the cursor-agent native title is the literal string "Cursor Agent"
@@ -390,8 +375,9 @@ export function getAgentLabel(title: string): string | null {
   // label from hook events so the braille-spinner + agent-name path lights
   // up working/permission/idle transitions in the renderer. Match before
   // `isClaudeAgent` because Claude's generic braille heuristic would
-  // otherwise claim every "⠋ Cursor Agent" frame as Claude.
-  if (lower.includes('cursor')) {
+  // otherwise claim every "⠋ Cursor Agent" frame as Claude. Token-match so a
+  // cwd like "~/cursor-rules" can't masquerade as a Cursor agent.
+  if (titleHasAgentName(title, 'cursor')) {
     return 'Cursor'
   }
   // Why: synthesized "⠋ Droid" working title needs to be matched before Claude's braille heuristic.

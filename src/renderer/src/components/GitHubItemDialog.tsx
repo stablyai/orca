@@ -3502,7 +3502,10 @@ function ChecksTab({
         toast.error('Could not build the agent launch command.')
         return
       }
-      focusTerminalTabSurface(result.tabId)
+      // Why: host-backed web launches can succeed without a local tab id.
+      if (result.tabId) {
+        focusTerminalTabSurface(result.tabId)
+      }
       toast.success('Started an AI agent for the broken checks.')
     } finally {
       setFixingChecks(false)

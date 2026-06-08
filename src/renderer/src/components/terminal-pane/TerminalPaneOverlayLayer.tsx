@@ -1,8 +1,9 @@
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import { useAppStore } from '../../store'
+import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { tabGroupBodyAnchorName } from '../tab-group/tab-group-body-anchor'
 import {
   findActivityTerminalPortal,
@@ -19,6 +20,25 @@ const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_ACTIVITY_PORTALS: ActivityTerminalPortalTarget[] = []
+const HAS_CSS_ANCHOR_POSITIONING =
+  typeof CSS !== 'undefined' &&
+  CSS.supports('position-anchor', '--orca-terminal-overlay-probe') &&
+  CSS.supports('top', 'anchor(--orca-terminal-overlay-probe top)') &&
+  CSS.supports('width', 'anchor-size(--orca-terminal-overlay-probe width)')
+
+function shouldUseCssAnchorPositioning(): boolean {
+  return (
+    HAS_CSS_ANCHOR_POSITIONING &&
+    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+  )
+}
+
+type MeasuredFallbackRect = {
+  top: number
+  left: number
+  width: number
+  height: number
+}
 
 type TerminalOverlaySlotProps = {
   terminalTabId: string
@@ -50,12 +70,84 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
   leaveWorktreeIfEmpty
 }: TerminalOverlaySlotProps): React.JSX.Element {
   const anchorName = groupId !== undefined ? tabGroupBodyAnchorName(groupId) : undefined
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  const [measuredFallbackRect, setMeasuredFallbackRect] = useState<MeasuredFallbackRect | null>(
+    null
+  )
   const [shouldMeasureHiddenStartup] = useState(
     () => useAppStore.getState().pendingStartupByTabId[terminalTabId] !== undefined
   )
+  useLayoutEffect(() => {
+    if (!anchorName || shouldUseCssAnchorPositioning() || !groupId) {
+      return
+    }
+
+    const findBody = (): HTMLElement | null => {
+      for (const candidate of document.querySelectorAll<HTMLElement>('[data-tab-group-body-id]')) {
+        if (candidate.dataset.tabGroupBodyId === groupId) {
+          return candidate
+        }
+      }
+      return null
+    }
+
+    const updateRect = (): void => {
+      const overlay = overlayRef.current
+      const parent = overlay?.parentElement
+      const body = findBody()
+      if (!parent || !body) {
+        setMeasuredFallbackRect(null)
+        return
+      }
+      const parentRect = parent.getBoundingClientRect()
+      const bodyRect = body.getBoundingClientRect()
+      setMeasuredFallbackRect({
+        top: bodyRect.top - parentRect.top,
+        left: bodyRect.left - parentRect.left,
+        width: bodyRect.width,
+        height: bodyRect.height
+      })
+    }
+
+    updateRect()
+    const body = findBody()
+    const parent = overlayRef.current?.parentElement
+    const resizeObserver = new ResizeObserver(updateRect)
+    if (body) {
+      resizeObserver.observe(body)
+    }
+    if (parent) {
+      resizeObserver.observe(parent)
+    }
+    window.addEventListener('resize', updateRect)
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', updateRect)
+    }
+  }, [anchorName, groupId, isVisible])
+
+  useLayoutEffect(() => {
+    if (!isVisible || !anchorName || shouldUseCssAnchorPositioning()) {
+      return
+    }
+    // Why: worktree switches resume visibility before fallback positioning
+    // settles. Re-fit on show and again after the measured rect lands so the
+    // PTY never stays pinned at a stale ~2-col width.
+    const frameId = requestAnimationFrame(() => {
+      window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
+    })
+    const retryId = window.setTimeout(() => {
+      window.dispatchEvent(new Event(SYNC_FIT_PANES_EVENT))
+    }, 50)
+    return () => {
+      cancelAnimationFrame(frameId)
+      window.clearTimeout(retryId)
+    }
+  }, [anchorName, isVisible, measuredFallbackRect])
+
   const style: React.CSSProperties = useMemo(
     () =>
-      anchorName
+      anchorName && shouldUseCssAnchorPositioning()
         ? {
             position: 'absolute',
             positionAnchor: anchorName,
@@ -67,16 +159,30 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
             opacity: isVisible ? 1 : 0,
             pointerEvents: isVisible ? 'auto' : 'none'
           }
-        : {
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: 0,
-            height: 0,
-            display: 'none',
-            pointerEvents: 'none'
-          },
-    [anchorName, isVisible, shouldMeasureHiddenStartup]
+        : anchorName
+          ? {
+              // Why: Chrome builds without CSS anchor positioning otherwise
+              // mount the terminal into a 0x0 overlay. Measure the tab-group
+              // body so the fallback does not cover the tab strip.
+              position: 'absolute',
+              top: measuredFallbackRect?.top ?? 32,
+              left: measuredFallbackRect?.left ?? 0,
+              width: measuredFallbackRect?.width ?? '100%',
+              height: measuredFallbackRect?.height ?? 'calc(100% - 32px)',
+              display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
+              opacity: isVisible ? 1 : 0,
+              pointerEvents: isVisible ? 'auto' : 'none'
+            }
+          : {
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: 0,
+              height: 0,
+              display: 'none',
+              pointerEvents: 'none'
+            },
+    [anchorName, isVisible, measuredFallbackRect, shouldMeasureHiddenStartup]
   )
   const focusGroup = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
@@ -120,6 +226,7 @@ const TerminalOverlaySlot = memo(function TerminalOverlaySlot({
 
   return (
     <div
+      ref={overlayRef}
       style={style}
       data-terminal-overlay-tab-id={terminalTabId}
       onPointerDown={focusGroup}

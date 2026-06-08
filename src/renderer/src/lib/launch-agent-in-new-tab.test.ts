@@ -11,7 +11,7 @@ const mockTrack = vi.fn()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 const store = {
-  settings: { agentCmdOverrides: {} },
+  settings: { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null as string | null },
   tabsByWorktree: {
     'wt-1': [{ id: 'tab-1' }]
   },
@@ -20,6 +20,7 @@ const store = {
   tabBarOrderByWorktree: {} as Record<string, string[]>,
   terminalLayoutsByTabId: {} as Record<string, { activeLeafId: string | null }>,
   createTab: mockCreateTab,
+  closeTab: vi.fn(),
   queueTabStartupCommand: mockQueueTabStartupCommand,
   setActiveTabType: mockSetActiveTabType,
   setTabBarOrder: mockSetTabBarOrder,
@@ -32,8 +33,10 @@ vi.mock('@/store', () => ({
   }
 }))
 
+const mockToastError = vi.fn()
+
 vi.mock('sonner', () => ({
-  toast: { message: vi.fn() }
+  toast: { message: vi.fn(), error: mockToastError }
 }))
 
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
@@ -55,10 +58,21 @@ vi.mock('@/lib/telemetry', () => ({
   tuiAgentToAgentKind: (agent: string) => agent
 }))
 
+const mockCreateWebRuntimeSessionTerminal = vi.fn()
+const mockIsWebRuntimeSessionActive = vi.fn(() => false)
+
+vi.mock('@/runtime/web-runtime-session', () => ({
+  createWebRuntimeSessionTerminal: mockCreateWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive,
+  isWebTerminalSurfaceTabId: vi.fn(() => false)
+}))
+
 describe('launchAgentInNewTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    store.settings = { agentCmdOverrides: {} }
+    mockIsWebRuntimeSessionActive.mockReturnValue(false)
+    mockCreateWebRuntimeSessionTerminal.mockResolvedValue(true)
+    store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: null }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
     store.openFiles = []
     store.browserTabsByWorktree = {}
@@ -79,6 +93,59 @@ describe('launchAgentInNewTab', () => {
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'codex'
     })
+  })
+
+  it('delegates agent quick launch to the host runtime in paired web clients', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'web-runtime' }
+    store.tabsByWorktree = {
+      'wt-1': [
+        { id: 'tab-1' },
+        { id: 'stale-agent-tab', launchAgent: 'claude' } as { id: string; launchAgent: string }
+      ]
+    }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        tabId: null,
+        pasteDraftAfterLaunch: false
+      })
+    )
+    expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      environmentId: 'web-runtime',
+      targetGroupId: 'group-1',
+      activate: true,
+      agent: 'claude'
+    })
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
+    await Promise.resolve()
+    expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
+    expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab')
+  })
+
+  it('surfaces a toast when host agent launch fails in paired web clients', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    mockCreateWebRuntimeSessionTerminal.mockResolvedValue(false)
+    store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'web-runtime' }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1'
+    })
+
+    await Promise.resolve()
+    expect(mockToastError).toHaveBeenCalledWith('Could not launch claude in a new terminal.')
+    expect(mockSetActiveTabType).not.toHaveBeenCalled()
   })
 
   it('queues initial working status for Command Code argv prompt launches', async () => {

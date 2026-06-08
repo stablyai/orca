@@ -418,6 +418,26 @@ export type BrowserApi = {
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
 }
 
+export type EmulatorApi = {
+  onPaneFocus: (callback: (data: { worktreeId: string }) => void) => () => void
+  onAutoAttach: (
+    callback: (data: {
+      worktreeId: string
+      info: { deviceUdid: string; streamUrl: string; wsUrl: string; axUrl?: string }
+    }) => void
+  ) => () => void
+  startFrameStream: (args: { streamUrl: string; streamKey?: string }) => Promise<{
+    streamId: string
+  }>
+  stopFrameStream: (args: { streamId: string }) => Promise<void>
+  onFrameStreamFrame: (
+    callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
+  ) => () => void
+  onFrameStreamError: (
+    callback: (data: { streamId: string; message: string }) => void
+  ) => () => void
+}
+
 export type DetectedBrowserProfileInfo = {
   name: string
   directory: string
@@ -901,6 +921,8 @@ export type PreloadApi = {
     signal: (id: string, signal: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
+    ackData: (id: string, charCount: number) => void
+    setActiveRendererPty: (id: string, active: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
@@ -908,7 +930,30 @@ export type PreloadApi = {
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
-    ) => Promise<{ data: string; cols: number; rows: number; seq?: number } | null>
+    ) => Promise<{
+      data: string
+      cols: number
+      rows: number
+      cwd?: string | null
+      seq?: number
+      source?: 'headless' | 'renderer'
+    } | null>
+    getRendererDeliveryDebugSnapshot: () => Promise<{
+      pendingPtyCount: number
+      pendingChars: number
+      maxPendingCharsByPty: number
+      rendererInFlightPtyCount: number
+      rendererInFlightChars: number
+      maxRendererInFlightCharsByPty: number
+      activeRendererPtyCount: number
+      flushScheduled: boolean
+      peakPendingChars: number
+      peakMaxPendingCharsByPty: number
+      peakRendererInFlightChars: number
+      peakMaxRendererInFlightCharsByPty: number
+      ackGatedFlushSkipCount: number
+    }>
+    resetRendererDeliveryDebug: () => Promise<void>
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
     ) => () => void
@@ -1408,6 +1453,19 @@ export type PreloadApi = {
       workspaceId?: LinearWorkspaceSelection
       force?: boolean
     }) => Promise<LinearCollectionResult<LinearProjectSummary>>
+    createProject: (args: {
+      name: string
+      description?: string
+      content?: string
+      teamIds: string[]
+      workspaceId?: string
+      leadId?: string | null
+      memberIds?: string[]
+      labelIds?: string[]
+      priority?: number
+      startDate?: string
+      targetDate?: string
+    }) => Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }>
     getProject: (args: {
       id: string
       workspaceId: string
@@ -1677,6 +1735,7 @@ export type PreloadApi = {
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<void>
   }
   browser: BrowserApi
+  emulator: EmulatorApi
   hooks: {
     check: (args: { repoId: string }) => Promise<{
       status?: 'ok' | 'error'
@@ -2057,6 +2116,7 @@ export type PreloadApi = {
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
     onNewMarkdownTab: (callback: () => void) => () => void
+    onNewSimulatorTab: (callback: () => void) => () => void
     onRequestTabCreate: (
       callback: (data: {
         requestId: string
@@ -2167,7 +2227,7 @@ export type PreloadApi = {
         worktreeId: string
         filePath: string
         relativePath: string
-        runtimeEnvironmentId: string
+        runtimeEnvironmentId?: string
       }) => void
     ) => () => void
     onOpenDiffFromMobile: (
@@ -2176,7 +2236,7 @@ export type PreloadApi = {
         filePath: string
         relativePath: string
         staged: boolean
-        runtimeEnvironmentId: string
+        runtimeEnvironmentId?: string
       }) => void
     ) => () => void
     onMobileMarkdownRequest: (
@@ -2439,6 +2499,9 @@ export type PreloadApi = {
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>
     getModelStates: () => Promise<SpeechModelState[]>
+    getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>
+    saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
+    clearOpenAiApiKey: () => Promise<{ configured: boolean }>
     downloadModel: (modelId: string) => Promise<void>
     cancelDownload: (modelId: string) => Promise<void>
     deleteModel: (modelId: string) => Promise<void>

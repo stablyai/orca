@@ -221,7 +221,7 @@ test.describe('Create Workspace', () => {
   }) => {
     const title = `E2E smart URL resolution ${Date.now()}`
     const url = 'https://github.com/stablyai/orca/pull/2049'
-    const titlePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    const linkedWorkspacePattern = /Review PR 2049/
 
     try {
       await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
@@ -295,9 +295,10 @@ test.describe('Create Workspace', () => {
       await createButton.click()
 
       await expect(dialog).toBeHidden({ timeout: 15_000 })
-      await expect(orcaPage.getByRole('option', { name: titlePattern })).toBeVisible({
+      await expect(orcaPage.getByRole('option', { name: linkedWorkspacePattern })).toBeVisible({
         timeout: 10_000
       })
+      await expect(orcaPage.getByText('Linked PR #2049')).toBeVisible()
       await expect
         .poll(() =>
           electronApp.evaluate(() => {

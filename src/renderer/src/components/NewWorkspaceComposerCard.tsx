@@ -3,14 +3,14 @@ composer card markup together so the inline and modal variants share one UI
 surface without splitting the controlled form into hard-to-follow fragments. */
 import React from 'react'
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   CornerDownLeft,
   FolderPlus,
   LoaderCircle,
   PlugZap,
-  Settings2,
-  Sparkles
+  Settings2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -34,7 +34,6 @@ import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPreset
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
 } from '@/components/new-workspace/SmartWorkspaceNameField'
-import AutoRenameBranchHint from '@/components/new-workspace/AutoRenameBranchHint'
 import type { SetupConfig } from '@/lib/new-workspace'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
 import type { SshConnectionStatus } from '../../../shared/ssh-types'
@@ -62,6 +61,8 @@ type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
+  /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
+  forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: () => void
   advancedOpen: boolean
@@ -114,7 +115,8 @@ function SetupCommandPreview({
           <div className="font-mono text-[11px] text-muted-foreground">orca.yaml</div>
           {headerAction}
         </div>
-        <pre className="overflow-x-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-5 text-emerald-700 dark:text-emerald-300/95">
+        {/* Why: long orca.yaml scripts must not grow the create dialog past the viewport. */}
+        <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words px-4 py-3 font-mono text-[12px] leading-5 text-emerald-700 scrollbar-sleek dark:text-emerald-300/95">
           {setupConfig.command}
         </pre>
       </div>
@@ -129,7 +131,7 @@ function SetupCommandPreview({
         </div>
         {headerAction}
       </div>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-foreground">
+      <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-foreground scrollbar-sleek">
         {setupConfig.command}
       </pre>
     </div>
@@ -228,6 +230,7 @@ export default function NewWorkspaceComposerCard({
   onSmartLinearIssueSelect,
   smartNameSelection,
   onClearSmartNameSelection,
+  forkPushWarning,
   detectedAgentIds,
   onOpenAgentSettings,
   advancedOpen,
@@ -260,7 +263,6 @@ export default function NewWorkspaceComposerCard({
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const disabledTuiAgents = useAppStore((s) => s.settings?.disabledTuiAgents ?? [])
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const autoRenameBranchFromWork = useAppStore((s) => s.settings?.autoRenameBranchFromWork ?? false)
   const nameInputFocusFrameRef = React.useRef<number | null>(null)
   const submitShortcutModifierLabel = getScreenSubmitModifierLabel()
   const selectedRepoName = React.useMemo(() => {
@@ -451,23 +453,10 @@ export default function NewWorkspaceComposerCard({
         </div>
 
         <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-name">
-          <div className="flex items-center justify-between gap-2">
-            <label className="min-w-0 truncate text-xs font-medium text-muted-foreground">
-              {selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}{' '}
-              <span className="text-muted-foreground/70">[Optional]</span>
-            </label>
-            {selectedRepoIsGit ? (
-              <div className="flex min-w-0 items-center justify-end gap-1.5">
-                {autoRenameBranchFromWork ? (
-                  <span className="flex min-w-0 items-center gap-1 truncate text-[11px] text-muted-foreground">
-                    <Sparkles className="size-3 shrink-0" />
-                    <span className="truncate">Auto-named if left blank</span>
-                  </span>
-                ) : null}
-                <AutoRenameBranchHint />
-              </div>
-            ) : null}
-          </div>
+          <label className="block min-w-0 truncate text-xs font-medium text-muted-foreground">
+            {selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}{' '}
+            <span className="text-muted-foreground/70">[Optional]</span>
+          </label>
           <SmartWorkspaceNameField
             inputRef={nameInputRef}
             repos={eligibleRepos}
@@ -495,6 +484,12 @@ export default function NewWorkspaceComposerCard({
               agentTrigger?.focus()
             }}
           />
+          {forkPushWarning ? (
+            <p className="flex items-start gap-1.5 text-[11px] text-yellow-600 dark:text-yellow-500">
+              <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+              <span>{forkPushWarning}</span>
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-1" data-contextual-tour-target="workspace-creation-agent">

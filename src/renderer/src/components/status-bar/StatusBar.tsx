@@ -37,6 +37,7 @@ import type {
 } from '../../../../shared/rate-limit-types'
 import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { SshStatusSegment } from './SshStatusSegment'
@@ -1445,7 +1446,9 @@ export function ProviderDetailsMenu({
                     ? 'G'
                     : provider.provider === 'opencode-go'
                       ? 'O'
-                      : 'X'}
+                      : provider.provider === 'kimi'
+                        ? 'K'
+                        : 'X'}
               </span>
             </span>
           ) : (
@@ -1585,7 +1588,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi } = rateLimits
 
   // Why: a provider only earns a bar once it's configured (isProviderConfigured
   // drops the `unavailable` state — Gemini OAuth off, OpenCode Go cookie unset,
@@ -1605,6 +1608,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     isProviderConfigured(gemini) &&
     statusBarItems.includes('gemini') &&
     isStatusBarItemAvailable('gemini', detectedAgentIds)
+  const showKimi =
+    isProviderConfigured(kimi) &&
+    statusBarItems.includes('kimi') &&
+    isStatusBarItemAvailable('kimi', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
   const showOpencodeGo = isProviderConfigured(opencodeGo) && statusBarItems.includes('opencode-go')
@@ -1613,7 +1620,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
-  const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
+  const anyVisible =
+    showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
   // Why: a brand-new user with no provider configured would otherwise see an
   // empty left side of the status bar and wonder what's missing. The CTA
   // names the surface and points to the setup path. Detection is on
@@ -1623,12 +1631,14 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     !isProviderConfigured(claude) &&
     !isProviderConfigured(codex) &&
     !isProviderConfigured(gemini) &&
-    !isProviderConfigured(opencodeGo)
+    !isProviderConfigured(opencodeGo) &&
+    !isProviderConfigured(kimi)
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching'
+    opencodeGo?.status === 'fetching' ||
+    kimi?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -1680,6 +1690,14 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 compact={compact}
                 iconOnly={iconOnly}
                 ariaLabel="Open OpenCode Go usage details"
+              />
+            )}
+            {showKimi && (
+              <ProviderDetailsMenu
+                provider={kimi}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open Kimi usage details"
               />
             )}
           </>
@@ -1793,6 +1811,18 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <OpenCodeGoIcon size={14} />
             OpenCode Go Usage
           </DropdownMenuCheckboxItem>
+          {isStatusBarItemAvailable('kimi', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('kimi')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('kimi')
+              }}
+            >
+              <AgentIcon agent="kimi" size={14} />
+              Kimi Usage
+            </DropdownMenuCheckboxItem>
+          )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => {

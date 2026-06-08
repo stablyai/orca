@@ -381,6 +381,19 @@ const orcaCliFeatureTipSetupResultSchema = z
   })
   .strict()
 
+const cmdJPaletteFeatureTipShownSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const cmdJPaletteFeatureTipAcknowledgedSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
 const featureWallOpenedSchema = z
   .object({
     source: featureWallOpenSourceSchema
@@ -1257,6 +1270,8 @@ export const eventSchemas = {
   orca_cli_feature_tip_shown: orcaCliFeatureTipShownSchema,
   orca_cli_feature_tip_setup_clicked: orcaCliFeatureTipSetupClickedSchema,
   orca_cli_feature_tip_setup_result: orcaCliFeatureTipSetupResultSchema,
+  cmd_j_palette_feature_tip_shown: cmdJPaletteFeatureTipShownSchema,
+  cmd_j_palette_feature_tip_acknowledged: cmdJPaletteFeatureTipAcknowledgedSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,
@@ -1353,6 +1368,8 @@ type _CohortExtendedRoster =
   | 'orca_cli_feature_tip_shown'
   | 'orca_cli_feature_tip_setup_clicked'
   | 'orca_cli_feature_tip_setup_result'
+  | 'cmd_j_palette_feature_tip_shown'
+  | 'cmd_j_palette_feature_tip_acknowledged'
 // Why: `z.object({}).strict()` infers a string index signature, which would
 // make every key appear present. Ignore index-signature-only keys here so
 // strict empty event payloads do not get pulled into keyed telemetry rosters.

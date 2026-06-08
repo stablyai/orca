@@ -182,6 +182,10 @@ export type OpenFile = {
   // a strikethrough label plus a "deleted"/"renamed" suffix. Cleared if the
   // file reappears on disk at its original path.
   externalMutation?: 'deleted' | 'renamed'
+  /** Why: diff bodies are cached in EditorPanel. Re-selecting an existing diff
+   * tab from the tree bumps this so the panel refetches instead of reusing a
+   * stale snapshot. */
+  diffContentReloadNonce?: number
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview'
 }
 
@@ -794,6 +798,13 @@ function buildDiffEditorFileId(
     : legacyId
 }
 
+function withDiffContentReloadRequest(file: OpenFile): OpenFile {
+  return {
+    ...file,
+    diffContentReloadNonce: (file.diffContentReloadNonce ?? 0) + 1
+  }
+}
+
 function isEditorFileIdOccupiedByOtherOwner(
   file: Pick<
     OpenFile,
@@ -1069,7 +1080,7 @@ function extractPublishFailureDetail(message: string): string | null {
 function isNonFastForwardRemoteError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
+    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message)
   )
 }
 
@@ -1078,6 +1089,7 @@ export function resolveRemoteOperationErrorMessage(
   options?: {
     publish?: boolean
     isPush?: boolean
+    isForcePush?: boolean
     isSync?: boolean
     isFetch?: boolean
     isFastForward?: boolean
@@ -1116,6 +1128,16 @@ export function resolveRemoteOperationErrorMessage(
     /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
   ) {
     return 'Sync failed — remote moved while syncing. Try again.'
+  }
+
+  // Why: force-with-lease rejection means the remote moved since our last
+  // snapshot; telling the user to pull would defeat the explicit force-push
+  // path and can reintroduce commits they meant to replace.
+  if (
+    options?.isForcePush &&
+    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message)
+  ) {
+    return 'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
   }
 
   // Why: non-fast-forward/rejected detection is shared across publish and push so
@@ -1181,6 +1203,14 @@ export function resolveRemoteOperationErrorMessage(
       return `Sync failed. ${detail}. Check your remote access and try again.`
     }
     return 'Sync failed. Check your connection and try again.'
+  }
+
+  if (options?.isForcePush) {
+    const detail = extractPublishFailureDetail(error.message)
+    if (detail) {
+      return `Force Push failed. ${detail}. Check your remote access and try again.`
+    }
+    return 'Force Push failed. Check your connection and try again.'
   }
 
   if (options?.isPush) {
@@ -2291,28 +2321,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
-        const needsUpdate =
-          existing.mode !== 'diff' ||
-          existing.diffSource !== diffSource ||
-          existing.isPreview !== updatedPreview ||
-          existing.runtimeEnvironmentId !== runtimeEnvironmentId
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview,
+          runtimeEnvironmentId
+        })
         return {
-          openFiles: needsUpdate
-            ? s.openFiles.map((f) =>
-                f.id === id
-                  ? {
-                      ...f,
-                      mode: 'diff' as const,
-                      diffSource,
-                      conflict: undefined,
-                      skippedConflicts: undefined,
-                      conflictReview: undefined,
-                      isPreview: updatedPreview,
-                      runtimeEnvironmentId
-                    }
-                  : f
-              )
-            : s.openFiles,
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2383,22 +2403,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource: 'branch' as const,
+          branchCompare,
+          branchOldPath: entry.oldPath,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview
+        })
         return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === id
-              ? {
-                  ...f,
-                  mode: 'diff' as const,
-                  diffSource: 'branch' as const,
-                  branchCompare,
-                  branchOldPath: entry.oldPath,
-                  conflict: undefined,
-                  skippedConflicts: undefined,
-                  conflictReview: undefined,
-                  isPreview: updatedPreview
-                }
-              : f
-          ),
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -2470,22 +2487,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
+        const reopenedDiff = withDiffContentReloadRequest({
+          ...existing,
+          mode: 'diff' as const,
+          diffSource: 'commit' as const,
+          commitCompare,
+          branchOldPath: entry.oldPath,
+          conflict: undefined,
+          skippedConflicts: undefined,
+          conflictReview: undefined,
+          isPreview: updatedPreview
+        })
         return {
-          openFiles: s.openFiles.map((f) =>
-            f.id === id
-              ? {
-                  ...f,
-                  mode: 'diff' as const,
-                  diffSource: 'commit' as const,
-                  commitCompare,
-                  branchOldPath: entry.oldPath,
-                  conflict: undefined,
-                  skippedConflicts: undefined,
-                  conflictReview: undefined,
-                  isPreview: updatedPreview
-                }
-              : f
-          ),
+          openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
           activeFileId: id,
           activeTabType: 'editor',
           activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
@@ -3248,7 +3262,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     // enough to read as a stuck label. Solution: fire the upstream refresh
     // as fire-and-forget so it doesn't block the mutation but updates the
     // store as soon as the IPC resolves.
-    get().beginRemoteOperation(publish ? 'publish' : 'push')
+    get().beginRemoteOperation(
+      publish ? 'publish' : options.forceWithLease === true ? 'force_push' : 'push'
+    )
     let shouldRefreshAfterRejectedPush = false
     try {
       await pushRuntimeGit(
@@ -3257,7 +3273,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
     } catch (error) {
       shouldRefreshAfterRejectedPush = isNonFastForwardRemoteError(error)
-      toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
+      toast.error(
+        resolveRemoteOperationErrorMessage(error, {
+          publish,
+          isPush: !publish && options.forceWithLease !== true,
+          isForcePush: !publish && options.forceWithLease === true
+        })
+      )
       throw error
     } finally {
       get().endRemoteOperation()

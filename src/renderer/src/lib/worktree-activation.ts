@@ -15,15 +15,24 @@ import { tuiAgentToAgentKind } from './telemetry'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
+import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import {
   activateWebRuntimeSessionWorktree,
-  isWebRuntimeSessionActive
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive,
+  isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
+import { getLastKnownHostTerminalTabCount } from '@/runtime/web-session-tabs-sync'
+import {
+  beginWebRuntimeWakeTerminalRespawn,
+  endWebRuntimeWakeTerminalRespawn
+} from '@/runtime/web-runtime-wake-terminal-respawn'
 import {
   setWorktreeNavActivator,
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
+import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 
 /** Telemetry payload threaded from the launch site to `pty:spawn`. Main
  *  fires `agent_started` only after the spawn succeeds — see
@@ -147,6 +156,7 @@ export function activateAndRevealWorktree(
     defaultTabs?: WorktreeDefaultTabsLaunch
     issueCommand?: IssueCommandLaunch
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
+    notifyHostRuntime?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
@@ -178,7 +188,10 @@ export function activateAndRevealWorktree(
   // 3. Core activation: sets activeWorktreeId, restores per-worktree state,
   // clears unread, bumps dead PTY generations, triggers GitHub refresh
   state.setActiveWorktree(worktreeId)
-  if (isWebRuntimeSessionActive(useAppStore.getState().settings?.activeRuntimeEnvironmentId)) {
+  if (
+    opts?.notifyHostRuntime !== false &&
+    isWebRuntimeSessionActive(useAppStore.getState().settings?.activeRuntimeEnvironmentId)
+  ) {
     // Why: paired web clients own only local selection state. The desktop host
     // must also activate the worktree so hidden renderer-owned terminal panes
     // mount and publish session surfaces back to the web client.
@@ -203,6 +216,11 @@ export function activateAndRevealWorktree(
   if (!isPlainAlreadyActiveTerminal && !state.isNavigatingHistory) {
     state.recordWorktreeVisit(worktreeId)
   }
+
+  // Why: sleeping an agent destroys the local PTY but preserves the provider
+  // session id. Waking the workspace should restore those CLI sessions without
+  // making the user click a separate sidebar row.
+  resumeSleepingAgentSessionsForWorktree(worktreeId)
 
   // 4. Ensure a focusable surface exists for externally-created worktrees
   const primaryTabId = ensureWorktreeHasInitialTerminal(
@@ -229,7 +247,58 @@ export function activateAndRevealWorktree(
     state.revealWorktreeInSidebar(worktreeId)
   }
 
+  ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
+
   return { primaryTabId }
+}
+
+export function ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId: string): void {
+  const state = useAppStore.getState()
+  const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
+  if (!runtimeEnvironmentId || !isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    return
+  }
+
+  const tabs = state.tabsByWorktree[worktreeId] ?? []
+  if (tabs.length === 0) {
+    return
+  }
+
+  const hasLivePty = tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
+  if (hasLivePty) {
+    return
+  }
+
+  const hasMirroredHostTabs = tabs.some((tab) => isWebTerminalSurfaceTabId(tab.id))
+  if (hasMirroredHostTabs) {
+    // Why: the host session still owns these tabs — wait for the mirror to
+    // repopulate PTY handles instead of creating a duplicate terminal.
+    return
+  }
+
+  if (getLastKnownHostTerminalTabCount(runtimeEnvironmentId, worktreeId) > 0) {
+    return
+  }
+
+  const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
+  if (renderableTabCount === 0) {
+    return
+  }
+
+  if (!beginWebRuntimeWakeTerminalRespawn(worktreeId)) {
+    return
+  }
+
+  // Why: sleep keeps local tab rows but terminal.stop clears host PTYs, so
+  // activation alone can leave a woke workspace with tab chrome but no surface.
+  void createWebRuntimeSessionTerminal({
+    worktreeId,
+    environmentId: runtimeEnvironmentId,
+    activate: true,
+    selectWorktree: false
+  }).finally(() => {
+    endWebRuntimeWakeTerminalRespawn(worktreeId)
+  })
 }
 
 export function ensureWorktreeHasInitialTerminal(

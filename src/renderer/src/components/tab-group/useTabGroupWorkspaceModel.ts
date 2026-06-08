@@ -23,7 +23,10 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '../../runtime/web-runtime-session'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
+import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
+import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
 
 export function recordTerminalTabGroupSplit(createdTerminal: TerminalTab | null | undefined): void {
   if (!createdTerminal) {
@@ -62,7 +65,8 @@ export function useTabGroupWorkspaceModel({
       openFiles: state.openFiles,
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
       expandedPaneByTabId: state.expandedPaneByTabId,
-      generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true
+      generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true,
+      mobileEmulatorEnabled: state.settings?.mobileEmulatorEnabled !== false
     }))
   )
 
@@ -234,24 +238,28 @@ export function useTabGroupWorkspaceModel({
       const runtimeEnvironmentId = useAppStore
         .getState()
         .settings?.activeRuntimeEnvironmentId?.trim()
-      if (
-        (item.contentType === 'terminal' || item.contentType === 'browser') &&
-        isWebRuntimeSessionActive(runtimeEnvironmentId)
-      ) {
+      if (item.contentType === 'terminal') {
+        closeTerminalTab(item.entityId)
+        if (!opts?.skipEmptyCheck) {
+          leaveWorktreeIfEmpty()
+        }
+        return
+      }
+      if (item.contentType === 'browser' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         // Why: paired web clients mirror host-owned tabs. Closing locally races
         // the host session snapshot and leaves stale terminal/browser handles.
         void closeWebRuntimeSessionTab({
           worktreeId,
-          tabId: item.contentType === 'browser' ? item.id : item.entityId,
+          tabId: item.id,
           environmentId: runtimeEnvironmentId
         })
         return
       }
-      if (item.contentType === 'terminal') {
-        closeTab(item.entityId)
-      } else if (item.contentType === 'browser') {
+      if (item.contentType === 'browser') {
         destroyWorkspaceWebviews(useAppStore.getState().browserPagesByWorkspace, item.entityId)
         closeBrowserTab(item.entityId)
+      } else if (item.contentType === 'simulator') {
+        closeUnifiedTab(item.id)
       } else {
         const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
         if (!canCloseTab) {
@@ -300,6 +308,8 @@ export function useTabGroupWorkspaceModel({
         } else if (item.contentType === 'browser') {
           destroyWorkspaceWebviews(useAppStore.getState().browserPagesByWorkspace, item.entityId)
           closeBrowserTab(item.entityId)
+        } else if (item.contentType === 'simulator') {
+          closeUnifiedTab(item.id)
         } else {
           const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
           if (canCloseTab) {
@@ -370,8 +380,13 @@ export function useTabGroupWorkspaceModel({
       }
       focusGroup(worktreeId, groupId)
       activateTab(item.id)
-      setActiveFile(item.entityId)
-      setActiveTabType('editor')
+      if (item.contentType === 'simulator') {
+        setActiveTabType('simulator')
+        // simulator has no editor file entity
+      } else {
+        setActiveFile(item.entityId)
+        setActiveTabType('editor')
+      }
     },
     [activateTab, focusGroup, groupId, groupTabs, setActiveFile, setActiveTabType, worktreeId]
   )
@@ -561,6 +576,19 @@ export function useTabGroupWorkspaceModel({
       newBrowserTab: () => {
         void openNewBrowserTabInActiveWorkspace(groupId)
       },
+      newSimulatorTab: worktreeState.mobileEmulatorEnabled
+        ? () => {
+            if (getSimulatorTabForWorktree(worktreeId)) {
+              void ensureSimulatorTab(worktreeId, { surfacePane: true })
+              return
+            }
+            // Why: mobile simulators are most useful beside the current tab group.
+            void openMobileEmulatorTab(worktreeId, {
+              placement: 'rightSplit',
+              targetGroupId: groupId
+            })
+          }
+        : undefined,
       openEntry: async (args: TabCreateEntryArgs) => {
         await openTabBarEntry(args)
       },

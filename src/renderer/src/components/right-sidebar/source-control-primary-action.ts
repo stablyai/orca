@@ -27,12 +27,13 @@ export type PrimaryActionKind =
 
 // Why: the in-flight remote op tracker stores which action the user actually
 // triggered, so the primary button can mirror that label/spinner instead of
-// claiming a stale or unrelated operation is running. 'fetch' is included
-// because Fetch participates in the busy flag, but it is intentionally NOT
-// in PrimaryActionKind — Fetch is dropdown-only, so when fetch is in flight
-// the primary keeps its natural label and CommitArea suppresses the spinner.
+// claiming a stale or unrelated operation is running. Dropdown-only remote
+// kinds are included because they participate in the busy flag, but they are
+// intentionally NOT in PrimaryActionKind — when Fetch is in flight the primary
+// keeps its natural label, while Force Push maps back to the push icon/slot.
 export type RemoteOpKind =
   | 'push'
+  | 'force_push'
   | 'pull'
   | 'sync'
   | 'fetch'
@@ -50,6 +51,7 @@ export type PrimaryAction = {
 export type PrimaryActionInputs = {
   stagedCount: number
   hasUnstagedChanges: boolean
+  hasStageableChanges: boolean
   hasPartiallyStagedChanges: boolean
   hasMessage: boolean
   hasUnresolvedConflicts: boolean
@@ -130,6 +132,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   const {
     stagedCount,
     hasUnstagedChanges,
+    hasStageableChanges,
     hasPartiallyStagedChanges,
     hasMessage,
     hasUnresolvedConflicts,
@@ -171,6 +174,15 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
       inFlightRemoteOpKind === 'pull' ||
       inFlightRemoteOpKind === 'sync' ||
       inFlightRemoteOpKind === 'publish'
+
+    if (inFlightRemoteOpKind === 'force_push') {
+      return {
+        kind: 'push',
+        label: 'Force Push',
+        title: 'Force Push in progress…',
+        disabled: true
+      }
+    }
 
     if (inFlightIsPrimaryKind && candidate.kind !== inFlightRemoteOpKind) {
       const label = PRIMARY_LABEL_BY_KIND[inFlightRemoteOpKind]
@@ -253,7 +265,7 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   //     with uncommitted changes; push/publish skips the actual user need).
   //     Sits before the upstream-status checks so it works regardless of
   //     whether upstream has resolved yet.
-  if (!hasStaged && hasUnstagedChanges) {
+  if (!hasStaged && hasStageableChanges) {
     return {
       kind: 'stage',
       label: 'Stage All',

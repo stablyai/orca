@@ -10,9 +10,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import TabBar from '../tab-bar/TabBar'
+
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import TabGroupDropOverlay from './TabGroupDropOverlay'
+import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import {
   getTabPaneBodyDroppableId,
@@ -88,12 +90,15 @@ export default function TabGroupPanel({
       expandedPaneByTabId={model.expandedPaneByTabId}
       onActivate={commands.activateTerminal}
       onClose={(terminalId) => {
-        const item = model.groupTabs.find(
-          (candidate) => candidate.entityId === terminalId && candidate.contentType === 'terminal'
-        )
-        if (item) {
+        const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
+        if (item?.contentType === 'terminal') {
           commands.closeItem(item.id)
+          return
         }
+        // Why: agent quick-launch can briefly desync unified/runtime tab ids
+        // before the host snapshot lands; still route close through the shared
+        // terminal close helper instead of no-op'ing.
+        closeTerminalTab(terminalId)
       }}
       onCloseOthers={(visibleId) => {
         // Why: TabBar emits this with the entityId for terminals/browsers and
@@ -113,6 +118,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
@@ -121,17 +127,22 @@ export default function TabGroupPanel({
       editorFiles={editorItems}
       browserTabs={browserItems}
       activeFileId={
-        activeTab?.contentType === 'terminal' || activeTab?.contentType === 'browser'
+        activeTab?.contentType === 'terminal' ||
+        activeTab?.contentType === 'browser' ||
+        activeTab?.contentType === 'simulator'
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
+      activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
       activeTabType={
         activeTab?.contentType === 'terminal'
           ? 'terminal'
           : activeTab?.contentType === 'browser'
             ? 'browser'
-            : 'editor'
+            : activeTab?.contentType === 'simulator'
+              ? 'simulator'
+              : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -346,6 +357,7 @@ export default function TabGroupPanel({
       <div
         ref={setBodyDropRef}
         className="relative flex-1 min-h-0 overflow-hidden"
+        data-tab-group-body-id={groupId}
         style={bodyAnchorStyle}
       >
         {/* Why: this empty anchor lets the agent-sessions tour read as a
@@ -359,14 +371,11 @@ export default function TabGroupPanel({
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
-          activeTab.contentType !== 'browser' && (
+          activeTab.contentType !== 'browser' &&
+          activeTab.contentType !== 'simulator' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
-              {/* Why: split groups render editor/browser content inside a
-                  plain relative pane body instead of the legacy flex column in
-                  Terminal.tsx. Anchoring the surface to `absolute inset-0`
-                  recreates the bounded viewport those panes expect, so plain
-                  overflow containers like MarkdownPreview can actually scroll
-                  instead of expanding to content height. */}
+              {/* Why: split groups render editor content inside a plain relative pane body
+                  instead of the legacy flex column in Terminal.tsx. */}
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -379,11 +388,11 @@ export default function TabGroupPanel({
             </div>
           )}
 
-        {/* Why: terminal/browser panes are rendered at the worktree level by
+        {/* Why: terminal/browser/simulator panes are rendered at the worktree level by
             overlay layers and absolutely positioned over this body element
             via the slot registered above. Rendering them per-group caused
-            split moves to remount xterm or reparent Electron `<webview>`,
-            losing TUI state or reloading the page. */}
+            split moves to remount xterm, reparent Electron `<webview>`, or
+            reload the simulator stream. */}
       </div>
     </div>
   )

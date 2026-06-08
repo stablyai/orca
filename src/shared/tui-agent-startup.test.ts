@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from './tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentResumeStartupPlan,
+  buildAgentStartupPlan,
+  buildShellCommandFromArgv
+} from './tui-agent-startup'
 
 describe('tui agent startup plans', () => {
   it('uses POSIX quoting when the target shell is Linux', () => {
@@ -22,6 +27,12 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("claude 'fix Bob''s \"quoted\" branch'")
+  })
+
+  it('invokes fully quoted argv commands in PowerShell', () => {
+    expect(buildShellCommandFromArgv(['codex', 'resume', 's1'], 'powershell')).toBe(
+      "& 'codex' 'resume' 's1'"
+    )
   })
 
   it('uses cmd escaping when requested explicitly', () => {
@@ -111,6 +122,28 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
+  })
+
+  it('builds Windows resume plans that PowerShell can invoke', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
+  })
+
+  it('honors command overrides when building POSIX resume plans', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'codex',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: { codex: 'codex --profile work' },
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
   })
 
   it('clears draft environment variables with the target shell syntax', () => {

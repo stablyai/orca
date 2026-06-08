@@ -124,6 +124,8 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
@@ -331,6 +333,13 @@ function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
     return sortBy
   }
   return getDefaultUIState().sortBy
+}
+
+function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui']['projectOrderBy'] {
+  if (projectOrderBy === 'manual' || projectOrderBy === 'recent') {
+    return projectOrderBy
+  }
+  return getDefaultUIState().projectOrderBy
 }
 
 function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
@@ -1824,6 +1833,7 @@ export class Store {
         const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
           parsed.settings
         )
+        const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
         const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
@@ -1893,6 +1903,7 @@ export class Store {
             primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
+            ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
@@ -3115,6 +3126,7 @@ export class Store {
       ...this.state.ui,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      projectOrderBy: normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
@@ -3126,6 +3138,9 @@ export class Store {
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
+      ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        this.state.ui?.browserDefaultZoomLevel
       ),
       showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
         this.state.ui?.showDotfilesByWorktree
@@ -3146,6 +3161,9 @@ export class Store {
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
+      projectOrderBy: updates.projectOrderBy
+        ? normalizeProjectOrderBy(updates.projectOrderBy)
+        : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab:
         updates.rightSidebarTab !== undefined
           ? normalizeRightSidebarTab(updates.rightSidebarTab)
@@ -3167,6 +3185,9 @@ export class Store {
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+      ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
       showDotfilesByWorktree:
         updates.showDotfilesByWorktree !== undefined

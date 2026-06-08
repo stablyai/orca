@@ -43,6 +43,8 @@ import {
 } from '../../runtime/runtime-git-client'
 import { useAppStore } from '../../store'
 import { useActiveWorktree } from '../../store/selectors'
+import { AutoRenameBranchPromptEditor } from './AutoRenameBranchPromptEditor'
+import { AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY } from './auto-rename-branch-search'
 import { SearchableSetting } from './SearchableSetting'
 import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
 import { matchesSettingsSearch } from './settings-search'
@@ -66,7 +68,7 @@ type ModelDiscoveryState = {
 
 type CommitMessageInstructionOperation = Extract<
   SourceControlAiOperation,
-  'commitMessage' | 'pullRequest'
+  'commitMessage' | 'pullRequest' | 'branchName'
 >
 
 type CommitMessageInstructionDraftValues = Record<CommitMessageInstructionOperation, string>
@@ -79,7 +81,8 @@ type CommitMessageInstructionDraftState = {
 
 const COMMIT_MESSAGE_INSTRUCTION_OPERATIONS: readonly CommitMessageInstructionOperation[] = [
   'commitMessage',
-  'pullRequest'
+  'pullRequest',
+  'branchName'
 ]
 
 function cloneInstructionDraftValues(
@@ -87,7 +90,8 @@ function cloneInstructionDraftValues(
 ): CommitMessageInstructionDraftValues {
   return {
     commitMessage: values.commitMessage,
-    pullRequest: values.pullRequest
+    pullRequest: values.pullRequest,
+    branchName: values.branchName
   }
 }
 
@@ -301,9 +305,11 @@ export function CommitMessageAiPane({
   const [outputOverridesOpen, setOutputOverridesOpen] = useState(false)
   const persistedCommitInstructions = config.instructionsByOperation.commitMessage ?? ''
   const persistedPullRequestInstructions = config.instructionsByOperation.pullRequest ?? ''
+  const persistedBranchNameInstructions = config.instructionsByOperation.branchName ?? ''
   const persistedInstructionDraftValues: CommitMessageInstructionDraftValues = {
     commitMessage: persistedCommitInstructions,
-    pullRequest: persistedPullRequestInstructions
+    pullRequest: persistedPullRequestInstructions,
+    branchName: persistedBranchNameInstructions
   }
   const [instructionDraftState, setInstructionDraftState] = useState(() =>
     createCommitMessageInstructionDraftState(
@@ -324,6 +330,7 @@ export function CommitMessageAiPane({
   }
   const commitInstructionsDraft = resolvedInstructionDraftState.draft.commitMessage
   const pullRequestInstructionsDraft = resolvedInstructionDraftState.draft.pullRequest
+  const branchNameInstructionsDraft = resolvedInstructionDraftState.draft.branchName
   const updateInstructionDraft = (
     operation: CommitMessageInstructionOperation,
     value: string
@@ -346,11 +353,16 @@ export function CommitMessageAiPane({
   const isCommitInstructionsDirty = commitInstructionsDraft !== persistedCommitInstructions
   const isPullRequestInstructionsDirty =
     pullRequestInstructionsDraft !== persistedPullRequestInstructions
-  const isCustomPromptDirty = isCommitInstructionsDirty || isPullRequestInstructionsDirty
+  const isBranchNameInstructionsDirty =
+    branchNameInstructionsDraft !== persistedBranchNameInstructions
+  const isCustomPromptDirty =
+    isCommitInstructionsDirty || isPullRequestInstructionsDirty || isBranchNameInstructionsDirty
   const commitPromptDraft = commitInstructionsDraft
   const pullRequestPromptDraft = pullRequestInstructionsDraft
+  const branchNamePromptDraft = branchNameInstructionsDraft
   const isCommitPromptDirty = isCommitInstructionsDirty
   const isPullRequestPromptDirty = isPullRequestInstructionsDirty
+  const isBranchNamePromptDirty = isBranchNameInstructionsDirty
   const isSavingPrompt = isSavingInstructions
 
   useEffect(() => {
@@ -788,9 +800,12 @@ export function CommitMessageAiPane({
 
   const onSavePrompt = async (operation: CommitMessageInstructionOperation): Promise<void> => {
     const draft = resolvedInstructionDraftState.draft[operation]
-    const dirty =
-      operation === 'commitMessage' ? isCommitInstructionsDirty : isPullRequestInstructionsDirty
-    if (!dirty || isSavingInstructions) {
+    const dirtyByOperation: Record<CommitMessageInstructionOperation, boolean> = {
+      commitMessage: isCommitInstructionsDirty,
+      pullRequest: isPullRequestInstructionsDirty,
+      branchName: isBranchNameInstructionsDirty
+    }
+    if (!dirtyByOperation[operation] || isSavingInstructions) {
       return
     }
     setIsSavingInstructions(true)
@@ -1182,15 +1197,68 @@ export function CommitMessageAiPane({
     )
   }
 
+  // Why: auto-name fires automatically and runs through the same agent as the
+  // other operations, so it can't work unless Git AI Author is on — keep its
+  // toggle here (gated on config.enabled) rather than orphaned in Git settings.
+  if (
+    config.enabled &&
+    matchesSettingsSearch(searchQuery, AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY)
+  ) {
+    sections.push(
+      <SearchableSetting
+        key="auto-rename-branch-from-work"
+        {...AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY}
+        className="flex items-center justify-between gap-4 py-2"
+      >
+        <div className="space-y-0.5">
+          <Label>Auto-name new workspaces from first message</Label>
+          <p className="text-xs text-muted-foreground">
+            When a blank new workspace starts work, Orca uses the first task to rename the sidebar
+            title and unpublished generated branch (e.g. <code>Nautilus</code>). Workspaces created
+            from linked issues or pull requests are named up front from the same short identity.
+            Tune the model and prompt under Advanced → Branch Names below.
+          </p>
+        </div>
+        <button
+          role="switch"
+          aria-checked={settings.autoRenameBranchFromWork}
+          onClick={() =>
+            updateSettings({ autoRenameBranchFromWork: !settings.autoRenameBranchFromWork })
+          }
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
+            settings.autoRenameBranchFromWork ? 'bg-foreground' : 'bg-muted-foreground/30'
+          }`}
+        >
+          <span
+            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
+              settings.autoRenameBranchFromWork ? 'translate-x-4' : 'translate-x-0.5'
+            }`}
+          />
+        </button>
+      </SearchableSetting>
+    )
+  }
+
   const commitMessagesGroupEntry = {
     title: 'Commit Messages',
     description: 'Commit message generation settings.',
     keywords: ['commit', 'message', 'model', 'prompt', 'conventional commits']
   }
   const commitAndPrCustomizationEntry = {
-    title: 'Commit and PR customization',
-    description: 'Configure behavior for commit message generation and PR creation.',
-    keywords: ['customization', 'advanced', 'commit', 'pull request', 'pr', 'model', 'prompt']
+    title: 'Advanced',
+    description:
+      'Override the model and prompt for commit messages, pull requests, and branch names.',
+    keywords: [
+      'customization',
+      'advanced',
+      'commit',
+      'pull request',
+      'pr',
+      'branch',
+      'name',
+      'model',
+      'prompt'
+    ]
   }
   const commitAndPrCustomizationMatches =
     config.enabled && matchesSettingsSearch(searchQuery, commitAndPrCustomizationEntry)
@@ -1274,6 +1342,51 @@ export function CommitMessageAiPane({
       <div key="commit-messages" className="space-y-3">
         <h4 className="text-sm font-semibold">Commit Messages</h4>
         <div className="divide-y divide-border/50">{commitMessageChildren}</div>
+      </div>
+    ) : null
+
+  const branchNamesGroupEntry = {
+    title: 'Branch Names',
+    description: 'Branch name generation settings for auto-named workspaces.',
+    keywords: ['branch', 'name', 'rename', 'model', 'prompt', 'slug', 'workspace']
+  }
+  const branchNamesGroupMatches =
+    config.enabled && matchesSettingsSearch(searchQuery, branchNamesGroupEntry)
+  const branchNamePromptMatches = matchesSettingsSearch(searchQuery, {
+    title: 'Branch name prompt',
+    description: 'Additional prompt text appended only when generating branch names.',
+    keywords: ['prompt', 'instructions', 'built-in prompt', 'slug', 'kebab-case']
+  })
+  const branchNameChildren = [
+    renderOperationModelControls(
+      'branchName',
+      'Model',
+      'Use a different model for branch name generation.',
+      ['model', 'override', 'branch', 'name', 'branch name model', 'slug', 'thinking'],
+      branchNamesGroupMatches || commitAndPrCustomizationMatches
+    ),
+    (config.enabled || isBranchNamePromptDirty) &&
+    (branchNamesGroupMatches ||
+      commitAndPrCustomizationMatches ||
+      isBranchNamePromptDirty ||
+      branchNamePromptMatches) ? (
+      <AutoRenameBranchPromptEditor
+        key="branch-name-prompt"
+        draft={branchNamePromptDraft}
+        dirty={isBranchNamePromptDirty}
+        saving={isSavingPrompt}
+        onDraftChange={(value) => updateInstructionDraft('branchName', value)}
+        onDiscard={() => onDiscardPrompt('branchName')}
+        onSave={() => void onSavePrompt('branchName')}
+      />
+    ) : null
+  ].filter(Boolean)
+
+  const branchNamesGroup =
+    branchNameChildren.length > 0 ? (
+      <div key="branch-names" className="space-y-3">
+        <h4 className="text-sm font-semibold">Branch Names</h4>
+        <div className="divide-y divide-border/50">{branchNameChildren}</div>
       </div>
     ) : null
 
@@ -1423,13 +1536,16 @@ export function CommitMessageAiPane({
       </div>
     ) : null
 
-  const outputOverrideChildren = [commitMessagesGroup, pullRequestsGroup].filter(Boolean)
+  const outputOverrideChildren = [commitMessagesGroup, pullRequestsGroup, branchNamesGroup].filter(
+    Boolean
+  )
   const outputOverridesSearchOpen = searchQuery.trim() !== '' && outputOverrideChildren.length > 0
   const outputOverridesVisible =
     outputOverridesOpen ||
     outputOverridesSearchOpen ||
     isCommitPromptDirty ||
-    isPullRequestPromptDirty
+    isPullRequestPromptDirty ||
+    isBranchNamePromptDirty
 
   if (outputOverrideChildren.length > 0) {
     sections.push(
@@ -1444,11 +1560,7 @@ export function CommitMessageAiPane({
             <button
               type="button"
               className="flex w-full cursor-pointer items-start gap-2 rounded-md py-1 text-left outline-none transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label={
-                outputOverridesVisible
-                  ? 'Collapse commit and PR customization'
-                  : 'Expand commit and PR customization'
-              }
+              aria-label={outputOverridesVisible ? 'Collapse advanced' : 'Expand advanced'}
             >
               <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-muted-foreground">
                 <ChevronDown
@@ -1460,10 +1572,11 @@ export function CommitMessageAiPane({
               </span>
               <span className="space-y-0.5">
                 <span className="block cursor-pointer text-sm leading-none font-medium">
-                  Commit and PR customization
+                  Advanced
                 </span>
                 <span className="block text-xs text-muted-foreground">
-                  Configure behavior for commit message generation and PR creation.
+                  Override the model and prompt for commit messages, pull requests, and branch
+                  names.
                 </span>
               </span>
             </button>

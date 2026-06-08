@@ -2,7 +2,6 @@ import { useEffect, useRef, type ComponentType, type Ref } from 'react'
 import { CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { getAddRepoLocalStartActions } from './add-repo-local-start-actions'
@@ -46,99 +45,6 @@ function AddRepoNestedScanProgressNotice({
         </Tooltip>
       ) : null}
     </div>
-  )
-}
-
-type AddRepoServerPathStartStepProps = {
-  serverPath: string
-  isAddingServerPath: boolean
-  addProjectBusyLabel: string | null
-  onServerPathChange: (path: string) => void
-  onAddServerPath: (kind: 'git' | 'folder') => void
-  onOpenCloneStep: () => void
-  onOpenCreateStep: () => void
-}
-
-export function AddRepoServerPathStartStep({
-  serverPath,
-  isAddingServerPath,
-  addProjectBusyLabel,
-  onServerPathChange,
-  onAddServerPath,
-  onOpenCloneStep,
-  onOpenCreateStep
-}: AddRepoServerPathStartStepProps): React.JSX.Element {
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>Add a server project</DialogTitle>
-        <DialogDescription>
-          Add a Git repository or folder that already exists on the selected runtime server.
-        </DialogDescription>
-      </DialogHeader>
-
-      <div className="space-y-3 pt-2">
-        <div className="space-y-1">
-          <label
-            htmlFor="server-project-path"
-            className="text-[11px] font-medium text-muted-foreground block"
-          >
-            Server path
-          </label>
-          <Input
-            id="server-project-path"
-            value={serverPath}
-            onChange={(event) => onServerPathChange(event.target.value)}
-            placeholder="/home/user/project"
-            className="h-11 text-sm font-mono"
-            disabled={isAddingServerPath}
-            autoFocus
-            spellCheck={false}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            onClick={() => onAddServerPath('git')}
-            disabled={!serverPath.trim() || isAddingServerPath}
-            className="h-10"
-          >
-            Add Git Project
-          </Button>
-          <Button
-            onClick={() => onAddServerPath('folder')}
-            disabled={!serverPath.trim() || isAddingServerPath}
-            variant="outline"
-            className="h-10"
-          >
-            Open as Folder
-          </Button>
-        </div>
-        {isAddingServerPath && addProjectBusyLabel ? (
-          <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-            <Loader2 className="size-3.5 shrink-0 animate-spin" />
-            <span>{addProjectBusyLabel}</span>
-          </div>
-        ) : null}
-        <div className="flex items-center justify-center gap-4 pt-1">
-          <button
-            type="button"
-            onClick={onOpenCloneStep}
-            disabled={isAddingServerPath}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
-          >
-            Clone into server path
-          </button>
-          <button
-            type="button"
-            onClick={onOpenCreateStep}
-            disabled={isAddingServerPath}
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
-          >
-            Create on server
-          </button>
-        </div>
-      </div>
-    </>
   )
 }
 

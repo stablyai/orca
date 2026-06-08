@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
+import type * as EditorAutosaveModule from '@/components/editor/editor-autosave'
 import type { FsChangedPayload } from '../../../shared/types'
 
 vi.mock('@/store', () => ({
@@ -9,10 +10,14 @@ vi.mock('@/store', () => ({
 // Why: editor-autosave calls window.dispatchEvent at module scope paths; the
 // vitest 'node' environment has no window. Stub the two exports we use so the
 // handler can run headlessly.
-vi.mock('@/components/editor/editor-autosave', () => ({
-  notifyEditorExternalFileChange: vi.fn(),
-  getOpenFilesForExternalFileChange: vi.fn(() => [])
-}))
+vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
+  const actual = await importOriginal<typeof EditorAutosaveModule>()
+  return {
+    ...actual,
+    notifyEditorExternalFileChange: vi.fn(),
+    getOpenFilesForExternalFileChange: vi.fn(() => [])
+  }
+})
 
 import {
   createExternalWatchEventHandler,
@@ -117,6 +122,12 @@ describe('getOverflowExternalReloadTargets', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo',
         relativePath: 'notes.md',
+        runtimeEnvironmentId: null
+      },
+      {
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        relativePath: 'staged.ts',
         runtimeEnvironmentId: null
       }
     ])

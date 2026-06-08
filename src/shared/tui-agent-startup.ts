@@ -1,4 +1,9 @@
 import { isShellProcess } from './agent-detection'
+import {
+  getAgentResumeArgv,
+  type AgentProviderSessionMetadata,
+  type ResumableTuiAgent
+} from './agent-session-resume'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './types'
 
@@ -13,14 +18,14 @@ export type AgentStartupPlan = {
 
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
 
-function resolveStartupShell(
+export function resolveStartupShell(
   platform: NodeJS.Platform,
   shell?: AgentStartupShell
 ): AgentStartupShell {
   return shell ?? (platform === 'win32' ? 'powershell' : 'posix')
 }
 
-function quoteStartupArg(value: string, shell: AgentStartupShell): string {
+export function quoteStartupArg(value: string, shell: AgentStartupShell): string {
   if (shell === 'powershell') {
     return `'${value.replace(/'/g, "''")}'`
   }
@@ -28,6 +33,17 @@ function quoteStartupArg(value: string, shell: AgentStartupShell): string {
     return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
   }
   return `'${value.replace(/'/g, `'\\''`)}'`
+}
+
+export function buildShellCommandFromArgv(
+  args: readonly string[],
+  shell: AgentStartupShell
+): string {
+  const command = args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
+  if (shell === 'powershell' && command) {
+    return `& ${command}`
+  }
+  return command
 }
 
 function clearEnvCommand(name: string, shell: AgentStartupShell): string {
@@ -132,6 +148,37 @@ export function buildAgentStartupPlan(args: {
     launchCommand: baseCommand,
     expectedProcess: config.expectedProcess,
     followupPrompt: trimmedPrompt
+  }
+}
+
+export function buildAgentResumeStartupPlan(args: {
+  agent: ResumableTuiAgent
+  providerSession: AgentProviderSessionMetadata
+  cmdOverrides: Partial<Record<TuiAgent, string>>
+  platform: NodeJS.Platform
+  shell?: AgentStartupShell
+}): AgentStartupPlan | null {
+  const argv = getAgentResumeArgv(args.agent, args.providerSession)
+  if (!argv) {
+    return null
+  }
+  const shell = resolveStartupShell(args.platform, args.shell)
+  const config = TUI_AGENT_CONFIG[args.agent]
+  const baseCommand = resolveBaseCommand({
+    agent: args.agent,
+    cmdOverrides: args.cmdOverrides,
+    shell
+  })
+  const resumeArgs = argv
+    .slice(1)
+    .map((arg) => quoteStartupArg(arg, shell))
+    .join(' ')
+  const launchCommand = resumeArgs ? `${baseCommand} ${resumeArgs}` : baseCommand
+  return {
+    agent: args.agent,
+    launchCommand,
+    expectedProcess: config.expectedProcess,
+    followupPrompt: null
   }
 }
 

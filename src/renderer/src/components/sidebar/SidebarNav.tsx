@@ -226,13 +226,16 @@ const SidebarNav = React.memo(function SidebarNav() {
               className={cn(
                 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
                 tasksActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8',
+                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8',
                 !canBrowseTasks && 'cursor-not-allowed opacity-50 hover:bg-transparent'
               )}
             >
               <List
-                className={cn('size-4 shrink-0', !tasksActive && 'text-sidebar-foreground/30')}
+                className={cn(
+                  'size-4 shrink-0',
+                  !tasksActive && 'text-worktree-sidebar-foreground/30'
+                )}
                 strokeWidth={tasksActive ? 2.25 : 1.75}
               />
               <span className="flex-1">Tasks</span>
@@ -297,14 +300,14 @@ const SidebarNav = React.memo(function SidebarNav() {
               className={cn(
                 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
                 automationsActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
               )}
             >
               <CalendarClock
                 className={cn(
                   'size-4 shrink-0',
-                  !automationsActive && 'text-sidebar-foreground/30'
+                  !automationsActive && 'text-worktree-sidebar-foreground/30'
                 )}
                 strokeWidth={automationsActive ? 2.25 : 1.75}
               />
@@ -322,12 +325,15 @@ const SidebarNav = React.memo(function SidebarNav() {
           className={cn(
             'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
             activityActive
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+              ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+              : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
           )}
         >
           <Bell
-            className={cn('size-4 shrink-0', !activityActive && 'text-sidebar-foreground/30')}
+            className={cn(
+              'size-4 shrink-0',
+              !activityActive && 'text-worktree-sidebar-foreground/30'
+            )}
             strokeWidth={activityActive ? 2.25 : 1.75}
           />
           <span className="flex-1">Agents</span>
@@ -351,12 +357,15 @@ const SidebarNav = React.memo(function SidebarNav() {
               className={cn(
                 'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight transition-colors',
                 mobileActive
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                  : 'text-sidebar-foreground/60 hover:bg-sidebar-foreground/8'
+                  ? 'bg-worktree-sidebar-accent text-worktree-sidebar-accent-foreground'
+                  : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
               )}
             >
               <Smartphone
-                className={cn('size-4 shrink-0', !mobileActive && 'text-sidebar-foreground/30')}
+                className={cn(
+                  'size-4 shrink-0',
+                  !mobileActive && 'text-worktree-sidebar-foreground/30'
+                )}
                 strokeWidth={mobileActive ? 2.25 : 1.75}
               />
               <span className="flex-1">Orca Mobile</span>
@@ -374,9 +383,12 @@ const SidebarNav = React.memo(function SidebarNav() {
         type="button"
         onClick={() => openModal('worktree-palette')}
         aria-label="Search worktrees and browser tabs"
-        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-sidebar-foreground/60 transition-colors hover:bg-sidebar-foreground/8"
+        className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] font-medium tracking-tight text-worktree-sidebar-foreground/60 transition-colors hover:bg-worktree-sidebar-foreground/8"
       >
-        <Search className="size-4 shrink-0 text-sidebar-foreground/30" strokeWidth={1.75} />
+        <Search
+          className="size-4 shrink-0 text-worktree-sidebar-foreground/30"
+          strokeWidth={1.75}
+        />
         <span className="flex-1">Search</span>
         <kbd className="hidden rounded border border-border/60 bg-background/40 px-1.5 py-px font-mono text-[10px] font-medium text-muted-foreground group-hover:inline-flex items-center">
           {worktreePaletteShortcut}

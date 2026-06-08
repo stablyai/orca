@@ -124,7 +124,10 @@ import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted
 } from './components/feature-tips/feature-tip-startup-gate'
-import { trackOrcaCliFeatureTipShown } from './components/feature-tips/feature-tip-telemetry'
+import {
+  trackCmdJPaletteFeatureTipShown,
+  trackOrcaCliFeatureTipShown
+} from './components/feature-tips/feature-tip-telemetry'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -437,6 +440,7 @@ function App(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
@@ -578,6 +582,8 @@ function App(): React.JSX.Element {
     featureTipsPromptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
+    } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
+      trackCmdJPaletteFeatureTipShown('app_open')
     }
     // Why: once a tip is visible, app quit/crash should not make it reappear
     // on the next launch just because the user never clicked a dismiss button.
@@ -1023,6 +1029,7 @@ function App(): React.JSX.Element {
         rightSidebarWidth,
         groupBy,
         sortBy,
+        projectOrderBy,
         showActiveOnly: false,
         hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
@@ -1047,6 +1054,7 @@ function App(): React.JSX.Element {
     rightSidebarWidth,
     groupBy,
     sortBy,
+    projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     showDotfilesByWorktree,

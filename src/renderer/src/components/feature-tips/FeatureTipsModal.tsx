@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { Loader2, Mic } from 'lucide-react'
+import { Mic } from 'lucide-react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import type { FeatureTip } from '../../../../shared/feature-tips'
-import { Button } from '@/components/ui/button'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
@@ -17,13 +16,18 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { CliFeatureTipVisual } from './CliFeatureTipVisual'
+import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
+import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
+import { FeatureTipActions } from './FeatureTipActions'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
   getOrcaCliFeatureTipTelemetrySource,
+  trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
@@ -45,6 +49,10 @@ function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
   }
 
   switch (tip.action) {
+    case 'learn-cmd-j-palette':
+      // Kept for type exhaustiveness; the cmd-j tip is rendered via
+      // CmdJPaletteTipDialog and never reaches this function at runtime.
+      return <CmdJPaletteFeatureTipVisual />
     case 'enable-voice':
       return (
         <div className="flex flex-col items-center gap-2.5">
@@ -64,46 +72,6 @@ function FeatureTipVisual({ tip }: { tip: FeatureTip }): JSX.Element {
         </div>
       )
   }
-}
-
-function FeatureTipActions({
-  currentTip,
-  primaryBusy,
-  onPrimaryAction,
-  onSkip,
-  showSkip = true,
-  fullWidth = false
-}: {
-  currentTip: FeatureTip
-  primaryBusy: boolean
-  onPrimaryAction: () => void
-  onSkip: () => void
-  showSkip?: boolean
-  fullWidth?: boolean
-}): JSX.Element {
-  return (
-    <>
-      {showSkip ? (
-        <Button variant="ghost" onClick={onSkip} disabled={primaryBusy}>
-          Maybe Later
-        </Button>
-      ) : null}
-      <Button
-        className={fullWidth ? 'w-full' : undefined}
-        onClick={onPrimaryAction}
-        disabled={primaryBusy}
-      >
-        {primaryBusy ? (
-          <>
-            <Loader2 className="size-4 animate-spin" />
-            Installing...
-          </>
-        ) : (
-          currentTip.ctaLabel
-        )}
-      </Button>
-    </>
-  )
 }
 
 export default function FeatureTipsModal(): JSX.Element | null {
@@ -164,6 +132,16 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
+  const openShortcutsSettings = (): void => {
+    // Why: dismiss the tip when navigating away — the tip's job is done once
+    // the user clicks through to rebind, and leaving it mounted behind the
+    // settings page would re-appear on close.
+    markCurrentTipSeen()
+    closeModal()
+    openSettingsTarget({ pane: 'shortcuts', repoId: null })
+    openSettingsPage()
+  }
+
   const enableOrchestrationSkillSetup = (): void => {
     localStorage.setItem(ORCHESTRATION_ENABLED_STORAGE_KEY, '1')
     localStorage.removeItem(ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY)
@@ -177,6 +155,15 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
     markFeatureTipsSeen([currentTip.id])
     switch (currentTip.action) {
+      case 'learn-cmd-j-palette': {
+        // Why: passive education tip — acknowledging just dismisses; the rebind
+        // path lives in Settings and is reachable from the palette itself.
+        trackCmdJPaletteFeatureTipAcknowledged(
+          getOrcaCliFeatureTipTelemetrySource(modalData.source)
+        )
+        closeModal()
+        break
+      }
       case 'enable-voice': {
         const voice = settings?.voice ?? getDefaultVoiceSettings()
         void updateSettings({
@@ -341,6 +328,20 @@ export default function FeatureTipsModal(): JSX.Element | null {
     )
   }
 
+  if (currentTip.action === 'learn-cmd-j-palette') {
+    return (
+      <CmdJPaletteTipDialog
+        open={isOpen}
+        tip={currentTip}
+        primaryBusy={primaryBusy}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSkip={handleSkip}
+        onRebindClick={openShortcutsSettings}
+      />
+    )
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md gap-4 p-7" showCloseButton>
@@ -360,6 +361,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             primaryBusy={primaryBusy}
             onPrimaryAction={() => void handlePrimaryAction()}
             onSkip={handleSkip}
+            showSkip
           />
         </DialogFooter>
       </DialogContent>

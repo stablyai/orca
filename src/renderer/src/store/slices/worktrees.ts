@@ -231,13 +231,17 @@ function areDetectedWorktreeResultsEqual(
 }
 
 function toVisibleTabType(contentType: string): WorkspaceVisibleTabType {
-  return contentType === 'browser' ? 'browser' : contentType === 'terminal' ? 'terminal' : 'editor'
+  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
+    return contentType
+  }
+  return 'editor'
 }
 
 const FORCE_RETRYABLE_WORKTREE_REMOVAL_MESSAGES = [
   'Worktree has uncommitted or untracked changes',
   'contains modified or untracked files',
-  'Worktree is no longer registered with Git but its directory remains'
+  'Worktree is no longer registered with Git but its directory remains',
+  'Worktree is no longer registered with Git and its directory is already gone'
 ] as const
 
 // Why: local preflight formatting can surface raw git porcelain instead of the

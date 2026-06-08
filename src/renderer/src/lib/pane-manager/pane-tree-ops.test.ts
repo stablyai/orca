@@ -28,13 +28,17 @@ function createPane({
   proposedRows,
   terminalCols,
   terminalRows,
-  paneId = 1
+  paneId = 1,
+  containerWidth = 800,
+  containerHeight = 400
 }: {
   proposedCols: number
   proposedRows: number
   terminalCols: number
   terminalRows: number
   paneId?: number
+  containerWidth?: number
+  containerHeight?: number
 }): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
   const fit = vi.fn()
@@ -73,7 +77,18 @@ function createPane({
     leafId,
     stablePaneId: leafId,
     terminal: terminal as never,
-    container: { dataset: {} } as never,
+    container: {
+      dataset: {},
+      getBoundingClientRect: () =>
+        ({
+          width: containerWidth,
+          height: containerHeight,
+          top: 0,
+          left: 0,
+          right: containerWidth,
+          bottom: containerHeight
+        }) as DOMRect
+    } as never,
     xtermContainer: {} as never,
     linkTooltip: {} as never,
     terminalGpuAcceleration: 'auto',
@@ -131,6 +146,23 @@ describe('safeFit', () => {
     expect(pane.terminal.scrollToBottom).not.toHaveBeenCalled()
     expect(pane.terminal.scrollLines).not.toHaveBeenCalled()
     expect(activeBuffer.viewportY).toBe(42)
+  })
+
+  it('skips refits while the pane container is still near-zero width', () => {
+    const pane = createPane({
+      proposedCols: 2,
+      proposedRows: 24,
+      terminalCols: 120,
+      terminalRows: 32,
+      containerWidth: 8,
+      containerHeight: 400
+    })
+
+    safeFit(pane)
+
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
+    expect(pane.terminal.resize).not.toHaveBeenCalled()
+    expect(pane.terminal.cols).toBe(120)
   })
 
   it('still refits when the proposed grid dimensions changed', () => {

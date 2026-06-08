@@ -11,6 +11,8 @@ export type FileExplorerRowProjection = {
   getRowsByPaths: (paths: Set<string>) => TreeNode[]
   countVisiblePaths: (paths: Set<string>) => number
   getInsertIndexAfterSubtree: (parentPath: string, worktreePath: string | null) => number
+  getParentIndex: (index: number) => number | null
+  getFirstChildIndex: (index: number) => number | null
 }
 
 export function createFileExplorerRowProjection(
@@ -61,8 +63,39 @@ export function createFileExplorerRowProjectionFromParts(
       getRowsByPathsInProjectionOrder(visibleFlatRows, rowsByPath, getIndexByPathMap, paths),
     countVisiblePaths: (paths) => countVisiblePaths(rowsByPath, paths),
     getInsertIndexAfterSubtree: (parentPath, worktreePath) =>
-      getInsertIndexAfterSubtree(visibleFlatRows, getIndexByPathMap, parentPath, worktreePath)
+      getInsertIndexAfterSubtree(visibleFlatRows, getIndexByPathMap, parentPath, worktreePath),
+    getParentIndex: (index) => getParentIndex(visibleFlatRows, index),
+    getFirstChildIndex: (index) => getFirstChildIndex(visibleFlatRows, index)
   }
+}
+
+function getParentIndex(visibleFlatRows: readonly TreeNode[], index: number): number | null {
+  const current = visibleFlatRows[index]
+  if (!current) {
+    return null
+  }
+  if (current.depth <= 0) {
+    return null
+  }
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const node = visibleFlatRows[i]
+    if (node && node.depth < current.depth) {
+      return i
+    }
+  }
+  return null
+}
+
+function getFirstChildIndex(visibleFlatRows: readonly TreeNode[], index: number): number | null {
+  const current = visibleFlatRows[index]
+  if (!current || !current.isDirectory) {
+    return null
+  }
+  const next = visibleFlatRows[index + 1]
+  if (next && next.depth === current.depth + 1) {
+    return index + 1
+  }
+  return null
 }
 
 function getRowsByPathsInProjectionOrder(

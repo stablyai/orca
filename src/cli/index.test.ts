@@ -113,6 +113,25 @@ describe('COMMAND_SPECS collision check', () => {
   })
 })
 
+describe('orca root help', () => {
+  it('advertises computer-use capabilities discovery', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer capabilities     Show computer-use provider capabilities'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer permissions      Show or open computer-use permission setup'
+    )
+    expect(logSpy.mock.calls[0][0]).toContain(
+      'computer press-key        Press a single key such as Return or Escape'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+  })
+})
+
 describe('orca cli worktree awareness', () => {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
   const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -1949,6 +1968,60 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(callMock).toHaveBeenCalledWith('browser.tabCurrent', { worktree: undefined })
+  })
+
+  it('passes emulator gesture points through to the runtime', async () => {
+    const points = [
+      { type: 'begin', x: 0.5, y: 0.8 },
+      { type: 'move', x: 0.5, y: 0.4 },
+      { type: 'end', x: 0.5, y: 0.2 }
+    ]
+    queueFixtures(callMock, okFixture('req_emulator_gesture', { ok: true }))
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['emulator', 'gesture', JSON.stringify(points), '--worktree', 'id:wt-1', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('emulator.gesture', {
+      points,
+      device: undefined,
+      emulator: undefined,
+      worktree: 'id:wt-1'
+    })
+  })
+
+  it('rejects emulator gesture points outside normalized coordinates', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(
+      [
+        'emulator',
+        'gesture',
+        JSON.stringify([
+          { type: 'begin', x: 1.2, y: 0.8 },
+          { type: 'end', x: 0.5, y: 0.2 }
+        ]),
+        '--worktree',
+        'id:wt-1',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock).not.toHaveBeenCalled()
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'invalid_argument',
+        message: '--points[0].x must be between 0 and 1'
+      }
+    })
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 
   it('creates an automation for the enclosing worktree by default', async () => {

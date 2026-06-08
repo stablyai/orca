@@ -12,10 +12,30 @@ describe('composeActiveTerminalTheme', () => {
     } as GlobalSettings
   }
 
-  it('returns the base theme when no overrides apply', () => {
+  it('layers terminal scrollbar defaults under the base theme', () => {
     const base = { background: '#101010', foreground: '#fafafa', cursor: '#fafafa' }
     const result = composeActiveTerminalTheme(base, settingsWith({}))
-    expect(result).toEqual(base)
+    expect(result).toEqual({
+      overviewRulerBorder: 'transparent',
+      scrollbarSliderBackground: 'rgba(180, 180, 185, 0.4)',
+      scrollbarSliderHoverBackground: 'rgba(180, 180, 185, 0.6)',
+      scrollbarSliderActiveBackground: 'rgba(180, 180, 185, 0.8)',
+      ...base
+    })
+  })
+
+  it('lets the base theme override terminal scrollbar defaults', () => {
+    const result = composeActiveTerminalTheme(
+      {
+        background: '#101010',
+        overviewRulerBorder: '#222222',
+        scrollbarSliderBackground: 'rgba(1, 2, 3, 0.4)'
+      },
+      settingsWith({})
+    )
+
+    expect(result!.overviewRulerBorder).toBe('#222222')
+    expect(result!.scrollbarSliderBackground).toBe('rgba(1, 2, 3, 0.4)')
   })
 
   it('layers terminalColorOverrides on top of the base theme', () => {

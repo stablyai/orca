@@ -39,6 +39,7 @@ import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -539,6 +540,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     fs: createFileApi(),
     git: createGitApi(),
     browser: createBrowserApi(),
+    emulator: createEmulatorApi(),
     gh: createGitHubApi(),
     gl: createGitLabApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
@@ -1456,6 +1458,17 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }
 
+function createEmulatorApi(): NonNullable<Partial<PreloadApi>['emulator']> {
+  return {
+    onPaneFocus: () => noopUnsubscribe,
+    onAutoAttach: () => noopUnsubscribe,
+    startFrameStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
+    stopFrameStream: () => Promise.resolve(),
+    onFrameStreamFrame: () => noopUnsubscribe,
+    onFrameStreamError: () => noopUnsubscribe
+  } as unknown as NonNullable<Partial<PreloadApi>['emulator']>
+}
+
 function createGitHubApi(): WebGitHubApi {
   const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
@@ -1823,6 +1836,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onNewBrowserTab: () => noopUnsubscribe,
     onNewMarkdownTab: () => noopUnsubscribe,
+    onNewSimulatorTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
@@ -2070,6 +2084,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     codex: null,
     gemini: null,
     opencodeGo: null,
+    kimi: null,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -2153,11 +2168,30 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     signal: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
+    ackData: () => {},
+    setActiveRendererPty: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     listSessions: () => Promise.resolve([]),
     getMainBufferSnapshot: () => Promise.resolve(null),
+    getRendererDeliveryDebugSnapshot: () =>
+      Promise.resolve({
+        pendingPtyCount: 0,
+        pendingChars: 0,
+        maxPendingCharsByPty: 0,
+        rendererInFlightPtyCount: 0,
+        rendererInFlightChars: 0,
+        maxRendererInFlightCharsByPty: 0,
+        activeRendererPtyCount: 0,
+        flushScheduled: false,
+        peakPendingChars: 0,
+        peakMaxPendingCharsByPty: 0,
+        peakRendererInFlightChars: 0,
+        peakMaxRendererInFlightCharsByPty: 0,
+        ackGatedFlushSkipCount: 0
+      }),
+    resetRendererDeliveryDebug: () => Promise.resolve(),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
@@ -2380,13 +2414,17 @@ function getStoredSettings(): GlobalSettings {
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = {
     ...stored,
-    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored)
+    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
+    ...normalizeTerminalCursorStyleDefault(stored)
   }
   if (
     rawStoredSettings &&
     (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
       stored.autoRenameBranchFromWorkDefaultedOn !==
-        migratedStored.autoRenameBranchFromWorkDefaultedOn)
+        migratedStored.autoRenameBranchFromWorkDefaultedOn ||
+      stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
+      stored.terminalCursorStyleDefaultedToBlock !==
+        migratedStored.terminalCursorStyleDefaultedToBlock)
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown

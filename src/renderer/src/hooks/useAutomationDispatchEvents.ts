@@ -378,14 +378,20 @@ export function useAutomationDispatchEvents(): void {
         if (!result) {
           throw new Error('Unable to build an agent launch plan.')
         }
-        observeAgentStatus(result.tabId, dispatchStartedAt)
+        const launchedTabId = result.tabId
+        // Why: host-backed automation terminals may lack a local tab id; skip
+        // pane-key status observation while background session output still
+        // tracks completion.
+        if (launchedTabId) {
+          observeAgentStatus(launchedTabId, dispatchStartedAt)
+        }
         try {
           await markDispatchResult({
             runId: run.id,
             status: 'dispatched',
             workspaceId: worktree.id,
             workspaceDisplayName: worktree.displayName,
-            terminalSessionId: result.tabId,
+            terminalSessionId: launchedTabId,
             precheckResult,
             error: null
           })

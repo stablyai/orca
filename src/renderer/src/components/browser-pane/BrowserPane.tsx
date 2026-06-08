@@ -99,6 +99,7 @@ import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import BrowserAddressBar from './BrowserAddressBar'
+import { BrowserImportHintButton } from './BrowserImportHintButton'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
@@ -117,6 +118,9 @@ import {
   addBrowserPageZoomEventListener,
   applyBrowserPageZoom,
   browserPageZoomLevelToPercent,
+  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  normalizeBrowserPageZoomLevel,
+  setBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from './browser-page-zoom'
 import {
@@ -2519,6 +2523,14 @@ function BrowserPagePane({
   const inputLockedRef = useRef(inputLocked)
   inputLockedRef.current = inputLocked
   const keybindings = useAppStore((state) => state.keybindings)
+  const browserDefaultZoomLevel = useAppStore(
+    (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
+  )
+  const setBrowserDefaultZoomLevel = useAppStore((state) => state.setBrowserDefaultZoomLevel)
+  const normalizedBrowserDefaultZoomLevel = normalizeBrowserPageZoomLevel(browserDefaultZoomLevel)
+  const browserDefaultZoomPercent = browserPageZoomLevelToPercent(normalizedBrowserDefaultZoomLevel)
+  const browserDefaultZoomLevelRef = useRef(normalizedBrowserDefaultZoomLevel)
+  browserDefaultZoomLevelRef.current = normalizedBrowserDefaultZoomLevel
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const faviconUrlRef = useRef<string | null>(browserTab.faviconUrl)
   const initialBrowserUrlRef = useRef(browserTab.url)
@@ -2546,7 +2558,7 @@ function BrowserPagePane({
   const [resourceNotice, setResourceNotice] = useState<string | null>(null)
   const [downloadState, setDownloadState] = useState<BrowserDownloadState | null>(null)
   const downloadStateRef = useRef<BrowserDownloadState | null>(null)
-  const [browserZoomPercent, setBrowserZoomPercent] = useState(100)
+  const [browserZoomPercent, setBrowserZoomPercent] = useState(browserDefaultZoomPercent)
   const [browserZoomFeedbackVisible, setBrowserZoomFeedbackVisible] = useState(false)
   const [contextMenu, setContextMenu] = useState<{
     x: number
@@ -3208,6 +3220,7 @@ function BrowserPagePane({
       }
       const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
       if (nextLevel !== null) {
+        setBrowserDefaultZoomLevel(nextLevel)
         showBrowserZoomFeedback(nextLevel)
       }
     }
@@ -3222,7 +3235,7 @@ function BrowserPagePane({
       removeGuestListener()
       removeLocalListener()
     }
-  }, [isActive, showBrowserZoomFeedback])
+  }, [isActive, setBrowserDefaultZoomLevel, showBrowserZoomFeedback])
 
   useEffect(() => {
     if (!isActive) {
@@ -3304,6 +3317,7 @@ function BrowserPagePane({
 
     let webview = webviewRegistry.get(browserTab.id)
     let needsInitialNavigation = false
+    let needsInitialDefaultZoom = false
     if (webview && webview.parentElement !== container) {
       // Why: moving an Electron webview between DOM parents can recreate the
       // guest document. Treat unexpected parent drift as stale state instead.
@@ -3337,6 +3351,7 @@ function BrowserPagePane({
       registerPersistentWebview(browserTab.id, webview)
       container.appendChild(webview)
       needsInitialNavigation = true
+      needsInitialDefaultZoom = true
     }
 
     webviewRef.current = webview
@@ -3363,6 +3378,13 @@ function BrowserPagePane({
       }
       if (!queuedAnnotationViewportBridgeSync) {
         syncBrowserAnnotationViewportBridge()
+      }
+      if (needsInitialDefaultZoom) {
+        const appliedLevel = setBrowserPageZoomLevel(webview, browserDefaultZoomLevelRef.current)
+        if (appliedLevel !== null) {
+          setBrowserZoomPercent(browserPageZoomLevelToPercent(appliedLevel))
+        }
+        needsInitialDefaultZoom = false
       }
       // Why: CDP Emulation.setDeviceMetricsOverride and related overrides are
       // scoped to the guest's debugger session and do not survive all
@@ -4238,7 +4260,8 @@ function BrowserPagePane({
     }
     return received
   })()
-  const showBrowserZoomIndicator = browserZoomFeedbackVisible || browserZoomPercent !== 100
+  const showBrowserZoomIndicator =
+    browserZoomFeedbackVisible || browserZoomPercent !== browserDefaultZoomPercent
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -4500,6 +4523,8 @@ function BrowserPagePane({
           onNavigate={navigateToUrl}
           inputRef={addressBarInputRef}
         />
+
+        <BrowserImportHintButton profileId={sessionProfileId} />
 
         <Tooltip>
           <TooltipTrigger asChild>

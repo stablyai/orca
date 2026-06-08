@@ -13,6 +13,15 @@ describe('slugifyForWorkspaceName', () => {
     expect(slugifyForWorkspaceName('feature/add issue drawer')).toBe('feature-add-issue-drawer')
     expect(slugifyForWorkspaceName('a'.repeat(80))).toBe('a'.repeat(48))
   })
+
+  it('removes apostrophes inside words instead of splitting them', () => {
+    expect(slugifyForWorkspaceName("Can't enable browser notifications")).toBe(
+      'cant-enable-browser-notifications'
+    )
+    expect(slugifyForWorkspaceName('Can’t enable browser notifications')).toBe(
+      'cant-enable-browser-notifications'
+    )
+  })
 })
 
 describe('getLinkedWorkItemSuggestedName', () => {
@@ -87,6 +96,52 @@ describe('getWorkspaceIntentName', () => {
     ).toEqual({
       displayName: 'Issue 9876 Make Importer Handle',
       seedName: 'issue-9876-make-importer-handle'
+    })
+  })
+
+  it('keeps contractions readable in linked issue display names', () => {
+    expect(
+      getWorkspaceIntentName({
+        sourceText: 'https://github.com/acme/app/issues/4802',
+        workItem: {
+          type: 'issue',
+          number: 4802,
+          title: "Can't enable browser notifications from within a browser tab"
+        }
+      })
+    ).toEqual({
+      displayName: "Issue 4802 Can't Enable Browser",
+      seedName: 'issue-4802-cant-enable-browser'
+    })
+  })
+
+  it('keeps single-letter contractions lowercase after the apostrophe', () => {
+    expect(
+      getWorkspaceIntentName({
+        sourceText: 'https://github.com/acme/app/issues/17',
+        workItem: {
+          type: 'issue',
+          number: 17,
+          title: "i'm blocked on notifications"
+        }
+      })
+    ).toEqual({
+      displayName: "Issue 17 I'm Blocked Notifications",
+      seedName: 'issue-17-im-blocked-notifications'
+    })
+
+    expect(
+      getWorkspaceIntentName({
+        sourceText: 'https://github.com/acme/app/issues/18',
+        workItem: {
+          type: 'issue',
+          number: 18,
+          title: "i'll update login"
+        }
+      })
+    ).toEqual({
+      displayName: "Issue 18 I'll Update Login",
+      seedName: 'issue-18-ill-update-login'
     })
   })
 

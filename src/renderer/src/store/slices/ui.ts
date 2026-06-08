@@ -20,6 +20,7 @@ import type {
   UpdateStatus,
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
+  ProjectOrderBy,
   WorktreeCardProperty
 } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
@@ -56,6 +57,10 @@ import {
   normalizeAgentActivityDisplayMode,
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
+import {
+  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  normalizeBrowserPageZoomLevel
+} from '../../../../shared/browser-page-zoom'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   clampWorkspaceBoardColumnWidth,
@@ -232,6 +237,9 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
   }
   return out as StatusBarItem[]
 }
+
+const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
+const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 
 function normalizePersistedRightSidebarTab(
   tab: PersistedUIState['rightSidebarTab'] | unknown
@@ -718,10 +726,14 @@ export type UISlice = {
   dismissSetupScriptPrompt: (repoId: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
+  browserImportHintHidden: boolean
+  setBrowserImportHintHidden: (hidden: boolean) => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlice['sortBy']) => void
+  projectOrderBy: ProjectOrderBy
+  setProjectOrderBy: (p: ProjectOrderBy) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
@@ -816,6 +828,8 @@ export type UISlice = {
   setBrowserDefaultUrl: (url: string | null) => void
   browserDefaultSearchEngine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
   setBrowserDefaultSearchEngine: (engine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null) => void
+  browserDefaultZoomLevel: number
+  setBrowserDefaultZoomLevel: (level: number) => void
   browserKagiSessionLink: string | null
   setBrowserKagiSessionLink: (link: string | null) => void
 }
@@ -1614,6 +1628,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ setupGuideSidebarDismissed: dismissed }).catch(console.error)
       return { setupGuideSidebarDismissed: dismissed }
     }),
+  browserImportHintHidden: false,
+  setBrowserImportHintHidden: (hidden) =>
+    set((s) => {
+      if (s.browserImportHintHidden === hidden) {
+        return s
+      }
+      window.api.ui.set({ browserImportHintHidden: hidden }).catch(console.error)
+      return { browserImportHintHidden: hidden }
+    }),
 
   groupBy: 'repo',
   // Why: group keys are mode-specific (e.g. repo id vs PR status), so
@@ -1626,6 +1649,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
+
+  // Why: like setSortBy, this is a bare set — it persists only via the
+  // debounced window.api.ui.set writer in App.tsx, not on its own.
+  projectOrderBy: 'manual',
+  setProjectOrderBy: (p) => set({ projectOrderBy: p }),
 
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
@@ -1850,13 +1878,24 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       //     'recent' sort keep it across restarts.
       const sortBy = ui.sortBy
       const migratedStatusBarItems = migrateStatusBarItems(ui.statusBarItems)
-      const statusBarItems =
+      const statusBarItemsWithPorts =
         ui._portsStatusBarDefaultAdded || migratedStatusBarItems.includes('ports')
           ? migratedStatusBarItems
-          : [...migratedStatusBarItems, 'ports' as const]
-      if (!ui._portsStatusBarDefaultAdded && typeof window !== 'undefined') {
+          : [...migratedStatusBarItems, DEFAULT_ON_PORTS_STATUS_BAR_ITEM]
+      const statusBarItems =
+        ui._kimiStatusBarDefaultAdded || statusBarItemsWithPorts.includes('kimi')
+          ? statusBarItemsWithPorts
+          : [...statusBarItemsWithPorts, DEFAULT_ON_KIMI_STATUS_BAR_ITEM]
+      if (
+        (!ui._portsStatusBarDefaultAdded || !ui._kimiStatusBarDefaultAdded) &&
+        typeof window !== 'undefined'
+      ) {
         window.api.ui
-          .set({ statusBarItems, _portsStatusBarDefaultAdded: true })
+          .set({
+            statusBarItems,
+            _portsStatusBarDefaultAdded: true,
+            _kimiStatusBarDefaultAdded: true
+          })
           .catch(console.error)
       }
       return {
@@ -1878,6 +1917,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
+        // Why: main-process getUI() already normalized this to a valid value
+        // (defaulting to 'manual'); read it through without migrating sortBy.
+        projectOrderBy: ui.projectOrderBy,
         // Why: Active-only was retired. Force the old persisted flag off so an
         // old profile cannot invisibly keep narrowing the workspace list.
         showActiveOnly: false,
@@ -1924,6 +1966,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
@@ -1942,6 +1985,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           validRepoIds
         ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
+        browserImportHintHidden: ui.browserImportHintHidden === true,
         // Why: restore visited-row acks alongside the persisted hook entries
         // they pair with. Stale acks for paneKeys whose tab/PTY no longer
         // exists are inert (no row references them); a paneKey reuse stamps a
@@ -2034,6 +2078,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setBrowserDefaultSearchEngine: (engine) => {
     void window.api.ui.set({ browserDefaultSearchEngine: engine }).catch(console.error)
     set({ browserDefaultSearchEngine: engine })
+  },
+  browserDefaultZoomLevel: DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  setBrowserDefaultZoomLevel: (level) => {
+    const normalized = normalizeBrowserPageZoomLevel(level)
+    void window.api.ui.set({ browserDefaultZoomLevel: normalized }).catch(console.error)
+    set({ browserDefaultZoomLevel: normalized })
   },
   browserKagiSessionLink: null,
   setBrowserKagiSessionLink: (link) => {

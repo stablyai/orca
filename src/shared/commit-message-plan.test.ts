@@ -33,7 +33,7 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
-  it('plans OpenCode run with prompt in argv and model variant', () => {
+  it('plans OpenCode run with prompt on stdin and model variant', () => {
     const result = planCommitMessageGeneration(
       {
         agentId: 'opencode',
@@ -56,10 +56,39 @@ describe('planCommitMessageGeneration', () => {
           '--format',
           'default',
           '--variant',
-          'high',
-          'PROMPT'
+          'high'
         ],
-        stdinPayload: null,
+        stdinPayload: 'PROMPT',
+        label: 'OpenCode'
+      }
+    })
+  })
+
+  it('keeps OpenCode preset command overrides while sending the prompt on stdin', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'opencode',
+        model: 'opencode/gpt-5.4-mini',
+        agentCommandOverride: 'npx opencode'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'npx',
+        args: [
+          'opencode',
+          'run',
+          '--model',
+          'opencode/gpt-5.4-mini',
+          '--agent',
+          'build',
+          '--format',
+          'default'
+        ],
+        stdinPayload: 'PROMPT',
         label: 'OpenCode'
       }
     })

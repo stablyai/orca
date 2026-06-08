@@ -44,6 +44,12 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from './ipc-tab-switch'
+import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
+import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
+import {
+  isManualSimulatorLaunchPending,
+  rememberPrelaunchedSimulatorSession
+} from '@/lib/simulator-launch-coordination'
 import {
   normalizeAgentStatusPayload,
   type AgentStatusIpcPayload,
@@ -71,6 +77,7 @@ import {
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
+import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { detectLanguage } from '@/lib/language-detect'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
@@ -78,6 +85,7 @@ import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { AppState } from '../store/types'
 import {
   closeWebRuntimeSessionTab,
@@ -100,6 +108,7 @@ import {
 } from './agent-hook-completion-notifications'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
+import { titleHasAgentName } from '../../../shared/agent-detection'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -672,8 +681,140 @@ export function useIpcEvents(): void {
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
+    let runtimeClientEventsUnsubscribe: (() => void) | null = null
+    let runtimeClientEventsEnvironmentId: string | null = null
+    let runtimeClientEventsGeneration = 0
 
     unsubs.push(attachMobileMarkdownBridge())
+
+    const handleWorktreesChanged = async (repoId: string): Promise<void> => {
+      // Why: diff before vs. after fetchWorktrees to detect server-side
+      // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
+      // and purge worktree-scoped state for removed ids. Without this,
+      // `ptyIdsByTabId` would retain entries for tabs whose worktree is
+      // gone, and SessionsStatusSegment's `boundPtyIds` set would keep
+      // misclassifying the zombie as bound (design §2c, §4.4).
+      const state = useAppStore.getState()
+      const before =
+        getAuthoritativeDetectedWorktreeIds(state, repoId) ??
+        getVisibleWorktreeIdsForRepo(state, repoId)
+      await state.fetchWorktrees(repoId)
+      await useAppStore.getState().fetchWorktreeLineage()
+      const afterState = useAppStore.getState()
+      const after = getAuthoritativeDetectedWorktreeIds(afterState, repoId)
+      if (!after) {
+        return
+      }
+      const removed: string[] = []
+      for (const id of before) {
+        if (!after.has(id)) {
+          removed.push(id)
+        }
+      }
+      if (removed.length > 0) {
+        console.warn(
+          `[worktree-purge] diff-based purge removing state for ${removed.length} worktree(s):`,
+          removed
+        )
+        afterState.purgeWorktreeTerminalState(removed)
+        afterState.removeWorkspaceSpaceWorktrees(removed)
+      }
+    }
+
+    const activateNotifiedWorktree = async (
+      {
+        repoId,
+        worktreeId,
+        setup,
+        startup,
+        defaultTabs
+      }: Extract<RuntimeClientEvent, { type: 'activateWorktree' }>,
+      options: { allowRuntimeEnvironment: boolean }
+    ): Promise<void> => {
+      if (!options.allowRuntimeEnvironment && isRuntimeEnvironmentActive()) {
+        // Why: local CLI-created worktree events carry local repo/worktree
+        // ids. Runtime server activation arrives through the remote event
+        // stream and is allowed through this helper separately.
+        return
+      }
+      const existedBeforeFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
+      // Why: fetch worktrees first so the activation helper can resolve
+      // the CLI-created worktree via findWorktreeById — it arrived from
+      // the main process and is not yet in the renderer state.
+      await useAppStore.getState().fetchWorktrees(repoId)
+      const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
+      // Why: route through activateAndRevealWorktree so CLI-created
+      // worktrees share the canonical activation path with UI-created
+      // ones. This records the visit in the back/forward history stack
+      // (recordWorktreeVisit), without which the nav buttons would
+      // ignore the CLI-driven workspace switch.
+      activateAndRevealWorktree(worktreeId, {
+        ...(setup ? { setup } : {}),
+        ...(startup ? { startup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {}),
+        ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
+        // Why: this activation already came from the host runtime event stream.
+        // Echoing it back as worktree.activate can create a selection loop.
+        notifyHostRuntime: false
+      })
+    }
+
+    const handleRuntimeClientEvent = (event: RuntimeClientEvent): void => {
+      if (event.type === 'reposChanged') {
+        const state = useAppStore.getState()
+        void state.fetchProjectGroups()
+        void state.fetchRepos()
+        return
+      }
+      if (event.type === 'worktreesChanged') {
+        void handleWorktreesChanged(event.repoId)
+        return
+      }
+      void activateNotifiedWorktree(event, { allowRuntimeEnvironment: true }).catch((error) => {
+        console.error('Failed to activate runtime-created worktree:', error)
+      })
+    }
+
+    const stopRuntimeClientEvents = (): void => {
+      runtimeClientEventsGeneration += 1
+      runtimeClientEventsEnvironmentId = null
+      runtimeClientEventsUnsubscribe?.()
+      runtimeClientEventsUnsubscribe = null
+    }
+
+    const syncRuntimeClientEventsSubscription = (): void => {
+      const environmentId = getActiveRuntimeEnvironmentId()
+      if (!environmentId) {
+        stopRuntimeClientEvents()
+        return
+      }
+      if (runtimeClientEventsEnvironmentId === environmentId) {
+        return
+      }
+      stopRuntimeClientEvents()
+      runtimeClientEventsEnvironmentId = environmentId
+      const generation = runtimeClientEventsGeneration
+      void subscribeRuntimeClientEvents(environmentId, handleRuntimeClientEvent, (error) => {
+        console.warn('[runtime-client-events] subscription error:', error)
+      })
+        .then((subscription) => {
+          if (generation !== runtimeClientEventsGeneration) {
+            subscription.unsubscribe()
+            return
+          }
+          runtimeClientEventsUnsubscribe = subscription.unsubscribe
+        })
+        .catch((error) => {
+          if (generation === runtimeClientEventsGeneration) {
+            runtimeClientEventsEnvironmentId = null
+            console.warn('[runtime-client-events] failed to subscribe:', error)
+          }
+        })
+    }
+
+    syncRuntimeClientEventsSubscription()
+    unsubs.push(useAppStore.subscribe(syncRuntimeClientEventsSubscription))
+    unsubs.push(stopRuntimeClientEvents)
 
     unsubs.push(
       window.api.repos.onChanged(() => {
@@ -696,37 +837,7 @@ export function useIpcEvents(): void {
           // active runtime with those ids can purge or overwrite server state.
           return
         }
-        // Why: diff before vs. after fetchWorktrees to detect server-side
-        // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
-        // and purge worktree-scoped state for removed ids. Without this,
-        // `ptyIdsByTabId` would retain entries for tabs whose worktree is
-        // gone, and SessionsStatusSegment's `boundPtyIds` set would keep
-        // misclassifying the zombie as bound (design §2c, §4.4).
-        const state = useAppStore.getState()
-        const before =
-          getAuthoritativeDetectedWorktreeIds(state, data.repoId) ??
-          getVisibleWorktreeIdsForRepo(state, data.repoId)
-        await state.fetchWorktrees(data.repoId)
-        await useAppStore.getState().fetchWorktreeLineage()
-        const afterState = useAppStore.getState()
-        const after = getAuthoritativeDetectedWorktreeIds(afterState, data.repoId)
-        if (!after) {
-          return
-        }
-        const removed: string[] = []
-        for (const id of before) {
-          if (!after.has(id)) {
-            removed.push(id)
-          }
-        }
-        if (removed.length > 0) {
-          console.warn(
-            `[worktree-purge] diff-based purge removing state for ${removed.length} worktree(s):`,
-            removed
-          )
-          afterState.purgeWorktreeTerminalState(removed)
-          afterState.removeWorkspaceSpaceWorktrees(removed)
-        }
+        await handleWorktreesChanged(data.repoId)
       })
     )
 
@@ -947,33 +1058,17 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
-        void (async () => {
-          if (isRuntimeEnvironmentActive()) {
-            // Why: local CLI-created worktree events carry local repo/worktree
-            // ids. Runtime server activation arrives through runtime state,
-            // not this local Electron event.
-            return
-          }
-          const existedBeforeFetch = Boolean(
-            useAppStore.getState().getKnownWorktreeById(worktreeId)
-          )
-          // Why: fetch worktrees first so the activation helper can resolve
-          // the CLI-created worktree via findWorktreeById — it arrived from
-          // the main process and is not yet in the renderer state.
-          await useAppStore.getState().fetchWorktrees(repoId)
-          const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
-          // Why: route through activateAndRevealWorktree so CLI-created
-          // worktrees share the canonical activation path with UI-created
-          // ones. This records the visit in the back/forward history stack
-          // (recordWorktreeVisit), without which the nav buttons would
-          // ignore the CLI-driven workspace switch.
-          activateAndRevealWorktree(worktreeId, {
+        void activateNotifiedWorktree(
+          {
+            type: 'activateWorktree',
+            repoId,
+            worktreeId,
             ...(setup ? { setup } : {}),
             ...(startup ? { startup } : {}),
-            ...(defaultTabs ? { defaultTabs } : {}),
-            ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {})
-          })
-        })().catch((error) => {
+            ...(defaultTabs ? { defaultTabs } : {})
+          },
+          { allowRuntimeEnvironment: false }
+        ).catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })
       })
@@ -1612,6 +1707,59 @@ export function useIpcEvents(): void {
         }
       })
     )
+
+    // Why: emulator IPC is additive. Older paired clients and partial test
+    // preload mocks should not crash the whole event hook when it is absent.
+    const unsubscribeNewSimulatorTab = window.api.ui.onNewSimulatorTab?.(() => {
+      if (isRuntimeEnvironmentActive()) {
+        return
+      }
+      const store = useAppStore.getState()
+      const worktreeId = store.activeWorktreeId
+      if (!worktreeId) {
+        return
+      }
+      void openMobileEmulatorTab(worktreeId, { placement: 'rightSplit' })
+    })
+    if (unsubscribeNewSimulatorTab) {
+      unsubs.push(unsubscribeNewSimulatorTab)
+    }
+
+    const unsubscribeEmulatorAutoAttach = window.api.emulator?.onAutoAttach(
+      ({ worktreeId, info }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
+        if (isManualSimulatorLaunchPending(worktreeId)) {
+          // Why: manual launches pre-attach first so the ready pane can be
+          // created in the right split instead of as a hidden tab in this group.
+          rememberPrelaunchedSimulatorSession(worktreeId, info)
+          return
+        }
+        ensureSimulatorTab(worktreeId, { surfacePane: false })
+        // Why: watcher may detect a helper while a simulator tab is already mounted; push stream info so the pane updates without re-attach.
+        window.setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('orca:emulator-auto-attach', {
+              detail: { worktreeId, info }
+            })
+          )
+        }, 0)
+      }
+    )
+    if (unsubscribeEmulatorAutoAttach) {
+      unsubs.push(unsubscribeEmulatorAutoAttach)
+    }
+
+    const unsubscribeEmulatorPaneFocus = window.api.emulator?.onPaneFocus(({ worktreeId }) => {
+      if (isRuntimeEnvironmentActive()) {
+        return
+      }
+      ensureSimulatorTab(worktreeId, { surfacePane: true })
+    })
+    if (unsubscribeEmulatorPaneFocus) {
+      unsubs.push(unsubscribeEmulatorPaneFocus)
+    }
 
     // Why: CLI-driven tab creation sends a request with a specific worktreeId and
     // url. The renderer creates the tab and replies with the page ID so the
@@ -2399,7 +2547,8 @@ export function useIpcEvents(): void {
           tabId: data.tabId,
           worktreeId: statusWorktreeId,
           terminalHandle: data.terminalHandle
-        }
+        },
+        data.providerSession ? { providerSession: data.providerSession } : undefined
       )
       applyResolvedAgentTerminalTitleToTab(store, data.paneKey, title, terminalTitle)
       if (options?.replay !== true && statusWorktreeId) {
@@ -2830,7 +2979,11 @@ function resolveHookPayloadAgentType(
   payload: ParsedAgentStatusPayload,
   terminalTitle: string | undefined
 ): ParsedAgentStatusPayload {
-  if (payload.agentType !== 'claude' || !terminalTitle?.toLowerCase().includes('openclaude')) {
+  if (
+    payload.agentType !== 'claude' ||
+    !terminalTitle ||
+    !titleHasAgentName(terminalTitle, 'openclaude')
+  ) {
     return payload
   }
   // Why: OpenClaude emits Claude-compatible hooks, so title identity is the

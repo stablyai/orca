@@ -217,7 +217,7 @@ function TaskSourcesAction(): React.JSX.Element {
         <GitHubRow compact />
         <LinearRow compact />
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center pt-2">
         <Button
           type="button"
           size="sm"
@@ -240,7 +240,9 @@ export function FeatureWallSetupChecklist(
 ): React.JSX.Element {
   const { activeStep, progress, onSelectStep } = props
   const activeDone = activeStep ? progress.stepDone[activeStep.id] : false
-  const useWideStepCopyLayout =
+  // Only steps with a visual constrain the caption to a narrow column so the
+  // illustration can sit beside it; captionless steps let the copy run full width.
+  const hasStepVisual =
     activeStep?.id === 'split-terminal' ||
     activeStep?.id === 'two-worktrees' ||
     activeStep?.id === 'add-two-repos'
@@ -290,15 +292,15 @@ export function FeatureWallSetupChecklist(
             </div>
             <div
               className={cn(
-                'grid max-w-3xl items-start sm:grid-cols-[minmax(0,48ch)_auto]',
-                useWideStepCopyLayout ? 'gap-8 sm:gap-10' : 'gap-5'
+                'grid max-w-3xl items-start',
+                hasStepVisual ? 'gap-8 sm:grid-cols-[minmax(0,48ch)_auto] sm:gap-10' : 'gap-5'
               )}
             >
               <div className="min-w-0">
                 <p
                   className={cn(
                     'text-base leading-normal text-muted-foreground',
-                    useWideStepCopyLayout ? 'pr-4 sm:pr-6' : null
+                    hasStepVisual ? 'pr-4 sm:pr-6' : null
                   )}
                 >
                   {activeStep.description}
@@ -308,11 +310,13 @@ export function FeatureWallSetupChecklist(
                     <SplitTerminalShortcutHint />
                   </div>
                 ) : null}
+                {/* Action lives under the caption, not after the grid, so it sits just
+                    below the copy instead of being pushed down by the taller visual. */}
+                <div className="mt-7 min-w-0">
+                  <SelectedStepAction {...props} />
+                </div>
               </div>
               <SelectedStepVisual stepId={activeStep.id} />
-            </div>
-            <div className="min-w-0">
-              <SelectedStepAction {...props} />
             </div>
           </div>
         ) : null}

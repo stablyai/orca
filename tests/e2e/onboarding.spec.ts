@@ -422,9 +422,10 @@ test.describe('Onboarding flow', () => {
     await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
     await expectAddProjectDialog(orcaPage)
-    await expect(orcaPage.getByPlaceholder('/home/user/project')).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: /Add Git Project/i })).toBeDisabled()
-    await expect(orcaPage.getByRole('button', { name: /Open as Folder/i })).toBeDisabled()
+    await expect(orcaPage.getByRole('button', { name: /Browse server/i })).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: /Clone from URL/i })).toBeVisible()
+    await expect(orcaPage.getByRole('button', { name: /Create on server/i })).toBeVisible()
+    await expect(orcaPage.getByText(/Or enter a server path manually/i)).toBeVisible()
     await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
     expect((await getOnboardingState(orcaPage)).closedAt).not.toBeNull()
   })

@@ -342,6 +342,19 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().activeFileId).toBe('wt-1::diff::staged::file.ts')
   })
 
+  it('bumps diffContentReloadNonce when re-opening an existing diff tab', () => {
+    const store = createEditorStore()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBeUndefined()
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(1)
+
+    store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
+    expect(store.getState().openFiles[0]?.diffContentReloadNonce).toBe(2)
+  })
+
   it('opens the visible diff tab in the requested split group', () => {
     const store = createEditorTabsStore()
     const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
@@ -2318,6 +2331,50 @@ describe('createEditorSlice remote branch actions', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Push failed. Check your connection and try again.')
     expect(gitStatusMock).not.toHaveBeenCalled()
     expect(gitUpstreamStatusMock).not.toHaveBeenCalled()
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('maps force-with-lease rejection into force-push guidance', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('fatal: stale info')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(
+      store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+        forceWithLease: true
+      })
+    ).rejects.toThrow(pushError.message)
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
+    )
+    await flushAsyncRemoteRefresh()
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('uses a force-push fallback message for generic force-with-lease errors', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('network timeout')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(
+      store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+        forceWithLease: true
+      })
+    ).rejects.toThrow(pushError.message)
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Force Push failed. Check your connection and try again.'
+    )
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 

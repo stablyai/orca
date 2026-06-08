@@ -7,7 +7,6 @@ import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree, type AgentStartedTelemetry } from '@/lib/worktree-activation'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
-  CLIENT_PLATFORM,
   getWorkspaceIntentName,
   getSetupConfig,
   getWorkspaceSeedName,
@@ -20,6 +19,7 @@ import {
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
+import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import type {
   GitPushTarget,
   GitHubPrStartPoint,
@@ -202,7 +202,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const settings = store.settings
   // Why: agent detection shells out and can be cold/slow. Start it now, but
   // don't let it serialize setup-policy resolution or git worktree creation.
-  const detectedAgentsPromise = store.ensureDetectedAgents()
+  const detectedAgentsPromise = repo.connectionId
+    ? store.ensureRemoteDetectedAgents(repo.connectionId)
+    : store.ensureDetectedAgents()
 
   const setupResolution = await resolveSetupDecision(repoId, repo)
   if (setupResolution.kind === 'needs-modal') {
@@ -274,6 +276,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
+    const agentLaunchPlatform = getAgentLaunchPlatformForRepo(repo)
 
     const detectedIds = new Set(await detectedAgentsPromise)
     effectiveAgent = pickTuiAgent(
@@ -302,7 +305,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         try {
           await window.api.agentTrust.markTrusted({
             preset: preflight,
-            workspacePath: worktreePath
+            workspacePath: worktreePath,
+            ...(repo.connectionId ? { connectionId: repo.connectionId } : {})
           })
         } catch {
           // Best-effort: continue with launch even if the trust write
@@ -324,7 +328,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
             agent: effectiveAgent,
             draft: draftContent,
             cmdOverrides: settings?.agentCmdOverrides ?? {},
-            platform: CLIENT_PLATFORM
+            platform: agentLaunchPlatform
           })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -340,7 +344,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         agent: effectiveAgent,
         prompt: '',
         cmdOverrides: settings?.agentCmdOverrides ?? {},
-        platform: CLIENT_PLATFORM,
+        platform: agentLaunchPlatform,
         allowEmptyPromptLaunch: true
       })
     }

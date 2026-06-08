@@ -1,6 +1,22 @@
+function normalizeApostrophes(input: string): string {
+  return input.replace(/[‘’]/g, "'")
+}
+
+// Why: contractions and possessives should not become stray `t` / `s` tokens
+// in display names or extra hyphen segments in branch-safe workspace seeds.
+function removeIntraWordApostrophes(input: string): string {
+  return normalizeApostrophes(input).replace(/([\p{L}\p{N}])'(?=[\p{L}\p{N}])/gu, '$1')
+}
+
+function stripDanglingDisplayApostrophes(input: string): string {
+  return normalizeApostrophes(input)
+    .replace(/(^|[^\p{L}\p{N}])'(?=[\p{L}\p{N}])/gu, '$1')
+    .replace(/([\p{L}\p{N}])'(?=$|[^\p{L}\p{N}])/gu, '$1')
+}
+
 export function slugifyForWorkspaceName(input: string): string {
   return (
-    input
+    removeIntraWordApostrophes(input)
       .trim()
       .toLowerCase()
       .replace(/[\\/]+/g, '-')
@@ -47,10 +63,7 @@ export type WorkspaceIntentName = {
 const ACTION_LABELS: [RegExp, string][] = [
   [/(?:^|[^a-z0-9_-])(?:fix(?:e[sd])?|resolve|repair)(?:$|[^a-z0-9_-])/i, 'Fix'],
   [/(?:^|[^a-z0-9_-])(?:debug|diagnose)(?:$|[^a-z0-9_-])/i, 'Debug'],
-  [
-    /(?:^|[^a-z0-9_-])(?:review|look\s+over|inspect|check|safe|safety)(?:$|[^a-z0-9_-])/i,
-    'Review'
-  ],
+  [/(?:^|[^a-z0-9_-])(?:review|look\s+over|inspect|check|safe|safety)(?:$|[^a-z0-9_-])/i, 'Review'],
   [/(?:^|[^a-z0-9_-])(?:implement|build|ship)(?:$|[^a-z0-9_-])/i, 'Implement'],
   [/(?:^|[^a-z0-9_-])(?:investigate|understand|triage)(?:$|[^a-z0-9_-])/i, 'Investigate'],
   [/(?:^|[^a-z0-9_-])(?:add|create)(?:$|[^a-z0-9_-])/i, 'Add'],
@@ -87,17 +100,26 @@ function detectIntentAction(sourceText: string): string | null {
 }
 
 function titleCaseWord(word: string): string {
-  const lower = word.toLowerCase()
-  if (/^[A-Z]{2,}\d*$/.test(word) || /^[A-Z]+-\d+$/i.test(word)) {
-    return word.toUpperCase()
+  const normalized = normalizeApostrophes(word)
+  if (/^[A-Z]{2,}\d*$/.test(normalized) || /^[A-Z]+-\d+$/i.test(normalized)) {
+    return normalized.toUpperCase()
+  }
+  const acronymPossessive = normalized.match(/^([A-Z]{2,}\d*)'([sS])$/)
+  if (acronymPossessive) {
+    return `${acronymPossessive[1].toUpperCase()}'s`
+  }
+  const lower = normalized.toLowerCase()
+  const apostropheParts = lower.split("'")
+  if (apostropheParts.length === 2 && apostropheParts[0].length === 1 && apostropheParts[1]) {
+    return `${apostropheParts[0].toUpperCase()}'${apostropheParts[1]}`
   }
   return lower.charAt(0).toUpperCase() + lower.slice(1)
 }
 
 function compactWords(input: string, maxWords = 4): string {
-  return input
+  return stripDanglingDisplayApostrophes(input)
     .replace(/https?:\/\/\S+/gi, ' ')
-    .replace(/[()[\]{}"']/g, ' ')
+    .replace(/[()[\]{}"]/g, ' ')
     .replace(/[#/\\:_-]+/g, ' ')
     .split(/\s+/)
     .map((word) => word.trim())

@@ -17,6 +17,7 @@ import {
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
+import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -51,6 +52,7 @@ type InternalRateLimitState = {
   codex: ProviderRateLimits | null
   gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
+  kimi: ProviderRateLimits | null
 }
 
 function normalizePollingInterval(ms: number): number {
@@ -65,7 +67,8 @@ export class RateLimitService {
     claude: null,
     codex: null,
     gemini: null,
-    opencodeGo: null
+    opencodeGo: null,
+    kimi: null
   }
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
@@ -742,7 +745,7 @@ export class RateLimitService {
 
   private withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider: 'claude' | 'codex' | 'gemini' | 'opencode-go'
+    provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -792,27 +795,30 @@ export class RateLimitService {
       gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
       opencodeGo: opencodeConfigChanged
         ? this.withFetchingStatus(null, 'opencode-go')
-        : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go')
+        : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
+      kimi: this.withFetchingStatus(previousState.kimi, 'kimi')
     })
 
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult] = await Promise.allSettled([
-      fetchClaudeRateLimits({
-        authPreparation: claudeAuthPreparation,
-        // Why: active quota refreshes run on startup/focus/timers. They must
-        // never spawn hidden Claude Code, which can trigger macOS App Data TCC.
-        allowPtyFallback: false
-      }),
-      missingWslCodexHome ??
-        fetchCodexRateLimits({
-          codexHomePath,
-          allowPtyFallback: this.shouldAllowCodexPtyFallback()
+    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult] =
+      await Promise.allSettled([
+        fetchClaudeRateLimits({
+          authPreparation: claudeAuthPreparation,
+          // Why: active quota refreshes run on startup/focus/timers. They must
+          // never spawn hidden Claude Code, which can trigger macOS App Data TCC.
+          allowPtyFallback: false
         }),
-      fetchGeminiRateLimits(geminiCliOAuthEnabled),
-      fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined)
-    ])
+        missingWslCodexHome ??
+          fetchCodexRateLimits({
+            codexHomePath,
+            allowPtyFallback: this.shouldAllowCodexPtyFallback()
+          }),
+        fetchGeminiRateLimits(geminiCliOAuthEnabled),
+        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
+        fetchKimiRateLimits()
+      ])
 
     const claude =
       claudeResult.status === 'fulfilled'
@@ -869,6 +875,18 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const kimi =
+      kimiResult.status === 'fulfilled'
+        ? kimiResult.value
+        : ({
+            provider: 'kimi',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error: kimiResult.reason instanceof Error ? kimiResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
@@ -898,7 +916,8 @@ export class RateLimitService {
         ? opencodeConfigChanged
           ? opencodeGo
           : this.applyStalePolicy(opencodeGo, previousState.opencodeGo)
-        : this.state.opencodeGo
+        : this.state.opencodeGo,
+      kimi: this.applyStalePolicy(kimi, previousState.kimi)
     })
 
     this.lastFetchAt = Date.now()

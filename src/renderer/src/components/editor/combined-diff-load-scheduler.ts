@@ -1,5 +1,6 @@
 export type CombinedDiffLoadScheduler = {
   request: (index: number) => void
+  rerequest: (index: number) => void
   reset: () => void
   dispose: () => void
 }
@@ -44,15 +45,30 @@ export function createCombinedDiffLoadScheduler({
     }
   }
 
+  const enqueue = (index: number): void => {
+    if (disposed || queued.has(index)) {
+      return
+    }
+    queued.add(index)
+    pending.push(index)
+    const requestVersion = version
+    schedule(() => drain(requestVersion))
+  }
+
   return {
     request(index) {
-      if (disposed || queued.has(index)) {
+      enqueue(index)
+    },
+    rerequest(index) {
+      if (disposed) {
         return
       }
-      queued.add(index)
-      pending.push(index)
-      const requestVersion = version
-      schedule(() => drain(requestVersion))
+      queued.delete(index)
+      const pendingIndex = pending.indexOf(index)
+      if (pendingIndex !== -1) {
+        pending.splice(pendingIndex, 1)
+      }
+      enqueue(index)
     },
     reset() {
       disposed = false

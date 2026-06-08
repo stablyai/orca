@@ -7,8 +7,6 @@ const {
   removeListenerMock,
   setPermissionRequestHandlerMock,
   setPermissionCheckHandlerMock,
-  setDevicePermissionHandlerMock,
-  setDisplayMediaRequestHandlerMock,
   handleMock,
   removeHandlerMock,
   systemPreferencesAskForMediaAccessMock,
@@ -17,18 +15,13 @@ const {
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
   setupAutoUpdaterMock,
-  sessionFromPartitionMock,
-  browserManagerUnregisterAllMock,
-  browserManagerNotifyPermissionDeniedMock,
-  browserManagerHandleGuestWillDownloadMock
+  browserManagerUnregisterAllMock
 } = vi.hoisted(() => ({
   onMock: vi.fn(),
   removeAllListenersMock: vi.fn(),
   removeListenerMock: vi.fn(),
   setPermissionRequestHandlerMock: vi.fn(),
   setPermissionCheckHandlerMock: vi.fn(),
-  setDevicePermissionHandlerMock: vi.fn(),
-  setDisplayMediaRequestHandlerMock: vi.fn(),
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
   systemPreferencesAskForMediaAccessMock: vi.fn(),
@@ -37,18 +30,12 @@ const {
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
-  sessionFromPartitionMock: vi.fn(),
-  browserManagerUnregisterAllMock: vi.fn(),
-  browserManagerNotifyPermissionDeniedMock: vi.fn(),
-  browserManagerHandleGuestWillDownloadMock: vi.fn()
+  browserManagerUnregisterAllMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   app: {},
   clipboard: {},
-  session: {
-    fromPartition: sessionFromPartitionMock
-  },
   systemPreferences: {
     askForMediaAccess: systemPreferencesAskForMediaAccessMock,
     getMediaAccessStatus: systemPreferencesGetMediaAccessStatusMock
@@ -81,8 +68,6 @@ vi.mock('../ipc/pty', () => ({
 
 vi.mock('../browser/browser-manager', () => ({
   browserManager: {
-    notifyPermissionDenied: browserManagerNotifyPermissionDeniedMock,
-    handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock,
     unregisterAll: browserManagerUnregisterAllMock
   }
 }))
@@ -170,26 +155,13 @@ describe('attachMainWindowServices', () => {
     removeHandlerMock.mockReset()
     setPermissionRequestHandlerMock.mockReset()
     setPermissionCheckHandlerMock.mockReset()
-    setDevicePermissionHandlerMock.mockReset()
-    setDisplayMediaRequestHandlerMock.mockReset()
     systemPreferencesAskForMediaAccessMock.mockReset()
     systemPreferencesGetMediaAccessStatusMock.mockReset()
     registerRepoHandlersMock.mockReset()
     registerWorktreeHandlersMock.mockReset()
     registerPtyHandlersMock.mockReset()
     setupAutoUpdaterMock.mockReset()
-    sessionFromPartitionMock.mockReset()
     browserManagerUnregisterAllMock.mockReset()
-    browserManagerNotifyPermissionDeniedMock.mockReset()
-    browserManagerHandleGuestWillDownloadMock.mockReset()
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: vi.fn(),
-      removeListener: vi.fn()
-    })
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
   })
@@ -334,7 +306,7 @@ describe('attachMainWindowServices', () => {
   it('only allows the explicit permission allowlist', async () => {
     attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
 
-    expect(setPermissionRequestHandlerMock).toHaveBeenCalledTimes(2)
+    expect(setPermissionRequestHandlerMock).toHaveBeenCalledTimes(1)
     const permissionHandler = setPermissionRequestHandlerMock.mock.calls[0][0]
     const callback = vi.fn()
 
@@ -369,205 +341,7 @@ describe('attachMainWindowServices', () => {
     }
   })
 
-  it('denies browser-session permissions, display capture, and downloads by default', async () => {
-    const browserSessionOnMock = vi.fn()
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: browserSessionOnMock,
-      removeListener: vi.fn()
-    })
-
-    const mainWindowOnMock = vi.fn()
-    const mainWindow = createMainWindow()
-    mainWindow.on = mainWindowOnMock
-
-    attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
-
-    const browserPermissionHandler = setPermissionRequestHandlerMock.mock.calls[1][0] as (
-      wc: unknown,
-      permission: string,
-      callback: (allowed: boolean) => void,
-      details?: unknown
-    ) => void
-    const cb = vi.fn()
-    const guestWc = { id: 401, getURL: vi.fn(() => 'https://example.com/account') }
-    browserPermissionHandler(guestWc, 'fullscreen', cb)
-    browserPermissionHandler(guestWc, 'notifications', cb)
-    // Why: `media` routes through macOS TCC instead of being denied outright,
-    // so pages inside the in-app browser can use camera/mic once Orca has been
-    // granted Camera/Microphone at the OS level.
-    browserPermissionHandler(guestWc, 'media', cb, { mediaTypes: ['video'] })
-    await vi.waitFor(() => expect(cb.mock.calls).toEqual([[true], [false], [true]]))
-    expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledTimes(1)
-    expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
-      guestWebContentsId: 401,
-      permission: 'notifications',
-      rawUrl: 'https://example.com/account'
-    })
-
-    const browserCheckHandler = setPermissionCheckHandlerMock.mock.calls[1][0] as (
-      wc: unknown,
-      permission: string,
-      origin: string,
-      details?: { mediaType?: 'video' | 'audio' | 'unknown' }
-    ) => boolean
-    expect(browserCheckHandler(null, 'fullscreen', '')).toBe(true)
-    expect(browserCheckHandler(null, 'notifications', '')).toBe(false)
-    expect(browserCheckHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
-
-    const displayMediaHandler = setDisplayMediaRequestHandlerMock.mock.calls[0][0]
-    const displayCb = vi.fn()
-    displayMediaHandler(null, displayCb)
-    expect(displayCb).toHaveBeenCalledWith({ video: undefined, audio: undefined })
-
-    const willDownloadHandler = browserSessionOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'will-download'
-    )?.[1] as (
-      event: unknown,
-      item: { getFilename: () => string },
-      webContents: { id: number }
-    ) => void
-    const item = { getFilename: vi.fn(() => 'report.pdf') }
-    willDownloadHandler({}, item, { id: 402 })
-    expect(browserManagerHandleGuestWillDownloadMock).toHaveBeenCalledTimes(1)
-    expect(browserManagerHandleGuestWillDownloadMock).toHaveBeenCalledWith({
-      guestWebContentsId: 402,
-      item
-    })
-  })
-
-  it('wires browser-session WebAuthn device selection for security keys', () => {
-    const browserSessionOnMock = vi.fn()
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: browserSessionOnMock,
-      removeListener: vi.fn()
-    })
-
-    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
-
-    expect(setDevicePermissionHandlerMock).toHaveBeenCalledWith(expect.any(Function))
-    const devicePermissionHandler = setDevicePermissionHandlerMock.mock.calls[0][0] as (details: {
-      deviceType: string
-      origin: string
-      device: { collections?: { usagePage?: number }[] }
-    }) => boolean
-    expect(
-      devicePermissionHandler({
-        deviceType: 'hid',
-        origin: 'https://github.com',
-        device: { collections: [{ usagePage: 0xf1d0 }] }
-      })
-    ).toBe(true)
-    expect(
-      devicePermissionHandler({
-        deviceType: 'hid',
-        origin: 'http://[::1]:5173',
-        device: { collections: [{ usagePage: 0xf1d0 }] }
-      })
-    ).toBe(true)
-    expect(
-      devicePermissionHandler({
-        deviceType: 'hid',
-        origin: 'https://github.com',
-        device: { collections: [{ usagePage: 1 }] }
-      })
-    ).toBe(false)
-
-    const browserCheckHandler = setPermissionCheckHandlerMock.mock.calls[1][0] as (
-      wc: unknown,
-      permission: string,
-      origin: string,
-      details?: { securityOrigin?: string }
-    ) => boolean
-    expect(browserCheckHandler(null, 'hid', '', { securityOrigin: 'https://github.com' })).toBe(
-      true
-    )
-
-    const selectHidHandler = browserSessionOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'select-hid-device'
-    )?.[1] as (
-      event: { preventDefault: () => void },
-      details: {
-        deviceList: { deviceId: string; collections?: { usagePage?: number }[] }[]
-        frame: { url: string }
-      },
-      callback: (deviceId?: string) => void
-    ) => void
-    const preventDefault = vi.fn()
-    const callback = vi.fn()
-    selectHidHandler(
-      { preventDefault },
-      {
-        frame: { url: 'https://github.com' },
-        deviceList: [
-          { deviceId: 'keyboard', collections: [{ usagePage: 1 }] },
-          { deviceId: 'security-key', collections: [{ usagePage: 0xf1d0 }] }
-        ]
-      },
-      callback
-    )
-
-    expect(preventDefault).toHaveBeenCalled()
-    expect(callback).toHaveBeenCalledWith('security-key')
-
-    const selectWebAuthnHandler = browserSessionOnMock.mock.calls.find(
-      ([eventName]) => eventName === 'select-webauthn-account'
-    )?.[1] as (
-      event: { preventDefault: () => void },
-      details: { accounts: { credentialId: string }[] },
-      callback: (credentialId?: string | null) => void
-    ) => void
-    const webAuthnCallback = vi.fn()
-    selectWebAuthnHandler(
-      { preventDefault: vi.fn() },
-      { accounts: [{ credentialId: 'credential-1' }] },
-      webAuthnCallback
-    )
-    expect(webAuthnCallback).toHaveBeenCalledWith('credential-1')
-  })
-
-  it('replaces the persistent browser-session download handler on re-attach', () => {
-    const browserSessionOnMock = vi.fn()
-    const browserSessionRemoveListenerMock = vi.fn()
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: browserSessionOnMock,
-      removeListener: browserSessionRemoveListenerMock
-    })
-
-    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
-    attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
-
-    const downloadOnCalls = browserSessionOnMock.mock.calls.filter(
-      ([eventName]) => eventName === 'will-download'
-    )
-    const downloadRemoveCalls = browserSessionRemoveListenerMock.mock.calls.filter(
-      ([eventName]) => eventName === 'will-download'
-    )
-    expect(downloadOnCalls).toHaveLength(2)
-    expect(downloadRemoveCalls).toHaveLength(2)
-    expect(downloadRemoveCalls[1][1]).toBe(downloadOnCalls[0][1])
-  })
-
   it('clears browser guest registrations when the main window closes', () => {
-    sessionFromPartitionMock.mockReturnValue({
-      setPermissionRequestHandler: setPermissionRequestHandlerMock,
-      setPermissionCheckHandler: setPermissionCheckHandlerMock,
-      setDevicePermissionHandler: setDevicePermissionHandlerMock,
-      setDisplayMediaRequestHandler: setDisplayMediaRequestHandlerMock,
-      on: vi.fn(),
-      removeListener: vi.fn()
-    })
     const mainWindowOnMock = vi.fn()
     const mainWindow = createMainWindow()
     mainWindow.on = mainWindowOnMock

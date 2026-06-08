@@ -142,6 +142,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       api: {
         ui: {
           onFileDrop: vi.fn(() => vi.fn())
+        },
+        pty: {
+          setActiveRendererPty: vi.fn()
         }
       }
     }
@@ -222,6 +225,35 @@ describe('useTerminalPaneGlobalEffects', () => {
     expect(mocks.fitPanes).not.toHaveBeenCalled()
     expect(isActiveRef.current).toBe(true)
     expect(isVisibleRef.current).toBe(true)
+  })
+
+  it('reports the active local PTY to the main output scheduler', () => {
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1, terminal: { name: 'terminal-a' } }]),
+      resumeRendering: vi.fn(),
+      suspendRendering: vi.fn(),
+      getActivePane: vi.fn(() => ({ id: 1, terminal: { name: 'terminal-a' } }))
+    }
+    const transport = { getPtyId: vi.fn(() => 'pty-active') }
+    const paneTransports = new Map([[1, transport]])
+
+    beginHookRender()
+    useTerminalPaneGlobalEffects({
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      isActive: true,
+      isVisible: true,
+      isSyncFitEnabled: true,
+      paneCount: 1,
+      managerRef: { current: manager as never },
+      containerRef: { current: null },
+      paneTransportsRef: { current: paneTransports as never },
+      isActiveRef: { current: false },
+      isVisibleRef: { current: false },
+      toggleExpandPane: vi.fn()
+    })
+
+    expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-active', true)
   })
 
   it('restores from the pre-hide scroll state when hidden layout changes the viewport', () => {

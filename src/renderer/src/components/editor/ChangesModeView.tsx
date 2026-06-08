@@ -2,17 +2,9 @@ import React, { lazy } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult, GitStatusEntry } from '../../../../shared/types'
 import { ConflictBanner } from './ConflictComponents'
+import { getDiffContentSignature } from './diff-content-signature'
 
 const DiffViewer = lazy(() => import('./DiffViewer'))
-
-function getContentSignature(content: string): string {
-  let hash = 2166136261
-  for (let i = 0; i < content.length; i += 1) {
-    hash ^= content.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  return (hash >>> 0).toString(16)
-}
 
 // Why: Changes view mode renders an edit-mode tab as a HEAD-vs-working-tree
 // diff without creating a separate diff-tab object. The draft is the live
@@ -70,7 +62,7 @@ export function ChangesModeView({
   // diff if we reuse the same kept model identities. Rotate only the
   // original-side model identity so Monaco rebuilds the stale HEAD snapshot
   // without throwing away the modified-side undo history.
-  const headContentSignature = getContentSignature(dc.originalContent)
+  const headContentSignature = getDiffContentSignature(dc.originalContent)
   const originalModelKey = `${diffViewStateKey}:original:${headContentSignature}`
   return (
     <div className="flex flex-1 min-h-0 flex-col">

@@ -2,12 +2,10 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 
 export const ENABLE_WEBGL_RENDERER = true
-let suggestedRendererType: 'dom' | undefined
 
 export function resetTerminalWebglSuggestion(): void {
-  // Why: VS Code clears its suggested renderer when gpuAcceleration changes,
-  // letting "auto" retry WebGL after a user toggles the setting.
-  suggestedRendererType = undefined
+  // Why: retained for settings/tests while "auto" intentionally stays on DOM
+  // for this release to avoid renderer metric changes corrupting TUI tables.
 }
 
 function isLinuxRenderer(): boolean {
@@ -21,16 +19,17 @@ export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
   if (pane.terminalGpuAcceleration === 'on') {
     return true
   }
+  if (pane.terminalGpuAcceleration === 'auto') {
+    // Why: WebGL and DOM report different cell metrics on current xterm beta;
+    // switching renderers after emoji/table output rewraps completed TUI rows.
+    return false
+  }
   if (isLinuxRenderer()) {
     // Why: multiple Linux/Wayland GPU stacks corrupt xterm's WebGL glyph atlas
     // without raising context loss; tab switching only masks it by rebuilding WebGL.
     return false
   }
-  return (
-    pane.terminalGpuAcceleration === 'auto' &&
-    suggestedRendererType === undefined &&
-    !pane.hasComplexScriptOutput
-  )
+  return false
 }
 
 function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
@@ -117,12 +116,6 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     pane.webglAddon = webglAddon
     refreshTerminalAfterWebglAttach(pane)
   } catch (err) {
-    if (pane.terminalGpuAcceleration === 'auto') {
-      // Why: mirrors VS Code's `terminal.integrated.gpuAcceleration=auto`
-      // behavior: once WebGL fails, keep subsequent auto panes on DOM until
-      // the setting changes and resets the suggestion.
-      suggestedRendererType = 'dom'
-    }
     // WebGL not available — default DOM renderer is fine, but log it for debugging
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
     pane.webglAddon = null

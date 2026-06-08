@@ -86,11 +86,11 @@ export default function WorkspaceKanbanStatusLane({
       }
       className={cn(
         'group/lane',
-        'relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-t-2 border-sidebar-border transition-colors',
+        'relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-t-2 border-worktree-sidebar-border transition-colors',
         meta.border,
         meta.laneTint,
-        isDragTarget && 'border-sidebar-ring bg-sidebar-accent/70',
-        'data-[workspace-board-external-drag-target=true]:border-sidebar-ring data-[workspace-board-external-drag-target=true]:bg-sidebar-accent/70'
+        isDragTarget && 'border-worktree-sidebar-ring bg-worktree-sidebar-accent/70',
+        'data-[workspace-board-external-drag-target=true]:border-worktree-sidebar-ring data-[workspace-board-external-drag-target=true]:bg-worktree-sidebar-accent/70'
       )}
       onDragOver={(event) => onDragOver(event, status.id)}
       onDragLeave={onDragLeave}
@@ -107,7 +107,7 @@ export default function WorkspaceKanbanStatusLane({
         tabIndex={0}
         className={cn(
           'group absolute right-0 top-0 z-20 h-9 w-2 cursor-col-resize outline-none',
-          'focus-visible:ring-1 focus-visible:ring-sidebar-ring',
+          'focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
           isResizingColumn && 'cursor-col-resize'
         )}
         onPointerDown={onColumnResizeStart}
@@ -117,8 +117,8 @@ export default function WorkspaceKanbanStatusLane({
         <span
           className={cn(
             'absolute inset-y-2 left-1/2 w-px -translate-x-1/2 rounded-full bg-transparent transition-colors',
-            'group-hover:bg-sidebar-ring/55 group-focus-visible:bg-sidebar-ring',
-            isResizingColumn && 'bg-sidebar-ring'
+            'group-hover:bg-worktree-sidebar-ring/55 group-focus-visible:bg-worktree-sidebar-ring',
+            isResizingColumn && 'bg-worktree-sidebar-ring'
           )}
         />
       </div>

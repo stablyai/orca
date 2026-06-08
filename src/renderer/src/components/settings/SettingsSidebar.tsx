@@ -85,10 +85,10 @@ function SettingsSetupGuideNavRow({
         })
       }
       className={cn(
-        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
         setupActive
-          ? 'bg-accent font-medium text-accent-foreground'
-          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+          ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
+          : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
       )}
     >
       <img
@@ -130,10 +130,10 @@ export function SettingsSidebar({
   const searchShortcutHint = useShortcutLabel('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
-      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
       isActive
-        ? 'bg-accent font-medium text-accent-foreground'
-        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
+        : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
     )
   const installStatusLabel = (status: SettingsNavInstallStatus): string => {
     switch (status) {
@@ -156,8 +156,8 @@ export function SettingsSidebar({
     )
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col border-r border-border/50 bg-card/40">
-      <div className="border-b border-border/50 px-3 py-3">
+    <aside className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar">
+      <div className="border-b border-worktree-sidebar-border px-3 py-3">
         <Button
           variant="ghost"
           size="sm"
@@ -169,7 +169,7 @@ export function SettingsSidebar({
         </Button>
       </div>
 
-      <div className="border-b border-border/50 px-3 py-3">
+      <div className="border-b border-worktree-sidebar-border px-3 py-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -188,7 +188,7 @@ export function SettingsSidebar({
       </div>
 
       {showSetupGuideTopRow ? (
-        <div className="border-b border-border/50 px-3 py-3">
+        <div className="border-b border-worktree-sidebar-border px-3 py-3">
           <SettingsSetupGuideNavRow
             progress={setupGuideProgress}
             setupActive={setupActive}

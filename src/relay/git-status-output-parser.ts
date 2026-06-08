@@ -69,6 +69,7 @@ export function parseStatusOutput(stdout: string): {
     if (line.startsWith('1 ') || line.startsWith('2 ')) {
       const parts = line.split(' ')
       const xy = parts[1]
+      const submodule = parseSubmoduleStatus(parts[2])
       const indexStatus = xy[0]
       const worktreeStatus = xy[1]
 
@@ -83,7 +84,8 @@ export function parseStatusOutput(stdout: string): {
             path: filePath,
             status: parseStatusChar(indexStatus),
             area: 'staged',
-            oldPath
+            oldPath,
+            ...(submodule ? { submodule } : {})
           })
         }
         if (worktreeStatus !== '.') {
@@ -91,19 +93,26 @@ export function parseStatusOutput(stdout: string): {
             path: filePath,
             status: parseStatusChar(worktreeStatus),
             area: 'unstaged',
-            oldPath
+            oldPath,
+            ...(submodule ? { submodule } : {})
           })
         }
       } else {
         const filePath = parts.slice(8).join(' ')
         if (indexStatus !== '.') {
-          entries.push({ path: filePath, status: parseStatusChar(indexStatus), area: 'staged' })
+          entries.push({
+            path: filePath,
+            status: parseStatusChar(indexStatus),
+            area: 'staged',
+            ...(submodule ? { submodule } : {})
+          })
         }
         if (worktreeStatus !== '.') {
           entries.push({
             path: filePath,
             status: parseStatusChar(worktreeStatus),
-            area: 'unstaged'
+            area: 'unstaged',
+            ...(submodule ? { submodule } : {})
           })
         }
       }
@@ -130,6 +139,19 @@ export function parseStatusOutput(stdout: string): {
           behind: upstreamAheadBehind?.behind ?? 0
         }
       : { hasUpstream: false, ahead: 0, behind: 0 }
+  }
+}
+
+function parseSubmoduleStatus(
+  submoduleField: string | undefined
+): { commitChanged: boolean; trackedChanges: boolean; untrackedChanges: boolean } | undefined {
+  if (!submoduleField?.startsWith('S')) {
+    return undefined
+  }
+  return {
+    commitChanged: submoduleField[1] === 'C',
+    trackedChanges: submoduleField[2] === 'M',
+    untrackedChanges: submoduleField[3] === 'U'
   }
 }
 

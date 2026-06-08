@@ -90,7 +90,8 @@ import {
   findRegisteredDeletableWorktree,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
-  stripOrcaProvenanceMetaUpdates
+  stripOrcaProvenanceMetaUpdates,
+  UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../worktree-removal-safety'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -1123,10 +1124,12 @@ export function registerWorktreeHandlers(
             notifyWorktreesChanged(mainWindow, repoId)
             return {}
           }
-          if (
-            (args.force || removedMeta) &&
-            (await isAlreadyRemovedWorktreePath(repo, worktreePath))
-          ) {
+          if (await isAlreadyRemovedWorktreePath(repo, worktreePath)) {
+            if (!args.force && !removedMeta) {
+              // Why: without persisted metadata, require the renderer recovery
+              // path before deleting Orca-only state for an unregistered path.
+              throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
+            }
             // Why: a manually deleted worktree is already gone from Git and disk.
             // The sidebar delete action has persisted metadata proving this was
             // an Orca-known row, so no force confirmation is needed.

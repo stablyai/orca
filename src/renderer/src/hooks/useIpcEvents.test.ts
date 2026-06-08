@@ -2666,7 +2666,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-new', {
       setup,
-      sidebarRevealBehavior: 'auto'
+      sidebarRevealBehavior: 'auto',
+      notifyHostRuntime: false
     })
 
     activateAndRevealWorktree.mockClear()
@@ -2681,7 +2682,224 @@ describe('useIpcEvents CLI-created worktree activation', () => {
 
     expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
     expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-existing', {})
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-existing', {
+      notifyHostRuntime: false
+    })
+  })
+
+  it('refreshes active runtime worktrees from remote client events', async () => {
+    const fetchWorktrees = vi.fn()
+    const fetchWorktreeLineage = vi.fn()
+    let runtimeOnResponse: ((response: unknown) => void) | undefined
+    const runtimeSubscribe = vi.fn(async (_args, callbacks) => {
+      runtimeOnResponse = (callbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+
+    vi.doMock('react', async () => {
+      const actual = await vi.importActual<typeof ReactModule>('react')
+      return {
+        ...actual,
+        useEffect: (effect: () => void | (() => void)) => {
+          effect()
+        }
+      }
+    })
+
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => ({
+          fetchRepos: vi.fn(),
+          fetchProjectGroups: vi.fn(),
+          fetchWorktrees,
+          fetchWorktreeLineage,
+          detectedWorktreesByRepo: {
+            'repo-1': {
+              repoId: 'repo-1',
+              authoritative: true,
+              source: 'git',
+              worktrees: [{ id: 'wt-old' }]
+            }
+          },
+          worktreesByRepo: {},
+          purgeWorktreeTerminalState: vi.fn(),
+          removeWorkspaceSpaceWorktrees: vi.fn(),
+          setUpdateStatus: vi.fn(),
+          activeModal: null,
+          closeModal: vi.fn(),
+          openModal: vi.fn(),
+          getKnownWorktreeById: vi.fn(),
+          activeWorktreeId: 'wt-old',
+          activeView: 'terminal',
+          setActiveView: vi.fn(),
+          setActiveRepo: vi.fn(),
+          setActiveWorktree: vi.fn(),
+          revealWorktreeInSidebar: vi.fn(),
+          setIsFullScreen: vi.fn(),
+          updateBrowserPageState: vi.fn(),
+          activeTabType: 'terminal',
+          editorFontZoomLevel: 0,
+          setEditorFontZoomLevel: vi.fn(),
+          setRateLimitsFromPush: vi.fn(),
+          setSshConnectionState: vi.fn(),
+          setSshTargetLabels: vi.fn(),
+          setPortForwards: vi.fn(),
+          clearPortForwards: vi.fn(),
+          setDetectedPorts: vi.fn(),
+          enqueueSshCredentialRequest: vi.fn(),
+          removeSshCredentialRequest: vi.fn(),
+          clearTabPtyId: vi.fn(),
+          settings: { activeRuntimeEnvironmentId: 'env-1', terminalFontSize: 13 }
+        })
+      }
+    }))
+
+    vi.doMock('@/lib/ui-zoom', () => ({
+      applyUIZoom: vi.fn()
+    }))
+    vi.doMock('@/lib/worktree-activation', () => ({
+      activateAndRevealWorktree: vi.fn(),
+      ensureWorktreeHasInitialTerminal: vi.fn()
+    }))
+    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+      getVisibleWorktreeIds: () => []
+    }))
+    vi.doMock('@/lib/editor-font-zoom', () => ({
+      nextEditorFontZoomLevel: vi.fn(() => 0),
+      computeEditorFontSize: vi.fn(() => 13)
+    }))
+    vi.doMock('@/components/settings/SettingsConstants', () => ({
+      zoomLevelToPercent: vi.fn(() => 100),
+      ZOOM_MIN: -3,
+      ZOOM_MAX: 3
+    }))
+    vi.doMock('@/lib/zoom-events', () => ({
+      dispatchZoomLevelChanged: vi.fn()
+    }))
+
+    vi.stubGlobal('window', {
+      api: {
+        repos: { onChanged: () => () => {} },
+        worktrees: {
+          onChanged: () => () => {},
+          onBaseStatus: () => () => {},
+          onRemoteBranchConflict: () => () => {}
+        },
+        runtimeEnvironments: { subscribe: runtimeSubscribe },
+        ui: {
+          onOpenSettings: () => () => {},
+          onOpenFeatureTour: () => () => {},
+          onToggleLeftSidebar: () => () => {},
+          onToggleRightSidebar: () => () => {},
+          onToggleWorktreePalette: () => () => {},
+          onToggleFloatingTerminal: () => () => {},
+          onOpenQuickOpen: () => () => {},
+          onOpenNewWorkspace: () => () => {},
+          onOpenTasks: () => () => {},
+          onJumpToWorktreeIndex: () => () => {},
+          onJumpToTabIndex: () => () => {},
+          onWorktreeHistoryNavigate: () => () => {},
+          onActivateWorktree: () => () => {},
+          onCreateTerminal: () => () => {},
+          onRequestTerminalCreate: () => () => {},
+          replyTerminalCreate: () => {},
+          onSplitTerminal: () => () => {},
+          onRenameTerminal: () => () => {},
+          onFocusTerminal: () => () => {},
+          onFocusEditorTab: () => () => {},
+          onCloseSessionTab: () => () => {},
+          onMoveSessionTab: () => () => {},
+          onOpenFileFromMobile: () => () => {},
+          onOpenDiffFromMobile: () => () => {},
+          onCloseTerminal: () => () => {},
+          onSleepWorktree: () => () => {},
+          onNewBrowserTab: () => () => {},
+          onNewMarkdownTab: () => () => {},
+          onRequestTabCreate: () => () => {},
+          replyTabCreate: () => {},
+          onRequestTabClose: () => () => {},
+          replyTabClose: () => {},
+          onRequestTabSetProfile: () => () => {},
+          replyTabSetProfile: () => {},
+          onNewTerminalTab: () => () => {},
+          onCloseActiveTab: () => () => {},
+          onSwitchTab: () => () => {},
+          onSwitchTabAcrossAllTypes: () => () => {},
+          onSwitchRecentTab: () => () => {},
+          onSwitchTerminalTab: () => () => {},
+          onToggleStatusBar: () => () => {},
+          onFullscreenChanged: () => () => {},
+          onTerminalZoom: () => () => {},
+          getZoomLevel: () => 0,
+          set: vi.fn()
+        },
+        settings: {
+          onChanged: () => () => {}
+        },
+        updater: {
+          getStatus: () => Promise.resolve({ state: 'idle' }),
+          onStatus: () => () => {},
+          onClearDismissal: () => () => {}
+        },
+        browser: {
+          onGuestLoadFailed: () => () => {},
+          onOpenLinkInOrcaTab: () => () => {},
+          onNavigationUpdate: () => () => {},
+          onActivateView: () => () => {},
+          onPaneFocus: () => () => {}
+        },
+        rateLimits: {
+          get: () => Promise.resolve({ limits: {}, lastUpdatedAt: Date.now() }),
+          onUpdate: () => () => {}
+        },
+        ssh: {
+          listTargets: () => Promise.resolve([]),
+          listPortForwards: () => Promise.resolve([]),
+          listDetectedPorts: () => Promise.resolve([]),
+          getState: () => Promise.resolve(null),
+          onStateChanged: () => () => {},
+          onCredentialRequest: () => () => {},
+          onPortForwardsChanged: () => () => {},
+          onDetectedPortsChanged: () => () => {},
+          onCredentialResolved: () => () => {}
+        },
+        runtime: {
+          getTerminalFitOverrides: () => Promise.resolve([]),
+          getTerminalDrivers: () => Promise.resolve([]),
+          getBrowserDrivers: () => Promise.resolve([]),
+          onTerminalFitOverrideChanged: () => () => {},
+          onTerminalDriverChanged: () => () => {},
+          onBrowserDriverChanged: () => () => {}
+        },
+        agentStatus: { onSet: () => () => {} }
+      }
+    })
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+
+    expect(runtimeSubscribe).toHaveBeenCalledWith(
+      {
+        selector: 'env-1',
+        method: 'runtime.clientEvents.subscribe',
+        timeoutMs: 15_000
+      },
+      expect.any(Object)
+    )
+    if (!runtimeOnResponse) {
+      throw new Error('Expected runtime client event callbacks')
+    }
+    runtimeOnResponse({
+      ok: true,
+      result: { type: 'worktreesChanged', repoId: 'repo-1' }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
+    expect(fetchWorktreeLineage).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -3233,7 +3451,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect.objectContaining({ state: 'working', prompt: 'p', agentType: 'claude' }),
       'Future Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
   })
 
@@ -3301,7 +3520,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       'Inactive Tab',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
   })
 
@@ -3391,7 +3611,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect.objectContaining({ state: 'working', prompt: 'hidden worker', agentType: 'codex' }),
       undefined,
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_700_000_000_000 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
 
     onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
@@ -3534,7 +3755,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       'Cursor ready',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
   })
 
@@ -3618,7 +3840,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       'Codex ready',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
     expect(updateTabTitle).toHaveBeenCalledTimes(1)
     expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex ready')
@@ -3720,7 +3943,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
             groupId: 'group-1',
             worktreeId: 'wt-1',
             contentType: 'terminal',
-            label: 'OpenClaude',
+            label: 'openclaude.exe',
             customLabel: null,
             sortOrder: 0,
             createdAt: 1_700_000_000_000
@@ -3782,7 +4005,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       'Terminal 2',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
   })
 
@@ -3857,7 +4081,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       'Inactive Tab',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
   })
 
@@ -3960,7 +4185,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect.objectContaining({ state: 'working', prompt: 'queued prompt', agentType: 'codex' }),
       'Future Tab',
       { updatedAt: 1_700_000_000_100, stateStartedAt: 1_699_999_999_100 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
     expect(setAgentStatus).toHaveBeenNthCalledWith(
       2,
@@ -3973,7 +4199,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       'Future Tab',
       { updatedAt: 1_700_000_000_200, stateStartedAt: 1_699_999_999_100 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
   })
 
@@ -4038,7 +4265,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect.objectContaining({ state: 'working', prompt: 'remote p', agentType: 'codex' }),
       'SSH Tab',
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
   })
 
@@ -4485,7 +4713,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }),
       undefined,
       { updatedAt: 1_700_000_000_000, stateStartedAt: 1_699_999_999_000 },
-      expect.objectContaining({ worktreeId: 'wt-1', terminalHandle: 'term-child' })
+      expect.objectContaining({ worktreeId: 'wt-1', terminalHandle: 'term-child' }),
+      undefined
     )
   })
 
@@ -4600,7 +4829,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect.objectContaining({ state: 'working' }),
       'Terminal 1',
       { updatedAt: 1_700_000_000_100, stateStartedAt: 1_699_999_999_100 },
-      expectWorktreeRouting('wt-1')
+      expectWorktreeRouting('wt-1'),
+      undefined
     )
   })
 

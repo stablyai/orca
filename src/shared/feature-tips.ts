@@ -4,11 +4,11 @@ import {
   type FeatureInteractionState
 } from './feature-interactions'
 
-export type FeatureTipId = 'voice-dictation' | 'orca-cli'
+export type FeatureTipId = 'voice-dictation' | 'orca-cli' | 'cmd-j-palette'
 
 export type FeatureTipPriority = 'new' | 'unseen'
 
-export type FeatureTipAction = 'enable-voice' | 'setup-cli'
+export type FeatureTipAction = 'enable-voice' | 'setup-cli' | 'learn-cmd-j-palette'
 
 export type FeatureTip = {
   id: FeatureTipId
@@ -37,6 +37,19 @@ export const FEATURE_TIPS = [
     description: 'Enable agents to coordinate child worktrees and communicate between worktrees.',
     action: 'setup-cli',
     ctaLabel: 'Install CLI & Skills',
+    completedByFeatureInteractions: []
+  },
+  {
+    id: 'cmd-j-palette',
+    priority: 'new',
+    eyebrow: 'Tip',
+    // Why: "<shortcut>" is a placeholder token; the cmd-j dialog splits the
+    // title on it and inlines the live, platform-correct keybinding as a <kbd>.
+    title: 'Jump to a worktree with <shortcut>',
+    description:
+      'Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.',
+    action: 'learn-cmd-j-palette',
+    ctaLabel: 'Got it',
     completedByFeatureInteractions: []
   },
   {

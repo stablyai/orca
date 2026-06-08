@@ -10,6 +10,11 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import {
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive,
+  isWebTerminalSurfaceTabId
+} from '@/runtime/web-runtime-session'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { TuiAgent } from '../../../shared/types'
@@ -39,8 +44,17 @@ export type LaunchAgentInNewTabArgs = {
   onPromptDelivered?: () => void
 }
 
+function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
+  const state = useAppStore.getState()
+  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+    if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
+      state.closeTab(tab.id)
+    }
+  }
+}
+
 export type LaunchAgentInNewTabResult = {
-  tabId: string
+  tabId: string | null
   startupPlan: AgentStartupPlan
   pasteDraftAfterLaunch: boolean
 } | null
@@ -187,6 +201,34 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
 
   if (!startupPlan) {
     return null
+  }
+
+  const runtimeEnvironmentId = store.settings?.activeRuntimeEnvironmentId?.trim()
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId) && pasteDraftAfterLaunch === null) {
+    // Why: paired web tabs are host-owned and return tabId: null on success.
+    // Local-only agent tabs cannot be closed because close routes through
+    // session.tabs.close on the host, so prune them before the host snapshot.
+    removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+    void createWebRuntimeSessionTerminal({
+      worktreeId,
+      environmentId: runtimeEnvironmentId,
+      targetGroupId: groupId,
+      activate: true,
+      ...(hasPrompt ? { command: startupPlan.launchCommand } : { agent })
+    }).then((created) => {
+      // Why: created means the host accepted the launch, not that a local tab
+      // exists; keep pruning stale local rows until the snapshot mirrors.
+      removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+      if (!created) {
+        toast.error(`Could not launch ${agent} in a new terminal.`)
+        return
+      }
+      store.setActiveTabType('terminal')
+      if (hasPrompt) {
+        onPromptDelivered?.()
+      }
+    })
+    return { tabId: null, startupPlan, pasteDraftAfterLaunch: false }
   }
 
   // Why: queue the startup command BEFORE TerminalPane mounts — it captures

@@ -31,6 +31,16 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.snapshotAnsi).toContain('hello world')
     })
 
+    it('captures PTY output in immediate snapshots without waiting for queued parsing', () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      void emulator.write('rendered before hidden restore snapshot')
+
+      expect(emulator.getSnapshot().snapshotAnsi).toContain(
+        'rendered before hidden restore snapshot'
+      )
+    })
+
     it('captures colored text', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b[31mred text\x1b[0m')
@@ -108,6 +118,67 @@ describe('HeadlessEmulator', () => {
       await emulator.write('\x1b]7;file:///path/here\x1b\\')
 
       expect(emulator.getSnapshot().cwd).toBe('/path/here')
+    })
+
+    it('tracks OSC-7 CWD across split PTY chunks', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]7;file:///split')
+      await emulator.write('/project\x07')
+
+      expect(emulator.getSnapshot().cwd).toBe('/split/project')
+    })
+
+    it('tracks OSC-7 CWD when ESC and OSC marker arrive in separate chunks', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b')
+      await emulator.write(']7;file:///split-escape\x07')
+
+      expect(emulator.getSnapshot().cwd).toBe('/split-escape')
+    })
+  })
+
+  describe('OSC title tracking', () => {
+    it('captures the latest OSC window title in snapshots', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]0;Codex working\x07hello')
+
+      expect(emulator.getSnapshot().lastTitle).toBe('Codex working')
+    })
+
+    it('uses the last OSC title when a chunk contains multiple title updates', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]0;Codex working\x07output\x1b]2;Codex idle\x1b\\')
+
+      expect(emulator.getSnapshot().lastTitle).toBe('Codex idle')
+    })
+
+    it('tracks OSC titles across split PTY chunks', async () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      await emulator.write('\x1b]0;Codex work')
+      await emulator.write('ing\x07')
+
+      expect(emulator.getSnapshot().lastTitle).toBe('Codex working')
+    })
+
+    it('adopts title metadata seeded from an external serializer', () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      emulator.setLastTitle('Seeded renderer title')
+
+      expect(emulator.getSnapshot().lastTitle).toBe('Seeded renderer title')
+    })
+
+    it('adopts cwd metadata seeded from persisted terminal history', () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      emulator.setCwd('/projects/restored')
+
+      expect(emulator.getSnapshot().cwd).toBe('/projects/restored')
     })
   })
 
@@ -267,17 +338,17 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
-    it('does not expose mouse modes before xterm applies the same write', async () => {
+    it('keeps mode snapshots in sync with immediate headless parsing', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
 
       const writePromise = emulator.write('\x1b[?1049h\x1b[?1002;1006h')
       const snapshot = emulator.getSnapshot()
       await writePromise
 
-      expect(snapshot.modes.alternateScreen).toBe(false)
-      expect(snapshot.modes.mouseTracking).toBe(false)
-      expect(snapshot.modes.sgrMouseMode).toBe(false)
-      expect(snapshot.rehydrateSequences).toBe('')
+      expect(snapshot.modes.alternateScreen).toBe(true)
+      expect(snapshot.modes.mouseTrackingMode).toBe('drag')
+      expect(snapshot.modes.sgrMouseMode).toBe(true)
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?1049h')
 
       const after = emulator.getSnapshot()
       expect(after.modes.alternateScreen).toBe(true)

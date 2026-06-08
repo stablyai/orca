@@ -606,6 +606,36 @@ describe('Store', () => {
     expect(store.getUI().groupBy).toBe('workspace-status')
   })
 
+  it('defaults projectOrderBy to manual when absent, even with recent sortBy', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { sortBy: 'recent' }
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderBy).toBe('manual')
+  })
+
+  it('falls back invalid projectOrderBy to manual', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { projectOrderBy: 'bogus' }
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderBy).toBe('manual')
+  })
+
+  it('preserves and round-trips an explicit recent projectOrderBy', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { projectOrderBy: 'recent' }
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderBy).toBe('recent')
+
+    store.updateUI({ projectOrderBy: 'manual' })
+    expect(store.getUI().projectOrderBy).toBe('manual')
+  })
+
   // ── 2. Load from existing valid file ─────────────────────────────────
 
   it('reads repos from an existing data file', async () => {
@@ -2860,6 +2890,14 @@ describe('Store', () => {
     expect(ui.lastUpdateCheckAt).toBe(1234)
   })
 
+  it('normalizes default browser zoom UI writes', async () => {
+    const store = await createStore()
+
+    store.updateUI({ browserDefaultZoomLevel: 1.26 })
+
+    expect(store.getUI().browserDefaultZoomLevel).toBe(1.5)
+  })
+
   it('encrypts the Kagi session link on disk and decrypts it on load', async () => {
     const sessionLink = 'https://kagi.com/search?token=secret'
     const store = await createStore()
@@ -3095,6 +3133,36 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().terminalMacOptionAsAlt).toBe('auto')
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
+  })
+
+  it('migrates inherited terminal bar cursor defaults to block on first load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalCursorStyle: 'bar' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().terminalCursorStyle).toBe('block')
+    expect(store.getSettings().terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('preserves terminal cursor choices after the block-default migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalCursorStyle: 'bar', terminalCursorStyleDefaultedToBlock: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().terminalCursorStyle).toBe('bar')
+    expect(store.getSettings().terminalCursorStyleDefaultedToBlock).toBe(true)
   })
 
   it('preserves explicit "false" terminalMacOptionAsAlt through migration', async () => {

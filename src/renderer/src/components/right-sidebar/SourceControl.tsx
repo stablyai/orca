@@ -18,6 +18,7 @@ import {
   Copy,
   Folder,
   FolderOpen,
+  GitFork,
   GitMerge,
   GitPullRequestArrow,
   MessageSquare,
@@ -67,6 +68,8 @@ import {
   getDiscardAllPaths,
   getStageAllPaths,
   getUnstageAllPaths,
+  isStageableStatusEntry,
+  isSubmoduleWorktreeOnlyChange,
   runDiscardAllForArea,
   type DiscardAllArea
 } from './discard-all-sequence'
@@ -84,6 +87,7 @@ import {
   type PendingDiscardConfirmation
 } from './source-control-discard-dialog'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
+import { describeForkPushTarget } from './fork-push-target-label'
 import { toast } from 'sonner'
 import {
   ContextMenu,
@@ -259,6 +263,8 @@ const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
+const SUBMODULE_WORKTREE_ONLY_LABEL = 'Submodule changes - stage inside submodule'
+const SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP = 'Stage these changes inside the submodule'
 
 function createDefaultCollapsedSections(): Set<string> {
   return new Set(DEFAULT_COLLAPSED_SECTIONS)
@@ -905,6 +911,7 @@ function resolveRemoteActionError(kind: RemoteOpKind, error: unknown): string {
   return resolveRemoteOperationErrorMessage(error, {
     publish: kind === 'publish',
     isPush: kind === 'push',
+    isForcePush: kind === 'force_push',
     isSync: kind === 'sync',
     isFetch: kind === 'fetch',
     isFastForward: kind === 'fast_forward',
@@ -998,7 +1005,7 @@ export function HostedReviewHeaderLink({
 }): React.JSX.Element {
   const label = hostedReviewLabel(review)
   const className =
-    'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground opacity-80 hover:text-foreground hover:underline'
+    'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground underline decoration-border underline-offset-2 opacity-80 hover:text-foreground hover:decoration-foreground'
 
   if (review.provider === 'github' || review.provider === 'gitlab') {
     return (
@@ -1770,7 +1777,9 @@ function SourceControlInner(): React.JSX.Element {
         return
       }
 
-      focusTerminalTabSurface(result.tabId)
+      if (result.tabId) {
+        focusTerminalTabSurface(result.tabId)
+      }
       toast.success('Started an AI agent for the conflicts.')
     } finally {
       setIsLaunchingConflictAgent(false)
@@ -1843,7 +1852,9 @@ function SourceControlInner(): React.JSX.Element {
           return false
         }
 
-        focusTerminalTabSurface(result.tabId)
+        if (result.tabId) {
+          focusTerminalTabSurface(result.tabId)
+        }
         toast.success('Started an AI agent for the commit failure.')
         return true
       } finally {
@@ -2143,7 +2154,15 @@ function SourceControlInner(): React.JSX.Element {
   // try/catch here would duplicate the notification.
   const runRemoteAction = useCallback(
     async (
-      kind: 'push' | 'pull' | 'fast_forward' | 'sync' | 'fetch' | 'publish' | 'rebase'
+      kind:
+        | 'push'
+        | 'force_push'
+        | 'pull'
+        | 'fast_forward'
+        | 'sync'
+        | 'fetch'
+        | 'publish'
+        | 'rebase'
     ): Promise<void> => {
       if (!activeWorktreeId || !worktreePath) {
         return
@@ -2170,6 +2189,17 @@ function SourceControlInner(): React.JSX.Element {
             connectionId,
             activeWorktree?.pushTarget,
             forceWithLease ? { forceWithLease: true } : undefined
+          )
+          return
+        }
+        if (kind === 'force_push') {
+          await pushBranch(
+            activeWorktreeId,
+            worktreePath,
+            false,
+            connectionId,
+            activeWorktree?.pushTarget,
+            { forceWithLease: true }
           )
           return
         }
@@ -2847,19 +2877,28 @@ function SourceControlInner(): React.JSX.Element {
     worktreePath
   ])
 
+  const stageableUnstagedPaths = useMemo(
+    () => [
+      ...getStageAllPaths(grouped.unstaged, 'unstaged'),
+      ...getStageAllPaths(grouped.untracked, 'untracked')
+    ],
+    [grouped.unstaged, grouped.untracked]
+  )
   const hasUnstagedChanges = grouped.unstaged.length > 0 || grouped.untracked.length > 0
+  const hasStageableChanges = stageableUnstagedPaths.length > 0
   const hasPartiallyStagedChanges = useMemo(() => {
-    if (grouped.staged.length === 0 || grouped.unstaged.length === 0) {
+    if (grouped.staged.length === 0 || stageableUnstagedPaths.length === 0) {
       return false
     }
-    const unstagedPaths = new Set(grouped.unstaged.map((entry) => entry.path))
+    const unstagedPaths = new Set(stageableUnstagedPaths)
     return grouped.staged.some((entry) => unstagedPaths.has(entry.path))
-  }, [grouped.staged, grouped.unstaged])
+  }, [grouped.staged, stageableUnstagedPaths])
 
   const primaryAction: PrimaryAction = useMemo(() => {
     const action = resolvePrimaryAction({
       stagedCount: grouped.staged.length,
       hasUnstagedChanges,
+      hasStageableChanges,
       hasPartiallyStagedChanges,
       hasMessage: commitMessage.trim().length > 0,
       hasUnresolvedConflicts: unresolvedConflicts.length > 0,
@@ -2884,6 +2923,7 @@ function SourceControlInner(): React.JSX.Element {
     commitMessage,
     grouped.staged.length,
     hasUnstagedChanges,
+    hasStageableChanges,
     hasPartiallyStagedChanges,
     isCommitting,
     isAbortingOperation,
@@ -2905,6 +2945,7 @@ function SourceControlInner(): React.JSX.Element {
       resolveDropdownItems({
         stagedCount: grouped.staged.length,
         hasUnstagedChanges,
+        hasStageableChanges,
         hasPartiallyStagedChanges,
         hasMessage: commitMessage.trim().length > 0,
         hasUnresolvedConflicts: unresolvedConflicts.length > 0,
@@ -2925,6 +2966,7 @@ function SourceControlInner(): React.JSX.Element {
       commitMessage,
       grouped.staged.length,
       hasUnstagedChanges,
+      hasStageableChanges,
       hasPartiallyStagedChanges,
       isCommitting,
       conflictOperation,
@@ -2976,6 +3018,7 @@ function SourceControlInner(): React.JSX.Element {
           void runRemoteAction('push')
           return
         case 'push':
+        case 'force_push':
         case 'pull':
         case 'fast_forward':
         case 'sync':
@@ -3106,11 +3149,7 @@ function SourceControlInner(): React.JSX.Element {
   const bulkStagePaths = useMemo(
     () =>
       selectedEntries
-        .filter(
-          (entry) =>
-            (entry.area === 'unstaged' || entry.area === 'untracked') &&
-            entry.entry.conflictStatus !== 'unresolved'
-        )
+        .filter((entry) => isStageableStatusEntry(entry.entry))
         .map((entry) => entry.entry.path),
     [selectedEntries]
   )
@@ -4377,6 +4416,18 @@ function SourceControlInner(): React.JSX.Element {
               clears. Active merge/rebase/cherry-pick operations are the
               exception: commits would be misleading before the user continues
               or aborts the operation. */}
+          {activeWorktree?.pushTarget && activeWorktree.pushTarget.remoteName !== 'origin' ? (
+            <div
+              className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground"
+              title={`Pushes to the fork at ${activeWorktree.pushTarget.remoteName} (not origin)`}
+            >
+              <GitFork className="size-3 shrink-0" aria-hidden="true" />
+              <span className="truncate">
+                Pushes to fork {describeForkPushTarget(activeWorktree.pushTarget)}
+              </span>
+            </div>
+          ) : null}
+
           {shouldRenderCommitArea(scope, unresolvedConflicts.length, conflictOperation) &&
             (primaryAction.kind === 'create_pr' ? (
               <PullRequestComposer
@@ -5518,12 +5569,15 @@ export function CommitArea({
   // mismatch keeps the spinner off — the disabled state alone is enough
   // signal there. Commit still spins on isCommitting because that path
   // doesn't go through inFlightRemoteOpKind.
+  const primaryHostsRemoteOperation =
+    primaryAction.kind === inFlightRemoteOpKind ||
+    (primaryAction.kind === 'push' && inFlightRemoteOpKind === 'force_push')
   const showSpinner =
     primaryAction.kind === 'create_pr'
       ? isCreatingPr
       : primaryAction.kind === 'commit'
         ? isCommitting
-        : isRemoteOperationActive && primaryAction.kind === inFlightRemoteOpKind
+        : isRemoteOperationActive && primaryHostsRemoteOperation
   // Why: when the primary doesn't host the in-flight op (e.g. Fetch, or any
   // dropdown action that mismatches the primary's natural label) the click
   // would otherwise be silent — the toast only fires on failure and a
@@ -6590,6 +6644,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const dirPath = parentDir === '.' ? '' : parentDir
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
   const isResolvedLocally = entry.conflictStatus === 'resolved_locally'
+  const isSubmoduleWorktreeOnly = isSubmoduleWorktreeOnlyChange(entry)
   const conflictLabel = entry.conflictKind ? CONFLICT_KIND_LABELS[entry.conflictKind] : null
   // Why: the hint text ("Open and edit…", "Decide whether to…") was removed
   // from the sidebar because it's not actionable here — the user can only
@@ -6607,8 +6662,7 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
     !isUnresolvedConflict &&
     !isResolvedLocally &&
     (entry.area === 'unstaged' || entry.area === 'untracked')
-  const canStage =
-    !isUnresolvedConflict && (entry.area === 'unstaged' || entry.area === 'untracked')
+  const canStage = isStageableStatusEntry(entry)
   const canUnstage = entry.area === 'staged'
 
   return (
@@ -6662,8 +6716,10 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>
             )}
           </span>
-          {conflictLabel && (
-            <div className="truncate text-[11px] text-muted-foreground">{conflictLabel}</div>
+          {(conflictLabel || isSubmoduleWorktreeOnly) && (
+            <div className="truncate text-[11px] text-muted-foreground">
+              {conflictLabel ?? SUBMODULE_WORKTREE_ONLY_LABEL}
+            </div>
           )}
         </div>
         {commentCount > 0 && (
@@ -6708,14 +6764,15 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
               }}
             />
           )}
-          {canStage && (
+          {(canStage || isSubmoduleWorktreeOnly) && (
             <ActionButton
               icon={Plus}
-              title="Stage"
+              title={isSubmoduleWorktreeOnly ? SUBMODULE_WORKTREE_ONLY_STAGE_TOOLTIP : 'Stage'}
               onClick={(event) => {
                 event.stopPropagation()
                 void onStage(entry.path)
               }}
+              disabled={isSubmoduleWorktreeOnly}
             />
           )}
           {canUnstage && (

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
 
 const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
 const VALID_CUSTOM_VIEW_MODELS = ['issue', 'project'] as const
@@ -222,6 +223,7 @@ export const LINEAR_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.linearListProjects(params?.query, params?.limit, params?.workspaceId, params?.force)
   }),
+  LINEAR_PROJECT_CREATE_METHOD,
   defineMethod({
     name: 'linear.getProject',
     params: ProjectId,

@@ -8,11 +8,11 @@ export function resolveTerminalCursorInactiveStyle(
 ): TerminalCursorInactiveStyle {
   // Why: xterm's default inactive outline turns a bar/underline cursor into
   // extra strokes in blurred panes; only block cursors benefit from outline.
-  return (cursorStyle ?? 'bar') === 'block' ? 'outline' : (cursorStyle ?? 'bar')
+  return (cursorStyle ?? 'block') === 'block' ? 'outline' : (cursorStyle ?? 'block')
 }
 
 export function buildDefaultTerminalOptions(): ITerminalOptions {
-  const cursorStyle: TerminalCursorStyle = 'bar'
+  const cursorStyle: TerminalCursorStyle = 'block'
 
   return {
     allowProposedApi: true,
@@ -31,6 +31,11 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
+    scrollbar: {
+      // Why: xterm's DOM scrollbar overlays the terminal in Electron; reserving
+      // gutter width in FitAddon underfits wide table/TUI output by a column.
+      width: 0
+    },
     // Why: advertise kitty keyboard protocol support so CLIs that probe
     // (CSI ? u) know Orca accepts enhanced key reporting. Orca still writes
     // CSI-u for Shift+Enter on non-Windows platforms; programs that respect

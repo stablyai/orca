@@ -1,6 +1,7 @@
 import './xterm-env-polyfill'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
+import { extractLastOscTitle } from '../../shared/agent-detection'
 import type { TerminalSnapshot, TerminalModes } from './types'
 
 export type HeadlessEmulatorOptions = {
@@ -13,7 +14,14 @@ export type HeadlessSnapshotOptions = {
   scrollbackRows?: number
 }
 
+type TerminalWithSynchronousWrite = Terminal & {
+  _core?: {
+    writeSync?: (data: string) => void
+  }
+}
+
 const DEFAULT_SCROLLBACK = 5000
+const OSC_SCAN_TAIL_LIMIT = 4096
 // Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
 // Keep parser state far beyond normal mode lists while still bounding memory.
 const PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096
@@ -51,6 +59,8 @@ export class HeadlessEmulator {
   private terminal: Terminal
   private serializer: SerializeAddon
   private cwd: string | null = null
+  private lastTitle: string | null = null
+  private oscScanTail = ''
   private privateModeScanTail = ''
   private mouseTrackingMode: MouseTrackingMode = 'none'
   private sgrMouseMode = false
@@ -62,7 +72,8 @@ export class HeadlessEmulator {
       cols: opts.cols,
       rows: opts.rows,
       scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
-      allowProposedApi: true
+      allowProposedApi: true,
+      logLevel: 'off'
     })
 
     this.serializer = new SerializeAddon()
@@ -86,7 +97,21 @@ export class HeadlessEmulator {
       return Promise.resolve()
     }
 
-    this.scanOsc7(data)
+    const oscInput = this.oscScanTail + data
+    this.oscScanTail = this.extractOscScanTail(oscInput)
+    this.scanOsc7(oscInput)
+    const lastTitle = extractLastOscTitle(oscInput)
+    if (lastTitle !== null) {
+      this.lastTitle = lastTitle
+    }
+    const writeSync = (this.terminal as TerminalWithSynchronousWrite)._core?.writeSync
+    if (typeof writeSync === 'function') {
+      // Why: hidden renderer restore snapshots are requested immediately after
+      // PTY bursts; queued headless writes can snapshot half-cleared TUI rows.
+      writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
+      this.scanPrivateModes(data)
+      return Promise.resolve()
+    }
     return new Promise<void>((resolve) => {
       this.terminal.write(data, () => {
         // Why: snapshots combine serialized xterm state with mirrored mouse
@@ -118,7 +143,8 @@ export class HeadlessEmulator {
       modes,
       cols: this.terminal.cols,
       rows: this.terminal.rows,
-      scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows
+      scrollbackLines: this.terminal.buffer.normal.length - this.terminal.rows,
+      lastTitle: this.lastTitle ?? undefined
     }
   }
 
@@ -128,6 +154,14 @@ export class HeadlessEmulator {
 
   getCwd(): string | null {
     return this.cwd
+  }
+
+  setCwd(cwd: string | null): void {
+    this.cwd = cwd
+  }
+
+  setLastTitle(title: string): void {
+    this.lastTitle = title
   }
 
   clearScrollback(): void {
@@ -148,6 +182,20 @@ export class HeadlessEmulator {
     while ((match = osc7Re.exec(data)) !== null) {
       this.parseOsc7Uri(match[1])
     }
+  }
+
+  private extractOscScanTail(input: string): string {
+    const lastOsc = input.lastIndexOf('\x1b]')
+    const lastEscape = input.endsWith('\x1b') ? input.length - 1 : -1
+    const start = Math.max(lastOsc, lastEscape)
+    if (start === -1) {
+      return ''
+    }
+    const suffix = input.slice(start)
+    if (suffix.includes('\x07') || suffix.includes('\x1b\\')) {
+      return ''
+    }
+    return suffix.slice(-OSC_SCAN_TAIL_LIMIT)
   }
 
   private scanPrivateModes(data: string): void {
