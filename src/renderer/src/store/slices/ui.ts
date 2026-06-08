@@ -20,6 +20,7 @@ import type {
   UpdateStatus,
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
+  ProjectOrderBy,
   WorktreeCardProperty
 } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
@@ -722,6 +723,8 @@ export type UISlice = {
   setGroupBy: (g: UISlice['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlice['sortBy']) => void
+  projectOrderBy: ProjectOrderBy
+  setProjectOrderBy: (p: ProjectOrderBy) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
@@ -1627,6 +1630,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
 
+  // Why: like setSortBy, this is a bare set — it persists only via the
+  // debounced window.api.ui.set writer in App.tsx, not on its own.
+  projectOrderBy: 'manual',
+  setProjectOrderBy: (p) => set({ projectOrderBy: p }),
+
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
 
@@ -1878,6 +1886,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
+        // Why: main-process getUI() already normalized this to a valid value
+        // (defaulting to 'manual'); read it through without migrating sortBy.
+        projectOrderBy: ui.projectOrderBy,
         // Why: Active-only was retired. Force the old persisted flag off so an
         // old profile cannot invisibly keep narrowing the workspace list.
         showActiveOnly: false,

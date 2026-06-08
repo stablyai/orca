@@ -5,6 +5,7 @@ import type {
   DetectedWorktree,
   Repo,
   ProjectGroup,
+  ProjectOrderBy,
   Worktree,
   WorktreeLineage,
   WorkspaceStatusDefinition
@@ -22,7 +23,6 @@ import {
   ConductorReviewIcon
 } from './workspace-status-icons'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
-import type { SortBy } from './smart-sort'
 import type { AppState } from '@/store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { UNGROUPED_PROJECT_GROUP_KEY } from '../../../../shared/project-groups'
@@ -31,16 +31,6 @@ import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 export { branchName }
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
-export type ProjectGroupOrdering = 'manual' | 'visible-worktree-order'
-
-export function getProjectGroupOrdering(
-  groupBy: WorktreeGroupBy,
-  sortBy: SortBy
-): ProjectGroupOrdering {
-  return groupBy === 'repo' && (sortBy === 'recent' || sortBy === 'smart')
-    ? 'visible-worktree-order'
-    : 'manual'
-}
 
 export type GroupHeaderRow = {
   type: 'header'
@@ -414,6 +404,88 @@ function withRepoSectionDisplayLabels(entries: readonly OrderedGroupEntry[]): Or
 }
 
 /**
+ * Recent rank for a project header. `hasActivity` projects (at least one
+ * visible worktree) always sort before fallback projects, regardless of the
+ * numeric values — a placeholder's `addedAt` must never outrank real activity.
+ * Within each tier, higher timestamps come first.
+ */
+type RecentRank = { hasActivity: boolean; ts: number }
+
+function recentRankForEntry(entry: OrderedGroupEntry): RecentRank {
+  let max = Number.NEGATIVE_INFINITY
+  for (const worktree of entry[1].items) {
+    if (worktree.lastActivityAt > max) {
+      max = worktree.lastActivityAt
+    }
+  }
+  if (max !== Number.NEGATIVE_INFINITY) {
+    // Why: Recent must be timestamp-based, not encounter order — the incoming
+    // array is no longer pre-sorted by recency once decoupled from sortBy.
+    return { hasActivity: true, ts: max }
+  }
+  const addedAt = entry[1].repo?.addedAt
+  return {
+    hasActivity: false,
+    ts: typeof addedAt === 'number' ? addedAt : Number.NEGATIVE_INFINITY
+  }
+}
+
+function compareRecentRank(a: RecentRank, b: RecentRank): number {
+  if (a.hasActivity !== b.hasActivity) {
+    return a.hasActivity ? -1 : 1
+  }
+  return b.ts - a.ts
+}
+
+function manualRankForEntry(
+  entry: OrderedGroupEntry,
+  repoOrder: Map<string, number> | undefined
+): number {
+  const key = entry[0]
+  const repoId = key.startsWith('repo:') ? key.slice('repo:'.length) : key
+  const rank = repoOrder?.get(repoId)
+  return rank === undefined ? Number.POSITIVE_INFINITY : rank
+}
+
+/**
+ * Order project header entries by the user's project-order preference. Manual
+ * follows the canonical repoOrder; Recent follows each project's most recent
+ * visible workspace activity (descending), with empty/imported-only projects
+ * sorting after active ones, then by manual rank, then label.
+ */
+function sortProjectEntries(
+  entries: OrderedGroupEntry[],
+  projectOrderBy: ProjectOrderBy,
+  repoOrder: Map<string, number> | undefined
+): OrderedGroupEntry[] {
+  if (projectOrderBy === 'recent') {
+    return [...entries].sort((a, b) => {
+      const byRecent = compareRecentRank(recentRankForEntry(a), recentRankForEntry(b))
+      if (byRecent !== 0) {
+        return byRecent
+      }
+      const ma = manualRankForEntry(a, repoOrder)
+      const mb = manualRankForEntry(b, repoOrder)
+      if (ma !== mb) {
+        return ma - mb
+      }
+      return a[1].label.localeCompare(b[1].label)
+    })
+  }
+  if (!repoOrder) {
+    return entries
+  }
+  return [...entries].sort((a, b) => {
+    const ra = manualRankForEntry(a, repoOrder)
+    const rb = manualRankForEntry(b, repoOrder)
+    if (ra !== rb) {
+      return ra - rb
+    }
+    return a[1].label.localeCompare(b[1].label)
+  })
+}
+
+/**
  * Build the flat row list consumed by the virtualizer.
  * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
  */
@@ -425,7 +497,7 @@ export function buildRows(
   collapsedGroups: Set<string>,
   repoOrder?: Map<string, number>,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
-  projectGroupOrdering: ProjectGroupOrdering = 'manual',
+  projectOrderBy: ProjectOrderBy = 'manual',
   lineageById: Record<string, WorktreeLineage> = {},
   worktreeMap: Map<string, Worktree> = new Map(
     worktrees.map((worktree) => [worktree.id, worktree])
@@ -546,25 +618,10 @@ export function buildRows(
       }
     }
   } else {
-    // Why: dynamic sorts need repo headers to follow their highest-ranked
-    // visible child. Manual ordering still uses the canonical state.repos
-    // order so repo-header drag has a stable source of truth.
-    const entries = Array.from(grouped.entries())
-    if (projectGroupOrdering === 'manual' && repoOrder) {
-      const rankFor = (key: string): number => {
-        const repoId = key.startsWith('repo:') ? key.slice('repo:'.length) : key
-        const rank = repoOrder.get(repoId)
-        return rank === undefined ? Number.POSITIVE_INFINITY : rank
-      }
-      entries.sort((a, b) => {
-        const ra = rankFor(a[0])
-        const rb = rankFor(b[0])
-        if (ra !== rb) {
-          return ra - rb
-        }
-        return a[1].label.localeCompare(b[1].label)
-      })
-    }
+    // Why: project header order is its own user choice (projectOrderBy),
+    // decoupled from workspace sortBy. Manual uses the canonical repoOrder so
+    // header drag has a stable source of truth; Recent follows activity.
+    const entries = sortProjectEntries(Array.from(grouped.entries()), projectOrderBy, repoOrder)
     // Why: large imported repo sets can have one group per repo; spreading
     // those entries into push can exceed V8's argument limit.
     for (const entry of entries) {
@@ -656,9 +713,13 @@ export function buildRows(
   }
 
   const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
-    if (projectGroupOrdering !== 'manual') {
-      return entries
+    if (projectOrderBy === 'recent') {
+      return [...entries].sort((left, right) =>
+        compareRecentRank(recentRankForEntry(left), recentRankForEntry(right))
+      )
     }
+    // Manual: within a Project Group, projects order by their per-group rank
+    // (projectGroupOrder), not the global repoOrder.
     return [...entries].sort((left, right) => {
       const leftOrder = left[1].repo?.projectGroupOrder
       const rightOrder = right[1].repo?.projectGroupOrder

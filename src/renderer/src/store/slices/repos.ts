@@ -16,6 +16,7 @@ import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
+import { reconcileFetchedRepos } from './repo-identity-reconcile'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
@@ -170,8 +171,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             ).repos
       set((s) => {
         const validRepoIds = new Set(repos.map((repo) => repo.id))
+        const reconciledRepos = reconcileFetchedRepos(s.repos, repos)
         return {
-          repos,
+          repos: reconciledRepos,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
           setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(

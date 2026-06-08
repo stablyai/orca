@@ -606,6 +606,36 @@ describe('Store', () => {
     expect(store.getUI().groupBy).toBe('workspace-status')
   })
 
+  it('defaults projectOrderBy to manual when absent, even with recent sortBy', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { sortBy: 'recent' }
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderBy).toBe('manual')
+  })
+
+  it('falls back invalid projectOrderBy to manual', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { projectOrderBy: 'bogus' }
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderBy).toBe('manual')
+  })
+
+  it('preserves and round-trips an explicit recent projectOrderBy', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      ui: { projectOrderBy: 'recent' }
+    })
+    const store = await createStore()
+    expect(store.getUI().projectOrderBy).toBe('recent')
+
+    store.updateUI({ projectOrderBy: 'manual' })
+    expect(store.getUI().projectOrderBy).toBe('manual')
+  })
+
   // ── 2. Load from existing valid file ─────────────────────────────────
 
   it('reads repos from an existing data file', async () => {

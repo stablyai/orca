@@ -51,6 +51,7 @@ import type {
   Worktree,
   Repo,
   ProjectGroup,
+  ProjectOrderBy,
   WorktreeLineage,
   WorktreeMeta,
   WorkspaceStatus,
@@ -68,14 +69,12 @@ import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 import {
-  type ProjectGroupOrdering,
   type Row,
   type WorktreeGroupBy,
   ALL_GROUP_KEY,
   PINNED_GROUP_KEY,
   buildRows,
   getGroupKeysForWorktree,
-  getProjectGroupOrdering,
   getLineageGroupKey
 } from './worktree-list-groups'
 import {
@@ -357,7 +356,7 @@ type VirtualizedWorktreeViewportProps = {
   activeWorktreeId: string | null
   currentWorktreeId: string | null
   groupBy: WorktreeGroupBy
-  projectGroupOrdering: ProjectGroupOrdering
+  projectOrderBy: ProjectOrderBy
   toggleGroup: (key: string) => void
   collapsedGroups: Set<string>
   handleCreateForRepo: (projectId: string) => void
@@ -395,7 +394,6 @@ type VirtualizedWorktreeViewportProps = {
   // (filtered out / collapsed-only). Visible-only ids would silently drop the
   // hidden repos on reorder.
   allRepoIds: string[]
-  reorderRepos: (orderedIds: string[]) => void
   prCache: Record<string, unknown> | null
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectGroups?: readonly ProjectGroup[]
@@ -703,7 +701,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   activeWorktreeId,
   currentWorktreeId,
   groupBy,
-  projectGroupOrdering,
+  projectOrderBy,
   toggleGroup,
   collapsedGroups,
   handleCreateForRepo,
@@ -734,7 +732,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   worktreeLineageById,
   repoOrder,
   allRepoIds,
-  reorderRepos,
   prCache,
   workspaceStatuses,
   projectGroups = EMPTY_PROJECT_GROUPS,
@@ -824,7 +821,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const suppressWorktreeClickUntilRef = useRef(0)
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders =
-    groupBy === 'repo' && projectGroupOrdering === 'manual' && !hasProjectGroups
+    groupBy === 'repo' && projectOrderBy === 'manual' && !hasProjectGroups
   const lastVisibleRefreshKeyRef = useRef('')
   const reportVisibleGitHubPRRefreshCandidates = useAppStore(
     (s) => s.reportVisibleGitHubPRRefreshCandidates
@@ -836,6 +833,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
   const settings = useAppStore((s) => s.settings)
   const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
+  const reorderRepos = useAppStore((s) => s.reorderRepos)
 
   useEffect(
     () =>
@@ -851,11 +849,27 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     []
   )
 
+  // Why: a project reorder relocates a whole group (header + its worktree
+  // rows) but leaves totalSize unchanged, so the current scrollTop is already
+  // the visually-stable position. Flag direct scroll input (same refs as
+  // markDirectScrollInput, defined later) so the scroll-anchor restore effect
+  // skips re-pinning the old top row — otherwise it chases the moved row and
+  // yanks the viewport, which is the "jumpy" drop.
+  const commitRepoReorder = useCallback(
+    (orderedIds: string[]) => {
+      const suppressUntil =
+        window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
+      suppressMeasurementAdjustmentUntilRef.current = suppressUntil
+      directScrollInputUntilRef.current = suppressUntil
+      reorderRepos(orderedIds)
+    },
+    [reorderRepos]
+  )
   // Drag is only meaningful when repo headers are using manual order. The
   // controller is still constructed for hook order stability when inert.
   const repoDrag = useRepoHeaderDrag({
     orderedRepoIds: allRepoIds,
-    onCommit: reorderRepos,
+    onCommit: commitRepoReorder,
     getScrollContainer: () => scrollRef.current
   })
   const worktreeDragGroups = useMemo(() => getWorktreeDragGroups(rows), [rows])
@@ -1418,7 +1432,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         new Set<string>(),
         repoOrder,
         workspaceStatuses,
-        projectGroupOrdering,
+        projectOrderBy,
         worktreeLineageById,
         worktreeMap,
         true,
@@ -1461,7 +1475,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
       activeWorktreeId,
       virtualizer,
       groupBy,
-      projectGroupOrdering,
+      projectOrderBy,
       worktrees,
       repoMap,
       prCache,
@@ -2765,7 +2779,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           repoDrag.state.dropIndicatorY !== null ? (
             <div
               role="presentation"
-              className="pointer-events-none absolute left-2 right-2 z-10 border-t border-dashed border-muted-foreground/70"
+              // Why z-30 (not z-10): the sticky pinned header is z-20, so a
+              // lower indicator renders behind it whenever the drop slot is at
+              // the top while scrolled. Match the worktree indicator's tier.
+              className="pointer-events-none absolute left-2 right-2 z-30 border-t border-dashed border-muted-foreground/70"
               style={{ top: `${repoDrag.state.dropIndicatorY}px` }}
             />
           ) : null}
@@ -2875,6 +2892,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       row.repo && 'overflow-hidden'
                     )}
                     style={{ paddingLeft: headerPaddingLeft }}
+                    // Why: arm project-header drag from anywhere on the row, not
+                    // just the icon — users grab the name to reorder. The hook
+                    // ignores presses on nested buttons (+/chevron) and only
+                    // promotes to a drag past a 4px threshold, so a plain click
+                    // still toggles collapse via onClick.
+                    onPointerDown={
+                      canReorderRepoHeaders && isRepoHeader && projectIdForHeader
+                        ? (e) => repoDrag.onHandlePointerDown(e, projectIdForHeader)
+                        : undefined
+                    }
                     onDragOver={
                       isPinnedHeader
                         ? handleWorkspacePinDragOver
@@ -2904,11 +2931,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   >
                     {row.icon ? (
                       <div
-                        onPointerDown={
-                          canReorderRepoHeaders && isRepoHeader && projectIdForHeader
-                            ? (e) => repoDrag.onHandlePointerDown(e, projectIdForHeader)
-                            : undefined
-                        }
                         className={cn(
                           'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
                           repoHeaderColor ? 'text-muted-foreground' : row.tone
@@ -3614,6 +3636,7 @@ const WorktreeList = React.memo(function WorktreeList({
   const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const sortBy = useAppStore((s) => s.sortBy)
   const setSortBy = useAppStore((s) => s.setSortBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
@@ -4056,8 +4079,6 @@ const WorktreeList = React.memo(function WorktreeList({
     return getEmptyProjectPlaceholderRepoIds({ groupBy, repos, worktreesByRepo, filterRepoIds })
   }, [filterRepoIds, groupBy, repos, worktreesByRepo])
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
-  const reorderReposAction = useAppStore((s) => s.reorderRepos)
-  const projectGroupOrdering = getProjectGroupOrdering(groupBy, sortBy)
 
   // Build flat row list for rendering
   const rows: Row[] = useMemo(
@@ -4070,7 +4091,7 @@ const WorktreeList = React.memo(function WorktreeList({
         effectiveCollapsedGroups,
         repoOrder,
         workspaceStatuses,
-        projectGroupOrdering,
+        projectOrderBy,
         worktreeLineageById,
         worktreeMap,
         true,
@@ -4087,7 +4108,7 @@ const WorktreeList = React.memo(function WorktreeList({
       effectiveCollapsedGroups,
       repoOrder,
       workspaceStatuses,
-      projectGroupOrdering,
+      projectOrderBy,
       worktreeLineageById,
       worktreeMap,
       settings,
@@ -4673,7 +4694,7 @@ const WorktreeList = React.memo(function WorktreeList({
         activeWorktreeId={selectedSidebarWorktreeId}
         currentWorktreeId={currentSidebarWorktreeId}
         groupBy={groupBy}
-        projectGroupOrdering={projectGroupOrdering}
+        projectOrderBy={projectOrderBy}
         toggleGroup={toggleGroup}
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={handleCreateForRepo}
@@ -4704,9 +4725,6 @@ const WorktreeList = React.memo(function WorktreeList({
         worktreeLineageById={worktreeLineageById}
         repoOrder={repoOrder}
         allRepoIds={allRepoIds}
-        reorderRepos={(orderedIds) => {
-          void reorderReposAction(orderedIds)
-        }}
         prCache={prCache}
         workspaceStatuses={workspaceStatuses}
         projectGroups={projectGroups}

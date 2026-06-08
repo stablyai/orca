@@ -118,10 +118,15 @@ export function useRepoHeaderDrag({
       // indicator just above the target header keeps it at the visual top of
       // where the dragged group would land.
       const INDICATOR_GAP_PX = 4
-      const indicatorY =
+      const rawIndicatorY =
         insertBefore >= rects.length
           ? rects.at(-1)!.bottom + INDICATOR_GAP_PX
           : Math.max(0, rects[insertBefore].top - INDICATOR_GAP_PX)
+      // Why: while scrolled, the topmost mounted header is pinned flush at the
+      // container top, so `top - GAP` lands above the overflow clip region and
+      // the line is painted invisibly. Floor the indicator at the current
+      // scroll offset so a top-of-list drop stays visible just below the edge.
+      const indicatorY = Math.max(container.scrollTop, rawIndicatorY)
       return { dropIndex: insertBefore, dropIndicatorY: indicatorY }
     },
     []

@@ -2532,6 +2532,8 @@ export type TaskResumeState = {
 
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
 
+export type ProjectOrderBy = 'manual' | 'recent'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
@@ -2541,6 +2543,11 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
+  /** Project header ordering in `groupBy: 'repo'`, independent of workspace
+   *  `sortBy`. 'manual' (default) uses the persisted repo order and enables
+   *  header drag; 'recent' orders by each project's most recent visible
+   *  workspace activity. */
+  projectOrderBy: ProjectOrderBy
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
