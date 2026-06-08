@@ -83,6 +83,9 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
     if (!pane) {
       throw new Error('No active terminal pane')
     }
+    const renderingDiagnostics = manager
+      ?.getRenderingDiagnostics()
+      .find((diagnostic) => diagnostic.paneId === pane.id)
 
     const cursorElements = Array.from(
       pane.container.querySelectorAll<HTMLElement>('.xterm-cursor, .xterm-cursor-layer *')
@@ -130,8 +133,8 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
       rowContainerClassName: rowContainer?.className ?? '',
       xtermClassName: xterm?.className ?? '',
       hasWebglCanvas: pane.container.querySelector('.xterm-webgl canvas') !== null,
-      hasComplexScriptOutput: pane.hasComplexScriptOutput === true,
-      renderer: pane.webglAddon ? 'webgl' : 'dom'
+      hasComplexScriptOutput: renderingDiagnostics?.hasComplexScriptOutput ?? false,
+      renderer: renderingDiagnostics?.hasWebgl ? 'webgl' : 'dom'
     }
   })
 }
@@ -261,6 +264,7 @@ test.describe('OpenCode emoji table terminal rendering', () => {
         description: JSON.stringify({ renderState, blinkSamples })
       })
 
+      expect(renderState.hasComplexScriptOutput).toBe(true)
       expect(renderState.renderer).toBe('dom')
       expect(renderState.hasWebglCanvas).toBe(false)
       expect(renderState.coreCursorHidden).toBe(false)

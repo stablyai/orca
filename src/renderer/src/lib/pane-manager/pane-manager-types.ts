@@ -77,6 +77,16 @@ export type ManagedPane = {
   serializeAddon: SerializeAddon
 }
 
+export type PaneRenderingDiagnostics = {
+  paneId: number
+  terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration']
+  gpuRenderingEnabled: boolean
+  webglAttachmentDeferred: boolean
+  webglDisabledAfterContextLoss: boolean
+  hasComplexScriptOutput: boolean
+  hasWebgl: boolean
+}
+
 // ---------------------------------------------------------------------------
 // Internal types
 // ---------------------------------------------------------------------------

@@ -2,10 +2,12 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 
 export const ENABLE_WEBGL_RENDERER = true
+let suggestedRendererType: 'dom' | undefined
 
 export function resetTerminalWebglSuggestion(): void {
-  // Why: retained for settings/tests while "auto" intentionally stays on DOM
-  // for this release to avoid renderer metric changes corrupting TUI tables.
+  // Why: toggling GPU settings should let "auto" retry WebGL after an earlier
+  // attach failure suggested DOM rendering for this app session.
+  suggestedRendererType = undefined
 }
 
 function isLinuxRenderer(): boolean {
@@ -19,17 +21,16 @@ export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
   if (pane.terminalGpuAcceleration === 'on') {
     return true
   }
-  if (pane.terminalGpuAcceleration === 'auto') {
-    // Why: WebGL and DOM report different cell metrics on current xterm beta;
-    // switching renderers after emoji/table output rewraps completed TUI rows.
-    return false
-  }
   if (isLinuxRenderer()) {
     // Why: multiple Linux/Wayland GPU stacks corrupt xterm's WebGL glyph atlas
     // without raising context loss; tab switching only masks it by rebuilding WebGL.
     return false
   }
-  return false
+  return (
+    pane.terminalGpuAcceleration === 'auto' &&
+    suggestedRendererType === undefined &&
+    !pane.hasComplexScriptOutput
+  )
 }
 
 function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
@@ -84,7 +85,9 @@ export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
   if (pane.terminalGpuAcceleration !== 'auto') {
     return
   }
-  disposeWebgl(pane, { refreshDimensions: true })
+  // Why: live TUIs often size tables before emitting complex glyphs. Refitting
+  // during this fallback can reflow the just-written frame under different metrics.
+  disposeWebgl(pane)
 }
 
 export function attachWebgl(pane: ManagedPaneInternal): void {
@@ -116,6 +119,11 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     pane.webglAddon = webglAddon
     refreshTerminalAfterWebglAttach(pane)
   } catch (err) {
+    if (pane.terminalGpuAcceleration === 'auto') {
+      // Why: "auto" tries the faster renderer first, but one failed attach is
+      // enough signal to keep new auto panes on DOM until the setting changes.
+      suggestedRendererType = 'dom'
+    }
     // WebGL not available — default DOM renderer is fine, but log it for debugging
     console.warn('[terminal] WebGL unavailable for pane', pane.id, '— using DOM renderer:', err)
     pane.webglAddon = null

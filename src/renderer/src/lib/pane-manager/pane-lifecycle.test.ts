@@ -165,13 +165,13 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
   })
 
-  it('uses DOM rendering for auto GPU acceleration', () => {
+  it('uses WebGL rendering for auto GPU acceleration on non-Linux platforms', () => {
     const pane = createPane()
 
     attachWebgl(pane)
 
-    expect(pane.webglAddon).toBeNull()
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('uses DOM rendering for auto GPU acceleration on Linux', () => {
@@ -204,17 +204,34 @@ describe('attachWebgl', () => {
     const pane = createPane()
 
     attachWebgl(pane)
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+    vi.mocked(pane.terminal.loadAddon).mockClear()
 
     markComplexScriptOutput(pane)
 
     expect(pane.hasComplexScriptOutput).toBe(true)
     expect(pane.webglAddon).toBeNull()
-    expect(webglMock.dispose).not.toHaveBeenCalled()
+    expect(webglMock.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
 
     attachWebgl(pane)
 
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('keeps later auto panes on DOM after WebGL attach fails', () => {
+    vi.mocked(WebglAddon).mockImplementationOnce(() => {
+      throw new Error('webgl unavailable')
+    })
+    const firstPane = createPane()
+    const secondPane = createPane()
+
+    attachWebgl(firstPane)
+    attachWebgl(secondPane)
+
+    expect(firstPane.webglAddon).toBeNull()
+    expect(secondPane.webglAddon).toBeNull()
+    expect(secondPane.terminal.loadAddon).not.toHaveBeenCalled()
   })
 
   it('allows explicit on mode to override complex-script DOM fallback', () => {

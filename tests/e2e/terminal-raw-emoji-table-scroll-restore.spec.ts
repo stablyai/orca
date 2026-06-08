@@ -14,7 +14,8 @@ import {
   getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
-  waitForActiveTerminalManager
+  waitForActiveTerminalManager,
+  waitForTerminalOutput
 } from './helpers/terminal'
 
 type BrowserTerminalPane = {
@@ -42,7 +43,6 @@ type BrowserTerminalPane = {
     }
   }
   container: HTMLElement
-  webglAddon?: unknown
 }
 
 type RawTableDebugWindow = Window & {
@@ -327,7 +327,15 @@ async function readVisibleSingerRowGeometry(page: Page): Promise<{
 
 async function readTerminalRenderDiagnostics(page: Page): Promise<{
   hasWebgl: boolean
+  hasComplexScriptOutput: boolean
   cursorHidden: boolean | null
+  terminalGpuAcceleration?: string
+  gpuRenderingEnabled?: boolean
+  webglAttachmentDeferred?: boolean
+  webglDisabledAfterContextLoss?: boolean
+  platform: string
+  userAgent: string
+  webgl2Available: boolean
 }> {
   return page.evaluate(() => {
     const pane = (window as RawTableDebugWindow).getActiveTestPane?.()
@@ -335,9 +343,31 @@ async function readTerminalRenderDiagnostics(page: Page): Promise<{
       throw new Error('Active terminal pane unavailable')
     }
     const terminalCore = pane.terminal._core
+    const canvas = document.createElement('canvas')
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const renderingDiagnostics = manager
+      ?.getRenderingDiagnostics()
+      .find((diagnostic) => diagnostic.paneId === pane.id)
     return {
-      hasWebgl: Boolean(pane.webglAddon),
-      cursorHidden: terminalCore?.coreService?.isCursorHidden ?? null
+      hasWebgl: renderingDiagnostics?.hasWebgl ?? false,
+      hasComplexScriptOutput: renderingDiagnostics?.hasComplexScriptOutput ?? false,
+      cursorHidden: terminalCore?.coreService?.isCursorHidden ?? null,
+      terminalGpuAcceleration: renderingDiagnostics?.terminalGpuAcceleration,
+      gpuRenderingEnabled: renderingDiagnostics?.gpuRenderingEnabled,
+      webglAttachmentDeferred: renderingDiagnostics?.webglAttachmentDeferred,
+      webglDisabledAfterContextLoss: renderingDiagnostics?.webglDisabledAfterContextLoss,
+      platform: navigator.platform,
+      userAgent: navigator.userAgent,
+      webgl2Available: canvas.getContext('webgl2') !== null
     }
   })
 }
@@ -349,6 +379,17 @@ async function closeFeatureTips(page: Page): Promise<void> {
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
+  })
+}
+
+async function expectAutoWebgl(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    return (
+      !navigator.platform.includes('Linux') &&
+      !navigator.userAgent.includes('Linux') &&
+      canvas.getContext('webgl2') !== null
+    )
   })
 }
 
@@ -373,6 +414,27 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
         return pane as BrowserTerminalPane
       }
     })
+  })
+
+  // Why: `auto` should start on the fast renderer for ordinary terminal output;
+  // the emoji table golden below proves complex output can still fall back safely.
+  test('uses WebGL by default for ordinary terminal output when available @terminal-rendering-golden', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await closeFeatureTips(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const marker = `ORCA_AUTO_WEBGL_SMOKE_${randomUUID()}`
+
+    await sendToTerminal(orcaPage, ptyId, `printf ${JSON.stringify(`${marker}\\n`)}\r`)
+    await waitForTerminalOutput(orcaPage, marker, 10_000)
+
+    const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+    expect(diagnostics.hasComplexScriptOutput).toBe(false)
+    expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
+    expect(diagnostics.cursorHidden).toBe(false)
   })
 
   // Why: this is the minimal golden for the v1.4.51 regression. It fails if
@@ -442,6 +504,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
         contentType: 'image/png'
       })
 
+      expect(diagnostics.hasComplexScriptOutput).toBe(true)
       expect(diagnostics.hasWebgl).toBe(false)
       expect(diagnostics.cursorHidden).toBe(false)
       expect(overpaint.offenders).toEqual([])

@@ -4,6 +4,7 @@ import type {
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
+  PaneRenderingDiagnostics,
   DropZone
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
@@ -177,6 +178,18 @@ export class PaneManager {
     }
     const pane = this.panes.get(this.activePaneId)
     return pane ? toPublicPane(pane) : null
+  }
+
+  getRenderingDiagnostics(): PaneRenderingDiagnostics[] {
+    return Array.from(this.panes.values()).map((pane) => ({
+      paneId: pane.id,
+      terminalGpuAcceleration: pane.terminalGpuAcceleration,
+      gpuRenderingEnabled: pane.gpuRenderingEnabled,
+      webglAttachmentDeferred: pane.webglAttachmentDeferred,
+      webglDisabledAfterContextLoss: pane.webglDisabledAfterContextLoss,
+      hasComplexScriptOutput: pane.hasComplexScriptOutput,
+      hasWebgl: Boolean(pane.webglAddon)
+    }))
   }
 
   getLeafId(numericPaneId: number): TerminalLeafId | null {
