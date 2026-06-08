@@ -116,67 +116,75 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
     }
   }, TIMER_SAMPLE_MS)
 
-  const start = performance.now()
-  const attempts: ScrollAttemptMeasurement[] = []
-  let afterViewportY = await measureScrollAttempt(page, attempts, 'cdpWheel', async () => {
-    await page.mouse.move(target.x, target.y)
-    await page.mouse.wheel(0, -1200)
-  })
-  let scrollLatencyMs = performance.now() - start
-  const cdpWheelMoved = afterViewportY < target.beforeViewportY
-  if (cdpWheelMoved && scrollLatencyMs >= SLOW_SCROLL_DIAGNOSTIC_MS) {
-    await measureAdditionalScrollAttempts(page, attempts)
-  }
-  if (afterViewportY >= target.beforeViewportY) {
-    afterViewportY = await measureScrollAttempt(page, attempts, 'domWheel', async () => {
-      await dispatchActiveTerminalWheelEvent(page)
+  let watcherStopped = false
+  try {
+    const start = performance.now()
+    const attempts: ScrollAttemptMeasurement[] = []
+    let afterViewportY = await measureScrollAttempt(page, attempts, 'cdpWheel', async () => {
+      await page.mouse.move(target.x, target.y)
+      await page.mouse.wheel(0, -1200)
     })
-    if (afterViewportY < target.beforeViewportY) {
-      scrollLatencyMs = performance.now() - start
+    let scrollLatencyMs = performance.now() - start
+    const cdpWheelMoved = afterViewportY < target.beforeViewportY
+    if (cdpWheelMoved && scrollLatencyMs >= SLOW_SCROLL_DIAGNOSTIC_MS) {
+      await measureAdditionalScrollAttempts(page, attempts)
     }
-  }
-  if (afterViewportY >= target.beforeViewportY) {
-    afterViewportY = await measureScrollAttempt(page, attempts, 'domScroll', async () => {
-      await scrollActiveTerminalViewportElement(page)
-    })
-    if (afterViewportY < target.beforeViewportY) {
-      scrollLatencyMs = performance.now() - start
+    if (afterViewportY >= target.beforeViewportY) {
+      afterViewportY = await measureScrollAttempt(page, attempts, 'domWheel', async () => {
+        await dispatchActiveTerminalWheelEvent(page)
+      })
+      if (afterViewportY < target.beforeViewportY) {
+        scrollLatencyMs = performance.now() - start
+      }
     }
-  }
-  if (afterViewportY >= target.beforeViewportY) {
-    afterViewportY = await measureScrollAttempt(page, attempts, 'xtermApi', async () => {
-      await scrollActiveTerminalByApi(page)
-    })
-    if (afterViewportY < target.beforeViewportY) {
-      scrollLatencyMs = performance.now() - start
+    if (afterViewportY >= target.beforeViewportY) {
+      afterViewportY = await measureScrollAttempt(page, attempts, 'domScroll', async () => {
+        await scrollActiveTerminalViewportElement(page)
+      })
+      if (afterViewportY < target.beforeViewportY) {
+        scrollLatencyMs = performance.now() - start
+      }
     }
-  }
-  if (afterViewportY >= target.beforeViewportY) {
-    const remainingMs = Math.max(0, 500 - (performance.now() - start))
-    const finalState = await waitForActiveTerminalViewportChange(
-      page,
-      target.beforeViewportY,
-      remainingMs
-    )
-    afterViewportY = finalState.viewportY
-    const lastAttempt = attempts.at(-1)
-    if (lastAttempt) {
-      lastAttempt.afterViewportY = finalState.viewportY
-      lastAttempt.afterScrollTop = finalState.scrollTop
+    if (afterViewportY >= target.beforeViewportY) {
+      afterViewportY = await measureScrollAttempt(page, attempts, 'xtermApi', async () => {
+        await scrollActiveTerminalByApi(page)
+      })
+      if (afterViewportY < target.beforeViewportY) {
+        scrollLatencyMs = performance.now() - start
+      }
     }
-    if (afterViewportY < target.beforeViewportY) {
-      scrollLatencyMs = performance.now() - start
+    if (afterViewportY >= target.beforeViewportY) {
+      const remainingMs = Math.max(0, 500 - (performance.now() - start))
+      const finalState = await waitForActiveTerminalViewportChange(
+        page,
+        target.beforeViewportY,
+        remainingMs
+      )
+      afterViewportY = finalState.viewportY
+      const lastAttempt = attempts.at(-1)
+      if (lastAttempt) {
+        lastAttempt.afterViewportY = finalState.viewportY
+        lastAttempt.afterScrollTop = finalState.scrollTop
+      }
+      if (afterViewportY < target.beforeViewportY) {
+        scrollLatencyMs = performance.now() - start
+      }
     }
-  }
-  const maxTimerDriftMs = await eventLoop.evaluate((watcher) => watcher.stop())
-  await eventLoop.dispose()
-  return {
-    scrollLatencyMs,
-    maxTimerDriftMs,
-    beforeViewportY: target.beforeViewportY,
-    afterViewportY,
-    baseY: target.baseY,
-    attempts
+    const maxTimerDriftMs = await eventLoop.evaluate((watcher) => watcher.stop())
+    watcherStopped = true
+    return {
+      scrollLatencyMs,
+      maxTimerDriftMs,
+      beforeViewportY: target.beforeViewportY,
+      afterViewportY,
+      baseY: target.baseY,
+      attempts
+    }
+  } finally {
+    if (!watcherStopped) {
+      await eventLoop.evaluate((watcher) => watcher.stop()).catch(() => undefined)
+    }
+    await eventLoop.dispose().catch(() => undefined)
   }
 }
 

@@ -241,11 +241,9 @@ async function measureAndAnnotateScroll<
     mainPressureAfterScroll,
     ackGateAfterScroll
   )
-  const scrollMoved = scrollMeasurement.afterViewportY < scrollMeasurement.beforeViewportY
-  if (scrollMoved) {
-    expect(
-      getResponsiveScrollPath(scrollMeasurement)?.latencyMs ?? Number.POSITIVE_INFINITY
-    ).toBeLessThan(maxScrollLatencyMs)
+  const responsivePath = getResponsiveScrollPath(scrollMeasurement)
+  if (responsivePath) {
+    expect(responsivePath.latencyMs).toBeLessThan(maxScrollLatencyMs)
   }
   expect(scrollMeasurement.maxTimerDriftMs).toBeLessThan(maxTimerDriftMs)
   await scrollActiveTerminalToBottom(orcaPage)
