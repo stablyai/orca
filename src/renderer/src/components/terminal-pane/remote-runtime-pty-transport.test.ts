@@ -236,6 +236,27 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
   })
 
+  it('detaches laptop-created remote runtime terminals without closing the server session', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    runtimeCall.mockClear()
+
+    transport.destroy?.()
+
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.close'
+      })
+    )
+  })
+
   it('retires stale host-owned terminal handles without surfacing pane errors', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()

@@ -17,6 +17,7 @@ import {
   shouldApplyWebSessionTabsSnapshot,
   shouldBootstrapInitialWebRuntimeTerminal,
   shouldRespawnWebRuntimeTerminalAfterWake,
+  shouldSyncRuntimeSessionTabs,
   type WebSessionTabsSyncState
 } from './web-session-tabs-sync'
 
@@ -189,6 +190,31 @@ describe('applyWebSessionTabsSnapshot', () => {
         hasLiveLocalPty: false
       })
     ).toBe(true)
+  })
+
+  it('syncs session tabs for desktop remote runtime clients, not only web clients', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId: ENV,
+        workspaceSessionReady: true
+      })
+    ).toBe(true)
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId: ENV,
+        activeWorktreeId: WT,
+        workspaceSessionReady: true,
+        requireActiveWorktree: true
+      })
+    ).toBe(true)
+    expect(
+      shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId: null,
+        workspaceSessionReady: true
+      })
+    ).toBe(false)
   })
 
   it('clears web session tracking maps when the host removes a worktree snapshot', () => {

@@ -123,10 +123,6 @@ export type WebSessionTabsSyncState = Pick<
   | 'sortEpoch'
 >
 
-function isWebClient(): boolean {
-  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
-}
-
 function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
     Boolean(value) &&
@@ -226,6 +222,19 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
   }
   const hostTerminalTabCount = args.event.tabs.filter((tab) => tab.type === 'terminal').length
   return hostTerminalTabCount === 0
+}
+
+export function shouldSyncRuntimeSessionTabs(args: {
+  activeRuntimeEnvironmentId: string | null | undefined
+  activeWorktreeId?: string | null
+  workspaceSessionReady: boolean
+  requireActiveWorktree?: boolean
+}): boolean {
+  const environmentId = args.activeRuntimeEnvironmentId?.trim()
+  if (!environmentId || !args.workspaceSessionReady) {
+    return false
+  }
+  return args.requireActiveWorktree === true ? Boolean(args.activeWorktreeId) : true
 }
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
@@ -2142,7 +2151,13 @@ export function useWebSessionTabsSync(): void {
     const environmentId = activeRuntimeEnvironmentId?.trim()
     // Why: startup hydration writes browser-local session state; applying the
     // host snapshot before that point gets clobbered and leaves the sidebar stale.
-    if (!isWebClient() || !environmentId || !workspaceSessionReady) {
+    if (
+      !shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId,
+        workspaceSessionReady
+      }) ||
+      !environmentId
+    ) {
       return
     }
 
@@ -2251,7 +2266,16 @@ export function useWebSessionTabsSync(): void {
 
   useEffect(() => {
     const environmentId = activeRuntimeEnvironmentId?.trim()
-    if (!isWebClient() || !activeWorktreeId || !environmentId || !workspaceSessionReady) {
+    if (
+      !shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId,
+        activeWorktreeId,
+        workspaceSessionReady,
+        requireActiveWorktree: true
+      }) ||
+      !environmentId ||
+      !activeWorktreeId
+    ) {
       return
     }
 
