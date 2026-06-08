@@ -4217,34 +4217,34 @@ describe('registerPtyHandlers', () => {
 
       firstProc.emitData('x'.repeat(600 * 1024))
       vi.advanceTimersByTime(8)
-      for (let index = 0; index < 15; index++) {
+      for (let index = 0; index < 31; index++) {
         vi.advanceTimersByTime(1)
       }
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(16)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
       vi.advanceTimersByTime(1)
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(16)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
       expect(vi.getTimerCount()).toBe(0)
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
-        pendingChars: 344 * 1024,
-        maxPendingCharsByPty: 344 * 1024,
+        pendingChars: 88 * 1024,
+        maxPendingCharsByPty: 88 * 1024,
         rendererInFlightPtyCount: 1,
-        rendererInFlightChars: 256 * 1024,
-        maxRendererInFlightCharsByPty: 256 * 1024,
+        rendererInFlightChars: 512 * 1024,
+        maxRendererInFlightCharsByPty: 512 * 1024,
         flushScheduled: false,
         peakPendingChars: 600 * 1024,
         peakMaxPendingCharsByPty: 600 * 1024,
-        peakRendererInFlightChars: 256 * 1024,
-        peakMaxRendererInFlightCharsByPty: 256 * 1024,
+        peakRendererInFlightChars: 512 * 1024,
+        peakMaxRendererInFlightCharsByPty: 512 * 1024,
         ackGatedFlushSkipCount: 1
       })
 
       secondProc.emitData('second-terminal-output')
       vi.advanceTimersByTime(8)
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(17)
-      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(17, 'pty:data', {
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(33)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(33, 'pty:data', {
         id: secondSpawn.id,
         data: 'second-terminal-output'
       })
@@ -4252,27 +4252,27 @@ describe('registerPtyHandlers', () => {
       ackData(null, { id: firstSpawn.id, charCount: 16 * 1024 })
       vi.advanceTimersByTime(1)
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(18)
-      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(18, 'pty:data', {
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(34)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(34, 'pty:data', {
         id: firstSpawn.id,
         data: 'x'.repeat(16 * 1024)
       })
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
-        pendingChars: 328 * 1024,
-        rendererInFlightChars: 256 * 1024 + 'second-terminal-output'.length,
+        pendingChars: 72 * 1024,
+        rendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length,
         peakPendingChars: 600 * 1024,
-        peakRendererInFlightChars: 256 * 1024 + 'second-terminal-output'.length
+        peakRendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length
       })
 
       resetPtyRendererDeliveryDebug()
 
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
-        pendingChars: 328 * 1024,
-        rendererInFlightChars: 256 * 1024 + 'second-terminal-output'.length,
-        peakPendingChars: 328 * 1024,
-        peakRendererInFlightChars: 256 * 1024 + 'second-terminal-output'.length,
+        pendingChars: 72 * 1024,
+        rendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length,
+        peakPendingChars: 72 * 1024,
+        peakRendererInFlightChars: 512 * 1024 + 'second-terminal-output'.length,
         ackGatedFlushSkipCount: 0
       })
     } finally {
@@ -4372,7 +4372,7 @@ describe('registerPtyHandlers', () => {
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(128)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
       expect(vi.getTimerCount()).toBe(0)
 
       writeListener(null, {
@@ -4381,8 +4381,8 @@ describe('registerPtyHandlers', () => {
       })
       interactiveProc.emitData('\x1b[20;2Hredraw')
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(129)
-      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(129, 'pty:data', {
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(513, 'pty:data', {
         id: interactiveSpawn.id,
         data: '\x1b[20;2Hredraw'
       })
@@ -4396,14 +4396,14 @@ describe('registerPtyHandlers', () => {
         })
         interactiveProc.emitData(reserveChunk)
       }
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(145)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(529)
 
       writeListener(null, {
         id: interactiveSpawn.id,
         data: 'a'
       })
       interactiveProc.emitData(reserveChunk)
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(145)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(529)
     } finally {
       vi.useRealTimers()
     }
@@ -4439,11 +4439,11 @@ describe('registerPtyHandlers', () => {
         vi.advanceTimersByTime(1)
       }
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(128)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
       ackData(null, { id: spawns[0].id, charCount: 16 * 1024 })
       vi.advanceTimersByTime(1)
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(129)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
     } finally {
       vi.useRealTimers()
     }
@@ -4479,22 +4479,22 @@ describe('registerPtyHandlers', () => {
       for (let index = 0; index < 400; index++) {
         vi.advanceTimersByTime(1)
       }
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(128)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(512)
 
       const activeIndex = procs.length - 1
       procs[activeIndex]!.emitData('active-output')
       setActiveRendererPty(null, { id: spawns[activeIndex]!.id, active: true })
       vi.advanceTimersByTime(8)
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(129)
-      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(129, 'pty:data', {
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(513)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(513, 'pty:data', {
         id: spawns[activeIndex]!.id,
         data: 'active-output'
       })
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         activeRendererPtyCount: 1,
         pendingPtyCount: procs.length - 1,
-        rendererInFlightChars: 2 * 1024 * 1024 + 'active-output'.length
+        rendererInFlightChars: 8 * 1024 * 1024 + 'active-output'.length
       })
       ackData(null, { id: spawns[0]!.id, charCount: 16 * 1024 })
     } finally {
@@ -4519,30 +4519,30 @@ describe('registerPtyHandlers', () => {
 
       activeProc.emitData('x'.repeat(768 * 1024))
       vi.advanceTimersByTime(8)
-      for (let index = 0; index < 15; index++) {
+      for (let index = 0; index < 31; index++) {
         vi.advanceTimersByTime(1)
       }
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(16)
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(32)
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 1,
-        pendingChars: 512 * 1024,
-        rendererInFlightChars: 256 * 1024,
-        maxRendererInFlightCharsByPty: 256 * 1024
+        pendingChars: 256 * 1024,
+        rendererInFlightChars: 512 * 1024,
+        maxRendererInFlightCharsByPty: 512 * 1024
       })
 
       setActiveRendererPty(null, { id: activeSpawn.id, active: true })
       vi.advanceTimersByTime(1)
 
-      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(17)
-      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(17, 'pty:data', {
+      expect(mainWindow.webContents.send).toHaveBeenCalledTimes(33)
+      expect(mainWindow.webContents.send).toHaveBeenNthCalledWith(33, 'pty:data', {
         id: activeSpawn.id,
         data: 'x'.repeat(16 * 1024)
       })
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
-        pendingChars: 496 * 1024,
-        rendererInFlightChars: 272 * 1024,
-        maxRendererInFlightCharsByPty: 272 * 1024
+        pendingChars: 240 * 1024,
+        rendererInFlightChars: 528 * 1024,
+        maxRendererInFlightCharsByPty: 528 * 1024
       })
     } finally {
       vi.useRealTimers()

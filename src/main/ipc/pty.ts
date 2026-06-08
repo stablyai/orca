@@ -1070,8 +1070,8 @@ export function registerPtyHandlers(
   const PTY_BATCH_DRAIN_CONTINUE_MS = 1
   const PTY_BATCH_FLUSH_CHUNK_CHARS = 16 * 1024
   const PTY_BATCH_FLUSH_MAX_WRITES = 2
-  const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 256 * 1024
-  const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 2 * 1024 * 1024
+  const PTY_RENDERER_IN_FLIGHT_HIGH_WATER_CHARS = 512 * 1024
+  const PTY_RENDERER_TOTAL_IN_FLIGHT_HIGH_WATER_CHARS = 8 * 1024 * 1024
   const PTY_RENDERER_INTERACTIVE_RESERVE_CHARS = 256 * 1024
   // Why: active panes need a bounded lane through old hidden bulk output so a
   // keystroke redraw can reach the renderer before every background ACK lands.
