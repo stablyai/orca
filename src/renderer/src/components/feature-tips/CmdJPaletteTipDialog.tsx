@@ -52,6 +52,9 @@ export function CmdJPaletteTipDialog({
       <DialogContent
         className="!flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden bg-[color-mix(in_srgb,var(--foreground)_8%,var(--background))] p-0 dark:bg-[color-mix(in_srgb,var(--foreground)_16%,var(--background))] sm:max-w-4xl md:!h-[min(27rem,calc(100vh-2rem))] md:!flex-row"
         showCloseButton
+        // Why: Radix auto-focuses the first focusable child; without this the
+        // inline rebind link in the description gets the focus ring on open.
+        onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <div className="scrollbar-sleek flex min-h-0 min-w-0 flex-1 flex-col justify-between overflow-y-auto px-8 py-9 md:shrink-0 md:basis-1/2">
           <DialogHeader className="gap-4 text-left">
@@ -81,7 +84,7 @@ export function CmdJPaletteTipDialog({
                   <button
                     type="button"
                     onClick={onRebindClick}
-                    className="font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:decoration-foreground"
+                    className="inline appearance-none border-0 bg-transparent p-0 font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:decoration-foreground"
                   >
                     Settings → Shortcuts
                   </button>
