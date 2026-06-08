@@ -891,14 +891,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     onClick={handleOpenRenameErrorDialog}
                     onDoubleClick={handleOpenRenameErrorDialog}
                     className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-destructive border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:text-destructive has-[>svg]:!px-0.5"
-                    aria-label="Auto-rename failed — view error"
+                    aria-label="Auto-rename failed: view error"
                   >
                     <AlertCircle className="size-2.5" />
                     rename failed
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  Auto-name failed — click for details
+                  Auto-name failed. Click for details
                 </TooltipContent>
               </Tooltip>
             ) : worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
