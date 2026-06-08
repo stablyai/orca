@@ -20,9 +20,13 @@ export type ScrollMeasurement = {
 
 type ScrollAttemptMeasurement = {
   name: string
+  actionMs: number
+  observeMs: number
   beforeViewportY: number
+  afterActionViewportY: number
   afterViewportY: number
   beforeScrollTop: number | null
+  afterActionScrollTop: number | null
   afterScrollTop: number | null
   error?: string
 }
@@ -178,10 +182,16 @@ export function annotateScrollMeasurement(
   const attempts = measurement.attempts
     .map(
       (attempt) =>
-        `${attempt.name}:${attempt.beforeViewportY}>${attempt.afterViewportY}` +
+        `${attempt.name}:${attempt.beforeViewportY}>${attempt.afterActionViewportY}>${
+          attempt.afterViewportY
+        }` +
         `(${formatNullableNumber(attempt.beforeScrollTop)}>${formatNullableNumber(
+          attempt.afterActionScrollTop
+        )}>${formatNullableNumber(
           attempt.afterScrollTop
-        )})${attempt.error ? ':error' : ''}`
+        )};action=${attempt.actionMs.toFixed(1)};observe=${attempt.observeMs.toFixed(1)})${
+          attempt.error ? ':error' : ''
+        }`
     )
     .join(',')
   testInfo.annotations.push({
@@ -212,17 +222,26 @@ async function measureScrollAttempt(
 ): Promise<number> {
   const before = await readActiveTerminalScrollState(page)
   let error: string | undefined
+  const actionStart = performance.now()
   try {
     await action()
   } catch (caught) {
     error = caught instanceof Error ? caught.message : String(caught)
   }
+  const actionMs = performance.now() - actionStart
+  const afterAction = await readActiveTerminalScrollState(page)
+  const observeStart = performance.now()
   const after = await waitForActiveTerminalViewportChange(page, before.viewportY, 75)
+  const observeMs = performance.now() - observeStart
   attempts.push({
     name,
+    actionMs,
+    observeMs,
     beforeViewportY: before.viewportY,
+    afterActionViewportY: afterAction.viewportY,
     afterViewportY: after.viewportY,
     beforeScrollTop: before.scrollTop,
+    afterActionScrollTop: afterAction.scrollTop,
     afterScrollTop: after.scrollTop,
     error
   })
