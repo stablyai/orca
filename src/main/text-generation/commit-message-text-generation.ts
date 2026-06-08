@@ -15,7 +15,10 @@ import {
   type GeneratedPullRequestFields,
   type PullRequestDraftContext
 } from '../../shared/pull-request-generation'
-import { cleanGeneratedCommitMessage } from '../../shared/commit-message-prompt'
+import {
+  cleanGeneratedCommitMessage,
+  extractAgentErrorMessage
+} from '../../shared/commit-message-prompt'
 import {
   buildBranchNamePrompt,
   sanitizeBranchSlug,
@@ -140,15 +143,36 @@ function formatAgentCliFailureMessage(
   exitCode: number | null,
   options?: { includeLocalMacDnsHint?: boolean }
 ): string {
-  const stderrDetail = stderr.trim()
-  const stdoutDetail = stdout.trim()
-  const detail = stderrDetail.length > 0 ? stderrDetail : stdoutDetail
+  const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
   const message = detail
     ? `${label} CLI command failed: ${detail}`
     : `${label} CLI command failed with code ${exitCode}.`
   return options?.includeLocalMacDnsHint === false
     ? message
     : withMacTailscaleDnsHint(message, detail)
+}
+
+function sanitizeAgentFailureDetail(detail: string | null): string | null {
+  const trimmed = detail
+    ?.replace(/\p{Cc}+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!trimmed) {
+    return null
+  }
+  // Why: agent stderr often includes local or SSH repo paths. Persisting those
+  // into worktree metadata leaks environment details into synced renderer state.
+  const redacted = trimmed
+    .replace(
+      /\\\\[^\s"'`<>\\]+\\(?:[^\s"'`<>\\]+(?:\s+[^\s"'`<>\\]+)*(?=\\)\\)*[^\s"'`<>\\]+/g,
+      '[path]'
+    )
+    .replace(
+      /[A-Za-z]:[\\/](?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])[\\/])*[^\s"'`<>\\/|:*?]+/g,
+      '[path]'
+    )
+    .replace(/(^|[\s"'`(])\/(?:[^\s"'`<>/]+(?:\s+[^\s"'`<>/]+)*(?=\/)\/)*[^\s"'`<>/]+/g, '$1[path]')
+  return redacted.length > 240 ? `${redacted.slice(0, 240).trimEnd()}...` : redacted
 }
 
 function userFacingUnsafeWindowsBatchArgs(label: string): string {
@@ -575,7 +599,7 @@ async function runLocalPlan(
       if (outputLimitExceeded) {
         finalize({
           success: false,
-          error: formatAgentCliFailureMessage(label, '', '', code)
+          error: `${label} CLI command produced too much output. Check the agent CLI configuration and try again.`
         })
         return
       }
@@ -623,9 +647,7 @@ function finalizeFromAgentOutput(args: {
   }
   const cleaned = cleanGeneratedCommitMessage(stdout)
   if (!cleaned) {
-    const stderrDetail = stderr.trim()
-    const stdoutDetail = stdout.trim()
-    const detail = stderrDetail.length > 0 ? stderrDetail : stdoutDetail
+    const detail = sanitizeAgentFailureDetail(extractAgentErrorMessage(stdout, stderr))
     if (detail) {
       console.error('[commit-message] Generator returned no stdout but reported an error:', {
         label,
