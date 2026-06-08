@@ -58,7 +58,7 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
             onClick={handleOpenSettings}
             className="mt-0.5 h-7 w-full text-xs"
           >
-            Set up in Settings
+            Connect an account
           </Button>
         </div>
       </HoverCardContent>
