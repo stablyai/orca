@@ -2,6 +2,7 @@ import React, { useCallback } from 'react'
 import { BarChart3 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 
@@ -37,7 +38,7 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
       </HoverCardTrigger>
       <HoverCardContent side="top" align="start" sideOffset={8} className="w-[260px] p-2.5">
         <div className="space-y-2 text-xs leading-[1.45]">
-          <div className="text-[12px] font-semibold text-foreground">Agent usage limits</div>
+          <div className="font-semibold text-foreground">Agent usage limits</div>
           <p className="text-muted-foreground">
             Connect your AI provider accounts to see their usage in real time and easily switch
             between accounts.
@@ -50,6 +51,7 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
             <OpenAIIcon size={13} />
             <GeminiIcon size={13} />
             <OpenCodeGoIcon size={13} />
+            <AgentIcon agent="kimi" size={13} />
           </div>
           <Button
             type="button"

@@ -16,9 +16,12 @@ function hasUsageData(provider: ProviderRateLimits): boolean {
 // — that's a *configured* provider failing transiently, and hiding it would
 // make the bar flap on every refresh hiccup.
 export function isProviderConfigured(
-  provider: ProviderRateLimits | null
+  provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
-  if (provider === null || provider.status === 'unavailable') {
+  // Why: a provider key can be absent entirely (e.g. a newly-added provider
+  // not yet present in an older session's rateLimits), so guard undefined too
+  // — reading `.status` off undefined would crash the whole status bar.
+  if (provider == null || provider.status === 'unavailable') {
     return false
   }
   if (provider.status === 'fetching' && !hasUsageData(provider)) {
