@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import {
+  AlertCircle,
   AlertTriangle,
   ChevronDown,
   GitMerge,
@@ -20,6 +21,7 @@ import {
 import CacheTimer, { usePromptCacheCountdownStartedAt } from './CacheTimer'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import { SshDisconnectedDialog } from './SshDisconnectedDialog'
+import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 import WorktreeCardAgents from './WorktreeCardAgents'
 import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
 import { cn } from '@/lib/utils'
@@ -219,6 +221,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
     null
   )
   const [titleRenaming, setTitleRenaming] = useState(false)
+  const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
 
   // Why: on restart the previously-active worktree is auto-restored without a
   // click, so the dialog never opens. Auto-show it for the active card when SSH
@@ -503,6 +506,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
     },
     []
   )
+  const handleOpenRenameErrorDialog = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setShowRenameErrorDialog(true)
+  }, [])
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
   const childWorkspaceLabel = `${lineageChildCount} child ${
@@ -867,7 +875,33 @@ const WorktreeCard = React.memo(function WorktreeCard({
               onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
             />
 
-            {worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
+            {typeof worktree.firstAgentMessageRenameError === 'string' &&
+            worktree.firstAgentMessageRenameError.length > 0 &&
+            !titleRenaming ? (
+              // The auto-rename generation step failed — surface it (red) rather
+              // than the silent "rename pending". The full message is raw agent
+              // CLI output (often many lines), so the badge opens a dialog on
+              // click instead of cramming it into a tooltip.
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onPointerDown={stopQuickActionPointerPropagation}
+                    onClick={handleOpenRenameErrorDialog}
+                    onDoubleClick={handleOpenRenameErrorDialog}
+                    className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-destructive border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:text-destructive has-[>svg]:!px-0.5"
+                    aria-label="Auto-rename failed — view error"
+                  >
+                    <AlertCircle className="size-2.5" />
+                    rename failed
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>
+                  Auto-name failed — click for details
+                </TooltipContent>
+              </Tooltip>
+            ) : worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -1125,6 +1159,16 @@ const WorktreeCard = React.memo(function WorktreeCard({
           status={sshStatus ?? 'disconnected'}
         />
       )}
+
+      {typeof worktree.firstAgentMessageRenameError === 'string' &&
+        worktree.firstAgentMessageRenameError.length > 0 && (
+          <AutoRenameFailedDialog
+            open={showRenameErrorDialog}
+            onOpenChange={setShowRenameErrorDialog}
+            worktreeName={worktree.displayName}
+            error={worktree.firstAgentMessageRenameError}
+          />
+        )}
     </>
   )
 })

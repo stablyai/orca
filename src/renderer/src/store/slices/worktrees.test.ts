@@ -2189,11 +2189,16 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { displayName: 'Fix auth', pendingFirstAgentMessageRename: false }
+      updates: {
+        displayName: 'Fix auth',
+        pendingFirstAgentMessageRename: false,
+        firstAgentMessageRenameError: null
+      }
     })
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       displayName: 'Fix auth',
-      pendingFirstAgentMessageRename: false
+      pendingFirstAgentMessageRename: false,
+      firstAgentMessageRenameError: null
     })
   })
 
