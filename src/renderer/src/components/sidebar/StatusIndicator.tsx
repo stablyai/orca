@@ -18,46 +18,25 @@ const StatusIndicator = React.memo(function StatusIndicator({
   title,
   ...rest
 }: StatusIndicatorProps) {
-  // Why: surface the status label as a native tooltip so hovering the dot
-  // reveals the state — matters especially for 'active' vs 'done', which
-  // share the same emerald dot. Callers pass aria-hidden="true" alongside
-  // an sr-only label, so the `title` attribute is ignored by AT and only
-  // serves sighted users on hover. Callers can override by passing their
-  // own `title`.
-  const resolvedTitle = title ?? getWorktreeStatusLabel(status)
+  // Why: color is reserved for state that needs the user (STYLEGUIDE.md). Only
+  // `working` (quiet spinner) and `permission` get a dot; `done` is left to the
+  // unread bell, which already signals completion and clears on view.
+  const dot =
+    status === 'working' ? (
+      <span className="block size-2 rounded-full border-2 border-muted-foreground border-t-transparent animate-spin" />
+    ) : status === 'permission' ? (
+      <span className="block size-2 rounded-full bg-status-warning" />
+    ) : null
 
-  if (status === 'working') {
-    return (
-      <span
-        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-        title={resolvedTitle}
-        {...rest}
-      >
-        <span className="block size-2 rounded-full border-2 border-yellow-500 border-t-transparent animate-spin" />
-      </span>
-    )
-  }
-
+  // Why: keep the 3×3 lane even when there's no dot so titles stay aligned
+  // across rows; only attach the hover tooltip when a dot is actually visible.
   return (
     <span
       className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
-      title={resolvedTitle}
+      title={dot ? (title ?? getWorktreeStatusLabel(status)) : undefined}
       {...rest}
     >
-      <span
-        className={cn(
-          'block size-2 rounded-full',
-          status === 'permission'
-            ? 'bg-amber-500'
-            : status === 'done' || status === 'active'
-              ? // Green dot for both hook-reported 'done' and the heuristic
-                // 'active' (terminal open, quiet). Working uses a yellow
-                // spinner so working vs done differ by motion; 'inactive'
-                // stays grey.
-                'bg-emerald-500'
-              : 'bg-neutral-500/40'
-        )}
-      />
+      {dot}
     </span>
   )
 })

@@ -16,31 +16,30 @@ function renderDotClassNames(status: Status): string[] {
   return dotClassName!.split(/\s+/)
 }
 
+function hasDot(status: Status): boolean {
+  return /rounded-full/.test(renderMarkup(status))
+}
+
 describe('StatusIndicator', () => {
-  it('renders working as a yellow spinner', () => {
+  it('renders working as a quiet neutral spinner — motion carries the signal, no loud color', () => {
     const classNames = renderDotClassNames('working')
 
-    expect(classNames).toContain('border-yellow-500')
+    expect(classNames).toContain('border-muted-foreground')
     expect(classNames).toContain('border-t-transparent')
     expect(classNames).toContain('animate-spin')
   })
 
-  it('renders permission as an amber attention dot', () => {
+  it('renders permission as a warning attention dot', () => {
     const classNames = renderDotClassNames('permission')
 
-    expect(classNames).toContain('bg-amber-500')
-    expect(classNames).not.toContain('bg-red-500')
+    expect(classNames).toContain('bg-status-warning')
   })
 
-  it('renders active as full emerald dot', () => {
-    const classNames = renderDotClassNames('active')
-
-    expect(classNames).toContain('bg-emerald-500')
+  it.each<Status>(['done', 'active', 'inactive'])('renders no dot for %s', (status) => {
+    expect(hasDot(status)).toBe(false)
   })
 
-  it('renders done as an emerald dot', () => {
-    const classNames = renderDotClassNames('done')
-
-    expect(classNames).toContain('bg-emerald-500')
+  it('always reserves the 3×3 lane so titles stay aligned even without a dot', () => {
+    expect(renderMarkup('inactive')).toContain('h-3 w-3')
   })
 })
