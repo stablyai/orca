@@ -13138,12 +13138,17 @@ export class OrcaRuntimeService {
   // Why: after a message is inserted for a recipient, any blocking
   // orchestration.check --wait calls watching that handle must be woken
   // so they can return the new message immediately instead of polling.
-  notifyMessageArrived(handle: string): void {
+  notifyMessageArrived(handle: string, messageType?: string): void {
     const waiters = this.messageWaitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
       return
     }
     for (const waiter of [...waiters]) {
+      // Why: a coordinator waiting for worker_done/escalation should not be
+      // woken by worker heartbeat noise and mistake that empty read for idleness.
+      if (messageType && waiter.typeFilter && !waiter.typeFilter.includes(messageType)) {
+        continue
+      }
       this.resolveMessageWaiter(waiter)
     }
   }
