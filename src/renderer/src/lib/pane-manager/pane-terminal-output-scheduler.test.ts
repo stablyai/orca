@@ -351,6 +351,31 @@ describe('pane terminal output scheduler', () => {
     )
   })
 
+  it('drains synchronized endings with final cursor placement before the fallback', async () => {
+    vi.useFakeTimers()
+    const { writeTerminalOutput } = await loadScheduler()
+    const terminal = createTerminal()
+
+    writeTerminalOutput(
+      terminal,
+      '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[5 q\x1b[?25h\x1b[19;3H\x1b[?2026l',
+      {
+        foreground: true,
+        latencySensitive: true,
+        stripTransientCursorShows: true,
+        coalesceForeground: true
+      }
+    )
+
+    vi.advanceTimersByTime(0)
+
+    expect(terminal.write).toHaveBeenCalledTimes(1)
+    expect(terminal.write).toHaveBeenCalledWith(
+      '\x1b[?2026h\x1b[?25l\x1b[13;14Hr\x1b[5 q\x1b[19;3H\x1b[?25h\x1b[?2026l',
+      expect.any(Function)
+    )
+  })
+
   it('does not batch repeated latency-sensitive synchronized frames across key-repeat ticks', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
