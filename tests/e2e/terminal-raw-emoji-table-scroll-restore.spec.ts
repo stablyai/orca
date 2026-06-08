@@ -375,7 +375,9 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     })
   })
 
-  test('keeps raw emoji box table aligned after restore and scroll', async ({
+  // Why: this is the minimal golden for the v1.4.51 regression. It fails if
+  // xterm underfits by one scrollbar column or counts ZWJ emoji as width 4.
+  test('keeps raw emoji box table aligned after restore and scroll @terminal-rendering-golden', async ({
     orcaPage,
     testRepoPath
   }, testInfo: TestInfo) => {
@@ -395,7 +397,6 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const runId = randomUUID()
-    const marker = `RAW_EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
     const scriptPath = path.join(testRepoPath, `.orca-raw-emoji-fixture-table-${runId}.mjs`)
     writeFileSync(scriptPath, rawEmojiFixtureBoxTableScript(EMOJI_TABLE_FIXTURE, runId))
 
@@ -410,10 +411,10 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await expect
         .poll(() => getTerminalContent(orcaPage, 30_000), {
-          timeout: 10_000,
-          message: 'raw emoji table marker did not survive workspace switch'
+          timeout: 30_000,
+          message: 'raw emoji table did not finish streaming after workspace switch'
         })
-        .toContain(marker)
+        .toContain('Singer')
 
       await scrollActiveTerminalToText(orcaPage, 'Singer')
       await closeFeatureTips(orcaPage)

@@ -731,6 +731,8 @@ test.describe('Terminal long table scroll restore repro', () => {
     }
   })
 
+  // Why: keeps the user-shaped markdown path covered in the broader e2e suite;
+  // the faster raw-table spec is the release-blocking golden for this bug.
   test('keeps real emoji markdown table right edge clean after restore and scroll', async ({
     orcaPage,
     testRepoPath
