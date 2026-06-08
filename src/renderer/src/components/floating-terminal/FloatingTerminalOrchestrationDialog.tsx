@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { Workflow } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -8,6 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
+import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
@@ -53,9 +53,18 @@ export function FloatingTerminalOrchestrationDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="gap-4 sm:max-w-[620px]">
         <DialogHeader>
-          <DialogTitle>Enable orchestration</DialogTitle>
-          {/* Why: the panel below already describes the skill; keep an a11y-only
-              description so Radix has one without repeating the same sentence. */}
+          {/* Why: the panel renders with hideHeader, so the modal owns the title
+              and status pill — avoiding a duplicate heading inside the modal. */}
+          <div className="flex flex-wrap items-center gap-2 pr-6">
+            <DialogTitle>Enable orchestration</DialogTitle>
+            {orchestrationSkillLoading && !orchestrationSkillDetected ? (
+              <IntegrationStatusPill tone="neutral">Checking...</IntegrationStatusPill>
+            ) : orchestrationSkillDetected ? (
+              <IntegrationStatusPill tone="connected">Installed</IntegrationStatusPill>
+            ) : (
+              <IntegrationStatusPill tone="attention">Not installed</IntegrationStatusPill>
+            )}
+          </div>
           <DialogDescription className="sr-only">
             Install the Orca CLI and orchestration skill so agents can coordinate through Orca.
           </DialogDescription>
@@ -71,7 +80,8 @@ export function FloatingTerminalOrchestrationDialog({
           installed={orchestrationSkillDetected}
           loading={orchestrationSkillLoading}
           error={orchestrationSkillError}
-          icon={<Workflow className="size-5" />}
+          variant="inline"
+          hideHeader
           installLabel="Install CLI & skill"
           preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
           onBeforeOpenTerminal={async () => {
