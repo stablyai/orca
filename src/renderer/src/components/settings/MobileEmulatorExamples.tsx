@@ -1,5 +1,6 @@
 import { Copy, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 
@@ -18,9 +19,19 @@ async function copyPrompt(prompt: string): Promise<void> {
   }
 }
 
-export function MobileEmulatorExamples(): React.JSX.Element {
+type MobileEmulatorExamplesProps = {
+  variant?: 'card' | 'inline'
+}
+
+export function MobileEmulatorExamples({
+  variant = 'card'
+}: MobileEmulatorExamplesProps): React.JSX.Element {
   return (
-    <div className="rounded-xl border border-border/60 bg-card/50 p-4">
+    <div
+      className={cn(
+        variant === 'card' ? 'rounded-xl border border-border/60 bg-card/50 p-4' : 'py-3'
+      )}
+    >
       <div className="flex items-center gap-2">
         <Sparkles className="size-3.5 text-muted-foreground" />
         <p className="text-sm font-medium">Try it — example prompts</p>
@@ -33,7 +44,7 @@ export function MobileEmulatorExamples(): React.JSX.Element {
         {EMULATOR_EXAMPLE_PROMPTS.map((prompt) => (
           <li
             key={prompt}
-            className="flex items-start gap-2 rounded-lg border border-border/50 bg-background/60 px-3 py-2"
+            className="flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2"
           >
             <p className="flex-1 text-[11px] leading-relaxed text-foreground/90">
               &ldquo;{prompt}&rdquo;

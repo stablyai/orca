@@ -16,6 +16,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { cn } from '@/lib/utils'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { StepBadge } from './BrowserUseStepBadge'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
@@ -79,6 +80,7 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   const cliEnabled = isOrcaCliAvailableOnPath(cliInstallStatus)
   const cliSupported = cliInstallStatus?.supported ?? false
   const completedCount = [cliEnabled, cliSkillInstalled].filter(Boolean).length
+  const step2Blocked = !cliEnabled && !cliSkillInstalled
 
   const handleEnableCli = async (): Promise<void> => {
     setCliBusy(true)
@@ -97,124 +99,115 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   }
 
   return (
-    <div className="space-y-3 py-3">
-      <div className="rounded-2xl border border-border/60 bg-card/30 p-4">
-        <div className="flex items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <p className="text-sm font-semibold">Agent Mobile Emulator Control</p>
+    <div className="rounded-2xl border border-border/60 bg-card/30 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <p className="text-sm font-semibold">Agent Mobile Emulator Control</p>
+          <p className="text-xs text-muted-foreground">
+            Let coding agents control the active mobile emulator with Orca CLI commands.
+          </p>
+        </div>
+        <span
+          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+            completedCount === 2
+              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {completedCount}/2
+        </span>
+      </div>
+
+      <div className="mt-3 divide-y divide-border/40">
+        <div className="flex items-start gap-3 py-3">
+          <StepBadge index={1} state={cliEnabled ? 'done' : cliBusy ? 'in-progress' : 'pending'} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-sm font-medium">Enable Orca CLI</p>
             <p className="text-xs text-muted-foreground">
-              Let coding agents control the active mobile emulator with Orca CLI commands.
+              Registers the Orca CLI command so agents can control the active emulator from their
+              shell.
             </p>
+            {cliInstallStatus?.commandPath && cliEnabled ? (
+              <p className="text-[11px] text-muted-foreground">
+                Installed at{' '}
+                <code className="rounded bg-muted px-1 py-0.5">{cliInstallStatus.commandPath}</code>
+              </p>
+            ) : null}
+            {!cliEnabled && cliInstallStatus?.detail ? (
+              <p className="text-[11px] text-muted-foreground">{cliInstallStatus.detail}</p>
+            ) : null}
           </div>
-          <span
-            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              completedCount === 2
-                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
-                : 'bg-muted text-muted-foreground'
-            }`}
-          >
-            {completedCount}/2
-          </span>
+          <TooltipProvider delayDuration={250}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={cliEnabled ? 'outline' : 'default'}
+                    disabled={cliLoading || cliBusy || !cliSupported || cliEnabled}
+                    onClick={() => void handleEnableCli()}
+                  >
+                    {cliLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}
+                    {getCliActionLabel(cliInstallStatus, cliBusy)}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!cliSupported && !cliLoading && cliInstallStatus?.detail ? (
+                <TooltipContent side="left" sideOffset={6}>
+                  {cliInstallStatus.detail}
+                </TooltipContent>
+              ) : null}
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
-        <div className="mt-3 space-y-3">
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4">
-            <div className="flex items-start gap-3">
-              <StepBadge
-                index={1}
-                state={cliEnabled ? 'done' : cliBusy ? 'in-progress' : 'pending'}
-              />
-              <div className="min-w-0 flex-1 space-y-1">
-                <p className="text-sm font-medium">Enable Orca CLI</p>
-                <p className="text-xs text-muted-foreground">
-                  Registers the Orca CLI command so agents can control the active emulator from
-                  their shell.
-                </p>
-                {cliInstallStatus?.commandPath && cliEnabled ? (
-                  <p className="text-[11px] text-muted-foreground">
-                    Installed at{' '}
-                    <code className="rounded bg-muted px-1 py-0.5">
-                      {cliInstallStatus.commandPath}
-                    </code>
-                  </p>
-                ) : null}
-                {!cliEnabled && cliInstallStatus?.detail ? (
-                  <p className="text-[11px] text-muted-foreground">{cliInstallStatus.detail}</p>
-                ) : null}
-              </div>
-              <TooltipProvider delayDuration={250}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={cliEnabled ? 'outline' : 'default'}
-                        disabled={cliLoading || cliBusy || !cliSupported || cliEnabled}
-                        onClick={() => void handleEnableCli()}
-                      >
-                        {cliLoading ? <Loader2 className="size-3.5 animate-spin" /> : null}
-                        {getCliActionLabel(cliInstallStatus, cliBusy)}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  {!cliSupported && !cliLoading && cliInstallStatus?.detail ? (
-                    <TooltipContent side="left" sideOffset={6}>
-                      {cliInstallStatus.detail}
-                    </TooltipContent>
-                  ) : null}
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
-
-          <div className={cliEnabled ? '' : 'opacity-60'}>
-            <AgentSkillSetupPanel
-              variant="inline"
-              title="Orca CLI skill"
-              description="Enables agents to use Orca CLI commands, including mobile emulator control."
-              command={ORCA_CLI_SKILL_INSTALL_COMMAND}
-              terminalTitle="Orca CLI skill setup"
-              terminalAriaLabel="Orca CLI skill install terminal"
-              terminalWorktreeId="settings-mobile-emulator-orca-cli-skill-terminal"
-              installed={cliSkillInstalled}
-              loading={cliSkillLoading}
-              error={cliSkillError}
-              installDisabled={!cliEnabled}
-              leading={<StepBadge index={2} state={cliSkillInstalled ? 'done' : 'pending'} />}
-              preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
-              onBeforeOpenTerminal={async () => {
-                await ensureOrcaCliAvailableForAgentSkillTerminal({
-                  onStatusChange: setCliInstallStatus
-                })
-              }}
-              onRecheck={refreshCliSkill}
-            />
-          </div>
-
-          <div className="rounded-xl border border-border/60 bg-card/50 p-4">
-            <div className="flex items-center gap-2">
-              <Import className="size-3.5 text-muted-foreground" />
-              <p className="text-sm font-medium">Common emulator commands</p>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Commands target the active emulator for the current worktree. Coordinates are
-              normalized from 0..1.
-            </p>
-            <div className="mt-3 grid gap-1.5 [@media(min-width:520px)]:grid-cols-2">
-              {EMULATOR_CLI_COMMANDS.map((command) => (
-                <code
-                  key={command}
-                  className="block break-all rounded-md border border-border/60 bg-background/60 px-2 py-1 font-mono text-[11px] leading-snug text-foreground"
-                >
-                  {command}
-                </code>
-              ))}
-            </div>
-          </div>
-
-          <MobileEmulatorExamples />
+        <div className={cn('py-3', step2Blocked && 'opacity-60')}>
+          <AgentSkillSetupPanel
+            variant="inline"
+            title="Orca CLI skill"
+            description="Enables agents to use Orca CLI commands, including mobile emulator control."
+            command={ORCA_CLI_SKILL_INSTALL_COMMAND}
+            terminalTitle="Orca CLI skill setup"
+            terminalAriaLabel="Orca CLI skill install terminal"
+            terminalWorktreeId="settings-mobile-emulator-orca-cli-skill-terminal"
+            installed={cliSkillInstalled}
+            loading={cliSkillLoading}
+            error={cliSkillError}
+            installDisabled={step2Blocked}
+            leading={<StepBadge index={2} state={cliSkillInstalled ? 'done' : 'pending'} />}
+            preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
+            onBeforeOpenTerminal={async () => {
+              await ensureOrcaCliAvailableForAgentSkillTerminal({
+                onStatusChange: setCliInstallStatus
+              })
+            }}
+            onRecheck={refreshCliSkill}
+          />
         </div>
+
+        <div className="py-3">
+          <div className="flex items-center gap-2">
+            <Import className="size-3.5 text-muted-foreground" />
+            <p className="text-sm font-medium">Common emulator commands</p>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Commands target the active emulator for the current worktree. Coordinates are normalized
+            from 0..1.
+          </p>
+          <div className="mt-3 grid gap-1.5 [@media(min-width:520px)]:grid-cols-2">
+            {EMULATOR_CLI_COMMANDS.map((command) => (
+              <code
+                key={command}
+                className="block break-all rounded-md border border-border/60 bg-background/60 px-2 py-1 font-mono text-[11px] leading-snug text-foreground"
+              >
+                {command}
+              </code>
+            ))}
+          </div>
+        </div>
+
+        <MobileEmulatorExamples variant="inline" />
       </div>
     </div>
   )

@@ -211,9 +211,17 @@ export function MobileEmulatorSettingsPane({
             </Select>
           }
         />
-
-        {enabled ? <MobileEmulatorAgentControlRow /> : null}
       </SearchableSetting>
+
+      {enabled ? (
+        <SearchableSetting
+          title="Agent Mobile Emulator Control"
+          description="Let coding agents control the active mobile emulator with Orca CLI commands."
+          keywords={MOBILE_EMULATOR_SEARCH_ENTRIES[3]?.keywords}
+        >
+          <MobileEmulatorAgentControlRow />
+        </SearchableSetting>
+      ) : null}
     </div>
   )
 }
