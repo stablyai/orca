@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
+import { tabHasFreshInputRequest } from './tab-input-request'
 import { useAppStore } from '../../store'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
@@ -66,6 +67,11 @@ export default function SortableTab({
   // map in TabBar would invalidate every SortableTab on every bell event
   // because the slice returns a fresh object reference on each mark/clear.
   const hasUnreadActivity = useAppStore((s) => s.unreadTerminalTabs[tab.id] === true)
+  // Why: pick the amber bell (needs input) vs a green dot (done) for unread
+  // tabs, mirroring the sidebar. See tabHasFreshInputRequest.
+  const tabNeedsInput = useAppStore((s) =>
+    tabHasFreshInputRequest(s.agentStatusByPaneKey, tab.id, Date.now())
+  )
   const renamingTabId = useAppStore((s) => s.renamingTabId)
   const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
@@ -254,22 +260,33 @@ export default function SortableTab({
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {showActivityAffordance && (
-        // Why: amber wash for unread tabs. Rendered as a real DOM child so
-        // both drop indicators (::before left / ::after right in
-        // drop-indicator.ts) stay free for drag-and-drop feedback — a prior
-        // ::after-based implementation collided with the right-edge drop
-        // indicator and hid it on unread tabs. pointer-events-none keeps
-        // clicks reaching the underlying tab handlers.
-        <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
+        // Why: hue follows the reason (amber = needs input, green = done). A real
+        // DOM child, not a pseudo-element, so the drag drop indicators
+        // (::before/::after in drop-indicator.ts) stay free for DnD feedback.
+        <span
+          aria-hidden
+          className={`pointer-events-none absolute inset-0 ${
+            tabNeedsInput ? 'bg-amber-500/10' : 'bg-status-success/10'
+          }`}
+        />
       )}
       {showActivityAffordance ? (
-        // Why: the activity marker sits to the LEFT of the tab title using
-        // Orca's filled bell glyph (amber-500 with a subtle drop shadow)
-        // so it matches the worktree-level bell in the sidebar — keeping
-        // every "needs your attention" surface in Orca consistent.
-        <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
-          <FilledBellIcon className="w-3 h-3 mr-1 text-amber-500 drop-shadow-sm" />
-        </span>
+        // Why: reserve the amber bell for "needs your input" (a permission
+        // prompt or ask-user question); a finished agent shows a calm green
+        // "ready to review" dot. Mirrors the sidebar so every status surface
+        // reads the same.
+        tabNeedsInput ? (
+          <span data-testid="tab-activity-bell" className="inline-flex shrink-0">
+            <FilledBellIcon className="w-3 h-3 mr-1 text-amber-500 drop-shadow-sm" />
+          </span>
+        ) : (
+          <span
+            data-testid="tab-activity-done"
+            className="mr-1 inline-flex h-3 w-3 shrink-0 items-center justify-center"
+          >
+            <span className="size-2 rounded-full bg-status-success" />
+          </span>
+        )
       ) : tabAgent ? (
         // Why: coding-agent tabs should read as Claude/Codex/etc. while the
         // harness is running; plain shells keep the generic terminal tile.
