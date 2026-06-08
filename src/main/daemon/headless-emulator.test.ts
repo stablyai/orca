@@ -31,6 +31,16 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.snapshotAnsi).toContain('hello world')
     })
 
+    it('captures PTY output in immediate snapshots without waiting for queued parsing', () => {
+      emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
+      void emulator.write('rendered before hidden restore snapshot')
+
+      expect(emulator.getSnapshot().snapshotAnsi).toContain(
+        'rendered before hidden restore snapshot'
+      )
+    })
+
     it('captures colored text', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
       await emulator.write('\x1b[31mred text\x1b[0m')
@@ -328,17 +338,17 @@ describe('HeadlessEmulator', () => {
       expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     })
 
-    it('does not expose mouse modes before xterm applies the same write', async () => {
+    it('keeps mode snapshots in sync with immediate headless parsing', async () => {
       emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
 
       const writePromise = emulator.write('\x1b[?1049h\x1b[?1002;1006h')
       const snapshot = emulator.getSnapshot()
       await writePromise
 
-      expect(snapshot.modes.alternateScreen).toBe(false)
-      expect(snapshot.modes.mouseTracking).toBe(false)
-      expect(snapshot.modes.sgrMouseMode).toBe(false)
-      expect(snapshot.rehydrateSequences).toBe('')
+      expect(snapshot.modes.alternateScreen).toBe(true)
+      expect(snapshot.modes.mouseTrackingMode).toBe('drag')
+      expect(snapshot.modes.sgrMouseMode).toBe(true)
+      expect(snapshot.rehydrateSequences).toContain('\x1b[?1049h')
 
       const after = emulator.getSnapshot()
       expect(after.modes.alternateScreen).toBe(true)

@@ -14,6 +14,12 @@ export type HeadlessSnapshotOptions = {
   scrollbackRows?: number
 }
 
+type TerminalWithSynchronousWrite = Terminal & {
+  _core?: {
+    writeSync?: (data: string) => void
+  }
+}
+
 const DEFAULT_SCROLLBACK = 5000
 const OSC_SCAN_TAIL_LIMIT = 4096
 // Why: PTY/SSH chunks can split a long combined DECSET before the final h/l.
@@ -66,7 +72,8 @@ export class HeadlessEmulator {
       cols: opts.cols,
       rows: opts.rows,
       scrollback: opts.scrollback ?? DEFAULT_SCROLLBACK,
-      allowProposedApi: true
+      allowProposedApi: true,
+      logLevel: 'off'
     })
 
     this.serializer = new SerializeAddon()
@@ -96,6 +103,14 @@ export class HeadlessEmulator {
     const lastTitle = extractLastOscTitle(oscInput)
     if (lastTitle !== null) {
       this.lastTitle = lastTitle
+    }
+    const writeSync = (this.terminal as TerminalWithSynchronousWrite)._core?.writeSync
+    if (typeof writeSync === 'function') {
+      // Why: hidden renderer restore snapshots are requested immediately after
+      // PTY bursts; queued headless writes can snapshot half-cleared TUI rows.
+      writeSync.call((this.terminal as TerminalWithSynchronousWrite)._core, data)
+      this.scanPrivateModes(data)
+      return Promise.resolve()
     }
     return new Promise<void>((resolve) => {
       this.terminal.write(data, () => {
