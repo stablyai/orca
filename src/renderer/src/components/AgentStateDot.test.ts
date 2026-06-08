@@ -7,6 +7,15 @@ function renderMarkup(state: AgentDotState): string {
   return renderToStaticMarkup(React.createElement(AgentStateDot, { state }))
 }
 
+function renderDotClassNames(state: AgentDotState): string[] {
+  const markup = renderMarkup(state)
+  const dotClassName = markup.match(/<span class="([^"]*rounded-full[^"]*)"/)?.[1]
+
+  expect(dotClassName).toBeDefined()
+
+  return dotClassName!.split(/\s+/)
+}
+
 describe('AgentStateDot', () => {
   it('renders working as a yellow spinner', () => {
     const markup = renderMarkup('working')
@@ -28,4 +37,21 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('lucide-circle-check')
     expect(markup).toContain('text-emerald-500')
   })
+
+  it('renders permission as an amber attention dot', () => {
+    const classNames = renderDotClassNames('permission')
+
+    expect(classNames).toContain('bg-amber-500')
+    expect(classNames).not.toContain('bg-red-500')
+  })
+
+  it.each(['blocked', 'waiting', 'interrupted'] satisfies AgentDotState[])(
+    'renders %s as a red attention dot',
+    (state) => {
+      const classNames = renderDotClassNames(state)
+
+      expect(classNames).toContain('bg-red-500')
+      expect(classNames).not.toContain('bg-amber-500')
+    }
+  )
 })
