@@ -2104,12 +2104,29 @@ export function connectPanePty(
       }
     }
 
-    function shouldSkipHiddenRendererOutput(foreground: boolean): boolean {
+    function hiddenRendererOutputNeedsLiveXterm(data: string): boolean {
+      const visualData = data.replaceAll('\x1b[?2031h', '')
+      if (visualData.includes('\x1b[')) {
+        return true
+      }
+      for (let index = 0; index < visualData.length; index += 1) {
+        if (visualData.charCodeAt(index) > 0x7f) {
+          return true
+        }
+      }
+      return false
+    }
+
+    function shouldSkipHiddenRendererOutput(foreground: boolean, data: string): boolean {
       return (
         !foreground &&
         !deps.isVisibleRef.current &&
         canUseHiddenOutputSnapshot(transport.getPtyId()) &&
-        !isHiddenStartupRendererQueryWindowActive()
+        !isHiddenStartupRendererQueryWindowActive() &&
+        // Why: snapshot replay is fine for plain scrollback, but visually rich
+        // TUI output relies on xterm's live parser/renderer state for clean
+        // restore + scroll repaint. Keep those bytes on the older live path.
+        !hiddenRendererOutputNeedsLiveXterm(data)
       )
     }
 
@@ -2518,7 +2535,7 @@ export function connectPanePty(
       const foreground = shouldWritePtyOutputForeground(deps.isVisibleRef.current)
       const restoreAppliesToCurrentPty =
         hiddenOutputRestorePtyId !== null && transport.getPtyId() === hiddenOutputRestorePtyId
-      if (shouldSkipHiddenRendererOutput(foreground)) {
+      if (shouldSkipHiddenRendererOutput(foreground, data)) {
         skipHiddenRendererOutput(data)
       } else if (
         (hiddenOutputRestoreNeeded || hiddenOutputRestoreInFlight) &&

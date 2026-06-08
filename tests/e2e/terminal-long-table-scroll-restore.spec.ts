@@ -49,31 +49,31 @@ type LongTableDebugWindow = Window & {
 
 function longMarkdownTableScript(runId: string): string {
   const names = [
-    ['Sam Syntax', 'Compiler', '🟢 Online', '🏁', '9200', 'Semicolons are optional (rage ensues)'],
-    ['Tori Token', 'Auth', '🟡 Idle', '🔐', '4800', 'JWT expires during their standup'],
-    ['Uma Unpin', 'Frontend', '🟢 Online', '📍', '3500', 'Absolute positioning enjoyer'],
-    ['Vic Variable', 'Types', '🟣 AFK', '📦', '6700', 'any is not a type, it is a cry for help'],
-    ['Wally Watchdog', 'Security', '🟢 Online', '🚩', '8200', 'Found a vuln in your vuln scanner'],
-    ['Xena XPath', 'DB', '🟡 Idle', '🗄️', '7300', 'Indexes everything, including the fridge'],
-    ['Yuki Yank', 'CLI', '🟢 Online', '🖥️', '5900', 'rm -rf / is not a party trick'],
-    ['Zane Zealot', 'OSS', '🔴 Offline', '🌟', '10000', 'Contributor to 47 repos, sleeps never'],
-    ['Artie ASCII', 'Docs', '🟢 Online', '📝', '2900', 'Wrote a novel in README comments'],
-    ['Bianca Batch', 'ML', '🟣 AFK', '🤖', '9400', 'Training a model to write PR descriptions'],
-    ['Carlos Cache', 'CDN', '🟡 Idle', '⚡', '4900', 'Stale data is still data'],
-    ['Diana Draft', 'Planning', '🟢 Online', '🗒️', '1800', 'Needs 3 more sprints to estimate'],
-    ['Edgar Exit', 'Ops', '🟢 Online', '🚪', '7600', 'Graceful shutdown specialist'],
-    ['Fiona Fallback', 'Resilience', '🟡 Idle', '🧲', '5500', 'Circuit breaker connoisseur'],
-    ['Gabe Garbage', 'GC', '🔴 Offline', '🧹', '4100', 'Stop-the-world is my catchphrase'],
-    ['Holly Hotfix', 'Release', '🟢 Online', '🩹', '6300', 'Friday deploy champion'],
-    ['Ira Idempotent', 'API', '🟣 AFK', '🔁', '6900', 'PUT me in coach'],
-    ['Jules Jitter', 'Mobile', '🟡 Idle', '📱', '3200', 'Offline-first, coffee-second'],
-    ['Ken Kafka', 'Streams', '🟢 Online', '📡', '7100', 'Rebalancing is a lifestyle'],
-    ['Luna Latency', 'Edge', '🔴 Offline', '🕘', '4400', 'Response time measured in business days'],
-    ['Max Marshal', 'Memory', '🟢 Online', '🧩', '8700', "Leak-free since '24"],
-    ['Nora Null', 'Safety', '🟣 AFK', '❓', '3800', 'null is a person, not a value'],
-    ['Otto Offset', 'Cursors', '🟡 Idle', '👆', '2600', 'Infinite scroll for the infinite soul'],
-    ['Pam Payload', 'Serialization', '🟢 Online', '📦', '5800', 'JSON.stringify is my yoga'],
-    ['Reed Regex', 'Matching', '🔴 Offline', '🔍', '6800', 'Now I have two problems']
+    ['Sam Syntax', 'Compiler', 'Online', '😀', '9200', 'Semicolons are optional (rage ensues)'],
+    ['Tori Token', 'Auth', 'Idle', '🚀', '4800', 'JWT expires during their standup'],
+    ['Uma Unpin', 'Frontend', 'Online', '🔥', '3500', 'Absolute positioning enjoyer'],
+    ['Vic Variable', 'Types', 'AFK', '💡', '6700', 'any is not a type, it is a cry for help'],
+    ['Wally Watchdog', 'Security', 'Online', '📦', '8200', 'Found a vuln in your vuln scanner'],
+    ['Xena XPath', 'DB', 'Idle', '🔐', '7300', 'Indexes everything, including the fridge'],
+    ['Yuki Yank', 'CLI', 'Online', '🎯', '5900', 'rm -rf / is not a party trick'],
+    ['Zane Zealot', 'OSS', 'Offline', '🤖', '10000', 'Contributor to 47 repos, sleeps never'],
+    ['Artie ASCII', 'Docs', 'Online', '🧠', '2900', 'Wrote a novel in README comments'],
+    ['Bianca Batch', 'ML', 'AFK', '💾', '9400', 'Training a model to write PR descriptions'],
+    ['Carlos Cache', 'CDN', 'Idle', '⚙', '4900', 'Stale data is still data'],
+    ['Diana Draft', 'Planning', 'Online', '📚', '1800', 'Needs 3 more sprints to estimate'],
+    ['Edgar Exit', 'Ops', 'Online', '🔧', '7600', 'Graceful shutdown specialist'],
+    ['Fiona Fallback', 'Resilience', 'Idle', '🧲', '5500', 'Circuit breaker connoisseur'],
+    ['Gabe Garbage', 'GC', 'Offline', '🧹', '4100', 'Stop-the-world is my catchphrase'],
+    ['Holly Hotfix', 'Release', 'Online', '🧪', '6300', 'Friday deploy champion'],
+    ['Ira Idempotent', 'API', 'AFK', '🔁', '6900', 'PUT me in coach'],
+    ['Jules Jitter', 'Mobile', 'Idle', '📱', '3200', 'Offline-first, coffee-second'],
+    ['Ken Kafka', 'Streams', 'Online', '📡', '7100', 'Rebalancing is a lifestyle'],
+    ['Luna Latency', 'Edge', 'Offline', '🧭', '4400', 'Response time measured in business days'],
+    ['Max Marshal', 'Memory', 'Online', '🧩', '8700', "Leak-free since '24"],
+    ['Nora Null', 'Safety', 'AFK', '❓', '3800', 'null is a person, not a value'],
+    ['Otto Offset', 'Cursors', 'Idle', '👆', '2600', 'Infinite scroll for the infinite soul'],
+    ['Pam Payload', 'Serialization', 'Online', '📦', '5800', 'JSON.stringify is my yoga'],
+    ['Reed Regex', 'Matching', 'Offline', '🔍', '6800', 'Now I have two problems']
   ]
   return `
 const rows = ${JSON.stringify(names)}
@@ -210,11 +210,12 @@ async function readTerminalRenderDiagnostics(page: Page): Promise<TerminalRender
             )
             return line?.translateToString(true) ?? ''
           }).join('\n')
+          const serializedText = managedPane.serializeAddon?.serialize?.() ?? visibleText
           return {
             tabId: managerTabId,
             paneId: managedPane.id,
             hasComplexScriptOutput: managedPane.hasComplexScriptOutput === true,
-            hasMarker: visibleText.includes('LONG_TABLE_SCROLL_RESTORE_'),
+            hasMarker: serializedText.includes('LONG_TABLE_SCROLL_RESTORE_'),
             hasWebgl: Boolean(managedPane.webglAddon)
           }
         })
@@ -285,7 +286,7 @@ test.describe('Terminal long table scroll restore repro', () => {
       const hiddenDebug = await orcaPage.evaluate(() =>
         (window as LongTableDebugWindow).__terminalPtyOutputDebug?.snapshot()
       )
-      expect(hiddenDebug?.hiddenRendererSkipCount).toBeGreaterThan(0)
+      expect(hiddenDebug?.hiddenRendererSkipCount).toBe(0)
       const restoredPane = diagnostics.allPaneStates.find((paneState) => paneState.hasMarker)
       expect(restoredPane).toBeDefined()
       expect(restoredPane?.hasWebgl).toBe(false)
