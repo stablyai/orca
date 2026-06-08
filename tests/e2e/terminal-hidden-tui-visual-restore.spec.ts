@@ -46,20 +46,32 @@ type HiddenTuiDebugSnapshot = {
   hiddenRendererMode2031ReplyCount: number
 }
 
+type TuiCursorState = {
+  hidden: boolean | null
+  initialized: boolean | null
+  cursorElementVisible: boolean
+  cursorCanvasPresent: boolean
+}
+
 function tuiFrame(runId: string, frame: number): string {
+  const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
   const rows = [
-    `OpenCode visual restore ${runId}`,
-    `Frame ${String(frame).padStart(3, '0')}`,
-    `Status ${frame % 2 === 0 ? 'thinking' : 'streaming'}`,
-    `Input echo ${'#'.repeat((frame % 18) + 1)}`,
-    `Diff +${frame * 3} -${frame}`,
+    '╭────────────────────────────────────────────────────────────────────╮',
+    `│ OpenCode visual restore Frame ${String(frame).padStart(3, '0')} ${frame % 2 === 0 ? '🟢' : '🟡'} ${progress} │`,
+    '├──────────────┬──────────────────────┬──────────────────────────────┤',
+    `│ model        │ codex/opencode       │ ${runId.slice(0, 28).padEnd(28)} │`,
+    `│ status       │ ${frame % 2 === 0 ? 'thinking' : 'streaming'}            │ input ${'#'.repeat((frame % 18) + 1).padEnd(22)} │`,
+    `│ diff         │ +${String(frame * 3).padEnd(19)} │ -${String(frame).padEnd(27)} │`,
+    '╰──────────────┴──────────────────────┴──────────────────────────────╯',
     `VISUAL_RESTORE_FINAL_${runId}_${frame}`
   ]
   return [
     '\x1b[?2026h',
     '\x1b[?1049h',
     '\x1b[2J\x1b[H',
+    '\x1b[?25l',
     rows.map((row) => `\x1b[2;36m${row}\x1b[0m`).join('\r\n'),
+    '\x1b[10;18H\x1b[?25h',
     '\x1b[?2026l'
   ].join('')
 }
@@ -82,6 +94,47 @@ async function writeHiddenFrames(page: Page, ptyId: string, scriptPath: string):
 async function readHiddenDebug(page: Page): Promise<HiddenTuiDebugSnapshot | null> {
   return page.evaluate(() => {
     return (window as HiddenTuiWindow).__terminalPtyOutputDebug?.snapshot() ?? null
+  })
+}
+
+async function readTuiCursorState(page: Page): Promise<TuiCursorState> {
+  return page.evaluate(() => {
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane is unavailable')
+    }
+    const terminalCore = (
+      pane.terminal as unknown as {
+        _core?: { coreService?: { isCursorHidden?: boolean; isCursorInitialized?: boolean } }
+      }
+    )._core
+    const cursorElement = pane.container.querySelector<HTMLElement>('.xterm-cursor')
+    const cursorRect = cursorElement?.getBoundingClientRect()
+    const cursorStyle = cursorElement ? window.getComputedStyle(cursorElement) : null
+    return {
+      hidden: terminalCore?.coreService?.isCursorHidden ?? null,
+      initialized: terminalCore?.coreService?.isCursorInitialized ?? null,
+      cursorElementVisible:
+        !!cursorElement &&
+        !!cursorRect &&
+        cursorRect.width > 0 &&
+        cursorRect.height > 0 &&
+        cursorStyle?.display !== 'none' &&
+        cursorStyle?.visibility !== 'hidden' &&
+        Number(cursorStyle?.opacity ?? '1') > 0,
+      cursorCanvasPresent:
+        pane.container.querySelector<HTMLCanvasElement>('.xterm-cursor-layer canvas') !== null
+    }
   })
 }
 
@@ -241,7 +294,21 @@ test.describe('Hidden terminal TUI visual restore', () => {
 
     const content = await getTerminalContent(orcaPage, 12_000)
     expect(content).toContain(`Frame 024`)
+    expect(content).toContain('╭')
+    expect(content).toContain('├')
+    expect(content).toContain('█')
     expect(content).not.toContain('Orca skipped hidden terminal output')
+    await expect
+      .poll(() => readTuiCursorState(orcaPage), {
+        timeout: 5_000,
+        message: 'restored TUI cursor stayed hidden after final frame'
+      })
+      .toMatchObject({
+        hidden: false,
+        initialized: true
+      })
+    const cursorState = await readTuiCursorState(orcaPage)
+    expect(cursorState.cursorElementVisible || cursorState.cursorCanvasPresent).toBe(true)
 
     const screenshotPath = testInfo.outputPath('hidden-tui-restore-final.png')
     await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
@@ -327,8 +394,22 @@ test.describe('Hidden terminal TUI visual restore', () => {
 
       const content = await getTerminalContent(orcaPage, 12_000)
       expect(content).toContain('Frame 041')
+      expect(content).toContain('╭')
+      expect(content).toContain('├')
+      expect(content).toContain('█')
       expect(content).not.toContain('Frame 040')
       expect(content).not.toContain('Orca skipped hidden terminal output')
+      await expect
+        .poll(() => readTuiCursorState(orcaPage), {
+          timeout: 5_000,
+          message: 'live TUI cursor stayed hidden after delayed restore'
+        })
+        .toMatchObject({
+          hidden: false,
+          initialized: true
+        })
+      const cursorState = await readTuiCursorState(orcaPage)
+      expect(cursorState.cursorElementVisible || cursorState.cursorCanvasPresent).toBe(true)
 
       const screenshotPath = testInfo.outputPath('hidden-tui-delayed-restore-final.png')
       await orcaPage.screenshot({ path: screenshotPath, fullPage: true })

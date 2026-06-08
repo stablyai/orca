@@ -17,6 +17,7 @@ export type ForegroundTerminalOutputTarget = {
 type ForegroundTerminalWriteOptions = {
   forceViewportRefresh?: boolean
   followupViewportRefresh?: boolean
+  onParsed?: () => void
 }
 
 const pendingViewportSettleRefreshByTerminal = new WeakMap<
@@ -135,11 +136,13 @@ export function writeForegroundTerminalChunk(
       if (beforeWriteViewport) {
         settleForegroundRender(terminal, beforeWriteViewport, options)
       }
+      options.onParsed?.()
     })
   } catch {
     if (beforeWriteViewport) {
       settleForegroundRender(terminal, beforeWriteViewport, options)
     }
+    options.onParsed?.()
   }
 }
 

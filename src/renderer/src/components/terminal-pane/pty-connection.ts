@@ -1826,9 +1826,9 @@ export function connectPanePty(
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
-      if (terminalOutputChunkPrefersDomRenderer(data)) {
-        manager.markPaneHasComplexScriptOutput(pane.id)
-      }
+      // Why: replay rebuilds terminal pixels from serialized bytes. Keep it off
+      // WebGL so stale atlas/canvas cells cannot survive restore + scroll.
+      manager.markPaneHasComplexScriptOutput(pane.id)
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
     }
 
@@ -1929,6 +1929,12 @@ export function connectPanePty(
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       recordTerminalOutput(pane.terminal)
+    }
+
+    function markRendererRiskForSkippedOutput(): void {
+      // Why: hidden-output recovery skips xterm.write entirely, so WebGL does
+      // not see the bytes it would later need to repaint during restore/scroll.
+      manager.markPaneHasComplexScriptOutput(pane.id)
     }
 
     function consumeForegroundImmediateBudget(dataLength: number): boolean {
@@ -2108,6 +2114,7 @@ export function connectPanePty(
     }
 
     function skipHiddenRendererOutput(data: string): void {
+      markRendererRiskForSkippedOutput()
       respondToSkippedMode2031Subscribe(data)
       markHiddenOutputRestoreNeeded()
       if (hiddenOutputRestoreInFlight) {
