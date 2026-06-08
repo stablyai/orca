@@ -57,6 +57,10 @@ import {
 } from './workspace-delete-quick-action'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import {
+  FLUSH_CARD_CONTENT_PULLBACK,
+  FLUSH_CARD_MIN_CONTENT_INSET
+} from './worktree-list-indentation'
 
 type WorktreeCardProps = {
   worktree: Worktree
@@ -711,7 +715,9 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const cardStyle = flushSurface
     ? {
         paddingLeft:
-          contentIndent > 0 ? `max(0.125rem, calc(${contentIndent}px - 0.625rem))` : '0.125rem'
+          contentIndent > 0
+            ? `max(${FLUSH_CARD_MIN_CONTENT_INSET}px, calc(${contentIndent}px - ${FLUSH_CARD_CONTENT_PULLBACK}px))`
+            : `${FLUSH_CARD_MIN_CONTENT_INSET}px`
       }
     : contentIndent > 0
       ? { paddingLeft: `calc(0.125rem + ${contentIndent}px)` }
