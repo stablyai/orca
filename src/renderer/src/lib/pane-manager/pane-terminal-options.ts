@@ -26,18 +26,16 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     fontWeight: '300',
     fontWeightBold: '500',
     scrollback: 10000,
-    // Why: xterm 6.x renders its own DOM scrollbar (default 14px), which no CSS
-    // on .xterm-viewport can resize. Slim it via the option. Setting width also
-    // enables the overview ruler, whose border is hidden via overviewRulerBorder
-    // in composeActiveTerminalTheme.
-    scrollbar: {
-      width: 7
-    },
     allowTransparency: false,
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
+    scrollbar: {
+      // Why: xterm's DOM scrollbar overlays the terminal in Electron; reserving
+      // gutter width in FitAddon underfits wide table/TUI output by a column.
+      width: 0
+    },
     // Why: advertise kitty keyboard protocol support so CLIs that probe
     // (CSI ? u) know Orca accepts enhanced key reporting. Orca still writes
     // CSI-u for Shift+Enter on non-Windows platforms; programs that respect

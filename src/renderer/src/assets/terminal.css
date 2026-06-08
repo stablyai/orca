@@ -29,7 +29,6 @@
   /* Why: xterm/VS Code keep the scrollbar gutter stable. `auto` lets Linux
      DOM scrollbars appear/disappear, which can feed resize/reflow jitter. */
   overflow-y: scroll;
-  scrollbar-gutter: stable;
 }
 
 /* Round the xterm DOM scrollbar thumb; xterm has no option for this, and its

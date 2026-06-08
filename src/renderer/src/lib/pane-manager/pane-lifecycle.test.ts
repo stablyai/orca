@@ -74,6 +74,10 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('outline')
   })
 
+  it('does not reserve a classic scrollbar gutter when fitting terminal columns', () => {
+    expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(0)
+  })
+
   it('only uses inactive outline for block cursors', () => {
     expect(resolveTerminalCursorInactiveStyle('block')).toBe('outline')
     expect(resolveTerminalCursorInactiveStyle('bar')).toBe('bar')
@@ -87,10 +91,6 @@ describe('buildDefaultTerminalOptions', () => {
     // bytes once the terminal advertises support. Regressing this flag
     // silently breaks enhanced chords, especially inside tmux.
     expect(buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard).toBe(true)
-  })
-
-  it('uses xterm scrollbar options for the slimmer terminal scrollbar', () => {
-    expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
   })
 })
 
