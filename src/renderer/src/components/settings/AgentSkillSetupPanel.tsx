@@ -170,7 +170,7 @@ export function AgentSkillSetupPanel({
       )}
     >
       <div
-        className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : undefined}
+        className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : 'pt-1.5'}
       >
         <div className="flex items-center gap-4">
           {leading}
@@ -180,7 +180,7 @@ export function AgentSkillSetupPanel({
             </div>
           ) : null}
           <div className="min-w-0 flex-1 self-center">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
               {loading && !installed ? (
                 <IntegrationStatusPill tone="neutral">Checking...</IntegrationStatusPill>

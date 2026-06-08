@@ -6,6 +6,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { MOBILE_EMULATOR_SEARCH_ENTRIES } from './mobile-emulator-search'
@@ -210,6 +211,8 @@ export function MobileEmulatorSettingsPane({
             </Select>
           }
         />
+
+        {enabled ? <MobileEmulatorAgentControlRow /> : null}
       </SearchableSetting>
     </div>
   )
