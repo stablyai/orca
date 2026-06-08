@@ -68,6 +68,23 @@ export type PendingWorktreeCreation = {
    *  progress — the panel shows a single indeterminate spinner rather than a
    *  stepped checklist that would freeze on the first step. */
   indeterminate: boolean
+  /** Gates the in-frame loader so fast creates never flash it: false until the
+   *  create has been pending past the debounce delay (or it errors). Until then
+   *  the prior workspace content stays visible and a fast create swaps straight
+   *  to its terminal. */
+  loaderVisible: boolean
   error?: string
   request: WorktreeCreationRequest
+}
+
+/** Human-readable progress line for an in-flight create, shared by the in-frame
+ *  loader and the sidebar row so the two never drift. Caller handles the error
+ *  case; this only covers the in-progress states. */
+export function getCreationProgressLabel(
+  entry: Pick<PendingWorktreeCreation, 'phase' | 'indeterminate'>
+): string {
+  if (entry.indeterminate) {
+    return 'Setting up your workspace…'
+  }
+  return entry.phase === 'creating' ? 'Creating worktree…' : 'Fetching base branch…'
 }

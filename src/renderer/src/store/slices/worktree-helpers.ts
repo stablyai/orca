@@ -135,10 +135,16 @@ export type WorktreeSlice = {
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
   beginPendingWorktreeCreation: (entry: PendingWorktreeCreation) => void
-  /** Merge a status patch (phase/error/status) into an existing pending entry. */
+  /** Merge a status patch (phase/error/status/loaderVisible) into an existing
+   *  pending entry. */
   updatePendingWorktreeCreation: (
     creationId: string,
-    patch: { phase?: WorktreeCreationPhase; status?: 'creating' | 'error'; error?: string }
+    patch: {
+      phase?: WorktreeCreationPhase
+      status?: 'creating' | 'error'
+      error?: string
+      loaderVisible?: boolean
+    }
   ) => void
   /** Drop a pending entry (on success or dismiss), clearing the active surface
    *  if it pointed at this creation. */

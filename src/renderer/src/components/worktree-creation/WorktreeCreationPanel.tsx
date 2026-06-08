@@ -1,52 +1,18 @@
 import React from 'react'
-import { AlertTriangle, Check, GitBranchPlus, Loader2, RotateCcw, X } from 'lucide-react'
+import { AlertTriangle, GitBranch, Loader2, RotateCcw, X } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
-import type { WorktreeCreationPhase } from '@/lib/pending-worktree-creation'
+import { getCreationProgressLabel } from '@/lib/pending-worktree-creation'
 
-const STEPS: { key: WorktreeCreationPhase; label: string }[] = [
-  { key: 'fetching', label: 'Fetching base branch' },
-  { key: 'creating', label: 'Creating worktree' }
-]
-
-function phaseIndex(phase: WorktreeCreationPhase): number {
-  // Why: derive the active step from STEPS order so adding a phase can't silently
-  // desync the index from the rendered list.
-  return STEPS.findIndex((step) => step.key === phase)
-}
-
-function StepRow({
-  label,
-  state
-}: {
-  label: string
-  state: 'done' | 'active' | 'pending'
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span className="flex size-5 shrink-0 items-center justify-center">
-        {state === 'done' ? (
-          <Check className="size-4 text-muted-foreground" />
-        ) : state === 'active' ? (
-          <Loader2 className="size-4 animate-spin text-foreground" />
-        ) : (
-          <span className="size-2 rounded-full bg-muted-foreground/30" />
-        )}
-      </span>
-      <span
-        className={cn(
-          'text-sm',
-          state === 'pending' ? 'text-muted-foreground/60' : 'text-foreground'
-        )}
-      >
-        {label}
-      </span>
-    </div>
-  )
-}
-
+/**
+ * In-frame creation state, shown in the workspace content area while a worktree
+ * is being created. Presented as a faux tab: a tab strip carrying the new
+ * worktree's name (the title) over a body that holds the live status. This lets
+ * the in-progress create read as a real workspace tab whose content is loading,
+ * so the handoff to the real terminal is a same-frame swap — and the title
+ * (name) and the body status never duplicate each other. Its appearance is
+ * debounced upstream so fast creates never paint it.
+ */
 export default function WorktreeCreationPanel({
   creationId
 }: {
@@ -57,85 +23,69 @@ export default function WorktreeCreationPanel({
     return null
   }
 
-  const name = entry.request.displayName || entry.request.name
+  const dismiss = (): void => useAppStore.getState().removePendingWorktreeCreation(creationId)
   const isError = entry.status === 'error'
+  const title = entry.request.displayName || entry.request.name
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-background">
-      <div className="w-full max-w-md px-6">
-        <div className="flex flex-col items-center gap-5 py-8">
-          <div
-            className={cn(
-              'flex size-16 items-center justify-center rounded-2xl border',
-              isError ? 'border-destructive/40 bg-destructive/5' : 'border-border/80 bg-card'
-            )}
-          >
-            {isError ? (
-              <AlertTriangle className="size-7 text-destructive" />
-            ) : (
-              <GitBranchPlus className="size-7 text-muted-foreground" />
-            )}
-          </div>
-
-          <div className="flex flex-col items-center gap-1 text-center">
-            <h2 className="text-lg font-semibold text-foreground">
-              {isError ? "Couldn't create worktree" : 'Creating worktree'}
-            </h2>
-            <p className="max-w-sm truncate text-sm text-muted-foreground">{name}</p>
-          </div>
-
+    <div className="absolute inset-0 flex flex-col bg-background">
+      {/* Faux tab strip: mirrors the real tab row (height, border, bg) so the
+          create reads as a workspace tab. Carries only the worktree name + a
+          cancel control — the live status lives in the body below. */}
+      <div className="flex h-[36px] shrink-0 items-stretch border-b border-border bg-card">
+        <div className="flex h-full max-w-[240px] items-center gap-1.5 border-r border-border px-2.5 text-xs">
           {isError ? (
-            <>
-              <p className="max-w-sm text-center text-sm text-muted-foreground">
-                {entry.error ?? 'Something went wrong while creating the worktree.'}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button onClick={() => retryBackgroundWorktreeCreation(creationId)}>
-                  <RotateCcw className="size-4" />
-                  Retry
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => useAppStore.getState().removePendingWorktreeCreation(creationId)}
-                >
-                  <X className="size-4" />
-                  Dismiss
-                </Button>
-              </div>
-            </>
+            <AlertTriangle className="size-3.5 shrink-0 text-destructive" />
           ) : (
-            <>
-              {entry.indeterminate ? (
-                <div className="flex items-center gap-2.5">
-                  <Loader2 className="size-4 animate-spin text-foreground" />
-                  <span className="text-sm text-foreground">Setting up your worktree…</span>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2.5">
-                  {STEPS.map((step, index) => {
-                    const current = phaseIndex(entry.phase)
-                    const state =
-                      index < current ? 'done' : index === current ? 'active' : 'pending'
-                    return <StepRow key={step.key} label={step.label} state={state} />
-                  })}
-                </div>
-              )}
-              <p className="max-w-sm text-center text-xs text-muted-foreground/70">
-                Setup runs in its own terminal tab once the worktree is ready. You can keep working
-                elsewhere meanwhile.
-              </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                onClick={() => useAppStore.getState().removePendingWorktreeCreation(creationId)}
-              >
-                <X className="size-4" />
-                Cancel
-              </Button>
-            </>
+            // Why: a static worktree glyph (not a spinner) keeps the tab reading
+            // as a normal tab; the single loading spinner lives in the body.
+            <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
           )}
+          <span className="truncate font-medium text-foreground">{title}</span>
+          <button
+            type="button"
+            title="Cancel"
+            aria-label="Cancel worktree creation"
+            onClick={dismiss}
+            className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-3" />
+          </button>
         </div>
+      </div>
+
+      {/* Body: a quiet top-left annotation on the surface the terminal will
+          fill — the same spot terminal output appears — so creation → terminal
+          reads as one frame filling in. */}
+      <div className="min-h-0 flex-1 p-3">
+        {isError ? (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span className="font-medium text-destructive">Couldn’t create worktree</span>
+            <span className="text-muted-foreground">
+              {entry.error ?? 'Something went wrong while creating the worktree.'}
+            </span>
+            <button
+              type="button"
+              onClick={() => retryBackgroundWorktreeCreation(creationId)}
+              className="inline-flex items-center gap-1 text-foreground hover:underline"
+            >
+              <RotateCcw className="size-3" />
+              Retry
+            </button>
+            <button
+              type="button"
+              onClick={dismiss}
+              className="text-muted-foreground hover:text-foreground hover:underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 shrink-0 animate-spin" />
+            <span>{getCreationProgressLabel(entry)}</span>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -3309,6 +3309,7 @@ function makePendingCreation(
     phase: 'fetching',
     status: 'creating',
     indeterminate: false,
+    loaderVisible: false,
     request: {
       repoId: 'repo1',
       name: 'feature',

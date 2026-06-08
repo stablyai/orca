@@ -329,6 +329,15 @@ function App(): React.JSX.Element {
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
+  // Why: the creation loader is debounced — a fast create resolves before its
+  // entry's loaderVisible flips, so the content area keeps showing the prior
+  // workspace (or Landing) and never flashes a loader. Only a create still
+  // pending past the debounce gates the loader and hides the terminal.
+  const activeCreationLoaderVisible = useAppStore(
+    (s) =>
+      s.activePendingCreationId != null &&
+      s.pendingWorktreeCreations[s.activePendingCreationId]?.loaderVisible === true
+  )
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
   // that remount so the left workspace list doesn't restart at scrollTop 0.
@@ -1801,7 +1810,9 @@ function App(): React.JSX.Element {
                     <div className="flex flex-1 min-w-0 min-h-0 flex-col">
                       <div
                         className={
-                          activeView !== 'terminal' || !activeWorktreeId || activePendingCreationId
+                          activeView !== 'terminal' ||
+                          !activeWorktreeId ||
+                          activeCreationLoaderVisible
                             ? 'hidden flex-1 min-w-0 min-h-0'
                             : 'flex flex-1 min-w-0 min-h-0'
                         }
@@ -1831,12 +1842,14 @@ function App(): React.JSX.Element {
                           {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                           {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                           {activeView === 'mobile' ? <MobilePage /> : null}
-                          {activeView === 'terminal' && activePendingCreationId ? (
+                          {activeView === 'terminal' &&
+                          activeCreationLoaderVisible &&
+                          activePendingCreationId ? (
                             <WorktreeCreationPanel creationId={activePendingCreationId} />
                           ) : null}
                           {activeView === 'terminal' &&
                           !activeWorktreeId &&
-                          !activePendingCreationId ? (
+                          !activeCreationLoaderVisible ? (
                             <Landing />
                           ) : null}
                         </RecoverableRenderErrorBoundary>

@@ -20,6 +20,7 @@ import {
   Workflow
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
 import {
   getAllWorktreesFromState,
@@ -28,6 +29,7 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
+import { PendingWorktreeRow } from './PendingWorktreeRow'
 import WorktreeCardAgents, {
   SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT
 } from './WorktreeCardAgents'
@@ -639,6 +641,9 @@ export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'imported-worktrees-card') {
     return `imported:${row.key}`
   }
+  if (row.type === 'pending-creation') {
+    return `pending:${row.creationId}`
+  }
   return `wt:${row.worktree.id}`
 }
 
@@ -652,7 +657,7 @@ export function getWorktreeDragGroups(rows: Row[]): WorktreeDragGroup[] {
       groups.push({ key: current.key, worktreeIds: current.ids })
       continue
     }
-    if (row.type === 'imported-worktrees-card') {
+    if (row.type === 'imported-worktrees-card' || row.type === 'pending-creation') {
       continue
     }
     if (!current) {
@@ -3563,6 +3568,24 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               )
             }
 
+            if (row.type === 'pending-creation') {
+              return (
+                <div
+                  key={vItem.key}
+                  role="presentation"
+                  data-worktree-virtual-row
+                  data-worktree-virtual-row-key={String(vItem.key)}
+                  data-worktree-virtual-row-start={vItem.start}
+                  data-index={vItem.index}
+                  ref={measureVirtualRowElement}
+                  className="absolute left-0 right-0 top-0 px-2 pb-1.5"
+                  style={{ transform: getVirtualRowTransform(vItem.start) }}
+                >
+                  <PendingWorktreeRow creationId={row.creationId} />
+                </div>
+              )
+            }
+
             const itemWorkspaceStatus =
               groupBy === 'workspace-status'
                 ? getWorkspaceStatus(row.worktree, workspaceStatuses)
@@ -4082,6 +4105,27 @@ const WorktreeList = React.memo(function WorktreeList({
   }, [filterRepoIds, groupBy, repos, worktreesByRepo])
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
 
+  // Why: buildRows only needs which creates exist and their repo. Subscribe on a
+  // flat key array (value-compared by useShallow) so progress updates
+  // (phase/loaderVisible) don't churn it and rebuild the whole sidebar row model
+  // on every creation tick. Split on the first space — the creationId is a UUID,
+  // so it has none and the repoId (which may contain spaces) stays intact.
+  const pendingCreationKeys = useAppStore(
+    useShallow((s) =>
+      Object.values(s.pendingWorktreeCreations ?? {}).map(
+        (creation) => `${creation.creationId} ${creation.request.repoId}`
+      )
+    )
+  )
+  const pendingCreations = useMemo(
+    () =>
+      pendingCreationKeys.map((key) => {
+        const separator = key.indexOf(' ')
+        return { creationId: key.slice(0, separator), repoId: key.slice(separator + 1) }
+      }),
+    [pendingCreationKeys]
+  )
+
   // Build flat row list for rendering
   const rows: Row[] = useMemo(
     () =>
@@ -4100,7 +4144,8 @@ const WorktreeList = React.memo(function WorktreeList({
         settings,
         projectGroups,
         placeholderRepoIds,
-        importedWorktreesByRepo
+        importedWorktreesByRepo,
+        pendingCreations
       ),
     [
       groupBy,
@@ -4116,7 +4161,8 @@ const WorktreeList = React.memo(function WorktreeList({
       settings,
       projectGroups,
       placeholderRepoIds,
-      importedWorktreesByRepo
+      importedWorktreesByRepo,
+      pendingCreations
     ]
   )
   // Why: status headers change during wake (inactive -> active). Key only on

@@ -1,23 +1,35 @@
-import React, { useMemo } from 'react'
+import React from 'react'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
+import {
+  getCreationProgressLabel,
+  type PendingWorktreeCreation
+} from '@/lib/pending-worktree-creation'
 
 function statusLabel(entry: PendingWorktreeCreation): string {
   if (entry.status === 'error') {
     return entry.error ?? 'Creation failed'
   }
-  return entry.phase === 'creating' ? 'Creating worktree…' : 'Fetching base branch…'
+  return getCreationProgressLabel(entry)
 }
 
-function PendingRow({
-  entry,
-  active
+/**
+ * Sidebar row for an in-progress (or failed) worktree create. Rendered inline in
+ * the worktree list under its target repo, so the new workspace appears where it
+ * will land. Self-contained: reads its own entry + active state by creationId.
+ */
+export function PendingWorktreeRow({
+  creationId
 }: {
-  entry: PendingWorktreeCreation
-  active: boolean
-}): React.JSX.Element {
+  creationId: string
+}): React.JSX.Element | null {
+  const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
+  const active = useAppStore((s) => s.activePendingCreationId === creationId)
+  if (!entry) {
+    return null
+  }
+
   const isError = entry.status === 'error'
   return (
     <div
@@ -31,10 +43,11 @@ function PendingRow({
       <button
         type="button"
         // Why: never route this through setActiveWorktree — there is no real
-        // worktree yet. activePendingCreationId drives the content panel instead.
+        // worktree yet. activePendingCreationId drives the content loader instead.
         onClick={() => {
           const store = useAppStore.getState()
-          store.setActivePendingWorktreeCreation(entry.creationId)
+          store.setActivePendingWorktreeCreation(creationId)
+          store.updatePendingWorktreeCreation(creationId, { loaderVisible: true })
           store.setActiveView('terminal')
         }}
         className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
@@ -64,7 +77,7 @@ function PendingRow({
         type="button"
         title="Cancel"
         aria-label="Cancel worktree creation"
-        onClick={() => useAppStore.getState().removePendingWorktreeCreation(entry.creationId)}
+        onClick={() => useAppStore.getState().removePendingWorktreeCreation(creationId)}
         className={cn(
           'mr-1 flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition-opacity hover:bg-sidebar-accent hover:text-foreground focus-visible:opacity-100',
           isError ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
@@ -72,32 +85,6 @@ function PendingRow({
       >
         <X className="size-3.5" />
       </button>
-    </div>
-  )
-}
-
-export default function PendingWorktreeCreationsStrip(): React.JSX.Element | null {
-  // Why: subscribe to the map reference (not Object.values) so this selector
-  // doesn't allocate a fresh array on every unrelated store update — e.g. PTY
-  // streaming during creation. The ref only changes when an entry is added,
-  // updated, or removed, so memoizing the values keeps re-renders minimal.
-  const pendingMap = useAppStore((s) => s.pendingWorktreeCreations)
-  const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
-  const pending = useMemo(() => Object.values(pendingMap), [pendingMap])
-
-  if (pending.length === 0) {
-    return null
-  }
-
-  return (
-    <div className="flex flex-col gap-1 px-2 pb-1.5">
-      {pending.map((entry) => (
-        <PendingRow
-          key={entry.creationId}
-          entry={entry}
-          active={entry.creationId === activePendingCreationId}
-        />
-      ))}
     </div>
   )
 }

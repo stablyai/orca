@@ -70,7 +70,32 @@ export type ImportedWorktreesCardRow = {
   placement: 'repo-group' | 'pinned-fallback'
 }
 
-export type Row = GroupHeaderRow | WorktreeRow | ImportedWorktreesCardRow
+export type PendingCreationRow = {
+  type: 'pending-creation'
+  key: string
+  creationId: string
+  repo: Repo | undefined
+}
+
+/** Minimal shape buildRows needs for an in-flight create. Deliberately not the
+ *  full PendingWorktreeCreation: row identity depends only on which creates
+ *  exist and their repo, so callers can subscribe on this stable shape and keep
+ *  progress-field churn (phase/loaderVisible) from rebuilding the whole list. */
+export type PendingCreationRef = { creationId: string; repoId: string }
+
+export type Row = GroupHeaderRow | WorktreeRow | ImportedWorktreesCardRow | PendingCreationRow
+
+function buildPendingCreationRow(
+  creation: PendingCreationRef,
+  repoMap: Map<string, Repo>
+): PendingCreationRow {
+  return {
+    type: 'pending-creation',
+    key: `pending:${creation.creationId}`,
+    creationId: creation.creationId,
+    repo: repoMap.get(creation.repoId)
+  }
+}
 
 type OrderedGroupEntry = [string, { label: string; items: Worktree[]; repo?: Repo }]
 
@@ -506,9 +531,26 @@ export function buildRows(
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],
   placeholderRepoIds: ReadonlySet<string> = new Set(),
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
+  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map(),
+  pendingCreations: readonly PendingCreationRef[] = []
 ): Row[] {
   const result: Row[] = []
+
+  const pendingByRepo = new Map<string, PendingCreationRef[]>()
+  for (const creation of pendingCreations) {
+    const list = pendingByRepo.get(creation.repoId) ?? []
+    list.push(creation)
+    pendingByRepo.set(creation.repoId, list)
+  }
+
+  // Why: non-repo groupings have no repo section to nest an in-progress create
+  // under, so surface them at the very top (where the old global strip sat)
+  // rather than dropping them. Repo grouping nests them under their repo below.
+  if (groupBy !== 'repo' && pendingCreations.length > 0) {
+    for (const creation of pendingCreations) {
+      result.push(buildPendingCreationRow(creation, repoMap))
+    }
+  }
 
   const visibleUnpinnedRepoIds = new Set(
     worktrees.filter((worktree) => !worktree.isPinned).map((worktree) => worktree.repoId)
@@ -594,6 +636,18 @@ export function buildRows(
           items: [],
           repo: candidate.repo
         })
+      }
+    }
+  }
+  if (groupBy === 'repo') {
+    for (const repoId of pendingByRepo.keys()) {
+      const key = `repo:${repoId}`
+      if (!grouped.has(key)) {
+        // Why: creating the first worktree in a repo leaves it with no group yet;
+        // ensure one so the in-progress row nests under its repo instead of being
+        // dropped.
+        const repo = repoMap.get(repoId)
+        grouped.set(key, { label: repo?.displayName ?? 'Unknown', items: [], repo })
       }
     }
   }
@@ -684,6 +738,12 @@ export function buildRows(
           const candidate = importedWorktreesByRepo.get(repo.id)
           if (candidate) {
             result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
+          }
+          // Why: surface in-progress creates at the top of their own repo so the
+          // new workspace appears where it will land, not flashed to the very top
+          // of the sidebar.
+          for (const creation of pendingByRepo.get(repo.id) ?? []) {
+            result.push(buildPendingCreationRow(creation, repoMap))
           }
         }
         const items = groupBy === 'repo' ? orderMainWorktreeFirst(group.items) : group.items

@@ -17,6 +17,11 @@ import {
 import type { CreateWorktreeResult } from '../../../shared/types'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 
+// Why: most local creates finish in well under this window; holding the loader
+// back this long means a fast create swaps prior content → terminal with no
+// loader flash, while a genuinely slow create still surfaces one promptly.
+const CREATION_LOADER_DEBOUNCE_MS = 280
+
 // Why: mirrors the startup-opt the composer used to build inline. The renderer
 // only seeds the first terminal when the backend did not already spawn it.
 function buildStartupOpt(
@@ -94,9 +99,13 @@ async function executeWorktreeCreation(
       return
     }
     const message = getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error))
-    useAppStore
-      .getState()
-      .updatePendingWorktreeCreation(creationId, { status: 'error', error: message })
+    // Why: an error must surface immediately even if it lands before the loader
+    // debounce fired, so force the loader visible alongside the error.
+    useAppStore.getState().updatePendingWorktreeCreation(creationId, {
+      status: 'error',
+      error: message,
+      loaderVisible: true
+    })
     // Why: only toast when the panel isn't already showing this error (the user
     // navigated away), so a visible failure isn't announced twice.
     if (useAppStore.getState().activePendingCreationId !== creationId) {
@@ -193,12 +202,19 @@ export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest):
     phase: 'fetching',
     status: 'creating',
     indeterminate,
+    loaderVisible: false,
     request
   })
   // Why: the creation panel only renders under the terminal view (App content
   // router), so force it active so the panel is what fills the content area.
   store.setActiveView('terminal')
   store.setSidebarOpen(true)
+  // Why: debounce the loader so a fast create never flashes it. The prior
+  // workspace stays visible until the delay elapses; if the create resolves
+  // first, removePendingWorktreeCreation clears the entry and this update no-ops.
+  setTimeout(() => {
+    useAppStore.getState().updatePendingWorktreeCreation(creationId, { loaderVisible: true })
+  }, CREATION_LOADER_DEBOUNCE_MS)
   void executeWorktreeCreation(creationId, request)
 }
 
