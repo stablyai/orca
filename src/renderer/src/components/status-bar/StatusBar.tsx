@@ -45,6 +45,7 @@ import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
 import { PortsStatusSegment } from './PortsStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { isProviderConfigured } from './status-bar-provider-visibility'
+import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -1613,6 +1614,16 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
+  // Why: a brand-new user with no provider configured would otherwise see an
+  // empty left side of the status bar and wonder what's missing. The CTA
+  // names the surface and points to the setup path. Detection is on
+  // configuration (not user toggles) so users who intentionally hid a
+  // provider's bar don't get the teaching prompt back.
+  const isEmptyUsageState =
+    !isProviderConfigured(claude) &&
+    !isProviderConfigured(codex) &&
+    !isProviderConfigured(gemini) &&
+    !isProviderConfigured(opencodeGo)
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
@@ -1647,25 +1658,33 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       }}
     >
       <div className="flex items-center gap-3">
-        {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
-        {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
-        {showGemini && (
-          <ProviderDetailsMenu
-            provider={gemini}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open Gemini usage details"
-          />
+        {isEmptyUsageState ? (
+          <StatusBarUsageEmptyCta />
+        ) : (
+          <>
+            {showClaude && (
+              <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />
+            )}
+            {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+            {showGemini && (
+              <ProviderDetailsMenu
+                provider={gemini}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open Gemini usage details"
+              />
+            )}
+            {showOpencodeGo && (
+              <ProviderDetailsMenu
+                provider={opencodeGo}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open OpenCode Go usage details"
+              />
+            )}
+          </>
         )}
-        {showOpencodeGo && (
-          <ProviderDetailsMenu
-            provider={opencodeGo}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open OpenCode Go usage details"
-          />
-        )}
-        {anyVisible && (
+        {anyVisible && !isEmptyUsageState && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
