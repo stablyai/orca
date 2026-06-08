@@ -7020,6 +7020,156 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('keeps live headless mobile session terminals when a desktop renderer publishes without them', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'serve-mobile-pty' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    const created = await runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`)
+
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    })
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer-empty',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: created.tab.id,
+        parentTabId: created.tab.parentTabId,
+        leafId: created.tab.leafId,
+        ptyId: 'serve-mobile-pty',
+        status: 'ready'
+      })
+    ])
+  })
+
+  it('hydrates persisted serve-owned mobile session terminals while a renderer is attached', async () => {
+    const focusTerminal = vi.fn()
+    const spawn = vi.fn().mockResolvedValue({ id: 'serve-persisted-pty', isReattach: true })
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
+      makeWorkspaceSessionWithHeadlessTerminal({
+        tabsByWorktree: {
+          [TEST_WORKTREE_ID]: [
+            {
+              id: 'host-tab',
+              ptyId: 'serve-persisted-pty',
+              worktreeId: TEST_WORKTREE_ID,
+              title: 'Persisted Mobile Terminal',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        terminalLayoutsByTabId: {
+          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: 'serve-persisted-pty' })
+        }
+      })
+    )
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal,
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    electronMocks.BrowserWindow.fromId.mockReturnValue({
+      isDestroyed: () => false,
+      webContents: { send: vi.fn() }
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer-empty',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: `host-tab::${HEADLESS_LEAF_ID}`,
+        parentTabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID,
+        ptyId: 'serve-persisted-pty',
+        status: 'pending-handle'
+      })
+    ])
+    expect(listed.tabGroups?.[0]).toMatchObject({
+      activeTabId: 'host-tab',
+      tabOrder: ['host-tab']
+    })
+
+    const activated = await runtime.activateMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab')
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID,
+        sessionId: 'serve-persisted-pty',
+        persistHostSessionBinding: true,
+        worktreeId: TEST_WORKTREE_ID
+      })
+    )
+    expect(focusTerminal).not.toHaveBeenCalled()
+    expect(activated.tabs[0]).toMatchObject({
+      type: 'terminal',
+      parentTabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      status: 'ready'
+    })
+  })
+
   it('hydrates legacy persisted terminal tabs without layout entries', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({

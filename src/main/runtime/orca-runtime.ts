@@ -163,6 +163,7 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabGroup,
+  RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
@@ -2127,9 +2128,13 @@ export class OrcaRuntimeService {
 
   private hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
     worktreeId?: string,
-    options: { force?: boolean } = {}
+    options: {
+      force?: boolean
+      allowAttachedWindow?: boolean
+      onlyServeOwnedTerminals?: boolean
+    } = {}
   ): void {
-    if (this.getAvailableAuthoritativeWindow()) {
+    if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
       return
     }
     const session = this.store?.getWorkspaceSession?.()
@@ -2142,33 +2147,146 @@ export class OrcaRuntimeService {
         : Object.entries(session.tabsByWorktree ?? {})
     for (const [entryWorktreeId, persistedTabs] of entries) {
       const existing = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
-      if (existing && existing.tabs.length > 0 && options.force !== true) {
+      if (
+        existing &&
+        existing.tabs.length > 0 &&
+        options.force !== true &&
+        options.onlyServeOwnedTerminals !== true
+      ) {
         continue
       }
-      const tabs = this.buildHeadlessMobileSessionTerminalTabs(entryWorktreeId, persistedTabs)
+      const tabs = this.buildHeadlessMobileSessionTerminalTabs(
+        entryWorktreeId,
+        persistedTabs
+      ).filter(
+        (tab) => options.onlyServeOwnedTerminals !== true || this.hasServeOwnedPtyBinding(tab)
+      )
       if (tabs.length === 0) {
         continue
       }
       const activeTab = this.pickHeadlessActiveTerminalTab(tabs)
       const tabOrder = this.collectHeadlessParentTabOrder(tabs)
       const groupId = this.getHeadlessMobileSessionGroupId(entryWorktreeId)
+      const mergedTabs =
+        options.onlyServeOwnedTerminals === true && existing
+          ? this.mergeMobileSessionSnapshotTabs(existing.tabs, tabs)
+          : tabs
+      const mergedActiveTab =
+        existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
+        activeTab ??
+        (mergedTabs[0]?.type === 'terminal' ? mergedTabs[0] : null)
+      const mergedTerminalTabs = mergedTabs.filter(
+        (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+      )
       this.mobileSessionTabsByWorktree.set(entryWorktreeId, {
-        worktree: entryWorktreeId,
+        worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
         snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-        activeGroupId: groupId,
-        activeTabId: activeTab?.id ?? null,
-        activeTabType: activeTab ? 'terminal' : null,
-        tabGroups: [
-          {
-            id: groupId,
-            activeTabId: activeTab?.parentTabId ?? tabOrder[0] ?? null,
-            tabOrder
-          }
-        ],
-        tabs
+        activeGroupId: existing?.activeGroupId ?? groupId,
+        activeTabId: mergedActiveTab?.id ?? null,
+        activeTabType: mergedActiveTab?.type ?? null,
+        tabGroups:
+          options.onlyServeOwnedTerminals === true && existing?.tabGroups
+            ? this.mergeMobileSessionTabGroups(
+                entryWorktreeId,
+                existing.tabGroups,
+                mergedTerminalTabs,
+                mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
+              )
+            : [
+                {
+                  id: groupId,
+                  activeTabId: activeTab?.parentTabId ?? tabOrder[0] ?? null,
+                  tabOrder
+                }
+              ],
+        tabs: mergedTabs
       })
     }
+  }
+
+  private isServeOwnedPtyId(ptyId: string | null | undefined): boolean {
+    return typeof ptyId === 'string' && ptyId.startsWith('serve-')
+  }
+
+  private hasServeOwnedPtyBinding(tab: RuntimeMobileSessionTerminalTab): boolean {
+    if (this.isServeOwnedPtyId(tab.ptyId)) {
+      return true
+    }
+    return Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).some((ptyId) =>
+      this.isServeOwnedPtyId(ptyId)
+    )
+  }
+
+  private mergeMobileSessionSnapshotTabs(
+    baseTabs: readonly RuntimeMobileSessionSnapshotTab[],
+    extraTabs: readonly RuntimeMobileSessionSnapshotTab[]
+  ): RuntimeMobileSessionSnapshotTab[] {
+    const seenIds = new Set<string>()
+    const merged: RuntimeMobileSessionSnapshotTab[] = []
+    const add = (tab: RuntimeMobileSessionSnapshotTab): void => {
+      const ids = this.getMobileSessionSnapshotTabIdentityKeys(tab)
+      if (ids.some((id) => seenIds.has(id))) {
+        return
+      }
+      for (const id of ids) {
+        seenIds.add(id)
+      }
+      merged.push(tab)
+    }
+    for (const tab of baseTabs) {
+      add(tab)
+    }
+    for (const tab of extraTabs) {
+      add(tab)
+    }
+    return merged
+  }
+
+  private getMobileSessionSnapshotTabIdentityKeys(tab: RuntimeMobileSessionSnapshotTab): string[] {
+    if (tab.type === 'terminal') {
+      return [tab.id, tab.parentTabId]
+    }
+    if (tab.type === 'browser') {
+      return [tab.id, tab.browserWorkspaceId]
+    }
+    return [tab.id]
+  }
+
+  private mergeMobileSessionTabGroups(
+    worktreeId: string,
+    groups: readonly RuntimeMobileSessionTabGroup[],
+    terminalTabs: readonly RuntimeMobileSessionTerminalTab[],
+    activeTab: RuntimeMobileSessionTerminalTab | null
+  ): RuntimeMobileSessionTabGroup[] {
+    const parentTabOrder = this.collectHeadlessParentTabOrder(terminalTabs)
+    if (parentTabOrder.length === 0) {
+      return [...groups]
+    }
+    const targetGroupId = groups[0]?.id ?? this.getHeadlessMobileSessionGroupId(worktreeId)
+    const nextGroups =
+      groups.length > 0
+        ? groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
+        : [
+            {
+              id: targetGroupId,
+              activeTabId: null,
+              tabOrder: []
+            }
+          ]
+    const target = nextGroups[0]!
+    for (const tabId of parentTabOrder) {
+      if (!target.tabOrder.includes(tabId)) {
+        target.tabOrder.push(tabId)
+      }
+    }
+    const activeParentId =
+      activeTab?.parentTabId ?? target.activeTabId ?? target.tabOrder[0] ?? null
+    target.activeTabId =
+      activeParentId && target.tabOrder.includes(activeParentId)
+        ? activeParentId
+        : (target.tabOrder[0] ?? null)
+    return nextGroups
   }
 
   private buildHeadlessMobileSessionTerminalTabs(
@@ -2468,11 +2586,14 @@ export class OrcaRuntimeService {
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )
-      if (
+      // Why: serve-created tabs can be visible before any renderer has adopted
+      // their tab id, so focusing the renderer would silently no-op.
+      const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
-        !this.notifier?.focusTerminal
-      ) {
+        (!this.notifier?.focusTerminal ||
+          this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
+      if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
         try {
           await this.createHeadlessMobileSessionTerminal(worktreeId, true, undefined, undefined, {
@@ -2509,6 +2630,16 @@ export class OrcaRuntimeService {
       this.notifier?.focusEditorTab?.(tab.id, worktreeId)
     }
     return this.getMobileSessionTabsForWorktree(worktreeId)
+  }
+
+  private shouldMaterializeHeadlessMobileSessionTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    return (
+      this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch) ||
+      this.hasServeOwnedPtyBinding(tab)
+    )
   }
 
   async closeMobileSessionTab(worktreeSelector: string, tabId: string): Promise<{ closed: true }> {
@@ -12287,24 +12418,172 @@ export class OrcaRuntimeService {
     if (snapshots === undefined) {
       return
     }
+    // Why: renderer graphs are authoritative for renderer tabs, but headless
+    // serve terminals never enter that graph unless we preserve their bindings.
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(undefined, {
+      allowAttachedWindow: true,
+      onlyServeOwnedTerminals: true
+    })
     const nextWorktrees = new Set<string>()
     for (const snapshot of snapshots) {
       nextWorktrees.add(snapshot.worktree)
       const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
+      const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(snapshot, existing)
       if (
         !existing ||
-        snapshot.publicationEpoch !== existing.publicationEpoch ||
-        snapshot.snapshotVersion >= existing.snapshotVersion
+        nextSnapshot.publicationEpoch !== existing.publicationEpoch ||
+        nextSnapshot.snapshotVersion >= existing.snapshotVersion
       ) {
-        this.mobileSessionTabsByWorktree.set(snapshot.worktree, snapshot)
+        this.mobileSessionTabsByWorktree.set(snapshot.worktree, nextSnapshot)
       }
     }
-    for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
+    for (const [worktreeId, existing] of [...this.mobileSessionTabsByWorktree.entries()]) {
       if (!nextWorktrees.has(worktreeId)) {
-        this.mobileSessionTabsByWorktree.delete(worktreeId)
-        this.notifyMobileSessionTabsRemoved(worktreeId)
+        const preserved = this.buildPreservedHeadlessMobileSessionSnapshot(existing)
+        if (preserved) {
+          this.mobileSessionTabsByWorktree.set(worktreeId, preserved)
+          nextWorktrees.add(worktreeId)
+        } else {
+          this.mobileSessionTabsByWorktree.delete(worktreeId)
+          this.notifyMobileSessionTabsRemoved(worktreeId)
+        }
       }
     }
+  }
+
+  private mergePreservedHeadlessMobileSessionTabs(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    existing: RuntimeMobileSessionTabsSnapshot | undefined
+  ): RuntimeMobileSessionTabsSnapshot {
+    if (!existing) {
+      return snapshot
+    }
+    const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
+    if (preservedTabs.length === 0) {
+      return snapshot
+    }
+    const hasIncomingActiveTab = snapshot.tabs.some((tab) => tab.isActive)
+    const normalizedPreservedTabs = preservedTabs.map((tab) =>
+      hasIncomingActiveTab ? { ...tab, isActive: false } : tab
+    )
+    const tabs = this.mergeMobileSessionSnapshotTabs(snapshot.tabs, normalizedPreservedTabs)
+    if (tabs.length === snapshot.tabs.length) {
+      return snapshot
+    }
+    const activeTab =
+      snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ??
+      tabs.find((tab) => tab.id === existing.activeTabId) ??
+      tabs.find((tab) => tab.isActive) ??
+      tabs[0] ??
+      null
+    const terminalTabs = tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+    )
+    return {
+      ...snapshot,
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(
+        snapshot,
+        normalizedPreservedTabs
+      ),
+      snapshotVersion: Math.max(snapshot.snapshotVersion, existing.snapshotVersion),
+      activeGroupId: snapshot.activeGroupId ?? existing.activeGroupId,
+      activeTabId: activeTab?.id ?? null,
+      activeTabType: activeTab?.type ?? null,
+      tabGroups: this.mergeMobileSessionTabGroups(
+        snapshot.worktree,
+        snapshot.tabGroups ?? existing.tabGroups ?? [],
+        terminalTabs,
+        activeTab?.type === 'terminal' ? activeTab : null
+      ),
+      tabs
+    }
+  }
+
+  private buildPreservedHeadlessMobileSessionSnapshot(
+    existing: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot | null {
+    const tabs = this.collectPreservedHeadlessMobileSessionTabs(existing)
+    if (tabs.length === 0) {
+      return null
+    }
+    const activeTab =
+      tabs.find((tab) => tab.id === existing.activeTabId) ??
+      tabs.find((tab) => tab.isActive) ??
+      tabs[0] ??
+      null
+    const terminalTabs = tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+    )
+    return {
+      ...existing,
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
+      activeGroupId:
+        existing.activeGroupId ?? this.getHeadlessMobileSessionGroupId(existing.worktree),
+      activeTabId: activeTab?.id ?? null,
+      activeTabType: activeTab?.type ?? null,
+      tabGroups: this.mergeMobileSessionTabGroups(
+        existing.worktree,
+        existing.tabGroups ?? [],
+        terminalTabs,
+        activeTab?.type === 'terminal' ? activeTab : null
+      ),
+      tabs
+    }
+  }
+
+  private collectPreservedHeadlessMobileSessionTabs(
+    existing: RuntimeMobileSessionTabsSnapshot,
+    incoming?: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionSnapshotTab[] {
+    const incomingIds = new Set(
+      incoming?.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab)) ?? []
+    )
+    return existing.tabs.filter((tab) => {
+      if (this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) => incomingIds.has(id))) {
+        return false
+      }
+      return this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
+    })
+  }
+
+  private shouldPreserveHeadlessMobileSessionTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionSnapshotTab
+  ): boolean {
+    if (tab.type !== 'terminal') {
+      return false
+    }
+    return (
+      this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch) ||
+      this.hasServeOwnedPtyBinding(tab)
+    )
+  }
+
+  private isHeadlessMobileSessionPublication(publicationEpoch: string): boolean {
+    return (
+      publicationEpoch.startsWith('headless:') ||
+      publicationEpoch.startsWith('headless-hydrated:') ||
+      publicationEpoch.includes(':headless-merge:')
+    )
+  }
+
+  private getMergedMobileSessionPublicationEpoch(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
+  ): string {
+    const signature = createHash('sha1')
+      .update(
+        preservedTabs
+          .map((tab) =>
+            tab.type === 'terminal'
+              ? `${tab.id}:${tab.parentTabId}:${tab.ptyId ?? ''}:${tab.leafId}`
+              : tab.id
+          )
+          .join('|')
+      )
+      .digest('hex')
+      .slice(0, 12)
+    return `${snapshot.publicationEpoch}:headless-merge:${signature}`
   }
 
   private notifyMobileSessionTabsRemoved(worktreeId: string): void {
