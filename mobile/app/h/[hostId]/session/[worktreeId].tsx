@@ -115,6 +115,7 @@ import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
+  mobileSessionTabsEqual,
   terminalRecordsEqual,
   type TerminalRecord
 } from '../../../../src/session/mobile-terminal-records'
@@ -130,6 +131,7 @@ import {
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 import type { DiffComment } from '../../../../../src/shared/types'
+import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 
 type Terminal = TerminalRecord
 
@@ -144,6 +146,7 @@ type MobileSessionTab =
       leafId?: string
       status?: 'pending-handle' | 'ready'
       terminal: string | null
+      agentStatus?: AgentStatusEntry | null
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }
@@ -240,59 +243,6 @@ type DirtyMarkdownDraft = {
   tabId: string
   title: string
   content: string
-}
-
-function mobileSessionTabsEqual(a: MobileSessionTab[], b: MobileSessionTab[]): boolean {
-  return a.length === b.length && a.every((tab, index) => mobileSessionTabEqual(tab, b[index]))
-}
-
-function mobileSessionTabEqual(a: MobileSessionTab, b: MobileSessionTab | undefined): boolean {
-  if (
-    !b ||
-    a.type !== b.type ||
-    a.id !== b.id ||
-    a.title !== b.title ||
-    a.isActive !== b.isActive
-  ) {
-    return false
-  }
-  switch (a.type) {
-    case 'terminal':
-      return (
-        b.type === 'terminal' &&
-        a.parentTabId === b.parentTabId &&
-        a.leafId === b.leafId &&
-        a.status === b.status &&
-        a.terminal === b.terminal &&
-        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
-      )
-    case 'markdown':
-      return (
-        b.type === 'markdown' &&
-        a.filePath === b.filePath &&
-        a.relativePath === b.relativePath &&
-        a.isDirty === b.isDirty &&
-        a.documentVersion === b.documentVersion
-      )
-    case 'file':
-      return (
-        b.type === 'file' &&
-        a.filePath === b.filePath &&
-        a.relativePath === b.relativePath &&
-        a.language === b.language &&
-        a.isDirty === b.isDirty
-      )
-    case 'browser':
-      return (
-        b.type === 'browser' &&
-        a.browserWorkspaceId === b.browserWorkspaceId &&
-        a.browserPageId === b.browserPageId &&
-        a.url === b.url &&
-        a.loading === b.loading &&
-        a.canGoBack === b.canGoBack &&
-        a.canGoForward === b.canGoForward
-      )
-  }
 }
 
 function getActiveTabIdForHandle(

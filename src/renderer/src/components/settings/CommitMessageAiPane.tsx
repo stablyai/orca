@@ -1,52 +1,28 @@
-/* eslint-disable max-lines -- Why: each agent setting (toggle, agent dropdown,
-   model dropdown, thinking effort dropdown, custom command, custom prompt) is
-   a SearchableSetting block, and splitting the pane across files would scatter
-   the ~6 conditional render branches without making any of them clearer. */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown, RefreshCw, Terminal } from 'lucide-react'
+import { useRef } from 'react'
+import type React from 'react'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import type {
-  SourceControlAiOperation,
   SourceControlAiSettingsPatch,
   SourceControlAiSettings
 } from '../../../../shared/source-control-ai-types'
 import {
-  clearSourceControlAiModelChoiceForHost,
   normalizeSourceControlAiSettings,
   readSourceControlAiModelChoiceForHost,
   selectSourceControlAiModelChoiceForHost
 } from '../../../../shared/source-control-ai'
+import { SOURCE_CONTROL_TEXT_ACTION_IDS } from '../../../../shared/source-control-ai-actions'
 import {
   CUSTOM_AGENT_ID,
-  getCommitMessageAgentCapability,
   isCustomAgentId,
-  listCommitMessageAgentCapabilities,
-  resolveCommitMessageAgentChoice,
-  type CommitMessageAgentCapability,
   type CommitMessageModelCapability
 } from '../../../../shared/commit-message-agent-spec'
-import { CUSTOM_PROMPT_PLACEHOLDER } from '../../../../shared/commit-message-prompt'
-import {
-  getCommitMessageModelDiscoveryHostKeyForScope,
-  LOCAL_COMMIT_MESSAGE_HOST_KEY
-} from '../../../../shared/commit-message-host-key'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
-import { getConnectionId } from '@/lib/connection-context'
-import { cn } from '@/lib/utils'
-import { Button } from '../ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
-import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import {
-  discoverRuntimeCommitMessageModels,
-  getRuntimeGitScope
-} from '../../runtime/runtime-git-client'
+import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../shared/commit-message-host-key'
+import { getRuntimeGitScope } from '../../runtime/runtime-git-client'
 import { useAppStore } from '../../store'
-import { useActiveWorktree } from '../../store/selectors'
-import { AutoRenameBranchPromptEditor } from './AutoRenameBranchPromptEditor'
-import { AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY } from './auto-rename-branch-search'
+import { Input } from '../ui/input'
+import { Label } from '../ui/label'
 import { SearchableSetting } from './SearchableSetting'
-import { COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES } from './commit-message-ai-search'
+import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
 import { matchesSettingsSearch } from './settings-search'
 
 type CommitMessageAiPaneProps = {
@@ -58,144 +34,8 @@ type CommitMessageAiPaneProps = {
   settingsSearchQuery?: string
 }
 
-type ModelDiscoveryState = {
-  status: 'idle' | 'loading' | 'ready' | 'error'
-  hostKey: string
-  models: CommitMessageModelCapability[]
-  defaultModelId?: string
-  error?: string
-}
-
-type CommitMessageInstructionOperation = Extract<
-  SourceControlAiOperation,
-  'commitMessage' | 'pullRequest' | 'branchName'
->
-
-type CommitMessageInstructionDraftValues = Record<CommitMessageInstructionOperation, string>
-
-type CommitMessageInstructionDraftState = {
-  source: CommitMessageInstructionDraftValues
-  draft: CommitMessageInstructionDraftValues
-  discardSignal: number | undefined
-}
-
-const COMMIT_MESSAGE_INSTRUCTION_OPERATIONS: readonly CommitMessageInstructionOperation[] = [
-  'commitMessage',
-  'pullRequest',
-  'branchName'
-]
-
-function cloneInstructionDraftValues(
-  values: CommitMessageInstructionDraftValues
-): CommitMessageInstructionDraftValues {
-  return {
-    commitMessage: values.commitMessage,
-    pullRequest: values.pullRequest,
-    branchName: values.branchName
-  }
-}
-
-export function createCommitMessageInstructionDraftState(
-  source: CommitMessageInstructionDraftValues,
-  discardSignal: number | undefined
-): CommitMessageInstructionDraftState {
-  return {
-    source: cloneInstructionDraftValues(source),
-    draft: cloneInstructionDraftValues(source),
-    discardSignal
-  }
-}
-
-export function resolveCommitMessageInstructionDraftState(
-  state: CommitMessageInstructionDraftState,
-  source: CommitMessageInstructionDraftValues,
-  discardSignal: number | undefined
-): CommitMessageInstructionDraftState {
-  if (state.discardSignal !== discardSignal) {
-    return createCommitMessageInstructionDraftState(source, discardSignal)
-  }
-
-  let changed = false
-  const nextSource = cloneInstructionDraftValues(state.source)
-  const nextDraft = cloneInstructionDraftValues(state.draft)
-  for (const operation of COMMIT_MESSAGE_INSTRUCTION_OPERATIONS) {
-    if (state.source[operation] === source[operation]) {
-      continue
-    }
-    if (state.draft[operation] === state.source[operation]) {
-      nextDraft[operation] = source[operation]
-    }
-    nextSource[operation] = source[operation]
-    changed = true
-  }
-
-  return changed
-    ? {
-        source: nextSource,
-        draft: nextDraft,
-        discardSignal
-      }
-    : state
-}
-
-const UNCONFIGURED_AGENT_SELECT_VALUE = ''
-const INHERIT_MODEL_SELECT_VALUE = '__inherit__'
-const COMING_SOON_COMMIT_MESSAGE_AGENTS: readonly { id: TuiAgent; label: string }[] = [
-  { id: 'gemini', label: 'Gemini' }
-]
-const GIT_AI_AUTHOR_SETTINGS_TITLE = 'Git AI Author'
-
 function readSettings(settings: GlobalSettings): SourceControlAiSettings {
   return normalizeSourceControlAiSettings(settings.sourceControlAi, settings.commitMessageAi)
-}
-
-function agentLabel(agentId: TuiAgent, capability: CommitMessageAgentCapability): string {
-  return AGENT_CATALOG.find((a) => a.id === agentId)?.label ?? capability.label
-}
-
-function readSelectedModelId(
-  config: SourceControlAiSettings,
-  hostKey: string,
-  agentId: TuiAgent
-): string | undefined {
-  return readSourceControlAiModelChoiceForHost(
-    {
-      selectedModelByAgent: config.selectedModelByAgent,
-      selectedModelByAgentByHost: config.selectedModelByAgentByHost
-    },
-    hostKey,
-    agentId
-  )
-}
-
-function resolveSelectedModel(
-  config: SourceControlAiSettings,
-  capability: CommitMessageAgentCapability,
-  hostKey: string
-): CommitMessageModelCapability {
-  const persisted = readSelectedModelId(config, hostKey, capability.id)
-  if (persisted) {
-    const found = capability.models.find((m) => m.id === persisted)
-    if (found) {
-      return found
-    }
-  }
-  // Why: defaultModelId is guaranteed to exist in provider capabilities by construction.
-  return capability.models.find((m) => m.id === capability.defaultModelId) ?? capability.models[0]
-}
-
-function resolveSelectedThinking(
-  config: SourceControlAiSettings,
-  model: CommitMessageModelCapability
-): string | undefined {
-  if (!model.thinkingLevels) {
-    return undefined
-  }
-  const persisted = config.selectedThinkingByModel[model.id]
-  if (persisted && model.thinkingLevels.some((l) => l.id === persisted)) {
-    return persisted
-  }
-  return model.defaultThinkingLevel
 }
 
 export function mergeDiscoveredModelsIntoCommitMessageConfig(
@@ -203,67 +43,36 @@ export function mergeDiscoveredModelsIntoCommitMessageConfig(
   agentId: TuiAgent,
   models: CommitMessageModelCapability[],
   defaultModelId: string,
-  hostKey = LOCAL_COMMIT_MESSAGE_HOST_KEY
+  hostKey = 'local'
 ): SourceControlAiSettings {
-  const persisted = readSelectedModelId(config, hostKey, agentId)
+  const currentChoice = {
+    selectedModelByAgent: config.selectedModelByAgent,
+    selectedModelByAgentByHost: config.selectedModelByAgentByHost
+  }
+  const persisted = readSourceControlAiModelChoiceForHost(currentChoice, hostKey, agentId)
   const nextModelId = models.some((model) => model.id === persisted) ? persisted : defaultModelId
   const selectedModelChoice =
     nextModelId && nextModelId !== persisted
-      ? selectSourceControlAiModelChoiceForHost(
-          {
-            selectedModelByAgent: config.selectedModelByAgent,
-            selectedModelByAgentByHost: config.selectedModelByAgentByHost
-          },
-          hostKey,
-          agentId,
-          nextModelId
-        )
-      : {
-          selectedModelByAgent: config.selectedModelByAgent,
-          selectedModelByAgentByHost: config.selectedModelByAgentByHost
-        }
-  const nextHostDiscoveredModels = {
-    ...config.discoveredModelsByAgentByHost?.[hostKey],
-    [agentId]: models
-  }
+      ? selectSourceControlAiModelChoiceForHost(currentChoice, hostKey, agentId, nextModelId)
+      : currentChoice
   return {
     ...config,
-    ...(hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
-      ? {
-          discoveredModelsByAgent: {
+    discoveredModelsByAgent:
+      hostKey === 'local'
+        ? {
             ...config.discoveredModelsByAgent,
             [agentId]: models
-          },
-          selectedModelByAgent:
-            selectedModelChoice.selectedModelByAgent ?? config.selectedModelByAgent
-        }
-      : {}),
+          }
+        : config.discoveredModelsByAgent,
     discoveredModelsByAgentByHost: {
       ...config.discoveredModelsByAgentByHost,
-      [hostKey]: nextHostDiscoveredModels
+      [hostKey]: {
+        ...config.discoveredModelsByAgentByHost?.[hostKey],
+        [agentId]: models
+      }
     },
+    selectedModelByAgent: selectedModelChoice.selectedModelByAgent ?? config.selectedModelByAgent,
     selectedModelByAgentByHost: selectedModelChoice.selectedModelByAgentByHost
-  }
-}
-
-function selectModelForHost(
-  config: SourceControlAiSettings,
-  hostKey: string,
-  agentId: TuiAgent,
-  modelId: string
-): Pick<SourceControlAiSettings, 'selectedModelByAgent' | 'selectedModelByAgentByHost'> {
-  const choice = selectSourceControlAiModelChoiceForHost(
-    {
-      selectedModelByAgent: config.selectedModelByAgent,
-      selectedModelByAgentByHost: config.selectedModelByAgentByHost
-    },
-    hostKey,
-    agentId,
-    modelId
-  )
-  return {
-    selectedModelByAgent: choice.selectedModelByAgent ?? config.selectedModelByAgent,
-    selectedModelByAgentByHost: choice.selectedModelByAgentByHost
   }
 }
 
@@ -288,561 +97,41 @@ export function CommitMessageAiPane({
 }: CommitMessageAiPaneProps): React.JSX.Element {
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
-  const activeWorktree = useActiveWorktree()
-  const activeConnectionId = getConnectionId(activeWorktree?.id ?? null)
-  const discoveryHostKey = getCommitMessageSettingsPaneDiscoveryHostKey(
-    settings,
-    activeConnectionId,
-    Boolean(activeWorktree?.id)
-  )
   const config = readSettings(settings)
-  const latestConfigRef = useRef(config)
-  latestConfigRef.current = config
   const settingsWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
-  const [modelDiscoveryByAgent, setModelDiscoveryByAgent] = useState<
-    Partial<Record<TuiAgent, ModelDiscoveryState>>
-  >({})
-  const [outputOverridesOpen, setOutputOverridesOpen] = useState(false)
-  const persistedCommitInstructions = config.instructionsByOperation.commitMessage ?? ''
-  const persistedPullRequestInstructions = config.instructionsByOperation.pullRequest ?? ''
-  const persistedBranchNameInstructions = config.instructionsByOperation.branchName ?? ''
-  const persistedInstructionDraftValues: CommitMessageInstructionDraftValues = {
-    commitMessage: persistedCommitInstructions,
-    pullRequest: persistedPullRequestInstructions,
-    branchName: persistedBranchNameInstructions
-  }
-  const [instructionDraftState, setInstructionDraftState] = useState(() =>
-    createCommitMessageInstructionDraftState(
-      persistedInstructionDraftValues,
-      customPromptDiscardSignal
-    )
-  )
-  const [isSavingInstructions, setIsSavingInstructions] = useState(false)
-  const resolvedInstructionDraftState = resolveCommitMessageInstructionDraftState(
-    instructionDraftState,
-    persistedInstructionDraftValues,
-    customPromptDiscardSignal
-  )
-  if (resolvedInstructionDraftState !== instructionDraftState) {
-    // Why: prompt drafts should follow persisted settings only while clean,
-    // and the parent discard signal must reset all unsaved instruction edits.
-    setInstructionDraftState(resolvedInstructionDraftState)
-  }
-  const commitInstructionsDraft = resolvedInstructionDraftState.draft.commitMessage
-  const pullRequestInstructionsDraft = resolvedInstructionDraftState.draft.pullRequest
-  const branchNameInstructionsDraft = resolvedInstructionDraftState.draft.branchName
-  const updateInstructionDraft = (
-    operation: CommitMessageInstructionOperation,
-    value: string
-  ): void => {
-    setInstructionDraftState((current) => {
-      const resolved = resolveCommitMessageInstructionDraftState(
-        current,
-        persistedInstructionDraftValues,
-        customPromptDiscardSignal
-      )
-      return {
-        ...resolved,
-        draft: {
-          ...resolved.draft,
-          [operation]: value
-        }
-      }
-    })
-  }
-  const isCommitInstructionsDirty = commitInstructionsDraft !== persistedCommitInstructions
-  const isPullRequestInstructionsDirty =
-    pullRequestInstructionsDraft !== persistedPullRequestInstructions
-  const isBranchNameInstructionsDirty =
-    branchNameInstructionsDraft !== persistedBranchNameInstructions
-  const isCustomPromptDirty =
-    isCommitInstructionsDirty || isPullRequestInstructionsDirty || isBranchNameInstructionsDirty
-  const commitPromptDraft = commitInstructionsDraft
-  const pullRequestPromptDraft = pullRequestInstructionsDraft
-  const branchNamePromptDraft = branchNameInstructionsDraft
-  const isCommitPromptDirty = isCommitInstructionsDirty
-  const isPullRequestPromptDirty = isPullRequestInstructionsDirty
-  const isBranchNamePromptDirty = isBranchNameInstructionsDirty
-  const isSavingPrompt = isSavingInstructions
-
-  useEffect(() => {
-    onCustomPromptDirtyChange?.(isCustomPromptDirty)
-  }, [isCustomPromptDirty, onCustomPromptDirtyChange])
-
-  const onCustomPromptDirtyChangeRef = useRef(onCustomPromptDirtyChange)
-  onCustomPromptDirtyChangeRef.current = onCustomPromptDirtyChange
-  const setPaneRootRef = useCallback((node: HTMLDivElement | null): void => {
-    if (node !== null) {
-      return
-    }
-    // Why: Settings owns the global unsaved-prompt guard; reset it when this
-    // pane detaches without keeping a passive cleanup-only Effect.
-    onCustomPromptDirtyChangeRef.current?.(false)
-  }, [])
-
-  const baseAgentCapabilities = useMemo(listCommitMessageAgentCapabilities, [])
-  const agentCapabilities = useMemo(
-    () =>
-      baseAgentCapabilities.map((capability) => {
-        const discovery = modelDiscoveryByAgent[capability.id]
-        if (
-          capability.modelSource !== 'dynamic' ||
-          discovery?.status !== 'ready' ||
-          discovery.hostKey !== discoveryHostKey
-        ) {
-          return capability
-        }
-        return {
-          ...capability,
-          models: discovery.models,
-          defaultModelId: discovery.defaultModelId ?? capability.defaultModelId
-        }
-      }),
-    [baseAgentCapabilities, discoveryHostKey, modelDiscoveryByAgent]
-  )
-  const resolvedAgentId = resolveCommitMessageAgentChoice(
-    config.agentId,
-    settings.defaultTuiAgent,
-    settings.disabledTuiAgents
-  )
-  const unsupportedSelectedAgent =
-    config.agentId &&
-    !isCustomAgentId(config.agentId) &&
-    !getCommitMessageAgentCapability(config.agentId)
-      ? config.agentId
-      : null
-  const activeAgentSelectValue = unsupportedSelectedAgent
-    ? UNCONFIGURED_AGENT_SELECT_VALUE
-    : (resolvedAgentId ?? UNCONFIGURED_AGENT_SELECT_VALUE)
-  const unsupportedDefaultAgent =
-    resolvedAgentId === null &&
-    !config.agentId &&
-    settings.defaultTuiAgent &&
-    settings.defaultTuiAgent !== 'blank'
-      ? settings.defaultTuiAgent
-      : null
-  const unsupportedDefaultAgentLabel = unsupportedDefaultAgent
-    ? (AGENT_CATALOG.find((a) => a.id === unsupportedDefaultAgent)?.label ??
-      unsupportedDefaultAgent)
-    : null
-  const unsupportedSelectedAgentIsComingSoon = COMING_SOON_COMMIT_MESSAGE_AGENTS.some(
-    (agent) => agent.id === unsupportedSelectedAgent
-  )
-  const unsupportedSelectedAgentLabel = unsupportedSelectedAgent
-    ? (COMING_SOON_COMMIT_MESSAGE_AGENTS.find((a) => a.id === unsupportedSelectedAgent)?.label ??
-      AGENT_CATALOG.find((a) => a.id === unsupportedSelectedAgent)?.label ??
-      unsupportedSelectedAgent)
-    : null
-  const isCustom = isCustomAgentId(resolvedAgentId)
-  const activeAgentId = resolvedAgentId && !isCustom ? resolvedAgentId : null
-  const activeCapability = activeAgentId
-    ? (agentCapabilities.find((capability) => capability.id === activeAgentId) ??
-      getCommitMessageAgentCapability(activeAgentId))
-    : undefined
-  const activeModel = activeCapability
-    ? resolveSelectedModel(config, activeCapability, discoveryHostKey)
-    : null
-  const activeThinking = activeModel ? resolveSelectedThinking(config, activeModel) : undefined
-  const rawActiveDiscovery = activeAgentId ? modelDiscoveryByAgent[activeAgentId] : undefined
-  const activeDiscovery =
-    rawActiveDiscovery?.hostKey === discoveryHostKey ? rawActiveDiscovery : undefined
 
   const localWriteConfig = (patch: SourceControlAiSettingsPatch): Promise<void> => {
     const next = settingsWriteQueueRef.current
       .catch(() => undefined)
       .then(async () => {
-        const latestSettings = useAppStore.getState().settings
-        const latestConfig = latestSettings ? readSettings(latestSettings) : latestConfigRef.current
-        const resolvedPatch = typeof patch === 'function' ? patch(latestConfig) : patch
-        await updateSettings({ sourceControlAi: { ...latestConfig, ...resolvedPatch } })
+        const latestSettings = useAppStore.getState().settings ?? settings
+        const current = readSettings(latestSettings)
+        const resolvedPatch = typeof patch === 'function' ? patch(current) : patch
+        await updateSettings({
+          sourceControlAi: {
+            ...current,
+            ...resolvedPatch
+          }
+        })
       })
     settingsWriteQueueRef.current = next
     return next
   }
   const writeConfig = writeSourceControlAiSettings ?? localWriteConfig
 
-  const refreshModels = async (agentId: TuiAgent): Promise<void> => {
-    const capability =
-      agentCapabilities.find((candidate) => candidate.id === agentId) ??
-      getCommitMessageAgentCapability(agentId)
-    if (!capability || capability.modelSource !== 'dynamic') {
-      return
-    }
-    setModelDiscoveryByAgent((prev) => ({
-      ...prev,
-      [agentId]: {
-        status: 'loading',
-        hostKey: discoveryHostKey,
-        models:
-          prev[agentId]?.hostKey === discoveryHostKey
-            ? (prev[agentId]?.models ?? capability.models)
-            : capability.models
-      }
-    }))
-    try {
-      const result = await discoverRuntimeCommitMessageModels(
-        {
-          settings,
-          worktreeId: activeWorktree?.id,
-          worktreePath: activeWorktree?.path ?? '',
-          connectionId: activeConnectionId ?? undefined
-        },
-        agentId
-      )
-      if (!result.success) {
-        setModelDiscoveryByAgent((prev) => ({
-          ...prev,
-          [agentId]: {
-            status: 'error',
-            hostKey: discoveryHostKey,
-            models:
-              prev[agentId]?.hostKey === discoveryHostKey
-                ? (prev[agentId]?.models ?? capability.models)
-                : capability.models,
-            error: result.error
-          }
-        }))
-        return
-      }
-      setModelDiscoveryByAgent((prev) => ({
-        ...prev,
-        [agentId]: {
-          status: 'ready',
-          hostKey: discoveryHostKey,
-          models: result.models,
-          defaultModelId: result.defaultModelId
-        }
-      }))
-      writeConfig((current) =>
-        mergeDiscoveredModelsIntoCommitMessageConfig(
-          current,
-          agentId,
-          result.models,
-          result.defaultModelId,
-          discoveryHostKey
-        )
-      )
-    } catch (error) {
-      setModelDiscoveryByAgent((prev) => ({
-        ...prev,
-        [agentId]: {
-          status: 'error',
-          hostKey: discoveryHostKey,
-          models:
-            prev[agentId]?.hostKey === discoveryHostKey
-              ? (prev[agentId]?.models ?? capability.models)
-              : capability.models,
-          error: error instanceof Error ? error.message : 'Failed to discover models'
-        }
-      }))
-    }
-  }
-
-  useEffect(() => {
-    if (
-      !config.enabled ||
-      isCustom ||
-      !activeCapability ||
-      activeCapability.modelSource !== 'dynamic'
-    ) {
-      return
-    }
-    const discovery = modelDiscoveryByAgent[activeCapability.id]
-    if (
-      discovery?.hostKey === discoveryHostKey &&
-      (discovery.status === 'loading' || discovery.status === 'ready')
-    ) {
-      return
-    }
-    void refreshModels(activeCapability.id)
-    // Why: auto-refresh should run once when a dynamic agent becomes active.
-    // Including the discovery map would retry immediately after an error and
-    // turn a visible CLI failure into a request loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    activeCapability?.id,
-    activeCapability?.modelSource,
-    config.enabled,
-    discoveryHostKey,
-    isCustom
-  ])
-
   const onToggleEnabled = (): void => {
-    const next = !config.enabled
-    if (!next) {
-      writeConfig({ enabled: false })
-      return
-    }
-    // Why: when the user enables the feature for the first time, hydrate the
-    // agent / model / thinking choices from their default agent when possible
-    // so Generate works without maintaining a second agent preference. If the
-    // user previously persisted 'custom', keep it and let them re-edit the
-    // command — no implicit reset to a preset.
-    const defaultTuiAgent = settings.defaultTuiAgent
-    const seedAgentId = resolveCommitMessageAgentChoice(
-      config.agentId,
-      defaultTuiAgent,
-      settings.disabledTuiAgents
-    )
-    if (!seedAgentId) {
-      writeConfig({ enabled: true, agentId: null })
-      return
-    }
-    writeConfig((current) => {
-      const currentSeedAgentId = resolveCommitMessageAgentChoice(
-        current.agentId,
-        defaultTuiAgent,
-        settings.disabledTuiAgents
-      )
-      const agentId = currentSeedAgentId ?? seedAgentId
-      const currentCapability = isCustomAgentId(agentId)
-        ? undefined
-        : getCommitMessageAgentCapability(agentId)
-      const seedModel = currentCapability
-        ? resolveSelectedModel(current, currentCapability, discoveryHostKey)
-        : null
-      const seedThinking = seedModel ? resolveSelectedThinking(current, seedModel) : undefined
-      const selectedModelPatch = currentCapability
-        ? selectModelForHost(
-            current,
-            discoveryHostKey,
-            currentCapability.id,
-            readSelectedModelId(current, discoveryHostKey, currentCapability.id) ??
-              currentCapability.defaultModelId
-          )
-        : {
-            selectedModelByAgent: current.selectedModelByAgent,
-            selectedModelByAgentByHost: current.selectedModelByAgentByHost
-          }
-      const nextSelectedThinkingByModel = { ...current.selectedThinkingByModel }
-      if (seedModel && seedThinking && !nextSelectedThinkingByModel[seedModel.id]) {
-        nextSelectedThinkingByModel[seedModel.id] = seedThinking
-      }
-      return {
-        enabled: true,
-        agentId,
-        ...selectedModelPatch,
-        selectedThinkingByModel: nextSelectedThinkingByModel
-      }
-    })
-    useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
-  }
-
-  const onAgentChange = (newAgentId: string): void => {
-    if (newAgentId === UNCONFIGURED_AGENT_SELECT_VALUE) {
-      return
-    }
-    if (isCustomAgentId(newAgentId)) {
-      writeConfig({ agentId: CUSTOM_AGENT_ID })
-      return
-    }
-    const capability = getCommitMessageAgentCapability(newAgentId as TuiAgent)
-    if (!capability) {
-      return
-    }
-    writeConfig((current) => {
-      const selectedModelPatch = selectModelForHost(
-        current,
-        discoveryHostKey,
-        capability.id,
-        readSelectedModelId(current, discoveryHostKey, capability.id) ?? capability.defaultModelId
-      )
-      const newModel = resolveSelectedModel(
-        { ...current, ...selectedModelPatch, agentId: capability.id },
-        capability,
-        discoveryHostKey
-      )
-      const nextSelectedThinkingByModel = { ...current.selectedThinkingByModel }
-      if (
-        newModel.thinkingLevels &&
-        newModel.defaultThinkingLevel &&
-        !nextSelectedThinkingByModel[newModel.id]
-      ) {
-        nextSelectedThinkingByModel[newModel.id] = newModel.defaultThinkingLevel
-      }
-      return {
-        agentId: capability.id,
-        ...selectedModelPatch,
-        selectedThinkingByModel: nextSelectedThinkingByModel
-      }
-    })
+    void writeConfig({ enabled: !config.enabled })
   }
 
   const onCustomCommandChange = (value: string): void => {
-    writeConfig({ customAgentCommand: value })
-  }
-
-  const onModelChange = (newModelId: string): void => {
-    if (!activeCapability) {
-      return
-    }
-    const model = activeCapability.models.find((m) => m.id === newModelId)
-    if (!model) {
-      return
-    }
-    writeConfig((current) => {
-      const selectedModelPatch = selectModelForHost(
-        current,
-        discoveryHostKey,
-        activeCapability.id,
-        model.id
-      )
-      const nextSelectedThinkingByModel = { ...current.selectedThinkingByModel }
-      if (
-        model.thinkingLevels &&
-        model.defaultThinkingLevel &&
-        !nextSelectedThinkingByModel[model.id]
-      ) {
-        nextSelectedThinkingByModel[model.id] = model.defaultThinkingLevel
-      }
-      return {
-        ...selectedModelPatch,
-        selectedThinkingByModel: nextSelectedThinkingByModel
-      }
-    })
-  }
-
-  const onThinkingChange = (newLevelId: string): void => {
-    if (!activeModel) {
-      return
-    }
-    writeConfig((current) => ({
-      selectedThinkingByModel: {
-        ...current.selectedThinkingByModel,
-        [activeModel.id]: newLevelId
-      }
-    }))
-  }
-
-  const readOperationOverrideModelId = (
-    operation: SourceControlAiOperation
-  ): string | undefined => {
-    if (!activeCapability) {
-      return undefined
-    }
-    const choice = config.modelOverridesByOperation?.[operation]
-    return readSourceControlAiModelChoiceForHost(choice, discoveryHostKey, activeCapability.id)
-  }
-
-  const onOperationModelChange = (
-    operation: SourceControlAiOperation,
-    newModelId: string
-  ): void => {
-    if (!activeCapability) {
-      return
-    }
-    if (newModelId === INHERIT_MODEL_SELECT_VALUE) {
-      writeConfig((current) => {
-        const latestOverrides = { ...current.modelOverridesByOperation }
-        const nextChoice = clearSourceControlAiModelChoiceForHost(
-          latestOverrides[operation],
-          discoveryHostKey,
-          activeCapability.id
-        )
-        if (nextChoice) {
-          latestOverrides[operation] = nextChoice
-        } else {
-          delete latestOverrides[operation]
-        }
-        return { modelOverridesByOperation: latestOverrides }
-      })
-      return
-    }
-    const model = activeCapability.models.find((candidate) => candidate.id === newModelId)
-    if (!model) {
-      return
-    }
-    writeConfig((current) => {
-      const currentChoice = current.modelOverridesByOperation?.[operation]
-      const nextChoice = selectSourceControlAiModelChoiceForHost(
-        currentChoice,
-        discoveryHostKey,
-        activeCapability.id,
-        model.id
-      )
-      if (
-        model.thinkingLevels &&
-        model.defaultThinkingLevel &&
-        !nextChoice.selectedThinkingByModel?.[model.id]
-      ) {
-        nextChoice.selectedThinkingByModel = {
-          ...nextChoice.selectedThinkingByModel,
-          [model.id]: model.defaultThinkingLevel
-        }
-      }
-      return {
-        modelOverridesByOperation: {
-          ...current.modelOverridesByOperation,
-          [operation]: nextChoice
-        }
-      }
-    })
-  }
-
-  const onOperationThinkingChange = (
-    operation: SourceControlAiOperation,
-    modelId: string,
-    newLevelId: string
-  ): void => {
-    writeConfig((current) => ({
-      modelOverridesByOperation: {
-        ...current.modelOverridesByOperation,
-        [operation]: {
-          ...current.modelOverridesByOperation?.[operation],
-          selectedThinkingByModel: {
-            ...current.modelOverridesByOperation?.[operation]?.selectedThinkingByModel,
-            [modelId]: newLevelId
-          }
-        }
-      }
-    }))
-  }
-
-  const onSavePrompt = async (operation: CommitMessageInstructionOperation): Promise<void> => {
-    const draft = resolvedInstructionDraftState.draft[operation]
-    const dirtyByOperation: Record<CommitMessageInstructionOperation, boolean> = {
-      commitMessage: isCommitInstructionsDirty,
-      pullRequest: isPullRequestInstructionsDirty,
-      branchName: isBranchNameInstructionsDirty
-    }
-    if (!dirtyByOperation[operation] || isSavingInstructions) {
-      return
-    }
-    setIsSavingInstructions(true)
-    try {
-      await writeConfig((current) => ({
-        instructionsByOperation: {
-          ...current.instructionsByOperation,
-          [operation]: draft
-        }
-      }))
-    } finally {
-      setIsSavingInstructions(false)
-    }
-  }
-
-  const onDiscardPrompt = (operation: CommitMessageInstructionOperation): void => {
-    setInstructionDraftState((current) => {
-      const resolved = resolveCommitMessageInstructionDraftState(
-        current,
-        persistedInstructionDraftValues,
-        customPromptDiscardSignal
-      )
-      return {
-        ...resolved,
-        draft: {
-          ...resolved.draft,
-          [operation]: resolved.source[operation]
-        }
-      }
-    })
+    void writeConfig({ customAgentCommand: value })
   }
 
   const onPrDefaultChange = (
     key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>,
     value: boolean
   ): void => {
-    writeConfig((current) => ({
+    void writeConfig((current) => ({
       prCreationDefaults: {
         ...current.prCreationDefaults,
         [key]: value
@@ -850,116 +139,34 @@ export function CommitMessageAiPane({
     }))
   }
 
-  const renderOperationModelControls = (
-    operation: SourceControlAiOperation,
-    title: string,
-    description: string,
-    keywords: string[],
-    forceVisible = false
-  ): React.JSX.Element | null => {
-    if (
-      !config.enabled ||
-      !activeCapability ||
-      !activeModel ||
-      (!forceVisible &&
-        !matchesSettingsSearch(searchQuery, {
-          title,
-          description,
-          keywords
-        }))
-    ) {
-      return null
-    }
-    const overrideModelId = readOperationOverrideModelId(operation)
-    const selectedModel = overrideModelId
-      ? activeCapability.models.find((model) => model.id === overrideModelId)
-      : undefined
-    const selectedThinking = selectedModel?.thinkingLevels?.some(
-      (level) =>
-        level.id ===
-        config.modelOverridesByOperation?.[operation]?.selectedThinkingByModel?.[selectedModel.id]
-    )
-      ? config.modelOverridesByOperation?.[operation]?.selectedThinkingByModel?.[selectedModel.id]
-      : selectedModel?.defaultThinkingLevel
-
-    return (
-      <div key={`${operation}-model`} className="space-y-2 py-2">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-0.5">
-            <Label>{title}</Label>
-            <p className="text-xs text-muted-foreground">{description}</p>
-          </div>
-          <Select
-            value={overrideModelId ?? INHERIT_MODEL_SELECT_VALUE}
-            onValueChange={(value) => onOperationModelChange(operation, value)}
-          >
-            <SelectTrigger size="sm" className="h-8 w-[220px] shrink-0 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={INHERIT_MODEL_SELECT_VALUE} className="cursor-pointer">
-                Use default model
-              </SelectItem>
-              {activeCapability.models.map((model) => (
-                <SelectItem key={model.id} value={model.id} className="cursor-pointer">
-                  {model.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        {selectedModel?.thinkingLevels && selectedThinking ? (
-          <div className="flex items-center justify-end gap-2">
-            <span className="text-[11px] text-muted-foreground">Thinking Effort</span>
-            <Select
-              value={selectedThinking}
-              onValueChange={(value) =>
-                onOperationThinkingChange(operation, selectedModel.id, value)
-              }
-            >
-              <SelectTrigger size="sm" className="h-7 w-[150px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {selectedModel.thinkingLevels.map((level) => (
-                  <SelectItem key={level.id} value={level.id} className="cursor-pointer">
-                    {level.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
-      </div>
-    )
-  }
-
   const sections: React.ReactNode[] = []
-  const enableGitAiAuthorEntry = {
-    title: 'Enable Git AI Author',
-    description: 'Adds AI generation to git commit, pull request, and branch-name flows.',
-    keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'enabled']
-  }
-  const gitAiAuthorPaneMatches = matchesSettingsSearch(
-    searchQuery,
-    COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES
-  )
-  const enableGitAiAuthorMatches = matchesSettingsSearch(searchQuery, enableGitAiAuthorEntry)
-  const forceEnableGitAiAuthorVisible = !config.enabled && gitAiAuthorPaneMatches
+  const customCommandInUse =
+    isCustomAgentId(config.agentId) ||
+    config.customAgentCommand.trim().length > 0 ||
+    SOURCE_CONTROL_TEXT_ACTION_IDS.some(
+      (actionId) => config.actions?.[actionId]?.agentId === CUSTOM_AGENT_ID
+    )
 
-  if (enableGitAiAuthorMatches || forceEnableGitAiAuthorVisible) {
+  if (
+    matchesSettingsSearch(searchQuery, {
+      title: 'Show Source Control AI actions',
+      description:
+        'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.',
+      keywords: ['ai', 'commit', 'message', 'generate', 'agent', 'enabled']
+    })
+  ) {
     sections.push(
       <SearchableSetting
         key="enabled"
-        {...enableGitAiAuthorEntry}
-        forceVisible={forceEnableGitAiAuthorVisible}
+        title="Show Source Control AI actions"
+        description="Adds action recipes for Source Control commit, pull request, branch-name, and fix actions."
+        keywords={['ai', 'commit', 'message', 'generate', 'agent', 'enabled']}
         className="flex items-center justify-between gap-4 py-2"
       >
-        <div className="space-y-0.5">
-          <Label>Enable Git AI Author</Label>
+        <div className="space-y-1">
+          <Label>Show Source Control AI actions</Label>
           <p className="text-xs text-muted-foreground">
-            Adds Generate controls for commit messages and pull request details. Runs the selected
-            agent CLI where the worktree is hosted.
+            Adds AI buttons that run the selected agent with the command template for that action.
           </p>
         </div>
         <button
@@ -980,127 +187,52 @@ export function CommitMessageAiPane({
     )
   }
 
-  if (
-    config.enabled &&
-    matchesSettingsSearch(searchQuery, {
-      title: 'Agent',
-      description: 'Which agent to invoke for git text generation.',
-      keywords: ['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor']
-    })
-  ) {
-    sections.push(
-      <SearchableSetting
-        key="agent"
-        title="Agent"
-        description="Which agent to invoke for git text generation."
-        keywords={['agent', 'claude', 'codex', 'opencode', 'gemini', 'cursor']}
-        className="flex items-center justify-between gap-4 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>Agent</Label>
-          <p className="text-xs text-muted-foreground">
-            Orca invokes this CLI in the background for commit messages and pull request details. It
-            must be installed where the worktree is hosted - your computer for local worktrees, or
-            the SSH host for remote ones.
-          </p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <Select value={activeAgentSelectValue} onValueChange={onAgentChange}>
-            <SelectTrigger size="sm" className="h-8 w-[260px] shrink-0 text-xs">
-              <SelectValue placeholder="Not configured" />
-            </SelectTrigger>
-            <SelectContent>
-              {agentCapabilities.map((capability) => {
-                const id = capability.id
-                return (
-                  <SelectItem key={id} value={id} className="cursor-pointer">
-                    <span className="flex items-center gap-2">
-                      <AgentIcon agent={id} size={14} />
-                      <span>{agentLabel(id, capability)}</span>
-                    </span>
-                  </SelectItem>
-                )
-              })}
-              {COMING_SOON_COMMIT_MESSAGE_AGENTS.filter(
-                (agent) => !agentCapabilities.some((capability) => capability.id === agent.id)
-              ).map((agent) => (
-                <SelectItem key={agent.id} value={agent.id} disabled className="cursor-not-allowed">
-                  <span className="flex items-center gap-2">
-                    <AgentIcon agent={agent.id} size={14} />
-                    <span>{agent.label}</span>
-                    <span className="text-[11px] text-muted-foreground">Coming soon</span>
-                  </span>
-                </SelectItem>
-              ))}
-              <SelectItem value={CUSTOM_AGENT_ID} className="cursor-pointer">
-                <span className="flex items-center gap-2">
-                  <Terminal className="size-3.5" />
-                  <span>Custom</span>
-                </span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          {unsupportedDefaultAgentLabel ? (
-            <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
-              Your default agent is {unsupportedDefaultAgentLabel}, which does not support{' '}
-              {GIT_AI_AUTHOR_SETTINGS_TITLE} yet. Choose a supported agent or Custom.
-            </p>
-          ) : null}
-          {unsupportedSelectedAgentLabel ? (
-            <p className="max-w-[260px] text-right text-[11px] text-muted-foreground">
-              {unsupportedSelectedAgentIsComingSoon
-                ? `${unsupportedSelectedAgentLabel} ${GIT_AI_AUTHOR_SETTINGS_TITLE} is coming soon.`
-                : `${unsupportedSelectedAgentLabel} does not support ${GIT_AI_AUTHOR_SETTINGS_TITLE} yet.`}{' '}
-              Choose a supported agent or Custom.
-            </p>
-          ) : null}
-        </div>
-      </SearchableSetting>
-    )
-  }
+  sections.push(
+    <SourceControlAiActionRecipeDefaults
+      key="action-recipes"
+      config={config}
+      defaultTuiAgent={settings.defaultTuiAgent}
+      customPromptDiscardSignal={customPromptDiscardSignal}
+      onCustomPromptDirtyChange={onCustomPromptDirtyChange}
+      searchQuery={searchQuery}
+      writeConfig={writeConfig}
+    />
+  )
 
   if (
     config.enabled &&
-    isCustom &&
-    matchesSettingsSearch(searchQuery, {
-      title: 'Custom command',
-      description: 'Command line Orca runs to generate source-control text.',
-      keywords: ['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']
-    })
+    (customCommandInUse ||
+      matchesSettingsSearch(searchQuery, {
+        title: 'Custom command',
+        description: 'Command line Orca runs when a text recipe uses Custom command.',
+        keywords: ['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']
+      }))
   ) {
     sections.push(
       <SearchableSetting
         key="custom-command"
         title="Custom command"
-        description="Command line Orca runs to generate source-control text."
+        description="Command line Orca runs when a text recipe uses Custom command."
         keywords={['custom', 'command', 'cli', 'binary', 'prompt', 'placeholder']}
         className="space-y-2 py-2"
       >
         <div className="space-y-0.5">
-          <Label htmlFor="commit-message-ai-custom-command">Custom command</Label>
+          <Label htmlFor="source-control-ai-custom-command">Custom command</Label>
           <p className="text-xs text-muted-foreground">
-            Use{' '}
-            <code className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">
-              {CUSTOM_PROMPT_PLACEHOLDER}
-            </code>{' '}
-            where the prompt should be substituted (passed as a single argument). Omit it and the
-            prompt is piped via stdin instead - useful for CLIs like{' '}
-            <code className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">claude -p</code>. Quoting
-            is for grouping arguments only; we never invoke a shell, so{' '}
-            <code className="rounded bg-muted/60 px-1 py-0.5 text-[10px]">$VAR</code> and backticks
-            are not expanded.
+            Used by commit-message, pull-request, and branch-name recipes that select Custom
+            command. Use <code className="font-mono">{'{prompt}'}</code> to pass the command input
+            as an argument; otherwise Orca pipes it on stdin.
           </p>
         </div>
-        <input
-          id="commit-message-ai-custom-command"
-          type="text"
+        <Input
+          id="source-control-ai-custom-command"
           spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"
           value={config.customAgentCommand}
-          onChange={(e) => onCustomCommandChange(e.target.value)}
-          placeholder={`e.g. ollama run llama3.1 ${CUSTOM_PROMPT_PLACEHOLDER}`}
-          className="w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+          onChange={(event) => onCustomCommandChange(event.target.value)}
+          placeholder="e.g. ollama run llama3.1 {prompt}"
+          className="h-8 font-mono text-xs"
         />
       </SearchableSetting>
     )
@@ -1108,507 +240,104 @@ export function CommitMessageAiPane({
 
   if (
     config.enabled &&
-    activeCapability &&
-    activeModel &&
     matchesSettingsSearch(searchQuery, {
-      title: 'Model',
-      description: 'Which model Git AI Author uses unless a per-action model is set.',
-      keywords: ['model', 'haiku', 'sonnet', 'opus', 'gpt']
+      title: 'Hosted-review creation defaults',
+      description: 'Defaults used when the hosted-review composer opens.',
+      keywords: [
+        'hosted review',
+        'pull request',
+        'merge request',
+        'pr',
+        'draft',
+        'template',
+        'generate',
+        'open'
+      ]
     })
   ) {
-    sections.push(
-      <SearchableSetting
-        key="model"
-        title="Model"
-        description="Which model Git AI Author uses unless a per-action model is set."
-        keywords={['model', 'haiku', 'sonnet', 'opus', 'gpt']}
-        className="flex items-center justify-between gap-4 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>Model</Label>
-          {activeDiscovery?.status === 'error' && (
-            <p className="text-xs text-destructive">{activeDiscovery.error}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          {activeCapability.modelSource === 'dynamic' && (
-            <button
-              type="button"
-              onClick={() => void refreshModels(activeCapability.id)}
-              disabled={activeDiscovery?.status === 'loading'}
-              title="Refresh models"
-              aria-label="Refresh models"
-              className="inline-flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`size-3.5 ${activeDiscovery?.status === 'loading' ? 'animate-spin' : ''}`}
-              />
-            </button>
-          )}
-          <Select value={activeModel.id} onValueChange={onModelChange}>
-            <SelectTrigger size="sm" className="h-8 w-[260px] shrink-0 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {activeCapability.models.map((m) => (
-                <SelectItem key={m.id} value={m.id} className="cursor-pointer">
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </SearchableSetting>
-    )
-  }
-
-  if (
-    config.enabled &&
-    activeModel?.thinkingLevels &&
-    activeThinking &&
-    matchesSettingsSearch(searchQuery, {
-      title: 'Thinking Effort',
-      description: 'Reasoning effort level for the selected model. Higher levels are slower.',
-      keywords: ['thinking', 'effort', 'reasoning']
-    })
-  ) {
-    sections.push(
-      <SearchableSetting
-        key="thinking"
-        title="Thinking Effort"
-        description="Reasoning effort level for the selected model. Higher levels are slower."
-        keywords={['thinking', 'effort', 'reasoning']}
-        className="flex items-center justify-between gap-4 py-2"
-      >
-        <Label>Thinking Effort</Label>
-        <Select value={activeThinking} onValueChange={onThinkingChange}>
-          <SelectTrigger size="sm" className="h-8 text-xs w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {activeModel.thinkingLevels.map((level) => (
-              <SelectItem key={level.id} value={level.id} className="cursor-pointer">
-                {level.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </SearchableSetting>
-    )
-  }
-
-  // Why: auto-name fires automatically and runs through the same agent as the
-  // other operations, so it can't work unless Git AI Author is on — keep its
-  // toggle here (gated on config.enabled) rather than orphaned in Git settings.
-  if (
-    config.enabled &&
-    matchesSettingsSearch(searchQuery, AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY)
-  ) {
-    sections.push(
-      <SearchableSetting
-        key="auto-rename-branch-from-work"
-        {...AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY}
-        className="flex items-center justify-between gap-4 py-2"
-      >
-        <div className="space-y-0.5">
-          <Label>Auto-name new workspaces from first message</Label>
-          <p className="text-xs text-muted-foreground">
-            When a blank new workspace starts work, Orca uses the first task to rename the sidebar
-            title and unpublished generated branch (e.g. <code>Nautilus</code>). Workspaces created
-            from linked issues or pull requests are named up front from the same short identity.
-            Tune the model and prompt under Advanced → Branch Names below.
-          </p>
-        </div>
-        <button
-          role="switch"
-          aria-checked={settings.autoRenameBranchFromWork}
-          onClick={() =>
-            updateSettings({ autoRenameBranchFromWork: !settings.autoRenameBranchFromWork })
-          }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.autoRenameBranchFromWork ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.autoRenameBranchFromWork ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
-      </SearchableSetting>
-    )
-  }
-
-  const commitMessagesGroupEntry = {
-    title: 'Commit Messages',
-    description: 'Commit message generation settings.',
-    keywords: ['commit', 'message', 'model', 'prompt', 'conventional commits']
-  }
-  const commitAndPrCustomizationEntry = {
-    title: 'Advanced',
-    description:
-      'Override the model and prompt for commit messages, pull requests, and branch names.',
-    keywords: [
-      'customization',
-      'advanced',
-      'commit',
-      'pull request',
-      'pr',
-      'branch',
-      'name',
-      'model',
-      'prompt'
+    const prDefaults = config.prCreationDefaults ?? {}
+    const rows: {
+      key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>
+      label: string
+      description: string
+    }[] = [
+      {
+        key: 'draft',
+        label: 'Draft by default',
+        description: 'Create hosted reviews as drafts unless changed in the composer.'
+      },
+      {
+        key: 'useTemplate',
+        label: 'Use review template when available',
+        description: 'Prefer repository pull request templates when no description is set.'
+      },
+      {
+        key: 'generateDetailsOnOpen',
+        label: 'Generate details when opening Create PR',
+        description: 'Run hosted-review detail generation once when the composer opens.'
+      },
+      {
+        key: 'openAfterCreate',
+        label: 'Open hosted review after creation',
+        description: 'Open the created hosted review in your browser after submit.'
+      }
     ]
-  }
-  const commitAndPrCustomizationMatches =
-    config.enabled && matchesSettingsSearch(searchQuery, commitAndPrCustomizationEntry)
-  const commitMessagesGroupMatches =
-    config.enabled && matchesSettingsSearch(searchQuery, commitMessagesGroupEntry)
-  const commitPromptMatches = matchesSettingsSearch(searchQuery, {
-    title: 'Commit message prompt',
-    description: 'Additional prompt text appended only when generating commit messages.',
-    keywords: ['prompt', 'conventional commits', 'gitmoji', 'style']
-  })
-  const commitMessageChildren = [
-    renderOperationModelControls(
-      'commitMessage',
-      'Model',
-      'Use a different model for commit message generation.',
-      [
-        'model',
-        'override',
-        'commit',
-        'message',
-        'commit message model',
-        'commit model',
-        'thinking'
-      ],
-      commitMessagesGroupMatches || commitAndPrCustomizationMatches
-    ),
-    (config.enabled || isCommitPromptDirty) &&
-    (commitMessagesGroupMatches ||
-      commitAndPrCustomizationMatches ||
-      isCommitPromptDirty ||
-      commitPromptMatches) ? (
-      <div key="commit-prompt" className="space-y-2 py-2">
+    sections.push(
+      <SearchableSetting
+        key="pr-creation-defaults"
+        title="Hosted-review creation defaults"
+        description="Defaults used when the hosted-review composer opens."
+        keywords={[
+          'hosted review',
+          'pull request',
+          'merge request',
+          'pr',
+          'draft',
+          'template',
+          'generate',
+          'open'
+        ]}
+        className="space-y-3 px-1 py-2"
+      >
         <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-commit-prompt">Prompt</Label>
+          <Label>Hosted-review creation defaults</Label>
           <p className="text-xs text-muted-foreground">
-            Appended only when generating commit messages. Use it for Conventional Commits, ticket
-            prefixes, or any other commit style your team prefers.
-          </p>
-        </div>
-        <textarea
-          id="source-control-ai-commit-prompt"
-          rows={4}
-          value={commitPromptDraft}
-          onChange={(e) => updateInstructionDraft('commitMessage', e.target.value)}
-          placeholder="Use Conventional Commits format (feat:, fix:, ...). Reference the ticket key when present."
-          className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-        />
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground">
-            {isCommitPromptDirty ? 'Unsaved changes' : 'Saved'}
-          </p>
-          <div className="flex items-center gap-2">
-            {isCommitPromptDirty ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => onDiscardPrompt('commitMessage')}
-                disabled={isSavingPrompt}
-              >
-                Discard
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              onClick={() => void onSavePrompt('commitMessage')}
-              disabled={!isCommitPromptDirty || isSavingPrompt}
-            >
-              {isSavingPrompt ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        </div>
-      </div>
-    ) : null
-  ].filter(Boolean)
-
-  const commitMessagesGroup =
-    commitMessageChildren.length > 0 ? (
-      <div key="commit-messages" className="space-y-3">
-        <h4 className="text-sm font-semibold">Commit Messages</h4>
-        <div className="divide-y divide-border/50">{commitMessageChildren}</div>
-      </div>
-    ) : null
-
-  const branchNamesGroupEntry = {
-    title: 'Branch Names',
-    description: 'Branch name generation settings for auto-named workspaces.',
-    keywords: ['branch', 'name', 'rename', 'model', 'prompt', 'slug', 'workspace']
-  }
-  const branchNamesGroupMatches =
-    config.enabled && matchesSettingsSearch(searchQuery, branchNamesGroupEntry)
-  const branchNamePromptMatches = matchesSettingsSearch(searchQuery, {
-    title: 'Branch name prompt',
-    description: 'Additional prompt text appended only when generating branch names.',
-    keywords: ['prompt', 'instructions', 'built-in prompt', 'slug', 'kebab-case']
-  })
-  const branchNameChildren = [
-    renderOperationModelControls(
-      'branchName',
-      'Model',
-      'Use a different model for branch name generation.',
-      ['model', 'override', 'branch', 'name', 'branch name model', 'slug', 'thinking'],
-      branchNamesGroupMatches || commitAndPrCustomizationMatches
-    ),
-    (config.enabled || isBranchNamePromptDirty) &&
-    (branchNamesGroupMatches ||
-      commitAndPrCustomizationMatches ||
-      isBranchNamePromptDirty ||
-      branchNamePromptMatches) ? (
-      <AutoRenameBranchPromptEditor
-        key="branch-name-prompt"
-        draft={branchNamePromptDraft}
-        dirty={isBranchNamePromptDirty}
-        saving={isSavingPrompt}
-        onDraftChange={(value) => updateInstructionDraft('branchName', value)}
-        onDiscard={() => onDiscardPrompt('branchName')}
-        onSave={() => void onSavePrompt('branchName')}
-      />
-    ) : null
-  ].filter(Boolean)
-
-  const branchNamesGroup =
-    branchNameChildren.length > 0 ? (
-      <div key="branch-names" className="space-y-3">
-        <h4 className="text-sm font-semibold">Branch Names</h4>
-        <div className="divide-y divide-border/50">{branchNameChildren}</div>
-      </div>
-    ) : null
-
-  const pullRequestsGroupEntry = {
-    title: 'Pull Requests',
-    description: 'Pull request authoring and creation settings.',
-    keywords: ['pull request', 'pr', 'model', 'prompt', 'draft', 'template', 'authoring']
-  }
-  const pullRequestsGroupMatches =
-    config.enabled && matchesSettingsSearch(searchQuery, pullRequestsGroupEntry)
-  const pullRequestPromptMatches = matchesSettingsSearch(searchQuery, {
-    title: 'Pull request prompt',
-    description: 'Additional prompt text appended only when generating pull request details.',
-    keywords: ['prompt', 'pull request', 'pr', 'description', 'template']
-  })
-  const prCreationDefaultsMatches = matchesSettingsSearch(searchQuery, {
-    title: 'PR creation defaults',
-    description: 'Defaults used when the Create PR composer opens.',
-    keywords: ['pull request', 'pr', 'draft', 'template', 'generate', 'open']
-  })
-  const prDefaults = config.prCreationDefaults ?? {}
-  const prDefaultRows: {
-    key: keyof NonNullable<SourceControlAiSettings['prCreationDefaults']>
-    label: string
-    description: string
-  }[] = [
-    {
-      key: 'draft',
-      label: 'Draft by default',
-      description: 'Start new pull requests as drafts.'
-    },
-    {
-      key: 'useTemplate',
-      label: 'Use PR template when available',
-      description: 'Prefer repository pull request templates when no description is set.'
-    },
-    {
-      key: 'generateDetailsOnOpen',
-      label: 'Generate details when opening Create PR',
-      description: 'Run pull-request detail generation once when the composer opens.'
-    },
-    {
-      key: 'openAfterCreate',
-      label: 'Open PR after creation',
-      description: 'Open the created hosted review in your browser after submit.'
-    }
-  ]
-  const pullRequestChildren = [
-    renderOperationModelControls(
-      'pullRequest',
-      'Model',
-      'Use a different model for pull request title and description generation.',
-      ['model', 'override', 'pull request', 'pr', 'pull request model', 'pr model', 'thinking'],
-      pullRequestsGroupMatches || commitAndPrCustomizationMatches
-    ),
-    (config.enabled || isPullRequestPromptDirty) &&
-    (pullRequestsGroupMatches ||
-      commitAndPrCustomizationMatches ||
-      isPullRequestPromptDirty ||
-      pullRequestPromptMatches) ? (
-      <div key="pull-request-prompt" className="space-y-2 py-2">
-        <div className="space-y-0.5">
-          <Label htmlFor="source-control-ai-pr-prompt">Prompt</Label>
-          <p className="text-xs text-muted-foreground">
-            Appended when generating pull request titles, descriptions, draft state, and base
-            suggestions. It never affects commit messages.
-          </p>
-        </div>
-        <textarea
-          id="source-control-ai-pr-prompt"
-          rows={4}
-          value={pullRequestPromptDraft}
-          onChange={(e) => updateInstructionDraft('pullRequest', e.target.value)}
-          placeholder="Summarize user-visible changes first, then list reviewer notes and testing evidence."
-          className="w-full resize-y rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
-        />
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] text-muted-foreground">
-            {isPullRequestPromptDirty ? 'Unsaved changes' : 'Saved'}
-          </p>
-          <div className="flex items-center gap-2">
-            {isPullRequestPromptDirty ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => onDiscardPrompt('pullRequest')}
-                disabled={isSavingPrompt}
-              >
-                Discard
-              </Button>
-            ) : null}
-            <Button
-              type="button"
-              variant="secondary"
-              size="xs"
-              onClick={() => void onSavePrompt('pullRequest')}
-              disabled={!isPullRequestPromptDirty || isSavingPrompt}
-            >
-              {isSavingPrompt ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
-        </div>
-      </div>
-    ) : null,
-    config.enabled &&
-    (pullRequestsGroupMatches || commitAndPrCustomizationMatches || prCreationDefaultsMatches) ? (
-      <div key="pr-creation-defaults" className="space-y-3 py-2">
-        <div className="space-y-0.5">
-          <Label>Creation defaults</Label>
-          <p className="text-xs text-muted-foreground">
-            Provider-neutral defaults for the Create PR composer. Repo settings can override each
-            field independently.
+            Used by repositories that inherit global hosted-review defaults.
           </p>
         </div>
         <div className="space-y-2">
-          {prDefaultRows.map((row) => {
-            const checked = prDefaults[row.key] === true
-            return (
-              <label
-                key={row.key}
-                className="flex items-start justify-between gap-4 rounded-md border border-border px-3 py-2"
-              >
-                <span className="space-y-0.5">
-                  <span className="block text-xs font-medium text-foreground">{row.label}</span>
-                  <span className="block text-[11px] text-muted-foreground">{row.description}</span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={(event) => onPrDefaultChange(row.key, event.target.checked)}
-                  className="mt-0.5 size-4 rounded border-border accent-primary"
-                />
-              </label>
-            )
-          })}
-        </div>
-      </div>
-    ) : null
-  ].filter(Boolean)
-
-  const pullRequestsGroup =
-    pullRequestChildren.length > 0 ? (
-      <div key="pull-requests" className="space-y-3">
-        <h4 className="text-sm font-semibold">Pull Requests</h4>
-        <div className="divide-y divide-border/50">{pullRequestChildren}</div>
-      </div>
-    ) : null
-
-  const outputOverrideChildren = [commitMessagesGroup, pullRequestsGroup, branchNamesGroup].filter(
-    Boolean
-  )
-  const outputOverridesSearchOpen = searchQuery.trim() !== '' && outputOverrideChildren.length > 0
-  const outputOverridesVisible =
-    outputOverridesOpen ||
-    outputOverridesSearchOpen ||
-    isCommitPromptDirty ||
-    isPullRequestPromptDirty ||
-    isBranchNamePromptDirty
-
-  if (outputOverrideChildren.length > 0) {
-    sections.push(
-      <SearchableSetting
-        key="output-overrides"
-        {...commitAndPrCustomizationEntry}
-        forceVisible
-        className="border-t border-border/50 px-1 pt-4"
-      >
-        <Collapsible open={outputOverridesVisible} onOpenChange={setOutputOverridesOpen}>
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="flex w-full cursor-pointer items-start gap-2 rounded-md py-1 text-left outline-none transition-colors hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
-              aria-label={outputOverridesVisible ? 'Collapse advanced' : 'Expand advanced'}
+          {rows.map((row) => (
+            <label
+              key={row.key}
+              className="flex items-start justify-between gap-4 rounded-md border border-border px-3 py-2"
             >
-              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center text-muted-foreground">
-                <ChevronDown
-                  className={cn(
-                    'size-3.5 transition-transform',
-                    outputOverridesVisible && 'rotate-180'
-                  )}
-                />
-              </span>
               <span className="space-y-0.5">
-                <span className="block cursor-pointer text-sm leading-none font-medium">
-                  Advanced
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  Override the model and prompt for commit messages, pull requests, and branch
-                  names.
-                </span>
+                <span className="block text-xs font-medium text-foreground">{row.label}</span>
+                <span className="block text-[11px] text-muted-foreground">{row.description}</span>
               </span>
-            </button>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="mt-3 space-y-5 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-              {outputOverrideChildren}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+              <input
+                type="checkbox"
+                checked={prDefaults[row.key] === true}
+                onChange={(event) => onPrDefaultChange(row.key, event.target.checked)}
+                className="mt-0.5 size-4 rounded border-border accent-primary"
+              />
+            </label>
+          ))}
+        </div>
       </SearchableSetting>
     )
   }
 
-  if (sections.length === 0) {
-    return <div className="space-y-4" />
-  }
-  // Why: this pane lives nested inside the Git section, so an explicit
-  // subsection divider keeps its controls visually distinct from adjacent git rows.
   return (
     <div
-      ref={setPaneRootRef}
       id="source-control-ai-settings"
       data-settings-section="source-control-ai-settings"
-      className="space-y-4 border-t border-border/60 pt-5"
+      className="space-y-4 border-t border-border/40 pt-4"
     >
-      <div className="space-y-1 pb-1">
-        <h3 className="text-[15px] font-semibold leading-tight text-foreground">
-          {GIT_AI_AUTHOR_SETTINGS_TITLE}
-        </h3>
+      <div className="space-y-0.5">
+        <h3 className="text-sm font-semibold">Source Control AI defaults</h3>
         <p className="text-xs text-muted-foreground">
-          Generate commit messages and pull request details using one background agent CLI.
+          Used by repositories that have not customized Source Control AI.
         </p>
       </div>
       {sections}

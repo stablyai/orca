@@ -38,6 +38,7 @@ export function DictationController() {
   const stoppedResolversRef = useRef(new Map<string, () => void>())
   const stopRequestedDuringStartRef = useRef(false)
   const finalTranscriptReceivedRef = useRef(false)
+  const erroredSessionIdsRef = useRef(new Set<string>())
   const intentionalTargetCancellationRef = useRef(false)
   const insertedFinalTranscriptRef = useRef('')
 
@@ -59,7 +60,8 @@ export function DictationController() {
       // transcript delivery is renderer IPC. Wait for this session's stopped
       // event so old finals cannot be mistaken for the next dictation run.
       await waitForStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef)
-      if (!finalTranscriptReceivedRef.current && getCapturedChunkCount() > 0) {
+      const sessionErrored = erroredSessionIdsRef.current.delete(sessionId)
+      if (!sessionErrored && !finalTranscriptReceivedRef.current && getCapturedChunkCount() > 0) {
         toast.message('No speech detected.')
       }
       insertionTargetRef.current = null
@@ -108,6 +110,7 @@ export function DictationController() {
     insertionTargetRef.current = captureInsertionTarget()
     stopRequestedDuringStartRef.current = false
     finalTranscriptReceivedRef.current = false
+    erroredSessionIdsRef.current.clear()
     insertedFinalTranscriptRef.current = ''
     intentionalTargetCancellationRef.current = false
     dictationStateRef.current = 'starting'
@@ -172,6 +175,7 @@ export function DictationController() {
       intentionalTargetCancellationRef.current = false
       stopRequestedDuringStartRef.current = false
       finalTranscriptReceivedRef.current = false
+      erroredSessionIdsRef.current.clear()
       insertedFinalTranscriptRef.current = ''
       activeSessionIdRef.current = null
       setPartialTranscript('')
@@ -381,6 +385,7 @@ export function DictationController() {
         return
       }
       const sessionId = data.sessionId
+      erroredSessionIdsRef.current.add(sessionId)
       dictationRunRef.current += 1
       activeSessionIdRef.current = null
       toast.error(`Speech error: ${data.error}`)

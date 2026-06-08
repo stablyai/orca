@@ -52,6 +52,12 @@
   --color-chart-5: var(--chart-5);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-worktree-sidebar: var(--worktree-sidebar);
+  --color-worktree-sidebar-foreground: var(--worktree-sidebar-foreground);
+  --color-worktree-sidebar-accent: var(--worktree-sidebar-accent);
+  --color-worktree-sidebar-accent-foreground: var(--worktree-sidebar-accent-foreground);
+  --color-worktree-sidebar-border: var(--worktree-sidebar-border);
+  --color-worktree-sidebar-ring: var(--worktree-sidebar-ring);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
@@ -137,6 +143,12 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
+  --worktree-sidebar: #f5f5f5;
+  --worktree-sidebar-foreground: #0a0a0a;
+  --worktree-sidebar-accent: #eaeaea;
+  --worktree-sidebar-accent-foreground: #171717;
+  --worktree-sidebar-border: #e5e5e5;
+  --worktree-sidebar-ring: #a1a1a1;
   --sidebar: #fafafa;
   --sidebar-foreground: #0a0a0a;
   --sidebar-primary: #171717;
@@ -210,6 +222,14 @@
   --chart-3: var(--color-blue-600);
   --chart-4: var(--color-blue-700);
   --chart-5: var(--color-blue-800);
+  /* Why: light mode sets worktree-sidebar to secondary (#f5f5f5); mirror that
+     lift in dark mode so the panel reads clearly above #0a0a0a canvas. */
+  --worktree-sidebar: #2a2a2a;
+  --worktree-sidebar-foreground: #fafafa;
+  --worktree-sidebar-accent: #353535;
+  --worktree-sidebar-accent-foreground: #fafafa;
+  --worktree-sidebar-border: rgb(255 255 255 / 0.1);
+  --worktree-sidebar-ring: #737373;
   --sidebar: #171717;
   --sidebar-foreground: #fafafa;
   --sidebar-primary: #1447e6;
@@ -1757,6 +1777,55 @@
   border-width: 1.5px;
 }
 
+/* Cmd+J feature tip — JS-driven sequence (keypress → palette → typing → results).
+   The keypress press-down and palette entrance are handled inline by React state
+   transitions; this file only defines the caret blink and the results fade-in. */
+
+/* Blinking caret for the simulated command-palette input while "typing". */
+@keyframes cmd-j-tip-caret {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-cmd-j-tip-caret {
+  animation: cmd-j-tip-caret 1s step-end infinite;
+}
+
+/* Worktree rows fade in when the palette opens — mirrors the real palette,
+   which shows recent worktrees on empty query and filters synchronously. */
+@keyframes cmd-j-tip-result-in {
+  0% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-cmd-j-tip-result-in {
+  animation: cmd-j-tip-result-in 120ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-cmd-j-tip-caret {
+    animation: none;
+    opacity: 1;
+  }
+
+  .animate-cmd-j-tip-result-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ── Feature wall: agents-orchestration animations ───────────────── */
 
 /* Why: drives the supported-agents marquee on page 1 of the agents tile.
@@ -2817,12 +2886,12 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  margin: 4px 0 6px 0;
+  margin: 2px 0 4px 0;
   padding-left: 8px;
   border-left: 2px solid color-mix(in srgb, #e7b10a 35%, transparent);
   color: var(--muted-foreground);
   font-size: 12.5px;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .orca-diff-comment-quote-text {
@@ -2830,10 +2899,7 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  word-break: break-all;
+  white-space: nowrap;
 }
 
 /* Comment Body */

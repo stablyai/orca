@@ -2334,6 +2334,50 @@ describe('createEditorSlice remote branch actions', () => {
     expect(store.getState().isRemoteOperationActive).toBe(false)
   })
 
+  it('maps force-with-lease rejection into force-push guidance', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('fatal: stale info')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(
+      store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+        forceWithLease: true
+      })
+    ).rejects.toThrow(pushError.message)
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
+    )
+    await flushAsyncRemoteRefresh()
+
+    expect(gitFetchMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(gitUpstreamStatusMock).toHaveBeenCalledWith({
+      worktreePath: '/repo',
+      connectionId: undefined
+    })
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
+  it('uses a force-push fallback message for generic force-with-lease errors', async () => {
+    const store = createEditorStore()
+    const pushError = new Error('network timeout')
+    gitPushMock.mockRejectedValueOnce(pushError)
+
+    await expect(
+      store.getState().pushBranch('wt-1', '/repo', false, undefined, undefined, {
+        forceWithLease: true
+      })
+    ).rejects.toThrow(pushError.message)
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      'Force Push failed. Check your connection and try again.'
+    )
+    expect(store.getState().isRemoteOperationActive).toBe(false)
+  })
+
   it('uses a fallback remote failure message when push rejects without Error', async () => {
     const store = createEditorStore()
     gitPushMock.mockRejectedValueOnce('failure')

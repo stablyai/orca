@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import TabBar from '../tab-bar/TabBar'
+
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import TabGroupDropOverlay from './TabGroupDropOverlay'
@@ -117,6 +118,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
       onSetCustomTitle={commands.setTabCustomTitle}
@@ -125,17 +127,22 @@ export default function TabGroupPanel({
       editorFiles={editorItems}
       browserTabs={browserItems}
       activeFileId={
-        activeTab?.contentType === 'terminal' || activeTab?.contentType === 'browser'
+        activeTab?.contentType === 'terminal' ||
+        activeTab?.contentType === 'browser' ||
+        activeTab?.contentType === 'simulator'
           ? null
           : activeTab?.id
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
+      activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
       activeTabType={
         activeTab?.contentType === 'terminal'
           ? 'terminal'
           : activeTab?.contentType === 'browser'
             ? 'browser'
-            : 'editor'
+            : activeTab?.contentType === 'simulator'
+              ? 'simulator'
+              : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -364,14 +371,11 @@ export default function TabGroupPanel({
         {activeDropZone ? <TabGroupDropOverlay zone={activeDropZone} /> : null}
         {activeTab &&
           activeTab.contentType !== 'terminal' &&
-          activeTab.contentType !== 'browser' && (
+          activeTab.contentType !== 'browser' &&
+          activeTab.contentType !== 'simulator' && (
             <div className="absolute inset-0 flex min-h-0 min-w-0">
-              {/* Why: split groups render editor/browser content inside a
-                  plain relative pane body instead of the legacy flex column in
-                  Terminal.tsx. Anchoring the surface to `absolute inset-0`
-                  recreates the bounded viewport those panes expect, so plain
-                  overflow containers like MarkdownPreview can actually scroll
-                  instead of expanding to content height. */}
+              {/* Why: split groups render editor content inside a plain relative pane body
+                  instead of the legacy flex column in Terminal.tsx. */}
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
@@ -384,11 +388,11 @@ export default function TabGroupPanel({
             </div>
           )}
 
-        {/* Why: terminal/browser panes are rendered at the worktree level by
+        {/* Why: terminal/browser/simulator panes are rendered at the worktree level by
             overlay layers and absolutely positioned over this body element
             via the slot registered above. Rendering them per-group caused
-            split moves to remount xterm or reparent Electron `<webview>`,
-            losing TUI state or reloading the page. */}
+            split moves to remount xterm, reparent Electron `<webview>`, or
+            reload the simulator stream. */}
       </div>
     </div>
   )

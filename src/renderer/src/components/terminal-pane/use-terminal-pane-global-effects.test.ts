@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   getTerminalOutputEpoch: vi.fn(() => 0),
   handleTerminalFileDrop: vi.fn(),
   requestTerminalBacklogRecovery: vi.fn(),
-  setActiveTerminalOutputTarget: vi.fn(),
   restoreScrollState: vi.fn(),
   restoreScrollStateAfterLayout: vi.fn()
 }))
@@ -57,8 +56,7 @@ vi.mock('./pane-helpers', () => ({
 
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   flushTerminalOutput: mocks.flushTerminalOutput,
-  requestTerminalBacklogRecovery: mocks.requestTerminalBacklogRecovery,
-  setActiveTerminalOutputTarget: mocks.setActiveTerminalOutputTarget
+  requestTerminalBacklogRecovery: mocks.requestTerminalBacklogRecovery
 }))
 
 vi.mock('@/lib/pane-manager/pane-scroll', () => ({
@@ -230,12 +228,11 @@ describe('useTerminalPaneGlobalEffects', () => {
   })
 
   it('reports the active local PTY to the main output scheduler', () => {
-    const terminal = { name: 'terminal-a' }
     const manager = {
-      getPanes: vi.fn(() => [{ id: 1, terminal }]),
+      getPanes: vi.fn(() => [{ id: 1, terminal: { name: 'terminal-a' } }]),
       resumeRendering: vi.fn(),
       suspendRendering: vi.fn(),
-      getActivePane: vi.fn(() => ({ id: 1, terminal }))
+      getActivePane: vi.fn(() => ({ id: 1, terminal: { name: 'terminal-a' } }))
     }
     const transport = { getPtyId: vi.fn(() => 'pty-active') }
     const paneTransports = new Map([[1, transport]])
@@ -257,7 +254,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
 
     expect(window.api.pty.setActiveRendererPty).toHaveBeenCalledWith('pty-active', true)
-    expect(mocks.setActiveTerminalOutputTarget).toHaveBeenCalledWith(terminal, true)
   })
 
   it('restores from the pre-hide scroll state when hidden layout changes the viewport', () => {

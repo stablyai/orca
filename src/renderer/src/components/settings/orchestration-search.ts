@@ -15,7 +15,12 @@ export const ORCHESTRATION_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'task',
       'DAG',
       'worker',
-      'coordinator'
+      'coordinator',
+      'claude',
+      'codex',
+      'examples',
+      'handoff',
+      'child agents'
     ]
   }
 ]

@@ -34,6 +34,10 @@ type AgentSkillSetupPanelProps = {
   onBeforeOpenTerminal?: () => void | Promise<void>
   showInstallWhenInstalled?: boolean
   showRecheckWhenInstalled?: boolean
+  installLabel?: string
+  installedInstallLabel?: string
+  actionHint?: ReactNode
+  footer?: ReactNode
   onRecheck: () => void | Promise<void>
 }
 
@@ -60,6 +64,10 @@ export function AgentSkillSetupPanel({
   onBeforeOpenTerminal,
   showInstallWhenInstalled = true,
   showRecheckWhenInstalled = true,
+  installLabel = 'Install',
+  installedInstallLabel = 'Update',
+  actionHint,
+  footer,
   onRecheck
 }: AgentSkillSetupPanelProps): React.JSX.Element {
   const [terminalOpen, setTerminalOpen] = useState(false)
@@ -135,7 +143,7 @@ export function AgentSkillSetupPanel({
           disabled={terminalOpen || installDisabled}
         >
           <Terminal className="size-3.5" />
-          Install
+          {installed ? installedInstallLabel : installLabel}
         </Button>
       ) : null}
       {!installed || showRecheckWhenInstalled ? (
@@ -162,7 +170,7 @@ export function AgentSkillSetupPanel({
       )}
     >
       <div
-        className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : undefined}
+        className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : 'pt-1.5'}
       >
         <div className="flex items-center gap-4">
           {leading}
@@ -172,7 +180,7 @@ export function AgentSkillSetupPanel({
             </div>
           ) : null}
           <div className="min-w-0 flex-1 self-center">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
               {loading && !installed ? (
                 <IntegrationStatusPill tone="neutral">Checking...</IntegrationStatusPill>
@@ -188,12 +196,20 @@ export function AgentSkillSetupPanel({
         <div className="mt-3 max-w-none">
           <p className="text-[13px] leading-snug text-muted-foreground">{description}</p>
           {actionRow}
+          {actionHint ? <div className="mt-2">{actionHint}</div> : null}
           {!installed && preInstallNotice && preInstallNoticeVisible ? (
             <p className="mt-3 text-[12px] leading-snug text-muted-foreground">
               {preInstallNotice}
             </p>
           ) : null}
         </div>
+        {footer ? (
+          <div
+            className={cn('border-t border-border/60', terminalOpen ? 'mt-2 pt-4' : 'mt-5 pt-5')}
+          >
+            {footer}
+          </div>
+        ) : null}
       </div>
       {terminalOpen ? (
         <div className={cn(variant === 'card' ? 'px-5 pb-5' : 'mt-2')}>

@@ -36,6 +36,7 @@ describe('copyMarkdownReviewNotesForAgent', () => {
       [
         'File: README.md',
         'Source: markdown',
+        '',
         'Line 2',
         'Excerpt:',
         '> specific phrase',

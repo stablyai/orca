@@ -31,6 +31,12 @@
   overflow-y: scroll;
 }
 
+/* Round the xterm DOM scrollbar thumb; xterm has no option for this, and its
+   default .xterm-slider has square corners. */
+.xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider {
+  border-radius: 4px;
+}
+
 /* xterm.css sets position:absolute;top:0 on .xterm-helpers but omits left,
    leaving left:auto. In Electron's Blink, left:auto can resolve to a non-zero
    value and offset the IME candidate window away from the cursor. Anchoring it

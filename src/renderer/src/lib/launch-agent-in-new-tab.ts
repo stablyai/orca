@@ -31,6 +31,8 @@ export type LaunchAgentInNewTabArgs = {
   /** Optional initial prompt. Delivery depends on `promptDelivery` and the
    *  agent's prompt mode. */
   prompt?: string
+  /** Optional CLI arguments appended to the selected agent command. */
+  agentArgs?: string | null
   /** Force generated prompt text out of the shell launch command. `draft`
    *  leaves it editable; `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -121,6 +123,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     worktreeId,
     groupId,
     prompt,
+    agentArgs,
     promptDelivery = 'auto-submit',
     launchSource,
     launchPlatform = CLIENT_PLATFORM,
@@ -150,6 +153,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -160,7 +164,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: launchPlatform
+      platform: launchPlatform,
+      agentArgs
     })
     if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, launchPlatform)) {
       startupPlan = {
@@ -176,6 +181,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         prompt: '',
         cmdOverrides,
         platform: launchPlatform,
+        agentArgs,
         allowEmptyPromptLaunch: true
       })
       pasteDraftAfterLaunch = trimmedPrompt
@@ -186,6 +192,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -195,6 +202,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs,
       allowEmptyPromptLaunch: !hasPrompt
     })
   }
@@ -205,8 +213,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
 
   const runtimeEnvironmentId = store.settings?.activeRuntimeEnvironmentId?.trim()
   if (isWebRuntimeSessionActive(runtimeEnvironmentId) && pasteDraftAfterLaunch === null) {
-    // Why: paired web tabs are host-owned. Local-only agent tabs cannot be
-    // closed because close routes through session.tabs.close on the host.
+    // Why: paired web tabs are host-owned and return tabId: null on success.
+    // Local-only agent tabs cannot be closed because close routes through
+    // session.tabs.close on the host, so prune them before the host snapshot.
     removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
     void createWebRuntimeSessionTerminal({
       worktreeId,
@@ -214,13 +223,19 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       targetGroupId: groupId,
       activate: true,
       ...(hasPrompt ? { command: startupPlan.launchCommand } : { agent })
-    }).then(() => {
+    }).then((created) => {
+      // Why: created means the host accepted the launch, not that a local tab
+      // exists; keep pruning stale local rows until the snapshot mirrors.
       removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+      if (!created) {
+        toast.error(`Could not launch ${agent} in a new terminal.`)
+        return
+      }
+      store.setActiveTabType('terminal')
+      if (hasPrompt) {
+        onPromptDelivered?.()
+      }
     })
-    store.setActiveTabType('terminal')
-    if (hasPrompt) {
-      onPromptDelivered?.()
-    }
     return { tabId: null, startupPlan, pasteDraftAfterLaunch: false }
   }
 

@@ -1,6 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog from '@/components/agent/AgentSettingsDialog'
 import { useComposerState } from '@/hooks/useComposerState'
@@ -74,7 +80,7 @@ function ComposerModalBody({
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent
-        className="flex flex-col sm:max-w-lg"
+        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
         onOpenAutoFocus={(event) => {
           // Why: Radix's FocusScope fires this once the dialog has mounted.
           // preventDefault stops it from focusing whatever first-tabbable it
@@ -221,9 +227,13 @@ function QuickTabBody({
     <>
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
+        <DialogDescription className="sr-only">
+          Choose the project, workspace name, and agent before creating the workspace.
+        </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
+        containerClassName="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}

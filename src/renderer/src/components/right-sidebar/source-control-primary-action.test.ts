@@ -127,6 +127,22 @@ describe('resolvePrimaryAction', () => {
     })
   })
 
+  it('mirrors an in-flight Force Push on the push primary slot', () => {
+    const result = resolvePrimaryAction(
+      inputs({
+        isRemoteOperationActive: true,
+        upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 },
+        inFlightRemoteOpKind: 'force_push'
+      })
+    )
+    expect(result).toEqual({
+      kind: 'push',
+      label: 'Force Push',
+      title: 'Force Push in progress…',
+      disabled: true
+    })
+  })
+
   it('blocks commits while unresolved conflicts exist', () => {
     const result = resolvePrimaryAction(
       inputs({ hasUnresolvedConflicts: true, stagedCount: 2, hasMessage: true })

@@ -396,7 +396,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         aria-label="Agents"
         data-compact-agent-list="true"
       >
-        {shouldUseSummaryRow ? (
+        {agents.length === 0 ? null : shouldUseSummaryRow ? (
           // Why: the worktree card is already the surface. Expanded compact
           // agents stay a quiet tree; only the collapsed summary reads as a pill.
           <div

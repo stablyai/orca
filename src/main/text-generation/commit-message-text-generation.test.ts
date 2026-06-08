@@ -88,7 +88,8 @@ describe('resolveCommitMessageSettings', () => {
         agentId: 'codex',
         model: 'gpt-5.5',
         thinkingLevel: 'low',
-        customPrompt: 'Use Conventional Commits.'
+        customPrompt: 'Use Conventional Commits.',
+        commandInputTemplate: '{basePrompt}\n\nUse Conventional Commits.'
       }
     })
   })
@@ -280,7 +281,7 @@ describe('resolveCommitMessageSettings', () => {
 
     expect(resolveCommitMessageSettings(settings)).toEqual({
       ok: false,
-      error: 'Custom command is empty. Add one in Settings -> Git -> Git AI Author.'
+      error: 'Custom command is empty. Add one in Settings -> Git -> Source Control AI.'
     })
   })
 })

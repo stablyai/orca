@@ -218,6 +218,92 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
+  it('automatically resumes sleeping agent sessions when activating a slept worktree', () => {
+    const worktree = makeWorktree()
+    const revealWorktreeInSidebar = vi.fn()
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/workspace/repo',
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      activeRepoId: 'repo-1',
+      activeView: 'terminal',
+      tabsByWorktree: {
+        [worktree.id]: [
+          {
+            id: 'slept-tab',
+            ptyId: 'wake-hint',
+            worktreeId: worktree.id,
+            title: 'Codex',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      ptyIdsByTabId: {},
+      unifiedTabsByWorktree: {},
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      activeGroupIdByWorktree: {},
+      openFiles: [],
+      browserTabsByWorktree: {},
+      activeFileIdByWorktree: {},
+      activeBrowserTabIdByWorktree: {},
+      activeTabTypeByWorktree: {},
+      activeTabIdByWorktree: {},
+      tabBarOrderByWorktree: {},
+      pendingStartupByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'slept-tab:0': {
+          paneKey: 'slept-tab:0',
+          tabId: 'slept-tab',
+          worktreeId: worktree.id,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          prompt: 'resume prior task',
+          state: 'working',
+          capturedAt: 1000,
+          updatedAt: 1000,
+          terminalTitle: 'Codex'
+        }
+      },
+      settings: {
+        agentCmdOverrides: {},
+        setupScriptLaunchMode: 'new-tab'
+      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
+      markWorktreeVisited: vi.fn(),
+      recordWorktreeVisit: vi.fn(),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar
+    })
+
+    const result = activateAndRevealWorktree(worktree.id)
+    const state = useAppStore.getState()
+    const resumedTab = state.tabsByWorktree[worktree.id]?.find((tab) => tab.id !== 'slept-tab')
+
+    expect(result).toEqual({ primaryTabId: null })
+    expect(resumedTab?.launchAgent).toBe('codex')
+    expect(state.pendingStartupByTabId[resumedTab!.id]).toEqual({
+      command: "codex 'resume' 'codex-session-1'",
+      telemetry: {
+        agent_kind: 'codex',
+        launch_source: 'sidebar',
+        request_kind: 'resume'
+      }
+    })
+    expect(state.sleepingAgentSessionsByPaneKey['slept-tab:0']).toBeUndefined()
+    expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
+  })
+
   it('forwards an explicit sidebar reveal behavior', () => {
     const worktree = makeWorktree()
     const revealWorktreeInSidebar = vi.fn()

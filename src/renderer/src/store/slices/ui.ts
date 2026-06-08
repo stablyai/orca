@@ -20,6 +20,7 @@ import type {
   UpdateStatus,
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
+  ProjectOrderBy,
   WorktreeCardProperty
 } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
@@ -725,10 +726,16 @@ export type UISlice = {
   dismissSetupScriptPrompt: (repoId: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
+  browserImportHintHidden: boolean
+  setBrowserImportHintHidden: (hidden: boolean) => void
+  usageEmptyStateDismissed: boolean
+  dismissUsageEmptyState: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlice['sortBy']) => void
+  projectOrderBy: ProjectOrderBy
+  setProjectOrderBy: (p: ProjectOrderBy) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
@@ -1447,15 +1454,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (!s.activeContextualTourId) {
         return s
       }
+      const tour = getContextualTour(s.activeContextualTourId)
       const nextStepIndex = getNextVisibleContextualTourStepIndex({
-        tour: getContextualTour(s.activeContextualTourId),
+        tour,
         currentStepIndex: s.activeContextualTourStepIndex,
         targetExists: hasContextualTourTarget
       })
-      if (nextStepIndex === null) {
-        return s
+      if (nextStepIndex !== null) {
+        return { activeContextualTourStepIndex: nextStepIndex }
       }
-      return { activeContextualTourStepIndex: nextStepIndex }
+      // Why: browser step 3's target lives in a closed menu until that step is active.
+      if (
+        s.activeContextualTourId === 'browser' &&
+        s.activeContextualTourStepIndex + 1 < tour.steps.length
+      ) {
+        return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
+      }
+      return s
     }),
   regressContextualTour: () =>
     set((s) => {
@@ -1623,6 +1638,24 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ setupGuideSidebarDismissed: dismissed }).catch(console.error)
       return { setupGuideSidebarDismissed: dismissed }
     }),
+  browserImportHintHidden: false,
+  setBrowserImportHintHidden: (hidden) =>
+    set((s) => {
+      if (s.browserImportHintHidden === hidden) {
+        return s
+      }
+      window.api.ui.set({ browserImportHintHidden: hidden }).catch(console.error)
+      return { browserImportHintHidden: hidden }
+    }),
+  usageEmptyStateDismissed: false,
+  dismissUsageEmptyState: () =>
+    set((s) => {
+      if (s.usageEmptyStateDismissed) {
+        return s
+      }
+      window.api.ui.set({ usageEmptyStateDismissed: true }).catch(console.error)
+      return { usageEmptyStateDismissed: true }
+    }),
 
   groupBy: 'repo',
   // Why: group keys are mode-specific (e.g. repo id vs PR status), so
@@ -1635,6 +1668,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
+
+  // Why: like setSortBy, this is a bare set — it persists only via the
+  // debounced window.api.ui.set writer in App.tsx, not on its own.
+  projectOrderBy: 'manual',
+  setProjectOrderBy: (p) => set({ projectOrderBy: p }),
 
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
@@ -1898,6 +1936,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
+        // Why: main-process getUI() already normalized this to a valid value
+        // (defaulting to 'manual'); read it through without migrating sortBy.
+        projectOrderBy: ui.projectOrderBy,
         // Why: Active-only was retired. Force the old persisted flag off so an
         // old profile cannot invisibly keep narrowing the workspace list.
         showActiveOnly: false,
@@ -1963,6 +2004,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           validRepoIds
         ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
+        browserImportHintHidden: ui.browserImportHintHidden === true,
+        // Why: default false when undefined so existing users still see the CTA;
+        // only an explicit dismissal persists true.
+        usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
         // Why: restore visited-row acks alongside the persisted hook entries
         // they pair with. Stale acks for paneKeys whose tab/PTY no longer
         // exists are inert (no row references them); a paneKey reuse stamps a

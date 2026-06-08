@@ -15,6 +15,7 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
+  getTabStripBorderClasses,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
@@ -38,6 +39,7 @@ type SortableTabProps = {
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
+  includeTopTabBorder?: boolean
 }
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -59,7 +61,8 @@ export default function SortableTab({
   onToggleExpand,
   onSplitGroup,
   dragData,
-  dropIndicator
+  dropIndicator,
+  includeTopTabBorder = true
 }: SortableTabProps): React.JSX.Element {
   // Why: subscribe to the per-tab boolean directly so only the tab whose unread
   // status actually flipped re-renders. Reading the whole `unreadTerminalTabs`
@@ -213,7 +216,7 @@ export default function SortableTab({
       // tab still reads as "selected + has activity". The wash is
       // rendered as an absolutely-positioned child below so the ::after
       // pseudo-element stays free for the drop indicator.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return

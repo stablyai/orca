@@ -69,8 +69,13 @@ describe('buildDefaultTerminalOptions', () => {
     expect(buildDefaultTerminalOptions().macOptionIsMeta).toBe(false)
   })
 
-  it('keeps the default inactive cursor as a single bar', () => {
-    expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('bar')
+  it('uses the default inactive outline only for the block cursor', () => {
+    expect(buildDefaultTerminalOptions().cursorStyle).toBe('block')
+    expect(buildDefaultTerminalOptions().cursorInactiveStyle).toBe('outline')
+  })
+
+  it('does not reserve a classic scrollbar gutter when fitting terminal columns', () => {
+    expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(0)
   })
 
   it('only uses inactive outline for block cursors', () => {
@@ -111,6 +116,7 @@ describe('attachWebgl', () => {
 
   it('keeps a pane on the DOM renderer after WebGL context loss', () => {
     const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
 
     attachWebgl(pane)
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
@@ -131,6 +137,7 @@ describe('attachWebgl', () => {
 
   it('repaints the current buffer after WebGL attaches', () => {
     const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
 
     attachWebgl(pane)
 
@@ -139,6 +146,7 @@ describe('attachWebgl', () => {
 
   it('does not attach WebGL while initial rendering is deferred', () => {
     const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
     pane.webglAttachmentDeferred = true
 
     attachWebgl(pane)
@@ -155,6 +163,15 @@ describe('attachWebgl', () => {
 
     expect(pane.webglAddon).toBeNull()
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('uses WebGL rendering for auto GPU acceleration on non-Linux platforms', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('uses DOM rendering for auto GPU acceleration on Linux', () => {
@@ -183,61 +200,41 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
-  it('uses DOM for later auto panes after WebGL attach fails until the suggestion resets', () => {
-    const firstPane = createPane()
-    vi.mocked(WebglAddon).mockImplementationOnce(() => {
-      throw new Error('webgl unavailable')
-    })
-
-    attachWebgl(firstPane)
-
-    expect(firstPane.webglAddon).toBeNull()
-
-    const laterAutoPane = createPane()
-    attachWebgl(laterAutoPane)
-
-    expect(laterAutoPane.terminal.loadAddon).not.toHaveBeenCalled()
-
-    resetTerminalWebglSuggestion()
-    const retriedAutoPane = createPane()
-    attachWebgl(retriedAutoPane)
-
-    expect(retriedAutoPane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
-  it('still attempts WebGL in on mode after auto mode suggests DOM', () => {
-    const autoPane = createPane()
-    vi.mocked(WebglAddon).mockImplementationOnce(() => {
-      throw new Error('webgl unavailable')
-    })
-
-    attachWebgl(autoPane)
-
-    const forcedPane = createPane()
-    forcedPane.terminalGpuAcceleration = 'on'
-    attachWebgl(forcedPane)
-
-    expect(forcedPane.terminal.loadAddon).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps auto-mode panes on DOM after complex-script output', () => {
+  it('keeps auto-mode panes on WebGL after complex-script output', () => {
     const pane = createPane()
 
     attachWebgl(pane)
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+    vi.mocked(pane.terminal.loadAddon).mockClear()
 
     markComplexScriptOutput(pane)
 
     expect(pane.hasComplexScriptOutput).toBe(true)
-    expect(pane.webglAddon).toBeNull()
-    expect(webglMock.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).not.toBeNull()
+    expect(webglMock.dispose).not.toHaveBeenCalled()
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
 
     attachWebgl(pane)
 
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
-  it('allows explicit on mode to override complex-script DOM fallback', () => {
+  it('keeps later auto panes on DOM after WebGL attach fails', () => {
+    vi.mocked(WebglAddon).mockImplementationOnce(() => {
+      throw new Error('webgl unavailable')
+    })
+    const firstPane = createPane()
+    const secondPane = createPane()
+
+    attachWebgl(firstPane)
+    attachWebgl(secondPane)
+
+    expect(firstPane.webglAddon).toBeNull()
+    expect(secondPane.webglAddon).toBeNull()
+    expect(secondPane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('keeps forced WebGL on after complex-script output', () => {
     const pane = createPane()
 
     markComplexScriptOutput(pane)

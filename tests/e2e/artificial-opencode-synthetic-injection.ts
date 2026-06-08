@@ -95,6 +95,7 @@ export async function startSyntheticOpenCodeInjection({
           `\x1b[1;2H\x1b[38;2;255;138;0m${spinner} OpenCode synthetic agent ${paneIndex}\x1b[0m`,
           `\x1b[${row};4H\x1b[38;2;231;237;247m${body.padEnd(118, '#')}\x1b[0m`,
           `\x1b[23;2H\x1b[38;2;106;169;255mstream ${String(frame).padStart(4, '0')} ${'#'.repeat(96)}\x1b[0m`,
+          '\x1b[?25h',
           '\x1b[?2026l'
         ].join('')
       }

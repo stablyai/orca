@@ -3,8 +3,6 @@ import { Check, Download, LoaderCircle, PackageCheck, RefreshCw, Settings, X } f
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import type { Repo } from '../../../../shared/types'
 
 type DismissButtonProps = {
   onDismiss: () => void
@@ -44,7 +42,7 @@ export function DetectedSetupPreview({
   provenance
 }: DetectedSetupPreviewProps): React.JSX.Element {
   return (
-    <div className="mt-3 border-t border-sidebar-border pt-3">
+    <div className="mt-3 border-t border-worktree-sidebar-border pt-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         <PackageCheck className="size-3.5" />
         Detected setup
@@ -55,7 +53,7 @@ export function DetectedSetupPreview({
         onChange={(event) => onSetupChange(event.target.value)}
         spellCheck={false}
         rows={Math.min(Math.max(setup.split('\n').length, 2), 6)}
-        className="setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="setup-script-prompt-command max-h-28 w-full resize-y overflow-auto scrollbar-sleek rounded-md border border-worktree-sidebar-border px-2 py-1.5 font-mono text-[11px] leading-5 text-foreground shadow-xs outline-none focus-visible:ring-1 focus-visible:ring-ring"
       />
       {provenance ? (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
@@ -109,7 +107,6 @@ export function PackageManagerActions({
 }
 
 export type SetupScriptPromptBodyProps = {
-  repo: Repo
   isInspectionError: boolean
   sharedSetupIgnored: boolean
   isPackageManagerSuggestion: boolean
@@ -117,7 +114,6 @@ export type SetupScriptPromptBodyProps = {
 }
 
 export function SetupScriptPromptBody({
-  repo,
   isInspectionError,
   sharedSetupIgnored,
   isPackageManagerSuggestion,
@@ -145,18 +141,7 @@ export function SetupScriptPromptBody({
       </>
     )
   }
-  return (
-    <>
-      Add a setup command for{' '}
-      <span className="inline-flex items-center gap-1.5 align-baseline px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-        <RepoBadgeMark color={repo.badgeColor} />
-        <span className="text-[10px] font-semibold text-foreground truncate max-w-[8rem] leading-none lowercase">
-          {repo.displayName}
-        </span>
-      </span>{' '}
-      to run when Orca creates new worktrees.
-    </>
-  )
+  return <>Add a setup command to run when Orca creates new worktrees.</>
 }
 
 export type InspectionErrorActionsProps = {

@@ -11,6 +11,7 @@ import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
 import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
+import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 
@@ -191,12 +192,21 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
     )
   }
 
-  const checks = await Promise.all(
+  const pathChecks = await Promise.all(
     KNOWN_AGENT_COMMANDS.map(async ({ id, cmd }) => ({
       id,
-      installed: await isCommandOnPath(cmd)
+      cmd,
+      installedOnPath: await isCommandOnPath(cmd)
     }))
   )
+  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
+  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
+  // computes user install dirs once instead of blocking once per missed CLI.
+  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
+  const checks = pathChecks.map(({ id, cmd, installedOnPath }) => ({
+    id,
+    installed: installedOnPath || installDirCommands.has(cmd)
+  }))
   return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
 }
 

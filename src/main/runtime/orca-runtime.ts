@@ -10,7 +10,8 @@ import type { AgentStatus } from '../../shared/agent-detection'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type ParsedAgentStatusPayload,
-  type AgentStatusOrchestrationContext
+  type AgentStatusOrchestrationContext,
+  type AgentStatusEntry
 } from '../../shared/agent-status-types'
 import {
   createAgentStatusOscProcessor,
@@ -163,6 +164,7 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabGroup,
+  RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
@@ -176,8 +178,21 @@ import type {
 } from '../../shared/runtime-types'
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
+import { RuntimeEmulatorCommands, setEmulatorBridge } from './orca-runtime-emulator'
+import { serveSimStateWatcher } from '../emulator/serve-sim-state-watcher'
+import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
+import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
+import type {
+  AgentTeamsTmuxCompatRequest,
+  AgentTeamsTmuxCompatResponse
+} from './claude-agent-teams-service'
+import {
+  buildClaudeAgentTeamsLaunchPlan,
+  ensureClaudeAgentTeamsShimDir,
+  resolveClaudeAgentTeamsShimBin
+} from './claude-agent-teams-shim-env'
 import { joinWorktreeRelativePath } from './runtime-relative-paths'
 import { collectMemorySnapshot } from '../memory/collector'
 import { BrowserWindow, ipcMain } from 'electron'
@@ -292,13 +307,15 @@ import {
   type LinearListFilter
 } from '../linear/issues'
 import {
+  createProject as createLinearProject,
   getCustomView as getLinearCustomView,
   getProject as getLinearProject,
   listCustomViewIssues as listLinearCustomViewIssues,
   listCustomViewProjects as listLinearCustomViewProjects,
   listCustomViews as listLinearCustomViews,
   listProjectIssues as listLinearProjectIssues,
-  listProjects as listLinearProjects
+  listProjects as listLinearProjects,
+  type LinearProjectCreateInput
 } from '../linear/projects'
 import {
   getTeamLabels as getLinearTeamLabels,
@@ -535,6 +552,7 @@ type RuntimeStore = {
     workspaceDir: string
     nestWorkspaces: boolean
     refreshLocalBaseRefOnWorktreeCreate: boolean
+    localBaseRefSuggestionDismissed?: boolean
     branchPrefix: string
     branchPrefixCustom: string
     defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
@@ -550,7 +568,10 @@ type RuntimeStore = {
     gitlabProjects?: GlobalSettings['gitlabProjects']
     experimentalWorktreeSymlinks?: boolean
     mobileAutoRestoreFitMs?: number | null
+    mobileEmulatorEnabled?: boolean
+    mobileEmulatorDefaultDeviceUdid?: string | null
     voice?: VoiceSettings
+    claudeAgentTeamsMode?: GlobalSettings['claudeAgentTeamsMode']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value
@@ -712,6 +733,7 @@ type RuntimePtyController = {
     cwd?: string
     command?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     telemetry?: WorktreeStartupLaunch['telemetry']
     connectionId?: string | null
     worktreeId?: string
@@ -1300,6 +1322,7 @@ export class OrcaRuntimeService {
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
   private forkBackfillStarted = false
   private agentBrowserBridge: AgentBrowserBridge | null = null
+  private emulatorBridge: EmulatorBridge | null = null
   private resolvedWorktreeCache: ResolvedWorktreeCache | null = null
   private resolvedWorktreeInFlight: ResolvedWorktreeInFlight | null = null
   private resolvedWorktreeGeneration = 0
@@ -1561,6 +1584,7 @@ export class OrcaRuntimeService {
   private accountServices: RuntimeAccountServices | null = null
   private commitMessageAgentEnv: CommitMessageAgentEnvironmentResolvers | null = null
   private automationService: AutomationService | null = null
+  private readonly claudeAgentTeams = new ClaudeAgentTeamsService()
   private mobileDictation: {
     id: string
     owner: string
@@ -1988,6 +2012,15 @@ export class OrcaRuntimeService {
     return this.agentBrowserBridge
   }
 
+  setEmulatorBridge(bridge: EmulatorBridge | null): void {
+    this.emulatorBridge = bridge
+    setEmulatorBridge(bridge)
+  }
+
+  getEmulatorBridge(): EmulatorBridge | null {
+    return this.emulatorBridge
+  }
+
   attachWindow(windowId: number): void {
     if (this.authoritativeWindowId === null) {
       this.authoritativeWindowId = windowId
@@ -2127,9 +2160,13 @@ export class OrcaRuntimeService {
 
   private hydrateHeadlessMobileSessionTabsFromWorkspaceSession(
     worktreeId?: string,
-    options: { force?: boolean } = {}
+    options: {
+      force?: boolean
+      allowAttachedWindow?: boolean
+      onlyServeOwnedTerminals?: boolean
+    } = {}
   ): void {
-    if (this.getAvailableAuthoritativeWindow()) {
+    if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
       return
     }
     const session = this.store?.getWorkspaceSession?.()
@@ -2142,32 +2179,237 @@ export class OrcaRuntimeService {
         : Object.entries(session.tabsByWorktree ?? {})
     for (const [entryWorktreeId, persistedTabs] of entries) {
       const existing = this.mobileSessionTabsByWorktree.get(entryWorktreeId)
-      if (existing && existing.tabs.length > 0 && options.force !== true) {
+      if (
+        existing &&
+        existing.tabs.length > 0 &&
+        options.force !== true &&
+        options.onlyServeOwnedTerminals !== true
+      ) {
         continue
       }
-      const tabs = this.buildHeadlessMobileSessionTerminalTabs(entryWorktreeId, persistedTabs)
+      const tabs = this.buildHeadlessMobileSessionTerminalTabs(
+        entryWorktreeId,
+        persistedTabs
+      ).filter(
+        (tab) => options.onlyServeOwnedTerminals !== true || this.hasServeOwnedPtyBinding(tab)
+      )
       if (tabs.length === 0) {
         continue
       }
       const activeTab = this.pickHeadlessActiveTerminalTab(tabs)
       const tabOrder = this.collectHeadlessParentTabOrder(tabs)
       const groupId = this.getHeadlessMobileSessionGroupId(entryWorktreeId)
+      const mergedTabs =
+        options.onlyServeOwnedTerminals === true && existing
+          ? this.mergeMobileSessionSnapshotTabs(existing.tabs, tabs)
+          : tabs
+      const mergedActiveTab =
+        existing?.tabs.find((tab) => tab.id === existing.activeTabId) ??
+        activeTab ??
+        (mergedTabs[0]?.type === 'terminal' ? mergedTabs[0] : null)
+      const mergedTerminalTabs = mergedTabs.filter(
+        (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+      )
       this.mobileSessionTabsByWorktree.set(entryWorktreeId, {
-        worktree: entryWorktreeId,
+        worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: `headless-hydrated:${Date.now().toString(36)}`,
         snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
-        activeGroupId: groupId,
-        activeTabId: activeTab?.id ?? null,
-        activeTabType: activeTab ? 'terminal' : null,
-        tabGroups: [
-          {
-            id: groupId,
-            activeTabId: activeTab?.parentTabId ?? tabOrder[0] ?? null,
-            tabOrder
-          }
-        ],
-        tabs
+        activeGroupId: existing?.activeGroupId ?? groupId,
+        activeTabId: mergedActiveTab?.id ?? null,
+        activeTabType: mergedActiveTab?.type ?? null,
+        tabGroups:
+          options.onlyServeOwnedTerminals === true && existing?.tabGroups
+            ? this.mergeMobileSessionTabGroups(
+                entryWorktreeId,
+                existing.tabGroups,
+                mergedTerminalTabs,
+                mergedActiveTab?.type === 'terminal' ? mergedActiveTab : null
+              )
+            : [
+                {
+                  id: groupId,
+                  activeTabId: activeTab?.parentTabId ?? tabOrder[0] ?? null,
+                  tabOrder
+                }
+              ],
+        tabs: mergedTabs
       })
+    }
+  }
+
+  private isServeOwnedPtyId(ptyId: string | null | undefined): boolean {
+    return typeof ptyId === 'string' && ptyId.startsWith('serve-')
+  }
+
+  private hasServeOwnedPtyBinding(tab: RuntimeMobileSessionTerminalTab): boolean {
+    if (this.isServeOwnedPtyId(tab.ptyId)) {
+      return true
+    }
+    return Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).some((ptyId) =>
+      this.isServeOwnedPtyId(ptyId)
+    )
+  }
+
+  private mergeMobileSessionSnapshotTabs(
+    baseTabs: readonly RuntimeMobileSessionSnapshotTab[],
+    extraTabs: readonly RuntimeMobileSessionSnapshotTab[]
+  ): RuntimeMobileSessionSnapshotTab[] {
+    const seenIds = new Set<string>()
+    const merged: RuntimeMobileSessionSnapshotTab[] = []
+    const add = (tab: RuntimeMobileSessionSnapshotTab): void => {
+      const ids = this.getMobileSessionSnapshotTabIdentityKeys(tab)
+      if (ids.some((id) => seenIds.has(id))) {
+        return
+      }
+      for (const id of ids) {
+        seenIds.add(id)
+      }
+      merged.push(tab)
+    }
+    for (const tab of baseTabs) {
+      add(tab)
+    }
+    for (const tab of extraTabs) {
+      add(tab)
+    }
+    return merged
+  }
+
+  private getMobileSessionSnapshotTabIdentityKeys(tab: RuntimeMobileSessionSnapshotTab): string[] {
+    if (tab.type === 'terminal') {
+      // Why: split terminal leaves share one parent tab; merge dedup must stay
+      // leaf-scoped or preserved siblings collapse into a single surface.
+      return [tab.id, `${tab.parentTabId}::${tab.leafId}`]
+    }
+    if (tab.type === 'browser') {
+      return [tab.id, tab.browserWorkspaceId]
+    }
+    return [tab.id]
+  }
+
+  private mergeMobileSessionTabGroups(
+    worktreeId: string,
+    groups: readonly RuntimeMobileSessionTabGroup[],
+    terminalTabs: readonly RuntimeMobileSessionTerminalTab[],
+    activeTab: RuntimeMobileSessionTerminalTab | null
+  ): RuntimeMobileSessionTabGroup[] {
+    const parentTabOrder = this.collectHeadlessParentTabOrder(terminalTabs)
+    if (parentTabOrder.length === 0) {
+      return [...groups]
+    }
+    const targetGroupId = groups[0]?.id ?? this.getHeadlessMobileSessionGroupId(worktreeId)
+    const nextGroups =
+      groups.length > 0
+        ? groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
+        : [
+            {
+              id: targetGroupId,
+              activeTabId: null,
+              tabOrder: []
+            }
+          ]
+    const target = nextGroups[0]!
+    for (const tabId of parentTabOrder) {
+      if (!target.tabOrder.includes(tabId)) {
+        target.tabOrder.push(tabId)
+      }
+    }
+    const activeParentId =
+      activeTab?.parentTabId ?? target.activeTabId ?? target.tabOrder[0] ?? null
+    target.activeTabId =
+      activeParentId && target.tabOrder.includes(activeParentId)
+        ? activeParentId
+        : (target.tabOrder[0] ?? null)
+    return nextGroups
+  }
+
+  private publishPtyBackedMobileSessionTerminal(
+    worktreeId: string,
+    pty: RuntimePtyWorktreeRecord,
+    args: { tabId: string; leafId: string; title: string | null; activate: boolean }
+  ): void {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const title = args.title ?? pty.title ?? pty.lastOscTitle ?? 'Terminal'
+    const existingTab = existing?.tabs.find(
+      (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+        candidate.type === 'terminal' &&
+        candidate.parentTabId === args.tabId &&
+        candidate.leafId === args.leafId
+    )
+    const parentLayout = this.buildMaterializedHeadlessParentLayout(
+      args.leafId,
+      pty.ptyId,
+      existingTab?.parentLayout
+    )
+    const tab: RuntimeMobileSessionTerminalTab = {
+      type: 'terminal',
+      id: `${args.tabId}::${args.leafId}`,
+      parentTabId: args.tabId,
+      leafId: args.leafId,
+      ptyId: pty.ptyId,
+      title,
+      parentLayout,
+      isActive: args.activate || existing?.activeTabId == null
+    }
+    const existingTabs = (existing?.tabs ?? []).filter(
+      (candidate) =>
+        !(
+          candidate.type === 'terminal' &&
+          candidate.parentTabId === args.tabId &&
+          candidate.leafId === args.leafId
+        )
+    )
+    const tabs = this.mergeMobileSessionSnapshotTabs(
+      existingTabs.map((candidate) => ({
+        ...candidate,
+        isActive: tab.isActive ? false : candidate.isActive
+      })),
+      [tab]
+    )
+    const activeTab =
+      (tab.isActive ? tab : tabs.find((candidate) => candidate.id === existing?.activeTabId)) ??
+      tabs.find((candidate) => candidate.isActive) ??
+      tabs[0] ??
+      null
+    const terminalTabs = tabs.filter(
+      (candidate): candidate is RuntimeMobileSessionTerminalTab => candidate.type === 'terminal'
+    )
+    const next: RuntimeMobileSessionTabsSnapshot = {
+      worktree: worktreeId,
+      publicationEpoch:
+        existing?.publicationEpoch ?? `headless:pty-backed:${Date.now().toString(36)}`,
+      snapshotVersion: (existing?.snapshotVersion ?? 0) + 1,
+      activeGroupId: existing?.activeGroupId ?? this.getHeadlessMobileSessionGroupId(worktreeId),
+      activeTabId: activeTab?.id ?? null,
+      activeTabType: activeTab?.type ?? null,
+      tabGroups: this.mergeMobileSessionTabGroups(
+        worktreeId,
+        existing?.tabGroups ?? [],
+        terminalTabs,
+        activeTab?.type === 'terminal' ? activeTab : null
+      ),
+      ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
+      tabs
+    }
+    this.mobileSessionTabsByWorktree.set(worktreeId, next)
+    this.notifyMobileSessionTabsChanged(worktreeId)
+  }
+
+  private touchMobileSessionSnapshotsForPty(ptyId: string): void {
+    for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
+      const hasPtyBackedTab = snapshot.tabs.some(
+        (tab) =>
+          tab.type === 'terminal' &&
+          (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] === ptyId)
+      )
+      if (!hasPtyBackedTab) {
+        continue
+      }
+      this.mobileSessionTabsByWorktree.set(worktreeId, {
+        ...snapshot,
+        snapshotVersion: snapshot.snapshotVersion + 1
+      })
+      this.notifyMobileSessionTabsChanged(worktreeId)
     }
   }
 
@@ -2468,11 +2710,14 @@ export class OrcaRuntimeService {
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )
-      if (
+      // Why: serve-created tabs can be visible before any renderer has adopted
+      // their tab id, so focusing the renderer would silently no-op.
+      const shouldMaterializePendingTerminal =
         publicTab?.type === 'terminal' &&
         publicTab.status !== 'ready' &&
-        !this.notifier?.focusTerminal
-      ) {
+        (!this.notifier?.focusTerminal ||
+          this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
+      if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
         try {
           await this.createHeadlessMobileSessionTerminal(worktreeId, true, undefined, undefined, {
@@ -2509,6 +2754,16 @@ export class OrcaRuntimeService {
       this.notifier?.focusEditorTab?.(tab.id, worktreeId)
     }
     return this.getMobileSessionTabsForWorktree(worktreeId)
+  }
+
+  private shouldMaterializeHeadlessMobileSessionTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    return (
+      this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch) ||
+      this.hasServeOwnedPtyBinding(tab)
+    )
   }
 
   async closeMobileSessionTab(worktreeSelector: string, tabId: string): Promise<{ closed: true }> {
@@ -3013,6 +3268,7 @@ export class OrcaRuntimeService {
     // `Network: https://local.example.com:3001/`) so the workspace ports
     // panel can surface them in place of the kernel bind address.
     advertisedUrlWatcher.ingest(ptyId, data, at)
+    serveSimStateWatcher.ingestPtyOutput(ptyId, data)
     // Ordering invariant (DO NOT REORDER): maybeHydrateHeadlessFromRenderer
     // MUST run before trackHeadlessTerminalData so the eager-state pattern
     // (set headlessTerminals + writeChain head = seedPromise) is in place
@@ -3036,6 +3292,7 @@ export class OrcaRuntimeService {
       return normalizedData
     }
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+    let shouldTouchPtyBackedSessionTabs = false
     const ptyTailBefore = pty
       ? {
           lines: pty.tailBuffer,
@@ -3062,8 +3319,11 @@ export class OrcaRuntimeService {
       pty.preview = buildPreview(pty.tailBuffer, pty.tailPartialLine)
       if (oscTitle !== null) {
         const prevStatus = pty.lastAgentStatus
+        const prevTitle = pty.lastOscTitle
         pty.lastOscTitle = oscTitle
         pty.lastAgentStatus = agentStatus
+        shouldTouchPtyBackedSessionTabs =
+          prevTitle !== oscTitle || prevStatus !== pty.lastAgentStatus
         if (agentStatus === 'idle' && prevStatus !== 'idle') {
           this.resolvePtyTuiIdleWaiters(pty, ptyId)
         }
@@ -3143,6 +3403,9 @@ export class OrcaRuntimeService {
     }
 
     this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
+    if (shouldTouchPtyBackedSessionTabs) {
+      this.touchMobileSessionSnapshotsForPty(ptyId)
+    }
 
     const listeners = this.dataListeners.get(ptyId)
     if (listeners) {
@@ -4305,6 +4568,7 @@ export class OrcaRuntimeService {
 
   onPtyExit(ptyId: string, exitCode: number): void {
     advertisedUrlWatcher.unbindPty(ptyId)
+    serveSimStateWatcher.unbindPty(ptyId)
     // Clean up new mobile state for this PTY
     this.mobileSubscribers.delete(ptyId)
     this.mobileDisplayModes.delete(ptyId)
@@ -4353,6 +4617,7 @@ export class OrcaRuntimeService {
       pty.lastExitCode = exitCode
       this.resolvePtyExitWaiters(pty, ptyId)
       this.pruneDisconnectedPtyTranscript(pty)
+      this.touchMobileSessionSnapshotsForPty(ptyId)
     }
 
     for (const leaf of this.getLeavesForPty(ptyId)) {
@@ -5475,13 +5740,15 @@ export class OrcaRuntimeService {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
-    const graphEpoch = this.captureReadyGraphEpoch()
+    const graphEpoch = this.graphStatus === 'ready' ? this.rendererGraphEpoch : null
     const targetWorktreeId = worktreeSelector
       ? (getExplicitWorktreeIdSelector(worktreeSelector) ??
         (await this.resolveWorktreeSelector(worktreeSelector)).id)
       : null
     const worktreesById = await this.getResolvedWorktreeMap()
-    this.assertStableReadyGraph(graphEpoch)
+    if (graphEpoch !== null) {
+      this.assertStableReadyGraph(graphEpoch)
+    }
 
     const resolvedWorktrees = [...worktreesById.values()]
     await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
@@ -5495,17 +5762,19 @@ export class OrcaRuntimeService {
 
     const terminals: RuntimeTerminalSummary[] = []
     const ptyIdsFromLeaves = new Set<string>()
-    for (const leaf of this.leaves.values()) {
-      if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
-        continue
+    if (graphEpoch !== null) {
+      for (const leaf of this.leaves.values()) {
+        if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
+          continue
+        }
+        if (!leaf.ptyId && livePtyWorktreeIds.has(leaf.worktreeId)) {
+          continue
+        }
+        if (leaf.ptyId) {
+          ptyIdsFromLeaves.add(leaf.ptyId)
+        }
+        terminals.push(this.buildTerminalSummary(leaf, worktreesById))
       }
-      if (!leaf.ptyId && livePtyWorktreeIds.has(leaf.worktreeId)) {
-        continue
-      }
-      if (leaf.ptyId) {
-        ptyIdsFromLeaves.add(leaf.ptyId)
-      }
-      terminals.push(this.buildTerminalSummary(leaf, worktreesById))
     }
 
     // Why: worktree.ps can classify active worktrees from PTY records even when
@@ -5531,6 +5800,32 @@ export class OrcaRuntimeService {
   // Why: when --terminal is omitted, the CLI auto-resolves to the active
   // terminal in the current worktree — matching browser's implicit active tab.
   async resolveActiveTerminal(worktreeSelector?: string): Promise<string> {
+    if (this.graphStatus !== 'ready') {
+      const targetWorktreeId = worktreeSelector
+        ? (await this.resolveWorktreeSelector(worktreeSelector)).id
+        : null
+      const snapshots = targetWorktreeId
+        ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
+        : await this.listAllMobileSessionTabs()
+      for (const snapshot of snapshots) {
+        const activeTerminal = snapshot.tabs.find(
+          (tab) =>
+            tab.type === 'terminal' &&
+            tab.isActive &&
+            tab.status === 'ready' &&
+            typeof tab.terminal === 'string'
+        )
+        if (activeTerminal?.type === 'terminal' && activeTerminal.terminal) {
+          return activeTerminal.terminal
+        }
+      }
+      const listed = await this.listTerminals(worktreeSelector)
+      const first = listed.terminals[0]?.handle
+      if (first) {
+        return first
+      }
+      throw new Error('no_active_terminal')
+    }
     this.assertGraphReady()
 
     const targetWorktreeId = worktreeSelector
@@ -5564,18 +5859,21 @@ export class OrcaRuntimeService {
   }
 
   async showTerminal(handle: string): Promise<RuntimeTerminalShow> {
-    const graphEpoch = this.captureReadyGraphEpoch()
-    const worktreesById = await this.getResolvedWorktreeMap()
-    this.assertStableReadyGraph(graphEpoch)
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
+      const worktreesById = await this.getResolvedWorktreeMap()
       return {
         ...this.buildPtyTerminalSummary(pty.pty, worktreesById),
+        tabId: pty.pty.tabId ?? pty.record.tabId,
+        leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
         paneRuntimeId: -1,
         ptyId: pty.pty.ptyId,
         rendererGraphEpoch: this.rendererGraphEpoch
       }
     }
+    const graphEpoch = this.captureReadyGraphEpoch()
+    const worktreesById = await this.getResolvedWorktreeMap()
+    this.assertStableReadyGraph(graphEpoch)
     const { leaf } = this.getLiveLeafForHandle(handle)
     const summary = this.buildTerminalSummary(leaf, worktreesById)
     return {
@@ -6596,9 +6894,8 @@ export class OrcaRuntimeService {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
         | 'projectGroupOrder'
-        | 'sourceControlAi'
       >
-    >
+    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
   ): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -6607,6 +6904,9 @@ export class OrcaRuntimeService {
     const sanitizedUpdates = omitUndefinedProperties(updates)
     if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
       sanitizedUpdates.worktreeBasePath = undefined
+    }
+    if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
+      sanitizedUpdates.sourceControlAi = null
     }
     const updated = this.store.updateRepo(repo.id, sanitizedUpdates)
     if (!updated) {
@@ -8836,7 +9136,16 @@ export class OrcaRuntimeService {
       )
     }
 
-    const existingBranchOption = { checkoutExistingBranch }
+    const suggestLocalBaseRefUpdate =
+      !settings.refreshLocalBaseRefOnWorktreeCreate &&
+      !settings.localBaseRefSuggestionDismissed &&
+      Boolean(remoteTrackingBase)
+    const remoteTrackingBaseOption = remoteTrackingBase ? { remoteTrackingBase } : undefined
+    const existingBranchOption = {
+      checkoutExistingBranch,
+      ...remoteTrackingBaseOption,
+      ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
+    }
     const addResult: AddWorktreeResult =
       (await (sparseDirectories.length > 0
         ? checkoutExistingBranch
@@ -8849,14 +9158,34 @@ export class OrcaRuntimeService {
               settings.refreshLocalBaseRefOnWorktreeCreate,
               existingBranchOption
             )
-          : addSparseWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              sparseDirectories,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate
-            )
+          : suggestLocalBaseRefUpdate
+            ? addSparseWorktree(
+                repo.path,
+                worktreePath,
+                branchName,
+                sparseDirectories,
+                baseBranch,
+                settings.refreshLocalBaseRefOnWorktreeCreate,
+                { ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate }
+              )
+            : remoteTrackingBaseOption
+              ? addSparseWorktree(
+                  repo.path,
+                  worktreePath,
+                  branchName,
+                  sparseDirectories,
+                  baseBranch,
+                  settings.refreshLocalBaseRefOnWorktreeCreate,
+                  remoteTrackingBaseOption
+                )
+              : addSparseWorktree(
+                  repo.path,
+                  worktreePath,
+                  branchName,
+                  sparseDirectories,
+                  baseBranch,
+                  settings.refreshLocalBaseRefOnWorktreeCreate
+                )
         : checkoutExistingBranch
           ? addWorktree(
               repo.path,
@@ -8867,13 +9196,33 @@ export class OrcaRuntimeService {
               false,
               existingBranchOption
             )
-          : addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate
-            ))) ?? {}
+          : suggestLocalBaseRefUpdate
+            ? addWorktree(
+                repo.path,
+                worktreePath,
+                branchName,
+                baseBranch,
+                settings.refreshLocalBaseRefOnWorktreeCreate,
+                false,
+                { ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate }
+              )
+            : remoteTrackingBaseOption
+              ? addWorktree(
+                  repo.path,
+                  worktreePath,
+                  branchName,
+                  baseBranch,
+                  settings.refreshLocalBaseRefOnWorktreeCreate,
+                  false,
+                  remoteTrackingBaseOption
+                )
+              : addWorktree(
+                  repo.path,
+                  worktreePath,
+                  branchName,
+                  baseBranch,
+                  settings.refreshLocalBaseRefOnWorktreeCreate
+                ))) ?? {}
 
     let configuredPushTarget: GitPushTarget | undefined
     if (preparedPushTarget) {
@@ -9153,6 +9502,9 @@ export class OrcaRuntimeService {
       ...(warning ? { warning } : {}),
       ...(addResult.localBaseRefRefresh
         ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
+        : {}),
+      ...(addResult.localBaseRefUpdateSuggestion
+        ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
         : {})
     }
   }
@@ -9536,13 +9888,17 @@ export class OrcaRuntimeService {
       return null
     }
 
+    const remoteRefPrefix = 'refs/remotes/'
+    const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
+      ? baseBranch.slice(remoteRefPrefix.length)
+      : baseBranch
     const remote = remotes
-      .filter((candidate) => baseBranch.startsWith(`${candidate}/`))
+      .filter((candidate) => shortBaseBranch.startsWith(`${candidate}/`))
       .sort((a, b) => b.length - a.length)[0]
     if (!remote) {
       return null
     }
-    const branch = baseBranch.slice(remote.length + 1)
+    const branch = shortBaseBranch.slice(remote.length + 1)
     if (!branch) {
       return null
     }
@@ -9550,7 +9906,7 @@ export class OrcaRuntimeService {
       remote,
       branch,
       ref: `refs/remotes/${remote}/${branch}`,
-      base: baseBranch
+      base: `${remote}/${branch}`
     }
   }
 
@@ -10133,6 +10489,7 @@ export class OrcaRuntimeService {
     // purge history and process-local caches before the ID points at new state.
     store.removeWorktreeMeta(worktreeId)
     advertisedUrlWatcher.forgetWorktree(worktreeId)
+    serveSimStateWatcher.forgetWorktree(worktreeId)
     deleteWorktreeHistoryDir(worktreeId)
   }
 
@@ -10548,18 +10905,19 @@ export class OrcaRuntimeService {
   }
 
   async renameTerminal(handle: string, title: string | null): Promise<RuntimeTerminalRename> {
-    this.assertGraphReady()
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       pty.pty.title = title
+      this.touchMobileSessionSnapshotsForPty(pty.pty.ptyId)
       for (const leaf of this.leaves.values()) {
         if (leaf.ptyId === pty.pty.ptyId) {
           this.notifier?.renameTerminal(leaf.tabId, title)
           return { handle, tabId: leaf.tabId, title }
         }
       }
-      return { handle, tabId: pty.record.tabId, title }
+      return { handle, tabId: pty.pty.tabId ?? pty.record.tabId, title }
     }
+    this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.renameTerminal(leaf.tabId, title)
     return { handle, tabId: leaf.tabId, title }
@@ -10617,8 +10975,28 @@ export class OrcaRuntimeService {
       const tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
       const leafId = canAdoptPaneIdentity ? (opts.leafId as string) : randomUUID()
       const paneKey = makePaneKey(tabId, leafId)
+      const baseEnv = opts.env ?? {}
+      const agentTeamsPlan = await buildClaudeAgentTeamsLaunchPlan({
+        command: opts.command,
+        mode: this.store?.getSettings?.().claudeAgentTeamsMode,
+        baseEnv: {
+          ...process.env,
+          ...baseEnv
+        },
+        createTeamEnv: (shimDir, shimBin) =>
+          this.claudeAgentTeams.createLaunchEnv({
+            leaderHandle: preAllocatedHandle,
+            baseEnv: {
+              ...process.env,
+              ...baseEnv
+            },
+            shimDir,
+            shimBin
+          }).env
+      })
       const env = {
-        ...opts.env,
+        ...baseEnv,
+        ...agentTeamsPlan?.env,
         ORCA_PANE_KEY: paneKey,
         ORCA_TAB_ID: tabId,
         ORCA_WORKTREE_ID: worktree.id
@@ -10627,8 +11005,9 @@ export class OrcaRuntimeService {
         cols: 120,
         rows: 40,
         cwd: worktree.path,
-        command: opts.command,
+        command: agentTeamsPlan?.command ?? opts.command,
         env,
+        envToDelete: agentTeamsPlan?.envToDelete,
         telemetry: opts.telemetry,
         connectionId: repo?.connectionId ?? null,
         worktreeId: worktree.id,
@@ -10647,6 +11026,14 @@ export class OrcaRuntimeService {
         pty.paneKey = paneKey
       }
       const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
+      if (pty) {
+        this.publishPtyBackedMobileSessionTerminal(worktree.id, pty, {
+          tabId,
+          leafId,
+          title: opts.title ?? null,
+          activate: opts.activate === true
+        })
+      }
       let surface: RuntimeTerminalCreate['surface'] = 'background'
       if (this.notifier?.revealTerminalSession) {
         try {
@@ -11115,7 +11502,6 @@ export class OrcaRuntimeService {
   }
 
   async focusTerminal(handle: string): Promise<RuntimeTerminalFocus> {
-    this.assertGraphReady()
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
@@ -11134,18 +11520,20 @@ export class OrcaRuntimeService {
         worktreeId: pty.pty.worktreeId
       }
     }
+    this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     this.notifier?.focusTerminal(leaf.tabId, leaf.worktreeId, leaf.leafId)
     return { handle, tabId: leaf.tabId, worktreeId: leaf.worktreeId }
   }
 
   async closeTerminal(handle: string): Promise<RuntimeTerminalClose> {
-    this.assertGraphReady()
     const pty = this.getLivePtyForHandle(handle)
+    this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
     if (pty) {
       const ptyKilled = this.ptyController?.kill(pty.pty.ptyId) ?? false
-      return { handle, tabId: pty.record.tabId, ptyKilled }
+      return { handle, tabId: pty.pty.tabId ?? pty.record.tabId, ptyKilled }
     }
+    this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     let ptyKilled = false
     if (leaf.ptyId) {
@@ -11171,6 +11559,7 @@ export class OrcaRuntimeService {
       direction?: 'horizontal' | 'vertical'
       command?: string
       env?: Record<string, string>
+      envToDelete?: string[]
       activate?: boolean
       telemetrySource?: TerminalPaneSplitSource
     } = {}
@@ -11208,6 +11597,7 @@ export class OrcaRuntimeService {
       direction?: 'horizontal' | 'vertical'
       command?: string
       env?: Record<string, string>
+      envToDelete?: string[]
       activate?: boolean
       telemetrySource?: TerminalPaneSplitSource
     } = {}
@@ -11240,6 +11630,7 @@ export class OrcaRuntimeService {
         ORCA_TAB_ID: parentTabId,
         ORCA_WORKTREE_ID: worktree.id
       },
+      envToDelete: opts.envToDelete,
       connectionId: repo?.connectionId ?? null,
       worktreeId: worktree.id,
       preAllocatedHandle
@@ -11267,8 +11658,51 @@ export class OrcaRuntimeService {
       this.ptyController.kill?.(result.id)
       throw error
     }
+    if (createdPty) {
+      this.publishPtyBackedMobileSessionTerminal(worktree.id, createdPty, {
+        tabId: parentTabId,
+        leafId,
+        title: null,
+        activate: opts.activate !== false
+      })
+    }
 
     return { handle: this.issuePtyHandle(createdPty ?? pty), tabId: parentTabId, paneRuntimeId: -1 }
+  }
+
+  async handleAgentTeamsTmuxCompat(
+    request: AgentTeamsTmuxCompatRequest
+  ): Promise<AgentTeamsTmuxCompatResponse> {
+    return await this.claudeAgentTeams.handleTmuxCompat(request, {
+      splitTerminal: (handle, opts) => this.splitTerminal(handle, opts),
+      readTerminal: (handle, opts) => this.readTerminal(handle, opts),
+      sendTerminal: (handle, action) => this.sendTerminal(handle, action),
+      focusTerminal: (handle) => this.focusTerminal(handle),
+      closeTerminal: (handle) => this.closeTerminal(handle),
+      showTerminal: (handle) => this.showTerminal(handle)
+    })
+  }
+
+  async prepareClaudeAgentTeamsLeader(args: {
+    paneKey: string
+    baseEnv?: Record<string, string>
+  }): Promise<{ env: Record<string, string> }> {
+    const handle = this.getTerminalHandleForPaneKey(args.paneKey)
+    if (!handle) {
+      throw new Error('claude_agent_teams_requires_orca_terminal')
+    }
+    const baseEnv = {
+      ...process.env,
+      ...args.baseEnv
+    }
+    const shimDir = await ensureClaudeAgentTeamsShimDir()
+    const shimBin = resolveClaudeAgentTeamsShimBin(baseEnv)
+    return this.claudeAgentTeams.createLaunchEnv({
+      leaderHandle: handle,
+      baseEnv,
+      shimDir,
+      shimBin
+    })
   }
 
   private waitForNewLeafInTab(
@@ -12088,6 +12522,7 @@ export class OrcaRuntimeService {
       // Why: restored/controller-discovered PTYs learn their worktree here
       // without registerPty(), so URL enrichment must bind at this source.
       advertisedUrlWatcher.bindPty(ptyId, worktreeId)
+      serveSimStateWatcher.bindPty(ptyId, worktreeId)
       return pty
     }
 
@@ -12117,6 +12552,7 @@ export class OrcaRuntimeService {
     // Why: recordPtyWorktree is the common lifecycle point for every path that
     // resolves a PTY's worktree, including renderer restore and controller list.
     advertisedUrlWatcher.bindPty(ptyId, worktreeId)
+    serveSimStateWatcher.bindPty(ptyId, worktreeId)
     return pty
   }
 
@@ -12194,11 +12630,8 @@ export class OrcaRuntimeService {
     const retained = [...this.ptysById.values()]
       .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
       .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
-    while (retained.length > DISCONNECTED_PTY_RECORD_MAX) {
-      const stale = retained.shift()
-      if (!stale) {
-        return
-      }
+    const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
+    for (const stale of retained.slice(0, staleCount)) {
       // Why: exited runtime-owned PTYs stay readable after exit, but long-lived
       // runtimes can churn through many background sessions. Bound the archive.
       this.dropDisconnectedPtyRecord(stale.ptyId)
@@ -12206,6 +12639,8 @@ export class OrcaRuntimeService {
   }
 
   private dropDisconnectedPtyRecord(ptyId: string): void {
+    // Why: pruning can remove a PTY without the normal exit callback.
+    serveSimStateWatcher.unbindPty(ptyId)
     this.ptysById.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
@@ -12291,24 +12726,175 @@ export class OrcaRuntimeService {
     if (snapshots === undefined) {
       return
     }
+    // Why: renderer graphs are authoritative for renderer tabs, but headless
+    // serve terminals never enter that graph unless we preserve their bindings.
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(undefined, {
+      allowAttachedWindow: true,
+      onlyServeOwnedTerminals: true
+    })
     const nextWorktrees = new Set<string>()
     for (const snapshot of snapshots) {
       nextWorktrees.add(snapshot.worktree)
       const existing = this.mobileSessionTabsByWorktree.get(snapshot.worktree)
+      const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(snapshot, existing)
       if (
         !existing ||
-        snapshot.publicationEpoch !== existing.publicationEpoch ||
-        snapshot.snapshotVersion >= existing.snapshotVersion
+        nextSnapshot.publicationEpoch !== existing.publicationEpoch ||
+        nextSnapshot.snapshotVersion >= existing.snapshotVersion
       ) {
-        this.mobileSessionTabsByWorktree.set(snapshot.worktree, snapshot)
+        this.mobileSessionTabsByWorktree.set(snapshot.worktree, nextSnapshot)
       }
     }
-    for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
+    for (const [worktreeId, existing] of [...this.mobileSessionTabsByWorktree.entries()]) {
       if (!nextWorktrees.has(worktreeId)) {
-        this.mobileSessionTabsByWorktree.delete(worktreeId)
-        this.notifyMobileSessionTabsRemoved(worktreeId)
+        const preserved = this.buildPreservedHeadlessMobileSessionSnapshot(existing)
+        if (preserved) {
+          this.mobileSessionTabsByWorktree.set(worktreeId, preserved)
+          nextWorktrees.add(worktreeId)
+        } else {
+          this.mobileSessionTabsByWorktree.delete(worktreeId)
+          this.notifyMobileSessionTabsRemoved(worktreeId)
+        }
       }
     }
+  }
+
+  private mergePreservedHeadlessMobileSessionTabs(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    existing: RuntimeMobileSessionTabsSnapshot | undefined
+  ): RuntimeMobileSessionTabsSnapshot {
+    if (!existing) {
+      return snapshot
+    }
+    const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
+    if (preservedTabs.length === 0) {
+      return snapshot
+    }
+    const hasIncomingActiveTab = snapshot.tabs.some((tab) => tab.isActive)
+    const normalizedPreservedTabs = preservedTabs.map((tab) =>
+      hasIncomingActiveTab ? { ...tab, isActive: false } : tab
+    )
+    const tabs = this.mergeMobileSessionSnapshotTabs(snapshot.tabs, normalizedPreservedTabs)
+    if (tabs.length === snapshot.tabs.length) {
+      return snapshot
+    }
+    const activeTab =
+      snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ??
+      tabs.find((tab) => tab.id === existing.activeTabId) ??
+      tabs.find((tab) => tab.isActive) ??
+      tabs[0] ??
+      null
+    const terminalTabs = tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+    )
+    return {
+      ...snapshot,
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(
+        snapshot,
+        normalizedPreservedTabs
+      ),
+      snapshotVersion: Math.max(snapshot.snapshotVersion, existing.snapshotVersion),
+      activeGroupId: snapshot.activeGroupId ?? existing.activeGroupId,
+      activeTabId: activeTab?.id ?? null,
+      activeTabType: activeTab?.type ?? null,
+      tabGroups: this.mergeMobileSessionTabGroups(
+        snapshot.worktree,
+        snapshot.tabGroups ?? existing.tabGroups ?? [],
+        terminalTabs,
+        activeTab?.type === 'terminal' ? activeTab : null
+      ),
+      tabs
+    }
+  }
+
+  private buildPreservedHeadlessMobileSessionSnapshot(
+    existing: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot | null {
+    const tabs = this.collectPreservedHeadlessMobileSessionTabs(existing)
+    if (tabs.length === 0) {
+      return null
+    }
+    const activeTab =
+      tabs.find((tab) => tab.id === existing.activeTabId) ??
+      tabs.find((tab) => tab.isActive) ??
+      tabs[0] ??
+      null
+    const terminalTabs = tabs.filter(
+      (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
+    )
+    return {
+      ...existing,
+      publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),
+      activeGroupId:
+        existing.activeGroupId ?? this.getHeadlessMobileSessionGroupId(existing.worktree),
+      activeTabId: activeTab?.id ?? null,
+      activeTabType: activeTab?.type ?? null,
+      tabGroups: this.mergeMobileSessionTabGroups(
+        existing.worktree,
+        existing.tabGroups ?? [],
+        terminalTabs,
+        activeTab?.type === 'terminal' ? activeTab : null
+      ),
+      tabs
+    }
+  }
+
+  private collectPreservedHeadlessMobileSessionTabs(
+    existing: RuntimeMobileSessionTabsSnapshot,
+    incoming?: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionSnapshotTab[] {
+    const incomingIds = new Set(
+      incoming?.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab)) ?? []
+    )
+    return existing.tabs.filter((tab) => {
+      if (this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) => incomingIds.has(id))) {
+        return false
+      }
+      return this.shouldPreserveHeadlessMobileSessionTab(existing, tab)
+    })
+  }
+
+  private shouldPreserveHeadlessMobileSessionTab(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    tab: RuntimeMobileSessionSnapshotTab
+  ): boolean {
+    if (tab.type !== 'terminal') {
+      return false
+    }
+    return (
+      this.isHeadlessMobileSessionPublication(snapshot.publicationEpoch) ||
+      this.hasServeOwnedPtyBinding(tab)
+    )
+  }
+
+  private isHeadlessMobileSessionPublication(publicationEpoch: string): boolean {
+    return (
+      publicationEpoch.startsWith('headless:') ||
+      publicationEpoch.startsWith('headless-hydrated:') ||
+      publicationEpoch.includes(':headless-merge:')
+    )
+  }
+
+  private getMergedMobileSessionPublicationEpoch(
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
+  ): string {
+    // Why: preserved snapshots can be merged repeatedly; normalize the prior
+    // merge suffix before recomputing so the publication epoch is idempotent.
+    const normalizedPublicationEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
+    const signature = createHash('sha1')
+      .update(
+        preservedTabs
+          .map((tab) =>
+            tab.type === 'terminal'
+              ? `${tab.id}:${tab.parentTabId}:${tab.ptyId ?? ''}:${tab.leafId}`
+              : tab.id
+          )
+          .join('|')
+      )
+      .digest('hex')
+      .slice(0, 12)
+    return `${normalizedPublicationEpoch}:headless-merge:${signature}`
   }
 
   private notifyMobileSessionTabsRemoved(worktreeId: string): void {
@@ -12526,10 +13112,12 @@ export class OrcaRuntimeService {
         id: tab.id,
         parentTabId: tab.parentTabId,
         leafId: tab.leafId,
-        title: leaf?.paneTitle ?? syncedTab?.title ?? pty?.title ?? tab.title,
+        title: leaf?.paneTitle ?? syncedTab?.title ?? pty?.lastOscTitle ?? pty?.title ?? tab.title,
         ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
         ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
-        ...(tab.agentStatus ? { agentStatus: tab.agentStatus } : {}),
+        ...(tab.agentStatus
+          ? { agentStatus: tab.agentStatus }
+          : this.buildPtyMobileAgentStatus(livePty ?? pty, tab, terminalHandle)),
         ...(tab.parentLayout ? { parentLayout: tab.parentLayout } : {}),
         isActive: tab.isActive,
         ...(terminalHandle
@@ -12573,6 +13161,36 @@ export class OrcaRuntimeService {
       ...(tabGroups ? { tabGroups } : {}),
       ...(snapshot.tabGroupLayout !== undefined ? { tabGroupLayout } : {}),
       tabs: normalizedTabs
+    }
+  }
+
+  private buildPtyMobileAgentStatus(
+    pty: RuntimePtyWorktreeRecord | null,
+    tab: RuntimeMobileSessionTerminalTab,
+    terminalHandle: string | null
+  ): { agentStatus: AgentStatusEntry } | Record<string, never> {
+    if (!pty?.lastAgentStatus) {
+      return {}
+    }
+    const now = pty.lastOutputAt ?? Date.now()
+    return {
+      agentStatus: {
+        state:
+          pty.lastAgentStatus === 'working'
+            ? 'working'
+            : pty.lastAgentStatus === 'permission'
+              ? 'blocked'
+              : 'done',
+        prompt: '',
+        updatedAt: now,
+        stateStartedAt: now,
+        paneKey: this.getMobileTerminalPaneKey(tab),
+        ...(terminalHandle ? { terminalHandle } : {}),
+        worktreeId: pty.worktreeId,
+        tabId: tab.parentTabId,
+        terminalTitle: pty.lastOscTitle ?? pty.title ?? tab.title,
+        stateHistory: []
+      }
     }
   }
 
@@ -12858,12 +13476,17 @@ export class OrcaRuntimeService {
   // Why: after a message is inserted for a recipient, any blocking
   // orchestration.check --wait calls watching that handle must be woken
   // so they can return the new message immediately instead of polling.
-  notifyMessageArrived(handle: string): void {
+  notifyMessageArrived(handle: string, messageType?: string): void {
     const waiters = this.messageWaitersByHandle.get(handle)
     if (!waiters || waiters.size === 0) {
       return
     }
     for (const waiter of [...waiters]) {
+      // Why: a coordinator waiting for worker_done/escalation should not be
+      // woken by worker heartbeat noise and mistake that empty read for idleness.
+      if (messageType && waiter.typeFilter && !waiter.typeFilter.includes(messageType)) {
+        continue
+      }
       this.resolveMessageWaiter(waiter)
     }
   }
@@ -13612,6 +14235,13 @@ export class OrcaRuntimeService {
     return listLinearProjects(query, Math.min(Math.max(1, limit), 50), workspaceId, force)
   }
 
+  linearCreateProject(
+    input: LinearProjectCreateInput,
+    workspaceId?: string
+  ): ReturnType<typeof createLinearProject> {
+    return createLinearProject(input, workspaceId)
+  }
+
   linearGetProject(
     id: string,
     workspaceId: string,
@@ -13791,6 +14421,13 @@ export class OrcaRuntimeService {
     resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
     getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
     getAvailableAuthoritativeWindow: () => this.getAvailableAuthoritativeWindow()
+  })
+
+  private readonly emulatorCommands = new RuntimeEmulatorCommands({
+    getEmulatorBridge: () => this.emulatorBridge,
+    resolveWorktreeSelector: (selector) => this.resolveWorktreeSelector(selector),
+    getAuthoritativeWindow: () => this.getAuthoritativeWindow(),
+    getSettings: () => this.requireStore().getSettings()
   })
 
   browserSnapshot: RuntimeBrowserCommands['browserSnapshot'] =
@@ -14196,6 +14833,51 @@ export class OrcaRuntimeService {
 
   browserTabClose: RuntimeBrowserCommands['browserTabClose'] =
     this.browserCommands.browserTabClose.bind(this.browserCommands)
+
+  // Emulator bindings (delegated to dedicated commands for surface separation).
+  emulatorTap: RuntimeEmulatorCommands['emulatorTap'] = this.emulatorCommands.emulatorTap.bind(
+    this.emulatorCommands
+  )
+  emulatorGesture: RuntimeEmulatorCommands['emulatorGesture'] =
+    this.emulatorCommands.emulatorGesture.bind(this.emulatorCommands)
+  emulatorType: RuntimeEmulatorCommands['emulatorType'] = this.emulatorCommands.emulatorType.bind(
+    this.emulatorCommands
+  )
+  emulatorButton: RuntimeEmulatorCommands['emulatorButton'] =
+    this.emulatorCommands.emulatorButton.bind(this.emulatorCommands)
+  emulatorRotate: RuntimeEmulatorCommands['emulatorRotate'] =
+    this.emulatorCommands.emulatorRotate.bind(this.emulatorCommands)
+  emulatorExec: RuntimeEmulatorCommands['emulatorExec'] = this.emulatorCommands.emulatorExec.bind(
+    this.emulatorCommands
+  )
+  emulatorAttach: RuntimeEmulatorCommands['emulatorAttach'] =
+    this.emulatorCommands.emulatorAttach.bind(this.emulatorCommands)
+  emulatorList: RuntimeEmulatorCommands['emulatorList'] = this.emulatorCommands.emulatorList.bind(
+    this.emulatorCommands
+  )
+  emulatorKill: RuntimeEmulatorCommands['emulatorKill'] = this.emulatorCommands.emulatorKill.bind(
+    this.emulatorCommands
+  )
+  emulatorShutdown: RuntimeEmulatorCommands['emulatorShutdown'] =
+    this.emulatorCommands.emulatorShutdown.bind(this.emulatorCommands)
+  emulatorListSimulators: RuntimeEmulatorCommands['emulatorListSimulators'] =
+    this.emulatorCommands.emulatorListSimulators.bind(this.emulatorCommands)
+  emulatorAvailability: RuntimeEmulatorCommands['emulatorAvailability'] =
+    this.emulatorCommands.emulatorAvailability.bind(this.emulatorCommands)
+  emulatorUnregisterActive: RuntimeEmulatorCommands['emulatorUnregisterActive'] =
+    this.emulatorCommands.emulatorUnregisterActive.bind(this.emulatorCommands)
+
+  // Why: serve-sim-state-watcher runs from main/index.ts startup; keep window IPC behind runtime (getAuthoritativeWindow is private).
+  notifyEmulatorAutoAttachFromWatcher(
+    worktreeId: string,
+    info: { deviceUdid: string; streamUrl: string; wsUrl: string; axUrl?: string }
+  ): void {
+    try {
+      this.getAuthoritativeWindow().webContents.send('ui:emulatorAutoAttach', { worktreeId, info })
+    } catch {
+      // Window may not exist during shutdown
+    }
+  }
 
   private getAuthoritativeWindow(): BrowserWindow {
     const win = this.getAvailableAuthoritativeWindow()

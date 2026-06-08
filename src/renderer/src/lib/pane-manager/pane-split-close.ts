@@ -180,11 +180,7 @@ export function closeManagedPane(args: CloseManagedPaneArgs): void {
     safeFit(p)
   }
   updateMultiPaneState(args.getDragCallbacks())
-  args.managerOptions.onPaneClosed?.(args.paneId, {
-    paneId: args.paneId,
-    leafId: closedLeafId,
-    terminal: pane.terminal
-  })
+  args.managerOptions.onPaneClosed?.(args.paneId, { paneId: args.paneId, leafId: closedLeafId })
   args.managerOptions.onLayoutChanged?.()
 }
 

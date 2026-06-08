@@ -84,7 +84,6 @@ const BACKGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog exceeded 2 MB.]\r\n'
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
-const activeOutputTargets = new WeakSet<TerminalOutputTarget>()
 const backlogRecoveryByTerminal = new WeakMap<
   TerminalOutputTarget,
   TerminalBacklogRecoveryRequest
@@ -527,13 +526,6 @@ function hasDrainableBacklog(): boolean {
 
 function takeNextDrainableEntry(): QueueEntry | null {
   for (const entry of queuedByTerminal.values()) {
-    if (!activeOutputTargets.has(entry.terminal) || !isEntryDrainable(entry)) {
-      continue
-    }
-    queuedByTerminal.delete(entry.terminal)
-    return entry
-  }
-  for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
       continue
     }
@@ -621,17 +613,6 @@ function drainQueuedOutput(): void {
     scheduleDrain(
       hasHighPriorityBacklog() ? HIGH_PRIORITY_DRAIN_INTERVAL_MS : BACKGROUND_DRAIN_INTERVAL_MS
     )
-  }
-}
-
-export function setActiveTerminalOutputTarget(
-  terminal: TerminalOutputTarget,
-  active: boolean
-): void {
-  if (active) {
-    activeOutputTargets.add(terminal)
-  } else {
-    activeOutputTargets.delete(terminal)
   }
 }
 
@@ -931,7 +912,6 @@ export function waitForTerminalOutputParsed(terminal: TerminalOutputTarget): Pro
 export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
   queuedByTerminal.delete(terminal)
-  activeOutputTargets.delete(terminal)
   discardForegroundRenderSettle(terminal)
   recordQueueDebugPressure()
 }

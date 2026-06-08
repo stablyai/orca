@@ -19,6 +19,7 @@ import type {
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
+import { normalizeAgentProviderSession, RESUMABLE_TUI_AGENTS } from './agent-session-resume'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -80,11 +81,59 @@ const terminalTabSchema = z.object({
     .catch(undefined)
 })
 
+// ─── Sleeping agent resume records ─────────────────────────────────
+
+const agentProviderSessionSchema = z.preprocess(
+  (raw) => normalizeAgentProviderSession(raw) ?? undefined,
+  z.object({
+    key: z.enum(['session_id', 'conversation_id']),
+    id: z.string().min(1).max(512)
+  })
+)
+
+const sleepingAgentSessionRecordSchema = z.object({
+  paneKey: z.string().refine((value) => value.length > 0),
+  tabId: terminalTabIdSchema.optional(),
+  worktreeId: z.string().min(1),
+  agent: z.enum(RESUMABLE_TUI_AGENTS),
+  providerSession: agentProviderSessionSchema,
+  prompt: z.string(),
+  state: z.enum(['working', 'blocked', 'waiting', 'done']),
+  capturedAt: z.number().finite().positive(),
+  updatedAt: z.number().finite().positive(),
+  terminalTitle: z.string().optional(),
+  lastAssistantMessage: z.string().optional(),
+  connectionId: z.string().nullable().optional()
+})
+
+const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
+  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined
+  }
+
+  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = {}
+  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
+    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
+    if (parsed.success && parsed.data.paneKey === paneKey) {
+      cleaned[paneKey] = parsed.data
+    }
+  }
+
+  return Object.keys(cleaned).length > 0 ? cleaned : undefined
+}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
+
 // ─── Unified tab model ──────────────────────────────────────────────
 
-const tabContentTypeSchema = z.enum(['terminal', 'editor', 'diff', 'conflict-review', 'browser'])
+const tabContentTypeSchema = z.enum([
+  'terminal',
+  'editor',
+  'diff',
+  'conflict-review',
+  'browser',
+  'simulator'
+])
 
-const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser'])
+const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'simulator'])
 
 const tabSchema = z.object({
   id: z.string(),
@@ -256,7 +305,8 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
       z.record(z.string(), z.number().finite().nonnegative())
     )
     .optional(),
-  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional()
+  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
+  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema
 })
 
 export type ParsedWorkspaceSession =

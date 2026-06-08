@@ -14,7 +14,13 @@ function isLinuxRenderer(): boolean {
   if (typeof navigator === 'undefined') {
     return false
   }
-  return navigator.platform.includes('Linux') || navigator.userAgent.includes('Linux')
+  const userAgent = navigator.userAgent
+  // Why: Node 24 exposes a Linux `navigator.platform` in CI, but this guard is
+  // only for real renderer user agents where Linux GPU stacks affect xterm.
+  return (
+    userAgent.includes('Linux') ||
+    (navigator.platform.includes('Linux') && !userAgent.startsWith('Node.js/'))
+  )
 }
 
 export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
@@ -110,9 +116,8 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     refreshTerminalAfterWebglAttach(pane)
   } catch (err) {
     if (pane.terminalGpuAcceleration === 'auto') {
-      // Why: mirrors VS Code's `terminal.integrated.gpuAcceleration=auto`
-      // behavior: once WebGL fails, keep subsequent auto panes on DOM until
-      // the setting changes and resets the suggestion.
+      // Why: "auto" tries the faster renderer first, but one failed attach is
+      // enough signal to keep new auto panes on DOM until the setting changes.
       suggestedRendererType = 'dom'
     }
     // WebGL not available — default DOM renderer is fine, but log it for debugging

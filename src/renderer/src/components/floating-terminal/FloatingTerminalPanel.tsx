@@ -1238,12 +1238,15 @@ export function FloatingTerminalPanel({
   return (
     // Why: root notification cards use z-40; keep the floating workspace below
     // them so alerts are never hidden behind an open terminal panel.
+    // Drop shadow on the outer shell, border on an inner shell — mixing both on
+    // one rounded node made corners look stubby. Floating tabs skip their top
+    // border so the titlebar curve stays clean.
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-30 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-30 flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
         left: bounds.left,
@@ -1262,7 +1265,7 @@ export function FloatingTerminalPanel({
       onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
         <div
           className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
           data-floating-terminal-shortcut-surface
@@ -1330,6 +1333,7 @@ export function FloatingTerminalPanel({
               onMakePreviewFilePermanent={makePreviewFilePermanent}
               onPinFile={pinFile}
               tabBarOrder={tabBarOrder}
+              tabStripChrome="floating-panel"
             />
           </div>
           <FloatingTerminalWindowControls

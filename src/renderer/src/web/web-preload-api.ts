@@ -39,6 +39,7 @@ import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -539,6 +540,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     fs: createFileApi(),
     git: createGitApi(),
     browser: createBrowserApi(),
+    emulator: createEmulatorApi(),
     gh: createGitHubApi(),
     gl: createGitLabApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
@@ -1033,6 +1035,9 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         manualOrder: args.manualOrder
       })
     },
+    // Why: the runtime create path emits no two-phase progress, so the web
+    // client's creation panel simply falls back to an indeterminate spinner.
+    onCreateProgress: () => noopUnsubscribe,
     prefetchCreateBase: async ({ repoId, baseBranch }) => {
       await callRuntimeResult('worktree.prefetchCreateBase', {
         repo: repoId,
@@ -1456,6 +1461,17 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }
 
+function createEmulatorApi(): NonNullable<Partial<PreloadApi>['emulator']> {
+  return {
+    onPaneFocus: () => noopUnsubscribe,
+    onAutoAttach: () => noopUnsubscribe,
+    startFrameStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
+    stopFrameStream: () => Promise.resolve(),
+    onFrameStreamFrame: () => noopUnsubscribe,
+    onFrameStreamError: () => noopUnsubscribe
+  } as unknown as NonNullable<Partial<PreloadApi>['emulator']>
+}
+
 function createGitHubApi(): WebGitHubApi {
   const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
@@ -1823,6 +1839,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onNewBrowserTab: () => noopUnsubscribe,
     onNewMarkdownTab: () => noopUnsubscribe,
+    onNewSimulatorTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
@@ -2400,13 +2417,17 @@ function getStoredSettings(): GlobalSettings {
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
   const migratedStored = {
     ...stored,
-    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored)
+    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
+    ...normalizeTerminalCursorStyleDefault(stored)
   }
   if (
     rawStoredSettings &&
     (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
       stored.autoRenameBranchFromWorkDefaultedOn !==
-        migratedStored.autoRenameBranchFromWorkDefaultedOn)
+        migratedStored.autoRenameBranchFromWorkDefaultedOn ||
+      stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
+      stored.terminalCursorStyleDefaultedToBlock !==
+        migratedStored.terminalCursorStyleDefaultedToBlock)
   ) {
     try {
       const parsed = JSON.parse(rawStoredSettings) as unknown

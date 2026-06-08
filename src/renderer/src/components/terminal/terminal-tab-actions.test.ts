@@ -126,7 +126,7 @@ describe('closeTerminalTab', () => {
     expect(closeTab).toHaveBeenCalledWith('local-tab-1')
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
-      tabId: 'local-tab-1',
+      tabId: 'host-tab-1',
       environmentId: 'web-runtime'
     })
   })
@@ -166,6 +166,60 @@ describe('closeTerminalTab', () => {
 
     closeTerminalTab('terminal-entity-1')
 
+    expect(closeUnifiedTab).toHaveBeenCalledWith('unified-tab-1')
+  })
+
+  it('activates the next unified terminal tab when closing the active unified-only tab', () => {
+    const closeUnifiedTab = vi.fn()
+    const setActiveTab = vi.fn()
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'unified-tab-1',
+            entityId: 'terminal-entity-1',
+            contentType: 'terminal',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            label: 'Claude',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0,
+            isPreview: false,
+            isPinned: false
+          },
+          {
+            id: 'unified-tab-2',
+            entityId: 'terminal-entity-2',
+            contentType: 'terminal',
+            groupId: 'group-1',
+            worktreeId: 'wt-1',
+            label: 'Terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 1,
+            createdAt: 0,
+            isPreview: false,
+            isPinned: false
+          }
+        ]
+      },
+      activeWorktreeId: 'wt-1',
+      activeTabId: 'terminal-entity-1',
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab: vi.fn(),
+      closeUnifiedTab,
+      setActiveTab,
+      setActiveWorktree: vi.fn()
+    })
+
+    closeTerminalTab('terminal-entity-1')
+
+    expect(setActiveTab).toHaveBeenCalledWith('terminal-entity-2')
     expect(closeUnifiedTab).toHaveBeenCalledWith('unified-tab-1')
   })
 

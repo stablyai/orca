@@ -40,6 +40,7 @@ import {
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
+import { renderSourceControlActionCommandTemplate } from '../../shared/source-control-ai-actions'
 import { resolveCliCommand } from '../codex-cli/command'
 import {
   getSpawnArgsForWindows,
@@ -757,7 +758,16 @@ export async function generateCommitMessageFromContext(
   params: GenerateCommitMessageParams,
   target: CommitMessageGenerationTarget
 ): Promise<GenerateCommitMessageResult> {
-  const prompt = buildCommitMessagePrompt(context, params.customPrompt ?? '')
+  const basePrompt = buildCommitMessagePrompt(context, '')
+  const prompt =
+    params.commandInputTemplate !== undefined
+      ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
+          basePrompt,
+          branch: context.branch ?? '(detached)',
+          stagedFiles: context.stagedSummary,
+          stagedPatch: context.stagedPatch
+        })
+      : buildCommitMessagePrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
     return { success: false, error: planned.error }
@@ -805,7 +815,20 @@ export async function generatePullRequestFieldsFromContext(
   params: GenerateCommitMessageParams,
   target: CommitMessageGenerationTarget
 ): Promise<GeneratePullRequestFieldsResult> {
-  const prompt = buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
+  const basePrompt = buildPullRequestFieldsPrompt(context, '')
+  const prompt =
+    params.commandInputTemplate !== undefined
+      ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
+          basePrompt,
+          branch: context.branch ?? '(detached)',
+          baseBranch: context.base,
+          currentTitle: context.currentTitle,
+          currentBody: context.currentBody,
+          commitSummary: context.commitSummary,
+          changedFiles: context.changeSummary,
+          patch: context.patch
+        })
+      : buildPullRequestFieldsPrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
     return {
@@ -836,7 +859,15 @@ export async function generateBranchNameFromContext(
   params: GenerateCommitMessageParams,
   target: CommitMessageGenerationTarget
 ): Promise<GenerateBranchNameResult> {
-  const prompt = buildBranchNamePrompt(context, params.customPrompt ?? '')
+  const basePrompt = buildBranchNamePrompt(context)
+  const prompt =
+    params.commandInputTemplate !== undefined
+      ? renderSourceControlActionCommandTemplate(params.commandInputTemplate, {
+          basePrompt,
+          firstPrompt: context.firstPrompt,
+          assistantMessage: context.assistantMessage ?? ''
+        })
+      : buildBranchNamePrompt(context, params.customPrompt ?? '')
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {
     return { success: false, error: planned.error }

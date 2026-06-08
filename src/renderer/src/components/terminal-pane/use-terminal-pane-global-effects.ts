@@ -12,8 +12,7 @@ import type { PtyTransport } from './pty-transport'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
 import {
   flushTerminalOutput,
-  requestTerminalBacklogRecovery,
-  setActiveTerminalOutputTarget
+  requestTerminalBacklogRecovery
 } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { handleFocusTerminalPaneDetail } from './focus-terminal-pane-event'
 import { surfaceStaleAgentRow } from './stale-agent-row'
@@ -138,32 +137,17 @@ export function useTerminalPaneGlobalEffects({
 
   useEffect(() => {
     const manager = managerRef.current
-    const syncActiveOutputTargets = (activePaneId: number | null): void => {
-      for (const pane of manager?.getPanes() ?? []) {
-        setActiveTerminalOutputTarget(pane.terminal, pane.id === activePaneId)
-      }
-      for (const [paneId, transport] of paneTransportsRef.current) {
-        const ptyId = transport.getPtyId()
-        if (!ptyId || ptyId.startsWith('remote:')) {
-          continue
-        }
-        window.api.pty.setActiveRendererPty?.(ptyId, paneId === activePaneId)
-      }
-    }
-
-    if (!isActive || !isVisible || !manager) {
-      syncActiveOutputTargets(null)
+    const activePane = isActive && isVisible ? manager?.getActivePane() : null
+    const ptyId = activePane
+      ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+      : null
+    if (!ptyId || ptyId.startsWith('remote:')) {
       return
     }
-
-    const activePane = manager.getActivePane()
-    const activePaneId = activePane?.id ?? null
-    // Why: active output hints must clear every pane when a tab hides; split
-    // focus can change after this effect's active-pane snapshot.
-    syncActiveOutputTargets(activePaneId)
-    return () => {
-      syncActiveOutputTargets(null)
-    }
+    // Why: main uses this as a scheduler hint only, so the foreground pane's
+    // renderer output gets first chance at the bounded ACK reserve.
+    window.api.pty.setActiveRendererPty?.(ptyId, true)
+    return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
   }, [isActive, isVisible, managerRef, paneTransportsRef])
 
   useEffect(() => {

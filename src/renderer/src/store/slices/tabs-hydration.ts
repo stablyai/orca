@@ -21,7 +21,7 @@ type HydratedTabState = {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
 
-function pruneLayoutForGroups(
+export function pruneTabGroupLayoutForGroups(
   root: TabGroupLayoutNode,
   validGroupIds: Set<string>
 ): TabGroupLayoutNode | null {
@@ -29,14 +29,17 @@ function pruneLayoutForGroups(
     return validGroupIds.has(root.groupId) ? root : null
   }
 
-  const first = pruneLayoutForGroups(root.first, validGroupIds)
-  const second = pruneLayoutForGroups(root.second, validGroupIds)
+  const first = pruneTabGroupLayoutForGroups(root.first, validGroupIds)
+  const second = pruneTabGroupLayoutForGroups(root.second, validGroupIds)
 
   if (first === null) {
     return second
   }
   if (second === null) {
     return first
+  }
+  if (first === root.first && second === root.second) {
+    return root
   }
 
   return { ...root, first, second }
@@ -127,7 +130,13 @@ function hydrateUnifiedFormat(
     })
     const hydratedGroups = validatedGroups.filter((group, index) => {
       const hadTabsBeforeHydration = groups[index]?.tabOrder.length > 0
-      return !hadTabsBeforeHydration || group.tabOrder.length > 0
+      if (group.tabOrder.length > 0) {
+        return true
+      }
+      if (hadTabsBeforeHydration) {
+        return false
+      }
+      return validatedGroups.every((candidate) => candidate.tabOrder.length === 0)
     })
     if (hydratedGroups.length === 0) {
       if ((tabsByWorktree[worktreeId] ?? []).length === 0) {
@@ -146,7 +155,7 @@ function hydrateUnifiedFormat(
     }
     const hydratedGroupIds = new Set(hydratedGroups.map((group) => group.id))
     const hydratedLayout = session.tabGroupLayouts?.[worktreeId]
-      ? pruneLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
+      ? pruneTabGroupLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
       : null
     layoutByWorktree[worktreeId] = hydratedLayout ?? {
       type: 'leaf',

@@ -721,6 +721,51 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(cleanResult)
   })
 
+  it('worktreeIsClean can ignore untracked files', async () => {
+    const cleanResult = { clean: true }
+    mux.request.mockResolvedValue(cleanResult)
+
+    const result = await provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
+
+    expect(mux.request).toHaveBeenCalledWith('git.worktreeIsClean', {
+      worktreePath: '/home/user/feat',
+      includeUntracked: false
+    })
+    expect(result).toEqual(cleanResult)
+  })
+
+  it('worktreeIsClean filters untracked stdout when old relays ignore the option', async () => {
+    mux.request.mockResolvedValue({ clean: false, stdout: '?? scratch.txt\n' })
+
+    const result = await provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
+
+    expect(result).toEqual({ clean: true })
+  })
+
+  it('worktreeIsClean keeps dirty results without stdout dirty for tracked-only checks', async () => {
+    mux.request.mockResolvedValue({ clean: false })
+
+    const result = await provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
+
+    expect(result).toEqual({ clean: false })
+  })
+
+  it('refreshLocalBaseRefForWorktreeCreate sends the narrow refresh request', async () => {
+    await provider.refreshLocalBaseRefForWorktreeCreate({
+      repoPath: '/home/user/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main',
+      ownerWorktreePath: '/home/user/repo'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith('git.refreshLocalBaseRefForWorktreeCreate', {
+      repoPath: '/home/user/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main',
+      ownerWorktreePath: '/home/user/repo'
+    })
+  })
+
   it('worktreeIsClean falls back to git.status for old relays', async () => {
     const methodNotFound = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
       code: -32601
@@ -741,6 +786,28 @@ describe('SshGitProvider', () => {
         worktreePath: '/home/user/feat'
       })
       expect(result).toEqual({ clean: false, stdout: 'untracked untracked: scratch.txt' })
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('worktreeIsClean filters untracked entries in old-relay fallback', async () => {
+    const methodNotFound = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
+      code: -32601
+    })
+    mux.request.mockRejectedValueOnce(methodNotFound).mockResolvedValueOnce({
+      entries: [{ path: 'scratch.txt', status: 'untracked', area: 'untracked' }],
+      conflictOperation: 'unknown'
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await expect(
+        provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
+      ).resolves.toEqual({ clean: true })
+      expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
+        worktreePath: '/home/user/feat'
+      })
     } finally {
       warnSpy.mockRestore()
     }

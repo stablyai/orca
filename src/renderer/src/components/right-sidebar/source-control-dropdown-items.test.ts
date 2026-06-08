@@ -35,6 +35,7 @@ describe('resolveDropdownItems', () => {
       'commit_sync',
       'separator',
       'push',
+      'force_push',
       'create_pr',
       'push_create_pr',
       'pull',
@@ -114,6 +115,7 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.push.label).toBe('Push (3)')
+    expect(byKind.force_push.label).toBe('Force Push (3)')
     expect(byKind.pull.label).toBe('Pull (2)')
     expect(byKind.sync.label).toBe('Sync (↓2 ↑3)')
   })
@@ -164,9 +166,12 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
 
-    expect(byKind.push.label).toBe('Force Push (4)')
-    expect(byKind.push.disabled).toBe(false)
-    expect(byKind.push.title).toBe(
+    expect(byKind.push.label).toBe('Push (14)')
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.title).toBe('Use Force Push — remote only has older copies of local commits')
+    expect(byKind.force_push.label).toBe('Force Push (4)')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.force_push.title).toBe(
       'Remote only has older copies of local commits. Force push 4 branch commits with lease to update origin/feature.'
     )
     expect(byKind.commit_push.label).toBe('Commit & Force Push')
@@ -192,6 +197,30 @@ describe('resolveDropdownItems', () => {
     expect(byKind.push_create_pr.disabled).toBe(false)
   })
 
+  it('offers explicit force-push-with-lease for an ordinary ahead branch', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: {
+          hasUpstream: true,
+          upstreamName: 'origin/feature',
+          ahead: 1,
+          behind: 0
+        }
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+
+    expect(byKind.push.label).toBe('Push (1)')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.label).toBe('Force Push (1)')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.force_push.title).toBe(
+      'Force push 1 local commit with lease to update origin/feature.'
+    )
+  })
+
   it('omits counts from labels when ahead/behind are 0', () => {
     const items = resolveDropdownItems(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 } })
@@ -200,6 +229,7 @@ describe('resolveDropdownItems', () => {
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
     expect(byKind.push.label).toBe('Push')
+    expect(byKind.force_push.label).toBe('Force Push')
     expect(byKind.pull.label).toBe('Pull')
     expect(byKind.sync.label).toBe('Sync')
   })
@@ -327,6 +357,7 @@ describe('resolveDropdownItems', () => {
       'commit_push',
       'commit_sync',
       'push',
+      'force_push',
       'pull',
       'fast_forward',
       'sync',

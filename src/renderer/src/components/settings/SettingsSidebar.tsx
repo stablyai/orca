@@ -1,6 +1,5 @@
 import type { RefObject } from 'react'
 import { ArrowLeft, Search, Server } from 'lucide-react'
-import logo from '../../../../../resources/logo.svg'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import type { GitHubRepositoryIdentity } from '../../../../shared/types'
@@ -85,30 +84,21 @@ function SettingsSetupGuideNavRow({
         })
       }
       className={cn(
-        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
         setupActive
-          ? 'bg-accent font-medium text-accent-foreground'
-          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+          ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
+          : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
       )}
     >
-      <img
-        src={logo}
-        alt=""
-        aria-hidden="true"
-        className={cn(
-          'size-4 shrink-0 object-contain invert dark:invert-0',
-          setupActive ? 'opacity-75' : 'opacity-45'
-        )}
+      <SetupGuideProgressRing
+        done={progress.doneCount}
+        total={progress.total}
+        sizeClassName="size-4"
+        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
       />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[13px] font-medium leading-4">Onboarding checklist</span>
       </span>
-      <SetupGuideProgressRing
-        done={progress.doneCount}
-        total={progress.total}
-        className="ml-auto shrink-0"
-        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
-      />
     </button>
   )
 }
@@ -130,10 +120,10 @@ export function SettingsSidebar({
   const searchShortcutHint = useShortcutLabel('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
-      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
       isActive
-        ? 'bg-accent font-medium text-accent-foreground'
-        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
+        : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
     )
   const installStatusLabel = (status: SettingsNavInstallStatus): string => {
     switch (status) {
@@ -156,8 +146,8 @@ export function SettingsSidebar({
     )
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col border-r border-border/50 bg-card/40">
-      <div className="border-b border-border/50 px-3 py-3">
+    <aside className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar">
+      <div className="border-b border-worktree-sidebar-border px-3 py-3">
         <Button
           variant="ghost"
           size="sm"
@@ -169,7 +159,7 @@ export function SettingsSidebar({
         </Button>
       </div>
 
-      <div className="border-b border-border/50 px-3 py-3">
+      <div className="border-b border-worktree-sidebar-border px-3 py-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -188,7 +178,7 @@ export function SettingsSidebar({
       </div>
 
       {showSetupGuideTopRow ? (
-        <div className="border-b border-border/50 px-3 py-3">
+        <div className="border-b border-worktree-sidebar-border px-3 py-3">
           <SettingsSetupGuideNavRow
             progress={setupGuideProgress}
             setupActive={setupActive}

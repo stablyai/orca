@@ -55,6 +55,7 @@ import {
 } from '../../shared/agent-interrupt-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
+import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
 
 export type { AgentHookSource }
 
@@ -222,6 +223,7 @@ function sanitizeHydratedEntry(
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
+    providerSession: normalizeAgentProviderSession(record.providerSession) ?? undefined,
     payload,
     receivedAt,
     stateStartedAt
@@ -236,6 +238,7 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     connectionId: entry.connectionId,
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
+    ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
     ...entry.payload
   }
 }
@@ -525,6 +528,7 @@ export class AgentHookServer {
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
       payload: {
         state: 'done',
         prompt: payload.prompt,
@@ -982,6 +986,7 @@ export class AgentHookServer {
       toolUseId?: string
       toolAgentId?: string
       toolAgentType?: string
+      providerSession?: unknown
       isReplay?: boolean
       payload: unknown
     },
@@ -1056,6 +1061,7 @@ export class AgentHookServer {
       typeof envelope.toolAgentType === 'string' && envelope.toolAgentType.trim().length > 0
         ? envelope.toolAgentType.trim()
         : undefined
+    const providerSession = normalizeAgentProviderSession(envelope.providerSession) ?? undefined
     // Why: the relay is across a trust boundary; re-run the canonical
     // normalizer on the inner payload so prompt/agentType/toolName/toolInput
     // length caps, embedded-newline collapse, and the `interrupted`-only-on-
@@ -1085,6 +1091,7 @@ export class AgentHookServer {
       toolUseId,
       toolAgentId,
       toolAgentType,
+      providerSession,
       isReplay: envelope.isReplay === true ? true : undefined,
       payload: normalizedPayload
     }

@@ -211,4 +211,32 @@ describe('Electron runtime package contract', () => {
     expect(uploadStep.uses).toBe('actions/upload-artifact@v7')
     expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
   })
+
+  it('keeps terminal rendering regressions in the fast golden E2E gate', () => {
+    const packageScripts = packageJson.scripts
+    const goldenWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/golden-e2e-experiment.yml'), 'utf8')
+    )
+    const steps = goldenWorkflow.jobs['golden-e2e'].steps
+    const linuxRunStep = steps.find((step) => step.name === 'Run golden E2E tests on Linux')
+    const macRunStep = steps.find((step) => step.name === 'Run golden E2E tests on macOS')
+    const windowsRunStep = steps.find((step) => step.name === 'Run golden E2E tests on Windows')
+    const pullRequestPaths = goldenWorkflow.on.pull_request.paths
+
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      '@terminal-rendering-golden'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      'terminal-raw-emoji-table-scroll-restore.spec.ts'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
+      'terminal-long-table-scroll-restore.spec.ts'
+    )
+    for (const runStep of [linuxRunStep, macRunStep, windowsRunStep]) {
+      expect(runStep.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
+    }
+    expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
+    expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
+    expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
+  })
 })

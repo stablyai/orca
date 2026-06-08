@@ -21,13 +21,17 @@ import { RepositoryIconPicker } from './RepositoryIconPicker'
 import { getRepositoryPaneSearchEntries } from './repository-search'
 export { getRepositoryPaneSearchEntries }
 
+type RepositoryPaneRepoUpdate = Omit<Partial<Repo>, 'sourceControlAi'> & {
+  sourceControlAi?: Repo['sourceControlAi'] | null
+}
+
 type RepositoryPaneProps = {
   repo: Repo
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
   hooksInspectionReady: boolean
   mayNeedUpdate: boolean
-  updateRepo: (repoId: string, updates: Partial<Repo>) => void
+  updateRepo: (repoId: string, updates: RepositoryPaneRepoUpdate) => void
   removeProject: (repoId: string) => void
 }
 

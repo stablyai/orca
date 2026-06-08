@@ -30,14 +30,6 @@ type HiddenTuiWindow = Window & {
       hiddenRendererMode2031ReplyCount: number
     }
   }
-  __terminalHiddenSnapshotOverride?: {
-    setPending: (
-      ptyId: string,
-      snapshot: { data: string; cols: number; rows: number; seq: number; source: 'headless' }
-    ) => void
-    resolve: (ptyId: string) => void
-    clear: (ptyId: string) => void
-  }
 }
 
 type HiddenTuiDebugSnapshot = {
@@ -46,22 +38,44 @@ type HiddenTuiDebugSnapshot = {
   hiddenRendererMode2031ReplyCount: number
 }
 
+type TuiCursorState = {
+  hidden: boolean | null
+  initialized: boolean | null
+  cursorElementVisible: boolean
+  cursorCanvasPresent: boolean
+}
+
 function tuiFrame(runId: string, frame: number): string {
+  const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
   const rows = [
-    `OpenCode visual restore ${runId}`,
-    `Frame ${String(frame).padStart(3, '0')}`,
-    `Status ${frame % 2 === 0 ? 'thinking' : 'streaming'}`,
-    `Input echo ${'#'.repeat((frame % 18) + 1)}`,
-    `Diff +${frame * 3} -${frame}`,
+    '╭────────────────────────────────────────────────────────────────────╮',
+    `│ OpenCode visual restore Frame ${String(frame).padStart(3, '0')} ${frame % 2 === 0 ? '🟢' : '🟡'} ${progress} │`,
+    '├──────────────┬──────────────────────┬──────────────────────────────┤',
+    `│ model        │ codex/opencode       │ ${runId.slice(0, 28).padEnd(28)} │`,
+    `│ status       │ ${frame % 2 === 0 ? 'thinking' : 'streaming'}            │ input ${'#'.repeat((frame % 18) + 1).padEnd(22)} │`,
+    `│ diff         │ +${String(frame * 3).padEnd(19)} │ -${String(frame).padEnd(27)} │`,
+    '╰──────────────┴──────────────────────┴──────────────────────────────╯',
     `VISUAL_RESTORE_FINAL_${runId}_${frame}`
   ]
   return [
     '\x1b[?2026h',
     '\x1b[?1049h',
     '\x1b[2J\x1b[H',
+    '\x1b[?25l',
     rows.map((row) => `\x1b[2;36m${row}\x1b[0m`).join('\r\n'),
+    '\x1b[10;18H\x1b[?25h',
     '\x1b[?2026l'
   ].join('')
+}
+
+function lowRiskRestoreFrame(runId: string, frame: number): string {
+  const rows = [
+    `LOW_RISK_RESTORE_FRAME_${runId}_${frame}`,
+    `status=${frame % 2 === 0 ? 'thinking' : 'streaming'}`,
+    `progress=${String(frame).padStart(3, '0')}`,
+    `VISUAL_RESTORE_FINAL_${runId}_${frame}`
+  ]
+  return `${rows.join('\r\n')}\r\n`
 }
 
 async function resetHiddenDebug(page: Page): Promise<void> {
@@ -85,6 +99,48 @@ async function readHiddenDebug(page: Page): Promise<HiddenTuiDebugSnapshot | nul
   })
 }
 
+async function readTuiCursorState(page: Page): Promise<TuiCursorState> {
+  return page.evaluate(() => {
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    if (!pane) {
+      throw new Error('Active terminal pane is unavailable')
+    }
+    const terminalCore = (
+      pane.terminal as unknown as {
+        _core?: { coreService?: { isCursorHidden?: boolean; isCursorInitialized?: boolean } }
+      }
+    )._core
+    const cursorElement = pane.container.querySelector<HTMLElement>('.xterm-cursor')
+    const cursorRect = cursorElement?.getBoundingClientRect()
+    const cursorStyle = cursorElement ? window.getComputedStyle(cursorElement) : null
+    return {
+      hidden: terminalCore?.coreService?.isCursorHidden ?? null,
+      initialized: terminalCore?.coreService?.isCursorInitialized ?? null,
+      // Why: a blinking DOM cursor may be transparent during the sampled frame;
+      // disappearance regressions remove the laid-out cursor element/layer.
+      cursorElementVisible:
+        !!cursorElement &&
+        !!cursorRect &&
+        cursorRect.width > 0 &&
+        cursorRect.height > 0 &&
+        cursorStyle?.display !== 'none' &&
+        cursorStyle?.visibility !== 'hidden',
+      cursorCanvasPresent:
+        pane.container.querySelector<HTMLCanvasElement>('.xterm-cursor-layer canvas') !== null
+    }
+  })
+}
+
 async function injectPaneData(
   page: Page,
   paneKey: string,
@@ -100,31 +156,6 @@ async function injectPaneData(
   if (!injected) {
     throw new Error(`No terminal PTY data injector registered for ${paneKey}`)
   }
-}
-
-async function installDelayedMainSnapshot(
-  page: Page,
-  ptyId: string,
-  snapshot: { data: string; cols: number; rows: number; seq: number; source: 'headless' }
-): Promise<void> {
-  await page.evaluate(
-    ({ ptyId, snapshot }) => {
-      ;(window as HiddenTuiWindow).__terminalHiddenSnapshotOverride?.setPending(ptyId, snapshot)
-    },
-    { ptyId, snapshot }
-  )
-}
-
-async function resolveDelayedMainSnapshot(page: Page, ptyId: string): Promise<void> {
-  await page.evaluate((ptyId) => {
-    ;(window as HiddenTuiWindow).__terminalHiddenSnapshotOverride?.resolve(ptyId)
-  }, ptyId)
-}
-
-async function clearDelayedMainSnapshot(page: Page, ptyId: string): Promise<void> {
-  await page.evaluate((ptyId) => {
-    ;(window as HiddenTuiWindow).__terminalHiddenSnapshotOverride?.clear(ptyId)
-  }, ptyId)
 }
 
 async function readMainSnapshotSource(
@@ -178,7 +209,7 @@ async function writeHiddenSideEffectBurst(
 }
 
 test.describe('Hidden terminal TUI visual restore', () => {
-  test('restores skipped hidden full-screen TUI output without visible corruption', async ({
+  test('restores hidden full-screen TUI output without visible corruption', async ({
     orcaPage,
     testRepoPath
   }, testInfo: TestInfo) => {
@@ -218,15 +249,9 @@ test.describe('Hidden terminal TUI visual restore', () => {
     await expect
       .poll(async () => (await readHiddenDebug(orcaPage))?.hiddenRendererSkipCount ?? 0, {
         timeout: 10_000,
-        message: 'hidden TUI output did not exercise the skipped-renderer path'
+        message: 'visually rich hidden TUI output should stay on the live xterm path'
       })
-      .toBeGreaterThan(0)
-    await expect
-      .poll(() => readMainSnapshotSource(orcaPage, hiddenPane.ptyId!), {
-        timeout: 10_000,
-        message: 'hidden TUI restore did not use the runtime headless snapshot'
-      })
-      .toBe('headless')
+      .toBe(0)
 
     await switchToWorktree(orcaPage, secondWorktreeId)
     await ensureTerminalVisible(orcaPage)
@@ -241,7 +266,21 @@ test.describe('Hidden terminal TUI visual restore', () => {
 
     const content = await getTerminalContent(orcaPage, 12_000)
     expect(content).toContain(`Frame 024`)
+    expect(content).toContain('╭')
+    expect(content).toContain('├')
+    expect(content).toContain('█')
     expect(content).not.toContain('Orca skipped hidden terminal output')
+    await expect
+      .poll(() => readTuiCursorState(orcaPage), {
+        timeout: 5_000,
+        message: 'restored TUI cursor stayed hidden after final frame'
+      })
+      .toMatchObject({
+        hidden: false,
+        initialized: true
+      })
+    const cursorState = await readTuiCursorState(orcaPage)
+    expect(cursorState.cursorElementVisible || cursorState.cursorCanvasPresent).toBe(true)
 
     const screenshotPath = testInfo.outputPath('hidden-tui-restore-final.png')
     await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
@@ -252,7 +291,7 @@ test.describe('Hidden terminal TUI visual restore', () => {
     rmSync(scriptPath, { force: true })
   })
 
-  test('keeps newer live TUI output visually correct while hidden restore is in flight', async ({
+  test('keeps newer live output correct after hidden output stayed live', async ({
     orcaPage
   }, testInfo: TestInfo) => {
     await waitForSessionReady(orcaPage)
@@ -284,8 +323,8 @@ test.describe('Hidden terminal TUI visual restore', () => {
       .toBe(firstWorktreeId)
 
     const runId = randomUUID()
-    const hiddenFrame = tuiFrame(runId, 40)
-    const liveFrame = tuiFrame(runId, 41)
+    const hiddenFrame = lowRiskRestoreFrame(runId, 40)
+    const liveFrame = lowRiskRestoreFrame(runId, 41)
     const finalMarker = `VISUAL_RESTORE_FINAL_${runId}_41`
     await resetHiddenDebug(orcaPage)
     await injectPaneData(orcaPage, paneKey, hiddenFrame, {
@@ -296,52 +335,50 @@ test.describe('Hidden terminal TUI visual restore', () => {
     await expect
       .poll(async () => (await readHiddenDebug(orcaPage))?.hiddenRendererSkipCount ?? 0, {
         timeout: 10_000,
-        message: 'hidden injected TUI output did not skip renderer parsing'
+        message: 'hidden injected output should stay on the live xterm path for release'
       })
-      .toBeGreaterThan(0)
+      .toBe(0)
 
-    await installDelayedMainSnapshot(orcaPage, hiddenPane.ptyId, {
-      data: hiddenFrame,
-      cols: 120,
-      rows: 40,
-      seq: hiddenFrame.length,
-      source: 'headless'
+    await switchToWorktree(orcaPage, secondWorktreeId)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await injectPaneData(orcaPage, paneKey, liveFrame, {
+      seq: hiddenFrame.length + liveFrame.length,
+      rawLength: liveFrame.length
     })
 
-    try {
-      await switchToWorktree(orcaPage, secondWorktreeId)
-      await ensureTerminalVisible(orcaPage)
-      await waitForActiveTerminalManager(orcaPage, 30_000)
-      await injectPaneData(orcaPage, paneKey, liveFrame, {
-        seq: hiddenFrame.length + liveFrame.length,
-        rawLength: liveFrame.length
+    await expect
+      .poll(() => getTerminalContent(orcaPage, 12_000), {
+        timeout: 10_000,
+        message: 'newer live TUI frame did not render after hidden output stayed live'
       })
-      await resolveDelayedMainSnapshot(orcaPage, hiddenPane.ptyId)
+      .toContain(finalMarker)
 
-      await expect
-        .poll(() => getTerminalContent(orcaPage, 12_000), {
-          timeout: 10_000,
-          message: 'newer live TUI frame did not render after delayed hidden snapshot'
-        })
-        .toContain(finalMarker)
-
-      const content = await getTerminalContent(orcaPage, 12_000)
-      expect(content).toContain('Frame 041')
-      expect(content).not.toContain('Frame 040')
-      expect(content).not.toContain('Orca skipped hidden terminal output')
-
-      const screenshotPath = testInfo.outputPath('hidden-tui-delayed-restore-final.png')
-      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
-      await testInfo.attach('hidden-tui-delayed-restore-final.png', {
-        path: screenshotPath,
-        contentType: 'image/png'
+    const content = await getTerminalContent(orcaPage, 12_000)
+    expect(content).toContain(`LOW_RISK_RESTORE_FRAME_${runId}_41`)
+    expect(content).toContain('progress=041')
+    expect(content.indexOf(`LOW_RISK_RESTORE_FRAME_${runId}_41`)).toBeGreaterThan(
+      content.indexOf(`LOW_RISK_RESTORE_FRAME_${runId}_40`)
+    )
+    expect(content).not.toContain('Orca skipped hidden terminal output')
+    await expect
+      .poll(() => readTuiCursorState(orcaPage), {
+        timeout: 5_000,
+        message: 'live TUI cursor stayed hidden after hidden output stayed live'
       })
-    } finally {
-      await clearDelayedMainSnapshot(orcaPage, hiddenPane.ptyId)
-    }
+      .toMatchObject({
+        hidden: false,
+        initialized: true
+      })
+    const screenshotPath = testInfo.outputPath('hidden-tui-live-output-final.png')
+    await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
+    await testInfo.attach('hidden-tui-live-output-final.png', {
+      path: screenshotPath,
+      contentType: 'image/png'
+    })
   })
 
-  test('keeps hidden terminal side effects live while renderer output is skipped', async ({
+  test('keeps hidden terminal side effects live while hidden output stays live', async ({
     orcaPage
   }) => {
     await waitForSessionReady(orcaPage)
@@ -380,9 +417,9 @@ test.describe('Hidden terminal TUI visual restore', () => {
     await expect
       .poll(async () => (await readHiddenDebug(orcaPage))?.hiddenRendererSkipCount ?? 0, {
         timeout: 10_000,
-        message: 'hidden side-effect output did not exercise the skipped-renderer path'
+        message: 'hidden side-effect output should stay on the live xterm path for release'
       })
-      .toBeGreaterThan(0)
+      .toBe(0)
     await expect
       .poll(() => getRuntimePaneTitle(orcaPage, hiddenSnapshot.tabId, hiddenPane.numericPaneId), {
         timeout: 10_000,

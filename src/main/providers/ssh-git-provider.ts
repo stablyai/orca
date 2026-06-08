@@ -43,6 +43,13 @@ function formatStatusEntriesForCleanCheck(entries: GitStatusResult['entries']): 
   return entries.map((entry) => `${entry.area} ${entry.status}: ${entry.path}`).join('\n')
 }
 
+function filterUntrackedPorcelainStatus(stdout: string | undefined): string | undefined {
+  const trackedLines = (stdout ?? '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0 && !line.startsWith('?? '))
+  return trackedLines.length > 0 ? trackedLines.join('\n') : undefined
+}
+
 export class SshGitProvider implements IGitProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -458,12 +465,26 @@ export class SshGitProvider implements IGitProvider {
     })) ?? {}) as RemoveWorktreeResult
   }
 
-  async worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }> {
+  async worktreeIsClean(
+    worktreePath: string,
+    options: { includeUntracked?: boolean } = {}
+  ): Promise<{ clean: boolean; stdout?: string }> {
     try {
-      return (await this.mux.request('git.worktreeIsClean', { worktreePath })) as {
+      const result = (await this.mux.request('git.worktreeIsClean', {
+        worktreePath,
+        ...(options.includeUntracked === false ? { includeUntracked: false } : {})
+      })) as {
         clean: boolean
         stdout?: string
       }
+      if (options.includeUntracked === false) {
+        if (!result.clean && result.stdout === undefined) {
+          return result
+        }
+        const trackedStdout = filterUntrackedPorcelainStatus(result.stdout)
+        return { clean: !trackedStdout, ...(trackedStdout ? { stdout: trackedStdout } : {}) }
+      }
+      return result
     } catch (error) {
       if (!isJsonRpcMethodNotFoundError(error)) {
         throw error
@@ -477,9 +498,23 @@ export class SshGitProvider implements IGitProvider {
       // Why: existing SSH relays may predate git.worktreeIsClean, but git.status
       // is a narrow relay RPC and avoids the generic git.exec allowlist.
       const status = await this.getStatus(worktreePath)
-      const clean = status.entries.length === 0
-      return { clean, stdout: formatStatusEntriesForCleanCheck(status.entries) }
+      const entries =
+        options.includeUntracked === false
+          ? status.entries.filter((entry) => entry.area !== 'untracked')
+          : status.entries
+      const clean = entries.length === 0
+      return { clean, stdout: formatStatusEntriesForCleanCheck(entries) }
     }
+  }
+
+  async refreshLocalBaseRefForWorktreeCreate(args: {
+    repoPath: string
+    fullRef: string
+    remoteTrackingRef: string
+    ownerWorktreePath?: string
+    checkOnly?: boolean
+  }): Promise<void> {
+    await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
   }
 
   async renameCurrentBranch(worktreePath: string, newBranch: string): Promise<void> {

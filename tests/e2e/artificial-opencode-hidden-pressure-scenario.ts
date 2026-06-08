@@ -192,8 +192,8 @@ export async function runHiddenRealPtyPressureScenario<
       ackGate
     )
 
-    expect(debug?.hiddenRendererSkipCount ?? 0).toBeGreaterThan(0)
-    expect(debug?.hiddenRendererSkippedChars ?? 0).toBeGreaterThan(0)
+    expect(debug?.hiddenRendererSkipCount ?? 0).toBe(0)
+    expect(debug?.hiddenRendererSkippedChars ?? 0).toBe(0)
     expect(pressureBeforeTyping.peakPendingChars).toBeGreaterThan(0)
     expect(pressureBeforeTyping.ackGatedFlushSkipCount).toBeGreaterThan(0)
     expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeGreaterThanOrEqual(8 * 1024 * 1024)

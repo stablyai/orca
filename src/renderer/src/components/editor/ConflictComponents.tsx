@@ -284,13 +284,14 @@ export function ConflictReviewPanel({
                 </TooltipContent>
               </Tooltip>
             )}
-            <div className="min-w-0">
-              <div className="text-sm font-medium text-foreground">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
+              <span className="text-sm font-medium text-foreground">
                 {unresolvedCount} unresolved conflict{unresolvedCount === 1 ? '' : 's'}
-              </div>
-              <div className="mt-1 text-xs text-muted-foreground">
+              </span>
+              <span className="text-muted-foreground/50">·</span>
+              <span className="text-xs text-muted-foreground">
                 Snapshot captured at {snapshotTime}.
-              </div>
+              </span>
             </div>
           </div>
           <Button type="button" size="sm" variant="outline" onClick={onRefreshSnapshot}>

@@ -977,7 +977,12 @@ describe('registerPtyHandlers', () => {
         processEnvOverrides?: Record<string, string | undefined>,
         // Why: daemon spawn tests need to exercise both WSL launch metadata
         // from main and PR #2662 command threading for OMP overlay selection.
-        spawnArgs?: { cwd?: string; shellOverride?: string; command?: string }
+        spawnArgs?: {
+          cwd?: string
+          shellOverride?: string
+          command?: string
+          envToDelete?: string[]
+        }
       ): Promise<DaemonSpawnCall> {
         const daemonSpawn = setupDaemonAdapter()
         const savedEnv: Record<string, string | undefined> = {}
@@ -1221,6 +1226,8 @@ describe('registerPtyHandlers', () => {
             rows: number
             worktreeId?: string
             env?: Record<string, string>
+            envToDelete?: string[]
+            command?: string
           }): Promise<{ id: string }>
         }
         const daemonSpawn = setupDaemonAdapter()
@@ -1248,6 +1255,57 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
       })
 
+      it('keeps the Agent Teams tmux shim ahead of host PATH shims for runtime-created daemon PTYs', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            env?: Record<string, string>
+            envToDelete?: string[]
+            command?: string
+          }): Promise<{ id: string }>
+        }
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never, undefined, (() => ({
+          enableGitHubAttribution: true
+        })) as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({
+          cols: 80,
+          rows: 24,
+          worktreeId: 'wt-runtime',
+          command: 'claude',
+          env: {
+            PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
+            ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+            TERM_PROGRAM: 'Orca',
+            ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+          },
+          envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+        })
+
+        const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+        expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
+        expect(spawnOptions.env.PATH).toContain(
+          '/tmp/orca-user-data/orca-terminal-attribution/posix'
+        )
+        expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
+        expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining(['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'])
+        )
+      })
+
       it('strips inherited agent-hook endpoint env from development daemon PTYs', async () => {
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
@@ -1271,6 +1329,34 @@ describe('registerPtyHandlers', () => {
         }))
         expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
         expect(env.PATH).toContain('/tmp/orca-user-data/orca-terminal-attribution/posix')
+      })
+
+      it('keeps the Agent Teams tmux shim ahead of host PATH shims on daemon pty:spawn', async () => {
+        const spawnOptions = await daemonSpawnAndGetOptions(
+          {
+            PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
+            ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+            TERM_PROGRAM: 'Orca',
+            ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+          },
+          undefined,
+          () => ({ enableGitHubAttribution: true }),
+          undefined,
+          {
+            command: 'claude',
+            envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+          }
+        )
+
+        expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
+        expect(spawnOptions.env.PATH).toContain(
+          '/tmp/orca-user-data/orca-terminal-attribution/posix'
+        )
+        expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
+        expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining(['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'])
+        )
       })
 
       it('injects dev-mode ORCA_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {

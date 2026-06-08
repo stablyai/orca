@@ -37,6 +37,7 @@ import type { Tab, TabContentType, TabGroupLayoutNode } from '../../../shared/ty
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
 import BrowserPaneOverlayLayer from './browser-pane/BrowserPaneOverlayLayer'
+import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import { useBrowserAutomationVisibilityForAny } from './browser-pane/browser-automation-visibility'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
@@ -74,6 +75,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
@@ -209,6 +211,7 @@ function Terminal(): React.JSX.Element | null {
   const terminalShortcutPolicy = useAppStore(
     (s) => s.settings?.terminalShortcutPolicy ?? 'orca-first'
   )
+  const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
   const setActiveFile = useAppStore((s) => s.setActiveFile)
   const closeFile = useAppStore((s) => s.closeFile)
@@ -823,6 +826,19 @@ function Terminal(): React.JSX.Element | null {
     ]
   )
 
+  const handleNewSimulatorTab = useCallback(() => {
+    if (!activeWorktreeId) {
+      return
+    }
+    const targetGroupId =
+      useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
+      useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+    void openMobileEmulatorTab(activeWorktreeId, {
+      placement: 'rightSplit',
+      targetGroupId: targetGroupId ?? undefined
+    })
+  }, [activeWorktreeId])
+
   const handleNewBrowserTab = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -1238,6 +1254,16 @@ function Terminal(): React.JSX.Element | null {
         return
       }
 
+      // Cmd/Ctrl+Shift+E — new mobile emulator tab (macOS only)
+      if (!e.repeat && mobileEmulatorEnabled && matchShortcut('tab.newSimulator')) {
+        e.preventDefault()
+        notifyTerminalCapture('tab.newSimulator')
+        if (!floatingWorkspaceFocused) {
+          handleNewSimulatorTab()
+        }
+        return
+      }
+
       // Save active editor file (fallback for when focus is
       // outside the editor content area, e.g. on the tab bar or sidebar).
       // When the editor itself has focus, editor-local handlers own the save
@@ -1403,6 +1429,7 @@ function Terminal(): React.JSX.Element | null {
   }, [
     activeWorktreeId,
     handleNewBrowserTab,
+    handleNewSimulatorTab,
     handleNewFile,
     handleNewTab,
     handleCloseTab,
@@ -1410,6 +1437,7 @@ function Terminal(): React.JSX.Element | null {
     closeBrowserTab,
     handleCloseFile,
     keybindings,
+    mobileEmulatorEnabled,
     terminalShortcutPolicy
   ])
 
@@ -1552,6 +1580,7 @@ function Terminal(): React.JSX.Element | null {
             onNewTerminalTab={() => handleNewTab()}
             onNewTerminalWithShell={handleNewTab}
             onNewBrowserTab={handleNewBrowserTab}
+            onNewSimulatorTab={mobileEmulatorEnabled ? handleNewSimulatorTab : undefined}
             onOpenEntry={handleOpenEntry}
             onNewFileTab={handleNewFile}
             onSetCustomTitle={setTabCustomTitle}
@@ -1562,8 +1591,21 @@ function Terminal(): React.JSX.Element | null {
             browserTabs={worktreeBrowserTabs}
             activeFileId={activeFileId}
             activeBrowserTabId={activeBrowserTabId}
+            activeSimulatorTabId={
+              activeTabType === 'simulator' && renderedActiveWorktreeId
+                ? (useAppStore.getState().getActiveTab(renderedActiveWorktreeId)?.id ?? null)
+                : null
+            }
             activeTabType={activeTabType}
             onActivateFile={(fileId) => {
+              const unifiedTabs =
+                useAppStore.getState().unifiedTabsByWorktree[renderedActiveWorktreeId ?? ''] ?? []
+              const unifiedTab = unifiedTabs.find((tab) => tab.id === fileId)
+              if (unifiedTab?.contentType === 'simulator') {
+                setActiveTab(fileId)
+                setActiveTabType('simulator')
+                return
+              }
               setActiveFile(fileId)
               setActiveTabType('editor')
             }}
@@ -1649,7 +1691,8 @@ function Terminal(): React.JSX.Element | null {
               // with no files after session restore). The terminal stays visible
               // as a fallback until another surface is ready.
               (activeTabType === 'editor' && worktreeFiles.length > 0) ||
-              (activeTabType === 'browser' && worktreeBrowserTabs.length > 0)
+              (activeTabType === 'browser' && worktreeBrowserTabs.length > 0) ||
+              activeTabType === 'simulator'
                 ? 'hidden'
                 : ''
             }`}
@@ -1920,6 +1963,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
         activityTerminalPortals={activityTerminalPortals}
       />
       <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
+      <EmulatorPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isVisible} />
     </div>
   )
 })

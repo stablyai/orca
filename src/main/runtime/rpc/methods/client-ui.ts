@@ -190,6 +190,7 @@ const UiUpdate = z
     starNagCompleted: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
+    usageEmptyStateDismissed: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),

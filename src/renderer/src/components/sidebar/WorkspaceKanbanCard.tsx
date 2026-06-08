@@ -35,7 +35,7 @@ function WorkspaceKanbanCard({
 
   return (
     <div
-      className="relative rounded-lg data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-sidebar-ring/40"
+      className="relative rounded-lg data-[workspace-board-card-area-selected=true]:ring-1 data-[workspace-board-card-area-selected=true]:ring-worktree-sidebar-ring/40"
       data-workspace-board-card-id={worktree.id}
       data-workspace-board-card-mode="detailed"
       data-workspace-board-card-selected={isSelected ? 'true' : 'false'}

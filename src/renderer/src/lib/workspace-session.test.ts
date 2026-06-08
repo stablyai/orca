@@ -190,6 +190,61 @@ describe('buildWorkspaceSessionPayload', () => {
     expect(payload.markdownFrontmatterVisible).toEqual({ '/tmp/demo.ts': true })
   })
 
+  it('does not persist empty split groups from transient simulator tab creation', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        unifiedTabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-unified-1',
+              entityId: 'tab-1',
+              groupId: 'group-left',
+              worktreeId: 'wt-1',
+              contentType: 'terminal',
+              label: 'shell',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        groupsByWorktree: {
+          'wt-1': [
+            {
+              id: 'group-left',
+              worktreeId: 'wt-1',
+              activeTabId: 'term-unified-1',
+              tabOrder: ['term-unified-1']
+            },
+            {
+              id: 'group-right',
+              worktreeId: 'wt-1',
+              activeTabId: null,
+              tabOrder: []
+            }
+          ]
+        },
+        layoutByWorktree: {
+          'wt-1': {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'group-left' },
+            second: { type: 'leaf', groupId: 'group-right' },
+            ratio: 0.5
+          }
+        },
+        activeGroupIdByWorktree: { 'wt-1': 'group-right' }
+      })
+    )
+
+    expect(payload.tabGroups?.['wt-1']).toEqual([
+      expect.objectContaining({ id: 'group-left', tabOrder: ['term-unified-1'] })
+    ])
+    expect(payload.tabGroupLayouts?.['wt-1']).toEqual({ type: 'leaf', groupId: 'group-left' })
+    expect(payload.activeGroupIdByWorktree?.['wt-1']).toBe('group-left')
+  })
+
   it('drops local terminal scrollback buffers from session payloads', () => {
     const localWorktreeId = 'repo-1::/local/worktree'
     const payload = buildWorkspaceSessionPayload(

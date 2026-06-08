@@ -99,6 +99,7 @@ import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { getBrowserPagesForWorkspace } from './browser-pane-page-selection'
 import BrowserAddressBar from './BrowserAddressBar'
+import { BrowserImportHintButton } from './BrowserImportHintButton'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
@@ -721,9 +722,6 @@ export default function BrowserPane({
   const setBrowserPageUrl = useAppStore((s) => s.setBrowserPageUrl)
   const runtimeEnvironmentActive = Boolean(activeRuntimeEnvironmentId?.trim())
   const activeBrowserPageId = activeBrowserPage?.id ?? null
-  const activeBrowserPageIsBlank =
-    !runtimeEnvironmentActive &&
-    (activeBrowserPage?.url === 'about:blank' || activeBrowserPage?.url === ORCA_BROWSER_BLANK_URL)
   const browserPageIds = useMemo(() => browserPages.map((page) => page.id), [browserPages])
   const automationVisiblePageIds = useBrowserAutomationVisiblePageIds(browserPageIds)
   // Why: inactive Electron webviews must stay mounted in their original DOM
@@ -758,10 +756,7 @@ export default function BrowserPane({
 
   useContextualTour(
     'browser',
-    isActive &&
-      activeBrowserPage !== null &&
-      !runtimeEnvironmentActive &&
-      !activeBrowserPageIsBlank,
+    isActive && activeBrowserPage !== null && !runtimeEnvironmentActive,
     'browser_visible'
   )
 
@@ -4523,6 +4518,8 @@ function BrowserPagePane({
           inputRef={addressBarInputRef}
         />
 
+        <BrowserImportHintButton profileId={sessionProfileId} />
+
         <Tooltip>
           <TooltipTrigger asChild>
             <span className="inline-flex">
@@ -4616,6 +4613,7 @@ function BrowserPagePane({
           browserPageId={browserTab.id}
           viewportPresetId={browserTab.viewportPresetId ?? null}
           onDestroyWebview={() => destroyPersistentWebview(browserTab.id)}
+          isActive={isActive}
         />
       </div>
       {downloadState ? (

@@ -12,6 +12,7 @@ import type {
   GitCommitCompareResult,
   GitConflictOperation,
   GitDiffResult,
+  GlobalSettings,
   GitPushTarget,
   GitUpstreamStatus,
   GitStatusResult,
@@ -68,6 +69,7 @@ import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } fro
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
+import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteFileUrl } from '../git/repo'
 import {
@@ -819,15 +821,28 @@ export function registerFilesystemHandlers(
         worktreePath: string
         repoId?: string
         connectionId?: string
+        sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+        sourceControlAi?: GlobalSettings['sourceControlAi']
+        agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
       }
     ): Promise<GenerateCommitMessageResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(
-        store.getSettings(),
-        discoveryHostKey,
-        'commitMessage',
-        await getRepoForSourceControlAi(store, args)
-      )
+      const baseSettings = store.getSettings()
+      const requestSettings = {
+        ...baseSettings,
+        ...(args.sourceControlAi !== undefined ? { sourceControlAi: args.sourceControlAi } : {}),
+        ...(args.agentCmdOverrides !== undefined
+          ? { agentCmdOverrides: args.agentCmdOverrides }
+          : {})
+      }
+      const resolvedSettings = args.sourceControlAiResolvedParams
+        ? { ok: true as const, params: args.sourceControlAiResolvedParams }
+        : resolveCommitMessageSettings(
+            requestSettings,
+            discoveryHostKey,
+            'commitMessage',
+            await getRepoForSourceControlAi(store, args)
+          )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }
@@ -955,15 +970,28 @@ export function registerFilesystemHandlers(
         body: string
         draft: boolean
         connectionId?: string
+        sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+        sourceControlAi?: GlobalSettings['sourceControlAi']
+        agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
       }
     ): Promise<GeneratePullRequestFieldsResult> => {
       const discoveryHostKey = getCommitMessageModelDiscoveryHostKey(args.connectionId ?? null)
-      const resolvedSettings = resolveCommitMessageSettings(
-        store.getSettings(),
-        discoveryHostKey,
-        'pullRequest',
-        await getRepoForSourceControlAi(store, args)
-      )
+      const baseSettings = store.getSettings()
+      const requestSettings = {
+        ...baseSettings,
+        ...(args.sourceControlAi !== undefined ? { sourceControlAi: args.sourceControlAi } : {}),
+        ...(args.agentCmdOverrides !== undefined
+          ? { agentCmdOverrides: args.agentCmdOverrides }
+          : {})
+      }
+      const resolvedSettings = args.sourceControlAiResolvedParams
+        ? { ok: true as const, params: args.sourceControlAiResolvedParams }
+        : resolveCommitMessageSettings(
+            requestSettings,
+            discoveryHostKey,
+            'pullRequest',
+            await getRepoForSourceControlAi(store, args)
+          )
       if (!resolvedSettings.ok) {
         return { success: false, error: resolvedSettings.error }
       }

@@ -263,7 +263,7 @@ export function WorktreeTitleInlineRename({
       key={`title:${titleElementKey}`}
       ref={handleRootRef}
       className={cn(
-        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
+        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         showUnreadEmphasis ? 'font-semibold' : 'font-normal',
         className
       )}

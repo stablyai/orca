@@ -33,11 +33,11 @@ export default function WorkspaceKanbanDrawerHeader({
 }: WorkspaceKanbanDrawerHeaderProps): React.JSX.Element {
   return (
     <>
-      <SheetHeader className="border-b border-sidebar-border px-4 py-3 pr-32">
+      <SheetHeader className="border-b border-worktree-sidebar-border px-4 py-3 pr-32">
         <SheetTitle className="flex items-center gap-2 text-sm">
           <span>Workspace board</span>
           {selectedCount > 1 ? (
-            <span className="rounded-full bg-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="rounded-full bg-worktree-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
               {selectedCount} selected
             </span>
           ) : null}

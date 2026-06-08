@@ -107,6 +107,181 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves valid sleeping agent resume records', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          terminalTitle: 'Codex',
+          lastAssistantMessage: 'done'
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
+    }
+  })
+
+  it('drops malformed sleeping agent resume records without failing the whole session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          worktreeId: 'wt',
+          agent: 'pi',
+          providerSession: { key: 'session_id', id: 'pi-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
+    }
+  })
+
+  it('preserves valid sleeping agent resume records when sibling records are malformed', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        },
+        'tab2:pane-1': {
+          paneKey: 'tab2:pane-1',
+          worktreeId: 'wt',
+          agent: 'not-real',
+          providerSession: { key: 'session_id', id: 'bad-session' },
+          prompt: 'ignore me',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab2:pane-1']).toBeUndefined()
+    }
+  })
+
+  it('drops sleeping agent records with unsafe provider session ids without dropping valid siblings', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        },
+        'tab2:pane-1': {
+          paneKey: 'tab2:pane-1',
+          tabId: 'tab2',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: '--last' },
+          prompt: 'ignore me',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession.id).toBe(
+        'codex-session'
+      )
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab2:pane-1']).toBeUndefined()
+    }
+  })
+
+  it('drops sleeping agent records whose embedded pane key differs from the map key', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        },
+        'tab2:pane-1': {
+          paneKey: 'other-tab:pane-1',
+          tabId: 'tab2',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'mismatched-session' },
+          prompt: 'ignore me',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession.id).toBe(
+        'codex-session'
+      )
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab2:pane-1']).toBeUndefined()
+    }
+  })
+
   it('rejects a session where ptyId is a number (schema drift)', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

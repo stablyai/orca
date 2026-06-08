@@ -25,7 +25,8 @@ import type {
   TabGroupLayoutNode,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
-  TerminalTab
+  TerminalTab,
+  TuiAgent
 } from '../../../shared/types'
 import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -41,6 +42,8 @@ import {
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 import {
   beginWebRuntimeWakeTerminalRespawn,
+  clearAllWebRuntimeWakeTerminalRespawn,
+  clearWebRuntimeWakeTerminalRespawnForWorktree,
   endWebRuntimeWakeTerminalRespawn,
   shouldSkipWebRuntimeWakeTerminalRespawn
 } from './web-runtime-wake-terminal-respawn'
@@ -119,10 +122,6 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 >
-
-function isWebClient(): boolean {
-  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
-}
 
 function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -225,6 +224,19 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
   return hostTerminalTabCount === 0
 }
 
+export function shouldSyncRuntimeSessionTabs(args: {
+  activeRuntimeEnvironmentId: string | null | undefined
+  activeWorktreeId?: string | null
+  workspaceSessionReady: boolean
+  requireActiveWorktree?: boolean
+}): boolean {
+  const environmentId = args.activeRuntimeEnvironmentId?.trim()
+  if (!environmentId || !args.workspaceSessionReady) {
+    return false
+  }
+  return args.requireActiveWorktree === true ? Boolean(args.activeWorktreeId) : true
+}
+
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   lastHostTerminalTabCountByWorktree.clear()
@@ -245,6 +257,7 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
   lastHostTerminalTabCountByWorktree.delete(key)
+  clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
   const keyPrefix = `${environmentId}:${worktreeId}:`
   for (const key of hostSessionTabIdByLocalKey.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -274,6 +287,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       hostSessionTabIdByLocalKey.delete(key)
     }
   }
+  clearAllWebRuntimeWakeTerminalRespawn()
 }
 
 function hostSessionTabMappingKey(args: {
@@ -419,11 +433,16 @@ function shouldReplaceTerminalTab(
   tab: TerminalTab,
   environmentId: string,
   nextRemotePtyIds: ReadonlySet<string>,
-  nextMirroredTerminalIds: ReadonlySet<string>
+  nextMirroredTerminalIds: ReadonlySet<string>,
+  nextMirroredLaunchAgents: ReadonlySet<TuiAgent>
 ): boolean {
-  if (tab.launchAgent && !isMirroredTerminalSurfaceId(tab.id) && nextMirroredTerminalIds.size > 0) {
+  if (
+    tab.launchAgent &&
+    !isMirroredTerminalSurfaceId(tab.id) &&
+    nextMirroredLaunchAgents.has(tab.launchAgent)
+  ) {
     // Why: paired web agent quick-launch used to create local-only tabs before
-    // the host snapshot landed. Once host mirrors exist, retire the stale row.
+    // the host snapshot landed. Retire only the matching agent's stale row.
     return true
   }
   if (isMirroredTerminalSurfaceId(tab.id)) {
@@ -1438,9 +1457,20 @@ export function applyWebSessionTabsSnapshot(
   const nextMirroredTerminalIds = new Set(
     terminalSurfaceTabs.map((tab) => toWebTerminalSurfaceTabId(tab.parentTabId))
   )
+  const nextMirroredLaunchAgents = new Set(
+    terminalSurfaceTabs
+      .map((tab) => tab.launchAgent)
+      .filter((agent): agent is TuiAgent => Boolean(agent))
+  )
   const retainedTerminalTabs = currentTerminalTabs.filter(
     (tab) =>
-      !shouldReplaceTerminalTab(tab, environmentId, nextRemotePtyIds, nextMirroredTerminalIds)
+      !shouldReplaceTerminalTab(
+        tab,
+        environmentId,
+        nextRemotePtyIds,
+        nextMirroredTerminalIds,
+        nextMirroredLaunchAgents
+      )
   )
   const mirroredTerminalTabs = buildMirroredTerminalTabs(
     snapshot,
@@ -2121,7 +2151,13 @@ export function useWebSessionTabsSync(): void {
     const environmentId = activeRuntimeEnvironmentId?.trim()
     // Why: startup hydration writes browser-local session state; applying the
     // host snapshot before that point gets clobbered and leaves the sidebar stale.
-    if (!isWebClient() || !environmentId || !workspaceSessionReady) {
+    if (
+      !shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId,
+        workspaceSessionReady
+      }) ||
+      !environmentId
+    ) {
       return
     }
 
@@ -2230,7 +2266,16 @@ export function useWebSessionTabsSync(): void {
 
   useEffect(() => {
     const environmentId = activeRuntimeEnvironmentId?.trim()
-    if (!isWebClient() || !activeWorktreeId || !environmentId || !workspaceSessionReady) {
+    if (
+      !shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId,
+        activeWorktreeId,
+        workspaceSessionReady,
+        requireActiveWorktree: true
+      }) ||
+      !environmentId ||
+      !activeWorktreeId
+    ) {
       return
     }
 
@@ -2300,6 +2345,8 @@ export function useWebSessionTabsSync(): void {
               beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)
             ) {
               requestedRespawnAfterWake = true
+              // Why: wake recovery must recreate the terminal without changing
+              // selected worktree to avoid re-triggering activation churn.
               void createWebRuntimeSessionTerminal({
                 worktreeId: activeWorktreeId,
                 environmentId,

@@ -69,7 +69,7 @@ function Sidebar({
       <div
         ref={containerRef}
         data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
-        className="relative min-h-0 flex-shrink-0 bg-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
         {...dropHandlers}
       >
         {sidebarOpen && (
@@ -93,8 +93,10 @@ function Sidebar({
         {sidebarOpen && affordance.visible ? (
           <div
             className={cn(
-              'pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-1.5 rounded-md border bg-sidebar-accent/95 px-4 text-center text-sidebar-accent-foreground shadow-xs',
-              affordance.tone === 'blocked' ? 'border-destructive/70' : 'border-sidebar-ring/70'
+              'pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-1.5 rounded-md border bg-worktree-sidebar-accent/95 px-4 text-center text-worktree-sidebar-accent-foreground shadow-xs',
+              affordance.tone === 'blocked'
+                ? 'border-destructive/70'
+                : 'border-worktree-sidebar-ring/70'
             )}
           >
             {affordance.tone === 'busy' ? (

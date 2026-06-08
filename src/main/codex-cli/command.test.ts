@@ -2,7 +2,12 @@ import { chmodSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { getVersionManagerBinPaths, resolveClaudeCommand, resolveCodexCommand } from './command'
+import {
+  getVersionManagerBinPaths,
+  resolveClaudeCommand,
+  resolveCliCommands,
+  resolveCodexCommand
+} from './command'
 
 function makeExecutable(path: string): void {
   mkdirSync(dirname(path), { recursive: true })
@@ -221,6 +226,51 @@ describe('resolveClaudeCommand', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-claude-command-'))
 
     expect(resolveClaudeCommand({ platform: 'linux', pathEnv: '', homePath: root })).toBe('claude')
+  })
+})
+
+describe('resolveCliCommands', () => {
+  afterEach(() => {
+    delete process.env.PATH
+    delete process.env.Path
+  })
+
+  it('resolves a batch from PATH and install directories', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
+    const pathDir = join(root, 'bin')
+    const pathClaude = join(pathDir, 'claude')
+    const nvmCodex = join(root, '.nvm', 'versions', 'node', 'v24.13.0', 'bin', 'codex')
+    const pnpmOpencode = join(root, 'Library', 'pnpm', 'opencode')
+    makeExecutable(pathClaude)
+    makeExecutable(nvmCodex)
+    makeExecutable(pnpmOpencode)
+
+    const resolved = resolveCliCommands(['claude', 'codex', 'opencode', 'missing'], {
+      platform: 'darwin',
+      pathEnv: pathDir,
+      homePath: root
+    })
+
+    expect(resolved.get('claude')).toBe(pathClaude)
+    expect(resolved.get('codex')).toBe(nvmCodex)
+    expect(resolved.get('opencode')).toBe(pnpmOpencode)
+    expect(resolved.get('missing')).toBe('missing')
+  })
+
+  it('deduplicates command names in the returned map', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-cli-commands-'))
+    const pathDir = join(root, 'bin')
+    const pathClaude = join(pathDir, 'claude')
+    makeExecutable(pathClaude)
+
+    const resolved = resolveCliCommands(['claude', 'claude'], {
+      platform: 'linux',
+      pathEnv: pathDir,
+      homePath: root
+    })
+
+    expect([...resolved.keys()]).toEqual(['claude'])
+    expect(resolved.get('claude')).toBe(pathClaude)
   })
 })
 

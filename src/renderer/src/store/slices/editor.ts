@@ -1080,7 +1080,7 @@ function extractPublishFailureDetail(message: string): string | null {
 function isNonFastForwardRemoteError(error: unknown): boolean {
   return (
     error instanceof Error &&
-    /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
+    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message)
   )
 }
 
@@ -1089,6 +1089,7 @@ export function resolveRemoteOperationErrorMessage(
   options?: {
     publish?: boolean
     isPush?: boolean
+    isForcePush?: boolean
     isSync?: boolean
     isFetch?: boolean
     isFastForward?: boolean
@@ -1127,6 +1128,16 @@ export function resolveRemoteOperationErrorMessage(
     /non-fast-forward|fetch first|updates were rejected/i.test(error.message)
   ) {
     return 'Sync failed — remote moved while syncing. Try again.'
+  }
+
+  // Why: force-with-lease rejection means the remote moved since our last
+  // snapshot; telling the user to pull would defeat the explicit force-push
+  // path and can reintroduce commits they meant to replace.
+  if (
+    options?.isForcePush &&
+    /non-fast-forward|fetch first|updates were rejected|stale info/i.test(error.message)
+  ) {
+    return 'Force push rejected — remote changed since last fetch. Fetch first, then try again.'
   }
 
   // Why: non-fast-forward/rejected detection is shared across publish and push so
@@ -1192,6 +1203,14 @@ export function resolveRemoteOperationErrorMessage(
       return `Sync failed. ${detail}. Check your remote access and try again.`
     }
     return 'Sync failed. Check your connection and try again.'
+  }
+
+  if (options?.isForcePush) {
+    const detail = extractPublishFailureDetail(error.message)
+    if (detail) {
+      return `Force Push failed. ${detail}. Check your remote access and try again.`
+    }
+    return 'Force Push failed. Check your connection and try again.'
   }
 
   if (options?.isPush) {
@@ -3243,7 +3262,9 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     // enough to read as a stuck label. Solution: fire the upstream refresh
     // as fire-and-forget so it doesn't block the mutation but updates the
     // store as soon as the IPC resolves.
-    get().beginRemoteOperation(publish ? 'publish' : 'push')
+    get().beginRemoteOperation(
+      publish ? 'publish' : options.forceWithLease === true ? 'force_push' : 'push'
+    )
     let shouldRefreshAfterRejectedPush = false
     try {
       await pushRuntimeGit(
@@ -3252,7 +3273,13 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       )
     } catch (error) {
       shouldRefreshAfterRejectedPush = isNonFastForwardRemoteError(error)
-      toast.error(resolveRemoteOperationErrorMessage(error, { publish, isPush: true }))
+      toast.error(
+        resolveRemoteOperationErrorMessage(error, {
+          publish,
+          isPush: !publish && options.forceWithLease !== true,
+          isForcePush: !publish && options.forceWithLease === true
+        })
+      )
       throw error
     } finally {
       get().endRemoteOperation()

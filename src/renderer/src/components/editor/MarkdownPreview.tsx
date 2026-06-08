@@ -1625,6 +1625,13 @@ export default function MarkdownPreview({
 
   return (
     <div className="markdown-preview-shell">
+      {showTableOfContents ? (
+        <MarkdownTableOfContentsPanel
+          items={tableOfContentsItems}
+          onClose={onCloseTableOfContents ?? (() => {})}
+          onNavigate={navigateToTableOfContentsItem}
+        />
+      ) : null}
       <div
         ref={setRootRef}
         tabIndex={0}
@@ -1786,13 +1793,6 @@ export default function MarkdownPreview({
           </Markdown>
         </div>
       </div>
-      {showTableOfContents ? (
-        <MarkdownTableOfContentsPanel
-          items={tableOfContentsItems}
-          onClose={onCloseTableOfContents ?? (() => {})}
-          onNavigate={navigateToTableOfContentsItem}
-        />
-      ) : null}
     </div>
   )
 }

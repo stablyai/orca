@@ -412,6 +412,42 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
+    it('keeps waiting for requested types when an unrelated heartbeat arrives', async () => {
+      setup()
+
+      const waitPromise = call('orchestration.check', {
+        terminal: 'coord',
+        wait: true,
+        timeoutMs: 5000,
+        types: 'worker_done,escalation'
+      }) as Promise<{ count: number; messages: { type: string }[] }>
+      await Promise.resolve()
+
+      await call('orchestration.send', {
+        from: 'worker',
+        to: 'coord',
+        subject: 'alive',
+        type: 'heartbeat'
+      })
+
+      const early = await Promise.race([
+        waitPromise.then(() => 'settled'),
+        Promise.resolve('pending')
+      ])
+      expect(early).toBe('pending')
+
+      await call('orchestration.send', {
+        from: 'worker',
+        to: 'coord',
+        subject: 'done',
+        type: 'worker_done'
+      })
+
+      const result = await waitPromise
+      expect(result.count).toBe(1)
+      expect(result.messages[0].type).toBe('worker_done')
+    })
+
     it('does not mark existing messages read when the check starts aborted', async () => {
       setup()
       const abortController = new AbortController()

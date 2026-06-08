@@ -21,6 +21,7 @@ import {
   FileText,
   FileType,
   FileVideo,
+  Smartphone,
   type LucideIcon
 } from 'lucide-react'
 
@@ -278,7 +279,10 @@ const FILE_ICON_BY_EXTENSION: Record<string, LucideIcon> = {
 
 const COMPOUND_EXTENSIONS = ['tar.bz2', 'tar.gz', 'tar.xz']
 
-function getFilename(filePath: string): string {
+function getFilename(filePath: string | undefined | null): string {
+  if (!filePath) {
+    return ''
+  }
   const lastSlash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
   return lastSlash >= 0 ? filePath.slice(lastSlash + 1) : filePath
 }
@@ -298,12 +302,20 @@ function getExtension(filename: string): string {
   return filename.slice(lastDot + 1).toLowerCase()
 }
 
-export function getFileTypeIcon(filePath: string): LucideIcon {
+export function getFileTypeIcon(filePath: string | undefined | null): LucideIcon {
   const filename = getFilename(filePath)
+  if (!filename) {
+    return File
+  }
   const lowerName = filename.toLowerCase()
   const exactMatch = FILE_ICON_BY_NAME[lowerName]
   if (exactMatch) {
     return exactMatch
+  }
+
+  // Why: simulator tabs reuse EditorFileTab chrome with a synthetic label path.
+  if (lowerName === 'mobile emulator' || lowerName === 'simulator') {
+    return Smartphone
   }
 
   if (lowerName === '.env' || lowerName.startsWith('.env.')) {

@@ -33,8 +33,10 @@ vi.mock('@/store', () => ({
   }
 }))
 
+const mockToastError = vi.fn()
+
 vi.mock('sonner', () => ({
-  toast: { message: vi.fn() }
+  toast: { message: vi.fn(), error: mockToastError }
 }))
 
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
@@ -125,8 +127,25 @@ describe('launchAgentInNewTab', () => {
     })
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(mockQueueTabStartupCommand).not.toHaveBeenCalled()
+    await Promise.resolve()
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
     expect(store.closeTab).toHaveBeenCalledWith('stale-agent-tab')
+  })
+
+  it('surfaces a toast when host agent launch fails in paired web clients', async () => {
+    mockIsWebRuntimeSessionActive.mockReturnValue(true)
+    mockCreateWebRuntimeSessionTerminal.mockResolvedValue(false)
+    store.settings = { agentCmdOverrides: {}, activeRuntimeEnvironmentId: 'web-runtime' }
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'claude',
+      worktreeId: 'wt-1'
+    })
+
+    await Promise.resolve()
+    expect(mockToastError).toHaveBeenCalledWith('Could not launch claude in a new terminal.')
+    expect(mockSetActiveTabType).not.toHaveBeenCalled()
   })
 
   it('queues initial working status for Command Code argv prompt launches', async () => {
@@ -272,5 +291,24 @@ describe('launchAgentInNewTab', () => {
     await Promise.resolve()
 
     expect(mockTrack).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
+  })
+
+  it('queues per-launch CLI arguments without putting generated prompts in argv', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      prompt: 'large generated prompt',
+      agentArgs: '--model gpt-5.5',
+      promptDelivery: 'submit-after-ready'
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: "codex '--model' 'gpt-5.5'"
+      })
+    )
   })
 })
