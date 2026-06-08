@@ -35,11 +35,11 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
         <button
           type="button"
           onClick={handleOpenSettings}
-          aria-label="Connect AI accounts to see usage"
+          aria-label="Connect an AI account to see usage"
           className="inline-flex h-5 cursor-pointer items-center gap-1.5 rounded px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
         >
           <BarChart3 className="size-3.5" />
-          <span>Connect AI accounts to see usage</span>
+          <span>Connect an AI account to see usage</span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="start" sideOffset={8} className="w-[260px] p-2.5">
