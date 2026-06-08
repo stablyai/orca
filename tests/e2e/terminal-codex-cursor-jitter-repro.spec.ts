@@ -83,6 +83,7 @@ type QueuedMessageFrame = ScreenSnapshot & {
   elapsedMs: number
   rasterCursorCells: RasterCursorCell[]
   rasterWorkingCursorCells: RasterCursorCell[]
+  rasterNonInputCursorCells: RasterCursorCell[]
 }
 
 type RasterFrameInput = {
@@ -102,7 +103,9 @@ const CURSOR_THEME = {
   cursor: '#23ff45',
   cursorAccent: '#001000',
   foreground: '#f4f4f5',
-  background: '#050505'
+  background: '#050505',
+  green: '#44aa66',
+  brightGreen: '#58c979'
 }
 
 const CODEX_TUI_READY_RE = /Ask Codex|OpenAI/i
@@ -110,7 +113,7 @@ const CODEX_TRUST_PROMPT_RE = /Do you trust the contents of this directory\?/i
 const CODEX_UPDATE_PROMPT_RE = /Update available|Skip until next version/i
 const CODEX_WORKING_STATUS_RE =
   /W[\s\S]{0,20}o[\s\S]{0,20}r[\s\S]{0,20}k[\s\S]{0,20}i[\s\S]{0,20}n[\s\S]{0,20}g[\s\S]{0,40}\(/i
-const QUEUED_CURSOR_SAMPLE_INTERVAL_MS = 20
+const QUEUED_CURSOR_SAMPLE_INTERVAL_MS = 5
 const QUEUED_CURSOR_CAPTURE_MS = 6_000
 const ARTIFACT_DIR = path.join(process.cwd(), '.tmp', 'cursor-jitter-repro')
 const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
@@ -143,6 +146,26 @@ function isQueuedInputLine(text: string): boolean {
     /\bs\b/.test(text) &&
     (text.includes('>') || text.includes('›') || text.includes('\u00e2\u20ac\u00ba'))
   )
+}
+
+function isInputCursorRow(snapshot: ScreenSnapshot, row: number): boolean {
+  const text = snapshot.lines.find((line) => line.row === row)?.text ?? ''
+  const trimmed = text.trimStart()
+  return isQueuedInputLine(text) || trimmed.startsWith('›')
+}
+
+function isPromptCursorFrame(frame: ScreenSnapshot): boolean {
+  if (!frame.marker || frame.coreCursorHidden !== false) {
+    return false
+  }
+  return isInputCursorRow(frame, frame.marker.cellY)
+}
+
+function isUnexpectedVisibleCursorFrame(frame: ScreenSnapshot): boolean {
+  if (!frame.marker || frame.coreCursorHidden !== false) {
+    return false
+  }
+  return !isInputCursorRow(frame, frame.marker.cellY)
 }
 
 function quotePowerShellSingleQuoted(value: string): string {
@@ -587,22 +610,72 @@ async function captureQueuedMessageFrames(
     width: window.innerWidth,
     height: window.innerHeight
   }))
+  const rasterInputs: RasterFrameInput[] = []
+  const screenSamples: QueuedMessageFrame[] = []
   const startedAt = Date.now()
   let suspiciousScreenshotCount = 0
-  const frames: QueuedMessageFrame[] = []
-  while (Date.now() - startedAt < QUEUED_CURSOR_CAPTURE_MS) {
-    const sample = await readScreenSnapshot(page, label, tabId, ptyId)
-    const input: RasterFrameInput = {
-      buffer: Buffer.from(await page.screenshot({ clip: target.clip })),
+
+  const cdp = await page.context().newCDPSession(page)
+  cdp.on('Page.screencastFrame', (params) => {
+    rasterInputs.push({
+      buffer: Buffer.from(params.data, 'base64'),
       at: Date.now(),
       elapsedMs: Date.now() - startedAt
+    })
+    void cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId }).catch(() => {})
+  })
+
+  await cdp.send('Page.enable').catch(() => {})
+  await cdp.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 })
+  try {
+    while (Date.now() - startedAt < QUEUED_CURSOR_CAPTURE_MS) {
+      screenSamples.push({
+        ...(await readScreenSnapshot(page, label, tabId, ptyId)),
+        index: screenSamples.length,
+        at: Date.now(),
+        elapsedMs: Date.now() - startedAt,
+        rasterCursorCells: [],
+        rasterWorkingCursorCells: [],
+        rasterNonInputCursorCells: []
+      })
+      await page.waitForTimeout(QUEUED_CURSOR_SAMPLE_INTERVAL_MS)
     }
+  } finally {
+    await cdp.send('Page.stopScreencast').catch(() => {})
+    await cdp.detach().catch(() => {})
+  }
+
+  const fallbackSample = screenSamples[0] ?? {
+    ...(await readScreenSnapshot(page, label, tabId, ptyId)),
+    index: 0,
+    at: Date.now(),
+    elapsedMs: Date.now() - startedAt,
+    rasterCursorCells: [],
+    rasterWorkingCursorCells: [],
+    rasterNonInputCursorCells: []
+  }
+  const frames: QueuedMessageFrame[] = []
+  for (const [index, input] of rasterInputs.entries()) {
+    const sample = screenSamples.reduce(
+      (nearest, candidate) =>
+        Math.abs(candidate.elapsedMs - input.elapsedMs) <
+        Math.abs(nearest.elapsedMs - input.elapsedMs)
+          ? candidate
+          : nearest,
+      fallbackSample
+    )
     const rasterCursorCells = analyzeRasterCursorCells(input.buffer, target, viewport)
     const rasterWorkingCursorCells = rasterCursorCells.filter((cell) =>
       workingRows(sample).has(cell.cellY)
     )
-    if (rasterWorkingCursorCells.length > 0 && suspiciousScreenshotCount < 8) {
-      const filename = `queued-message-raster-working-cursor-${frames.length}.png`
+    const rasterNonInputCursorCells = rasterCursorCells.filter(
+      (cell) => !isInputCursorRow(sample, cell.cellY)
+    )
+    if (
+      (rasterWorkingCursorCells.length > 0 || rasterNonInputCursorCells.length > 0) &&
+      suspiciousScreenshotCount < 8
+    ) {
+      const filename = `queued-message-raster-suspicious-cursor-${index}.png`
       await testInfo.attach(filename, {
         body: input.buffer,
         contentType: 'image/png'
@@ -612,13 +685,13 @@ async function captureQueuedMessageFrames(
     }
     frames.push({
       ...sample,
-      index: frames.length,
+      index,
       at: input.at,
       elapsedMs: input.elapsedMs,
       rasterCursorCells,
-      rasterWorkingCursorCells
+      rasterWorkingCursorCells,
+      rasterNonInputCursorCells
     })
-    await page.waitForTimeout(QUEUED_CURSOR_SAMPLE_INTERVAL_MS)
   }
   return frames
 }
@@ -660,6 +733,13 @@ test.describe('Codex terminal cursor jitter repro', () => {
       )
       .toBe(true)
     await applyCursorProbeTheme(orcaPage, tabId)
+    const workingOnlyFrames = await captureQueuedMessageFrames(
+      orcaPage,
+      `${shellCase.label}-no-input`,
+      tabId,
+      ptyId,
+      testInfo
+    )
     await orcaPage.keyboard.insertText('s')
     await expect
       .poll(
@@ -681,17 +761,21 @@ test.describe('Codex terminal cursor jitter repro', () => {
 
     const snapshot = await readScreenSnapshot(orcaPage, shellCase.label, tabId, ptyId)
     const rawChunks = await readPtyOutputDiagnostics(orcaPage)
+    const visibleWorkingOnlyCursorFrames = workingOnlyFrames.filter(isPromptCursorFrame)
+    const unexpectedWorkingOnlyCursorFrames = workingOnlyFrames.filter(
+      isUnexpectedVisibleCursorFrame
+    )
     const visibleWorkingCursorFrames = frames.filter(isVisibleWorkingCursorFrame)
+    const unexpectedQueuedCursorFrames = frames.filter(isUnexpectedVisibleCursorFrame)
     const rasterWorkingCursorFrames = frames.filter(
       (frame) => frame.rasterWorkingCursorCells.length > 0
     )
-    const rasterMismatchedCursorFrames = frames.filter((frame) =>
-      frame.rasterCursorCells.some(
-        (cell) => cell.cellX !== frame.cursorX || cell.cellY !== frame.cursorY
-      )
-    )
     await testInfo.attach('queued-message-cursor-frames.json', {
       body: JSON.stringify(frames, null, 2),
+      contentType: 'application/json'
+    })
+    await testInfo.attach('working-no-input-cursor-frames.json', {
+      body: JSON.stringify(workingOnlyFrames, null, 2),
       contentType: 'application/json'
     })
     await testInfo.attach('queued-message-screen.json', {
@@ -711,6 +795,10 @@ test.describe('Codex terminal cursor jitter repro', () => {
       `${JSON.stringify(frames, null, 2)}\n`
     )
     writeFileSync(
+      path.join(ARTIFACT_DIR, 'working-no-input-cursor-frames.json'),
+      `${JSON.stringify(workingOnlyFrames, null, 2)}\n`
+    )
+    writeFileSync(
       path.join(ARTIFACT_DIR, 'queued-message-pty-chunks.txt'),
       `${formatPtyChunks(rawChunks)}\n`
     )
@@ -723,6 +811,14 @@ test.describe('Codex terminal cursor jitter repro', () => {
       'queued input should be captured before checking cursor placement'
     ).toBeGreaterThan(0)
     expect(
+      visibleWorkingOnlyCursorFrames,
+      'Codex should expose its prompt cursor during the no-input capture so the repro can detect misplaced cursor restores'
+    ).not.toEqual([])
+    expect(
+      unexpectedWorkingOnlyCursorFrames,
+      `visible cursor should only appear on Codex prompt rows while Working: ${JSON.stringify(unexpectedWorkingOnlyCursorFrames)}`
+    ).toEqual([])
+    expect(
       visibleWorkingCursorFrames,
       `cursor should not be visibly parked on Working row: ${JSON.stringify(visibleWorkingCursorFrames)}`
     ).toEqual([])
@@ -731,8 +827,8 @@ test.describe('Codex terminal cursor jitter repro', () => {
       `rasterized terminal should not paint cursor-colored pixels on Working row: ${JSON.stringify(rasterWorkingCursorFrames)}`
     ).toEqual([])
     expect(
-      rasterMismatchedCursorFrames,
-      `rasterized terminal should only paint the cursor at xterm's logical cursor cell: ${JSON.stringify(rasterMismatchedCursorFrames)}`
+      unexpectedQueuedCursorFrames,
+      `visible cursor should only appear on Codex prompt rows after queuing input: ${JSON.stringify(unexpectedQueuedCursorFrames)}`
     ).toEqual([])
   })
 })
