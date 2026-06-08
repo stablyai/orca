@@ -12323,11 +12323,8 @@ export class OrcaRuntimeService {
     const retained = [...this.ptysById.values()]
       .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
       .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
-    while (retained.length > DISCONNECTED_PTY_RECORD_MAX) {
-      const stale = retained.shift()
-      if (!stale) {
-        return
-      }
+    const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
+    for (const stale of retained.slice(0, staleCount)) {
       // Why: exited runtime-owned PTYs stay readable after exit, but long-lived
       // runtimes can churn through many background sessions. Bound the archive.
       this.dropDisconnectedPtyRecord(stale.ptyId)

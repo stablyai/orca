@@ -615,6 +615,7 @@ export function connectPanePty(
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
   let synchronizedForegroundOutputActive = false
+  let hiddenRendererSynchronizedOutputActive = false
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -2106,6 +2107,19 @@ export function connectPanePty(
 
     function hiddenRendererOutputNeedsLiveXterm(data: string): boolean {
       const visualData = data.replaceAll('\x1b[?2031h', '')
+      const synchronizedOutputActive =
+        hiddenRendererSynchronizedOutputActive ||
+        containsSynchronizedOutputStart(visualData) ||
+        containsSynchronizedOutputEnd(visualData)
+      // Why: DEC synchronized output frames can split into plain row chunks;
+      // skipping the middle chunks recreates the hidden TUI restore artifacts.
+      hiddenRendererSynchronizedOutputActive = shouldSynchronizedOutputRemainActive(
+        visualData,
+        hiddenRendererSynchronizedOutputActive
+      )
+      if (synchronizedOutputActive) {
+        return true
+      }
       if (visualData.includes('\x1b[')) {
         return true
       }

@@ -5250,11 +5250,22 @@ describe('OrcaRuntimeService', () => {
     const [terminal] = (await runtime.listTerminals()).terminals
     const lines = Array.from({ length: 120 }, (_, index) => `line-${index}-${'x'.repeat(400)}`)
     runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
+    // Why: xterm-headless uses Array.shift internally while draining writes;
+    // this test guards read-preview trimming, not emulator parsing.
+    await runtime.serializeMainTerminalBuffer('pty-1')
 
-    const shiftSpy = vi.spyOn(Array.prototype, 'shift')
-    const preview = await runtime.readTerminal(terminal.handle)
-    const shiftCallCount = shiftSpy.mock.calls.length
-    shiftSpy.mockRestore()
+    const originalShift = Array.prototype.shift
+    let shiftCallCount = 0
+    Array.prototype.shift = function (...args) {
+      shiftCallCount += 1
+      return originalShift.apply(this, args)
+    }
+    let preview: Awaited<ReturnType<typeof runtime.readTerminal>>
+    try {
+      preview = await runtime.readTerminal(terminal.handle)
+    } finally {
+      Array.prototype.shift = originalShift
+    }
 
     expect(preview.limited).toBe(true)
     expect(preview.tail.at(-1)).toBe(lines.at(-1))
