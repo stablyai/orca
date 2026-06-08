@@ -1,4 +1,12 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
+import {
+  dispatchActiveTerminalWheelEvent,
+  readActiveTerminalScrollState,
+  scrollActiveTerminalByApi,
+  scrollActiveTerminalToBottom,
+  scrollActiveTerminalViewportElement,
+  type ActiveTerminalScrollState
+} from './artificial-opencode-active-terminal-scroll'
 import { sendToTerminal, waitForTerminalOutput } from './helpers/terminal'
 
 export type ScrollMeasurement = {
@@ -7,6 +15,16 @@ export type ScrollMeasurement = {
   beforeViewportY: number
   afterViewportY: number
   baseY: number
+  attempts: ScrollAttemptMeasurement[]
+}
+
+type ScrollAttemptMeasurement = {
+  name: string
+  beforeViewportY: number
+  afterViewportY: number
+  beforeScrollTop: number | null
+  afterScrollTop: number | null
+  error?: string
 }
 
 type ScrollMainPressureSnapshot = {
@@ -38,28 +56,7 @@ export async function seedActiveTerminalScrollback(
   await scrollActiveTerminalToBottom(page)
 }
 
-export async function scrollActiveTerminalToBottom(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const pane = (() => {
-      const store = window.__store
-      const state = store?.getState()
-      const worktreeId = state?.activeWorktreeId
-      const tabId =
-        state?.activeTabType === 'terminal'
-          ? state.activeTabId
-          : worktreeId
-            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-            : null
-      const manager = tabId ? window.__paneManagers?.get(tabId) : null
-      const candidate = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-      if (!candidate) {
-        throw new Error('Active terminal pane is unavailable')
-      }
-      return candidate
-    })()
-    pane.terminal.scrollToBottom()
-  })
-}
+export { scrollActiveTerminalToBottom }
 
 export async function measureActiveTerminalWheelScroll(page: Page): Promise<ScrollMeasurement> {
   const target = await page.evaluate(() => {
@@ -121,33 +118,39 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
   }, TIMER_SAMPLE_MS)
 
   const start = performance.now()
-  await page.mouse.move(target.x, target.y)
-  await page.mouse.wheel(0, -1200)
-  let afterViewportY = target.beforeViewportY
-  while (performance.now() - start < 75) {
-    afterViewportY = await readActiveTerminalViewportY(page)
-    if (afterViewportY < target.beforeViewportY) {
-      break
+  const attempts: ScrollAttemptMeasurement[] = []
+  let afterViewportY = await measureScrollAttempt(page, attempts, 'cdpWheel', async () => {
+    await page.mouse.move(target.x, target.y)
+    await page.mouse.wheel(0, -1200)
+  })
+  if (afterViewportY >= target.beforeViewportY) {
+    afterViewportY = await measureScrollAttempt(page, attempts, 'domWheel', async () => {
+      await dispatchActiveTerminalWheelEvent(page)
+    })
+  }
+  if (afterViewportY >= target.beforeViewportY) {
+    afterViewportY = await measureScrollAttempt(page, attempts, 'domScroll', async () => {
+      await scrollActiveTerminalViewportElement(page)
+    })
+  }
+  if (afterViewportY >= target.beforeViewportY) {
+    afterViewportY = await measureScrollAttempt(page, attempts, 'xtermApi', async () => {
+      await scrollActiveTerminalByApi(page)
+    })
+  }
+  if (afterViewportY >= target.beforeViewportY) {
+    const remainingMs = Math.max(0, 500 - (performance.now() - start))
+    const finalState = await waitForActiveTerminalViewportChange(
+      page,
+      target.beforeViewportY,
+      remainingMs
+    )
+    afterViewportY = finalState.viewportY
+    const lastAttempt = attempts.at(-1)
+    if (lastAttempt) {
+      lastAttempt.afterViewportY = finalState.viewportY
+      lastAttempt.afterScrollTop = finalState.scrollTop
     }
-    await page.waitForTimeout(5)
-  }
-  if (afterViewportY >= target.beforeViewportY) {
-    await dispatchActiveTerminalWheelEvent(page)
-  }
-  afterViewportY = await readActiveTerminalViewportY(page)
-  if (afterViewportY >= target.beforeViewportY) {
-    await scrollActiveTerminalViewportElement(page)
-  }
-  afterViewportY = await readActiveTerminalViewportY(page)
-  if (afterViewportY >= target.beforeViewportY) {
-    await scrollActiveTerminalByApi(page)
-  }
-  while (performance.now() - start < 500) {
-    afterViewportY = await readActiveTerminalViewportY(page)
-    if (afterViewportY < target.beforeViewportY) {
-      break
-    }
-    await page.waitForTimeout(5)
   }
   const scrollLatencyMs = performance.now() - start
   const maxTimerDriftMs = await eventLoop.evaluate((watcher) => watcher.stop())
@@ -157,7 +160,8 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
     maxTimerDriftMs,
     beforeViewportY: target.beforeViewportY,
     afterViewportY,
-    baseY: target.baseY
+    baseY: target.baseY,
+    attempts
   }
 }
 
@@ -171,13 +175,22 @@ export function annotateScrollMeasurement(
 ): void {
   const scrollMoved = measurement.afterViewportY < measurement.beforeViewportY
   const scrollMetric = scrollMoved ? ` scroll=${measurement.scrollLatencyMs.toFixed(1)}ms` : ''
+  const attempts = measurement.attempts
+    .map(
+      (attempt) =>
+        `${attempt.name}:${attempt.beforeViewportY}>${attempt.afterViewportY}` +
+        `(${formatNullableNumber(attempt.beforeScrollTop)}>${formatNullableNumber(
+          attempt.afterScrollTop
+        )})${attempt.error ? ':error' : ''}`
+    )
+    .join(',')
   testInfo.annotations.push({
     type,
     description: `panes=${paneCount}${scrollMetric} scrollMoved=${scrollMoved} maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(
       1
     )}ms viewportBefore=${measurement.beforeViewportY} viewportAfter=${
       measurement.afterViewportY
-    } baseY=${measurement.baseY} mainPeakPendingChars=${
+    } baseY=${measurement.baseY} scrollAttempts=${attempts} mainPeakPendingChars=${
       mainPressure?.peakPendingChars ?? 0
     } mainPeakInFlightChars=${mainPressure?.peakRendererInFlightChars ?? 0} mainAckGatedFlushSkips=${
       mainPressure?.ackGatedFlushSkipCount ?? 0
@@ -187,111 +200,48 @@ export function annotateScrollMeasurement(
   })
 }
 
-async function scrollActiveTerminalViewportElement(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = window.__store
-    const state = store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('Active terminal pane is unavailable')
-    }
-    const viewport = pane.container.querySelector<HTMLElement>('.xterm-viewport')
-    if (!viewport) {
-      throw new Error('Active terminal viewport is unavailable')
-    }
-    // Why: Linux CI can drop wheel delivery entirely under PTY flood; changing
-    // the viewport scrollTop exercises xterm's DOM scroll synchronization.
-    viewport.scrollTop = Math.max(0, viewport.scrollTop - 1200)
-    viewport.dispatchEvent(new Event('scroll', { bubbles: true }))
-  })
+function formatNullableNumber(value: number | null): string {
+  return value === null ? 'na' : value.toFixed(0)
 }
 
-async function scrollActiveTerminalByApi(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = window.__store
-    const state = store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('Active terminal pane is unavailable')
-    }
-    // Why: Linux/Xvfb can lose synthetic wheel/DOM scroll events under flood;
-    // xterm's public API keeps this probe about viewport responsiveness.
-    const targetLine = Math.max(0, pane.terminal.buffer.active.viewportY - 20)
-    pane.terminal.scrollToLine(targetLine)
+async function measureScrollAttempt(
+  page: Page,
+  attempts: ScrollAttemptMeasurement[],
+  name: string,
+  action: () => Promise<void>
+): Promise<number> {
+  const before = await readActiveTerminalScrollState(page)
+  let error: string | undefined
+  try {
+    await action()
+  } catch (caught) {
+    error = caught instanceof Error ? caught.message : String(caught)
+  }
+  const after = await waitForActiveTerminalViewportChange(page, before.viewportY, 75)
+  attempts.push({
+    name,
+    beforeViewportY: before.viewportY,
+    afterViewportY: after.viewportY,
+    beforeScrollTop: before.scrollTop,
+    afterScrollTop: after.scrollTop,
+    error
   })
+  return after.viewportY
 }
 
-async function dispatchActiveTerminalWheelEvent(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = window.__store
-    const state = store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('Active terminal pane is unavailable')
+async function waitForActiveTerminalViewportChange(
+  page: Page,
+  beforeViewportY: number,
+  timeoutMs: number
+): Promise<ActiveTerminalScrollState> {
+  const start = performance.now()
+  let state = await readActiveTerminalScrollState(page)
+  while (performance.now() - start < timeoutMs) {
+    state = await readActiveTerminalScrollState(page)
+    if (state.viewportY < beforeViewportY) {
+      break
     }
-    // Why: CI can drop CDP wheel input while the active textarea is focused;
-    // dispatching on xterm's own surfaces still exercises its user scroll path.
-    const wheelTargets = [
-      pane.container.querySelector<HTMLElement>('.xterm'),
-      pane.container.querySelector<HTMLElement>('.xterm-viewport'),
-      pane.container.querySelector<HTMLElement>('.xterm-screen')
-    ].filter((target): target is HTMLElement => Boolean(target))
-    if (wheelTargets.length === 0) {
-      throw new Error('Active terminal wheel target is unavailable')
-    }
-    for (const wheelTarget of wheelTargets) {
-      wheelTarget.dispatchEvent(
-        new WheelEvent('wheel', {
-          bubbles: true,
-          cancelable: true,
-          deltaMode: WheelEvent.DOM_DELTA_PIXEL,
-          deltaY: -1200
-        })
-      )
-    }
-  })
-}
-
-async function readActiveTerminalViewportY(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const store = window.__store
-    const state = store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('Active terminal pane is unavailable')
-    }
-    return pane.terminal.buffer.active.viewportY
-  })
+    await page.waitForTimeout(5)
+  }
+  return state
 }
