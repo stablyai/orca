@@ -587,63 +587,22 @@ async function captureQueuedMessageFrames(
     width: window.innerWidth,
     height: window.innerHeight
   }))
-  const rasterInputs: RasterFrameInput[] = []
-  const screenSamples: QueuedMessageFrame[] = []
   const startedAt = Date.now()
-
-  const cdp = await page.context().newCDPSession(page)
-  cdp.on('Page.screencastFrame', (params) => {
-    rasterInputs.push({
-      buffer: Buffer.from(params.data, 'base64'),
+  let suspiciousScreenshotCount = 0
+  const frames: QueuedMessageFrame[] = []
+  while (Date.now() - startedAt < QUEUED_CURSOR_CAPTURE_MS) {
+    const sample = await readScreenSnapshot(page, label, tabId, ptyId)
+    const input: RasterFrameInput = {
+      buffer: Buffer.from(await page.screenshot({ clip: target.clip })),
       at: Date.now(),
       elapsedMs: Date.now() - startedAt
-    })
-    void cdp.send('Page.screencastFrameAck', { sessionId: params.sessionId }).catch(() => {})
-  })
-
-  await cdp.send('Page.enable').catch(() => {})
-  await cdp.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 })
-  try {
-    while (Date.now() - startedAt < QUEUED_CURSOR_CAPTURE_MS) {
-      screenSamples.push({
-        ...(await readScreenSnapshot(page, label, tabId, ptyId)),
-        index: screenSamples.length,
-        at: Date.now(),
-        elapsedMs: Date.now() - startedAt,
-        rasterCursorCells: [],
-        rasterWorkingCursorCells: []
-      })
-      await page.waitForTimeout(QUEUED_CURSOR_SAMPLE_INTERVAL_MS)
     }
-  } finally {
-    await cdp.send('Page.stopScreencast').catch(() => {})
-    await cdp.detach().catch(() => {})
-  }
-
-  let suspiciousScreenshotCount = 0
-  const fallbackSample = screenSamples[0] ?? {
-    ...(await readScreenSnapshot(page, label, tabId, ptyId)),
-    index: 0,
-    at: Date.now(),
-    elapsedMs: Date.now() - startedAt,
-    rasterCursorCells: [],
-    rasterWorkingCursorCells: []
-  }
-  const frames: QueuedMessageFrame[] = []
-  for (const [index, input] of rasterInputs.entries()) {
-    const nearestSample = screenSamples.reduce(
-      (nearest, sample) =>
-        Math.abs(sample.elapsedMs - input.elapsedMs) < Math.abs(nearest.elapsedMs - input.elapsedMs)
-          ? sample
-          : nearest,
-      fallbackSample
-    )
     const rasterCursorCells = analyzeRasterCursorCells(input.buffer, target, viewport)
     const rasterWorkingCursorCells = rasterCursorCells.filter((cell) =>
-      workingRows(nearestSample).has(cell.cellY)
+      workingRows(sample).has(cell.cellY)
     )
     if (rasterWorkingCursorCells.length > 0 && suspiciousScreenshotCount < 8) {
-      const filename = `queued-message-raster-working-cursor-${index}.png`
+      const filename = `queued-message-raster-working-cursor-${frames.length}.png`
       await testInfo.attach(filename, {
         body: input.buffer,
         contentType: 'image/png'
@@ -652,13 +611,14 @@ async function captureQueuedMessageFrames(
       suspiciousScreenshotCount += 1
     }
     frames.push({
-      ...nearestSample,
-      index,
+      ...sample,
+      index: frames.length,
       at: input.at,
       elapsedMs: input.elapsedMs,
       rasterCursorCells,
       rasterWorkingCursorCells
     })
+    await page.waitForTimeout(QUEUED_CURSOR_SAMPLE_INTERVAL_MS)
   }
   return frames
 }
@@ -725,6 +685,11 @@ test.describe('Codex terminal cursor jitter repro', () => {
     const rasterWorkingCursorFrames = frames.filter(
       (frame) => frame.rasterWorkingCursorCells.length > 0
     )
+    const rasterMismatchedCursorFrames = frames.filter((frame) =>
+      frame.rasterCursorCells.some(
+        (cell) => cell.cellX !== frame.cursorX || cell.cellY !== frame.cursorY
+      )
+    )
     await testInfo.attach('queued-message-cursor-frames.json', {
       body: JSON.stringify(frames, null, 2),
       contentType: 'application/json'
@@ -764,6 +729,10 @@ test.describe('Codex terminal cursor jitter repro', () => {
     expect(
       rasterWorkingCursorFrames,
       `rasterized terminal should not paint cursor-colored pixels on Working row: ${JSON.stringify(rasterWorkingCursorFrames)}`
+    ).toEqual([])
+    expect(
+      rasterMismatchedCursorFrames,
+      `rasterized terminal should only paint the cursor at xterm's logical cursor cell: ${JSON.stringify(rasterMismatchedCursorFrames)}`
     ).toEqual([])
   })
 })

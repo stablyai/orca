@@ -345,7 +345,19 @@ function removeTransientCursorShowSequences(data: string): string {
     )
     if (nextHideIndex === -1) {
       if (nextPositionEnd === -1) {
-        break
+        const synchronizedEndIndex = data.indexOf(
+          SYNCHRONIZED_OUTPUT_END_SEQUENCE,
+          showIndex + CURSOR_SHOW_SEQUENCE.length
+        )
+        if (synchronizedEndIndex === -1) {
+          break
+        }
+        // Why: a synchronized frame can end while parked on footer/status
+        // text. Do not expose that transient cell as the visible cursor.
+        result += data.slice(offset, showIndex)
+        offset = showIndex + CURSOR_SHOW_SEQUENCE.length
+        showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
+        continue
       }
       // Why: Codex can show the cursor before its final synchronized-frame
       // placement. Place first so xterm cannot rasterize the stale cell.
