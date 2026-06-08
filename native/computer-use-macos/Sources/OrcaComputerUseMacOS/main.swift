@@ -795,7 +795,7 @@ final class Provider {
         guard result == .success else {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
         }
-        let actual = stringAttribute(record.element, kAXValueAttribute as String)
+        let actual = rawStringAttribute(record.element, kAXValueAttribute as String)
         let verification = actual == expected
             ? verifiedAction(property: "value", expected: expected, actualPreview: actual)
             : unverifiedAction(reason: actual == nil ? "provider_unavailable" : "value_mismatch", expected: expected, actualPreview: actual)

@@ -37,6 +37,8 @@ on:
 jobs:
   native-smoke:
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:

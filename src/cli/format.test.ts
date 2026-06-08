@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { quoteCliCommandArgument } from './shell-command-quote'
 import { RuntimeRpcFailureError } from './runtime-client'
 import {
   formatCliError,
@@ -250,7 +251,7 @@ describe('formatComputerAction', () => {
     })
 
     expect(output).toContain(
-      "Use `orca computer get-app-state --app 'Text Editor' --worktree id:repo::/tmp/repo --window-id 99`"
+      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Text Editor')} --worktree id:repo::/tmp/repo --window-id 99\``
     )
     expect(output).toContain('5 visible elements in current window')
     expect(output).toContain(
@@ -436,7 +437,7 @@ describe('formatComputerAction', () => {
     const output = formatComputerAction('click', result)
 
     expect(output).toContain(
-      "Use `orca computer get-app-state --app 'Linux Browser' --window-index 2`"
+      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
     )
     expect(output).not.toContain('--window-id')
   })
@@ -464,7 +465,7 @@ describe('formatComputerAction', () => {
     const output = formatComputerAction('click', result)
 
     expect(output).toContain(
-      "Use `orca computer get-app-state --app 'Linux Browser' --window-index 2`"
+      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
     )
     expect(output).not.toContain('--window-index 4')
     expect(output).not.toContain('--window-id')
@@ -572,6 +573,41 @@ describe('printResult computer screenshots', () => {
     }
     expect(output.result.screenshot.dataOmitted).toBe(true)
     expect(output.result.screenshot.path).toContain('req_1-screenshot.png')
+  })
+
+  it('keeps inline screenshot data when temp export fails', () => {
+    testScreenshotDir = join(tmpdir(), `orca-format-blocked-${Date.now()}`)
+    writeFileSync(testScreenshotDir, 'not-a-directory')
+    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
+    const screenshotData = Buffer.from('png-data').toString('base64')
+
+    printResult(
+      {
+        id: 'req-export-fail',
+        ok: true,
+        result: {
+          screenshot: {
+            data: screenshotData,
+            format: 'png',
+            width: 1,
+            height: 1,
+            scale: 1
+          },
+          screenshotStatus: { state: 'captured' }
+        },
+        _meta: { runtimeId: 'runtime-1' }
+      },
+      true,
+      () => 'unused'
+    )
+
+    const output = JSON.parse(logSpy.mock.calls[0][0]) as {
+      result: { screenshot: { data: string; path?: string; dataOmitted?: boolean } }
+    }
+    expect(output.result.screenshot.data).toBe(screenshotData)
+    expect(output.result.screenshot.path).toBeUndefined()
+    expect(output.result.screenshot.dataOmitted).toBeUndefined()
   })
 
   it('does not rewrite non-computer nested screenshot JSON payloads', () => {

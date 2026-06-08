@@ -151,13 +151,21 @@ export function mapBridgeError(message: string): RuntimeClientError {
   if (/screenshot_failed|screenshot.*failed|screen recording|payload cap/i.test(text)) {
     return new RuntimeClientError('screenshot_failed', text)
   }
+  if (
+    /window_not_found|No top-level(?: AT-SPI| UI Automation)? window|has no (?:on-screen |accessibility )?window|could not match accessibility window|unknown window(?:_index| id)?/i.test(
+      text
+    )
+  ) {
+    return new RuntimeClientError('window_not_found', text)
+  }
   if (/permission|desktop session|DBUS|XDG_RUNTIME_DIR|AT-SPI/i.test(text)) {
     return new RuntimeClientError('permission_denied', text)
   }
-  if (/No top-level|No .*window|window/i.test(text)) {
-    return new RuntimeClientError('window_not_found', text)
-  }
-  if (/element|element_index/i.test(text)) {
+  if (
+    /element_not_found|stale element|fresh element index|unknown element_index|element \d+ is stale|element indexes require|element \d+ changed since|element \d+ is not in the current cached snapshot/i.test(
+      text
+    )
+  ) {
     return new RuntimeClientError('element_not_found', text)
   }
   return new RuntimeClientError('accessibility_error', text)

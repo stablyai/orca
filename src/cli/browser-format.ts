@@ -1,3 +1,4 @@
+import { formatBase64PayloadByteCount } from './base64-payload-byte-count'
 import type {
   BrowserProfileListResult,
   BrowserScreenshotResult,
@@ -15,7 +16,7 @@ export function formatSnapshot(result: BrowserSnapshotResult): string {
 }
 
 export function formatScreenshot(result: BrowserScreenshotResult): string {
-  return `Screenshot captured (${result.format}, ${Math.round(result.data.length * 0.75)} bytes)`
+  return `Screenshot captured (${result.format}, ${formatBase64PayloadByteCount(result.data)})`
 }
 
 export function formatTabList(result: BrowserTabListResult): string {

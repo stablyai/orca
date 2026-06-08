@@ -1,6 +1,8 @@
 import { chmodSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import { formatBase64PayloadByteCount } from './base64-payload-byte-count'
+import { quoteCliCommandArgument } from './shell-command-quote'
 import type {
   ComputerActionMetadata,
   ComputerActionResult,
@@ -60,25 +62,31 @@ export function prepareComputerCliJsonResult<TResult>(
   if (!screenshot || typeof screenshot.data !== 'string' || screenshot.data.length === 0) {
     return response
   }
-  const extension = screenshot.format === 'png' ? 'png' : 'img'
-  const outputDir = computerScreenshotTempDir()
-  cleanupComputerScreenshots(outputDir)
-  const outputPath = join(outputDir, `${safeCliFileStem(response.id)}-screenshot.${extension}`)
-  writeFileSync(outputPath, Buffer.from(screenshot.data, 'base64'), { mode: 0o600 })
-  const expiresAt = new Date(Date.now() + COMPUTER_SCREENSHOT_TTL_MS).toISOString()
-  return {
-    ...response,
-    result: {
-      ...record.result,
-      screenshot: {
-        ...screenshot,
-        data: undefined,
-        path: outputPath,
-        dataOmitted: true,
-        expiresAt
+  try {
+    const extension = screenshot.format === 'png' ? 'png' : 'img'
+    const outputDir = computerScreenshotTempDir()
+    cleanupComputerScreenshots(outputDir)
+    const outputPath = join(outputDir, `${safeCliFileStem(response.id)}-screenshot.${extension}`)
+    writeFileSync(outputPath, Buffer.from(screenshot.data, 'base64'), { mode: 0o600 })
+    const expiresAt = new Date(Date.now() + COMPUTER_SCREENSHOT_TTL_MS).toISOString()
+    return {
+      ...response,
+      result: {
+        ...record.result,
+        screenshot: {
+          ...screenshot,
+          data: undefined,
+          path: outputPath,
+          dataOmitted: true,
+          expiresAt
+        }
       }
-    }
-  } as RuntimeRpcSuccess<TResult>
+    } as RuntimeRpcSuccess<TResult>
+  } catch {
+    // Why: temp-file export is an ergonomics optimization; keep inline screenshot
+    // data when disk, permissions, or path validation would otherwise fail --json.
+    return response
+  }
 }
 
 const COMPUTER_SCREENSHOT_TTL_MS = 24 * 60 * 60 * 1000
@@ -209,12 +217,12 @@ function formatComputerFollowUpCommand(
     'computer',
     'get-app-state',
     '--app',
-    shellQuote(result.snapshot.app.bundleId ?? result.snapshot.app.name)
+    quoteCliCommandArgument(result.snapshot.app.bundleId ?? result.snapshot.app.name)
   ]
   if (target.session) {
-    args.push('--session', shellQuote(target.session))
+    args.push('--session', quoteCliCommandArgument(target.session))
   } else if (target.worktree) {
-    args.push('--worktree', shellQuote(target.worktree))
+    args.push('--worktree', quoteCliCommandArgument(target.worktree))
   }
   const windowChanged =
     result.action?.verification?.state === 'unverified' &&
@@ -272,7 +280,7 @@ function formatComputerActionScreenshotFailure(result: ComputerActionResult): st
 function formatComputerScreenshotStatus(result: ComputerSnapshotResult): string {
   if (result.screenshotStatus.state === 'captured' && result.screenshot) {
     const bytes = result.screenshot.data
-      ? `${Math.round(result.screenshot.data.length * 0.75)} bytes`
+      ? formatBase64PayloadByteCount(result.screenshot.data)
       : `saved to ${result.screenshot.path ?? 'temporary file'}`
     const dimensions = `${result.screenshot.width}x${result.screenshot.height}`
     const scale = result.screenshot.scale
@@ -299,13 +307,6 @@ function formatComputerScreenshotScale(scale: number): string {
   return Number.isInteger(scale)
     ? String(scale)
     : scale.toFixed(3).replace(/0+$/u, '').replace(/\.$/u, '')
-}
-
-function shellQuote(value: string): string {
-  if (/^[a-zA-Z0-9._:/@-]+$/.test(value)) {
-    return value
-  }
-  return `'${value.replaceAll("'", "'\\''")}'`
 }
 
 function formatActionVerb(verb: string): string {

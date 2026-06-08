@@ -68,7 +68,7 @@ export async function startMacOSNativeProviderSocket({
   isCurrent
 }: {
   helperExecutablePath: string
-  isCurrent: (socketPath: string, socketDirectory: string) => boolean
+  isCurrent: (socketPath: string) => boolean
 }): Promise<StartedMacOSProviderSocket> {
   const socketDirectory = mkdtempSync(join(tmpdir(), 'orca-computer-use-'))
   chmodSync(socketDirectory, 0o700)
@@ -88,7 +88,7 @@ export async function startMacOSNativeProviderSocket({
     ])
     providerFailure.cleanup()
     rmSync(socketTokenPath, { force: true })
-    if (!isCurrent(socketPath, socketDirectory)) {
+    if (!isCurrent(socketPath)) {
       socket.destroy()
       cleanupSocketDirectory(socketDirectory)
       throw new RuntimeClientError(
@@ -103,7 +103,7 @@ export async function startMacOSNativeProviderSocket({
     // Why: connect failures happen after spawn; terminate the detached helper
     // so repeated startup attempts do not leave orphan providers.
     provider.kill('SIGTERM')
-    if (isCurrent(socketPath, socketDirectory)) {
+    if (isCurrent(socketPath)) {
       cleanupSocketDirectory(socketDirectory)
     }
     throw error

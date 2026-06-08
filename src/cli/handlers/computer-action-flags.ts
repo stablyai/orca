@@ -51,11 +51,7 @@ export function getComputerActionObserveFlags(flags: Map<string, string | boolea
   windowId?: number
   windowIndex?: number
 } {
-  return {
-    noScreenshot: flags.has('no-screenshot') ? true : undefined,
-    ...(flags.has('restore-window') ? { restoreWindow: true } : {}),
-    ...getComputerWindowTargetFlags(flags)
-  }
+  return getComputerObserveFlags(flags)
 }
 
 export function getComputerClickActionFlags(flags: Map<string, string | boolean>): {
