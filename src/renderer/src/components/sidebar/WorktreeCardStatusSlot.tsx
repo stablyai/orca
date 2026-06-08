@@ -65,7 +65,15 @@ export function WorktreeCardStatusSlot({
             aria-label={actionLabel}
           >
             {isUnread ? (
-              <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
+              // Why: the amber bell means "needs your input" — a permission
+              // prompt or ask-user question (agent state blocked/waiting →
+              // 'permission'). Any other unread (a completed agent, a raw BEL)
+              // is a calm green "ready to review" dot, not an alert.
+              status === 'permission' ? (
+                <FilledBellIcon className="size-[13px] text-amber-500 drop-shadow-sm" />
+              ) : (
+                <span className="block size-2 rounded-full bg-status-success" />
+              )
             ) : showStatus ? (
               <>
                 <StatusIndicator
