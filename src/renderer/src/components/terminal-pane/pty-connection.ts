@@ -615,7 +615,6 @@ export function connectPanePty(
   let pendingTerminalBellNotification = false
   let reattachIdleAgentCursorResetTimer: ReturnType<typeof setTimeout> | null = null
   let synchronizedForegroundOutputActive = false
-  let hiddenRendererSynchronizedOutputActive = false
   // Why: idle callbacks are registered before the deferred PTY output plumbing
   // exists. Start with the shared scheduler, then switch to the PTY writer
   // below so hidden-tab resets keep backlog-recovery callbacks and byte order.
@@ -1926,7 +1925,7 @@ export function connectPanePty(
       // Why: hidden tab output is coalesced by the scheduler. Run per-byte
       // renderer checks at the xterm write boundary so background PTY bursts
       // do not spend foreground event-loop time scanning bytes we will delay.
-      if (terminalOutputChunkPrefersDomRenderer(chunk)) {
+      if (terminalOutputChunkPrefersDomRenderer(chunk) || containsNonAsciiOutput(chunk)) {
         manager.markPaneHasComplexScriptOutput(pane.id)
       }
       recordTerminalOutput(pane.terminal)
@@ -2105,43 +2104,14 @@ export function connectPanePty(
       }
     }
 
-    function hiddenRendererOutputNeedsLiveXterm(data: string): boolean {
-      const visualData = data.replaceAll('\x1b[?2031h', '')
-      const synchronizedOutputActive =
-        hiddenRendererSynchronizedOutputActive ||
-        containsSynchronizedOutputStart(visualData) ||
-        containsSynchronizedOutputEnd(visualData)
-      // Why: DEC synchronized output frames can split into plain row chunks;
-      // skipping the middle chunks recreates the hidden TUI restore artifacts.
-      hiddenRendererSynchronizedOutputActive = shouldSynchronizedOutputRemainActive(
-        visualData,
-        hiddenRendererSynchronizedOutputActive
-      )
-      if (synchronizedOutputActive) {
-        return true
-      }
-      if (visualData.includes('\x1b[')) {
-        return true
-      }
-      for (let index = 0; index < visualData.length; index += 1) {
-        if (visualData.charCodeAt(index) > 0x7f) {
-          return true
-        }
-      }
-      return false
-    }
-
     function shouldSkipHiddenRendererOutput(foreground: boolean, data: string): boolean {
-      return (
-        !foreground &&
-        !deps.isVisibleRef.current &&
-        canUseHiddenOutputSnapshot(transport.getPtyId()) &&
-        !isHiddenStartupRendererQueryWindowActive() &&
-        // Why: snapshot replay is fine for plain scrollback, but visually rich
-        // TUI output relies on xterm's live parser/renderer state for clean
-        // restore + scroll repaint. Keep those bytes on the older live path.
-        !hiddenRendererOutputNeedsLiveXterm(data)
-      )
+      void foreground
+      void data
+      // Why: release correctness beats the hidden-output perf optimization.
+      // Real OpenCode tables still corrupt after workspace switching when PTY
+      // bytes bypass the renderer, so keep hidden panes on the live xterm path
+      // and leave snapshot skipping for a later perf branch.
+      return false
     }
 
     function skipHiddenRendererOutput(data: string): void {
