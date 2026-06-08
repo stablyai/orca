@@ -265,11 +265,21 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
     }
     const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
     const rows = pane.container.querySelector<HTMLElement>('.xterm-rows')
-    if (!screen || !rows) {
+    if (!screen) {
       throw new Error('Active terminal DOM unavailable')
     }
 
     const screenRect = screen.getBoundingClientRect()
+    if (!rows) {
+      // Why: WebGL renders rows into a canvas, so DOM-span overpaint checks only
+      // apply when the DOM renderer is active. Buffer wrap checks still run below.
+      return {
+        screenRight: screenRect.right,
+        offenderCount: 0,
+        offenders: []
+      }
+    }
+
     const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
     const maxRight = screenRect.right + Math.max(1, cellWidth * 0.5)
     const offenders = Array.from(rows.querySelectorAll<HTMLElement>('span'))
@@ -305,8 +315,26 @@ async function readVisibleSingerRowGeometry(page: Page): Promise<{
     }
     const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
     const rows = pane.container.querySelector<HTMLElement>('.xterm-rows')
-    if (!screen || !rows) {
+    if (!screen) {
       throw new Error('Active terminal DOM unavailable')
+    }
+    const screenRect = screen.getBoundingClientRect()
+    if (!rows) {
+      const buffer = pane.terminal.buffer.active
+      const line = Array.from(
+        { length: pane.terminal.rows },
+        (_, row) => buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
+      ).find((text) => text.includes('Singer'))
+      if (!line) {
+        throw new Error('Singer row buffer line unavailable')
+      }
+      const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+      return {
+        cols: pane.terminal.cols,
+        screenRight: screenRect.right,
+        rowRight: screenRect.left + pane.terminal.cols * cellWidth,
+        rowText: line
+      }
     }
     const row = Array.from(rows.children).find((element) =>
       (element.textContent ?? '').includes('Singer')
@@ -314,7 +342,6 @@ async function readVisibleSingerRowGeometry(page: Page): Promise<{
     if (!row) {
       throw new Error('Singer row DOM unavailable')
     }
-    const screenRect = screen.getBoundingClientRect()
     const rowRect = row.getBoundingClientRect()
     return {
       cols: pane.terminal.cols,
@@ -417,7 +444,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
   })
 
   // Why: `auto` should start on the fast renderer for ordinary terminal output;
-  // the emoji table golden below proves complex output can still fall back safely.
+  // the emoji table golden below proves complex output does not disable it.
   test('uses WebGL by default for ordinary terminal output when available @terminal-rendering-golden', async ({
     orcaPage
   }) => {
@@ -504,8 +531,8 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
         contentType: 'image/png'
       })
 
-      expect(diagnostics.hasComplexScriptOutput).toBe(true)
-      expect(diagnostics.hasWebgl).toBe(false)
+      expect(diagnostics.hasComplexScriptOutput).toBe(false)
+      expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
       expect(diagnostics.cursorHidden).toBe(false)
       expect(overpaint.offenders).toEqual([])
       expect(wrapDiagnostics.wrappedBoxLines).toEqual([])

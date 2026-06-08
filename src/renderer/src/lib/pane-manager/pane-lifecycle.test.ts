@@ -200,7 +200,7 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps auto-mode panes on DOM after complex-script output', () => {
+  it('keeps auto-mode panes on WebGL after complex-script output', () => {
     const pane = createPane()
 
     attachWebgl(pane)
@@ -210,13 +210,13 @@ describe('attachWebgl', () => {
     markComplexScriptOutput(pane)
 
     expect(pane.hasComplexScriptOutput).toBe(true)
-    expect(pane.webglAddon).toBeNull()
-    expect(webglMock.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.webglAddon).not.toBeNull()
+    expect(webglMock.dispose).not.toHaveBeenCalled()
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
 
     attachWebgl(pane)
 
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('keeps later auto panes on DOM after WebGL attach fails', () => {
@@ -234,7 +234,7 @@ describe('attachWebgl', () => {
     expect(secondPane.terminal.loadAddon).not.toHaveBeenCalled()
   })
 
-  it('allows explicit on mode to override complex-script DOM fallback', () => {
+  it('keeps forced WebGL on after complex-script output', () => {
     const pane = createPane()
 
     markComplexScriptOutput(pane)

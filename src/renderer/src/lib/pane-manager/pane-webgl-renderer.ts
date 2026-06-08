@@ -26,11 +26,7 @@ export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
     // without raising context loss; tab switching only masks it by rebuilding WebGL.
     return false
   }
-  return (
-    pane.terminalGpuAcceleration === 'auto' &&
-    suggestedRendererType === undefined &&
-    !pane.hasComplexScriptOutput
-  )
+  return pane.terminalGpuAcceleration === 'auto' && suggestedRendererType === undefined
 }
 
 function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
@@ -82,12 +78,6 @@ export function disposeWebgl(
 
 export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
   pane.hasComplexScriptOutput = true
-  if (pane.terminalGpuAcceleration !== 'auto') {
-    return
-  }
-  // Why: live TUIs often size tables before emitting complex glyphs. Refitting
-  // during this fallback can reflow the just-written frame under different metrics.
-  disposeWebgl(pane)
 }
 
 export function attachWebgl(pane: ManagedPaneInternal): void {

@@ -106,8 +106,8 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
-  // Why: complex-script shaping/RTL rendering is visibly wrong in xterm WebGL;
-  // keep auto-mode panes on DOM once their output proves they need browser text shaping.
+  // Why: expose complex-output diagnostics without changing renderer choice;
+  // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean
   webglAddon: WebglAddon | null
   // Why nullable: ligatures are opt-in per font and toggleable at runtime,

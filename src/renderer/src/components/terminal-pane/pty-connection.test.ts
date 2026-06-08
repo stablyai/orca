@@ -4027,7 +4027,7 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
-  it('marks panes that receive Arabic output for DOM rendering', async () => {
+  it('does not switch renderers for Arabic output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4046,14 +4046,14 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('Arabic: السلام عليكم\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(pane.terminal.write).toHaveBeenCalledWith(
       'Arabic: السلام عليكم\r\n',
       expect.any(Function)
     )
   })
 
-  it('marks panes for DOM rendering when background SGR is split across PTY chunks', async () => {
+  it('does not switch renderers when background SGR is split across PTY chunks', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4075,10 +4075,10 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.(';2;52;52;52m codex block \x1b[0m\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
   })
 
-  it('keeps renderer-risk scan state across more than two split PTY chunks', async () => {
+  it('does not switch renderers across split background SGR PTY chunks', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4101,7 +4101,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.(';52;52m codex block \x1b[0m\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
   })
 
   it('forces a viewport refresh for foreground Codex-style background redraws', async () => {
@@ -4130,7 +4130,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('\x1b[2J\x1b[H\x1b[48;2;52;52;52m codex block text \x1b[0m\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
   })
 
@@ -4163,7 +4163,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.(';2;52;52;52m codex block text \x1b[0m\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
   })
 
@@ -4199,7 +4199,7 @@ describe('connectPanePty', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
-  it('switches terminal UI drawing glyphs to the DOM renderer for release safety', async () => {
+  it('keeps terminal UI drawing glyphs on the active renderer', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4218,7 +4218,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('⠋ Working ├─ file.ts █ progress \uE0B0 prompt\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(pane.terminal.write).toHaveBeenCalledWith(
       '⠋ Working ├─ file.ts █ progress \uE0B0 prompt\r\n',
       expect.any(Function)
