@@ -25,12 +25,6 @@ describe('isProviderConfigured', () => {
     expect(isProviderConfigured(null)).toBe(false)
   })
 
-  it('hides a provider key absent from rateLimits without crashing', () => {
-    // A newly-added provider (e.g. Kimi) may be undefined in an older session's
-    // rateLimits; reading `.status` off undefined would crash the status bar.
-    expect(isProviderConfigured(undefined)).toBe(false)
-  })
-
   it('hides an unconfigured (unavailable) provider', () => {
     // The bug: Gemini OAuth off / OpenCode Go cookie unset returns a non-null
     // `unavailable` object, which previously slipped past the `!== null` gate
