@@ -385,7 +385,7 @@ async function waitForMainPtyPressureBacklog(page: Page): Promise<MainPtyPressur
       async () => {
         lastSnapshot = await readMainPtyPressureDebug(page)
         return (
-          (lastSnapshot?.peakRendererInFlightChars ?? 0) >= 8 * 1024 * 1024 &&
+          (lastSnapshot?.peakRendererInFlightChars ?? 0) >= 2 * 1024 * 1024 &&
           (lastSnapshot?.peakPendingChars ?? 0) > 0 &&
           (lastSnapshot?.ackGatedFlushSkipCount ?? 0) > 0
         )

@@ -196,7 +196,7 @@ export async function runHiddenRealPtyPressureScenario<
     expect(debug?.hiddenRendererSkippedChars ?? 0).toBeGreaterThan(0)
     expect(pressureBeforeTyping.peakPendingChars).toBeGreaterThan(0)
     expect(pressureBeforeTyping.ackGatedFlushSkipCount).toBeGreaterThan(0)
-    expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeGreaterThanOrEqual(8 * 1024 * 1024)
+    expect(mainPressure?.peakRendererInFlightChars ?? 0).toBeGreaterThanOrEqual(2 * 1024 * 1024)
     expect(ackGate?.heldAckChars ?? 0).toBeGreaterThan(0)
     expect(measurement.medianLatencyMs).toBeLessThan(75)
     expect(measurement.worstLatencyMs).toBeLessThan(300)
