@@ -12,7 +12,13 @@ function isLinuxRenderer(): boolean {
   if (typeof navigator === 'undefined') {
     return false
   }
-  return navigator.platform.includes('Linux') || navigator.userAgent.includes('Linux')
+  const userAgent = navigator.userAgent
+  // Why: Node 24 exposes a Linux `navigator.platform` in CI, but this guard is
+  // only for real renderer user agents where Linux GPU stacks affect xterm.
+  return (
+    userAgent.includes('Linux') ||
+    (navigator.platform.includes('Linux') && !userAgent.startsWith('Node.js/'))
+  )
 }
 
 export function shouldUseTerminalWebgl(pane: ManagedPaneInternal): boolean {
