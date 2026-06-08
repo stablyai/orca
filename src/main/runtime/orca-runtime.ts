@@ -2245,6 +2245,8 @@ export class OrcaRuntimeService {
 
   private getMobileSessionSnapshotTabIdentityKeys(tab: RuntimeMobileSessionSnapshotTab): string[] {
     if (tab.type === 'terminal') {
+      // Why: split terminal leaves share one parent tab; merge dedup must stay
+      // leaf-scoped or preserved siblings collapse into a single surface.
       return [tab.id, `${tab.parentTabId}::${tab.leafId}`]
     }
     if (tab.type === 'browser') {
@@ -12571,6 +12573,8 @@ export class OrcaRuntimeService {
     snapshot: RuntimeMobileSessionTabsSnapshot,
     preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
   ): string {
+    // Why: preserved snapshots can be merged repeatedly; normalize the prior
+    // merge suffix before recomputing so the publication epoch is idempotent.
     const normalizedPublicationEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
     const signature = createHash('sha1')
       .update(
