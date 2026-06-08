@@ -18,6 +18,9 @@ describe('slugifyForWorkspaceName', () => {
     expect(slugifyForWorkspaceName("Can't enable browser notifications")).toBe(
       'cant-enable-browser-notifications'
     )
+    expect(slugifyForWorkspaceName('Can’t enable browser notifications')).toBe(
+      'cant-enable-browser-notifications'
+    )
   })
 })
 
@@ -109,6 +112,36 @@ describe('getWorkspaceIntentName', () => {
     ).toEqual({
       displayName: "Issue 4802 Can't Enable Browser",
       seedName: 'issue-4802-cant-enable-browser'
+    })
+  })
+
+  it('keeps single-letter contractions lowercase after the apostrophe', () => {
+    expect(
+      getWorkspaceIntentName({
+        sourceText: 'https://github.com/acme/app/issues/17',
+        workItem: {
+          type: 'issue',
+          number: 17,
+          title: "i'm blocked on notifications"
+        }
+      })
+    ).toEqual({
+      displayName: "Issue 17 I'm Blocked Notifications",
+      seedName: 'issue-17-im-blocked-notifications'
+    })
+
+    expect(
+      getWorkspaceIntentName({
+        sourceText: 'https://github.com/acme/app/issues/18',
+        workItem: {
+          type: 'issue',
+          number: 18,
+          title: "i'll update login"
+        }
+      })
+    ).toEqual({
+      displayName: "Issue 18 I'll Update Login",
+      seedName: 'issue-18-ill-update-login'
     })
   })
 

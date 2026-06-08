@@ -8,5 +8,11 @@ describe('mobile workspace names', () => {
         title: "Can't enable browser notifications"
       })
     ).toBe('cant-enable-browser-notifications')
+
+    expect(
+      getLinkedWorkItemSuggestedName({
+        title: 'Can’t enable browser notifications'
+      })
+    ).toBe('cant-enable-browser-notifications')
   })
 })

@@ -111,9 +111,7 @@ function titleCaseWord(word: string): string {
   const lower = normalized.toLowerCase()
   const apostropheParts = lower.split("'")
   if (apostropheParts.length === 2 && apostropheParts[0].length === 1 && apostropheParts[1]) {
-    return `${apostropheParts[0].toUpperCase()}'${
-      apostropheParts[1].charAt(0).toUpperCase() + apostropheParts[1].slice(1)
-    }`
+    return `${apostropheParts[0].toUpperCase()}'${apostropheParts[1]}`
   }
   return lower.charAt(0).toUpperCase() + lower.slice(1)
 }
