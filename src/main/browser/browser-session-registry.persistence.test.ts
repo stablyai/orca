@@ -257,23 +257,35 @@ describe('BrowserSessionRegistry persistence', () => {
     requestHandler(guestWc, 'clipboard-read', permissionCallback)
     requestHandler(guestWc, 'clipboard-sanitized-write', permissionCallback)
     requestHandler(guestWc, 'notifications', permissionCallback)
+    requestHandler(guestWc, 'persistent-storage', permissionCallback)
+    requestHandler(guestWc, 'geolocation', permissionCallback)
     requestHandler(guestWc, 'media', permissionCallback, { mediaTypes: ['video'] })
 
     await vi.waitFor(() =>
-      expect(permissionCallback.mock.calls).toEqual([[true], [true], [true], [false], [true]])
+      expect(permissionCallback.mock.calls).toEqual([
+        [true],
+        [true],
+        [true],
+        [true],
+        [true],
+        [false],
+        [true]
+      ])
     )
     expect(browserManagerNotifyPermissionDeniedMock).toHaveBeenCalledWith({
       guestWebContentsId: 401,
-      permission: 'notifications',
+      permission: 'geolocation',
       rawUrl: 'https://example.com/account'
     })
     expect(
       browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.permission)
-    ).toEqual(['notifications'])
+    ).toEqual(['geolocation'])
     expect(checkHandler(null, 'fullscreen', '')).toBe(true)
     expect(checkHandler(null, 'clipboard-read', '')).toBe(true)
     expect(checkHandler(null, 'clipboard-sanitized-write', '')).toBe(true)
-    expect(checkHandler(null, 'notifications', '')).toBe(false)
+    expect(checkHandler(null, 'notifications', '')).toBe(true)
+    expect(checkHandler(null, 'persistent-storage', '')).toBe(true)
+    expect(checkHandler(null, 'geolocation', '')).toBe(false)
     expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
     expect(defaultSession.setDisplayMediaRequestHandler).toHaveBeenCalled()
     const displayMediaHandler = defaultSession.setDisplayMediaRequestHandler.mock.calls[0][0]
