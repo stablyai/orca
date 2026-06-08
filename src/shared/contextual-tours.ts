@@ -116,7 +116,10 @@ export const CONTEXTUAL_TOURS = [
       {
         title: 'Stay logged in',
         body: 'Bring your existing logins into Orca to stay signed in immediately.',
-        targetSelector: '[data-contextual-tour-target="browser-import-cookies-control"]',
+        // Prefer the always-visible Import button; fall back to the overflow-menu
+        // item only once the user has dismissed the import hint.
+        targetSelector:
+          '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]',
         preferredPlacement: 'left'
       }
     ]

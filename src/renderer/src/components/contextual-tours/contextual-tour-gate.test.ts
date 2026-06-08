@@ -113,6 +113,79 @@ describe('contextual tour gate', () => {
     expect(target?.rect.width).toBe(200)
   })
 
+  it('resolves the browser import step to the visible hint button when both targets exist', () => {
+    // The hint button precedes the overflow-menu row in the DOM, so document-order
+    // resolution must pick it even though the combined selector lists both.
+    const hintButton = {
+      closest: () => null,
+      getBoundingClientRect: () => ({
+        left: 200,
+        top: 8,
+        right: 280,
+        bottom: 36,
+        width: 80,
+        height: 28
+      })
+    }
+    const menuRow = {
+      closest: () => null,
+      getBoundingClientRect: () => ({
+        left: 300,
+        top: 8,
+        right: 332,
+        bottom: 40,
+        width: 32,
+        height: 32
+      })
+    }
+
+    const selector =
+      '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]'
+    const target = getMeasurableContextualTourTarget(selector, {
+      // querySelectorAll returns matches in document order: hint button first.
+      querySelectorAll: () => [hintButton, menuRow]
+    } as unknown as ParentNode)
+
+    expect(target?.element).toBe(hintButton)
+    expect(target?.rect.width).toBe(80)
+  })
+
+  it('falls back to the overflow-menu row when the hint button is hidden', () => {
+    // Hint dismissed: its element is inside an aria-hidden subtree (or unmounted),
+    // so resolution must fall through to the always-present menu row.
+    const hiddenHintButton = {
+      closest: (querySelector: string) => (querySelector.includes('aria-hidden') ? {} : null),
+      getBoundingClientRect: () => ({
+        left: 200,
+        top: 8,
+        right: 280,
+        bottom: 36,
+        width: 80,
+        height: 28
+      })
+    }
+    const menuRow = {
+      closest: () => null,
+      getBoundingClientRect: () => ({
+        left: 300,
+        top: 8,
+        right: 332,
+        bottom: 40,
+        width: 32,
+        height: 32
+      })
+    }
+
+    const selector =
+      '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]'
+    const target = getMeasurableContextualTourTarget(selector, {
+      querySelectorAll: () => [hiddenHintButton, menuRow]
+    } as unknown as ParentNode)
+
+    expect(target?.element).toBe(menuRow)
+    expect(target?.rect.width).toBe(32)
+  })
+
   it('starts an unseen tour only when global gates pass', () => {
     const tour = getContextualTour('tasks')
     const hasFirstTarget = (selector: string): boolean => selector === tour.steps[0]?.targetSelector

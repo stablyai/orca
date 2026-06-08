@@ -117,7 +117,10 @@ describe('contextual tour definitions', () => {
     })
     expect(tour?.steps[2]).toMatchObject({
       body: 'Bring your existing logins into Orca to stay signed in immediately.',
-      targetSelector: '[data-contextual-tour-target="browser-import-cookies-control"]',
+      // Prefers the always-visible Import button, falling back to the overflow
+      // menu's Import Cookies row once the hint button is dismissed.
+      targetSelector:
+        '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]',
       preferredPlacement: 'left'
     })
   })
