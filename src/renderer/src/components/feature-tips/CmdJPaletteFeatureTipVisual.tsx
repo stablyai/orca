@@ -5,7 +5,7 @@ import { formatShortcutKeys, useShortcutKeys } from '@/hooks/useShortcutLabel'
 
 const TYPED_QUERY = 'auth'
 // Why: the real palette lists recent worktrees on open; typing only narrows the
-// list. Mix done + running states so the tip reads like a live workspace switcher.
+// list. Mix done + running states so the tip reads like a live worktree switcher.
 const DEMO_WORKTREES: readonly {
   key: string
   name: string
