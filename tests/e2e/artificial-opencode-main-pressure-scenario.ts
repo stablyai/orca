@@ -7,6 +7,7 @@ import { sendToTerminal } from './helpers/terminal'
 import { writePressureOutputScript } from './artificial-opencode-hidden-pressure-scenario'
 import {
   annotateScrollMeasurement,
+  getResponsiveScrollPath,
   measureActiveTerminalWheelScroll,
   scrollActiveTerminalToBottom,
   seedActiveTerminalScrollback
@@ -242,7 +243,9 @@ async function measureAndAnnotateScroll<
   )
   const scrollMoved = scrollMeasurement.afterViewportY < scrollMeasurement.beforeViewportY
   if (scrollMoved) {
-    expect(scrollMeasurement.scrollLatencyMs).toBeLessThan(maxScrollLatencyMs)
+    expect(
+      getResponsiveScrollPath(scrollMeasurement)?.latencyMs ?? Number.POSITIVE_INFINITY
+    ).toBeLessThan(maxScrollLatencyMs)
   }
   expect(scrollMeasurement.maxTimerDriftMs).toBeLessThan(maxTimerDriftMs)
   await scrollActiveTerminalToBottom(orcaPage)

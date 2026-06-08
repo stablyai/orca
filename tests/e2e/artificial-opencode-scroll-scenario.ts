@@ -7,7 +7,14 @@ import {
   scrollActiveTerminalViewportElement,
   type ActiveTerminalScrollState
 } from './artificial-opencode-active-terminal-scroll'
+import {
+  formatScrollAttempts,
+  getResponsiveScrollPath,
+  type ScrollAttemptMeasurement
+} from './artificial-opencode-scroll-measurement'
 import { sendToTerminal, waitForTerminalOutput } from './helpers/terminal'
+
+export { getResponsiveScrollPath }
 
 export type ScrollMeasurement = {
   scrollLatencyMs: number
@@ -16,19 +23,6 @@ export type ScrollMeasurement = {
   afterViewportY: number
   baseY: number
   attempts: ScrollAttemptMeasurement[]
-}
-
-type ScrollAttemptMeasurement = {
-  name: string
-  actionMs: number
-  observeMs: number
-  beforeViewportY: number
-  afterActionViewportY: number
-  afterViewportY: number
-  beforeScrollTop: number | null
-  afterActionScrollTop: number | null
-  afterScrollTop: number | null
-  error?: string
 }
 
 type ScrollMainPressureSnapshot = {
@@ -213,22 +207,15 @@ export function annotateScrollMeasurement(
   ackGate: ScrollAckGateSnapshot | null
 ): void {
   const scrollMoved = measurement.afterViewportY < measurement.beforeViewportY
-  const scrollMetric = scrollMoved ? ` scroll=${measurement.scrollLatencyMs.toFixed(1)}ms` : ''
-  const attempts = measurement.attempts
-    .map(
-      (attempt) =>
-        `${attempt.name}:${attempt.beforeViewportY}>${attempt.afterActionViewportY}>${
-          attempt.afterViewportY
-        }` +
-        `(${formatNullableNumber(attempt.beforeScrollTop)}>${formatNullableNumber(
-          attempt.afterActionScrollTop
-        )}>${formatNullableNumber(
-          attempt.afterScrollTop
-        )};action=${attempt.actionMs.toFixed(1)};observe=${attempt.observeMs.toFixed(1)})${
-          attempt.error ? ':error' : ''
-        }`
-    )
-    .join(',')
+  const responsiveScroll = getResponsiveScrollPath(measurement)
+  const scrollMetric = responsiveScroll
+    ? ` scroll=${responsiveScroll.latencyMs.toFixed(1)}ms scrollPath=${responsiveScroll.name}${
+        responsiveScroll.name === 'cdpWheel'
+          ? ''
+          : ` cdpScroll=${measurement.scrollLatencyMs.toFixed(1)}ms`
+      }`
+    : ''
+  const attempts = formatScrollAttempts(measurement.attempts)
   testInfo.annotations.push({
     type,
     description: `panes=${paneCount}${scrollMetric} scrollMoved=${scrollMoved} maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(
@@ -243,10 +230,6 @@ export function annotateScrollMeasurement(
       ackGate?.heldAckChars ?? 0
     } gatedAckPtys=${ackGate?.gatedPtyCount ?? 0}`
   })
-}
-
-function formatNullableNumber(value: number | null): string {
-  return value === null ? 'na' : value.toFixed(0)
 }
 
 async function measureScrollAttempt(
