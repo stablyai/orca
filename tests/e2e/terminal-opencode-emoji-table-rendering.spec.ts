@@ -255,12 +255,7 @@ test.describe('OpenCode emoji table terminal rendering', () => {
 
       const renderState = await readActiveTerminalRenderState(orcaPage)
       const blinkSamples = await sampleCursorBlink(orcaPage)
-      const screenshotPath = testInfo.outputPath('opencode-emoji-table-final.png')
-      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
-      await testInfo.attach('opencode-emoji-table-final.png', {
-        path: screenshotPath,
-        contentType: 'image/png'
-      })
+
       testInfo.annotations.push({
         type: 'opencode-emoji-table-rendering',
         description: JSON.stringify({ renderState, blinkSamples })
