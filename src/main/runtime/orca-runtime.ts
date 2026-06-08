@@ -2245,7 +2245,7 @@ export class OrcaRuntimeService {
 
   private getMobileSessionSnapshotTabIdentityKeys(tab: RuntimeMobileSessionSnapshotTab): string[] {
     if (tab.type === 'terminal') {
-      return [tab.id, tab.parentTabId]
+      return [tab.id, `${tab.parentTabId}::${tab.leafId}`]
     }
     if (tab.type === 'browser') {
       return [tab.id, tab.browserWorkspaceId]
@@ -12571,6 +12571,7 @@ export class OrcaRuntimeService {
     snapshot: RuntimeMobileSessionTabsSnapshot,
     preservedTabs: readonly RuntimeMobileSessionSnapshotTab[]
   ): string {
+    const normalizedPublicationEpoch = snapshot.publicationEpoch.split(':headless-merge:')[0]
     const signature = createHash('sha1')
       .update(
         preservedTabs
@@ -12583,7 +12584,7 @@ export class OrcaRuntimeService {
       )
       .digest('hex')
       .slice(0, 12)
-    return `${snapshot.publicationEpoch}:headless-merge:${signature}`
+    return `${normalizedPublicationEpoch}:headless-merge:${signature}`
   }
 
   private notifyMobileSessionTabsRemoved(worktreeId: string): void {

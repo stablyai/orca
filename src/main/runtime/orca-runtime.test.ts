@@ -7066,6 +7066,120 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
+  it('keeps split sibling headless mobile terminal leaves when a desktop renderer omits them', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:split-siblings',
+          snapshotVersion: 1,
+          activeGroupId: 'headless-group',
+          activeTabId: 'host-tab::pane:2',
+          activeTabType: 'terminal',
+          tabGroups: [
+            {
+              id: 'headless-group',
+              activeTabId: 'host-tab',
+              tabOrder: ['host-tab']
+            }
+          ],
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'host-tab::pane:1',
+              parentTabId: 'host-tab',
+              leafId: 'pane:1',
+              title: 'left',
+              isActive: false
+            },
+            {
+              type: 'terminal',
+              id: 'host-tab::pane:2',
+              parentTabId: 'host-tab',
+              leafId: 'pane:2',
+              title: 'right',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'renderer-empty',
+          snapshotVersion: 2,
+          activeGroupId: null,
+          activeTabId: null,
+          activeTabType: null,
+          tabs: []
+        }
+      ]
+    })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toEqual([
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'host-tab::pane:1',
+        parentTabId: 'host-tab',
+        leafId: 'pane:1'
+      }),
+      expect.objectContaining({
+        type: 'terminal',
+        id: 'host-tab::pane:2',
+        parentTabId: 'host-tab',
+        leafId: 'pane:2'
+      })
+    ])
+    expect(listed.activeTabId).toBe('host-tab::pane:2')
+  })
+
+  it('keeps preserved headless mobile session publication epochs idempotent', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:stable-epoch',
+          snapshotVersion: 1,
+          activeGroupId: null,
+          activeTabId: 'host-tab::pane:1',
+          activeTabType: 'terminal',
+          tabs: [
+            {
+              type: 'terminal',
+              id: 'host-tab::pane:1',
+              parentTabId: 'host-tab',
+              leafId: 'pane:1',
+              title: 'Terminal',
+              isActive: true
+            }
+          ]
+        }
+      ]
+    })
+
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    const firstMerge = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    const secondMerge = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(secondMerge.publicationEpoch).toBe(firstMerge.publicationEpoch)
+    expect(secondMerge.publicationEpoch.match(/:headless-merge:/g) ?? []).toHaveLength(1)
+  })
+
   it('hydrates persisted serve-owned mobile session terminals while a renderer is attached', async () => {
     const focusTerminal = vi.fn()
     const spawn = vi.fn().mockResolvedValue({ id: 'serve-persisted-pty', isReattach: true })
