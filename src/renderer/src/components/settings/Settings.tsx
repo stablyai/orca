@@ -885,6 +885,8 @@ function Settings(): React.JSX.Element {
   const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
   const isFocusedShortcutsPane =
     activeSectionId === 'shortcuts' && settingsSearchQuery.trim() === ''
+  const isFocusedSetupGuidePane =
+    activeSectionId === 'setup-guide' && settingsSearchQuery.trim() === ''
 
   return (
     <div
@@ -913,8 +915,9 @@ function Settings(): React.JSX.Element {
         >
           <div
             className={cn(
-              'mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
-              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24'
+              'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
+              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
+              isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
             )}
           >
             {visibleNavSections.length === 0 ? (
@@ -998,7 +1001,7 @@ function Settings(): React.JSX.Element {
                   title="Onboarding checklist"
                   description="Finish the core workflows that make Orca useful for parallel agent work."
                   searchEntries={getSectionSearchEntries('setup-guide')}
-                  bodyClassName="overflow-hidden p-0"
+                  bodyClassName="overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none"
                 >
                   {isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
                 </SettingsSection>

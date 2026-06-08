@@ -1,6 +1,5 @@
 import type { RefObject } from 'react'
 import { ArrowLeft, Search, Server } from 'lucide-react'
-import logo from '../../../../../resources/logo.svg'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import type { GitHubRepositoryIdentity } from '../../../../shared/types'
@@ -91,24 +90,15 @@ function SettingsSetupGuideNavRow({
           : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
       )}
     >
-      <img
-        src={logo}
-        alt=""
-        aria-hidden="true"
-        className={cn(
-          'size-4 shrink-0 object-contain invert dark:invert-0',
-          setupActive ? 'opacity-75' : 'opacity-45'
-        )}
+      <SetupGuideProgressRing
+        done={progress.doneCount}
+        total={progress.total}
+        sizeClassName="size-4"
+        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
       />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-[13px] font-medium leading-4">Onboarding checklist</span>
       </span>
-      <SetupGuideProgressRing
-        done={progress.doneCount}
-        total={progress.total}
-        className="ml-auto shrink-0"
-        tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
-      />
     </button>
   )
 }

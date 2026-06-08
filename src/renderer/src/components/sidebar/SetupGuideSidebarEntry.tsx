@@ -1,6 +1,5 @@
 import React from 'react'
 import { EyeOff } from 'lucide-react'
-import logo from '../../../../../resources/logo.svg'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import {
@@ -81,22 +80,14 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
               : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8'
           )}
         >
-          <img
-            src={logo}
-            alt=""
-            aria-hidden="true"
-            className={cn(
-              'size-4 shrink-0 object-contain invert dark:invert-0',
-              setupActive ? 'opacity-75' : 'opacity-30'
-            )}
+          <SetupGuideProgressRing
+            done={setupProgress.coreDoneCount}
+            total={setupProgress.coreTotal}
+            sizeClassName="size-4"
           />
           <span className="flex min-w-0 flex-1 flex-col">
             <span className="truncate">Onboarding checklist</span>
           </span>
-          <SetupGuideProgressRing
-            done={setupProgress.coreDoneCount}
-            total={setupProgress.coreTotal}
-          />
         </button>
       </ContextMenuTrigger>
       <ContextMenuContent>
