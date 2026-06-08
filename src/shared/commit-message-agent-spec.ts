@@ -323,8 +323,10 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     id: 'opencode',
     label: 'OpenCode',
     binary: 'opencode',
-    promptDelivery: 'argv',
-    buildArgs: ({ prompt, model, thinkingLevel }) => [
+    // Why: Source Control AI prompts can include large staged diffs; OpenCode
+    // accepts the prompt on stdin, which avoids cross-platform argv limits.
+    promptDelivery: 'stdin',
+    buildArgs: ({ model, thinkingLevel }) => [
       'run',
       '--model',
       model,
@@ -332,8 +334,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       'build',
       '--format',
       'default',
-      ...(thinkingLevel ? ['--variant', thinkingLevel] : []),
-      prompt
+      ...(thinkingLevel ? ['--variant', thinkingLevel] : [])
     ],
     modelSource: 'dynamic',
     modelDiscovery: { binary: 'opencode', args: ['models'], parse: parseLineModels },
