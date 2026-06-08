@@ -12,7 +12,7 @@ const {
   getBitbucketAuthStatusMock,
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
-  resolveCliCommandMock
+  resolveCliCommandsMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   execFileMock: vi.fn(),
@@ -23,7 +23,7 @@ const {
   getBitbucketAuthStatusMock: vi.fn(),
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
-  resolveCliCommandMock: vi.fn()
+  resolveCliCommandsMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -48,7 +48,7 @@ vi.mock('../startup/hydrate-shell-path', () => ({
 }))
 
 vi.mock('../codex-cli/command', () => ({
-  resolveCliCommand: resolveCliCommandMock
+  resolveCliCommands: resolveCliCommandsMock
 }))
 
 vi.mock('./ssh', () => ({
@@ -104,12 +104,12 @@ describe('preflight', () => {
     getBitbucketAuthStatusMock.mockReset()
     getAzureDevOpsAuthStatusMock.mockReset()
     getGiteaAuthStatusMock.mockReset()
-    // Why: default the install-dir resolver to "not found" (returns the bare
-    // command, which is not an absolute path) so the `which` mock stays the sole
-    // source of truth for existing tests. Cases exercising the GUI-PATH fallback
-    // override this per-test.
-    resolveCliCommandMock.mockReset()
-    resolveCliCommandMock.mockImplementation((command: string) => command)
+    // Why: existing tests should keep treating `which` as the only source
+    // unless a case explicitly exercises the install-dir fallback.
+    resolveCliCommandsMock.mockReset()
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) => new Map(commands.map((command) => [command, command]))
+    )
     getBitbucketAuthStatusMock.mockResolvedValue(defaultBitbucketStatus)
     getAzureDevOpsAuthStatusMock.mockResolvedValue(defaultAzureDevOpsStatus)
     getGiteaAuthStatusMock.mockResolvedValue(defaultGiteaStatus)
@@ -448,38 +448,38 @@ describe('preflight', () => {
   })
 
   it('detects agents via the install-dir resolver when which fails (stripped GUI PATH)', async () => {
-    // Why: GUI-launched Orca inherits a stripped PATH from launchd, so `which`
-    // can miss CLIs the user installed under ~/.local/bin, ~/Library/pnpm,
-    // ~/.asdf/shims, etc. — and the async shell-PATH hydration races the first
-    // detection. resolveCliCommand probes those same install dirs the spawn path
-    // uses, so detection must fall back to it rather than report "Not installed".
+    // Why: cold GUI launches can run detection before shell-PATH hydration
+    // adds user install dirs, so `which` can miss runnable CLIs.
     execFileAsyncMock.mockImplementation(async (command) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
-      // `which` finds nothing — the stripped-PATH failure mode.
       throw new Error('not found')
     })
-    resolveCliCommandMock.mockImplementation((cmd: string) => {
-      if (cmd === 'claude') {
-        return '/Users/test/.local/bin/claude'
-      }
-      if (cmd === 'codex') {
-        return '/Users/test/.asdf/shims/codex'
-      }
-      if (cmd === 'opencode') {
-        return '/Users/test/Library/pnpm/opencode'
-      }
-      // Not installed: resolver echoes the bare command (not an absolute path).
-      return cmd
-    })
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) =>
+        new Map(
+          commands.map((cmd) => {
+            if (cmd === 'claude') {
+              return [cmd, '/Users/test/.local/bin/claude']
+            }
+            if (cmd === 'codex') {
+              return [cmd, '/Users/test/.asdf/shims/codex']
+            }
+            if (cmd === 'opencode') {
+              return [cmd, '/Users/test/Library/pnpm/opencode']
+            }
+            return [cmd, cmd]
+          })
+        )
+    )
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'codex', 'opencode'])
+    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
   })
 
   it('does not double-count an agent already found on PATH via the install-dir resolver', async () => {
-    // Why: when `which` already resolves an agent, the resolver fallback must not
-    // produce a duplicate id in the detected list.
+    // Why: the fallback should not duplicate ids when PATH already finds a CLI.
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
@@ -489,23 +489,24 @@ describe('preflight', () => {
       }
       throw new Error('not found')
     })
-    resolveCliCommandMock.mockImplementation((cmd: string) =>
-      cmd === 'claude' ? '/Users/test/.local/bin/claude' : cmd
+    resolveCliCommandsMock.mockImplementation(
+      (commands: string[]) => new Map(commands.map((cmd) => [cmd, cmd]))
     )
 
     await expect(detectInstalledAgents()).resolves.toEqual(['claude'])
+    expect(resolveCliCommandsMock).toHaveBeenCalledTimes(1)
+    expect(resolveCliCommandsMock).toHaveBeenCalledWith(expect.not.arrayContaining(['claude']))
   })
 
   it('treats an agent as not installed when the install-dir resolver throws', async () => {
-    // Why: resolveCliCommand does synchronous fs probes (statSync/readdirSync);
-    // a transient fs error must degrade to "not installed", never crash detection.
+    // Why: transient fs errors in the fallback must not crash detection.
     execFileAsyncMock.mockImplementation(async (command) => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
       throw new Error('not found')
     })
-    resolveCliCommandMock.mockImplementation(() => {
+    resolveCliCommandsMock.mockImplementation(() => {
       throw new Error('EACCES: permission denied')
     })
 
@@ -598,10 +599,8 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
     expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
-    // Why: the install-dir fallback reads the LOCAL filesystem, so it must never
-    // run for WSL detection — otherwise a binary installed on the Windows host
-    // could be falsely reported as present inside the distro.
-    expect(resolveCliCommandMock).not.toHaveBeenCalled()
+    // Why: the local fallback must not report host binaries as WSL binaries.
+    expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
       expect.arrayContaining([
@@ -634,8 +633,8 @@ describe('preflight', () => {
 
     await expect(detectInstalledAgents({ wslDefault: true })).resolves.toEqual(['codex'])
     expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
-    // Why: the local install-dir fallback must not leak into WSL detection.
-    expect(resolveCliCommandMock).not.toHaveBeenCalled()
+    // Why: the local fallback must not leak into WSL detection.
+    expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     expect(execFileAsyncMock).toHaveBeenCalledWith(
       'wsl.exe',
       expect.arrayContaining(['--exec', 'bash', '-ic', expect.stringContaining("'codex'")]),
