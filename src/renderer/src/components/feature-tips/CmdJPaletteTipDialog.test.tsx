@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
-import { FEATURE_TIPS } from '../../../../shared/feature-tips'
+import { FEATURE_TIPS, type FeatureTip } from '../../../../shared/feature-tips'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 
 const shortcutLabelMock = vi.hoisted(() => vi.fn(() => '⌘J'))
@@ -29,10 +29,15 @@ vi.mock('./FeatureTipActions', () => ({
   FeatureTipActions: () => <div data-testid="feature-tip-actions" />
 }))
 
-const paletteTip = FEATURE_TIPS.find((tip) => tip.id === 'cmd-j-palette')
-if (!paletteTip) {
-  throw new Error('Expected cmd-j-palette feature tip fixture')
+function getCmdJPaletteTip(): FeatureTip {
+  const tip = FEATURE_TIPS.find((entry) => entry.id === 'cmd-j-palette')
+  if (!tip) {
+    throw new Error('Expected cmd-j-palette feature tip fixture')
+  }
+  return { ...tip }
 }
+
+const paletteTip = getCmdJPaletteTip()
 
 function renderDialog(): string {
   return renderToStaticMarkup(
