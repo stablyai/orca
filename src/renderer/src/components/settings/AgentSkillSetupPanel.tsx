@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { RefreshCw, Terminal } from 'lucide-react'
+import { Copy, RefreshCw, Terminal } from 'lucide-react'
+import { toast } from 'sonner'
 import { IntegrationStatusPill } from '../integration-status-pill'
 import { OnboardingInlineCommandTerminal } from '../onboarding/OnboardingInlineCommandTerminal'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
@@ -125,6 +127,16 @@ export function AgentSkillSetupPanel({
       }
     }
   }
+
+  const copyInstallCommand = async (): Promise<void> => {
+    try {
+      await window.api.ui.writeClipboardText(command)
+      toast.success('Copied install command.')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to copy install command.')
+    }
+  }
+
   const actionRow = (
     <div className="mt-3 flex flex-wrap items-center gap-2">
       {!installed || showInstallWhenInstalled ? (
@@ -169,6 +181,7 @@ export function AgentSkillSetupPanel({
   return (
     <div
       className={cn(
+        'min-w-0',
         variant === 'card' ? 'rounded-xl border border-border bg-muted/20' : null,
         className
       )}
@@ -222,15 +235,44 @@ export function AgentSkillSetupPanel({
         ) : null}
       </div>
       {terminalOpen ? (
-        <div className={cn(variant === 'card' ? 'px-5 pb-5' : 'mt-2')}>
+        <div
+          className={cn(
+            'min-w-0 max-w-full overflow-hidden',
+            variant === 'card' ? 'px-5 pb-5' : 'mt-2'
+          )}
+        >
+          <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden rounded-md border border-border bg-muted/35 px-3 py-2">
+            <code className="scrollbar-sleek min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs text-muted-foreground">
+              {command}
+            </code>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0"
+                  aria-label="Copy install command"
+                  onClick={() => void copyInstallCommand()}
+                >
+                  <Copy className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                Copy command
+              </TooltipContent>
+            </Tooltip>
+          </div>
           <OnboardingInlineCommandTerminal
             worktreeId={terminalWorktreeId}
             command={command}
             title={terminalTitle}
+            description="Press Enter to run the install command."
             ariaLabel={terminalAriaLabel}
             terminalHeightPx={terminalHeightPx}
             shellOverride={terminalShellOverride}
-            terminalTopMarginPx={0}
+            terminalTopMarginPx={8}
+            descriptionPaddingClassName="px-4 py-2"
             autoScrollIntoView={false}
             onTerminalExit={notifyInstalledAgentSkillsChanged}
           />
