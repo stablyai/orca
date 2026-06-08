@@ -3,8 +3,6 @@ import { Check, Download, LoaderCircle, PackageCheck, RefreshCw, Settings, X } f
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import type { Repo } from '../../../../shared/types'
 
 type DismissButtonProps = {
   onDismiss: () => void
@@ -109,7 +107,6 @@ export function PackageManagerActions({
 }
 
 export type SetupScriptPromptBodyProps = {
-  repo: Repo
   isInspectionError: boolean
   sharedSetupIgnored: boolean
   isPackageManagerSuggestion: boolean
@@ -117,7 +114,6 @@ export type SetupScriptPromptBodyProps = {
 }
 
 export function SetupScriptPromptBody({
-  repo,
   isInspectionError,
   sharedSetupIgnored,
   isPackageManagerSuggestion,
@@ -145,18 +141,7 @@ export function SetupScriptPromptBody({
       </>
     )
   }
-  return (
-    <>
-      Add a setup command for{' '}
-      <span className="inline-flex items-center gap-1.5 align-baseline px-1.5 py-0.5 rounded-[4px] bg-accent border border-border dark:bg-accent/50 dark:border-border/60">
-        <RepoBadgeMark color={repo.badgeColor} />
-        <span className="text-[10px] font-semibold text-foreground truncate max-w-[8rem] leading-none lowercase">
-          {repo.displayName}
-        </span>
-      </span>{' '}
-      to run when Orca creates new worktrees.
-    </>
-  )
+  return <>Add a setup command to run when Orca creates new worktrees.</>
 }
 
 export type InspectionErrorActionsProps = {
