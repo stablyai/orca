@@ -1458,7 +1458,6 @@ export function FloatingTerminalPanel({
       )}
       <FloatingTerminalOrchestrationDialog
         open={orchestrationDialogOpen}
-        activeTabId={activeTerminalId}
         onOpenChange={setOrchestrationDialogOpen}
         onSetupStateChange={() => void refreshOrchestrationSetupVisibility()}
       />
