@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import path from 'path'
+import { resolveCliCommand } from '../codex-cli/command'
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
@@ -141,6 +142,24 @@ async function isCommandOnPath(command: string, wslTarget?: WslPreflightTarget):
   }
 }
 
+// Why: `which` only sees process.env.PATH, which GUI-launched apps inherit from
+// launchd in a stripped form. The user's shell rc dirs (~/.local/bin,
+// ~/Library/pnpm, ~/.asdf/shims, nvm/volta/fnm/mise shims, ...) are absent until
+// startup shell-PATH hydration lands, and that async hydrate races the first
+// detectInstalledAgents call — whose result is then cached for the session. So a
+// cold start can report every agent as "Not installed" even though the user can
+// launch them from Terminal. resolveCliCommand additionally probes those install
+// dirs (src/main/codex-cli/command.ts) — a strict superset of the PATH lookup —
+// so detection stops depending on PATH-hydration timing. Local filesystem only;
+// never used for WSL or SSH-remote detection (those return earlier).
+function isCommandInInstallDirs(command: string): boolean {
+  try {
+    return path.isAbsolute(resolveCliCommand(command))
+  } catch {
+    return false
+  }
+}
+
 const KNOWN_AGENT_COMMANDS = Object.entries(TUI_AGENT_CONFIG).flatMap(([id, config]) =>
   getTuiAgentDetectCommands(config).map((cmd) => ({
     id,
@@ -194,7 +213,9 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
   const checks = await Promise.all(
     KNOWN_AGENT_COMMANDS.map(async ({ id, cmd }) => ({
       id,
-      installed: await isCommandOnPath(cmd)
+      // Why: fall back to the install-dir probe when the PATH lookup misses, so
+      // GUI launches with an un-hydrated PATH still detect locally-installed CLIs.
+      installed: (await isCommandOnPath(cmd)) || isCommandInInstallDirs(cmd)
     }))
   )
   return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
