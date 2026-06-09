@@ -471,6 +471,7 @@ export type Tab = {
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
+  quickCommandLabel?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -505,6 +506,8 @@ export type TerminalTab = {
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
   generatedTitle?: string | null
+  /** Stable label from the tab-bar Quick Command that created this terminal. */
+  quickCommandLabel?: string | null
   customTitle: string | null
   color: string | null
   sortOrder: number

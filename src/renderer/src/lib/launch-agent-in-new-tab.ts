@@ -39,6 +39,8 @@ export type LaunchAgentInNewTabArgs = {
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar
    *  quick-launch entry point so existing callers stay unchanged. */
   launchSource?: LaunchSource
+  /** User-authored Quick Command label for local tabs created from the tab bar. */
+  quickCommandLabel?: string | null
   /** Shell platform that will execute the startup command. Defaults to the
    * renderer OS; SSH and WSL worktrees run a Linux shell even from Windows. */
   launchPlatform?: NodeJS.Platform
@@ -126,6 +128,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     agentArgs,
     promptDelivery = 'auto-submit',
     launchSource,
+    quickCommandLabel,
     launchPlatform = CLIENT_PLATFORM,
     onPromptDelivered
   } = args
@@ -252,7 +255,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   //
   // Why: stamp the launched agent on the tab so the tab bar shows the provider
   // icon immediately, before the agent's first hook event arrives.
-  const tab = store.createTab(worktreeId, groupId, undefined, { launchAgent: agent })
+  const tab = store.createTab(worktreeId, groupId, undefined, {
+    launchAgent: agent,
+    quickCommandLabel
+  })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),

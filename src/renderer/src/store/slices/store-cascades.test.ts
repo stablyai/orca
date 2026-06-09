@@ -1078,6 +1078,35 @@ describe('setActiveWorktree', () => {
     expect(groups[0].tabOrder).toEqual([terminal.id])
   })
 
+  it('stores trimmed quick command labels on terminal and unified tabs', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    const labeled = store
+      .getState()
+      .createTab(wt, undefined, undefined, { quickCommandLabel: '  Run tests  ' })
+    const unlabeled = store
+      .getState()
+      .createTab(wt, undefined, undefined, { quickCommandLabel: '   ' })
+    const state = store.getState()
+
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === labeled.id)?.quickCommandLabel).toBe(
+      'Run tests'
+    )
+    expect(
+      state.unifiedTabsByWorktree[wt].find((tab) => tab.entityId === labeled.id)?.quickCommandLabel
+    ).toBe('Run tests')
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === unlabeled.id)).not.toHaveProperty(
+      'quickCommandLabel'
+    )
+  })
+
   it('stamps the Windows default shell onto new terminal tabs', () => {
     const originalNavigator = globalThis.navigator
     Object.defineProperty(globalThis, 'navigator', {
