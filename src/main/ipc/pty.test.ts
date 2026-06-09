@@ -2664,6 +2664,46 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('does not update cached PTY size when runtime controller resize fails', async () => {
+    type RuntimeResizeController = {
+      spawn(args: { cols: number; rows: number }): Promise<{ id: string }>
+      resize(ptyId: string, cols: number, rows: number): boolean
+      getSize(ptyId: string): { cols: number; rows: number } | null
+    }
+    let controller: RuntimeResizeController | null = null
+    const proc = {
+      onData: vi.fn(),
+      onExit: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(() => {
+        throw new Error('resize failed')
+      }),
+      kill: vi.fn(),
+      process: 'zsh',
+      pid: 12345
+    }
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    spawnMock.mockReturnValue(proc)
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const resizeController = controller as unknown as RuntimeResizeController
+    const spawned = await resizeController.spawn({ cols: 80, rows: 24 })
+
+    expect(resizeController.resize(spawned.id, 120, 30)).toBe(false)
+    expect(resizeController.getSize(spawned.id)).toEqual({ cols: 80, rows: 24 })
+  })
+
   it('persists runtime-owned headless session bindings when explicitly requested', async () => {
     type RuntimeSpawnController = {
       spawn(args: {

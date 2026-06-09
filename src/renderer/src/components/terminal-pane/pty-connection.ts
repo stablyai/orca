@@ -1641,7 +1641,9 @@ export function connectPanePty(
     if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
       return
     }
-    if (!isRemoteRuntimePtyId(currentPtyId)) {
+    if (isRemoteRuntimePtyId(currentPtyId)) {
+      transport.resize(proposed.cols, proposed.rows)
+    } else {
       window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
     }
   }

@@ -1922,8 +1922,8 @@ export function registerPtyHandlers(
     getSize: (ptyId) => ptySizes.get(ptyId) ?? null,
     resize: (ptyId, cols, rows) => {
       try {
-        ptySizes.set(ptyId, { cols, rows })
         getProviderForPty(ptyId).resize(ptyId, cols, rows)
+        ptySizes.set(ptyId, { cols, rows })
         return true
       } catch {
         return false
@@ -2610,8 +2610,16 @@ export function registerPtyHandlers(
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return
     }
+    const provider = tryGetProviderForPty(args.id)
+    if (!provider) {
+      return
+    }
+    try {
+      provider.resize(args.id, args.cols, args.rows)
+    } catch {
+      return
+    }
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
-    tryGetProviderForPty(args.id)?.resize(args.id, args.cols, args.rows)
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
   })
 
