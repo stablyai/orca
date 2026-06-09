@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveWindowsDefaultShell } from './pty-shell-utils'
+import { resolveDefaultCwd, resolveWindowsDefaultShell } from './pty-shell-utils'
 
 describe('resolveWindowsDefaultShell', () => {
   it('uses an existing SHELL override when one is provided', () => {
@@ -39,5 +39,37 @@ describe('resolveWindowsDefaultShell', () => {
         (path) => path === 'C:\\Windows\\System32\\cmd.exe'
       )
     ).toBe('C:\\Windows\\System32\\cmd.exe')
+  })
+})
+
+describe('resolveDefaultCwd', () => {
+  it('uses USERPROFILE for Windows PTYs without an explicit cwd', () => {
+    expect(
+      resolveDefaultCwd(
+        {
+          USERPROFILE: 'C:\\Users\\alice',
+          HOME: '/not/a/windows/cwd'
+        },
+        'win32',
+        'C:\\Users\\fallback'
+      )
+    ).toBe('C:\\Users\\alice')
+  })
+
+  it('falls back to HOMEDRIVE plus HOMEPATH on Windows when USERPROFILE is missing', () => {
+    expect(
+      resolveDefaultCwd(
+        {
+          HOMEDRIVE: 'D:',
+          HOMEPATH: '\\Users\\bob'
+        },
+        'win32',
+        'C:\\Users\\fallback'
+      )
+    ).toBe('D:\\Users\\bob')
+  })
+
+  it('keeps POSIX HOME fallback behavior', () => {
+    expect(resolveDefaultCwd({ HOME: '/home/alice' }, 'linux', '/fallback')).toBe('/home/alice')
   })
 })

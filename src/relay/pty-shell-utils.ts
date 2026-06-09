@@ -1,5 +1,6 @@
 import { execFile as execFileCb } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
+import { homedir } from 'os'
 import { win32 as pathWin32 } from 'path'
 import { promisify } from 'util'
 
@@ -54,6 +55,19 @@ export function resolveDefaultShell(): string {
     }
   }
   return '/bin/sh'
+}
+
+export function resolveDefaultCwd(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  homeDir = homedir()
+): string {
+  if (platform === 'win32') {
+    const driveHome = env.HOMEDRIVE && env.HOMEPATH ? `${env.HOMEDRIVE}${env.HOMEPATH}` : undefined
+    return env.USERPROFILE || env.HOME || driveHome || homeDir || `${env.SystemDrive || 'C:'}\\`
+  }
+
+  return env.HOME || homeDir || '/'
 }
 
 /**
