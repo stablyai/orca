@@ -17,7 +17,6 @@ import { cn } from '@/lib/utils'
 import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
-import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import { translate } from '@/i18n/i18n'
 
@@ -36,7 +35,7 @@ type SourceControlAgentActionDialogFormProps = {
   agentArgs: string
   commandTemplate: string
   savedCommandInputTemplate?: string | null
-  baseCommandInput: string
+  saveLaunchRecipe: boolean
   saveTargetValue: string
   saveTargets: { value: string; label: string }[]
   settings: GlobalSettings | null
@@ -49,8 +48,10 @@ type SourceControlAgentActionDialogFormProps = {
   onSelectedAgentChange: (agent: TuiAgent | null) => void
   onAgentArgsChange: (value: string) => void
   onCommandTemplateChange: (value: string) => void
+  onSaveLaunchRecipeChange: (value: boolean) => void
   onSaveAgentDefaultChange: (value: string) => void
   onOpenSettings?: () => void
+  onCancel: () => void
   onStart: () => void
 }
 
@@ -77,7 +78,7 @@ export function SourceControlAgentActionDialogForm({
   agentArgs,
   commandTemplate,
   savedCommandInputTemplate,
-  baseCommandInput,
+  saveLaunchRecipe,
   saveTargetValue,
   saveTargets,
   settings,
@@ -90,10 +91,14 @@ export function SourceControlAgentActionDialogForm({
   onSelectedAgentChange,
   onAgentArgsChange,
   onCommandTemplateChange,
+  onSaveLaunchRecipeChange,
   onSaveAgentDefaultChange,
   onOpenSettings,
+  onCancel,
   onStart
 }: SourceControlAgentActionDialogFormProps): React.JSX.Element {
+  const defaultCommandTemplate = savedCommandInputTemplate ?? '{basePrompt}'
+  const commandTemplateIncludesBasePrompt = commandTemplate.includes('{basePrompt}')
   const selectedRecipe = selectedAgent
     ? {
         agentId: selectedAgent,
@@ -118,12 +123,25 @@ export function SourceControlAgentActionDialogForm({
     )
   )
   const showSaveLaunchRecipe = canSaveAgentDefault && selectedAgent && !allLaunchRecipesAlreadySaved
+  const saveScopeTargets = saveTargets.filter((target) => target.value !== 'none')
+  const effectiveStartLabel =
+    showSaveLaunchRecipe && saveLaunchRecipe
+      ? translate(
+          'auto.components.right.sidebar.SourceControlAgentActionDialogForm.5421a96acb',
+          'Save & start agent'
+        )
+      : startLabel
 
   return (
-    <>
-      <div className="min-w-0 space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="min-h-0 min-w-0 flex-1 space-y-4 overflow-y-auto pr-1 scrollbar-sleek">
         <div className="space-y-2">
-          <Label className="text-xs">{translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.15c5d85706", "Agent")}</Label>
+          <Label className="text-xs">
+            {translate(
+              'auto.components.right.sidebar.SourceControlAgentActionDialogForm.15c5d85706',
+              'Agent'
+            )}
+          </Label>
           {hasEnabledAgents || selectedAgent ? (
             <AgentCombobox
               agents={agentOptions}
@@ -134,11 +152,25 @@ export function SourceControlAgentActionDialogForm({
             />
           ) : (
             <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              <span>{detecting ? translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.c7ff8cef11", "Detecting agents...") : translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.1d47db9bf0", "No enabled agents")}</span>
+              <span>
+                {detecting
+                  ? translate(
+                      'auto.components.right.sidebar.SourceControlAgentActionDialogForm.c7ff8cef11',
+                      'Detecting agents...'
+                    )
+                  : translate(
+                      'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1d47db9bf0',
+                      'No enabled agents'
+                    )}
+              </span>
               {onOpenSettings ? (
                 <Button type="button" variant="ghost" size="xs" onClick={onOpenSettings}>
                   <Settings className="size-3.5" />
-                  {translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.b99c33cec5", "Settings")}</Button>
+                  {translate(
+                    'auto.components.right.sidebar.SourceControlAgentActionDialogForm.b99c33cec5',
+                    'Settings'
+                  )}
+                </Button>
               ) : null}
             </div>
           )}
@@ -152,63 +184,131 @@ export function SourceControlAgentActionDialogForm({
 
         <div className="space-y-2">
           <Label htmlFor="source-control-agent-cli-args" className="text-xs">
-            {translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.bc8dc39f4b", "CLI arguments")}</Label>
+            {translate(
+              'auto.components.right.sidebar.SourceControlAgentActionDialogForm.bc8dc39f4b',
+              'CLI arguments'
+            )}
+          </Label>
           <Input
             id="source-control-agent-cli-args"
             value={agentArgs}
             spellCheck={false}
-            placeholder={translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.fe119187bb", "--model sonnet")}
+            placeholder={translate(
+              'auto.components.right.sidebar.SourceControlAgentActionDialogForm.fe119187bb',
+              '--model sonnet'
+            )}
             onChange={(event) => onAgentArgsChange(event.target.value)}
             className="h-8 font-mono text-xs"
           />
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="source-control-agent-command-input" className="text-xs">
-              {translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.f4f3c9ca4a", "Command template")}</Label>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <Label htmlFor="source-control-agent-command-input" className="text-xs">
+                {translate(
+                  'auto.components.right.sidebar.SourceControlAgentActionDialogForm.f4f3c9ca4a',
+                  'Prompt template'
+                )}
+              </Label>
+              <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                {translate(
+                  'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bb611240f',
+                  "Use {basePrompt} for Orca's default prompt."
+                )}
+              </p>
+            </div>
             <Button
               type="button"
               variant="ghost"
               size="xs"
-              onClick={() => onCommandTemplateChange(savedCommandInputTemplate ?? '{basePrompt}')}
+              disabled={commandTemplate === defaultCommandTemplate}
+              onClick={() => onCommandTemplateChange(defaultCommandTemplate)}
             >
               <RotateCcw className="size-3.5" />
-              {translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.7ec6abbf2a", "Reset")}</Button>
+              {translate(
+                'auto.components.right.sidebar.SourceControlAgentActionDialogForm.7ec6abbf2a',
+                'Reset'
+              )}
+            </Button>
           </div>
           <textarea
             id="source-control-agent-command-input"
-            rows={12}
+            rows={10}
             value={commandTemplate}
             onChange={(event) => onCommandTemplateChange(event.target.value)}
-            className="box-border min-h-[14rem] min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+            className="box-border min-h-[7.75rem] min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
           />
-          <SourceControlActionVariableChips
-            actionId={actionId}
-            variablePreviews={{ basePrompt: baseCommandInput }}
-            onInsert={(variable) => {
-              const separator =
-                commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '
-              onCommandTemplateChange(`${commandTemplate}${separator}{${variable}}`)
-            }}
-          />
+          <p className="text-[11px] leading-4 text-muted-foreground">
+            {translate(
+              'auto.components.right.sidebar.SourceControlAgentActionDialogForm.d8f40128ee',
+              "{basePrompt} is Orca's default prompt."
+            )}
+          </p>
+          {!commandTemplateIncludesBasePrompt ? (
+            <p className="flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2.5 py-2 text-[11px] leading-4 text-destructive">
+              <TriangleAlert className="mt-px size-3 shrink-0" />
+              <span>
+                {translate(
+                  'auto.components.right.sidebar.SourceControlAgentActionDialogForm.23280cbab1',
+                  "This template does not include {basePrompt}, so the agent will not receive Orca's default prompt."
+                )}
+              </span>
+            </p>
+          ) : null}
         </div>
 
         {showSaveLaunchRecipe ? (
-          <div className="space-y-2">
-            <Label className="text-xs">{translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.f84657c925", "Save launch recipe")}</Label>
-            <Select value={saveTargetValue} onValueChange={onSaveAgentDefaultChange}>
-              <SelectTrigger size="sm" className="h-8 w-full text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {saveTargets.map((target) => (
-                  <SelectItem key={target.value} value={target.value}>
-                    {target.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div
+            className={cn(
+              'space-y-2 rounded-md border border-border bg-background p-3',
+              saveLaunchRecipe && 'border-foreground shadow-[inset_0_0_0_1px_var(--foreground)]'
+            )}
+          >
+            <label className="grid cursor-pointer grid-cols-[1rem_1fr] items-start gap-2.5">
+              <input
+                type="checkbox"
+                checked={saveLaunchRecipe}
+                onChange={(event) => onSaveLaunchRecipeChange(event.target.checked)}
+                className="mt-0.5 size-3.5 accent-foreground"
+              />
+              <span>
+                <span className="block text-xs font-semibold">
+                  {translate(
+                    'auto.components.right.sidebar.SourceControlAgentActionDialogForm.c29f9cf266',
+                    "Save this prompt and don't show this review next time"
+                  )}
+                </span>
+                <span className="mt-0.5 block text-[11px] leading-4 text-muted-foreground">
+                  {translate(
+                    'auto.components.right.sidebar.SourceControlAgentActionDialogForm.6cefcdfba1',
+                    'You can change it later in Source Control AI settings.'
+                  )}
+                </span>
+              </span>
+            </label>
+            {saveLaunchRecipe ? (
+              <div className="grid grid-cols-[5.5rem_1fr] items-center gap-2 border-t border-border pt-2">
+                <span className="text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.right.sidebar.SourceControlAgentActionDialogForm.013c9ac04a',
+                    'Save for'
+                  )}
+                </span>
+                <Select value={saveTargetValue} onValueChange={onSaveAgentDefaultChange}>
+                  <SelectTrigger size="sm" className="h-8 w-full text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {saveScopeTargets.map((target) => (
+                      <SelectItem key={target.value} value={target.value}>
+                        {target.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -233,7 +333,11 @@ export function SourceControlAgentActionDialogForm({
                   <span>{deliveryPlan.summary}</span>
                 </div>
                 <div className="truncate font-mono text-[11px]">
-                  {translate("auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bc0bdbb5e", "Launch:")}{deliveryPlan.commandLabel}
+                  {translate(
+                    'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bc0bdbb5e',
+                    'Launch:'
+                  )}
+                  {deliveryPlan.commandLabel}
                 </div>
                 <div className="text-[11px]">{deliveryPlan.caveat}</div>
               </div>
@@ -243,15 +347,21 @@ export function SourceControlAgentActionDialogForm({
       </div>
 
       <DialogFooter className="flex-wrap gap-2 sm:justify-end">
+        <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
+          {translate(
+            'auto.components.right.sidebar.SourceControlAgentActionDialogForm.ea4788705e',
+            'Cancel'
+          )}
+        </Button>
         <Button type="button" size="sm" disabled={!canStart} onClick={onStart}>
           {isStarting ? (
             <RefreshCw className="size-4 animate-spin" />
           ) : (
             <Sparkles className="size-4" />
           )}
-          {startLabel}
+          {effectiveStartLabel}
         </Button>
       </DialogFooter>
-    </>
+    </div>
   )
 }

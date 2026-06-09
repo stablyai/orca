@@ -4476,7 +4476,7 @@ function ChecksTab({
       title={translate('auto.components.PullRequestPage.a053bdd082', 'Fix Broken Checks With AI')}
       description={translate(
         'auto.components.PullRequestPage.ddfd42f460',
-        'Choose the agent and edit the full command input before launch.'
+        'Review the prompt before starting an agent.'
       )}
       baseCommandInput={fixChecksComposerPrompt ?? ''}
       connectionId={repo?.connectionId ?? null}

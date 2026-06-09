@@ -13,6 +13,7 @@ export type UseSourceControlAgentActionDialogResult = {
   statusCopy: string | null
   agentArgs: string
   commandTemplate: string
+  saveLaunchRecipe: boolean
   saveTargetValue: string
   saveTargets: { value: string; label: string }[]
   settings: ReturnType<typeof useAppStore.getState>['settings']
@@ -23,6 +24,7 @@ export type UseSourceControlAgentActionDialogResult = {
   onSelectedAgentChange: (agent: TuiAgent | null) => void
   onAgentArgsChange: (value: string) => void
   onCommandTemplateChange: (value: string) => void
+  onSaveLaunchRecipeChange: (value: boolean) => void
   onSaveAgentDefaultChange: (value: string) => void
   handleStart: () => Promise<void>
 }
