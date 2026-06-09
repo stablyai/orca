@@ -83,7 +83,7 @@ export function AgentRow(props: {
           width: 'var(--feature-wall-agent-status-box, 16px)'
         }}
       >
-        {state === 'working' ? (
+        {state === "working" ? (
           <AgentStateDot state="working" size="md" />
         ) : (
           <span

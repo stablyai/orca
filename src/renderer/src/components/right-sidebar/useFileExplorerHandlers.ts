@@ -75,12 +75,7 @@ export async function activateFileExplorerNode(args: {
     try {
       targetIsDirectory = (await statPath(node.path)).isDirectory
     } catch {
-      toast.error(
-        translate(
-          'auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991',
-          'Cannot open symlink target'
-        )
-      )
+      toast.error(translate("auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991", "Cannot open symlink target"))
       return
     }
     if (targetIsDirectory) {
@@ -92,12 +87,7 @@ export async function activateFileExplorerNode(args: {
         markPathAsDirectory(node.path)
         toggleDir(activeWorktreeId, node.path)
       } else {
-        toast.error(
-          translate(
-            'auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991',
-            'Cannot open symlink target'
-          )
-        )
+        toast.error(translate("auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991", "Cannot open symlink target"))
       }
       return
     }

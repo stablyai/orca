@@ -27,8 +27,7 @@ export function AddRepoStepIndicator({
         onClick={onBack}
       >
         <ArrowLeft className="size-3" />
-        {translate('auto.components.sidebar.AddRepoStepIndicator.3bb655c117', 'Back')}
-      </button>
+        {translate("auto.components.sidebar.AddRepoStepIndicator.3bb655c117", "Back")}</button>
     </div>
   )
 }

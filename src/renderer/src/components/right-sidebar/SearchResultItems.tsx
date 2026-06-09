@@ -105,11 +105,7 @@ export function FileResultRow({
                 onClick={() => window.api.ui.writeClipboardText(fileResult.relativePath)}
               >
                 <Copy className="size-3.5" />
-                {translate(
-                  'auto.components.right.sidebar.SearchResultItems.3596b9668d',
-                  'Copy Path'
-                )}
-              </ContextMenuItem>
+                {translate("auto.components.right.sidebar.SearchResultItems.3596b9668d", "Copy Path")}</ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
           {/* Why: the row label intentionally truncates long parent paths to
@@ -204,11 +200,7 @@ export function MatchResultRow({
           onClick={() => window.api.ui.writeClipboardText(`${relativePath}#L${match.line}`)}
         >
           <Copy className="size-3.5" />
-          {translate(
-            'auto.components.right.sidebar.SearchResultItems.cc06595a3b',
-            'Copy Line Path'
-          )}
-        </ContextMenuItem>
+          {translate("auto.components.right.sidebar.SearchResultItems.cc06595a3b", "Copy Line Path")}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   )
