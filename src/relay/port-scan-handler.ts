@@ -1,5 +1,6 @@
 import { readFile, readdir, readlink } from 'fs/promises'
 import type { RelayDispatcher } from './dispatcher'
+import { scanWindowsListeningPorts } from './windows-port-scan'
 
 // Keep in sync with src/shared/ssh-types.ts — DetectedPort
 export type DetectedPort = {
@@ -16,17 +17,26 @@ const MAX_DETECTED_PORTS = 50
 export class PortScanHandler {
   constructor(dispatcher: RelayDispatcher) {
     dispatcher.onRequest('ports.detect', async () => {
-      if (process.platform !== 'linux') {
-        return { ports: [], platform: process.platform }
+      if (process.platform === 'linux') {
+        return {
+          ports: await this.scanLinuxListeningPorts(),
+          platform: process.platform
+        }
+      }
+      if (process.platform === 'win32') {
+        return {
+          ports: await scanWindowsListeningPorts(),
+          platform: process.platform
+        }
       }
       return {
-        ports: await this.scanListeningPorts(),
+        ports: [],
         platform: process.platform
       }
     })
   }
 
-  private async scanListeningPorts(): Promise<DetectedPort[]> {
+  private async scanLinuxListeningPorts(): Promise<DetectedPort[]> {
     const [tcp4, tcp6] = await Promise.all([
       this.readProcNet('/proc/net/tcp'),
       this.readProcNet('/proc/net/tcp6')
