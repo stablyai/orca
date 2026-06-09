@@ -35,6 +35,7 @@ import {
   asanaTaskComments,
   asanaUpdateTask
 } from '@/runtime/runtime-asana-client'
+import { AsanaUserAvatar } from '@/components/AsanaUserAvatar'
 import type { AsanaComment, AsanaTask, AsanaUser } from '../../../shared/types'
 
 type AsanaIssueWorkspaceProps = {
@@ -417,8 +418,9 @@ export default function AsanaIssueWorkspace({
                   <button
                     type="button"
                     disabled={pendingField === 'assignee'}
-                    className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] text-muted-foreground transition hover:bg-muted/40 disabled:opacity-50"
                   >
+                    {displayed.assignee ? <AsanaUserAvatar user={displayed.assignee} /> : null}
                     {displayed.assignee?.name ?? '+ Assignee'}
                     {pendingField === 'assignee' ? (
                       <LoaderCircle className="size-3 animate-spin" />
@@ -447,7 +449,8 @@ export default function AsanaIssueWorkspace({
                       }
                       className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
                     >
-                      <span className="truncate">{user.name}</span>
+                      <AsanaUserAvatar user={user} />
+                      <span className="min-w-0 truncate">{user.name}</span>
                     </button>
                   ))}
                 </PopoverContent>

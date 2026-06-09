@@ -157,6 +157,7 @@ import {
 import { shouldHideTaskPageListChrome } from '@/components/task-page-list-chrome-visibility'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
 import { findTaskPageAsanaTask } from '@/components/task-page-asana-cache-selectors'
+import { AsanaUserAvatar } from '@/components/AsanaUserAvatar'
 import {
   createTaskPageGitHubStatusStateDraft,
   resolveTaskPageGitHubStatusStateDraft,
@@ -1205,29 +1206,6 @@ function GitHubAssigneeAvatar({ assignee }: { assignee: GitHubAssignableUser }):
       className="inline-flex size-5 items-center justify-center rounded-full border border-border/40 bg-muted text-[10px] font-medium text-muted-foreground"
     >
       {assignee.login.slice(0, 1).toUpperCase()}
-    </span>
-  )
-}
-
-function AsanaUserAvatar({ user }: { user: AsanaUser }): React.JSX.Element {
-  if (user.photoUrl) {
-    return (
-      <img
-        src={user.photoUrl}
-        alt={user.name}
-        loading="lazy"
-        decoding="async"
-        title={user.name}
-        className="size-5 shrink-0 rounded-full border border-border/40 bg-muted object-cover"
-      />
-    )
-  }
-  return (
-    <span
-      title={user.name}
-      className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-border/40 bg-muted text-[10px] font-medium text-muted-foreground"
-    >
-      {user.name.slice(0, 1).toUpperCase()}
     </span>
   )
 }
