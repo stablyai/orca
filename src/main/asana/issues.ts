@@ -79,10 +79,15 @@ function mapUser(value: unknown): AsanaUser | undefined {
   if (!gid) {
     return undefined
   }
+  // Why: Asana's `photo` is null for users without a profile picture, and a
+  // record of size variants otherwise — prefer 60px for a crisp small avatar.
+  const photo = asRecord(user.photo)
+  const photoUrl = asString(photo.image_60x60) || asString(photo.image_36x36) || undefined
   return {
     gid,
     name: asString(user.name, 'Unknown'),
-    email: typeof user.email === 'string' ? user.email : undefined
+    email: typeof user.email === 'string' ? user.email : undefined,
+    photoUrl
   }
 }
 
@@ -586,7 +591,7 @@ export async function listAssignableUsers(
   try {
     const params = new URLSearchParams({
       workspace: entry.workspace.id,
-      opt_fields: 'name,email',
+      opt_fields: 'name,email,photo.image_60x60,photo.image_36x36',
       limit: '100'
     })
     const response = await asanaRequest<AsanaListResponse>(entry, `/users?${params.toString()}`)

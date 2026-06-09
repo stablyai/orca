@@ -224,6 +224,35 @@ describe('Asana task operations', () => {
     })
   })
 
+  it('maps assignable users with their photo url', async () => {
+    asanaRequestMock.mockResolvedValueOnce({
+      data: [
+        {
+          gid: 'user-1',
+          name: 'Ada',
+          email: 'ada@example.com',
+          photo: { image_60x60: 'https://asana.example/ada-60.png' }
+        },
+        { gid: 'user-2', name: 'Grace', photo: null }
+      ]
+    })
+
+    const { listAssignableUsers } = await import('./issues')
+
+    const users = await listAssignableUsers('ws-1')
+    expect(users).toEqual([
+      {
+        gid: 'user-1',
+        name: 'Ada',
+        email: 'ada@example.com',
+        photoUrl: 'https://asana.example/ada-60.png'
+      },
+      { gid: 'user-2', name: 'Grace', email: undefined, photoUrl: undefined }
+    ])
+    // Photo variants are requested so the UI can render avatars.
+    expect(String(asanaRequestMock.mock.calls[0][1])).toContain('photo.image_60x60')
+  })
+
   it('toggles completion through updateTask', async () => {
     asanaRequestMock.mockResolvedValueOnce(null)
 

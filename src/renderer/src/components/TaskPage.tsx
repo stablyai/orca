@@ -1209,6 +1209,29 @@ function GitHubAssigneeAvatar({ assignee }: { assignee: GitHubAssignableUser }):
   )
 }
 
+function AsanaUserAvatar({ user }: { user: AsanaUser }): React.JSX.Element {
+  if (user.photoUrl) {
+    return (
+      <img
+        src={user.photoUrl}
+        alt={user.name}
+        loading="lazy"
+        decoding="async"
+        title={user.name}
+        className="size-5 shrink-0 rounded-full border border-border/40 bg-muted object-cover"
+      />
+    )
+  }
+  return (
+    <span
+      title={user.name}
+      className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-border/40 bg-muted text-[10px] font-medium text-muted-foreground"
+    >
+      {user.name.slice(0, 1).toUpperCase()}
+    </span>
+  )
+}
+
 function GitHubIssueLabelSelector({
   labels,
   selectedLabels,
@@ -11617,7 +11640,10 @@ export default function TaskPage(): React.JSX.Element {
                       <SelectItem value="none">Unassigned</SelectItem>
                       {availableAsanaUsers.map((user) => (
                         <SelectItem key={user.gid} value={user.gid}>
-                          {user.name}
+                          <span className="flex min-w-0 items-center gap-2">
+                            <AsanaUserAvatar user={user} />
+                            <span className="min-w-0 truncate">{user.name}</span>
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>

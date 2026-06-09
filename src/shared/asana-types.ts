@@ -37,6 +37,7 @@ export type AsanaUser = {
   gid: string
   name: string
   email?: string | null
+  photoUrl?: string | null
 }
 
 export type AsanaSection = {
