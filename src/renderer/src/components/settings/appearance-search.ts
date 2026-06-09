@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 
@@ -15,9 +16,9 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
       'Choose how Orca looks in the app window.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.262fe1d24f', 'dark'),
-      translate('auto.components.settings.appearance.search.44d873fd18', 'light'),
-      translate('auto.components.settings.appearance.search.3a9b69d734', 'system')
+      ...translateSearchKeyword('auto.components.settings.appearance.search.262fe1d24f', 'dark'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.44d873fd18', 'light'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.3a9b69d734', 'system')
     ]
   }
 ])
@@ -30,16 +31,25 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       'Choose the language used by the Orca interface.'
     ),
     keywords: [
-      translate('settings.appearance.language.title', 'Language'),
-      translate(
+      ...translateSearchKeyword('settings.appearance.language.title', 'Language'),
+      ...translateSearchKeyword(
         'settings.appearance.language.description',
         'Choose the language used by the Orca interface.'
       ),
-      translate('settings.appearance.language.system', 'System'),
-      translate('settings.appearance.language.english', 'English'),
-      translate('auto.components.settings.appearance.search.language.locale', 'locale'),
-      translate('auto.components.settings.appearance.search.language.i18n', 'i18n'),
-      translate('auto.components.settings.appearance.search.language.translation', 'translation')
+      ...translateSearchKeyword('settings.appearance.language.system', 'System'),
+      ...translateSearchKeyword('settings.appearance.language.english', 'English'),
+      ...translateSearchKeyword('settings.appearance.language.chinese', '中文（简体）'),
+      ...translateSearchKeyword('settings.appearance.language.korean', '한국어'),
+      ...translateSearchKeyword('settings.appearance.language.japanese', '日本語'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.language.locale',
+        'locale'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.language.i18n', 'i18n'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.language.translation',
+        'translation'
+      )
     ]
   }
 ])
@@ -52,9 +62,9 @@ export const getZoomEntries = createLocalizedCatalog((): SettingsSearchEntry[] =
       'Scale the entire application interface.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.3ae5de6101', 'zoom'),
-      translate('auto.components.settings.appearance.search.0952091186', 'scale'),
-      translate('auto.components.settings.appearance.search.0c83659f48', 'shortcut')
+      ...translateSearchKeyword('auto.components.settings.appearance.search.3ae5de6101', 'zoom'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.0952091186', 'scale'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.0c83659f48', 'shortcut')
     ]
   }
 ])
@@ -67,14 +77,23 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
       'Choose the font used by the Orca interface.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.24094af355', 'font'),
-      translate('auto.components.settings.appearance.search.a0e09aed9c', 'typeface'),
-      translate('auto.components.settings.appearance.search.8b36fb3f64', 'typography'),
-      translate('auto.components.settings.appearance.search.fab91464dd', 'ide'),
-      translate('auto.components.settings.appearance.search.1f2880a9d5', 'orca'),
-      translate('auto.components.settings.appearance.search.5095258df2', 'interface'),
-      translate('auto.components.settings.appearance.search.36e006efc1', 'app'),
-      translate('auto.components.settings.appearance.search.2f12e1aa3a', 'ui')
+      ...translateSearchKeyword('auto.components.settings.appearance.search.24094af355', 'font'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.a0e09aed9c',
+        'typeface'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.8b36fb3f64',
+        'typography'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.fab91464dd', 'ide'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.1f2880a9d5', 'orca'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.5095258df2',
+        'interface'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.36e006efc1', 'app'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.2f12e1aa3a', 'ui')
     ]
   }
 ])
@@ -90,12 +109,18 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       'Dim files matched by .gitignore in the file explorer.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.bce3ac317a', 'git'),
-      translate('auto.components.settings.appearance.search.08c86bf58e', 'gitignore'),
-      translate('auto.components.settings.appearance.search.9f2df826ac', 'ignored'),
-      translate('auto.components.settings.appearance.search.c1bca1885a', 'file explorer'),
-      translate('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-      translate('auto.components.settings.appearance.search.648eeada79', 'hide')
+      ...translateSearchKeyword('auto.components.settings.appearance.search.bce3ac317a', 'git'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.08c86bf58e',
+        'gitignore'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.9f2df826ac', 'ignored'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.c1bca1885a',
+        'file explorer'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
   }
 ])
@@ -108,11 +133,14 @@ export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry
       'Show Orca in the titlebar.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.bed343b03e', 'titlebar'),
-      translate('auto.components.settings.appearance.search.1f2880a9d5', 'orca'),
-      translate('auto.components.settings.appearance.search.36e006efc1', 'app'),
-      translate('auto.components.settings.appearance.search.51f957ce39', 'name'),
-      translate('auto.components.settings.appearance.search.a895d0f938', 'brand')
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.bed343b03e',
+        'titlebar'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.1f2880a9d5', 'orca'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.36e006efc1', 'app'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.51f957ce39', 'name'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.a895d0f938', 'brand')
     ]
   }
 ])
@@ -133,13 +161,13 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
       'Show the Tasks button at the top of the left sidebar.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.0d5a74b606', 'tasks'),
-      translate('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-      translate('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
-      translate('auto.components.settings.appearance.search.648eeada79', 'hide'),
-      translate('auto.components.settings.appearance.search.ac79fe4a04', 'show'),
-      translate('auto.components.settings.appearance.search.2ee4810f38', 'github'),
-      translate('auto.components.settings.appearance.search.6b846424cc', 'linear')
+      ...translateSearchKeyword('auto.components.settings.appearance.search.0d5a74b606', 'tasks'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.2ee4810f38', 'github'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.6b846424cc', 'linear')
     ]
   },
   {
@@ -152,13 +180,22 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
       'Show the Automations button at the top of the left sidebar.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.b186f3cefb', 'automations'),
-      translate('auto.components.settings.appearance.search.58f4e22fa2', 'automation'),
-      translate('auto.components.settings.appearance.search.4c920ab2d1', 'schedule'),
-      translate('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-      translate('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
-      translate('auto.components.settings.appearance.search.648eeada79', 'hide'),
-      translate('auto.components.settings.appearance.search.ac79fe4a04', 'show')
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.b186f3cefb',
+        'automations'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.58f4e22fa2',
+        'automation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.4c920ab2d1',
+        'schedule'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show')
     ]
   },
   {
@@ -171,13 +208,13 @@ export const getSidebarEntries = createLocalizedCatalog((): SettingsSearchEntry[
       'Show the Orca Mobile button at the top of the left sidebar.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.74618577c7', 'mobile'),
-      translate('auto.components.settings.appearance.search.5e5b8878bf', 'phone'),
-      translate('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
-      translate('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
-      translate('auto.components.settings.appearance.search.648eeada79', 'hide'),
-      translate('auto.components.settings.appearance.search.ac79fe4a04', 'show'),
-      translate('auto.components.settings.appearance.search.839fb1e3ed', 'toolbox')
+      ...translateSearchKeyword('auto.components.settings.appearance.search.74618577c7', 'mobile'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5e5b8878bf', 'phone'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.6cf5f54ce1', 'button'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.ac79fe4a04', 'show'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.839fb1e3ed', 'toolbox')
     ]
   }
 ])
@@ -190,13 +227,22 @@ export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[
       'Choose the app icon shown in the Dock and window switcher.'
     ),
     keywords: [
-      translate('auto.components.settings.appearance.search.2cfb3420c0', 'app icon'),
-      translate('auto.components.settings.appearance.search.1f2880a9d5', 'orca'),
-      translate('auto.components.settings.appearance.search.d18b54ca90', 'dock'),
-      translate('auto.components.settings.appearance.search.e5bc35d59e', 'window'),
-      translate('auto.components.settings.appearance.search.651f35b2c6', 'switcher'),
-      translate('auto.components.settings.appearance.search.f586abfa35', 'blue'),
-      translate('auto.components.settings.appearance.search.468448bba4', 'watercolor')
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.2cfb3420c0',
+        'app icon'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.1f2880a9d5', 'orca'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.d18b54ca90', 'dock'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.e5bc35d59e', 'window'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.651f35b2c6',
+        'switcher'
+      ),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.f586abfa35', 'blue'),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.468448bba4',
+        'watercolor'
+      )
     ]
   }
 ])

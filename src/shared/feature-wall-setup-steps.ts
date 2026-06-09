@@ -4,6 +4,7 @@ export type FeatureWallSetupStepId =
   | 'notifications'
   | 'split-terminal'
   | 'two-worktrees'
+  | 'browser'
   | 'task-sources'
   | 'agent-capabilities'
   | 'setup-script'
@@ -17,7 +18,8 @@ export type FeatureWallSetupStep = {
 
 export const FEATURE_WALL_SETUP_PARALLEL_WORK_STEP_IDS = [
   'split-terminal',
-  'two-worktrees'
+  'two-worktrees',
+  'browser'
 ] as const satisfies readonly FeatureWallSetupStepId[]
 
 export type FeatureWallSetupSectionId = 'parallel-work' | 'setup'
@@ -36,6 +38,13 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
     subtitle: 'Multi-task',
     description:
       'Work in 2 different worktrees at once. Each one is isolated (even in the same project). Perfect for working on 2 features at once.'
+  },
+  {
+    id: 'browser',
+    name: "Use Orca's browser",
+    subtitle: "Use Orca's browser",
+    description:
+      'Browse your web app without leaving Orca. Grab any element and send its exact source and styles to an agent with one click.'
   },
   {
     id: 'notifications',

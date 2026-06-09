@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getFloatingWorkspaceSearchEntries = createLocalizedCatalog(() => [
@@ -20,20 +21,50 @@ export const getFloatingWorkspaceSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.floating.workspace.search.6f183fa1b9',
         'floating terminal'
       ),
-      translate('auto.components.settings.floating.workspace.search.ebeedb2f6a', 'quick terminal'),
-      translate('auto.components.settings.floating.workspace.search.2b5efa55c9', 'global'),
-      translate('auto.components.settings.floating.workspace.search.6410fe83d8', 'terminal'),
-      translate('auto.components.settings.floating.workspace.search.49db74a92d', 'browser'),
-      translate('auto.components.settings.floating.workspace.search.884e5e6132', 'markdown'),
-      translate('auto.components.settings.floating.workspace.search.156ffeee08', 'note'),
-      translate('auto.components.settings.floating.workspace.search.52db6e3baf', 'notes'),
-      translate('auto.components.settings.floating.workspace.search.a38bfc3f77', 'quick panel'),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.ebeedb2f6a',
+        'quick terminal'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.2b5efa55c9',
+        'global'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.6410fe83d8',
+        'terminal'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.49db74a92d',
+        'browser'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.884e5e6132',
+        'markdown'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.156ffeee08',
+        'note'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.52db6e3baf',
+        'notes'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.a38bfc3f77',
+        'quick panel'
+      ),
       translate(
         'auto.components.settings.floating.workspace.search.6765b85e48',
         'launch directory'
       ),
-      translate('auto.components.settings.floating.workspace.search.a452146574', 'toggle button'),
-      translate('auto.components.settings.floating.workspace.search.94f4d013c8', 'status bar')
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.a452146574',
+        'toggle button'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.floating.workspace.search.94f4d013c8',
+        'status bar'
+      )
     ]
   }
 ])

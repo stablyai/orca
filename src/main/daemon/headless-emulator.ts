@@ -152,6 +152,15 @@ export class HeadlessEmulator {
     return this.terminal.buffer.active.type === 'alternate'
   }
 
+  getVisibleLines(): string[] {
+    const buffer = this.terminal.buffer.active
+    const lines: string[] = []
+    for (let row = buffer.viewportY; row < buffer.viewportY + this.terminal.rows; row += 1) {
+      lines.push(buffer.getLine(row)?.translateToString(true) ?? '')
+    }
+    return lines
+  }
+
   getCwd(): string | null {
     return this.cwd
   }

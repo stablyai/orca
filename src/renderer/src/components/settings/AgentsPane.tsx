@@ -12,11 +12,11 @@ import { Input } from '../ui/input'
 import { cn } from '@/lib/utils'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
-  AGENT_GENERATED_TAB_TITLES_DESCRIPTION,
-  AGENT_GENERATED_TAB_TITLES_TITLE
+  getAgentGeneratedTabTitlesDescription,
+  getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
 import { AgentLocationSetting } from './AgentLocationSetting'
-import { AGENT_STATUS_HOOKS_DESCRIPTION, AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
+import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import {
   SettingsBadge,
   SettingsSegmentedControl,
@@ -646,15 +646,15 @@ export function AgentStatusHooksSetting({
   return (
     <section className="space-y-3">
       <SettingsSwitchRow
-        label={AGENT_STATUS_HOOKS_TITLE}
-        description={AGENT_STATUS_HOOKS_DESCRIPTION}
+        label={getAgentStatusHooksTitle()}
+        description={getAgentStatusHooksDescription()}
         checked={enabled}
         onChange={() =>
           updateSettings({
             agentStatusHooksEnabled: !enabled
           })
         }
-        ariaLabel={AGENT_STATUS_HOOKS_TITLE}
+        ariaLabel={getAgentStatusHooksTitle()}
       />
     </section>
   )
@@ -668,15 +668,15 @@ export function AgentGeneratedTabTitlesSetting({
   return (
     <section className="space-y-3">
       <SettingsSwitchRow
-        label={AGENT_GENERATED_TAB_TITLES_TITLE}
-        description={AGENT_GENERATED_TAB_TITLES_DESCRIPTION}
+        label={getAgentGeneratedTabTitlesTitle()}
+        description={getAgentGeneratedTabTitlesDescription()}
         checked={enabled}
         onChange={() =>
           updateSettings({
             tabAutoGenerateTitle: !enabled
           })
         }
-        ariaLabel={AGENT_GENERATED_TAB_TITLES_TITLE}
+        ariaLabel={getAgentGeneratedTabTitlesTitle()}
       />
     </section>
   )

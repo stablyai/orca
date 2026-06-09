@@ -138,11 +138,14 @@ export function SettingsSidebar({
   const installStatusLabel = (status: SettingsNavInstallStatus): string => {
     switch (status) {
       case 'install':
-        return 'Not installed'
+        return translate(
+          'auto.components.settings.AgentSkillSetupPanel.5289300939',
+          'Not installed'
+        )
       case 'installed':
-        return 'Installed'
+        return translate('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')
       case 'checking':
-        return 'Checking'
+        return translate('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')
     }
   }
   const installStatusClassName = (status: SettingsNavInstallStatus): string =>

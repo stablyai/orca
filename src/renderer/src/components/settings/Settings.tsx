@@ -992,7 +992,10 @@ function Settings(): React.JSX.Element {
                     'auto.components.settings.Settings.21f09426ea',
                     'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.'
                   )}
-                  badge="Optional"
+                  badge={translate(
+                    'auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf',
+                    'Optional'
+                  )}
                   searchEntries={getSectionSearchEntries('accounts')}
                 >
                   {isSectionMounted('accounts') ? (

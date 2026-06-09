@@ -64,13 +64,14 @@ describe('getFeatureWallSetupProgress', () => {
     const progress = getFeatureWallSetupProgress(makeInput({ gitRepoCount: 2 }))
 
     expect(progress.stepDone['add-two-repos']).toBe(true)
-    expect(progress.coreTotal).toBe(8)
+    expect(progress.coreTotal).toBe(9)
   })
 
   it('orders visible parallel work before setup tasks', () => {
     expect(getFeatureWallSetupSteps().map((step) => step.id)).toEqual([
       'split-terminal',
       'two-worktrees',
+      'browser',
       'notifications',
       'default-agent',
       'agent-capabilities',
@@ -83,7 +84,8 @@ describe('getFeatureWallSetupProgress', () => {
   it('groups setup guide steps into Parallel work and Setup sections', () => {
     expect(getFeatureWallSetupStepsForSection('parallel-work').map((step) => step.id)).toEqual([
       'split-terminal',
-      'two-worktrees'
+      'two-worktrees',
+      'browser'
     ])
     expect(getFeatureWallSetupStepsForSection('setup').map((step) => step.id)).toEqual([
       'notifications',
@@ -271,6 +273,22 @@ describe('getFeatureWallSetupProgress', () => {
     )
 
     expect(progress.stepDone['two-worktrees']).toBe(true)
+  })
+
+  it('marks the browser step complete once a non-blank page has been viewed', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          browser: { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        }
+      })
+    )
+
+    expect(progress.stepDone.browser).toBe(true)
+  })
+
+  it('does not mark the browser step complete without a viewed page', () => {
+    expect(getFeatureWallSetupProgress(makeInput()).stepDone.browser).toBe(false)
   })
 
   it('marks task sources complete for any supported connected provider', () => {

@@ -1,6 +1,7 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 
 export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
@@ -11,14 +12,35 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         'Floating animated pet in the bottom-right corner.'
       ),
       keywords: [
-        translate('auto.components.settings.experimental.search.0d24759f14', 'experimental'),
-        translate('auto.components.settings.experimental.search.051203d37c', 'pet'),
-        translate('auto.components.settings.experimental.search.b54cea709b', 'sidekick'),
-        translate('auto.components.settings.experimental.search.2a33975d72', 'mascot'),
-        translate('auto.components.settings.experimental.search.9f5609bfb8', 'overlay'),
-        translate('auto.components.settings.experimental.search.65df471ab2', 'animated'),
-        translate('auto.components.settings.experimental.search.791fefc0b0', 'corner'),
-        translate('auto.components.settings.experimental.search.9af7a518db', 'character')
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword('auto.components.settings.experimental.search.051203d37c', 'pet'),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.b54cea709b',
+          'sidekick'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.2a33975d72',
+          'mascot'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.9f5609bfb8',
+          'overlay'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.65df471ab2',
+          'animated'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.791fefc0b0',
+          'corner'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.9af7a518db',
+          'character'
+        )
       ]
     },
     {
@@ -28,16 +50,46 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         'Threaded left-sidebar feed for agent completions and blocking states.'
       ),
       keywords: [
-        translate('auto.components.settings.experimental.search.0d24759f14', 'experimental'),
-        translate('auto.components.settings.experimental.search.fa72e71f05', 'agents'),
-        translate('auto.components.settings.experimental.search.92a9357d1f', 'agents view'),
-        translate('auto.components.settings.experimental.search.244a0ecd3d', 'activity'),
-        translate('auto.components.settings.experimental.search.d01b3882ba', 'notifications'),
-        translate('auto.components.settings.experimental.search.10b52f79c1', 'worktrees'),
-        translate('auto.components.settings.experimental.search.ca5d1f3f46', 'timeline'),
-        translate('auto.components.settings.experimental.search.7b79081695', 'unread'),
-        translate('auto.components.settings.experimental.search.8facf10138', 'bell'),
-        translate('auto.components.settings.experimental.search.fe5688b761', 'sidebar')
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.fa72e71f05',
+          'agents'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.92a9357d1f',
+          'agents view'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.244a0ecd3d',
+          'activity'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.d01b3882ba',
+          'notifications'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.10b52f79c1',
+          'worktrees'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.ca5d1f3f46',
+          'timeline'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.7b79081695',
+          'unread'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.8facf10138',
+          'bell'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.fe5688b761',
+          'sidebar'
+        )
       ]
     },
     {
@@ -50,16 +102,46 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         'Persistent pane highlight for terminal bell and agent-completion events.'
       ),
       keywords: [
-        translate('auto.components.settings.experimental.search.0d24759f14', 'experimental'),
-        translate('auto.components.settings.experimental.search.9bb3bd5098', 'terminal'),
-        translate('auto.components.settings.experimental.search.01567f19ca', 'attention'),
-        translate('auto.components.settings.experimental.search.268e99d957', 'highlight'),
-        translate('auto.components.settings.experimental.search.edc49480a1', 'pane'),
-        translate('auto.components.settings.experimental.search.8facf10138', 'bell'),
-        translate('auto.components.settings.experimental.search.7695fd30e9', 'notification'),
-        translate('auto.components.settings.experimental.search.5f067ba0f9', 'agent'),
-        translate('auto.components.settings.experimental.search.f10d307468', 'completion'),
-        translate('auto.components.settings.experimental.search.7b79081695', 'unread')
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.9bb3bd5098',
+          'terminal'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.01567f19ca',
+          'attention'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.268e99d957',
+          'highlight'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.edc49480a1',
+          'pane'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.8facf10138',
+          'bell'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.7695fd30e9',
+          'notification'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.5f067ba0f9',
+          'agent'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.f10d307468',
+          'completion'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.7b79081695',
+          'unread'
+        )
       ]
     },
     {
@@ -72,16 +154,43 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
         'Automatically symlink configured files or folders into newly created worktrees so shared state (envs, caches, installs) stays connected.'
       ),
       keywords: [
-        translate('auto.components.settings.experimental.search.0d24759f14', 'experimental'),
-        translate('auto.components.settings.experimental.search.d23ae13990', 'worktree'),
-        translate('auto.components.settings.experimental.search.10b52f79c1', 'worktrees'),
-        translate('auto.components.settings.experimental.search.c387565812', 'symlink'),
-        translate('auto.components.settings.experimental.search.bff1ff7768', 'symlinks'),
-        translate('auto.components.settings.experimental.search.3028f0bd3a', 'link'),
-        translate('auto.components.settings.experimental.search.f082788cfe', 'links'),
-        translate('auto.components.settings.experimental.search.3021571c30', 'shared'),
-        translate('auto.components.settings.experimental.search.4ad605f222', 'env'),
-        translate('auto.components.settings.experimental.search.44c7f209d5', 'node_modules')
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.d23ae13990',
+          'worktree'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.10b52f79c1',
+          'worktrees'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.c387565812',
+          'symlink'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.bff1ff7768',
+          'symlinks'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.3028f0bd3a',
+          'link'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.f082788cfe',
+          'links'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.3021571c30',
+          'shared'
+        ),
+        ...translateSearchKeyword('auto.components.settings.experimental.search.4ad605f222', 'env'),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.44c7f209d5',
+          'node_modules'
+        )
       ]
     }
   ]

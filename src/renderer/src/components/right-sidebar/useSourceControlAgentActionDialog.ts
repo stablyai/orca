@@ -55,6 +55,7 @@ export function useSourceControlAgentActionDialog({
   })
   const [isStarting, setIsStarting] = useState(false)
   const saveTargets = useMemo(() => buildSourceControlAgentSaveTargets(repoId), [repoId])
+  const [saveLaunchRecipe, setSaveLaunchRecipe] = useState(true)
   const [saveTargetValue, setSaveTargetValue] = useState(DEFAULT_SAVE_TARGET_VALUE)
 
   const disabledAgents = settings?.disabledTuiAgents
@@ -86,6 +87,7 @@ export function useSourceControlAgentActionDialog({
     setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
     setAgentArgs(savedAgentArgs ?? '')
     setSelectedAgent(savedAgentId ?? null)
+    setSaveLaunchRecipe(true)
     setSaveTargetValue(DEFAULT_SAVE_TARGET_VALUE)
     let stale = false
     void refreshDetectedAgents().then((nextAgents) => {
@@ -121,6 +123,7 @@ export function useSourceControlAgentActionDialog({
     (nextOpen: boolean) => {
       if (!nextOpen) {
         setDeliveryPlan({ status: 'idle' })
+        setSaveLaunchRecipe(true)
         setSaveTargetValue(DEFAULT_SAVE_TARGET_VALUE)
       }
       onOpenChange(nextOpen)
@@ -202,7 +205,7 @@ export function useSourceControlAgentActionDialog({
         trimmedCommandInput,
         agentArgs,
         commandTemplate,
-        saveTargetValue,
+        saveTargetValue: saveLaunchRecipe ? saveTargetValue : 'none',
         actionId,
         repoId,
         settings,
@@ -238,6 +241,7 @@ export function useSourceControlAgentActionDialog({
     refreshDetectedAgents,
     repo,
     repoId,
+    saveLaunchRecipe,
     saveTargetValue,
     settings,
     selectedAgent,
@@ -265,6 +269,10 @@ export function useSourceControlAgentActionDialog({
     setCommandTemplate(value)
     setDeliveryPlan({ status: 'idle' })
   }, [])
+  const onSaveLaunchRecipeChange = useCallback((value: boolean) => {
+    setSaveLaunchRecipe(value)
+    setDeliveryPlan({ status: 'idle' })
+  }, [])
 
   return {
     handleOpenChange,
@@ -275,6 +283,7 @@ export function useSourceControlAgentActionDialog({
     statusCopy,
     agentArgs,
     commandTemplate,
+    saveLaunchRecipe,
     saveTargetValue,
     saveTargets,
     settings,
@@ -285,6 +294,7 @@ export function useSourceControlAgentActionDialog({
     onSelectedAgentChange,
     onAgentArgsChange,
     onCommandTemplateChange,
+    onSaveLaunchRecipeChange,
     onSaveAgentDefaultChange: setSaveTargetValue,
     handleStart
   }

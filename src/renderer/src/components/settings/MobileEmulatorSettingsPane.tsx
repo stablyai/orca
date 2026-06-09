@@ -40,12 +40,17 @@ const SIMULATOR_STATE_SUFFIX_RE =
 
 function statusText(availability: EmulatorAvailability | null, enabled: boolean): string {
   if (!enabled) {
-    return 'Disabled'
+    return translate('auto.components.settings.MobileEmulatorSettingsPane.a4f1c82d90', 'Disabled')
   }
   if (!availability) {
-    return 'Checking'
+    return translate(
+      'auto.components.settings.MobileEmulatorSettingsPane.b5e2d93e01',
+      'Checking...'
+    )
   }
-  return availability.available ? 'Ready' : 'Needs setup'
+  return availability.available
+    ? translate('auto.components.settings.MobileEmulatorSettingsPane.c6f3ea4f12', 'Ready')
+    : translate('auto.components.settings.MobileEmulatorSettingsPane.d704fb5023', 'Needs setup')
 }
 
 function statusBadgeClassName(availability: EmulatorAvailability | null, enabled: boolean): string {

@@ -1,6 +1,7 @@
 import { KEYBINDING_DEFINITIONS } from '../../../../shared/keybindings'
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
@@ -14,15 +15,21 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
       'Choose whether Orca or the focused terminal wins when shortcuts overlap.'
     ),
     keywords: [
-      translate('auto.components.settings.shortcuts.search.ca6a0c2df7', 'shortcut'),
-      translate('auto.components.settings.shortcuts.search.0ecba9aa5f', 'keyboard'),
-      translate('auto.components.settings.shortcuts.search.7e3fc707aa', 'terminal'),
-      translate('auto.components.settings.shortcuts.search.7f1b38f59a', 'tui'),
-      translate('auto.components.settings.shortcuts.search.f1adebbe8c', 'shell'),
-      translate('auto.components.settings.shortcuts.search.0f8cb15582', 'agent'),
-      translate('auto.components.settings.shortcuts.search.0ecfc47434', 'conflict'),
-      translate('auto.components.settings.shortcuts.search.afda131738', 'orca first'),
-      translate('auto.components.settings.shortcuts.search.4811a8264a', 'terminal first')
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.ca6a0c2df7', 'shortcut'),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.0ecba9aa5f', 'keyboard'),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.7e3fc707aa', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.7f1b38f59a', 'tui'),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.f1adebbe8c', 'shell'),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.0f8cb15582', 'agent'),
+      ...translateSearchKeyword('auto.components.settings.shortcuts.search.0ecfc47434', 'conflict'),
+      ...translateSearchKeyword(
+        'auto.components.settings.shortcuts.search.afda131738',
+        'orca first'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.shortcuts.search.4811a8264a',
+        'terminal first'
+      )
     ]
   })
 )

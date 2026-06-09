@@ -15,7 +15,9 @@ import {
   TwoAgentsAction,
   WorkspacesAction
 } from './FeatureWallSetupWorkflowActions'
+import { BrowserAction } from './FeatureWallBrowserAction'
 import {
+  SetupBrowserVisual,
   SetupMultipleReposVisual,
   SetupTwoAgentsVisual,
   SetupWorkspacesVisual
@@ -151,6 +153,9 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   if (activeStep.id === 'two-worktrees') {
     return <WorkspacesAction done={activeDone} />
   }
+  if (activeStep.id === 'browser') {
+    return <BrowserAction done={activeDone} />
+  }
   if (activeStep.id === 'task-sources') {
     return <TaskSourcesAction />
   }
@@ -177,6 +182,9 @@ function SelectedStepVisual(props: { stepId: FeatureWallSetupStepId }): React.JS
   }
   if (props.stepId === 'add-two-repos') {
     return <SetupMultipleReposVisual />
+  }
+  if (props.stepId === 'browser') {
+    return <SetupBrowserVisual />
   }
   return null
 }
@@ -266,6 +274,7 @@ export function FeatureWallSetupChecklist(
   const hasStepVisual =
     activeStep?.id === 'split-terminal' ||
     activeStep?.id === 'two-worktrees' ||
+    activeStep?.id === 'browser' ||
     activeStep?.id === 'add-two-repos'
   const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
   const setupSteps = getFeatureWallSetupStepsForSection('setup')

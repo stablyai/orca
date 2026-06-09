@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getTerminalDarkThemeSearchEntries = createLocalizedCatalog(() => [
@@ -9,10 +10,10 @@ export const getTerminalDarkThemeSearchEntries = createLocalizedCatalog(() => [
       'Choose the terminal theme used in dark mode.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
-      translate('auto.components.settings.terminal.search.0ce176909a', 'theme'),
-      translate('auto.components.settings.terminal.search.f785374072', 'dark'),
-      translate('auto.components.settings.terminal.search.7718d70356', 'preview')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0ce176909a', 'theme'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f785374072', 'dark'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.7718d70356', 'preview')
     ]
   },
   {
@@ -22,10 +23,10 @@ export const getTerminalDarkThemeSearchEntries = createLocalizedCatalog(() => [
       'Controls the split divider line between panes in dark mode.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
-      translate('auto.components.settings.terminal.search.781f49d942', 'divider'),
-      translate('auto.components.settings.terminal.search.f785374072', 'dark'),
-      translate('auto.components.settings.terminal.search.674b7c8436', 'color')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.781f49d942', 'divider'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f785374072', 'dark'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.674b7c8436', 'color')
     ]
   }
 ])
@@ -41,9 +42,12 @@ export const getTerminalLightThemeSearchEntries = createLocalizedCatalog(() => [
       'When disabled, light mode reuses the dark terminal theme.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
-      translate('auto.components.settings.terminal.search.da864e6cec', 'light mode'),
-      translate('auto.components.settings.terminal.search.0ce176909a', 'theme')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.da864e6cec',
+        'light mode'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0ce176909a', 'theme')
     ]
   },
   {
@@ -53,10 +57,10 @@ export const getTerminalLightThemeSearchEntries = createLocalizedCatalog(() => [
       'Choose the theme used when Orca is in light mode.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
-      translate('auto.components.settings.terminal.search.0ce176909a', 'theme'),
-      translate('auto.components.settings.terminal.search.411229c636', 'light'),
-      translate('auto.components.settings.terminal.search.7718d70356', 'preview')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0ce176909a', 'theme'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.411229c636', 'light'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.7718d70356', 'preview')
     ]
   },
   {
@@ -66,10 +70,10 @@ export const getTerminalLightThemeSearchEntries = createLocalizedCatalog(() => [
       'Controls the split divider line between panes in light mode.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
-      translate('auto.components.settings.terminal.search.781f49d942', 'divider'),
-      translate('auto.components.settings.terminal.search.411229c636', 'light'),
-      translate('auto.components.settings.terminal.search.674b7c8436', 'color')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.781f49d942', 'divider'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.411229c636', 'light'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.674b7c8436', 'color')
     ]
   }
 ])

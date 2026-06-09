@@ -12,6 +12,7 @@ import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatc
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
   type RequestActiveTerminalPaneSplitDetail
@@ -167,7 +168,15 @@ export function useTerminalPaneContextMenu({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
-      pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+      pasteText: (text, options) => {
+        pasteTerminalText(pane.terminal, text, options)
+        if (options?.forceBracketedPaste) {
+          const manager = managerRef.current
+          if (manager) {
+            scheduleImagePasteWebglAtlasRecovery(manager)
+          }
+        }
+      },
       onImagePasteError: (error) => {
         const detail = error instanceof Error ? error.message : String(error)
         onPasteError(`Image paste failed: ${detail}`)

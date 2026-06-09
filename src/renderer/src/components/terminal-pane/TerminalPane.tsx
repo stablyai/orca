@@ -84,6 +84,7 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -1251,7 +1252,15 @@ export default function TerminalPane({
         readClipboardText: window.api.ui.readClipboardText,
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
-        pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+        pasteText: (text, options) => {
+          pasteTerminalText(pane.terminal, text, options)
+          if (options?.forceBracketedPaste) {
+            const manager = managerRef.current
+            if (manager) {
+              scheduleImagePasteWebglAtlasRecovery(manager)
+            }
+          }
+        },
         onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
       }).catch(() => {
         /* ignore clipboard failures */

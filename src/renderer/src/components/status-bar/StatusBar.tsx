@@ -1031,9 +1031,7 @@ function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <span className="animate-pulse">
-          {translate('auto.components.status.bar.StatusBar.2483c60695', '&middot;&middot;&middot;')}
-        </span>
+        <span className="animate-pulse">···</span>
       </span>
     )
   }
@@ -1043,9 +1041,7 @@ function ProviderSegment({
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
-        <span className="animate-pulse">
-          {translate('auto.components.status.bar.StatusBar.2483c60695', '&middot;&middot;&middot;')}
-        </span>
+        <span className="animate-pulse">···</span>
       </span>
     )
   }
@@ -1082,11 +1078,7 @@ function ProviderSegment({
           const left = Math.max(0, Math.round(100 - bucket.usedPercent))
           return (
             <React.Fragment key={bucket.name}>
-              {i > 0 && (
-                <span className="text-muted-foreground">
-                  {translate('auto.components.status.bar.StatusBar.4dff061aab', '&middot;')}
-                </span>
-              )}
+              {i > 0 && <span className="text-muted-foreground">·</span>}
               <span className="tabular-nums">
                 {bucket.name} {left}%
               </span>
@@ -1108,11 +1100,7 @@ function ProviderSegment({
       {p.session && (
         <WindowLabel w={p.session} label={formatWindowLabel(p.session.windowMinutes)} />
       )}
-      {p.session && p.weekly && (
-        <span className="text-muted-foreground">
-          {translate('auto.components.status.bar.StatusBar.4dff061aab', '&middot;')}
-        </span>
-      )}
+      {p.session && p.weekly && <span className="text-muted-foreground">·</span>}
       {p.weekly && <WindowLabel w={p.weekly} label={formatWindowLabel(p.weekly.windowMinutes)} />}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>

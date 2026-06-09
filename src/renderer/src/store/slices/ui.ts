@@ -727,6 +727,9 @@ export type UISlice = {
   dismissSetupScriptPrompt: (repoId: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
+  setupGuideBrowserMilestoneMigrated: boolean
+  setupGuideBrowserMilestoneLegacyComplete: boolean
+  markSetupGuideBrowserMilestoneMigrated: (legacyComplete: boolean) => void
   browserImportHintHidden: boolean
   setBrowserImportHintHidden: (hidden: boolean) => void
   usageEmptyStateDismissed: boolean
@@ -1650,6 +1653,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ setupGuideSidebarDismissed: dismissed }).catch(console.error)
       return { setupGuideSidebarDismissed: dismissed }
     }),
+  setupGuideBrowserMilestoneMigrated: true,
+  setupGuideBrowserMilestoneLegacyComplete: false,
+  markSetupGuideBrowserMilestoneMigrated: (legacyComplete) =>
+    set((s) => {
+      if (
+        s.setupGuideBrowserMilestoneMigrated &&
+        s.setupGuideBrowserMilestoneLegacyComplete === legacyComplete
+      ) {
+        return s
+      }
+      const updates = {
+        setupGuideBrowserMilestoneMigrated: true,
+        setupGuideBrowserMilestoneLegacyComplete: legacyComplete
+      }
+      window.api.ui.set(updates).catch(console.error)
+      return updates
+    }),
   browserImportHintHidden: false,
   setBrowserImportHintHidden: (hidden) =>
     set((s) => {
@@ -2016,6 +2036,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           validRepoIds
         ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
+        setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
+        setupGuideBrowserMilestoneLegacyComplete:
+          ui.setupGuideBrowserMilestoneLegacyComplete === true,
         browserImportHintHidden: ui.browserImportHintHidden === true,
         // Why: default false when undefined so existing users still see the CTA;
         // only an explicit dismissal persists true.

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
@@ -9,20 +10,23 @@ export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
       'Recover from frozen terminals by killing sessions, clearing saved scrollback, or restarting the daemon.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.f35400f7e8', 'daemon'),
-      translate('auto.components.settings.terminal.search.9f2dda133c', 'pty'),
-      translate('auto.components.settings.terminal.search.d802a578bf', 'sessions'),
-      translate('auto.components.settings.terminal.search.a8d2784214', 'manage'),
-      translate('auto.components.settings.terminal.search.a3e5297c10', 'kill'),
-      translate('auto.components.settings.terminal.search.920573d65b', 'kill all'),
-      translate('auto.components.settings.terminal.search.456da64d4d', 'clear'),
-      translate('auto.components.settings.terminal.search.3982d88725', 'history'),
-      translate('auto.components.settings.terminal.search.cde233f5da', 'scrollback'),
-      translate('auto.components.settings.terminal.search.6892fb1019', 'restart'),
-      translate('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
-      translate('auto.components.settings.terminal.search.0a05629060', 'recover'),
-      translate('auto.components.settings.terminal.search.88561b3499', 'frozen'),
-      translate('auto.components.settings.terminal.search.d4daf4f612', 'unfreeze')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f35400f7e8', 'daemon'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.9f2dda133c', 'pty'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d802a578bf', 'sessions'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.a8d2784214', 'manage'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.a3e5297c10', 'kill'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.920573d65b', 'kill all'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.456da64d4d', 'clear'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.3982d88725', 'history'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.cde233f5da',
+        'scrollback'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.6892fb1019', 'restart'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f66a7cf715', 'terminal'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0a05629060', 'recover'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.88561b3499', 'frozen'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d4daf4f612', 'unfreeze')
     ]
   }
 ])
@@ -35,10 +39,16 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
       'Controls the transparency of the terminal background.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.46d99ef4bb', 'opacity'),
-      translate('auto.components.settings.terminal.search.4f7f8f28ca', 'transparency'),
-      translate('auto.components.settings.terminal.search.f6dd9ff606', 'background'),
-      translate('auto.components.settings.terminal.search.7db59c4738', 'alpha')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.46d99ef4bb', 'opacity'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.4f7f8f28ca',
+        'transparency'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.f6dd9ff606',
+        'background'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.7db59c4738', 'alpha')
     ]
   },
   {
@@ -48,11 +58,17 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
       'Apply background blur to the terminal window. Requires restart.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.0838b3717b', 'window'),
-      translate('auto.components.settings.terminal.search.71eb45e293', 'blur'),
-      translate('auto.components.settings.terminal.search.f6dd9ff606', 'background'),
-      translate('auto.components.settings.terminal.search.4f7f8f28ca', 'transparency'),
-      translate('auto.components.settings.terminal.search.6c2f9f05c8', 'vibrancy')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0838b3717b', 'window'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.71eb45e293', 'blur'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.f6dd9ff606',
+        'background'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.4f7f8f28ca',
+        'transparency'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.6c2f9f05c8', 'vibrancy')
     ]
   },
   {
@@ -62,10 +78,13 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
       'Horizontal padding around the terminal grid in pixels.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.e8baf0d12c', 'padding'),
-      translate('auto.components.settings.terminal.search.54a9b3725b', 'horizontal'),
-      translate('auto.components.settings.terminal.search.b2f52cb96c', 'spacing'),
-      translate('auto.components.settings.terminal.search.f25d948664', 'margin')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.e8baf0d12c', 'padding'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.54a9b3725b',
+        'horizontal'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b2f52cb96c', 'spacing'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f25d948664', 'margin')
     ]
   },
   {
@@ -75,10 +94,10 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
       'Vertical padding around the terminal grid in pixels.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.e8baf0d12c', 'padding'),
-      translate('auto.components.settings.terminal.search.18ce996647', 'vertical'),
-      translate('auto.components.settings.terminal.search.b2f52cb96c', 'spacing'),
-      translate('auto.components.settings.terminal.search.f25d948664', 'margin')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.e8baf0d12c', 'padding'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.18ce996647', 'vertical'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b2f52cb96c', 'spacing'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f25d948664', 'margin')
     ]
   },
   {
@@ -91,10 +110,10 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
       'Hide the mouse cursor when typing in the terminal.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.ea364ce6e4', 'mouse'),
-      translate('auto.components.settings.terminal.search.ee611ae238', 'hide'),
-      translate('auto.components.settings.terminal.search.34fe1af39d', 'typing'),
-      translate('auto.components.settings.terminal.search.6eaf7ee0e4', 'cursor')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.ea364ce6e4', 'mouse'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.ee611ae238', 'hide'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.34fe1af39d', 'typing'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.6eaf7ee0e4', 'cursor')
     ]
   },
   {
@@ -104,11 +123,11 @@ export const getTerminalWindowSearchEntries = createLocalizedCatalog(() => [
       'Override individual terminal colors.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.674b7c8436', 'color'),
-      translate('auto.components.settings.terminal.search.d8bd6182b8', 'override'),
-      translate('auto.components.settings.terminal.search.11fd3fbcf2', 'ansi'),
-      translate('auto.components.settings.terminal.search.4ba8623632', 'palette'),
-      translate('auto.components.settings.terminal.search.0ce176909a', 'theme')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.674b7c8436', 'color'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d8bd6182b8', 'override'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.11fd3fbcf2', 'ansi'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.4ba8623632', 'palette'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0ce176909a', 'theme')
     ]
   }
 ])
@@ -124,16 +143,19 @@ export const getTerminalSetupScriptSearchEntries = createLocalizedCatalog(() => 
       "Where the repository setup script runs when a new workspace is created: a vertical split (default), a horizontal split, or a background tab titled 'Setup'."
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.4529806908', 'setup'),
-      translate('auto.components.settings.terminal.search.6b659fff2a', 'script'),
-      translate('auto.components.settings.terminal.search.7a48c7715b', 'workspace'),
-      translate('auto.components.settings.terminal.search.de7bc1d5f5', 'split'),
-      translate('auto.components.settings.terminal.search.54a9b3725b', 'horizontal'),
-      translate('auto.components.settings.terminal.search.18ce996647', 'vertical'),
-      translate('auto.components.settings.terminal.search.f44643328e', 'tab'),
-      translate('auto.components.settings.terminal.search.fd6c24313d', 'new'),
-      translate('auto.components.settings.terminal.search.b872de3926', 'location'),
-      translate('auto.components.settings.terminal.search.c047f398cc', 'launch')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.4529806908', 'setup'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.6b659fff2a', 'script'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.7a48c7715b', 'workspace'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.de7bc1d5f5', 'split'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.54a9b3725b',
+        'horizontal'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.18ce996647', 'vertical'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f44643328e', 'tab'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.fd6c24313d', 'new'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b872de3926', 'location'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.c047f398cc', 'launch')
     ]
   }
 ])

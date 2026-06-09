@@ -33,13 +33,16 @@ export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
       value: 'repo',
       label: translate(
         'auto.components.right.sidebar.SourceControlAgentActionDialog.808cfe0a3b',
-        'Save for this repository only'
+        'This repository'
       )
     })
   }
   targets.push({
     value: 'global',
-    label: repoId ? 'Save as default for all repositories' : 'Save as global default'
+    label: translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.38b899cc02',
+      'All repositories'
+    )
   })
   return targets
 }

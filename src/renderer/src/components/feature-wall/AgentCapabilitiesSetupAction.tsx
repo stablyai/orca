@@ -304,7 +304,7 @@ function AgentCapabilityStatusNote(props: {
             'Installed'
           )}
         </span>
-        {props.status.label !== 'Installed' ? (
+        {props.status.tone !== 'ready' ? (
           <span
             className={cn(
               'text-xs font-medium',

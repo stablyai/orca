@@ -56,7 +56,6 @@ export function SourceControlAgentActionDialog(
     actionId,
     title,
     description,
-    baseCommandInput,
     savedCommandInputTemplate,
     onOpenSettings,
     startLabel = 'Start agent',
@@ -71,6 +70,7 @@ export function SourceControlAgentActionDialog(
     statusCopy,
     agentArgs,
     commandTemplate,
+    saveLaunchRecipe,
     saveTargetValue,
     saveTargets,
     settings,
@@ -81,14 +81,15 @@ export function SourceControlAgentActionDialog(
     onSelectedAgentChange,
     onAgentArgsChange,
     onCommandTemplateChange,
+    onSaveLaunchRecipeChange,
     onSaveAgentDefaultChange,
     handleStart
   } = useSourceControlAgentActionDialog(props)
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-2xl">
-        <DialogHeader>
+      <DialogContent className="flex h-[70vh] min-w-0 flex-col overflow-hidden sm:max-w-2xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="text-xs">{description}</DialogDescription>
         </DialogHeader>
@@ -102,7 +103,7 @@ export function SourceControlAgentActionDialog(
           agentArgs={agentArgs}
           commandTemplate={commandTemplate}
           savedCommandInputTemplate={savedCommandInputTemplate}
-          baseCommandInput={baseCommandInput}
+          saveLaunchRecipe={saveLaunchRecipe}
           saveTargetValue={saveTargetValue}
           saveTargets={saveTargets}
           settings={settings}
@@ -115,8 +116,10 @@ export function SourceControlAgentActionDialog(
           onSelectedAgentChange={onSelectedAgentChange}
           onAgentArgsChange={onAgentArgsChange}
           onCommandTemplateChange={onCommandTemplateChange}
+          onSaveLaunchRecipeChange={onSaveLaunchRecipeChange}
           onSaveAgentDefaultChange={onSaveAgentDefaultChange}
           onOpenSettings={onOpenSettings}
+          onCancel={() => handleOpenChange(false)}
           onStart={() => void handleStart()}
         />
       </DialogContent>

@@ -4585,7 +4585,7 @@ function SourceControlInner(): React.JSX.Element {
         )}
         description={translate(
           'auto.components.right.sidebar.SourceControl.901140f47d',
-          'Review and edit the full command input before starting an agent.'
+          'Review the prompt before starting an agent.'
         )}
         baseCommandInput={resolveConflictsPrompt}
         worktreeId={activeWorktreeId}
@@ -5220,7 +5220,7 @@ function CommitFailureFixSplitButton({
           )}
           description={translate(
             'auto.components.right.sidebar.SourceControl.15b7f210d7',
-            'Choose the agent and edit the full command input before launch.'
+            'Review the prompt before starting an agent.'
           )}
           baseCommandInput={prompt}
           worktreeId={worktreeId}
