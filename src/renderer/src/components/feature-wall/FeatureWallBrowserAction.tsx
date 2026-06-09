@@ -37,6 +37,10 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
       state.groupsByWorktree[targetWorktree.id]?.[0]?.id
     if (groupId) {
       void openNewBrowserTabInActiveWorkspace(groupId)
+    } else {
+      toast.warning('Browser could not open', {
+        description: 'No workspace group is available for this worktree yet.'
+      })
     }
   }, [closeModal, openModal, openNewBrowserTabInActiveWorkspace, targetWorktree])
 
@@ -87,6 +91,11 @@ function BrowserSkillInstallButton(): React.JSX.Element {
       if (result.skillInstallCommand) {
         setCommand(result.skillInstallCommand)
       }
+    } catch (error) {
+      console.error('Browser setup failed', error)
+      toast.error('Browser setup failed', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred.'
+      })
     } finally {
       setBusy(false)
     }
