@@ -116,7 +116,8 @@ export function SettingsSidebar({
 }: SettingsSidebarProps): React.JSX.Element {
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
   const setupActive = activeSectionId === 'setup-guide'
-  const showSetupGuideTopRow = setupGuideProgress.doneCount < setupGuideProgress.total
+  const showSetupGuideTopRow =
+    setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
   const searchShortcutHint = useShortcutLabel('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
