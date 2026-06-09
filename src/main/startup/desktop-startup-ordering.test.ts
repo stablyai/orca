@@ -12,7 +12,9 @@ describe('desktop startup ordering', () => {
     const desktopEnd = source.indexOf('// Why: the macOS notification permission dialog')
     const desktopStartup = source.slice(desktopStart, desktopEnd)
 
-    expect(attachBlock).toContain('awaitLocalPtyStartup: () => firstWindowStartupServicesReady')
+    expect(attachBlock).toContain('awaitLocalPtyStartup: () => localPtyStartupReady')
+    expect(source).toContain('firstWindowStartupServicesReady = startupServices.firstWindowReady')
+    expect(source).toContain('localPtyStartupReady = startupServices.localPtyReady')
 
     const windowIndex = desktopStartup.indexOf('Promise.resolve(openMainWindow())')
     const rpcStartIndex = desktopStartup.indexOf('desktopRuntimeRpc.start()')

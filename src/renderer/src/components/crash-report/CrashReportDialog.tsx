@@ -99,7 +99,7 @@ export function CrashReportDialog(): React.JSX.Element | null {
     }
   }, [openCrashReport])
 
-  if (!open && !loading) {
+  if (!open) {
     return null
   }
 

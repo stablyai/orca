@@ -165,6 +165,7 @@ let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
 let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
+let localPtyStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
 const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
@@ -404,7 +405,7 @@ ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
 })
 
 function startDesktopFirstWindowStartupServices(): Promise<void> {
-  firstWindowStartupServicesReady = startFirstWindowStartupServices({
+  const startupServices = startFirstWindowStartupServices({
     // Why: the persistent-terminal daemon is desktop-only. Headless `orca serve`
     // registers its PTY runtime separately and must not spawn the desktop daemon
     // or hook loopback listener.
@@ -429,6 +430,8 @@ function startDesktopFirstWindowStartupServices(): Promise<void> {
       console.error('[agent-hooks] Failed to start local hook server:', error)
     }
   })
+  firstWindowStartupServicesReady = startupServices.firstWindowReady
+  localPtyStartupReady = startupServices.localPtyReady
   return firstWindowStartupServicesReady
 }
 
@@ -615,7 +618,7 @@ function openMainWindow(): BrowserWindow {
     prepareCodexRuntimeHomeForLaunch,
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
-      awaitLocalPtyStartup: () => firstWindowStartupServicesReady,
+      awaitLocalPtyStartup: () => localPtyStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
           markExpectedRendererReload(webContentsId)

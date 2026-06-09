@@ -67,6 +67,8 @@ describe('renderer startup runtime routing', () => {
     expect(hostSource).toContain('window.api.crashReports.getLatestPending()')
     expect(hostSource).toContain('window.api.ui.onOpenCrashReport')
     expect(hostSource).toContain('REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT')
+    expect(hostSource).toContain('if (!open) {')
+    expect(hostSource).not.toContain('if (!open && !loading)')
   })
 
   it('clears stale crash-report state before opening the lazy manual report surface', () => {
@@ -133,7 +135,9 @@ describe('renderer startup runtime routing', () => {
     expect(source).toContain("React.lazy(() => import('./WorktreeMetaDialog'))")
     expect(source).not.toContain("from './AddRepoDialog'")
     expect(source).not.toContain("from './WorktreeMetaDialog'")
-    expect(source).toContain("activeModal === 'add-repo' ? <AddRepoDialog /> : null")
+    expect(source).toContain("activeModal === 'add-repo'")
+    expect(source).toContain('shouldMountAddRepoDialog ? <AddRepoDialog /> : null')
+    expect(source).toContain('setTimeout(() =>')
     expect(source).toContain("activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null")
   })
 
