@@ -8,6 +8,7 @@ import type { GlobalSettings } from '../../../../shared/types'
 import { getTaskPresetQuery, PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { AsanaIcon } from '@/components/icons/AsanaIcon'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -282,6 +283,17 @@ const SidebarNav = React.memo(function SidebarNav() {
                     }}
                   >
                     <JiraIcon className="size-3.5" />
+                  </TaskProviderShortcut>
+                ) : null}
+                {visibleTaskProviders.includes('asana') ? (
+                  <TaskProviderShortcut
+                    canBrowseTasks={canBrowseTasks}
+                    label="Open Asana tasks"
+                    onOpen={() => {
+                      openTaskPage({ taskSource: 'asana' })
+                    }}
+                  >
+                    <AsanaIcon className="size-3.5" />
                   </TaskProviderShortcut>
                 ) : null}
               </span>
