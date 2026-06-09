@@ -224,7 +224,7 @@ describe('WorktreeCard quick actions', () => {
 
   it('omits the repeated branch metadata row when compact cards are enabled', () => {
     worktreeCardProperties = []
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -241,7 +241,7 @@ describe('WorktreeCard quick actions', () => {
 
   it('omits the branch metadata row when the workspace has a custom title', () => {
     worktreeCardProperties = []
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
@@ -281,7 +281,7 @@ describe('WorktreeCard quick actions', () => {
 
   it('moves unread and primary into the title row when compact cards are enabled', () => {
     worktreeCardProperties = ['status', 'unread']
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
 
     const markup = renderToStaticMarkup(
       <WorktreeCard

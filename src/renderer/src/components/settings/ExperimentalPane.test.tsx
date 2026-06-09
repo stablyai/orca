@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { ExperimentalPane } from './ExperimentalPane'
-import { EXPERIMENTAL_SEARCH_ENTRY } from './experimental-search'
+import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './experimental-search'
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
@@ -10,15 +10,14 @@ vi.mock('../../store', () => ({
 }))
 
 describe('ExperimentalPane', () => {
-  it('renders compact worktree cards as an off-by-default experimental switch', () => {
+  it('does not render compact worktree cards after graduation from Experimental', () => {
     const markup = renderToStaticMarkup(
       <ExperimentalPane settings={getDefaultSettings('/tmp')} updateSettings={vi.fn()} />
     )
 
-    expect(markup).toContain('Compact worktree cards')
-    expect(markup).toContain('aria-checked="false"')
-    expect(markup).toContain('single title row')
-    expect(markup).toContain('selected properties on a second row')
-    expect(EXPERIMENTAL_SEARCH_ENTRY.compactWorktreeCards.keywords).toContain('metadata')
+    expect(markup).not.toContain('Compact worktree cards')
+    expect(EXPERIMENTAL_PANE_SEARCH_ENTRIES.map((entry) => entry.title)).not.toContain(
+      'Compact worktree cards'
+    )
   })
 })

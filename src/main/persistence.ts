@@ -1923,6 +1923,13 @@ export class Store {
             ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: compact worktree cards graduated from Experimental; preserve
+            // the old opt-in for profiles written during the rollout.
+            compactWorktreeCards:
+              parsed.settings?.compactWorktreeCards ??
+              parsed.settings?.experimentalCompactWorktreeCards ??
+              defaults.settings.compactWorktreeCards,
+            experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,

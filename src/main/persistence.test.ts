@@ -3448,6 +3448,23 @@ describe('Store', () => {
     expect(store.getSettings().experimentalPet).toBe(true)
   })
 
+  it('migrates the legacy experimental compact worktree cards setting', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalCompactWorktreeCards: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().compactWorktreeCards).toBe(true)
+    expect(store.getSettings().experimentalCompactWorktreeCards).toBeUndefined()
+  })
+
   it('defaults legacy experimentalActivity profiles off once', async () => {
     writeDataFile({
       schemaVersion: 1,

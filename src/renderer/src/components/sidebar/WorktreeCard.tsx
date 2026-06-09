@@ -164,7 +164,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const cardProps = useAppStore((s) => s.worktreeCardProperties)
-  const compactCards = settings?.experimentalCompactWorktreeCards === true
+  const compactCards = settings?.compactWorktreeCards === true
   const handleEditIssue = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
