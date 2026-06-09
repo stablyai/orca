@@ -89,11 +89,7 @@ export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: s
     return `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
   }
   return powerShellCommand(
-    [
-      '$ErrorActionPreference = "Stop"',
-      `try { $null = New-Item -ItemType Directory -LiteralPath ${powerShellLiteral(lockDir)}; 'OK' }`,
-      "catch { 'BUSY' }"
-    ].join('; ')
+    `$ErrorActionPreference = "Stop"; try { $null = New-Item -ItemType Directory -LiteralPath ${powerShellLiteral(lockDir)}; 'OK' } catch { 'BUSY' }`
   )
 }
 

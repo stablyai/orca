@@ -6,7 +6,8 @@ import {
   makeRemoteDirectoryCommand,
   probeRelayInstalledCommand,
   readRemoteHomeCommand,
-  relayLivenessProbeCommand
+  relayLivenessProbeCommand,
+  tryCreateInstallLockCommand
 } from './ssh-remote-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
@@ -39,6 +40,16 @@ describe('ssh remote command builders', () => {
     expect(listRelayBaseDirsCommand(windows, 'C:/Users/me/.orca-remote')).toContain(
       '-EncodedCommand'
     )
+  })
+
+  it('keeps the Windows install-lock try/catch parseable', () => {
+    const script = decodePowerShellCommand(
+      tryCreateInstallLockCommand(windows, 'C:/Users/me/.orca-remote/relay/.install-lock')
+    )
+
+    expect(script).toContain('$ErrorActionPreference = "Stop"; try {')
+    expect(script).toContain("} catch { 'BUSY' }")
+    expect(script).not.toContain('}; catch')
   })
 
   it('makes Windows remote directory changes fail before running scoped commands', () => {
