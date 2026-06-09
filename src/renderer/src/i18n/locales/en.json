@@ -15,7 +15,8 @@
         "system": "System",
         "english": "English",
         "chinese": "中文（简体）",
-        "korean": "한국어"
+        "korean": "한국어",
+        "japanese": "日本語"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",

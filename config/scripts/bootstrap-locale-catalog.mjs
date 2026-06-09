@@ -24,6 +24,11 @@ const LOCALE_CONFIG = {
     targetLanguage: 'ko',
     displayName: 'Korean',
     cacheFile: '.ko-catalog-cache.json'
+  },
+  ja: {
+    targetLanguage: 'ja',
+    displayName: 'Japanese',
+    cacheFile: '.ja-catalog-cache.json'
   }
 }
 
