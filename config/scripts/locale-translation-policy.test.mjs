@@ -75,6 +75,30 @@ describe('locale-translation-policy', () => {
     ).toBe('更新中…')
     expect(
       repairTranslatedValue({
+        key: 'auto.components.sidebar.workspace.status.28986b3747',
+        enValue: 'Started an AI agent for the broken checks.',
+        localeValue: '壊れた小切手に対して AI エージェントを開始しました。',
+        locale: 'ja'
+      })
+    ).toBe('失敗したチェックに対して AI エージェントを開始しました。')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
+        enValue: 'Control terminals and agents from your phone.',
+        localeValue: '電話機からターミナルとエージェントを制御します。',
+        locale: 'ja'
+      })
+    ).toBe('スマートフォンからターミナルとエージェントを操作')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.934add88b6',
+        enValue: 'Reviewer',
+        localeValue: '査読者',
+        locale: 'ja'
+      })
+    ).toBe('レビュアー')
+    expect(
+      repairTranslatedValue({
         key: 'auto.components.settings.AgentsPane.92033495ff',
         enValue: 'Auto',
         localeValue: '汽车',
@@ -89,6 +113,73 @@ describe('locale-translation-policy', () => {
         locale: 'ko'
       })
     ).toBe('크래시 신고...')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.App.722d03aa62',
+        enValue: 'The crash report dialog hit an error.',
+        localeValue: '충돌 보고서 대화 상자에 오류가 발생했습니다.',
+        locale: 'ko'
+      })
+    ).toBe('크래시 보고서 대화 상자에 오류가 발생했습니다.')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.dashboard.DashboardAgentRow.912e136cd9',
+        enValue: 'Send',
+        localeValue: '보내다',
+        locale: 'ko'
+      })
+    ).toBe('보내기')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.orchestration.search.ca54c69806',
+        enValue: 'DAG',
+        localeValue: '가리비',
+        locale: 'ko'
+      })
+    ).toBe('DAG')
+  })
+
+  it('fixes Chinese detected-state and skill terminology regressions', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.sidebar.SidebarNav.e518f544b1',
+        enValue: 'No agents detected',
+        localeValue: '未已检测代理',
+        locale: 'zh'
+      })
+    ).toBe('未检测到代理')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.skills.SkillsPage.38e0951c3a',
+        enValue: 'Agent Skills',
+        localeValue: '代理技巧',
+        locale: 'zh'
+      })
+    ).toBe('代理技能')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.appearance.search.9ae151b26b',
+        enValue: 'linear',
+        localeValue: '线性',
+        locale: 'zh'
+      })
+    ).toBe('Linear')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.JiraIssueWorkspace.ef21405c6d',
+        enValue: 'Jira issue',
+        localeValue: '吉拉问题',
+        locale: 'zh'
+      })
+    ).toBe('Jira 议题')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.dbe5e2448e',
+        enValue: 'Pull request merged',
+        localeValue: '合并请求请求',
+        locale: 'zh'
+      })
+    ).toBe('拉取请求已合并')
   })
 
   it('applies search keyword overrides for settings search synonyms', () => {

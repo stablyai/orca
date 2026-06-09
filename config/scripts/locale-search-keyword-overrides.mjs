@@ -48,7 +48,19 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     update: '업데이트',
     cache: '캐시',
     timer: '타이머',
-    search: '검색'
+    search: '검색',
+    examples: '예시',
+    coordinator: '코디네이터',
+    worker: '워커',
+    DAG: 'DAG',
+    dispatch: '디스패치',
+    'child agents': '하위 에이전트',
+    handoff: '핸드오프',
+    messaging: '메시징',
+    coordination: '코디네이션',
+    'multi-agent': '멀티 에이전트',
+    orchestration: '오케스트레이션',
+    task: '작업'
   },
   zh: {
     dark: '深色',
@@ -99,7 +111,11 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     update: '更新',
     cache: '缓存',
     timer: '计时器',
-    search: '搜索'
+    search: '搜索',
+    linear: 'Linear',
+    jira: 'Jira',
+    skill: '技能',
+    skills: '技能'
   },
   ja: {
     dark: 'ダーク',

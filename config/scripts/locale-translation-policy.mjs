@@ -103,7 +103,8 @@ export const BRAND_MISTRANSLATIONS = {
     Pi: ['圆周率'],
     Droid: ['机器人'],
     'GitHub Copilot': ['GitHub 副驾驶', '副驾驶'],
-    Linear: ['线性', '线形']
+    Linear: ['线性', '线形'],
+    Jira: ['吉拉']
   },
   ja: {
     Codex: ['法典', 'コーデックス'],

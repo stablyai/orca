@@ -324,8 +324,43 @@ export const LOCALE_KEY_OVERRIDES = {
   'auto.App.ca6c6eece7': { ko: '스킬', zh: '技能', ja: 'スキル' },
   'auto.App.62ca9895a7': { ko: '스페이스', zh: '空间', ja: 'スペース' },
   'settings.appearance.statusBar.kimiToggleDescription': {
-    ko: 'Kimi 구독',
+    ko: '활성 워크스페이스의 Kimi 구독 사용량을 표시합니다.',
     zh: 'Kimi 订阅',
     ja: 'Kimi サブスクリプション'
+  },
+  'auto.components.mobile.MobileHero.cd4e5e816f': {
+    ko: '주머니 속의 워크스페이스.',
+    zh: '您的工作区就在您的口袋里。',
+    ja: 'ワークスペースをポケットに。'
+  },
+  'auto.components.GitHubItemDialog.dbe5e2448e': {
+    ko: 'PR이 병합되었습니다',
+    zh: '拉取请求已合并',
+    ja: 'プルリクエストがマージされました'
+  },
+  'auto.components.PullRequestPage.c57873d721': {
+    ko: 'PR이 병합되었습니다',
+    zh: '拉取请求已合并',
+    ja: 'プルリクエストがマージされました'
+  },
+  'auto.components.TaskPage.a161925adc': {
+    ko: 'PR이 병합되었습니다',
+    zh: '拉取请求已合并',
+    ja: 'プルリクエストがマージされました'
+  },
+  'auto.components.settings.AgentsPane.9bccf48906': {
+    ko: '에이전트 위치',
+    zh: '代理位置',
+    ja: 'エージェントの場所'
+  },
+  'auto.components.skills.SkillsPage.38e0951c3a': {
+    ko: '에이전트 스킬',
+    zh: '代理技能',
+    ja: 'エージェントのスキル'
+  },
+  'auto.components.sidebar.SidebarNav.e518f544b1': {
+    ko: '감지된 에이전트 없음',
+    zh: '未检测到代理',
+    ja: 'エージェントが検出されません'
   }
 }
