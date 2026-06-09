@@ -301,6 +301,10 @@ function handleRepoHeaderActionPointerDown(event: React.PointerEvent<HTMLElement
   event.stopPropagation()
 }
 
+function stopRepoHeaderMenuEvent(event: React.SyntheticEvent<HTMLElement>): void {
+  event.stopPropagation()
+}
+
 function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>): boolean {
   return isRepoHeaderActionTarget(event.target, event.currentTarget)
 }
@@ -3014,7 +3018,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           align="end"
                           side="bottom"
                           sideOffset={6}
-                          onClick={(event) => event.stopPropagation()}
+                          // Why: Radix portals preserve React bubbling through
+                          // the project header. Keep menu interactions from
+                          // arming row drag/collapse handlers behind it.
+                          onPointerDown={stopRepoHeaderMenuEvent}
+                          onMouseDown={stopRepoHeaderMenuEvent}
+                          onPointerUp={stopRepoHeaderMenuEvent}
+                          onMouseUp={stopRepoHeaderMenuEvent}
+                          onClick={stopRepoHeaderMenuEvent}
+                          onKeyDown={stopRepoHeaderMenuEvent}
                         >
                           <DropdownMenuItem
                             onSelect={() => {
@@ -3064,7 +3076,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           align="end"
                           side="bottom"
                           sideOffset={6}
-                          onClick={(event) => event.stopPropagation()}
+                          // Why: Radix portals preserve React bubbling through
+                          // the project header. Keep menu interactions from
+                          // arming row drag/collapse handlers behind it.
+                          onPointerDown={stopRepoHeaderMenuEvent}
+                          onMouseDown={stopRepoHeaderMenuEvent}
+                          onPointerUp={stopRepoHeaderMenuEvent}
+                          onMouseUp={stopRepoHeaderMenuEvent}
+                          onClick={stopRepoHeaderMenuEvent}
+                          onKeyDown={stopRepoHeaderMenuEvent}
                         >
                           <DropdownMenuItem
                             onSelect={() => {
