@@ -3,6 +3,14 @@ import path from 'node:path'
 import process from 'node:process'
 import { pathToFileURL } from 'node:url'
 
+import {
+  collectStringLeaves,
+  repairCatalog,
+  repairTranslatedValue,
+  setLeaf,
+  shouldPreserveEnglishValue
+} from './locale-translation-policy.mjs'
+
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 const LOCALES_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
 
@@ -10,57 +18,12 @@ const LOCALE_CONFIG = {
   zh: {
     targetLanguage: 'zh-CN',
     displayName: 'Simplified Chinese',
-    cacheFile: '.zh-catalog-cache.json',
-    nativePickerLabels: {
-      chinese: '中文（简体）'
-    },
-    preserveBrandNames(catalog) {
-      function walk(value) {
-        if (typeof value === 'string') {
-          return value.replaceAll('逆戟鲸', 'Orca')
-        }
-        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-          return value
-        }
-        for (const [key, child] of Object.entries(value)) {
-          value[key] = walk(child)
-        }
-        return value
-      }
-      walk(catalog)
-      if (catalog.menu) {
-        catalog.menu.exit = '退出'
-        catalog.menu.exploreOrca = '探索 Orca'
-        catalog.menu.gettingStarted = 'Orca 入门'
-      }
-    }
+    cacheFile: '.zh-catalog-cache.json'
   },
   ko: {
     targetLanguage: 'ko',
     displayName: 'Korean',
-    cacheFile: '.ko-catalog-cache.json',
-    nativePickerLabels: {
-      korean: '한국어'
-    },
-    preserveBrandNames(catalog) {
-      function walk(value) {
-        if (typeof value === 'string') {
-          return value.replaceAll('오르카', 'Orca')
-        }
-        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-          return value
-        }
-        for (const [key, child] of Object.entries(value)) {
-          value[key] = walk(child)
-        }
-        return value
-      }
-      walk(catalog)
-      if (catalog.menu) {
-        catalog.menu.exploreOrca = 'Orca 둘러보기'
-        catalog.menu.gettingStarted = 'Orca 시작하기'
-      }
-    }
+    cacheFile: '.ko-catalog-cache.json'
   }
 }
 
@@ -85,37 +48,8 @@ function restorePlaceholders(text, tokens) {
   return result
 }
 
-function collectStringLeaves(value, prefix = '', leaves = []) {
-  if (typeof value === 'string') {
-    leaves.push({ key: prefix, value })
-    return leaves
-  }
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return leaves
-  }
-  for (const [key, child] of Object.entries(value)) {
-    collectStringLeaves(child, prefix ? `${prefix}.${key}` : key, leaves)
-  }
-  return leaves
-}
-
-function setLeaf(catalog, key, translatedValue) {
-  const parts = key.split('.')
-  let cursor = catalog
-  for (let index = 0; index < parts.length - 1; index += 1) {
-    cursor = cursor[parts[index]]
-  }
-  cursor[parts.at(-1)] = translatedValue
-}
-
 function shouldSkipTranslation(text) {
-  if (!text.trim()) {
-    return true
-  }
-  if (/^https?:\/\//.test(text)) {
-    return true
-  }
-  return false
+  return shouldPreserveEnglishValue(text)
 }
 
 async function translateText(text, targetLanguage) {
@@ -215,24 +149,37 @@ export async function main(root = process.cwd(), locale = parseLocaleArg(process
     }
     const { protectedText, tokens } = protectPlaceholders(value)
     const translated = await translateText(protectedText, config.targetLanguage)
-    cache.set(value, restorePlaceholders(translated, tokens))
+    const restored = restorePlaceholders(translated, tokens)
+    cache.set(
+      value,
+      repairTranslatedValue({ key: '', enValue: value, localeValue: restored, locale })
+    )
     await new Promise((resolve) => setTimeout(resolve, 200))
   })
+
+  for (const value of uniqueValues) {
+    if (shouldSkipTranslation(value) && !cache.has(value)) {
+      cache.set(value, value)
+    }
+  }
 
   await saveCache(cachePath, cache)
 
   for (const leaf of leaves) {
-    setLeaf(localeCatalog, leaf.key, cache.get(leaf.value) ?? leaf.value)
+    const cached = cache.get(leaf.value) ?? leaf.value
+    setLeaf(
+      localeCatalog,
+      leaf.key,
+      repairTranslatedValue({
+        key: leaf.key,
+        enValue: leaf.value,
+        localeValue: cached,
+        locale
+      })
+    )
   }
 
-  // Why: keep picker labels native — machine translation often mangles script names.
-  if (localeCatalog.settings?.appearance?.language) {
-    for (const [key, label] of Object.entries(config.nativePickerLabels)) {
-      localeCatalog.settings.appearance.language[key] = label
-    }
-  }
-
-  config.preserveBrandNames(localeCatalog)
+  repairCatalog(enCatalog, localeCatalog, locale)
 
   await fs.writeFile(localePath, `${JSON.stringify(localeCatalog, null, 2)}\n`, 'utf8')
   console.log(`Wrote ${localePath}`)

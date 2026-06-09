@@ -48,6 +48,7 @@
     "bootstrap:locale-catalog": "node config/scripts/bootstrap-locale-catalog.mjs",
     "bootstrap:zh-catalog": "node config/scripts/bootstrap-zh-catalog.mjs",
     "bootstrap:ko-catalog": "node config/scripts/bootstrap-locale-catalog.mjs --locale ko",
+    "repair:locale-catalog": "node config/scripts/repair-locale-catalog.mjs",
     "verify:localization-coverage": "node config/scripts/audit-localization-coverage.mjs --check",
     "audit:localization": "node config/scripts/audit-localization-coverage.mjs",
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/verify-cli-bin.mjs --fix-executable && node config/scripts/install-dev-cli.mjs",
