@@ -208,6 +208,22 @@ describe('parseUnameToRelayPlatform', () => {
     expect(parseUnameToRelayPlatform('Linux', 'amd64')).toBe('linux-x64')
   })
 
+  it('maps Windows amd64', () => {
+    expect(parseUnameToRelayPlatform('Windows', 'AMD64')).toBe('win32-x64')
+  })
+
+  it('maps Windows X64 runtime architecture', () => {
+    expect(parseUnameToRelayPlatform('Windows', 'X64')).toBe('win32-x64')
+  })
+
+  it('maps Windows arm64', () => {
+    expect(parseUnameToRelayPlatform('win32', 'ARM64')).toBe('win32-arm64')
+  })
+
+  it('maps MSYS/MINGW uname output as Windows', () => {
+    expect(parseUnameToRelayPlatform('MINGW64_NT-10.0', 'x86_64')).toBe('win32-x64')
+  })
+
   it('returns null for unsupported OS', () => {
     expect(parseUnameToRelayPlatform('FreeBSD', 'x86_64')).toBeNull()
   })
