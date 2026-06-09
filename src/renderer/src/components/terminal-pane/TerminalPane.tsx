@@ -84,6 +84,7 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -1251,7 +1252,15 @@ export default function TerminalPane({
         readClipboardText: window.api.ui.readClipboardText,
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
-        pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+        pasteText: (text, options) => {
+          pasteTerminalText(pane.terminal, text, options)
+          if (options?.forceBracketedPaste) {
+            const manager = managerRef.current
+            if (manager) {
+              scheduleImagePasteWebglAtlasRecovery(manager)
+            }
+          }
+        },
         onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
       }).catch(() => {
         /* ignore clipboard failures */
@@ -1948,8 +1957,14 @@ export default function TerminalPane({
               <input
                 ref={renameInputRef}
                 className="pane-title-input"
-                aria-label={translate("auto.components.terminal.pane.TerminalPane.7dbbfcbecc", "Pane title")}
-                placeholder={translate("auto.components.terminal.pane.TerminalPane.7dbbfcbecc", "Pane title")}
+                aria-label={translate(
+                  'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
+                  'Pane title'
+                )}
+                placeholder={translate(
+                  'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
+                  'Pane title'
+                )}
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
@@ -1967,7 +1982,11 @@ export default function TerminalPane({
                   type="button"
                   className="pane-title-text"
                   onClick={() => handleStartRename(pane.id)}
-                  aria-label={translate("auto.components.terminal.pane.TerminalPane.cc5a2dc706", "Edit pane title: {{value0}}", { value0: title })}
+                  aria-label={translate(
+                    'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
+                    'Edit pane title: {{value0}}',
+                    { value0: title }
+                  )}
                 >
                   {title}
                 </button>
@@ -1982,13 +2001,21 @@ export default function TerminalPane({
                         e.stopPropagation()
                         handleRemoveTitle(pane.id)
                       }}
-                      aria-label={translate("auto.components.terminal.pane.TerminalPane.f984ab2a30", "Remove pane title: {{value0}}", { value0: title })}
+                      aria-label={translate(
+                        'auto.components.terminal.pane.TerminalPane.f984ab2a30',
+                        'Remove pane title: {{value0}}',
+                        { value0: title }
+                      )}
                     >
                       <X className="size-3" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={4}>
-                    {translate("auto.components.terminal.pane.TerminalPane.ac112e9036", "Remove title")}</TooltipContent>
+                    {translate(
+                      'auto.components.terminal.pane.TerminalPane.ac112e9036',
+                      'Remove title'
+                    )}
+                  </TooltipContent>
                 </Tooltip>
               </>
             )}

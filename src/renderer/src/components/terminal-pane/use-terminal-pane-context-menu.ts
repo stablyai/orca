@@ -12,6 +12,7 @@ import { sendTerminalQuickCommandToPane } from './terminal-quick-command-dispatc
 import { splitWebRuntimeTerminal } from '@/runtime/web-runtime-session'
 import { pasteTerminalText } from './terminal-bracketed-paste'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 import {
   REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT,
   type RequestActiveTerminalPaneSplitDetail
@@ -148,7 +149,12 @@ export function useTerminalPaneContextMenu({
     // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
     // remounts; the numeric PaneManager id is only a local runtime handle.
     await window.api.ui.writeClipboardText(makePaneKey(tabId, pane.leafId))
-    toast.success(translate("auto.components.terminal.pane.use.terminal.pane.context.menu.a29b9faa01", "Pane ID copied"))
+    toast.success(
+      translate(
+        'auto.components.terminal.pane.use.terminal.pane.context.menu.a29b9faa01',
+        'Pane ID copied'
+      )
+    )
     pane.terminal.focus()
   }
 
@@ -162,7 +168,15 @@ export function useTerminalPaneContextMenu({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
       connectionId,
-      pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+      pasteText: (text, options) => {
+        pasteTerminalText(pane.terminal, text, options)
+        if (options?.forceBracketedPaste) {
+          const manager = managerRef.current
+          if (manager) {
+            scheduleImagePasteWebglAtlasRecovery(manager)
+          }
+        }
+      },
       onImagePasteError: (error) => {
         const detail = error instanceof Error ? error.message : String(error)
         onPasteError(`Image paste failed: ${detail}`)
