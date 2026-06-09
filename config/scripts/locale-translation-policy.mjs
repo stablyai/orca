@@ -28,6 +28,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Kilocode',
   'Kimi',
   'Kiro',
+  'Linear',
   'Mistral Vibe',
   'OMP',
   'OpenClaude',
@@ -42,7 +43,10 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Zed',
   'codex',
   'gemini',
-  'claude'
+  'claude',
+  'gh',
+  'idle',
+  'anthropic'
 ])
 
 export const LOCALE_VALUE_OVERRIDES = {
@@ -76,6 +80,24 @@ export const LOCALE_VALUE_OVERRIDES = {
     Starter: '入门版',
     Turns: '轮次',
     'Recent sessions': '最近的会话'
+  },
+  ja: {
+    Dismiss: '閉じる',
+    Optional: '任意',
+    Ports: 'ポート',
+    Active: 'アクティブ',
+    'Dismiss agent': 'エージェントを閉じる',
+    'Codex Usage': 'Codex 使用量',
+    'Claude Usage': 'Claude 使用量',
+    'Gemini Usage': 'Gemini 使用量',
+    'Force Delete Branch': 'ブランチを強制削除',
+    'Time agents worked': 'エージェント作業時間',
+    PR: 'PR',
+    Custom: 'カスタム',
+    'Terminal 1': 'ターミナル 1',
+    Starter: 'スターター',
+    Turns: 'ターン',
+    'Recent sessions': '最近のセッション'
   }
 }
 
@@ -114,6 +136,24 @@ export const BRAND_MISTRANSLATIONS = {
     Pi: ['圆周率'],
     Droid: ['机器人'],
     'GitHub Copilot': ['GitHub 副驾驶', '副驾驶']
+  },
+  ja: {
+    Codex: ['法典', 'コーデックス'],
+    Gemini: ['双子座'],
+    Claude: ['クロード'],
+    Grok: ['グロック'],
+    Orca: ['シャチ', '逆戟鲸', 'オルカ'],
+    Cursor: ['カーソル'],
+    OpenCode: ['オープンコード', 'オープン・コード'],
+    OpenClaw: ['オープンクロー'],
+    OpenClaude: ['オープンクロード'],
+    Antigravity: ['反重力'],
+    Continue: ['続ける', '続行'],
+    Charm: ['魅力'],
+    Goose: ['ガチョウ', '雁'],
+    Pi: ['円周率'],
+    Droid: ['ロボット', 'ドロイド'],
+    'GitHub Copilot': ['GitHub コパイロット', 'コパイロット']
   }
 }
 
@@ -124,20 +164,38 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /상담원/g, replacement: '에이전트', whenEnIncludes: 'agent' },
     { pattern: /상담사/g, replacement: '에이전트', whenEnIncludes: 'agent' },
     { pattern: /지점/g, replacement: '브랜치', whenEnIncludes: 'ranch' },
-    { pattern: /분기/g, replacement: '브랜치', whenEnIncludes: 'ranch' }
+    { pattern: /분기/g, replacement: '브랜치', whenEnIncludes: 'ranch' },
+    { pattern: /나뭇가지/g, replacement: '브랜치', whenEnIncludes: 'ranch' },
+    { pattern: /홍보/g, replacement: 'PR', whenEnIncludes: 'PR' },
+    { pattern: /선형/g, replacement: 'Linear', whenEnIncludes: 'Linear' }
   ],
   zh: [
     { pattern: /客服人员/g, replacement: '代理', whenEnIncludes: 'agent' },
     { pattern: /会议/g, replacement: '会话', whenEnIncludes: 'session' },
     { pattern: /港口/g, replacement: '端口', whenEnIncludes: 'ort' },
     { pattern: /公关/g, replacement: 'PR', whenEnIncludes: 'PR' },
-    { pattern: /虎鲸:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' }
+    { pattern: /虎鲸:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' },
+    { pattern: /代理商/g, replacement: '代理', whenEnIncludes: 'agent' },
+    { pattern: /智能体/g, replacement: '代理', whenEnIncludes: 'agent' },
+    { pattern: /分支机构/g, replacement: '分支', whenEnIncludes: 'ranch' }
+  ],
+  ja: [
+    { pattern: /解雇/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
+    { pattern: /却下/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
+    { pattern: /代理人/g, replacement: 'エージェント', whenEnIncludes: 'agent' },
+    { pattern: /支店/g, replacement: 'ブランチ', whenEnIncludes: 'ranch' },
+    { pattern: /港(?!口)/g, replacement: 'ポート', whenEnIncludes: 'ort' },
+    { pattern: /会議/g, replacement: 'セッション', whenEnIncludes: 'session' },
+    { pattern: /広報/g, replacement: 'PR', whenEnIncludes: 'PR' },
+    { pattern: /端末/g, replacement: 'ターミナル', whenEnIncludes: 'erminal' },
+    { pattern: /シャチ:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' }
   ]
 }
 
 export const NATIVE_PICKER_LABELS = {
-  zh: { chinese: '中文（简体）', korean: '한국어' },
-  ko: { chinese: '中文（简体）', korean: '한국어' }
+  zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語' },
+  ko: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語' },
+  ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語' }
 }
 
 export function isEnglishOnlyKey(key) {
@@ -213,7 +271,14 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
   }
 
   if (enValue === 'Orca' || enValue.startsWith('Orca ')) {
-    result = result.replaceAll('虎鲸', 'Orca').replaceAll('逆戟鲸', 'Orca')
+    result = result
+      .replaceAll('虎鲸', 'Orca')
+      .replaceAll('逆戟鲸', 'Orca')
+      .replaceAll('シャチ', 'Orca')
+  }
+
+  if (enValue.includes('orca://')) {
+    result = result.replace(/シャチ:\/\//g, 'orca://')
   }
 
   return result
