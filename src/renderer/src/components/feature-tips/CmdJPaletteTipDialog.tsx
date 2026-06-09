@@ -81,20 +81,13 @@ export function CmdJPaletteTipDialog({
               <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
                 <span className="block">{tip.description}</span>
                 <span className="block text-muted-foreground">
-                  {translate(
-                    'auto.components.feature.tips.CmdJPaletteTipDialog.8241897205',
-                    'Rebind the shortcut anytime in'
-                  )}{' '}
+                  {translate("auto.components.feature.tips.CmdJPaletteTipDialog.8241897205", "Rebind the shortcut anytime in")}{' '}
                   <button
                     type="button"
                     onClick={onRebindClick}
                     className="inline appearance-none border-0 bg-transparent p-0 font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:decoration-foreground"
                   >
-                    {translate(
-                      'auto.components.feature.tips.CmdJPaletteTipDialog.c0bb9f869b',
-                      'Settings → Shortcuts'
-                    )}
-                  </button>
+                    {translate("auto.components.feature.tips.CmdJPaletteTipDialog.c0bb9f869b", "Settings → Shortcuts")}</button>
                   .
                 </span>
               </DialogDescription>

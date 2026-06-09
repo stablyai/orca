@@ -246,17 +246,7 @@ function AppSection({
           type="button"
           onClick={onToggle}
           className="pl-2 py-2 pr-0.5 transition-colors hover:bg-muted/50"
-          aria-label={
-            isCollapsed
-              ? translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.e419d27083',
-                  'Expand Orca'
-                )
-              : translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.53dd5560ae',
-                  'Collapse Orca'
-                )
-          }
+          aria-label={isCollapsed ? translate("auto.components.status.bar.ResourceUsageStatusSegment.e419d27083", "Expand Orca") : translate("auto.components.status.bar.ResourceUsageStatusSegment.53dd5560ae", "Collapse Orca")}
           aria-expanded={!isCollapsed}
         >
           {isCollapsed ? (
@@ -267,8 +257,7 @@ function AppSection({
         </button>
         <div className="flex-1 min-w-0 py-2 pr-3 flex items-center justify-between">
           <span className="text-[11px] font-semibold uppercase tracking-wide truncate text-muted-foreground">
-            {translate('auto.components.status.bar.ResourceUsageStatusSegment.288a4dd177', 'Orca')}
-          </span>
+            {translate("auto.components.status.bar.ResourceUsageStatusSegment.288a4dd177", "Orca")}</span>
           <div className="flex items-center gap-2 shrink-0">
             <Sparkline samples={app.history} />
             <MetricPair cpu={app.cpu} memory={app.memory} />
@@ -278,28 +267,10 @@ function AppSection({
       </div>
       {!isCollapsed && (
         <div className="border-t border-border/30">
-          <AppSubRow
-            label={translate(
-              'auto.components.status.bar.ResourceUsageStatusSegment.81cd37af99',
-              'Main'
-            )}
-            values={app.main}
-          />
-          <AppSubRow
-            label={translate(
-              'auto.components.status.bar.ResourceUsageStatusSegment.d406915b78',
-              'Renderer'
-            )}
-            values={app.renderer}
-          />
+          <AppSubRow label={translate("auto.components.status.bar.ResourceUsageStatusSegment.81cd37af99", "Main")} values={app.main} />
+          <AppSubRow label={translate("auto.components.status.bar.ResourceUsageStatusSegment.d406915b78", "Renderer")} values={app.renderer} />
           {(app.other.cpu > 0 || app.other.memory > 0) && (
-            <AppSubRow
-              label={translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.0f9e50eb07',
-                'Other'
-              )}
-              values={app.other}
-            />
+            <AppSubRow label={translate("auto.components.status.bar.ResourceUsageStatusSegment.0f9e50eb07", "Other")} values={app.other} />
           )}
         </div>
       )}
@@ -416,11 +387,7 @@ function SessionRow({
             session.bound &&
               'opacity-0 group-hover/sessrow:opacity-100 group-focus-within/sessrow:opacity-100 focus-visible:opacity-100'
           )}
-          aria-label={translate(
-            'auto.components.status.bar.ResourceUsageStatusSegment.b10695d6ce',
-            'Kill session {{value0}}',
-            { value0: session.sessionId }
-          )}
+          aria-label={translate("auto.components.status.bar.ResourceUsageStatusSegment.b10695d6ce", "Kill session {{value0}}", { value0: session.sessionId })}
         >
           <X className="size-3" />
         </button>
@@ -477,17 +444,7 @@ function WorktreeRow({
             type="button"
             onClick={onToggle}
             className="pl-2 py-2 pr-0.5 shrink-0"
-            aria-label={
-              isCollapsed
-                ? translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.c4a8968bdd',
-                    'Expand workspace'
-                  )
-                : translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.bbcd9b7b85',
-                    'Collapse workspace'
-                  )
-            }
+            aria-label={isCollapsed ? translate("auto.components.status.bar.ResourceUsageStatusSegment.c4a8968bdd", "Expand workspace") : translate("auto.components.status.bar.ResourceUsageStatusSegment.bbcd9b7b85", "Collapse workspace")}
           >
             {isCollapsed ? (
               <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -504,11 +461,7 @@ function WorktreeRow({
         <button
           type="button"
           onClick={onNavigate}
-          aria-label={translate(
-            'auto.components.status.bar.ResourceUsageStatusSegment.d659d71d2d',
-            'Resume workspace {{value0}}',
-            { value0: rowLabel }
-          )}
+          aria-label={translate("auto.components.status.bar.ResourceUsageStatusSegment.d659d71d2d", "Resume workspace {{value0}}", { value0: rowLabel })}
           className="flex-1 min-w-0 py-2 pr-2 pl-1 text-left flex items-center gap-1.5"
           disabled={!isNavigable}
         >
@@ -519,11 +472,7 @@ function WorktreeRow({
               local. */}
           {worktree.isRemote && (
             <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
-              {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1',
-                '· remote'
-              )}
-            </span>
+              {translate("auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1", "· remote")}</span>
           )}
         </button>
         <div className="flex items-center gap-2 shrink-0 pr-3">
@@ -546,11 +495,7 @@ function WorktreeRow({
                       type="button"
                       onClick={onDelete}
                       disabled={isMainWorktree}
-                      aria-label={translate(
-                        'auto.components.status.bar.ResourceUsageStatusSegment.16bc3c998a',
-                        'Delete workspace {{value0}}',
-                        { value0: rowLabel }
-                      )}
+                      aria-label={translate("auto.components.status.bar.ResourceUsageStatusSegment.16bc3c998a", "Delete workspace {{value0}}", { value0: rowLabel })}
                       className={cn(
                         'p-0.5 rounded text-muted-foreground transition-colors',
                         isMainWorktree
@@ -566,15 +511,7 @@ function WorktreeRow({
                     sideOffset={4}
                     className="z-[70] max-w-[200px] text-pretty"
                   >
-                    {isMainWorktree
-                      ? translate(
-                          'auto.components.status.bar.ResourceUsageStatusSegment.946724a70a',
-                          'The main workspace cannot be deleted.'
-                        )
-                      : translate(
-                          'auto.components.status.bar.ResourceUsageStatusSegment.a82253b458',
-                          'Delete workspace.'
-                        )}
+                    {isMainWorktree ? translate("auto.components.status.bar.ResourceUsageStatusSegment.946724a70a", "The main workspace cannot be deleted.") : translate("auto.components.status.bar.ResourceUsageStatusSegment.a82253b458", "Delete workspace.")}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -669,17 +606,7 @@ function ResourceTree({
                 type="button"
                 onClick={() => toggleRepo(group.repoId)}
                 className="pl-2 py-2 pr-0.5 transition-colors hover:bg-muted/50"
-                aria-label={
-                  repoCollapsed
-                    ? translate(
-                        'auto.components.status.bar.ResourceUsageStatusSegment.b12e31dfcb',
-                        'Expand repo'
-                      )
-                    : translate(
-                        'auto.components.status.bar.ResourceUsageStatusSegment.73a3fd68a9',
-                        'Collapse repo'
-                      )
-                }
+                aria-label={repoCollapsed ? translate("auto.components.status.bar.ResourceUsageStatusSegment.b12e31dfcb", "Expand repo") : translate("auto.components.status.bar.ResourceUsageStatusSegment.73a3fd68a9", "Collapse repo")}
               >
                 {repoCollapsed ? (
                   <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -694,11 +621,7 @@ function ResourceTree({
                   </span>
                   {group.hasRemoteChildren && (
                     <span className="shrink-0 text-[9px] uppercase tracking-wide text-muted-foreground/70">
-                      {translate(
-                        'auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1',
-                        '· remote'
-                      )}
-                    </span>
+                      {translate("auto.components.status.bar.ResourceUsageStatusSegment.21cacb16d1", "· remote")}</span>
                   )}
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
@@ -1199,11 +1122,7 @@ export function ResourceUsageStatusSegment({
               className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
               aria-label={
                 daemonUnreachable
-                  ? translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.59f178fe11',
-                      '{{value0}}, daemon unreachable',
-                      { value0: resourceManagerAriaLabel }
-                    )
+                  ? translate("auto.components.status.bar.ResourceUsageStatusSegment.59f178fe11", "{{value0}}, daemon unreachable", { value0: resourceManagerAriaLabel })
                   : resourceManagerAriaLabel
               }
             >
@@ -1235,13 +1154,7 @@ export function ResourceUsageStatusSegment({
                 </span>
               )}
               {daemonUnreachable && (
-                <AlertTriangle
-                  className="size-3 text-yellow-500"
-                  aria-label={translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.ca95d077db',
-                    'Daemon unreachable'
-                  )}
-                />
+                <AlertTriangle className="size-3 text-yellow-500" aria-label={translate("auto.components.status.bar.ResourceUsageStatusSegment.ca95d077db", "Daemon unreachable")} />
               )}
             </button>
           </PopoverTrigger>
@@ -1278,15 +1191,7 @@ export function ResourceUsageStatusSegment({
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
             <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
             <span className="truncate">
-              {runtimeEnvironmentActive
-                ? translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.6a822b06a7',
-                    'Resource Manager'
-                  )
-                : translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.6d9793d4bc',
-                    'Resource Manager - Terminals'
-                  )}
+              {runtimeEnvironmentActive ? translate("auto.components.status.bar.ResourceUsageStatusSegment.6a822b06a7", "Resource Manager") : translate("auto.components.status.bar.ResourceUsageStatusSegment.6d9793d4bc", "Resource Manager - Terminals")}
             </span>
           </div>
 
@@ -1297,25 +1202,14 @@ export function ResourceUsageStatusSegment({
                   type="button"
                   onClick={() => daemonActions.setPending('restart')}
                   disabled={daemonActions.isBusy || runtimeEnvironmentActive}
-                  aria-label={translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
-                    'Restart daemon'
-                  )}
+                  aria-label={translate("auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb", "Restart daemon")}
                   className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
                 >
                   <RotateCw className="size-3" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {runtimeEnvironmentActive
-                  ? translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.14ff448686',
-                      'Unavailable for runtime servers'
-                    )
-                  : translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb',
-                      'Restart daemon'
-                    )}
+                {runtimeEnvironmentActive ? translate("auto.components.status.bar.ResourceUsageStatusSegment.14ff448686", "Unavailable for runtime servers") : translate("auto.components.status.bar.ResourceUsageStatusSegment.c9382662bb", "Restart daemon")}
               </TooltipContent>
             </Tooltip>
             <Tooltip delayDuration={200}>
@@ -1324,25 +1218,14 @@ export function ResourceUsageStatusSegment({
                   type="button"
                   onClick={() => daemonActions.setPending('killAll')}
                   disabled={daemonActions.isBusy || runtimeEnvironmentActive}
-                  aria-label={translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
-                    'Kill all sessions'
-                  )}
+                  aria-label={translate("auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59", "Kill all sessions")}
                   className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
                 >
                   <Trash2 className="size-3" />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={6}>
-                {runtimeEnvironmentActive
-                  ? translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.14ff448686',
-                      'Unavailable for runtime servers'
-                    )
-                  : translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
-                      'Kill all sessions'
-                    )}
+                {runtimeEnvironmentActive ? translate("auto.components.status.bar.ResourceUsageStatusSegment.14ff448686", "Unavailable for runtime servers") : translate("auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59", "Kill all sessions")}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -1352,18 +1235,9 @@ export function ResourceUsageStatusSegment({
           <div className="flex items-start gap-2 border-b border-border bg-yellow-500/10 px-3 py-2 text-[11px] text-foreground">
             <AlertTriangle className="mt-0.5 size-3 shrink-0 text-yellow-500" />
             <div className="flex-1">
-              <div className="font-medium">
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.f8e0d794b4',
-                  'Daemon is not responding'
-                )}
-              </div>
+              <div className="font-medium">{translate("auto.components.status.bar.ResourceUsageStatusSegment.f8e0d794b4", "Daemon is not responding")}</div>
               <div className="text-muted-foreground">
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.f85af9cda6',
-                  'Resource snapshots and terminal sessions are unavailable.'
-                )}
-              </div>
+                {translate("auto.components.status.bar.ResourceUsageStatusSegment.f85af9cda6", "Resource snapshots and terminal sessions are unavailable.")}</div>
             </div>
             <Button
               variant="outline"
@@ -1373,11 +1247,7 @@ export function ResourceUsageStatusSegment({
               disabled={daemonActions.isBusy}
             >
               <RotateCw className="mr-1 size-3" />
-              {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.93b0de3c21',
-                'Restart'
-              )}
-            </Button>
+              {translate("auto.components.status.bar.ResourceUsageStatusSegment.93b0de3c21", "Restart")}</Button>
           </div>
         )}
 
@@ -1387,12 +1257,7 @@ export function ResourceUsageStatusSegment({
             role="status"
           >
             <AlertTriangle className="size-3 shrink-0 text-yellow-500" />
-            <span>
-              {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.e7cf14ec78',
-                'Terminal sessions unavailable. The list may be stale.'
-              )}
-            </span>
+            <span>{translate("auto.components.status.bar.ResourceUsageStatusSegment.e7cf14ec78", "Terminal sessions unavailable. The list may be stale.")}</span>
           </div>
         )}
 
@@ -1409,11 +1274,7 @@ export function ResourceUsageStatusSegment({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                  {translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.1fedf94eae',
-                    'Combined CPU load. Values above 100% mean more than one core is working at once.'
-                  )}
-                </TooltipContent>
+                  {translate("auto.components.status.bar.ResourceUsageStatusSegment.1fedf94eae", "Combined CPU load. Values above 100% mean more than one core is working at once.")}</TooltipContent>
               </Tooltip>
               <span className="text-muted-foreground/50">·</span>
               <Tooltip delayDuration={200}>
@@ -1426,11 +1287,7 @@ export function ResourceUsageStatusSegment({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                  {translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.9e2525c89f',
-                    "Resident memory held by Orca plus the processes under each worktree's terminals."
-                  )}
-                </TooltipContent>
+                  {translate("auto.components.status.bar.ResourceUsageStatusSegment.9e2525c89f", "Resident memory held by Orca plus the processes under each worktree's terminals.")}</TooltipContent>
               </Tooltip>
               <span className="text-muted-foreground/50">·</span>
               <Tooltip delayDuration={200}>
@@ -1439,29 +1296,15 @@ export function ResourceUsageStatusSegment({
                     tabIndex={0}
                     className="text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded"
                   >
-                    {formatPercent(hostShare)}{' '}
-                    {translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.e7ccce7e87',
-                      'of system RAM'
-                    )}
-                  </span>
+                    {formatPercent(hostShare)} {translate("auto.components.status.bar.ResourceUsageStatusSegment.e7ccce7e87", "of system RAM")}</span>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
-                  {translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.6449a95c78',
-                    "How much of this machine's physical RAM the Orca-tracked processes are sitting on."
-                  )}
-                </TooltipContent>
+                  {translate("auto.components.status.bar.ResourceUsageStatusSegment.6449a95c78", "How much of this machine's physical RAM the Orca-tracked processes are sitting on.")}</TooltipContent>
               </Tooltip>
             </div>
             {orphanCount > 0 && (
               <span className="shrink-0 text-yellow-500" aria-live="polite">
-                {orphanCount}{' '}
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
-                  'orphan'
-                )}
-                {orphanCount === 1 ? '' : 's'}
+                {orphanCount} {translate("auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31", "orphan")}{orphanCount === 1 ? '' : 's'}
               </span>
             )}
           </div>
@@ -1489,11 +1332,7 @@ export function ResourceUsageStatusSegment({
                 )}
                 aria-pressed={sortOption === 'name'}
               >
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.2aa2de6cb9',
-                  'Name'
-                )}
-              </button>
+                {translate("auto.components.status.bar.ResourceUsageStatusSegment.2aa2de6cb9", "Name")}</button>
               <div className="flex items-center gap-2 shrink-0">
                 <div className={cn(METRIC_COLUMNS_CLS, 'text-[10px]')}>
                   <button
@@ -1508,11 +1347,7 @@ export function ResourceUsageStatusSegment({
                     )}
                     aria-pressed={sortOption === 'cpu'}
                   >
-                    {translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.298f4be7f2',
-                      'CPU'
-                    )}
-                  </button>
+                    {translate("auto.components.status.bar.ResourceUsageStatusSegment.298f4be7f2", "CPU")}</button>
                   <button
                     type="button"
                     onClick={() => setSortOption('memory')}
@@ -1525,11 +1360,7 @@ export function ResourceUsageStatusSegment({
                     )}
                     aria-pressed={sortOption === 'memory'}
                   >
-                    {translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.1b24a32d3a',
-                      'Memory'
-                    )}
-                  </button>
+                    {translate("auto.components.status.bar.ResourceUsageStatusSegment.1b24a32d3a", "Memory")}</button>
                 </div>
                 {/* Why: empty trailing gutter so the CPU/Memory header
                     cells line up with the row cells; rows reserve the same
@@ -1558,11 +1389,7 @@ export function ResourceUsageStatusSegment({
 
             {unifiedRepos.length === 0 && resourceSnapshot && (
               <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.27a74f91f0',
-                  'Nothing running right now'
-                )}
-              </div>
+                {translate("auto.components.status.bar.ResourceUsageStatusSegment.27a74f91f0", "Nothing running right now")}</div>
             )}
 
             {resourceSnapshot && (
@@ -1576,14 +1403,8 @@ export function ResourceUsageStatusSegment({
             {!resourceSnapshot && !daemonUnreachable && (
               <div className="px-3 py-4 text-center text-xs text-muted-foreground">
                 {runtimeEnvironmentActive
-                  ? translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.56b6888304',
-                      'Local resource usage hidden for runtime servers.'
-                    )
-                  : translate(
-                      'auto.components.status.bar.ResourceUsageStatusSegment.888dad8c55',
-                      'Loading…'
-                    )}
+                  ? translate("auto.components.status.bar.ResourceUsageStatusSegment.56b6888304", "Local resource usage hidden for runtime servers.")
+                  : translate("auto.components.status.bar.ResourceUsageStatusSegment.888dad8c55", "Loading…")}
               </div>
             )}
           </div>
@@ -1598,11 +1419,7 @@ export function ResourceUsageStatusSegment({
                 className="relative inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
                 <span className="min-w-0 truncate px-4 text-center">
-                  {translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
-                    'Review inactive workspaces ('
-                  )}
-                  {oldWorkspaceCount})
+                  {translate("auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3", "Review inactive workspaces (")}{oldWorkspaceCount})
                 </span>
                 <ChevronRight
                   className="absolute right-2.5 size-3.5 text-muted-foreground"
@@ -1616,16 +1433,7 @@ export function ResourceUsageStatusSegment({
                 onClick={() => void handleKillOrphans()}
                 className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89',
-                  'Kill'
-                )}
-                {orphanCount}{' '}
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.996295bff2',
-                  'orphan terminal'
-                )}
-                {orphanCount === 1 ? '' : 's'}
+                {translate("auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89", "Kill")}{orphanCount} {translate("auto.components.status.bar.ResourceUsageStatusSegment.996295bff2", "orphan terminal")}{orphanCount === 1 ? '' : 's'}
               </button>
             ) : null}
           </div>
@@ -1668,48 +1476,25 @@ export function ResourceUsageStatusSegment({
         >
           <DialogHeader>
             <DialogTitle className="text-sm">
-              {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89',
-                'Kill'
-              )}{' '}
+              {translate("auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89", "Kill")}{' '}
               <span className="font-medium text-foreground">
-                {killConfirm?.label ??
-                  translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.138b99bd80',
-                    'this session'
-                  )}
+                {killConfirm?.label ?? translate("auto.components.status.bar.ResourceUsageStatusSegment.138b99bd80", "this session")}
               </span>
               ?
             </DialogTitle>
             <DialogDescription className="text-xs">
-              {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.67c4ecda49',
-                "Force-quits this terminal. Any unsaved work in the pane is lost. This can't be undone."
-              )}
-            </DialogDescription>
+              {translate("auto.components.status.bar.ResourceUsageStatusSegment.67c4ecda49", "Force-quits this terminal. Any unsaved work in the pane is lost. This can't be undone.")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setKillConfirm(null)} disabled={killing}>
-              {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.946d9f94d0',
-                'Cancel'
-              )}
-            </Button>
+              {translate("auto.components.status.bar.ResourceUsageStatusSegment.946d9f94d0", "Cancel")}</Button>
             <Button
               variant="destructive"
               onClick={() => void runKillConfirmed()}
               disabled={killing}
             >
               {killing ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              {killing
-                ? translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.41ae4fa725',
-                    'Killing…'
-                  )
-                : translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.b10695d6ce',
-                    'Kill session'
-                  )}
+              {killing ? translate("auto.components.status.bar.ResourceUsageStatusSegment.41ae4fa725", "Killing…") : translate("auto.components.status.bar.ResourceUsageStatusSegment.b10695d6ce", "Kill session")}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -295,31 +295,16 @@ export function ThemePicker({
       <Input
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
-        placeholder={translate(
-          'auto.components.settings.SettingsFormControls.fac59213fc',
-          'Search builtin themes'
-        )}
+        placeholder={translate("auto.components.settings.SettingsFormControls.fac59213fc", "Search builtin themes")}
       />
       <div className="rounded-lg border border-border/50">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
+          <span>{translate("auto.components.settings.SettingsFormControls.fbb428db98", "Selected:")} {selectedTheme}</span>
           <span>
-            {translate('auto.components.settings.SettingsFormControls.fbb428db98', 'Selected:')}{' '}
-            {selectedTheme}
-          </span>
-          <span>
-            {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
-            {filteredThemes.length}
+            {translate("auto.components.settings.SettingsFormControls.4e11f87ca6", "Showing")} {filteredThemes.length}
             {normalizedQuery
-              ? translate(
-                  'auto.components.settings.SettingsFormControls.c822571b2e',
-                  ' matching "{{value0}}"',
-                  { value0: query.trim() }
-                )
-              : translate(
-                  'auto.components.settings.SettingsFormControls.cb330ef7f8',
-                  ' of {{value0}}',
-                  { value0: BUILTIN_TERMINAL_THEME_NAMES.length }
-                )}
+              ? translate("auto.components.settings.SettingsFormControls.c822571b2e", " matching \"{{value0}}\"", { value0: query.trim() })
+              : translate("auto.components.settings.SettingsFormControls.cb330ef7f8", " of {{value0}}", { value0: BUILTIN_TERMINAL_THEME_NAMES.length })}
           </span>
         </div>
         <ScrollArea className="h-64">
@@ -337,21 +322,12 @@ export function ThemePicker({
                 <span className="truncate">{theme}</span>
                 {selectedTheme === theme ? (
                   <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
-                    {translate(
-                      'auto.components.settings.SettingsFormControls.9119fb2268',
-                      'Current'
-                    )}
-                  </span>
+                    {translate("auto.components.settings.SettingsFormControls.9119fb2268", "Current")}</span>
                 ) : null}
               </button>
             ))}
             {filteredThemes.length === 0 ? (
-              <div className="px-3 py-6 text-sm text-muted-foreground">
-                {translate(
-                  'auto.components.settings.SettingsFormControls.ceefb9d7f1',
-                  'No themes found.'
-                )}
-              </div>
+              <div className="px-3 py-6 text-sm text-muted-foreground">{translate("auto.components.settings.SettingsFormControls.ceefb9d7f1", "No themes found.")}</div>
             ) : null}
           </div>
         </ScrollArea>
@@ -438,10 +414,7 @@ export function NumberField({
         <>
           {description}
           {defaultValue !== undefined ? (
-            <span className="ml-1 text-muted-foreground/70">
-              {translate('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
-              {defaultValue}
-            </span>
+            <span className="ml-1 text-muted-foreground/70">{translate("auto.components.settings.SettingsFormControls.b661b034ec", "· Default:")} {defaultValue}</span>
           ) : null}
         </>
       }
@@ -647,11 +620,8 @@ export function FontAutocomplete({
                 focusInput()
               }}
               className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label={translate(
-                'auto.components.settings.SettingsFormControls.a4ff6143f8',
-                'Clear font selection'
-              )}
-              title={translate('auto.components.settings.SettingsFormControls.74bcecd5ec', 'Clear')}
+              aria-label={translate("auto.components.settings.SettingsFormControls.a4ff6143f8", "Clear font selection")}
+              title={translate("auto.components.settings.SettingsFormControls.74bcecd5ec", "Clear")}
             >
               <CircleX className="size-3.5" />
             </button>
@@ -667,11 +637,8 @@ export function FontAutocomplete({
               }
             }}
             className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label={translate(
-              'auto.components.settings.SettingsFormControls.c766f8ac75',
-              'Toggle font suggestions'
-            )}
-            title={translate('auto.components.settings.SettingsFormControls.b55371ea18', 'Fonts')}
+            aria-label={translate("auto.components.settings.SettingsFormControls.c766f8ac75", "Toggle font suggestions")}
+            title={translate("auto.components.settings.SettingsFormControls.b55371ea18", "Fonts")}
           >
             <ChevronsUpDown className="size-3.5" />
           </button>
@@ -709,12 +676,7 @@ export function FontAutocomplete({
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-3 text-sm text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.SettingsFormControls.42a4d15a30',
-                    'No matching fonts.'
-                  )}
-                </div>
+                <div className="px-3 py-3 text-sm text-muted-foreground">{translate("auto.components.settings.SettingsFormControls.42a4d15a30", "No matching fonts.")}</div>
               )}
             </div>
           </ScrollArea>

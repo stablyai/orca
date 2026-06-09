@@ -30,19 +30,19 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
   const segments = [
     {
       key: 'new-input',
-      label: translate('auto.components.stats.usage.overview.sections.9365b14a4e', 'New input'),
+      label: translate("auto.components.stats.usage.overview.sections.9365b14a4e", "New input"),
       value: overview.newInputTokens,
       className: 'bg-foreground'
     },
     {
       key: 'output',
-      label: translate('auto.components.stats.usage.overview.sections.7f270458af', 'Output'),
+      label: translate("auto.components.stats.usage.overview.sections.7f270458af", "Output"),
       value: overview.outputTokens,
       className: 'bg-muted-foreground'
     },
     {
       key: 'cache',
-      label: translate('auto.components.stats.usage.overview.sections.0015facc1f', 'Cache'),
+      label: translate("auto.components.stats.usage.overview.sections.0015facc1f", "Cache"),
       value: overview.cacheTokens,
       className: 'bg-border'
     }
@@ -55,31 +55,20 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h4 className="text-sm font-semibold text-foreground">
-            {translate('auto.components.stats.usage.overview.sections.4ff104da47', 'Token mix')}
-          </h4>
+          <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.usage.overview.sections.4ff104da47", "Token mix")}</h4>
           <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.stats.usage.overview.sections.3bc4a01b24',
-              'Combined input, output, and cache tokens across enabled providers.'
-            )}
-          </p>
+            {translate("auto.components.stats.usage.overview.sections.3bc4a01b24", "Combined input, output, and cache tokens across enabled providers.")}</p>
         </div>
         {overview.reasoningTokens > 0 ? (
           <Badge variant="outline" className="shrink-0">
-            {formatUsageTokens(overview.reasoningTokens)}{' '}
-            {translate('auto.components.stats.usage.overview.sections.e65084cb4b', 'reasoning')}
-          </Badge>
+            {formatUsageTokens(overview.reasoningTokens)} {translate("auto.components.stats.usage.overview.sections.e65084cb4b", "reasoning")}</Badge>
         ) : null}
       </div>
 
       {mixTotal > 0 ? (
         <div
           className="flex h-3 overflow-hidden rounded-full border border-border/60 bg-muted"
-          aria-label={translate(
-            'auto.components.stats.usage.overview.sections.3a795542fa',
-            'Combined token mix'
-          )}
+          aria-label={translate("auto.components.stats.usage.overview.sections.3a795542fa", "Combined token mix")}
         >
           {segments.map((segment) =>
             segment.value > 0 ? (
@@ -87,11 +76,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
                 key={segment.key}
                 className={segment.className}
                 style={{ width: `${(segment.value / mixTotal) * 100}%` }}
-                aria-label={translate(
-                  'auto.components.stats.usage.overview.sections.32330a6e66',
-                  '{{value0}}: {{value1}} tokens',
-                  { value0: segment.label, value1: segment.value.toLocaleString() }
-                )}
+                aria-label={translate("auto.components.stats.usage.overview.sections.32330a6e66", "{{value0}}: {{value1}} tokens", { value0: segment.label, value1: segment.value.toLocaleString() })}
               />
             ) : null
           )}
@@ -125,50 +110,33 @@ export function DailyIntensityGrid({
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h4 className="text-sm font-semibold text-foreground">
-            {translate(
-              'auto.components.stats.usage.overview.sections.69e2b50427',
-              'Daily intensity'
-            )}
-          </h4>
+          <h4 className="text-sm font-semibold text-foreground">{translate("auto.components.stats.usage.overview.sections.69e2b50427", "Daily intensity")}</h4>
           <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.stats.usage.overview.sections.f28ff1f852',
-              'Recent combined Claude, Codex, and OpenCode token activity.'
-            )}
-          </p>
+            {translate("auto.components.stats.usage.overview.sections.f28ff1f852", "Recent combined Claude, Codex, and OpenCode token activity.")}</p>
         </div>
         {bestDay && bestDay.totalTokens > 0 ? (
           <Badge variant="outline" className="shrink-0">
-            {translate('auto.components.stats.usage.overview.sections.c424eb3f8e', 'Best:')}
-            {formatDayLabel(bestDay.day)}
+            {translate("auto.components.stats.usage.overview.sections.c424eb3f8e", "Best:")}{formatDayLabel(bestDay.day)}
           </Badge>
         ) : null}
       </div>
 
       <div
         className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-1 sm:grid-cols-[repeat(21,minmax(0,1fr))]"
-        aria-label={translate(
-          'auto.components.stats.usage.overview.sections.52d9221dc0',
-          'Recent token activity heatmap'
-        )}
+        aria-label={translate("auto.components.stats.usage.overview.sections.52d9221dc0", "Recent token activity heatmap")}
       >
         {days.map((day) => (
           <div
             key={day.day}
             className={`aspect-square min-h-3 rounded-[2px] border ${INTENSITY_CLASS[day.intensity]}`}
-            aria-label={translate(
-              'auto.components.stats.usage.overview.sections.32330a6e66',
-              '{{value0}}: {{value1}} tokens',
-              { value0: day.day, value1: day.totalTokens.toLocaleString() }
-            )}
+            aria-label={translate("auto.components.stats.usage.overview.sections.32330a6e66", "{{value0}}: {{value1}} tokens", { value0: day.day, value1: day.totalTokens.toLocaleString() })}
           />
         ))}
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
         <span>{formatDayLabel(days[0]?.day ?? '')}</span>
-        <span>{translate('auto.components.stats.usage.overview.sections.1dd166c920', 'Less')}</span>
+        <span>{translate("auto.components.stats.usage.overview.sections.1dd166c920", "Less")}</span>
         <div className="flex items-center gap-1" aria-hidden>
           {[0, 1, 2, 3, 4].map((intensity) => (
             <span
@@ -177,7 +145,7 @@ export function DailyIntensityGrid({
             />
           ))}
         </div>
-        <span>{translate('auto.components.stats.usage.overview.sections.f6df0d7d6d', 'More')}</span>
+        <span>{translate("auto.components.stats.usage.overview.sections.f6df0d7d6d", "More")}</span>
         <span>{formatDayLabel(days.at(-1)?.day ?? '')}</span>
       </div>
     </section>
@@ -206,27 +174,21 @@ export function ProviderUsageRow({
             <Badge variant={statusVariant}>{status}</Badge>
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
-            {provider.topModel ??
-              translate('auto.components.stats.usage.overview.sections.3de9bf87fc', 'No model yet')}
+            {provider.topModel ?? translate("auto.components.stats.usage.overview.sections.3de9bf87fc", "No model yet")}
             {provider.topProject ? ` - ${provider.topProject}` : ''}
           </p>
         </div>
         {!provider.enabled ? (
           <Button variant="outline" size="xs" onClick={onEnable}>
-            {translate('auto.components.stats.usage.overview.sections.57d1448ef8', 'Enable')}
-          </Button>
+            {translate("auto.components.stats.usage.overview.sections.57d1448ef8", "Enable")}</Button>
         ) : null}
       </div>
 
       <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
+        <span>{formatUsageTokens(provider.totalTokens)} {translate("auto.components.stats.usage.overview.sections.32330a6e66", "tokens")}</span>
         <span>
-          {formatUsageTokens(provider.totalTokens)}{' '}
-          {translate('auto.components.stats.usage.overview.sections.32330a6e66', 'tokens')}
-        </span>
-        <span>
-          {provider.sessions.toLocaleString()}{' '}
-          {translate('auto.components.stats.usage.overview.sections.9564a3b21b', 'sessions -')}
-          {provider.activityCount.toLocaleString()} {provider.activityLabel}
+          {provider.sessions.toLocaleString()} {translate("auto.components.stats.usage.overview.sections.9564a3b21b", "sessions -")}{provider.activityCount.toLocaleString()}{' '}
+          {provider.activityLabel}
         </span>
         <span>{formatUsageCost(provider.estimatedCostUsd)}</span>
       </div>

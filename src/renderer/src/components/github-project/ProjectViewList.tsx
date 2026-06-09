@@ -180,11 +180,7 @@ export default function ProjectViewList({
   if (table.rows.length === 0) {
     return (
       <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
-        {translate(
-          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
-          "No items match this view's filter."
-        )}
-      </div>
+        {translate("auto.components.github.project.ProjectViewList.4f57d2e0b1", "No items match this view's filter.")}</div>
     )
   }
 
@@ -328,11 +324,7 @@ function ProjectHeaderRow({
                 'group flex min-w-0 flex-1 items-center gap-1 truncate text-left uppercase tracking-wide hover:text-foreground',
                 isActive && 'text-foreground'
               )}
-              aria-label={translate(
-                'auto.components.github.project.ProjectViewList.eddfc7a794',
-                'Sort by {{value0}}',
-                { value0: f.name }
-              )}
+              aria-label={translate("auto.components.github.project.ProjectViewList.eddfc7a794", "Sort by {{value0}}", { value0: f.name })}
             >
               <span className="truncate">{f.name}</span>
               <Icon
@@ -359,10 +351,7 @@ function ProjectHeaderRow({
           <PopoverTrigger asChild>
             <button
               type="button"
-              aria-label={translate(
-                'auto.components.github.project.ProjectViewList.f949f5b2b7',
-                'Configure columns'
-              )}
+              aria-label={translate("auto.components.github.project.ProjectViewList.f949f5b2b7", "Configure columns")}
               className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <Columns3 className="size-3.5" />
@@ -370,8 +359,7 @@ function ProjectHeaderRow({
           </PopoverTrigger>
           <PopoverContent align="end" className="w-56 p-1">
             <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              {translate('auto.components.github.project.ProjectViewList.989f81dc2a', 'Columns')}
-            </div>
+              {translate("auto.components.github.project.ProjectViewList.989f81dc2a", "Columns")}</div>
             {availableFields.map((f) => {
               // Why: TITLE is the only column that anchors the row's identity
               // and click target — disallow hiding it so users can't end up

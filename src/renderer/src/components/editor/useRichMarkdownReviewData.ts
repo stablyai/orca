@@ -57,10 +57,7 @@ export function useRichMarkdownReviewData({
     return [
       {
         id: 'all',
-        label: translate(
-          'auto.components.editor.useRichMarkdownReviewData.f9d2acd6b0',
-          'All unsent notes'
-        ),
+        label: translate("auto.components.editor.useRichMarkdownReviewData.f9d2acd6b0", "All unsent notes"),
         notes: unsentNotes,
         prompt: formatMarkdownReviewNotes(unsentNotes, markdownReviewContent)
       }

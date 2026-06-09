@@ -29,9 +29,9 @@ export function ReviewAnimatedVisual(props: {
           transform: `translateX(-50%) scale(${scale})`
         }}
       >
-        {activeStepId === 'notes' ? (
+        {activeStepId === "notes" ? (
           <ReviewNotesAnimatedVisual key="notes" reducedMotion={reducedMotion} />
-        ) : activeStepId === 'pr-view' ? (
+        ) : activeStepId === "pr-view" ? (
           <ReviewPRViewAnimatedVisual key="pr-view" reducedMotion={reducedMotion} />
         ) : (
           <ReviewShipAnimatedVisual key="ship" reducedMotion={reducedMotion} />

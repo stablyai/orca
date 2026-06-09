@@ -185,7 +185,6 @@ export function EditorPanelShell({
 function EditorLoadingFallback(): JSX.Element {
   return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      {translate('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
-    </div>
+      {translate("auto.components.editor.EditorPanelShell.e2c4dec350", "Loading editor...")}</div>
   )
 }

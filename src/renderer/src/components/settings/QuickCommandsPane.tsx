@@ -164,11 +164,7 @@ export function QuickCommandsPane({
 
   const renderTriggerLabel = (): React.JSX.Element => {
     if (showAll) {
-      return (
-        <span>
-          {translate('auto.components.settings.QuickCommandsPane.c6b155911b', 'All commands')}
-        </span>
-      )
+      return <span>{translate("auto.components.settings.QuickCommandsPane.c6b155911b", "All commands")}</span>
     }
     const includesGlobal = effectiveSelection.has(GLOBAL_SCOPE_KEY)
     const selectedRepos = repos.filter((r) => effectiveSelection.has(r.id))
@@ -180,12 +176,7 @@ export function QuickCommandsPane({
       const [first, ...rest] = selectedRepos
       parts.push(rest.length > 0 ? `${first.displayName} +${rest.length}` : first.displayName)
     }
-    return (
-      <span className="truncate">
-        {parts.join(', ') ||
-          translate('auto.components.settings.QuickCommandsPane.d1d0976320', 'None')}
-      </span>
-    )
+    return <span className="truncate">{parts.join(', ') || translate("auto.components.settings.QuickCommandsPane.d1d0976320", "None")}</span>
   }
 
   const saveCommand = (next: TerminalQuickCommand): void => {
@@ -202,16 +193,9 @@ export function QuickCommandsPane({
 
   const removeCommand = async (command: TerminalQuickCommand): Promise<void> => {
     const confirmed = await confirm({
-      title: translate(
-        'auto.components.settings.QuickCommandsPane.3edf3deaf8',
-        'Delete "{{value0}}"?',
-        { value0: command.label || 'Untitled' }
-      ),
-      description: translate(
-        'auto.components.settings.QuickCommandsPane.3d9dc558e8',
-        'This quick command will be removed from your saved list.'
-      ),
-      confirmLabel: translate('auto.components.settings.QuickCommandsPane.ec1ed99e70', 'Delete'),
+      title: translate("auto.components.settings.QuickCommandsPane.3edf3deaf8", "Delete \"{{value0}}\"?", { value0: command.label || 'Untitled' }),
+      description: translate("auto.components.settings.QuickCommandsPane.3d9dc558e8", "This quick command will be removed from your saved list."),
+      confirmLabel: translate("auto.components.settings.QuickCommandsPane.ec1ed99e70", "Delete"),
       confirmVariant: 'destructive'
     })
     if (!confirmed) {
@@ -230,15 +214,9 @@ export function QuickCommandsPane({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3 py-2">
         <div className="space-y-1">
-          <Label>
-            {translate('auto.components.settings.QuickCommandsPane.f91b649324', 'Saved Commands')}
-          </Label>
+          <Label>{translate("auto.components.settings.QuickCommandsPane.f91b649324", "Saved Commands")}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.QuickCommandsPane.c36912efd5',
-              'Run them from the Quick Commands button in the tab bar, or right-click inside any terminal.'
-            )}
-          </p>
+            {translate("auto.components.settings.QuickCommandsPane.c36912efd5", "Run them from the Quick Commands button in the tab bar, or right-click inside any terminal.")}</p>
         </div>
         <Button
           type="button"
@@ -247,8 +225,7 @@ export function QuickCommandsPane({
           onClick={() => setEditor({ mode: 'add', command: createDraftForCurrentFilter() })}
         >
           <Plus />
-          {translate('auto.components.settings.QuickCommandsPane.5aacc8f7dc', 'Add Command')}
-        </Button>
+          {translate("auto.components.settings.QuickCommandsPane.5aacc8f7dc", "Add Command")}</Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -286,12 +263,7 @@ export function QuickCommandsPane({
                       showAll ? 'opacity-70' : 'opacity-0'
                     )}
                   />
-                  <span>
-                    {translate(
-                      'auto.components.settings.QuickCommandsPane.c6b155911b',
-                      'All commands'
-                    )}
-                  </span>
+                  <span>{translate("auto.components.settings.QuickCommandsPane.c6b155911b", "All commands")}</span>
                 </button>
               </div>
               <CommandList>
@@ -306,9 +278,7 @@ export function QuickCommandsPane({
                       effectiveSelection.has(GLOBAL_SCOPE_KEY) ? 'opacity-70' : 'opacity-0'
                     )}
                   />
-                  <span>
-                    {translate('auto.components.settings.QuickCommandsPane.8c877dec41', 'Global')}
-                  </span>
+                  <span>{translate("auto.components.settings.QuickCommandsPane.8c877dec41", "Global")}</span>
                 </CommandItem>
                 {repos.map((repo) => {
                   const isSelected = effectiveSelection.has(repo.id)
@@ -343,14 +313,8 @@ export function QuickCommandsPane({
         {visibleCommands.length === 0 ? (
           <div className="px-3 py-6 text-sm text-muted-foreground">
             {commands.length === 0
-              ? translate(
-                  'auto.components.settings.QuickCommandsPane.38d61927e6',
-                  'No quick commands saved.'
-                )
-              : translate(
-                  'auto.components.settings.QuickCommandsPane.3eb9897ab0',
-                  'No commands in the selected scopes.'
-                )}
+              ? translate("auto.components.settings.QuickCommandsPane.38d61927e6", "No quick commands saved.")
+              : translate("auto.components.settings.QuickCommandsPane.3eb9897ab0", "No commands in the selected scopes.")}
           </div>
         ) : (
           <div className="max-h-[60vh] space-y-2 overflow-y-auto p-2 scrollbar-sleek">
@@ -364,11 +328,7 @@ export function QuickCommandsPane({
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <div className="truncate text-sm font-medium">
-                        {command.label ||
-                          translate(
-                            'auto.components.settings.QuickCommandsPane.2bb9e38e93',
-                            'Untitled'
-                          )}
+                        {command.label || translate("auto.components.settings.QuickCommandsPane.2bb9e38e93", "Untitled")}
                       </div>
                       <Badge variant="outline" className="max-w-44 gap-1.5">
                         {scope.type === 'repo' ? (
@@ -395,36 +355,22 @@ export function QuickCommandsPane({
                       >
                         {isTerminalAgentQuickCommand(command)
                           ? `${getAgentLabel(command.agent)}: ${getTerminalQuickCommandBody(command)}`
-                          : getTerminalQuickCommandBody(command) ||
-                            translate(
-                              'auto.components.settings.QuickCommandsPane.0252ddd578',
-                              'No command text'
-                            )}
+                          : getTerminalQuickCommandBody(command) || translate("auto.components.settings.QuickCommandsPane.0252ddd578", "No command text")}
                       </span>
                     </div>
                   </div>
                   <div className="shrink-0 text-[11px] font-medium text-foreground/75">
                     {isTerminalAgentQuickCommand(command)
-                      ? translate('auto.components.settings.QuickCommandsPane.4ccc63da87', 'Agent')
+                      ? translate("auto.components.settings.QuickCommandsPane.4ccc63da87", "Agent")
                       : command.appendEnter
-                        ? translate(
-                            'auto.components.settings.QuickCommandsPane.9b3e338d62',
-                            'Enter'
-                          )
-                        : translate(
-                            'auto.components.settings.QuickCommandsPane.9fcfc29519',
-                            'Insert'
-                          )}
+                        ? translate("auto.components.settings.QuickCommandsPane.9b3e338d62", "Enter")
+                        : translate("auto.components.settings.QuickCommandsPane.9fcfc29519", "Insert")}
                   </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={translate(
-                      'auto.components.settings.QuickCommandsPane.7d90fd5299',
-                      'Edit {{value0}}',
-                      { value0: command.label || 'quick command' }
-                    )}
+                    aria-label={translate("auto.components.settings.QuickCommandsPane.7d90fd5299", "Edit {{value0}}", { value0: command.label || 'quick command' })}
                     onClick={() => setEditor({ mode: 'edit', command })}
                   >
                     <Pencil />
@@ -433,11 +379,7 @@ export function QuickCommandsPane({
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    aria-label={translate(
-                      'auto.components.settings.QuickCommandsPane.8764c6e9e4',
-                      'Remove {{value0}}',
-                      { value0: command.label || 'quick command' }
-                    )}
+                    aria-label={translate("auto.components.settings.QuickCommandsPane.8764c6e9e4", "Remove {{value0}}", { value0: command.label || 'quick command' })}
                     onClick={() => void removeCommand(command)}
                     className="text-muted-foreground hover:text-destructive"
                   >

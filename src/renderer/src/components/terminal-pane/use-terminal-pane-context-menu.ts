@@ -148,12 +148,7 @@ export function useTerminalPaneContextMenu({
     // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
     // remounts; the numeric PaneManager id is only a local runtime handle.
     await window.api.ui.writeClipboardText(makePaneKey(tabId, pane.leafId))
-    toast.success(
-      translate(
-        'auto.components.terminal.pane.use.terminal.pane.context.menu.a29b9faa01',
-        'Pane ID copied'
-      )
-    )
+    toast.success(translate("auto.components.terminal.pane.use.terminal.pane.context.menu.a29b9faa01", "Pane ID copied"))
     pane.terminal.focus()
   }
 

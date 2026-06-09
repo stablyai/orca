@@ -19,8 +19,7 @@ export function KeepAwakeCard(props: {
               {AGENT_AWAKE_TITLE}
             </div>
             <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.feature.wall.KeepAwakeCard.209713d3c7', 'Optional')}
-            </span>
+              {translate("auto.components.feature.wall.KeepAwakeCard.209713d3c7", "Optional")}</span>
           </div>
           <p className="text-[13px] leading-snug text-muted-foreground">
             {getAgentAwakeDescription()}

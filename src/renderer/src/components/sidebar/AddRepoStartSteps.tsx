@@ -32,14 +32,8 @@ function AddRepoNestedScanProgressNotice({
               variant="ghost"
               size="icon-xs"
               className="group text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive focus-visible:ring-destructive/40"
-              aria-label={translate(
-                'auto.components.sidebar.AddRepoStartSteps.9906cae183',
-                'Stop scan'
-              )}
-              title={translate(
-                'auto.components.sidebar.AddRepoStartSteps.69ea7f8dc4',
-                'Stop scanning'
-              )}
+              aria-label={translate("auto.components.sidebar.AddRepoStartSteps.9906cae183", "Stop scan")}
+              title={translate("auto.components.sidebar.AddRepoStartSteps.69ea7f8dc4", "Stop scanning")}
               onClick={onStopNestedScan}
             >
               <Loader2 className="size-3.5 animate-spin text-annotation-highlight group-hover:hidden group-focus-visible:hidden" />
@@ -47,11 +41,7 @@ function AddRepoNestedScanProgressNotice({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate(
-              'auto.components.sidebar.AddRepoStartSteps.d301db1c9a',
-              'Scanning repositories. Click to stop.'
-            )}
-          </TooltipContent>
+            {translate("auto.components.sidebar.AddRepoStartSteps.d301db1c9a", "Scanning repositories. Click to stop.")}</TooltipContent>
         </Tooltip>
       ) : null}
     </div>
@@ -103,16 +93,9 @@ export function AddRepoLocalStartStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>
-          {translate('auto.components.sidebar.AddRepoStartSteps.d13757911c', 'Add a project')}
-        </DialogTitle>
+        <DialogTitle>{translate("auto.components.sidebar.AddRepoStartSteps.d13757911c", "Add a project")}</DialogTitle>
         {repoCount === 0 ? (
-          <DialogDescription>
-            {translate(
-              'auto.components.sidebar.AddRepoStartSteps.acf895cb42',
-              'Add a project to get started with Orca.'
-            )}
-          </DialogDescription>
+          <DialogDescription>{translate("auto.components.sidebar.AddRepoStartSteps.acf895cb42", "Add a project to get started with Orca.")}</DialogDescription>
         ) : null}
       </DialogHeader>
 
@@ -129,9 +112,7 @@ export function AddRepoLocalStartStep({
         {/* Keep secondary entry methods always visible so they stay discoverable without an extra click. */}
         {/* Label clarifies the lighter-weight rows are alternate entry methods, not lesser features. */}
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground">
-            {translate('auto.components.sidebar.AddRepoStartSteps.f3c96237ae', 'Or add from…')}
-          </p>
+          <p className="text-xs font-medium text-muted-foreground">{translate("auto.components.sidebar.AddRepoStartSteps.f3c96237ae", "Or add from…")}</p>
           {/* Match the primary card's surface (bg-background) so the group reads as the same family, not a recessed panel. */}
           <div className="overflow-hidden rounded-md border border-border/80 bg-background">
             {secondaryActions.map((action, index) => (

@@ -303,10 +303,7 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
       ) : null}
 
       {errorSection ? (
-        <SectionCard
-          title={translate('auto.components.automations.HermesCronOutputView.05affc68e3', 'Error')}
-          accent="error"
-        >
+        <SectionCard title={translate("auto.components.automations.HermesCronOutputView.05affc68e3", "Error")} accent="error">
           <CommentMarkdown
             variant="document"
             content={errorSection.body}
@@ -316,13 +313,7 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
       ) : null}
 
       {responseSection ? (
-        <SectionCard
-          title={translate(
-            'auto.components.automations.HermesCronOutputView.4557213074',
-            'Response'
-          )}
-          accent="response"
-        >
+        <SectionCard title={translate("auto.components.automations.HermesCronOutputView.4557213074", "Response")} accent="response">
           <CommentMarkdown
             variant="document"
             content={responseSection.body}
@@ -333,7 +324,7 @@ export function HermesCronOutputView({ content }: { content: string }): React.JS
 
       {promptSection ? (
         <CollapsibleSection
-          title={translate('auto.components.automations.HermesCronOutputView.e27c716b43', 'Prompt')}
+          title={translate("auto.components.automations.HermesCronOutputView.e27c716b43", "Prompt")}
           tone="muted"
           icon={MessageSquare}
           iconClass="text-indigo-700 dark:text-indigo-400"

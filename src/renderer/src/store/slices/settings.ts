@@ -321,12 +321,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       return true
     }
     if (hasUnsavedEditorState(get())) {
-      toast.error(
-        translate(
-          'auto.store.slices.settings.faa8fb83dd',
-          'Save or close unsaved editor tabs before switching servers.'
-        )
-      )
+      toast.error(translate("auto.store.slices.settings.faa8fb83dd", "Save or close unsaved editor tabs before switching servers."))
       return false
     }
     try {
@@ -359,7 +354,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       return true
     } catch (err) {
       console.error('Failed to switch runtime environment:', err)
-      toast.error(translate('auto.store.slices.settings.e12dab333b', 'Failed to switch servers'), {
+      toast.error(translate("auto.store.slices.settings.e12dab333b", "Failed to switch servers"), {
         description: err instanceof Error ? err.message : String(err)
       })
       return false
