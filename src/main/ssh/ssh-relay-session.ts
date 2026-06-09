@@ -612,7 +612,7 @@ export class SshRelaySession {
       wrapCommand: !isWindowsRemoteHost(hostPlatform)
     })
     if (typeof conn.writeFile === 'function') {
-      await conn.writeFile(shim.path, shim.contents)
+      await conn.writeFile(shim.path, shim.contents, { hostPlatform })
     } else {
       const sftp = await conn.sftp()
       try {

@@ -329,7 +329,8 @@ describe('SshRelaySession', () => {
     expect(vi.mocked(execCommand).mock.calls[0]?.[2]).toEqual({ wrapCommand: false })
     expect(mockConn.writeFile).toHaveBeenCalledWith(
       'C:/Users/me/.orca-relay/bin/orca.cmd',
-      expect.stringContaining('@echo off')
+      expect.stringContaining('@echo off'),
+      { hostPlatform: getRemoteHostPlatform('win32-x64') }
     )
     const shim = vi.mocked(mockConn.writeFile).mock.calls[0]?.[1] as string
     expect(shim).toContain('C:/Users/me/.orca-remote/relay-v1')

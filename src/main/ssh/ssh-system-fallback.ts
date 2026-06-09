@@ -1,12 +1,17 @@
 /* eslint-disable max-lines -- Why: system-ssh process wrapping and fallback file operations share cleanup contracts. */
 import { spawn, type ChildProcess } from 'child_process'
+import { constants } from 'node:fs'
 import { existsSync } from 'fs'
+import { lstat, open, readdir } from 'fs/promises'
+import { join as pathJoin } from 'path'
 import { Duplex } from 'stream'
 import { pipeline } from 'stream/promises'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import { wrapRemoteCommandForPosixShell, shellEscape } from './ssh-connection-utils'
 import type { SshExecOptions } from './ssh-connection-utils'
+import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 
 const SYSTEM_SSH_PATHS =
   process.platform === 'win32'
@@ -28,6 +33,7 @@ type SystemSshCommandChannel = ClientChannel & {
 
 type SystemSshOperationOptions = {
   signal?: AbortSignal
+  hostPlatform?: RemoteHostPlatform
 }
 
 /**
@@ -97,6 +103,11 @@ export async function uploadDirectoryViaSystemSsh(
   options?: SystemSshOperationOptions
 ): Promise<void> {
   throwIfAborted(options?.signal)
+  if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
+    await uploadDirectoryViaSystemSshWindows(target, localDir, remoteDir, options)
+    return
+  }
+
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
@@ -152,6 +163,16 @@ export async function writeFileViaSystemSsh(
   options?: SystemSshOperationOptions
 ): Promise<void> {
   throwIfAborted(options?.signal)
+  if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
+    await writeBufferViaSystemSshWindows(
+      target,
+      remotePath,
+      Buffer.from(contents, 'utf-8'),
+      options
+    )
+    return
+  }
+
   const channel = spawnSystemSshCommand(target, `cat > ${shellEscape(remotePath)}`)
   const closePromise = awaitWithSystemSshAbort(
     options?.signal,
@@ -162,6 +183,110 @@ export async function writeFileViaSystemSsh(
     channel.stdin.end(contents)
   }
   await closePromise
+}
+
+async function uploadDirectoryViaSystemSshWindows(
+  target: SshTarget,
+  localDir: string,
+  remoteDir: string,
+  options: SystemSshOperationOptions
+): Promise<void> {
+  await runWindowsSystemSshCommand(target, makeWindowsDirectoryCommand(remoteDir), options)
+  const hostPlatform = options.hostPlatform
+  if (!hostPlatform) {
+    throw new Error('Windows system SSH upload requires a remote host platform')
+  }
+  const entries = await readdir(localDir, { withFileTypes: true })
+  for (const entry of entries) {
+    throwIfAborted(options.signal)
+    const localPath = pathJoin(localDir, entry.name)
+    const remotePath = joinRemotePath(hostPlatform, remoteDir, entry.name)
+    const statResult = await lstat(localPath)
+    if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
+      continue
+    }
+    if (statResult.isDirectory()) {
+      await uploadDirectoryViaSystemSshWindows(target, localPath, remotePath, options)
+      continue
+    }
+    const buffer = await readLocalUploadFile(localPath, statResult)
+    await writeBufferViaSystemSshWindows(target, remotePath, buffer, options)
+  }
+}
+
+async function readLocalUploadFile(
+  localPath: string,
+  statResult: Awaited<ReturnType<typeof lstat>>
+): Promise<Buffer> {
+  const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const openedStat = await handle.stat()
+    if (
+      !openedStat.isFile() ||
+      openedStat.size !== statResult.size ||
+      (statResult.ino !== 0 && openedStat.ino !== 0 && openedStat.ino !== statResult.ino) ||
+      (statResult.dev !== 0 && openedStat.dev !== 0 && openedStat.dev !== statResult.dev)
+    ) {
+      throw new Error(`File changed during upload: ${localPath}`)
+    }
+    return await handle.readFile()
+  } finally {
+    await handle.close()
+  }
+}
+
+async function writeBufferViaSystemSshWindows(
+  target: SshTarget,
+  remotePath: string,
+  contents: Buffer,
+  options: SystemSshOperationOptions
+): Promise<void> {
+  throwIfAborted(options.signal)
+  const channel = spawnSystemSshCommand(target, makeWindowsWriteFileCommand(remotePath), {
+    wrapCommand: false
+  })
+  const closePromise = awaitWithSystemSshAbort(
+    options.signal,
+    () => channel.close(),
+    waitForChannelClose(channel, `write ${remotePath}`)
+  )
+  if (!options.signal?.aborted) {
+    channel.stdin.end(contents)
+  }
+  await closePromise
+}
+
+async function runWindowsSystemSshCommand(
+  target: SshTarget,
+  command: string,
+  options: SystemSshOperationOptions
+): Promise<void> {
+  const channel = spawnSystemSshCommand(target, command, { wrapCommand: false })
+  await awaitWithSystemSshAbort(
+    options.signal,
+    () => channel.close(),
+    waitForChannelClose(channel, 'windows system ssh command')
+  )
+}
+
+function makeWindowsDirectoryCommand(remotePath: string): string {
+  return powerShellCommand(
+    `$null = New-Item -ItemType Directory -Force -LiteralPath ${powerShellLiteral(remotePath)}`
+  )
+}
+
+function makeWindowsWriteFileCommand(remotePath: string): string {
+  return powerShellCommand(
+    [
+      '$ErrorActionPreference = "Stop"',
+      `$path = ${powerShellLiteral(remotePath)}`,
+      '$parent = [System.IO.Path]::GetDirectoryName($path)',
+      'if ($parent) { $null = [System.IO.Directory]::CreateDirectory($parent) }',
+      '$inputStream = [Console]::OpenStandardInput()',
+      '$outputStream = [System.IO.File]::Open($path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)',
+      'try { $inputStream.CopyTo($outputStream) } finally { $outputStream.Dispose() }'
+    ].join('; ')
+  )
 }
 
 export function buildSshArgs(target: SshTarget): string[] {

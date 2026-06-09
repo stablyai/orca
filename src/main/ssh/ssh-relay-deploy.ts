@@ -234,7 +234,7 @@ async function uploadRelay(
   // Create remote directory
   await execHostCommand(conn, hostPlatform, makeRemoteDirectoryCommand(hostPlatform, remoteDir))
 
-  await uploadDirectoryForConnection(conn, localRelayDir, remoteDir)
+  await uploadDirectoryForConnection(conn, localRelayDir, remoteDir, hostPlatform)
 
   // Make the node binary executable
   await execHostCommand(
@@ -246,16 +246,22 @@ async function uploadRelay(
   // Why: write `.version` via SFTP rather than shell to avoid quoting issues
   // with content-hashed version strings. The remote daemon reads this same
   // file on startup so the wire-handshake validates against it.
-  await writeRemoteFile(conn, joinRemotePath(hostPlatform, remoteDir, '.version'), fullVersion)
+  await writeRemoteFile(
+    conn,
+    hostPlatform,
+    joinRemotePath(hostPlatform, remoteDir, '.version'),
+    fullVersion
+  )
 }
 
 async function uploadDirectoryForConnection(
   conn: SshConnection,
   localRelayDir: string,
-  remoteDir: string
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform
 ): Promise<void> {
   if (typeof conn.uploadDirectory === 'function') {
-    await conn.uploadDirectory(localRelayDir, remoteDir)
+    await conn.uploadDirectory(localRelayDir, remoteDir, { hostPlatform })
     return
   }
 
@@ -269,11 +275,12 @@ async function uploadDirectoryForConnection(
 
 async function writeRemoteFile(
   conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
   remotePath: string,
   contents: string
 ): Promise<void> {
   if (typeof conn.writeFile === 'function') {
-    await conn.writeFile(remotePath, contents)
+    await conn.writeFile(remotePath, contents, { hostPlatform })
     return
   }
 
@@ -385,7 +392,12 @@ async function installNativeDeps(
     type: 'commonjs',
     dependencies: RELAY_NATIVE_DEPS
   })}\n`
-  await writeRemoteFile(conn, joinRemotePath(hostPlatform, remoteDir, 'package.json'), pkgJson)
+  await writeRemoteFile(
+    conn,
+    hostPlatform,
+    joinRemotePath(hostPlatform, remoteDir, 'package.json'),
+    pkgJson
+  )
 
   try {
     const installArgs = Object.entries(RELAY_NATIVE_DEPS)

@@ -29,7 +29,12 @@ import {
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import type { RemoteHostPlatform } from './ssh-remote-platform'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
+
+type SshRemoteFileOptions = {
+  hostPlatform?: RemoteHostPlatform
+}
 
 export class SshConnection {
   private client: SshClient | null = null
@@ -163,7 +168,11 @@ export class SshConnection {
     })
   }
 
-  async uploadDirectory(localDir: string, remoteDir: string): Promise<void> {
+  async uploadDirectory(
+    localDir: string,
+    remoteDir: string,
+    options?: SshRemoteFileOptions
+  ): Promise<void> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
       try {
@@ -175,11 +184,16 @@ export class SshConnection {
       return
     }
     await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
-      signal: this.systemOperationAbortController.signal
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform
     })
   }
 
-  async writeFile(remotePath: string, contents: string): Promise<void> {
+  async writeFile(
+    remotePath: string,
+    contents: string,
+    options?: SshRemoteFileOptions
+  ): Promise<void> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
       const swallowLateSftpError = (): void => {}
@@ -223,7 +237,8 @@ export class SshConnection {
       return
     }
     await writeFileViaSystemSsh(this.target, remotePath, contents, {
-      signal: this.systemOperationAbortController.signal
+      signal: this.systemOperationAbortController.signal,
+      hostPlatform: options?.hostPlatform
     })
   }
 
@@ -420,7 +435,11 @@ export class SshConnection {
     this.proxyProcess?.kill()
     this.proxyProcess = null
 
-    const channel = this.spawnTrackedSystemSshCommand('printf ORCA-SYSTEM-SSH-OK')
+    // Why: this probe runs before remote platform detection. A raw echo works
+    // under POSIX shells, cmd.exe, and PowerShell; `/bin/sh` wrapping does not.
+    const channel = this.spawnTrackedSystemSshCommand('echo ORCA-SYSTEM-SSH-OK', {
+      wrapCommand: false
+    })
     try {
       await new Promise<void>((resolve, reject) => {
         let stdout = ''
