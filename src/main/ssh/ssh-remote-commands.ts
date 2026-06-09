@@ -167,7 +167,9 @@ export function commandInRemoteDirectory(
   if (!isWindowsRemoteHost(host)) {
     return `cd ${shellEscape(remoteDir)} && ${command}`
   }
-  return powerShellCommand(`Set-Location -LiteralPath ${powerShellLiteral(remoteDir)}; ${command}`)
+  return powerShellCommand(
+    `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(remoteDir)}; ${command}`
+  )
 }
 
 export function commandWithNodePath(
@@ -183,7 +185,7 @@ export function commandWithNodePath(
   return powerShellCommand(
     [
       `$env:PATH = ${powerShellLiteral(nodeBinDir)} + ';' + $env:PATH`,
-      `Set-Location -LiteralPath ${powerShellLiteral(remoteDir)}`,
+      `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(remoteDir)}`,
       command
     ].join('; ')
   )

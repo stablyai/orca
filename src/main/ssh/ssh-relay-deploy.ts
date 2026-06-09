@@ -454,7 +454,7 @@ async function installNativeDeps(
         hostPlatform,
         nodePath,
         remoteDir,
-        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellLiteral('require("node-pty"); console.log(process.argv[1])')} ${powerShellLiteral(PROBE_OK)} } catch { 'MISSING' }`
+        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellLiteral('require("node-pty"); console.log(process.argv[1])')} ${powerShellLiteral(PROBE_OK)}; if ($LASTEXITCODE -ne 0) { 'MISSING' } } catch { 'MISSING' }`
       )
     : commandWithNodePath(
         hostPlatform,
