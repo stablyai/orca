@@ -56,12 +56,23 @@ describe('markdown preview helpers', () => {
     ).toBe('rich')
   })
 
+  it('uses the configured markdown edit default', () => {
+    expect(
+      getDefaultMarkdownViewMode({
+        language: 'markdown',
+        mode: 'edit',
+        markdownDefaultViewMode: 'source'
+      })
+    ).toBe('source')
+  })
+
   it('defaults markdown diffs to source mode', () => {
     expect(
       getDefaultMarkdownViewMode({
         language: 'markdown',
         mode: 'diff',
-        diffSource: 'unstaged'
+        diffSource: 'unstaged',
+        markdownDefaultViewMode: 'rich'
       })
     ).toBe('source')
   })

@@ -42,6 +42,7 @@ function EditorPanelInner({
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const editorViewMode = useAppStore((s) => s.editorViewMode)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const markdownFrontmatterVisible = useAppStore((s) => s.markdownFrontmatterVisible)
@@ -228,6 +229,7 @@ function EditorPanelInner({
     gitStatusByWorktree,
     gitBranchChangesByWorktree,
     markdownViewMode,
+    markdownDefaultViewMode: settings?.markdownDefaultViewMode,
     isChangesMode
   })
 
@@ -354,6 +356,10 @@ function EditorPanelInner({
       onOpenContainingFolder={handleOpenContainingFolder}
       onToggleSideBySide={() => setSideBySide((prev) => !prev)}
       onEditorToggleChange={handleEditorToggleChange}
+      markdownDefaultViewMode={settings?.markdownDefaultViewMode ?? 'rich'}
+      onMarkdownDefaultViewModeChange={(next) =>
+        void updateSettings({ markdownDefaultViewMode: next })
+      }
       onToggleMarkdownTableOfContents={() => setShowMarkdownTableOfContents((shown) => !shown)}
       onToggleMarkdownFrontmatter={() =>
         setMarkdownFrontmatterVisible(

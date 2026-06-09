@@ -1972,6 +1972,7 @@ export type OpenInApplication = {
 }
 
 export type SourceControlViewMode = 'list' | 'tree'
+export type MarkdownDefaultViewMode = 'source' | 'rich'
 
 export type FloatingTerminalCwdRequest = {
   path?: string
@@ -2004,6 +2005,8 @@ export type GlobalSettings = {
   editorMinimapEnabled: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
   markdownReviewToolsEnabled: boolean
+  /** Default view for markdown edit tabs that do not have an explicit per-file mode. */
+  markdownDefaultViewMode: MarkdownDefaultViewMode
   /** Why: mirrors terminal selection-paste muscle memory without mutating the
    *  normal system clipboard; Linux and macOS enable it by default, Windows
    *  leaves middle-click semantics unchanged unless the user opts in. */

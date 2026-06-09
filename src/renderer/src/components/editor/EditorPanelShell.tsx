@@ -2,6 +2,7 @@ import { Suspense, type JSX, type Ref } from 'react'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import type { OpenFile } from '@/store/slices/editor'
+import type { MarkdownDefaultViewMode } from '../../../../shared/types'
 import { EditorContent } from './EditorContent'
 import { EditorPanelHeader } from './EditorPanelHeader'
 import { UntitledFileRenameDialog } from './UntitledFileRenameDialog'
@@ -37,6 +38,8 @@ type EditorPanelShellProps = {
   onOpenContainingFolder: () => void
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
+  markdownDefaultViewMode: MarkdownDefaultViewMode
+  onMarkdownDefaultViewModeChange: (next: MarkdownDefaultViewMode) => void
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
@@ -77,6 +80,8 @@ export function EditorPanelShell({
   onOpenContainingFolder,
   onToggleSideBySide,
   onEditorToggleChange,
+  markdownDefaultViewMode,
+  onMarkdownDefaultViewModeChange,
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
@@ -123,6 +128,8 @@ export function EditorPanelShell({
           onOpenContainingFolder={onOpenContainingFolder}
           onToggleSideBySide={onToggleSideBySide}
           onEditorToggleChange={onEditorToggleChange}
+          markdownDefaultViewMode={markdownDefaultViewMode}
+          onMarkdownDefaultViewModeChange={onMarkdownDefaultViewModeChange}
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}

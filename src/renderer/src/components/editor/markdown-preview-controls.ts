@@ -1,9 +1,11 @@
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownDefaultViewMode } from '../../../../shared/types'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
 import type { EditorToggleValue } from './EditorViewToggle'
 
 type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
   language: string
+  markdownDefaultViewMode?: MarkdownDefaultViewMode | null
 }
 
 const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
@@ -71,8 +73,15 @@ export function getDefaultMarkdownViewMode(target: MarkdownPreviewTarget): Markd
   if (target.language === 'markdown' && target.mode === 'diff') {
     return 'source'
   }
+  if (target.language === 'markdown' && target.mode === 'edit') {
+    return resolveMarkdownDefaultViewMode(target.markdownDefaultViewMode)
+  }
   const modes = getMarkdownViewModes(target)
   return modes.includes('rich') ? 'rich' : 'source'
+}
+
+export function resolveMarkdownDefaultViewMode(value: unknown): MarkdownDefaultViewMode {
+  return value === 'source' ? 'source' : 'rich'
 }
 
 export function canOpenMarkdownPreview(target: MarkdownPreviewTarget): boolean {

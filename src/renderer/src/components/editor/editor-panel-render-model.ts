@@ -2,6 +2,7 @@ import { detectLanguage } from '@/lib/language-detect'
 import { canPreviewLanguage } from '@/lib/file-preview'
 import type { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownDefaultViewMode } from '../../../../shared/types'
 import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,
@@ -21,6 +22,7 @@ type EditorPanelRenderModelParams = {
   gitStatusByWorktree: StoreState['gitStatusByWorktree']
   gitBranchChangesByWorktree: StoreState['gitBranchChangesByWorktree']
   markdownViewMode: StoreState['markdownViewMode']
+  markdownDefaultViewMode?: MarkdownDefaultViewMode | null
   isChangesMode: boolean
 }
 
@@ -30,6 +32,7 @@ export function getEditorPanelRenderModel({
   gitStatusByWorktree,
   gitBranchChangesByWorktree,
   markdownViewMode,
+  markdownDefaultViewMode,
   isChangesMode
 }: EditorPanelRenderModelParams) {
   const isSingleDiff =
@@ -73,7 +76,8 @@ export function getEditorPanelRenderModel({
   const defaultMarkdownViewMode = getDefaultMarkdownViewMode({
     language: resolvedLanguage,
     mode: activeFile.mode,
-    diffSource: activeFile.diffSource
+    diffSource: activeFile.diffSource,
+    markdownDefaultViewMode
   })
   const storedMarkdownViewMode = markdownViewMode[activeFile.id]
   const mdViewMode: MarkdownViewMode =

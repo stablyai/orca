@@ -13,6 +13,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').showGitIgnoredFiles).toBe(true)
   })
 
+  it('opens markdown edit tabs in rich mode by default', () => {
+    expect(getDefaultSettings('/tmp').markdownDefaultViewMode).toBe('rich')
+  })
+
   it('uses list view for Source Control changes by default', () => {
     expect(getDefaultSettings('/tmp').sourceControlViewMode).toBe('list')
   })

@@ -11,7 +11,17 @@ import {
 } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuLabel,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from '@/components/ui/context-menu'
 import type { MarkdownViewMode } from '@/store/slices/editor'
+import type { MarkdownDefaultViewMode } from '../../../../shared/types'
 
 // Why: 'changes' is not a MarkdownViewMode in the store — it lives on the
 // orthogonal editorViewMode slice. This toggle unifies both dimensions into a
@@ -74,15 +84,19 @@ type EditorViewToggleProps = {
   modes: readonly EditorToggleValue[]
   onChange: (value: EditorToggleValue) => void
   metadataOverride?: Partial<Record<MarkdownViewMode, ViewModeMetadata>>
+  markdownDefaultViewMode?: MarkdownDefaultViewMode
+  onMarkdownDefaultViewModeChange?: (value: MarkdownDefaultViewMode) => void
 }
 
 export default function EditorViewToggle({
   value,
   modes,
   onChange,
-  metadataOverride
+  metadataOverride,
+  markdownDefaultViewMode,
+  onMarkdownDefaultViewModeChange
 }: EditorViewToggleProps): React.JSX.Element {
-  return (
+  const control = (
     <TooltipProvider delayDuration={300}>
       <ToggleGroup
         type="single"
@@ -126,5 +140,30 @@ export default function EditorViewToggle({
         })}
       </ToggleGroup>
     </TooltipProvider>
+  )
+
+  if (!markdownDefaultViewMode || !onMarkdownDefaultViewModeChange) {
+    return control
+  }
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <span className="inline-flex">{control}</span>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-56">
+        <ContextMenuLabel>Default for new Markdown tabs</ContextMenuLabel>
+        <ContextMenuSeparator />
+        <ContextMenuRadioGroup
+          value={markdownDefaultViewMode}
+          onValueChange={(next) =>
+            onMarkdownDefaultViewModeChange(next === 'source' ? 'source' : 'rich')
+          }
+        >
+          <ContextMenuRadioItem value="rich">Rich Editor</ContextMenuRadioItem>
+          <ContextMenuRadioItem value="source">Source</ContextMenuRadioItem>
+        </ContextMenuRadioGroup>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import type { MarkdownDefaultViewMode } from '../../../../shared/types'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
   NOTEBOOK_VIEW_MODE_METADATA
@@ -64,6 +65,8 @@ type EditorPanelHeaderProps = {
   onOpenContainingFolder: () => void
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
+  markdownDefaultViewMode: MarkdownDefaultViewMode
+  onMarkdownDefaultViewModeChange: (next: MarkdownDefaultViewMode) => void
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
@@ -98,6 +101,8 @@ export function EditorPanelHeader({
   onOpenContainingFolder,
   onToggleSideBySide,
   onEditorToggleChange,
+  markdownDefaultViewMode,
+  onMarkdownDefaultViewModeChange,
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
@@ -330,6 +335,12 @@ export function EditorPanelHeader({
           onChange={onEditorToggleChange}
           metadataOverride={
             isCsv ? CSV_VIEW_MODE_METADATA : isNotebook ? NOTEBOOK_VIEW_MODE_METADATA : undefined
+          }
+          markdownDefaultViewMode={
+            isMarkdown && activeFile.mode === 'edit' ? markdownDefaultViewMode : undefined
+          }
+          onMarkdownDefaultViewModeChange={
+            isMarkdown && activeFile.mode === 'edit' ? onMarkdownDefaultViewModeChange : undefined
           }
         />
       )}
