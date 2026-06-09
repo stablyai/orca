@@ -157,6 +157,7 @@ import {
   hasPendingRendererSerializerForPaneKey,
   setPtyOwnership,
   setLocalPtyProvider,
+  rebindLocalProviderListeners,
   unregisterSshPtyProvider
 } from './pty'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
@@ -179,6 +180,14 @@ const TEST_CODEX_HOME =
 
 function makeDisposable() {
   return { dispose: vi.fn() }
+}
+
+function makeDeferred() {
+  let resolve!: () => void
+  const promise = new Promise<void>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
 }
 
 describe('registerPtyHandlers', () => {
@@ -381,6 +390,78 @@ describe('registerPtyHandlers', () => {
       throw new Error('missing pty:write listener')
     }
     return writeCall[1] as (event: unknown, args: { id: string; data: string }) => void
+  }
+
+  function installDaemonTestProvider() {
+    const spawn = vi.fn(async (options: { sessionId?: string }) => ({
+      id: options.sessionId ?? 'daemon-pty'
+    }))
+    setLocalPtyProvider({
+      spawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    return spawn
+  }
+
+  function installObservableDaemonTestProvider() {
+    const spawn = vi.fn(async (options: { sessionId?: string }) => ({
+      id: options.sessionId ?? 'daemon-pty'
+    }))
+    let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
+    let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
+    setLocalPtyProvider({
+      spawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+        dataHandler = handler
+        return () => {}
+      }),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((handler: (payload: { id: string; code: number }) => void) => {
+        exitHandler = handler
+        return () => {}
+      }),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    return {
+      spawn,
+      emitData: (id: string, data: string) => dataHandler?.({ id, data }),
+      emitExit: (id: string, code = 0) => exitHandler?.({ id, code })
+    }
   }
 
   function getPtyAckDataListener(): (
@@ -2273,6 +2354,186 @@ describe('registerPtyHandlers', () => {
     )
   })
 
+  it('waits for the desktop startup barrier before renderer local spawns resolve the provider', async () => {
+    const barrier = makeDeferred()
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyStartup: () => barrier.promise
+      }
+    )
+
+    const pendingSpawn = handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    }) as Promise<{ id: string }>
+
+    await Promise.resolve()
+    expect(spawnMock).not.toHaveBeenCalled()
+
+    const daemonSpawn = installDaemonTestProvider()
+    barrier.resolve()
+    const result = await pendingSpawn
+
+    expect(daemonSpawn).toHaveBeenCalledTimes(1)
+    expect(result.id).toBe(daemonSpawn.mock.calls[0]?.[0].sessionId)
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rebinds local data and exit listeners after a late daemon provider install', async () => {
+    vi.useFakeTimers()
+    const barrier = makeDeferred()
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn(() => 13),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          awaitLocalPtyStartup: () => barrier.promise
+        }
+      )
+
+      const pendingSpawn = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'daemon-session'
+      }) as Promise<{ id: string }>
+      await Promise.resolve()
+
+      const daemon = installObservableDaemonTestProvider()
+      rebindLocalProviderListeners()
+      barrier.resolve()
+      const result = await pendingSpawn
+
+      daemon.emitData(result.id, 'daemon output')
+      vi.advanceTimersByTime(8)
+      daemon.emitExit(result.id, 0)
+
+      expect(daemon.spawn).toHaveBeenCalledTimes(1)
+      expect(runtime.onPtyData).toHaveBeenCalledWith(result.id, 'daemon output', expect.any(Number))
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: result.id,
+        data: 'daemon output',
+        seq: 13,
+        rawLength: 'daemon output'.length
+      })
+      expect(runtime.onPtyExit).toHaveBeenCalledWith(result.id, 0)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+        id: result.id,
+        code: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('waits for the desktop startup barrier before runtime local spawns resolve the provider', async () => {
+    const barrier = makeDeferred()
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyStartup: () => barrier.promise
+      }
+    )
+    const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+      spawn: (args: { cols: number; rows: number; env?: Record<string, string> }) => Promise<{
+        id: string
+      }>
+    }
+
+    const pendingSpawn = controller.spawn({ cols: 80, rows: 24, env: {} })
+
+    await Promise.resolve()
+    expect(spawnMock).not.toHaveBeenCalled()
+
+    const daemonSpawn = installDaemonTestProvider()
+    barrier.resolve()
+    const result = await pendingSpawn
+
+    expect(daemonSpawn).toHaveBeenCalledTimes(1)
+    expect(result.id).toBe(daemonSpawn.mock.calls[0]?.[0].sessionId)
+    expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('does not wait on the desktop startup barrier for SSH spawns', async () => {
+    const barrier = makeDeferred()
+    const awaitLocalPtyStartup = vi.fn(() => barrier.promise)
+    const sshSpawn = vi.fn(async () => ({ id: 'remote-pty' }))
+    registerSshPtyProvider('ssh-1', {
+      spawn: sshSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { awaitLocalPtyStartup }
+    )
+
+    await expect(
+      handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        connectionId: 'ssh-1',
+        env: {}
+      })
+    ).resolves.toEqual(expect.objectContaining({ id: 'remote-pty' }))
+
+    expect(awaitLocalPtyStartup).not.toHaveBeenCalled()
+    expect(sshSpawn).toHaveBeenCalledTimes(1)
+  })
+
   it('lists sessions from both local and SSH providers', async () => {
     registerPtyHandlers(mainWindow as never)
     const sshListProcesses = vi.fn(async () => [
@@ -2662,6 +2923,46 @@ describe('registerPtyHandlers', () => {
       expect.any(String),
       'term_expected'
     )
+  })
+
+  it('does not update cached PTY size when runtime controller resize fails', async () => {
+    type RuntimeResizeController = {
+      spawn(args: { cols: number; rows: number }): Promise<{ id: string }>
+      resize(ptyId: string, cols: number, rows: number): boolean
+      getSize(ptyId: string): { cols: number; rows: number } | null
+    }
+    let controller: RuntimeResizeController | null = null
+    const proc = {
+      onData: vi.fn(),
+      onExit: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(() => {
+        throw new Error('resize failed')
+      }),
+      kill: vi.fn(),
+      process: 'zsh',
+      pid: 12345
+    }
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    spawnMock.mockReturnValue(proc)
+
+    registerPtyHandlers(mainWindow as never, runtime as never)
+    const resizeController = controller as unknown as RuntimeResizeController
+    const spawned = await resizeController.spawn({ cols: 80, rows: 24 })
+
+    expect(resizeController.resize(spawned.id, 120, 30)).toBe(false)
+    expect(resizeController.getSize(spawned.id)).toEqual({ cols: 80, rows: 24 })
   })
 
   it('persists runtime-owned headless session bindings when explicitly requested', async () => {

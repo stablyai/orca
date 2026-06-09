@@ -18,6 +18,7 @@ import {
   SourceControlTextGenerationDialogForm,
   type SourceControlTextGenerationSaveTarget
 } from './SourceControlTextGenerationDialogForm'
+import { translate } from '@/i18n/i18n'
 
 export { buildCommitMessageGenerationParams } from './SourceControlTextGenerationParams'
 
@@ -63,7 +64,13 @@ export function SourceControlTextGenerationDialog({
             operation: actionId,
             discoveryHostKey
           })
-        : { ok: false as const, error: 'Settings are not loaded.' },
+        : {
+            ok: false as const,
+            error: translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialog.d054d5e0a0',
+              'Settings are not loaded.'
+            )
+          },
     [actionId, discoveryHostKey, repo, settings]
   )
   const baseParams = resolved.ok ? resolved.value.params : null
@@ -77,19 +84,28 @@ export function SourceControlTextGenerationDialog({
     ? [
         {
           target: { type: 'repo', repoId: repo.id },
-          label: 'Save for this repository only',
+          label: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.5959da1e4d',
+            'Save for this repository only'
+          ),
           successMessage: `Saved ${recipeLabel} for this repository.`
         },
         {
           target: { type: 'global' },
-          label: 'Save as default for all repositories',
+          label: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.7f1ec309a4',
+            'Save as default for all repositories'
+          ),
           successMessage: `Saved ${recipeLabel} as a global default.`
         }
       ]
     : [
         {
           target: { type: 'global' },
-          label: 'Save as global default',
+          label: translate(
+            'auto.components.right.sidebar.SourceControlTextGenerationDialog.c5b7fa7cb6',
+            'Save as global default'
+          ),
           successMessage: `Saved ${recipeLabel} as a global default.`
         }
       ]
@@ -105,7 +121,7 @@ export function SourceControlTextGenerationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="text-xs">{description}</DialogDescription>
@@ -123,6 +139,7 @@ export function SourceControlTextGenerationDialog({
           actionId={actionId}
           generateLabel={generateLabel}
           settings={settings}
+          repo={repo ?? null}
           baseParams={baseParams}
           saveTargets={saveTargets}
           onGenerate={onGenerate}

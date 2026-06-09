@@ -1004,8 +1004,21 @@ export function registerPtyHandlers(
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
-  store?: Store
+  store?: Store,
+  options?: {
+    awaitLocalPtyStartup?: () => Promise<void>
+  }
 ): void {
+  const getLocalPtyStartupPromise = (connectionId?: string | null): Promise<void> | undefined => {
+    if (connectionId) {
+      return undefined
+    }
+    // Why: during desktop cold start the daemon provider swap now overlaps
+    // first paint. Local spawns must wait before resolving getProvider(), while
+    // SSH/headless paths do not use the desktop daemon.
+    return options?.awaitLocalPtyStartup?.()
+  }
+
   // Remove any previously registered handlers so we can re-register them
   // (e.g. when macOS re-activates the app and creates a new window).
   ipcMain.removeHandler('pty:spawn')
@@ -1561,6 +1574,10 @@ export function registerPtyHandlers(
   // Hardcoding localProvider.getPtyProcess() would silently fail for remote PTYs.
   runtime?.setPtyController({
     spawn: async (args) => {
+      const startupPromise = getLocalPtyStartupPromise(args.connectionId)
+      if (startupPromise) {
+        await startupPromise
+      }
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -1922,8 +1939,8 @@ export function registerPtyHandlers(
     getSize: (ptyId) => ptySizes.get(ptyId) ?? null,
     resize: (ptyId, cols, rows) => {
       try {
-        ptySizes.set(ptyId, { cols, rows })
         getProviderForPty(ptyId).resize(ptyId, cols, rows)
+        ptySizes.set(ptyId, { cols, rows })
         return true
       } catch {
         return false
@@ -2009,6 +2026,10 @@ export function registerPtyHandlers(
         }
       }
     ) => {
+      const startupPromise = getLocalPtyStartupPromise(args.connectionId)
+      if (startupPromise) {
+        await startupPromise
+      }
       const provider = getProvider(args.connectionId)
       const isClaudeLaunch = !args.connectionId && isClaudeLaunchCommand(args.command)
       if (isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
@@ -2610,8 +2631,16 @@ export function registerPtyHandlers(
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return
     }
+    const provider = tryGetProviderForPty(args.id)
+    if (!provider) {
+      return
+    }
+    try {
+      provider.resize(args.id, args.cols, args.rows)
+    } catch {
+      return
+    }
     ptySizes.set(args.id, { cols: args.cols, rows: args.rows })
-    tryGetProviderForPty(args.id)?.resize(args.id, args.cols, args.rows)
     runtime?.onExternalPtyResize(args.id, args.cols, args.rows)
   })
 

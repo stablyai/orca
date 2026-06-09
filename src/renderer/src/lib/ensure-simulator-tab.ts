@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
+import { translate } from '@/i18n/i18n'
 
 export const isMacOsHost = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
@@ -65,7 +66,7 @@ export function ensureSimulatorTab(
     )
     if (reusableRightGroupId) {
       const tab = store.createUnifiedTab(worktreeId, 'simulator', {
-        label: 'Mobile Emulator',
+        label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
         targetGroupId: reusableRightGroupId,
         activate: true
       })
@@ -85,7 +86,7 @@ export function ensureSimulatorTab(
         splitDirection: 'right'
       },
       {
-        label: 'Mobile Emulator',
+        label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
         activate: true
       }
     )
@@ -95,7 +96,7 @@ export function ensureSimulatorTab(
   }
 
   const tab = store.createUnifiedTab(worktreeId, 'simulator', {
-    label: 'Mobile Emulator',
+    label: translate('auto.lib.ensure.simulator.tab.372d21d428', 'Mobile Emulator'),
     targetGroupId: sourceGroupId,
     activate: shouldSurface
   })

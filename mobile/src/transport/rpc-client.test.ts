@@ -477,6 +477,42 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('replays terminal subscribe with the latest viewport after reconnect', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const firstSocket = mockSockets[0]!
+
+    firstSocket.open()
+    firstSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    firstSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    client.subscribe(
+      'terminal.subscribe',
+      {
+        terminal: 'term-1',
+        client: { id: 'phone-1', type: 'mobile' },
+        viewport: { cols: 45, rows: 20 }
+      },
+      () => {}
+    )
+    expect(sentRequest(firstSocket, 'terminal.subscribe').params).toMatchObject({
+      viewport: { cols: 45, rows: 20 }
+    })
+
+    client.updateTerminalSubscriptionViewport('term-1', { cols: 60, rows: 24 })
+    firstSocket.close()
+    vi.advanceTimersByTime(500)
+    const secondSocket = mockSockets[1]!
+    secondSocket.open()
+    secondSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    secondSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    expect(sentRequest(secondSocket, 'terminal.subscribe').params).toMatchObject({
+      viewport: { cols: 60, rows: 24 }
+    })
+
+    client.close()
+  })
+
   it('honors per-request timeout overrides', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!

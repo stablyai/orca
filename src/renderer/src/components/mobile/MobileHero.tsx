@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, Copy, RefreshCw, Smartphone, Trash2 } from 'luci
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { translate } from '@/i18n/i18n'
 
 export type Platform = 'ios' | 'android'
 export type StepIndex = 0 | 1
@@ -29,22 +30,39 @@ export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Eleme
   return (
     <div className="mp-intro-shell">
       <div className="mp-eyebrow-row">
-        <span className="mp-eyebrow">Orca Mobile</span>
+        <span className="mp-eyebrow">
+          {translate('auto.components.mobile.MobileHero.5410d55d79', 'Orca Mobile')}
+        </span>
       </div>
-      <h1 className="mp-h1">Your workspaces, in your pocket.</h1>
+      <h1 className="mp-h1">
+        {translate(
+          'auto.components.mobile.MobileHero.cd4e5e816f',
+          'Your workspaces, in your pocket.'
+        )}
+      </h1>
       <p className="mp-lead">
-        Control Orca from your phone. Check on agents, review changes, and kick off tasks while
-        you&apos;re away from your desk.
+        {translate(
+          'auto.components.mobile.MobileHero.b4ccce5cb7',
+          "Control Orca from your phone. Check on agents, review changes, and kick off tasks while you're away from your desk."
+        )}
       </p>
-      <div className="mp-platform-badges" aria-label="Supported mobile platforms">
-        <span className="mp-platform-label">Available on</span>
+      <div
+        className="mp-platform-badges"
+        aria-label={translate(
+          'auto.components.mobile.MobileHero.ec0607bf66',
+          'Supported mobile platforms'
+        )}
+      >
+        <span className="mp-platform-label">
+          {translate('auto.components.mobile.MobileHero.da1d5e5ed0', 'Available on')}
+        </span>
         <span className="mp-platform-badge">
           <IosBrandIcon />
-          iOS
+          {translate('auto.components.mobile.MobileHero.711e6f4b47', 'iOS')}
         </span>
         <span className="mp-platform-badge">
           <AndroidLogo />
-          Android
+          {translate('auto.components.mobile.MobileHero.ac1eb64952', 'Android')}
         </span>
       </div>
       <div className="mp-cta-row">
@@ -53,7 +71,7 @@ export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Eleme
           className="mp-primary-action mp-flow-primary-action"
           onClick={onStart}
         >
-          Get started
+          {translate('auto.components.mobile.MobileHero.10d27b4cba', 'Get started')}
           <ArrowRight className="size-3.5" />
         </button>
       </div>
@@ -77,13 +95,20 @@ export function HeroPaired({
   return (
     <div>
       <div className="mp-eyebrow-row">
-        <span className="mp-eyebrow">Orca Mobile</span>
+        <span className="mp-eyebrow">
+          {translate('auto.components.mobile.MobileHero.5410d55d79', 'Orca Mobile')}
+        </span>
       </div>
       <h1 className="mp-h1">
-        {devices.length === 1 ? 'Your phone is paired.' : 'Your phones are paired.'}
+        {devices.length === 1
+          ? translate('auto.components.mobile.MobileHero.051978a785', 'Your phone is paired.')
+          : translate('auto.components.mobile.MobileHero.d0b52871ce', 'Your phones are paired.')}
       </h1>
       <p className="mp-lead-sm">
-        Open Orca Mobile to pick up where you left off, or pair another device.
+        {translate(
+          'auto.components.mobile.MobileHero.266c18c105',
+          'Open Orca Mobile to pick up where you left off, or pair another device.'
+        )}
       </p>
       <ul className="mp-paired-list">
         {devices.map((device) => {
@@ -96,7 +121,8 @@ export function HeroPaired({
               <div className="mp-paired-main">
                 <div className="mp-paired-name">{device.name}</div>
                 <div className="mp-paired-meta">
-                  Paired {new Date(device.pairedAt).toLocaleDateString()}
+                  {translate('auto.components.mobile.MobileHero.94829abdb1', 'Paired')}
+                  {new Date(device.pairedAt).toLocaleDateString()}
                 </div>
               </div>
               <button
@@ -104,8 +130,12 @@ export function HeroPaired({
                 className="mp-paired-revoke"
                 onClick={() => onRevoke(device.deviceId)}
                 disabled={revoking}
-                aria-label={`Revoke ${device.name}`}
-                title="Revoke device"
+                aria-label={translate(
+                  'auto.components.mobile.MobileHero.34f878d04f',
+                  'Revoke {{value0}}',
+                  { value0: device.name }
+                )}
+                title={translate('auto.components.mobile.MobileHero.f9cbf4bb53', 'Revoke device')}
               >
                 <Trash2 className="size-3.5" />
               </button>
@@ -116,7 +146,7 @@ export function HeroPaired({
       <div className="mp-flow-actions">
         <button type="button" className="mp-secondary-action" onClick={onPairAnother}>
           <Smartphone className="size-3.5" />
-          Pair another device
+          {translate('auto.components.mobile.MobileHero.ff48d9d520', 'Pair another device')}
         </button>
         <span />
       </div>
@@ -179,11 +209,18 @@ export function HeroFlow({
             <div className="mp-step2-copy">
               <div className="mp-eyebrow-row">
                 <div className="mp-step-num">{stepIdx + 1}</div>
-                <span className="mp-eyebrow">Step 1 of 2</span>
+                <span className="mp-eyebrow">
+                  {translate('auto.components.mobile.MobileHero.92ddfdfa1f', 'Step 1 of 2')}
+                </span>
               </div>
-              <h2 className="mp-h2">Get the app.</h2>
+              <h2 className="mp-h2">
+                {translate('auto.components.mobile.MobileHero.0d9b33299e', 'Get the app.')}
+              </h2>
               <p className="mp-lead-sm">
-                Scan the QR with your phone or open the install link to grab Orca Mobile.
+                {translate(
+                  'auto.components.mobile.MobileHero.e75647ace0',
+                  'Scan the QR with your phone or open the install link to grab Orca Mobile.'
+                )}
               </p>
               <div className="mp-tab-toggle">
                 <button
@@ -193,7 +230,7 @@ export function HeroFlow({
                   onClick={() => onPlatformChange('ios')}
                 >
                   <IosBrandIcon />
-                  iOS
+                  {translate('auto.components.mobile.MobileHero.711e6f4b47', 'iOS')}
                 </button>
                 <button
                   type="button"
@@ -202,7 +239,7 @@ export function HeroFlow({
                   onClick={() => onPlatformChange('android')}
                 >
                   <AndroidLogo />
-                  Android
+                  {translate('auto.components.mobile.MobileHero.ac1eb64952', 'Android')}
                 </button>
               </div>
               <div className="mp-inline-actions">
@@ -211,12 +248,23 @@ export function HeroFlow({
                 </button>
                 <button type="button" className="mp-text-link" onClick={onCopyInstallUrl}>
                   <Copy className="size-3.5" />
-                  Copy install link
+                  {translate('auto.components.mobile.MobileHero.aa97420ba4', 'Copy install link')}
                 </button>
               </div>
             </div>
-            <div className="mp-qr" aria-label="Install QR code">
-              {installQrUrl ? <img src={installQrUrl} alt="Install QR" /> : null}
+            <div
+              className="mp-qr"
+              aria-label={translate(
+                'auto.components.mobile.MobileHero.7af266b80d',
+                'Install QR code'
+              )}
+            >
+              {installQrUrl ? (
+                <img
+                  src={installQrUrl}
+                  alt={translate('auto.components.mobile.MobileHero.3241f3c26a', 'Install QR')}
+                />
+              ) : null}
             </div>
           </div>
         </div>
@@ -226,15 +274,26 @@ export function HeroFlow({
             <div className="mp-step2-copy">
               <div className="mp-eyebrow-row">
                 <div className="mp-step-num">2</div>
-                <span className="mp-eyebrow">Step 2 of 2</span>
+                <span className="mp-eyebrow">
+                  {translate('auto.components.mobile.MobileHero.3960f5c339', 'Step 2 of 2')}
+                </span>
               </div>
-              <h2 className="mp-h2">Pair this {getDeviceLabel()}.</h2>
+              <h2 className="mp-h2">
+                {translate('auto.components.mobile.MobileHero.901c98bb93', 'Pair this')}
+                {getDeviceLabel()}.
+              </h2>
               <p className="mp-lead-sm">
-                Open Orca Mobile, tap <strong>Pair Desktop</strong>, and scan the code.
+                {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open Orca Mobile, tap')}
+                <strong>
+                  {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
+                </strong>
+                {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
               </p>
 
               <div className="mp-network-row">
-                <span className="mp-network-label">Network</span>
+                <span className="mp-network-label">
+                  {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
+                </span>
                 <Select
                   value={selectedAddress ?? ''}
                   onValueChange={onSelectedAddressChange}
@@ -243,9 +302,17 @@ export function HeroFlow({
                   <SelectTrigger
                     size="sm"
                     className="mp-network-select"
-                    aria-label="Network interface to advertise"
+                    aria-label={translate(
+                      'auto.components.mobile.MobileHero.79d2f480da',
+                      'Network interface to advertise'
+                    )}
                   >
-                    <SelectValue placeholder="No interfaces found" />
+                    <SelectValue
+                      placeholder={translate(
+                        'auto.components.mobile.MobileHero.ca85e595a7',
+                        'No interfaces found'
+                      )}
+                    />
                   </SelectTrigger>
                   <SelectContent>
                     {networkInterfaces.map((iface) => (
@@ -260,15 +327,23 @@ export function HeroFlow({
                   className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}
                   onClick={onRefreshNetworkInterfaces}
                   disabled={refreshingNetworkInterfaces}
-                  aria-label="Refresh network interfaces"
-                  title="Refresh network interfaces"
+                  aria-label={translate(
+                    'auto.components.mobile.MobileHero.85067b9e06',
+                    'Refresh network interfaces'
+                  )}
+                  title={translate(
+                    'auto.components.mobile.MobileHero.85067b9e06',
+                    'Refresh network interfaces'
+                  )}
                 >
                   <RefreshCw className="size-3.5" />
                 </button>
               </div>
 
               <div className="mp-inline-actions">
-                <span className="mp-action-divider">Can&apos;t scan?</span>
+                <span className="mp-action-divider">
+                  {translate('auto.components.mobile.MobileHero.4c1df4eba7', "Can't scan?")}
+                </span>
                 <button
                   type="button"
                   className="mp-text-link"
@@ -276,20 +351,28 @@ export function HeroFlow({
                   disabled={!pairingUrl || pairLoading}
                 >
                   <Copy className="size-3.5" />
-                  Copy pairing code
+                  {translate('auto.components.mobile.MobileHero.010dddcf27', 'Copy pairing code')}
                 </button>
               </div>
             </div>
             <div className="mp-qr-stack">
               <div
                 className="mp-qr"
-                aria-label="Pairing QR code"
+                aria-label={translate(
+                  'auto.components.mobile.MobileHero.bb0074ce11',
+                  'Pairing QR code'
+                )}
                 aria-busy={pairLoading && !pairQrDataUrl}
               >
                 {pairQrDataUrl ? (
-                  <img src={pairQrDataUrl} alt="Pairing QR" />
+                  <img
+                    src={pairQrDataUrl}
+                    alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
+                  />
                 ) : pairLoading ? (
-                  <span className="mp-qr-loading">Generating…</span>
+                  <span className="mp-qr-loading">
+                    {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
+                  </span>
                 ) : null}
               </div>
               <button
@@ -298,7 +381,11 @@ export function HeroFlow({
                 onClick={onRegeneratePairing}
                 disabled={pairLoading}
               >
-                {pairLoading ? 'Generating…' : pairQrDataUrl ? 'Regenerate code' : 'Generate code'}
+                {pairLoading
+                  ? translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
+                  : pairQrDataUrl
+                    ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
+                    : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
               </button>
             </div>
           </div>
@@ -308,7 +395,7 @@ export function HeroFlow({
       <div className="mp-flow-actions">
         <button type="button" className="mp-flow-back" onClick={onBack}>
           <ArrowLeft className="size-3" />
-          Back
+          {translate('auto.components.mobile.MobileHero.b622eba64d', 'Back')}
         </button>
         {isLast ? (
           onDone ? (
@@ -317,7 +404,7 @@ export function HeroFlow({
               className="mp-primary-action mp-flow-primary-action"
               onClick={onDone}
             >
-              Done
+              {translate('auto.components.mobile.MobileHero.3f90dbd274', 'Done')}
               <ArrowRight className="size-3.5" />
             </button>
           ) : (
@@ -329,7 +416,7 @@ export function HeroFlow({
             className="mp-flow-continue mp-flow-primary-action"
             onClick={onContinue}
           >
-            Continue
+            {translate('auto.components.mobile.MobileHero.a8fb43cf1c', 'Continue')}
             <ArrowRight className="size-3.5" />
           </button>
         )}

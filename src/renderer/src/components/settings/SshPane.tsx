@@ -16,7 +16,8 @@ import {
   isRelayGracePeriodValid,
   parseRelayGracePeriodSeconds
 } from './ssh-target-draft'
-export { SSH_PANE_SEARCH_ENTRIES } from './ssh-search'
+import { translate } from '@/i18n/i18n'
+export { getSshPaneSearchEntries } from './ssh-search'
 
 type SshPaneProps = Record<string, never>
 
@@ -47,7 +48,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
         setSshTargetsMetadata(result)
       } catch {
         if (!opts?.signal?.aborted && mountedRef.current) {
-          toast.error('Failed to load SSH targets')
+          toast.error(
+            translate('auto.components.settings.SshPane.f1fc50dad2', 'Failed to load SSH targets')
+          )
         }
       }
     },
@@ -76,19 +79,30 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const handleSave = async (): Promise<void> => {
     const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
     if (!host) {
-      toast.error('Host or SSH config alias is required')
+      toast.error(
+        translate(
+          'auto.components.settings.SshPane.0e5aa04161',
+          'Host or SSH config alias is required'
+        )
+      )
       return
     }
 
     if (isNaN(port) || port < 1 || port > 65535) {
-      toast.error('Port must be between 1 and 65535')
+      toast.error(
+        translate('auto.components.settings.SshPane.4db9afce1c', 'Port must be between 1 and 65535')
+      )
       return
     }
 
     const graceSeconds = parseRelayGracePeriodSeconds(form)
     if (!isRelayGracePeriodValid(form, graceSeconds)) {
       toast.error(
-        `Relay grace period must be between 60 and ${MAX_SSH_RELAY_GRACE_PERIOD_SECONDS} seconds, or choose keep alive until reset`
+        translate(
+          'auto.components.settings.SshPane.3879cbaa52',
+          'Relay grace period must be between 60 and {{value0}} seconds, or choose keep alive until reset',
+          { value0: MAX_SSH_RELAY_GRACE_PERIOD_SECONDS }
+        )
       )
       return
     }
@@ -126,14 +140,22 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       if (!mountedRef.current) {
         return
       }
-      toast.success(editingId ? 'Target updated' : 'Target added')
+      toast.success(
+        editingId
+          ? translate('auto.components.settings.SshPane.b4ba0ce33d', 'Target updated')
+          : translate('auto.components.settings.SshPane.f602009125', 'Target added')
+      )
       setShowForm(false)
       setEditingId(null)
       setForm(EMPTY_FORM)
       await loadTargets()
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to save target')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.settings.SshPane.2227ce47b6', 'Failed to save target')
+        )
       }
     }
   }
@@ -160,12 +182,16 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       // reconnect metadata; clear it so focused SSH tabs stop retrying it.
       clearRemovedSshTargetState(id)
       if (mountedRef.current) {
-        toast.success('Target removed')
+        toast.success(translate('auto.components.settings.SshPane.a0237eb1ca', 'Target removed'))
       }
       await loadTargets()
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to remove target')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.settings.SshPane.c2a69510e3', 'Failed to remove target')
+        )
       }
     }
   }
@@ -181,7 +207,11 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       await window.api.ssh.connect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Connection failed')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.settings.SshPane.e95d5ae10e', 'Connection failed')
+      )
     }
   }
 
@@ -190,16 +220,29 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       await window.api.ssh.disconnect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Disconnect failed')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.settings.SshPane.a43de1d3ee', 'Disconnect failed')
+      )
     }
   }
 
   const handleTerminateSessions = async (targetId: string): Promise<void> => {
     try {
       await terminateSessionsWithReconnect(targetId)
-      toast.success('Remote terminals ended')
+      toast.success(
+        translate('auto.components.settings.SshPane.90e308c98b', 'Remote terminals ended')
+      )
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to end remote terminals')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.SshPane.025e107643',
+              'Failed to end remote terminals'
+            )
+      )
     }
   }
 
@@ -207,12 +250,21 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     try {
       await window.api.ssh.resetRelay({ targetId })
       if (mountedRef.current) {
-        toast.success('Remote relay reset')
+        toast.success(
+          translate('auto.components.settings.SshPane.db2e48975e', 'Remote relay reset')
+        )
       }
       await loadTargets()
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to reset remote relay')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.settings.SshPane.2c4ee7332b',
+                'Failed to reset remote relay'
+              )
+        )
       }
     }
   }
@@ -224,14 +276,23 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
         if (result.success) {
-          toast.success('Connection successful')
+          toast.success(
+            translate('auto.components.settings.SshPane.81d08bcddf', 'Connection successful')
+          )
         } else {
-          toast.error(result.error ?? 'Connection test failed')
+          toast.error(
+            result.error ??
+              translate('auto.components.settings.SshPane.0cda732f43', 'Connection test failed')
+          )
         }
       }
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Test failed')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.settings.SshPane.68c13b4589', 'Test failed')
+        )
       }
     } finally {
       if (mountedRef.current) {
@@ -252,13 +313,23 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
         if (synced.length === 0) {
           toast('~/.ssh/config already in sync')
         } else {
-          toast.success(`Synced ${synced.length} server${synced.length > 1 ? 's' : ''}`)
+          toast.success(
+            translate(
+              'auto.components.settings.SshPane.f8050f6307',
+              'Synced {{value0}} server{{value1}}',
+              { value0: synced.length, value1: synced.length > 1 ? 's' : '' }
+            )
+          )
         }
       }
       await loadTargets()
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Import failed')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate('auto.components.settings.SshPane.f495689b82', 'Import failed')
+        )
       }
     }
   }
@@ -274,9 +345,14 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       {/* Header row */}
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
-          <p className="text-sm font-medium">Targets</p>
+          <p className="text-sm font-medium">
+            {translate('auto.components.settings.SshPane.94c5284560', 'Targets')}
+          </p>
           <p className="text-xs text-muted-foreground">
-            Add a remote host to connect to it in Orca.
+            {translate(
+              'auto.components.settings.SshPane.a7d28dff81',
+              'Add a remote host to connect to it in Orca.'
+            )}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
@@ -287,7 +363,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
             className="gap-1.5"
           >
             <Upload className="size-3" />
-            Import
+            {translate('auto.components.settings.SshPane.51d7dba44d', 'Import')}
           </Button>
           {!showForm ? (
             <Button
@@ -301,7 +377,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
               className="gap-1.5"
             >
               <Plus className="size-3" />
-              Add Target
+              {translate('auto.components.settings.SshPane.639ceb3698', 'Add Target')}
             </Button>
           ) : null}
         </div>
@@ -318,7 +394,10 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
             {/* Target list */}
             {targets.length === 0 && !showForm ? (
               <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
-                No SSH targets configured.
+                {translate(
+                  'auto.components.settings.SshPane.c0f1c80166',
+                  'No SSH targets configured.'
+                )}
               </div>
             ) : (
               <div className="space-y-2">

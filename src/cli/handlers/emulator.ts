@@ -20,6 +20,7 @@ type EmulatorKillResult = {
 type EmulatorShutdownResult = EmulatorKillResult
 
 type EmulatorGesturePoint = {
+  edge?: number
   type: 'begin' | 'move' | 'end'
   x: number
   y: number
@@ -54,6 +55,7 @@ function parseEmulatorGesturePoints(raw: string): EmulatorGesturePoint[] {
     }
     const candidate = point as Record<string, unknown>
     const type = candidate.type
+    const edge = candidate.edge
     const x = candidate.x
     const y = candidate.y
     if (type !== 'begin' && type !== 'move' && type !== 'end') {
@@ -70,7 +72,16 @@ function parseEmulatorGesturePoints(raw: string): EmulatorGesturePoint[] {
     }
     assertNormalizedCoordinate(x, `points[${index}].x`)
     assertNormalizedCoordinate(y, `points[${index}].y`)
-    return { type, x, y }
+    if (
+      edge !== undefined &&
+      (typeof edge !== 'number' || !Number.isInteger(edge) || edge < 0 || edge > 4)
+    ) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `gesture point ${index} edge must be an integer between 0 and 4`
+      )
+    }
+    return edge === undefined ? { type, x, y } : { type, x, y, edge }
   })
 }
 

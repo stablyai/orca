@@ -44,8 +44,11 @@ describe('new workspace create gates', () => {
     ).toBe(false)
   })
 
-  it('still blocks quick create for missing form state and explicit setup choices', () => {
-    expect(getQuickComposerCreateDisabled({ ...readyInput, repoId: '' })).toBe(true)
+  it('keeps quick create clickable when no repo is selected so submit can validate inline', () => {
+    expect(getQuickComposerCreateDisabled({ ...readyInput, repoId: '' })).toBe(false)
+  })
+
+  it('still blocks quick create for other missing form state and explicit setup choices', () => {
     expect(getQuickComposerCreateDisabled({ ...readyInput, workspaceSeedName: '' })).toBe(true)
     expect(getQuickComposerCreateDisabled({ ...readyInput, creating: true })).toBe(true)
     expect(

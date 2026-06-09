@@ -28,6 +28,7 @@ import {
 } from './source-control-ai-recipe-persistence'
 import type { SourceControlAiControllerParams } from './source-control-ai-controller-types'
 import { openSourceControlAiSettingsTarget } from './source-control-ai-settings-navigation'
+import { translate } from '@/i18n/i18n'
 
 export function getSourceControlAiControllerDiscoveryHostKey(
   settings: SourceControlAiControllerParams['settings'],
@@ -159,7 +160,12 @@ export function useSourceControlAi({
       return
     }
     if (unresolvedConflicts.length === 0) {
-      toast.message('No unresolved conflicts to send.')
+      toast.message(
+        translate(
+          'auto.components.right.sidebar.use.source.control.ai.cfafa92509',
+          'No unresolved conflicts to send.'
+        )
+      )
       return
     }
     setResolveConflictsComposerOpen(true)

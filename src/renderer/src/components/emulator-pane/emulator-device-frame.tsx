@@ -10,14 +10,15 @@ import {
 import {
   fitDeviceFrameToPane,
   resolveDeviceFrameKind,
-  type PaneSize,
   type StreamSize
 } from './emulator-device-frame-layout'
 import {
   buildWheelGesturePoints,
   clampEmulatorScreenPoint,
+  buildEmulatorGesturePoint,
   mapClientPointToSimulatorScreen,
   resolveEmulatorWheelDelta,
+  resolveEmulatorHomeIndicatorEdge,
   resolveEmulatorPointerAction,
   type EmulatorScreenPoint,
   type EmulatorGesturePoint,
@@ -25,8 +26,11 @@ import {
 } from './emulator-screen-gesture'
 import { PhoneHardwareButtons } from './emulator-phone-hardware-buttons'
 import { EmulatorScreenStreamContent } from './emulator-screen-stream-content'
-import { useEmulatorTouchStream } from './use-emulator-touch-stream'
+import { useEmulatorControlStream } from './use-emulator-control-stream'
+import { useEmulatorPaneSize } from './use-emulator-pane-size'
+import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type EmulatorDeviceFrameProps = {
   previewUrl?: string
@@ -65,67 +69,27 @@ export function EmulatorDeviceFrame({
   onTap,
   onGesture
 }: EmulatorDeviceFrameProps) {
-  const paneRef = useRef<HTMLDivElement | null>(null)
+  const { paneRef, paneSize } = useEmulatorPaneSize()
   const pointerSamplesRef = useRef<PointerSample[] | null>(null)
   const activePointerIdRef = useRef<number | null>(null)
   const liveTouchRef = useRef(false)
+  const liveTouchEdgeRef = useRef<number | undefined>(undefined)
   const lastTouchPointRef = useRef<EmulatorScreenPoint | null>(null)
   const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
-  const [paneSize, setPaneSize] = useState<PaneSize | null>(null)
   const canInteract = isLive && !loading && !streamError
-  const { sendTouch } = useEmulatorTouchStream(wsUrl, canInteract)
+  const { sendKeyboardFrames, sendTouch } = useEmulatorControlStream(wsUrl, canInteract)
+  const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
+    useEmulatorScreenKeyboard({
+      canInteract,
+      sendKeyboardFrames
+    })
 
   useEffect(() => {
     setStreamError(false)
     setStreamSize(null)
   }, [previewUrl, streamKey])
-
-  useEffect(() => {
-    const node = paneRef.current
-    if (!node) {
-      return
-    }
-    let frameId: number | null = null
-    const updateSize = (): void => {
-      const rect = node.getBoundingClientRect()
-      const width = Math.floor(rect.width)
-      const height = Math.floor(rect.height)
-      setPaneSize((current) =>
-        current?.width === width && current.height === height ? current : { width, height }
-      )
-    }
-    const scheduleUpdate = (): void => {
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId)
-      }
-      frameId = requestAnimationFrame(() => {
-        frameId = null
-        updateSize()
-      })
-    }
-
-    updateSize()
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', scheduleUpdate)
-      return () => {
-        if (frameId !== null) {
-          cancelAnimationFrame(frameId)
-        }
-        window.removeEventListener('resize', scheduleUpdate)
-      }
-    }
-
-    const observer = new ResizeObserver(scheduleUpdate)
-    observer.observe(node)
-    return () => {
-      if (frameId !== null) {
-        cancelAnimationFrame(frameId)
-      }
-      observer.disconnect()
-    }
-  }, [])
 
   const mapEventToScreenPoint = useCallback(
     (event: ScreenCoordinateEvent): EmulatorScreenPoint | null =>
@@ -176,10 +140,11 @@ export function EmulatorDeviceFrame({
       }
       const point = lastTouchPointRef.current
       if (liveTouchRef.current && point) {
-        void sendTouch({ ...point, type: 'end' })
+        void sendTouch(buildEmulatorGesturePoint(point, 'end', liveTouchEdgeRef.current))
       }
       wheelGestureRef.current = null
       liveTouchRef.current = false
+      liveTouchEdgeRef.current = undefined
       lastTouchPointRef.current = null
     },
     [sendTouch]
@@ -191,6 +156,10 @@ export function EmulatorDeviceFrame({
         return
       }
       event.preventDefault()
+      try {
+        event.currentTarget.focus({ preventScroll: true })
+      } catch {}
+      enableKeyboardCapture()
       const point = mapEventToScreenPoint(event)
       if (!point) {
         return
@@ -198,14 +167,17 @@ export function EmulatorDeviceFrame({
       activePointerIdRef.current = event.pointerId
       pointerSamplesRef.current = [{ clientX: event.clientX, clientY: event.clientY }]
       lastTouchPointRef.current = point
+      liveTouchEdgeRef.current = resolveEmulatorHomeIndicatorEdge(point)
       // Why: serve-sim's native viewer streams touch phases live; replaying the
       // whole drag after pointer-up can be ignored by iOS gesture recognizers.
-      liveTouchRef.current = sendTouch({ ...point, type: 'begin' })
+      liveTouchRef.current = sendTouch(
+        buildEmulatorGesturePoint(point, 'begin', liveTouchEdgeRef.current)
+      )
       try {
         event.currentTarget.setPointerCapture(event.pointerId)
       } catch {}
     },
-    [canInteract, mapEventToScreenPoint, sendTouch]
+    [canInteract, enableKeyboardCapture, mapEventToScreenPoint, sendTouch]
   )
 
   const handlePointerMove = useCallback(
@@ -231,7 +203,7 @@ export function EmulatorDeviceFrame({
       const point = mapEventToScreenPoint(event)
       if (point) {
         lastTouchPointRef.current = point
-        void sendTouch({ ...point, type: 'move' })
+        void sendTouch(buildEmulatorGesturePoint(point, 'move', liveTouchEdgeRef.current))
       }
     },
     [mapEventToScreenPoint, sendTouch]
@@ -244,11 +216,12 @@ export function EmulatorDeviceFrame({
       }
       const point = lastTouchPointRef.current
       if (liveTouchRef.current && point) {
-        void sendTouch({ ...point, type: 'end' })
+        void sendTouch(buildEmulatorGesturePoint(point, 'end', liveTouchEdgeRef.current))
       }
       pointerSamplesRef.current = null
       activePointerIdRef.current = null
       liveTouchRef.current = false
+      liveTouchEdgeRef.current = undefined
       lastTouchPointRef.current = null
     },
     [sendTouch]
@@ -266,12 +239,14 @@ export function EmulatorDeviceFrame({
       const endPoint = mapEventToScreenPoint(event) ?? lastTouchPointRef.current
       if (liveTouchRef.current) {
         if (endPoint) {
-          void sendTouch({ ...endPoint, type: 'end' })
+          void sendTouch(buildEmulatorGesturePoint(endPoint, 'end', liveTouchEdgeRef.current))
         }
         liveTouchRef.current = false
+        liveTouchEdgeRef.current = undefined
         lastTouchPointRef.current = null
         return
       }
+      liveTouchEdgeRef.current = undefined
       lastTouchPointRef.current = null
       if (!canInteract) {
         return
@@ -364,7 +339,10 @@ export function EmulatorDeviceFrame({
   )
 
   return (
-    <div ref={paneRef} className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+    <div
+      ref={paneRef}
+      className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted"
+    >
       <div
         className="relative"
         style={{
@@ -401,9 +379,26 @@ export function EmulatorDeviceFrame({
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             onWheel={handleWheel}
-            role={isLive ? 'button' : undefined}
-            aria-label={isLive ? 'Emulator screen' : undefined}
+            role={isLive ? 'application' : undefined}
+            tabIndex={isLive ? 0 : undefined}
+            aria-keyshortcuts={keyboardCaptureActive ? 'Escape' : undefined}
+            aria-label={
+              isLive
+                ? keyboardCaptureActive
+                  ? translate(
+                      'auto.components.emulator.pane.emulator.device.frame.8f25ffaf8a',
+                      'Emulator screen, keyboard captured. Press Escape to release.'
+                    )
+                  : translate(
+                      'auto.components.emulator.pane.emulator.device.frame.9406c15775',
+                      'Emulator screen'
+                    )
+                : undefined
+            }
           >
             {/* Why: the stream is the actual emulator screen; fake in-screen
                 chrome doubles up with iOS's real status bar and makes bezels lie. */}

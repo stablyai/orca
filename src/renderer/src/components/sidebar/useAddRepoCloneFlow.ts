@@ -6,6 +6,7 @@ import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetr
 import type { Repo } from '../../../../shared/types'
 import { getCloneDestinationAutoFill } from './clone-defaults'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
+import { translate } from '@/i18n/i18n'
 
 export function useAddRepoCloneFlow({
   step,
@@ -81,7 +82,12 @@ export function useAddRepoCloneFlow({
     if (activeRuntimeEnvironmentId?.trim()) {
       // Why: the native folder picker returns a client-local path. Runtime
       // clone destinations must be typed as server paths.
-      toast.error('Enter a server path for the clone destination.')
+      toast.error(
+        translate(
+          'auto.components.sidebar.useAddRepoCloneFlow.0dc4d1b657',
+          'Enter a server path for the clone destination.'
+        )
+      )
       return
     }
     const gen = cloneGenRef.current
@@ -123,7 +129,10 @@ export function useAddRepoCloneFlow({
       if (gen !== cloneGenRef.current) {
         return
       }
-      toast.success('Repository cloned', { description: repo.displayName })
+      toast.success(
+        translate('auto.components.sidebar.useAddRepoCloneFlow.4d0013cc93', 'Repository cloned'),
+        { description: repo.displayName }
+      )
       // Why: eagerly upsert so step 2 finds the repo before the IPC event.
       const state = useAppStore.getState()
       const existingIdx = state.repos.findIndex((r) => r.id === repo.id)

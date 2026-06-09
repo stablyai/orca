@@ -4,6 +4,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { getOrchestrationSkillAgentStatuses } from '@/lib/orchestration-skill-coverage'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 function getAgentCoverageSummary(props: {
   loading: boolean
@@ -51,7 +52,15 @@ function AgentCoverageChip({
           status.installed ? 'text-status-success' : 'text-muted-foreground'
         )}
       >
-        {status.installed ? 'Ready' : 'Missing'}
+        {status.installed
+          ? translate(
+              'auto.components.settings.OrchestrationSkillAgentCoverage.1e8f8d8fae',
+              'Ready'
+            )
+          : translate(
+              'auto.components.settings.OrchestrationSkillAgentCoverage.ffe13e36fb',
+              'Missing'
+            )}
       </span>
     </span>
   )
@@ -88,7 +97,12 @@ export function OrchestrationSkillAgentCoverage(props: {
       )}
     >
       <div className="space-y-1">
-        <h3 className="text-sm font-medium text-foreground">Agent coverage</h3>
+        <h3 className="text-sm font-medium text-foreground">
+          {translate(
+            'auto.components.settings.OrchestrationSkillAgentCoverage.6dec5ce2d2',
+            'Agent coverage'
+          )}
+        </h3>
         <p className="text-xs leading-relaxed text-muted-foreground">{summary}</p>
       </div>
 

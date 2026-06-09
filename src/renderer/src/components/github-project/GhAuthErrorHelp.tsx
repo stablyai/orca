@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import type { GitHubProjectViewError } from '@/../../shared/github-project-types'
 import type { GhAuthDiagnostic } from '@/../../shared/github-auth-types'
+import { translate } from '@/i18n/i18n'
 
 type AuthErrorKind = 'auth_required' | 'scope_missing'
 
@@ -39,12 +40,18 @@ function reloadOrcaRenderer(): void {
 function findEnvVarCommand(varName: string): { label: string; command: string } {
   if (IS_WINDOWS) {
     return {
-      label: 'Check if it’s set (PowerShell)',
+      label: translate(
+        'auto.components.github.project.GhAuthErrorHelp.df636f5886',
+        'Check if it’s set (PowerShell)'
+      ),
       command: `Get-ChildItem Env:${varName}`
     }
   }
   return {
-    label: 'Find where it’s set',
+    label: translate(
+      'auto.components.github.project.GhAuthErrorHelp.ae43542893',
+      'Find where it’s set'
+    ),
     command: `grep -RIn '${varName}' ~/.zshrc ~/.zshenv ~/.bashrc ~/.bash_profile ~/.profile ~/.config 2>/dev/null`
   }
 }
@@ -54,11 +61,20 @@ function unsetEnvVarCommand(varName: string): { label: string; command: string }
     // Persistent removal at the user scope; the user still needs a fresh
     // shell/Orca relaunch for the change to take effect.
     return {
-      label: 'Unset (PowerShell, persistent)',
+      label: translate(
+        'auto.components.github.project.GhAuthErrorHelp.fd17b3019f',
+        'Unset (PowerShell, persistent)'
+      ),
       command: `Remove-Item Env:${varName}; [Environment]::SetEnvironmentVariable('${varName}', $null, 'User')`
     }
   }
-  return { label: 'Unset for this shell', command: `unset ${varName}` }
+  return {
+    label: translate(
+      'auto.components.github.project.GhAuthErrorHelp.891a7d4616',
+      'Unset for this shell'
+    ),
+    command: `unset ${varName}`
+  }
 }
 
 function openExternal(url: string): void {
@@ -71,9 +87,13 @@ function openExternal(url: string): void {
 async function copyToClipboard(text: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
-    toast.success('Copied to clipboard')
+    toast.success(
+      translate('auto.components.github.project.GhAuthErrorHelp.224c9d0ae8', 'Copied to clipboard')
+    )
   } catch {
-    toast.error('Failed to copy')
+    toast.error(
+      translate('auto.components.github.project.GhAuthErrorHelp.8a7f6bf5dc', 'Failed to copy')
+    )
   }
 }
 
@@ -99,7 +119,13 @@ function buildRemediation(
     return {
       summary: errorMessage,
       commands: [
-        { label: 'Copy command', command: kind === 'auth_required' ? LOGIN_CMD : REFRESH_CMD }
+        {
+          label: translate(
+            'auto.components.github.project.GhAuthErrorHelp.b436c586d1',
+            'Copy command'
+          ),
+          command: kind === 'auth_required' ? LOGIN_CMD : REFRESH_CMD
+        }
       ]
     }
   }
@@ -109,7 +135,15 @@ function buildRemediation(
       summary: 'GitHub CLI (`gh`) is not installed or not on PATH.',
       detail:
         'Orca uses `gh` to talk to GitHub Projects. Install it from cli.github.com, then sign in.',
-      commands: [{ label: 'Copy login command', command: LOGIN_CMD }],
+      commands: [
+        {
+          label: translate(
+            'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
+            'Copy login command'
+          ),
+          command: LOGIN_CMD
+        }
+      ],
       docsUrl: 'https://cli.github.com/'
     }
   }
@@ -151,7 +185,15 @@ function buildRemediation(
   if (kind === 'auth_required' || !active) {
     return {
       summary: 'You’re not signed in to GitHub via `gh`.',
-      commands: [{ label: 'Copy login command', command: LOGIN_CMD }]
+      commands: [
+        {
+          label: translate(
+            'auto.components.github.project.GhAuthErrorHelp.9c2da6353b',
+            'Copy login command'
+          ),
+          command: LOGIN_CMD
+        }
+      ]
     }
   }
 
@@ -165,7 +207,15 @@ function buildRemediation(
         )} scope${diag.missingScopes.length === 1 ? '' : 's'} needed for GitHub Projects.`,
       detail:
         'Run the refresh command in a terminal. It will open a browser to authorize the new scopes, then come back here and reload.',
-      commands: [{ label: 'Copy refresh command', command: REFRESH_CMD }]
+      commands: [
+        {
+          label: translate(
+            'auto.components.github.project.GhAuthErrorHelp.3fefeebde4',
+            'Copy refresh command'
+          ),
+          command: REFRESH_CMD
+        }
+      ]
     }
   }
 
@@ -176,7 +226,15 @@ function buildRemediation(
     summary: errorMessage,
     detail:
       'Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO.',
-    commands: [{ label: 'Copy refresh command', command: REFRESH_CMD }],
+    commands: [
+      {
+        label: translate(
+          'auto.components.github.project.GhAuthErrorHelp.3fefeebde4',
+          'Copy refresh command'
+        ),
+        command: REFRESH_CMD
+      }
+    ],
     docsUrl:
       'https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-saml-single-sign-on/authorizing-a-personal-access-token-for-use-with-saml-single-sign-on'
   }
@@ -232,7 +290,8 @@ export function GhAuthErrorHelp({
               onClick={() => openExternal(docsUrl)}
               className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
             >
-              <ExternalLink className="size-3" /> Docs
+              <ExternalLink className="size-3" />{' '}
+              {translate('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
             </button>
           ) : null}
           {/* Why: after running the refresh command in a terminal, users need to
@@ -242,7 +301,8 @@ export function GhAuthErrorHelp({
             onClick={reloadOrcaRenderer}
             className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
           >
-            <RotateCw className="size-3" /> Reload
+            <RotateCw className="size-3" />{' '}
+            {translate('auto.components.github.project.GhAuthErrorHelp.7e800068d8', 'Reload')}
           </button>
         </div>
       </div>
@@ -267,13 +327,15 @@ export function GhAuthErrorHelp({
         ))}
         {docsUrl ? (
           <Button size="sm" variant="outline" onClick={() => openExternal(docsUrl)}>
-            <ExternalLink className="mr-1 size-3.5" /> Docs
+            <ExternalLink className="mr-1 size-3.5" />{' '}
+            {translate('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
           </Button>
         ) : null}
         {/* Why: after running the refresh command in a terminal, users need to
             reload the renderer to pick up the new gh token state. */}
         <Button size="sm" variant="outline" onClick={reloadOrcaRenderer}>
-          <RotateCw className="mr-1 size-3.5" /> Reload
+          <RotateCw className="mr-1 size-3.5" />{' '}
+          {translate('auto.components.github.project.GhAuthErrorHelp.7e800068d8', 'Reload')}
         </Button>
       </div>
     </div>

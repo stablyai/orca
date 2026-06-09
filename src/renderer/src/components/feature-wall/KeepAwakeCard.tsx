@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import { AGENT_AWAKE_TITLE, getAgentAwakeDescription } from '../settings/agent-awake-copy'
 import type { GlobalSettings } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 export function KeepAwakeCard(props: {
   settings: GlobalSettings
@@ -18,7 +19,7 @@ export function KeepAwakeCard(props: {
               {AGENT_AWAKE_TITLE}
             </div>
             <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              Optional
+              {translate('auto.components.feature.wall.KeepAwakeCard.209713d3c7', 'Optional')}
             </span>
           </div>
           <p className="text-[13px] leading-snug text-muted-foreground">

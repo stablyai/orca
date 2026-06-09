@@ -77,7 +77,7 @@ describe('applyTerminalGpuAcceleration', () => {
     expect(pane.fitAddon.fit).not.toHaveBeenCalled()
   })
 
-  it('returns Linux panes to DOM when switching from forced WebGL back to auto', () => {
+  it('returns Linux panes to DOM when switching from forced WebGL back to auto without a safe renderer', () => {
     vi.stubGlobal('navigator', {
       platform: 'Linux x86_64',
       userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'

@@ -3,6 +3,7 @@ import type { DiffComment } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
+import { translate } from '@/i18n/i18n'
 
 export function DiffNotesSendMenu({
   worktreeId,
@@ -42,7 +43,7 @@ export function DiffNotesSendMenu({
   const scopes = useMemo<NotesSendMenuScope<DiffComment>[]>(() => {
     const allNotesScope = {
       id: 'all',
-      label: 'All unsent notes',
+      label: translate('auto.components.editor.DiffNotesSendMenu.8b87612461', 'All unsent notes'),
       notes: unsentNotes,
       prompt: unsentPrompt
     }
@@ -52,7 +53,7 @@ export function DiffNotesSendMenu({
     return [
       {
         id: 'file',
-        label: 'This file',
+        label: translate('auto.components.editor.DiffNotesSendMenu.f1aa04b5cf', 'This file'),
         notes: unsentFileNotes,
         prompt: unsentFilePrompt
       },

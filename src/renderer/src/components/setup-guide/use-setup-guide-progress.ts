@@ -1,5 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: setup-guide readiness is driven by bounded IPC probes and browser focus events; the state cannot be derived synchronously from render inputs. */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
@@ -28,6 +28,34 @@ import {
 
 const SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS = 15_000
 
+const setupScriptProbeCacheListeners = new Set<() => void>()
+let setupScriptProbeCache = INITIAL_SETUP_SCRIPT_PROBE_STATE
+
+function readSetupScriptProbeCache(): SetupScriptProbeState {
+  return setupScriptProbeCache
+}
+
+function subscribeSetupScriptProbeCache(listener: () => void): () => void {
+  setupScriptProbeCacheListeners.add(listener)
+  return () => {
+    setupScriptProbeCacheListeners.delete(listener)
+  }
+}
+
+function setSetupScriptProbeCache(next: SetupScriptProbeState): void {
+  if (
+    setupScriptProbeCache.signature === next.signature &&
+    setupScriptProbeCache.ready === next.ready &&
+    setupScriptProbeCache.hasSetupScript === next.hasSetupScript
+  ) {
+    return
+  }
+  setupScriptProbeCache = next
+  for (const listener of setupScriptProbeCacheListeners) {
+    listener()
+  }
+}
+
 export function useSetupGuideProgress(
   shouldRefreshCoreState: boolean,
   orchestrationSkillInstalled: boolean,
@@ -46,8 +74,10 @@ export function useSetupGuideProgress(
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
-  const [setupScriptProbe, setSetupScriptProbe] = useState<SetupScriptProbeState>(
-    INITIAL_SETUP_SCRIPT_PROBE_STATE
+  const setupScriptProbe = useSyncExternalStore(
+    subscribeSetupScriptProbeCache,
+    readSetupScriptProbeCache,
+    readSetupScriptProbeCache
   )
   const [computerUsePermissionsReady, setComputerUsePermissionsReady] = useState(false)
   const [computerUsePermissionStatusChecked, setComputerUsePermissionStatusChecked] =
@@ -116,14 +146,14 @@ export function useSetupGuideProgress(
     // visibility readiness so a wedged read cannot hide the checklist forever.
     const timeoutId = window.setTimeout(() => {
       if (activeSetupScriptProbeSignatureRef.current === signature) {
-        setSetupScriptProbe({ signature, ready: true, hasSetupScript: false })
+        setSetupScriptProbeCache({ signature, ready: true, hasSetupScript: false })
       }
     }, SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS)
 
     const settle = (hasSetupScript: boolean): void => {
       window.clearTimeout(timeoutId)
       if (activeSetupScriptProbeSignatureRef.current === signature) {
-        setSetupScriptProbe({ signature, ready: true, hasSetupScript })
+        setSetupScriptProbeCache({ signature, ready: true, hasSetupScript })
       }
     }
 

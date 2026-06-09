@@ -131,12 +131,14 @@ export function useTabGroupWorkspaceModel({
             title: resolveUnifiedTabLabel(
               {
                 ...item,
+                quickCommandLabel: item.quickCommandLabel ?? terminalTab?.quickCommandLabel,
                 generatedLabel: item.generatedLabel ?? terminalTab?.generatedTitle
               },
               worktreeState.generatedTabTitlesEnabled,
               item.label
             ),
             defaultTitle: terminalTab?.defaultTitle,
+            quickCommandLabel: terminalTab?.quickCommandLabel ?? item.quickCommandLabel ?? null,
             generatedTitle: terminalTab?.generatedTitle ?? item.generatedLabel ?? null,
             customTitle: item.customLabel ?? terminalTab?.customTitle ?? null,
             color: item.color ?? terminalTab?.color ?? null,

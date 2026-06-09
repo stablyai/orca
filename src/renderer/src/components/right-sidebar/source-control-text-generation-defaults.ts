@@ -7,7 +7,9 @@ import {
   type SourceControlActionRecipe,
   type SourceControlTextActionId
 } from '../../../../shared/source-control-ai-actions'
+import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings, Repo } from '../../../../shared/types'
+import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 
 type TextGenerationRecipeConfiguration = {
   agentId?: SourceControlActionRecipe['agentId']
@@ -39,6 +41,23 @@ export function generationParamsToActionRecipe(
     commandInputTemplate: params.commandInputTemplate ?? '{basePrompt}',
     ...(params.agentArgs !== undefined ? { agentArgs: params.agentArgs } : {})
   }
+}
+
+export function sourceControlTextGenerationDefaultsMatchTarget(input: {
+  actionId: SourceControlTextActionId
+  target: SourceControlAiWriteTarget
+  params: ResolvedSourceControlAiGenerationParams
+  settings: Pick<GlobalSettings, 'sourceControlAi' | 'commitMessageAi'> | null | undefined
+  repo?: Pick<Repo, 'sourceControlAi'> | null
+}): boolean {
+  return sourceControlActionRecipeMatchesTarget({
+    actionId: input.actionId,
+    target: input.target,
+    recipe: generationParamsToActionRecipe(input.params),
+    settings: input.settings,
+    repo: input.repo,
+    customAgentCommand: input.params.customAgentCommand
+  })
 }
 
 export function hasConfiguredSourceControlTextGenerationDefaults(input: {

@@ -38,6 +38,7 @@ import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualized
 import { branchName } from '@/lib/git-utils'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
+import { translate } from '@/i18n/i18n'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list
@@ -93,9 +94,18 @@ function showLocalBaseRefRefreshToast(result: LocalBaseRefRefreshResult | undefi
       break
   }
 
-  toast.warning(`Local ${result.localBranch} was not refreshed`, {
-    description: `Workspace created from ${result.baseRef}, but Orca could not fast-forward local ${result.localBranch} because ${reason}`
-  })
+  toast.warning(
+    translate('auto.store.slices.worktrees.14bc053a47', 'Local {{value0}} was not refreshed', {
+      value0: result.localBranch
+    }),
+    {
+      description: translate(
+        'auto.store.slices.worktrees.903b51c2ed',
+        'Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}',
+        { value0: result.baseRef, value1: result.localBranch, value2: reason }
+      )
+    }
+  )
 }
 
 function showPreservedBranchToast(
@@ -115,14 +125,23 @@ function showPreservedBranchToast(
   const expectedHead = preservedBranch.head
   const action = expectedHead
     ? {
-        label: 'Force Delete Branch',
+        label: translate('auto.store.slices.worktrees.e50495aae6', 'Force Delete Branch'),
         onClick: () => onForceDelete(branch, expectedHead)
       }
     : undefined
-  toast.warning(`${targetTitle} deleted, branch kept`, {
-    description: `Git could not safely delete branch "${branch}"${deletedTarget}, so Orca kept it to avoid losing local commits.`,
-    ...(action ? { action } : {})
-  })
+  toast.warning(
+    translate('auto.store.slices.worktrees.4e6496f3d2', '{{value0}} deleted, branch kept', {
+      value0: targetTitle
+    }),
+    {
+      description: translate(
+        'auto.store.slices.worktrees.d1d78a7baa',
+        'Git could not safely delete branch "{{value0}}"{{value1}}, so Orca kept it to avoid losing local commits.',
+        { value0: branch, value1: deletedTarget }
+      ),
+      ...(action ? { action } : {})
+    }
+  )
 }
 
 function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
@@ -1550,13 +1569,15 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             { worktree: toRuntimeWorktreeSelector(worktreeId), branchName, expectedHead },
             { timeoutMs: 15_000 }
           ))
-      toast.success('Local branch deleted', {
-        description: `Deleted "${branchName}".`
+      toast.success(translate('auto.store.slices.worktrees.19db0085fb', 'Local branch deleted'), {
+        description: translate('auto.store.slices.worktrees.5a58e03a26', 'Deleted "{{value0}}".', {
+          value0: branchName
+        })
       })
       return { ok: true as const, ...result }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err)
-      toast.error('Failed to delete branch', {
+      toast.error(translate('auto.store.slices.worktrees.0216895fb5', 'Failed to delete branch'), {
         description: error
       })
       return { ok: false as const, error }

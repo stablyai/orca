@@ -18,6 +18,7 @@ import {
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
+import { getTerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 import {
   equalizePaneSplitSizes,
   safeFit,
@@ -26,6 +27,7 @@ import {
 } from './pane-tree-ops'
 import { toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
+import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
   resumePaneRendering,
@@ -188,6 +190,7 @@ export class PaneManager {
       webglAttachmentDeferred: pane.webglAttachmentDeferred,
       webglDisabledAfterContextLoss: pane.webglDisabledAfterContextLoss,
       hasComplexScriptOutput: pane.hasComplexScriptOutput,
+      terminalWebglAutoDecision: getTerminalWebglAutoDecision(),
       hasWebgl: Boolean(pane.webglAddon)
     }))
   }
@@ -255,6 +258,14 @@ export class PaneManager {
 
   markPaneHasComplexScriptOutput(paneId: number): void {
     markPaneComplexScriptOutput(this.panes, paneId)
+  }
+
+  rebuildPaneWebgl(paneId: number): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) {
+      return
+    }
+    rebuildAttachedWebgl(pane)
   }
 
   suspendRendering(): void {

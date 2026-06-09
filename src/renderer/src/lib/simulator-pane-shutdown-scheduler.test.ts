@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cancelPendingSimulatorPaneShutdown,
-  scheduleSimulatorPaneManagedShutdown
+  scheduleSimulatorPaneManagedShutdown,
+  shutdownManagedSimulatorIfNoPane
 } from './simulator-pane-shutdown-scheduler'
 
 type TestTab = {
@@ -121,5 +122,32 @@ describe('scheduleSimulatorPaneManagedShutdown', () => {
 
     expect(shutdownManagedSimulator).toHaveBeenCalledTimes(1)
     expect(shutdownManagedSimulator).toHaveBeenCalledWith('wt-2')
+  })
+
+  it('immediately shuts down the managed simulator when no pane remains', async () => {
+    tabsByWorktree = { 'wt-1': [{ id: 'terminal-1', contentType: 'terminal' }] }
+
+    await expect(
+      shutdownManagedSimulatorIfNoPane('wt-1', 'sim-1', {
+        getTabsForWorktree,
+        shutdownManagedSimulator
+      })
+    ).resolves.toBe(true)
+
+    expect(shutdownManagedSimulator).toHaveBeenCalledTimes(1)
+    expect(shutdownManagedSimulator).toHaveBeenCalledWith('wt-1')
+  })
+
+  it('does not immediately shut down while a simulator pane still exists', async () => {
+    tabsByWorktree = { 'wt-1': [{ id: 'sim-1', contentType: 'simulator' }] }
+
+    await expect(
+      shutdownManagedSimulatorIfNoPane('wt-1', 'sim-1', {
+        getTabsForWorktree,
+        shutdownManagedSimulator
+      })
+    ).resolves.toBe(false)
+
+    expect(shutdownManagedSimulator).not.toHaveBeenCalled()
   })
 })

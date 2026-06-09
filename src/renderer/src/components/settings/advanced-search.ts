@@ -1,37 +1,49 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
+import { translate } from '@/i18n/i18n'
 
-export const ADVANCED_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
-    title: 'HTTP/1.1 Compatibility',
-    description: 'Use HTTP/1.1 for Electron networking when HTTP/2 fails behind a proxy.',
+    title: translate(
+      'auto.components.settings.advanced.search.11eea3da72',
+      'HTTP/1.1 Compatibility'
+    ),
+    description: translate(
+      'auto.components.settings.advanced.search.585f56fae0',
+      'Use HTTP/1.1 for Electron networking when HTTP/2 fails behind a proxy.'
+    ),
     keywords: [
-      'advanced',
-      'networking',
-      'network',
-      'http',
-      'http2',
-      'http/2',
-      'http1',
-      'http/1.1',
-      'compatibility',
-      'proxy',
-      'vpn',
-      'support',
-      'troubleshooting',
-      'updates',
-      'updater'
+      translate('auto.components.settings.advanced.search.e04e9db503', 'advanced'),
+      translate('auto.components.settings.advanced.search.2b4d26d11e', 'networking'),
+      translate('auto.components.settings.advanced.search.4d44352eea', 'network'),
+      translate('auto.components.settings.advanced.search.48a1c8f534', 'http'),
+      translate('auto.components.settings.advanced.search.4b4ae4345a', 'http2'),
+      translate('auto.components.settings.advanced.search.a0f71bd909', 'http/2'),
+      translate('auto.components.settings.advanced.search.f8ff125ebe', 'http1'),
+      translate('auto.components.settings.advanced.search.621233008b', 'http/1.1'),
+      translate('auto.components.settings.advanced.search.65bf6af262', 'compatibility'),
+      translate('auto.components.settings.advanced.search.f98a60af11', 'proxy'),
+      translate('auto.components.settings.advanced.search.4383251647', 'vpn'),
+      translate('auto.components.settings.advanced.search.79e0947e95', 'support'),
+      translate('auto.components.settings.advanced.search.6576fce4d2', 'troubleshooting'),
+      translate('auto.components.settings.advanced.search.e61ed8ab33', 'updates'),
+      translate('auto.components.settings.advanced.search.a7002e1ac4', 'updater')
     ]
   }
-]
+])
 
 function findEntry(title: string): SettingsSearchEntry {
-  const entry = ADVANCED_PANE_SEARCH_ENTRIES.find((e) => e.title === title)
+  const entry = getAdvancedPaneSearchEntries().find((e) => e.title === title)
   if (!entry) {
     throw new Error(`Missing advanced-pane search entry: "${title}"`)
   }
   return entry
 }
 
-export const ADVANCED_SEARCH_ENTRY = {
-  http1Compatibility: findEntry('HTTP/1.1 Compatibility')
-} as const
+export function getAdvancedSearchEntry() {
+  return {
+    http1Compatibility: findEntry(
+      translate('auto.components.settings.advanced.search.11eea3da72', 'HTTP/1.1 Compatibility')
+    )
+  } as const
+}

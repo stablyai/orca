@@ -123,6 +123,7 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
+import { resolveMarkdownFloatingActionsBottom } from '../../../../src/session/markdown-floating-actions-layout'
 import {
   createMobileSessionCreateWarningState,
   dismissMobileSessionCreateWarningState,
@@ -411,7 +412,8 @@ function MarkdownReader({
   onChange,
   onSave,
   onCopy,
-  onDiscard
+  onDiscard,
+  keyboardLift
 }: {
   documentId: string
   doc: MarkdownDocState | undefined
@@ -420,6 +422,7 @@ function MarkdownReader({
   onSave: () => void
   onCopy: () => void
   onDiscard: () => void
+  keyboardLift: number
 }) {
   if (!doc || doc.status === 'loading') {
     return (
@@ -461,7 +464,21 @@ function MarkdownReader({
         onChange={onChange}
       />
       {showFloatingActions ? (
-        <View pointerEvents="box-none" style={styles.markdownFloatingBar}>
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.markdownFloatingBar,
+            // Why: the editor focus lives inside a WebView, so keep native
+            // Save/Discard controls lifted instead of resizing that surface.
+            {
+              bottom: resolveMarkdownFloatingActionsBottom({
+                keyboardLift,
+                restingBottom: spacing.lg,
+                liftedClearance: spacing.md
+              })
+            }
+          ]}
+        >
           {statusText ? (
             <Text
               style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
@@ -3935,7 +3952,7 @@ export default function SessionScreen() {
             </View>
           </View>
         ) : activeMarkdownTab ? (
-          <View style={[styles.markdownFrame, { paddingBottom: keyboardLift }]}>
+          <View style={styles.markdownFrame}>
             <MarkdownReader
               documentId={activeMarkdownTab.id}
               doc={markdownDocs.get(activeMarkdownTab.id)}
@@ -3944,6 +3961,7 @@ export default function SessionScreen() {
               onSave={() => void saveMarkdownTab(activeMarkdownTab)}
               onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
               onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
+              keyboardLift={keyboardLift}
             />
             {toastMessage && (
               <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>

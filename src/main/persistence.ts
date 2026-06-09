@@ -125,6 +125,7 @@ import {
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import {
   collectTerminalScrollbackSnapshotRefs,
@@ -1941,6 +1942,7 @@ export class Store {
               parsed.settings?.terminalQuickCommands
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
@@ -3095,6 +3097,9 @@ export class Store {
     }
     if ('appIcon' in updates) {
       sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
+    }
+    if ('uiLanguage' in updates) {
+      sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,

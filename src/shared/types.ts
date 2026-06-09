@@ -26,6 +26,7 @@ import type {
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { UiLanguage } from './ui-language'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -471,6 +472,7 @@ export type Tab = {
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
+  quickCommandLabel?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -505,6 +507,8 @@ export type TerminalTab = {
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
   generatedTitle?: string | null
+  /** Stable label from the tab-bar Quick Command that created this terminal. */
+  quickCommandLabel?: string | null
   customTitle: string | null
   color: string | null
   sortOrder: number
@@ -1994,6 +1998,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
@@ -2015,8 +2020,8 @@ export type GlobalSettings = {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
-  /** Mirrors VS Code's terminal.integrated.gpuAcceleration shape.
-   *  - 'auto': use DOM on Linux; otherwise try xterm WebGL and fall back to DOM if the renderer fails.
+  /** Terminal renderer policy.
+   *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
    *  - 'off': keep terminal rendering on xterm's DOM renderer. */
   terminalGpuAcceleration: 'auto' | 'on' | 'off'

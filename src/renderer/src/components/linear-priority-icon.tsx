@@ -1,6 +1,7 @@
 import React from 'react'
 
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 // Why: Linear priority glyphs are provider-brand signals, so their fills match
 // Linear's lower-contrast icon colors instead of Orca's generic state tokens.
@@ -52,7 +53,10 @@ export function LinearPriorityIcon({
         title={label}
       >
         <span aria-hidden="true">!</span>
-        <span className="sr-only">Priority: {label}</span>
+        <span className="sr-only">
+          {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')}
+          {label}
+        </span>
       </span>
     )
   }
@@ -67,7 +71,10 @@ export function LinearPriorityIcon({
           aria-hidden="true"
           className="size-3 rounded-full border border-muted-foreground/55"
         />
-        <span className="sr-only">Priority: {label}</span>
+        <span className="sr-only">
+          {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')}
+          {label}
+        </span>
       </span>
     )
   }
@@ -102,7 +109,10 @@ export function LinearPriorityIcon({
           )
         })}
       </svg>
-      <span className="sr-only">Priority: {label}</span>
+      <span className="sr-only">
+        {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')}
+        {label}
+      </span>
     </span>
   )
 }

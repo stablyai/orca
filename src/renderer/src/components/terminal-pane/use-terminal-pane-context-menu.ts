@@ -24,6 +24,7 @@ import {
 } from './terminal-agent-session-fork'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -147,7 +148,12 @@ export function useTerminalPaneContextMenu({
     // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
     // remounts; the numeric PaneManager id is only a local runtime handle.
     await window.api.ui.writeClipboardText(makePaneKey(tabId, pane.leafId))
-    toast.success('Pane ID copied')
+    toast.success(
+      translate(
+        'auto.components.terminal.pane.use.terminal.pane.context.menu.a29b9faa01',
+        'Pane ID copied'
+      )
+    )
     pane.terminal.focus()
   }
 

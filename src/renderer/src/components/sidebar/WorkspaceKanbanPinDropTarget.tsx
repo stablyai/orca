@@ -1,6 +1,7 @@
 import React from 'react'
 import { Pin } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanPinDropTargetProps = {
   isDragOver: boolean
@@ -25,8 +26,15 @@ export default function WorkspaceKanbanPinDropTarget({
       onDragLeave={onDragLeave}
     >
       <Pin className="size-3.5" />
-      <span className="font-medium">Pinned</span>
-      <span className="truncate">Drop here to pin without changing status.</span>
+      <span className="font-medium">
+        {translate('auto.components.sidebar.WorkspaceKanbanPinDropTarget.8fae2d0862', 'Pinned')}
+      </span>
+      <span className="truncate">
+        {translate(
+          'auto.components.sidebar.WorkspaceKanbanPinDropTarget.c30151c5ee',
+          'Drop here to pin without changing status.'
+        )}
+      </span>
     </div>
   )
 }

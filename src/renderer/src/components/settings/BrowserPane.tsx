@@ -1,34 +1,23 @@
 import { useCallback, useRef, useState, type MutableRefObject } from 'react'
-import { Plus } from 'lucide-react'
-import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
-import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { Label } from '../ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../ui/dialog'
 import { useAppStore } from '../../store'
-import { SEARCH_ENGINE_LABELS, type SearchEngine } from '../../../../shared/browser-url'
-import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
-import {
-  BROWSER_PANE_SEARCH_ENTRIES as BROWSER_CORE_SEARCH_ENTRIES,
-  getBrowserLinkRoutingDescription
-} from './browser-search'
-import { BROWSER_USE_PANE_SEARCH_ENTRIES } from './browser-use-search'
-import { BROWSER_PANE_SEARCH_ENTRIES } from './browser-pane-search'
+import { getBrowserPaneSearchEntries, getBrowserLinkRoutingDescription } from './browser-search'
+import { getBrowserUsePaneSearchEntries } from './browser-use-search'
+import { getBrowserPaneCombinedSearchEntries } from './browser-pane-search'
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
 import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
-import { BrowserProfileRow } from './BrowserProfileRow'
 import { BrowserUseSetup } from './BrowserUsePane'
-import { KagiSessionLinkForm } from './KagiSessionLinkForm'
+import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
+import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
+import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
+import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
 import {
   createBrowserHomePageDraftState,
   resolveBrowserHomePageDraftState
 } from './browser-home-page-draft-state'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
-export { BROWSER_PANE_SEARCH_ENTRIES }
+export { getBrowserPaneCombinedSearchEntries }
 
 type BrowserPaneProps = {
   settings: GlobalSettings
@@ -62,22 +51,17 @@ export function BrowserPane({
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
-  const mountedRef = useMountedRef()
   const persistedHomePageDraft = browserDefaultUrl ?? ''
   const [homePageDraftState, setHomePageDraftState] = useState(() =>
     createBrowserHomePageDraftState(persistedHomePageDraft)
   )
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
-  const [newProfileName, setNewProfileName] = useState('')
-  const [isCreatingProfile, setIsCreatingProfile] = useState(false)
   const sessionCookieScrollFrameIdsRef = useRef<number[]>([])
   const resolvedHomePageDraftState = resolveBrowserHomePageDraftState(
     homePageDraftState,
     persistedHomePageDraft
   )
 
-  // Why: the in-app browser address bar can save the home page from outside
-  // Settings, so reconcile the draft before commit when that stored URL changes.
   if (resolvedHomePageDraftState !== homePageDraftState) {
     setHomePageDraftState(resolvedHomePageDraftState)
   }
@@ -90,19 +74,17 @@ export function BrowserPane({
     if (node !== null) {
       return
     }
-    // Why: session-cookie scroll frames are owned by this Settings pane surface;
-    // cancel them as soon as the pane unmounts so stale jumps cannot fire later.
     cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
   }, [])
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
-  const showHomePage = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[0]])
-  const showSearchEngine = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[1]])
-  const showDefaultZoom = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[2]])
-  const showLinkRouting = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[3]])
-  const showCookies = matchesSettingsSearch(searchQuery, [BROWSER_CORE_SEARCH_ENTRIES[4]])
-  const showBrowserUse = matchesSettingsSearch(searchQuery, BROWSER_USE_PANE_SEARCH_ENTRIES)
+  const showHomePage = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[0]])
+  const showSearchEngine = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[1]])
+  const showDefaultZoom = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[2]])
+  const showLinkRouting = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[3]])
+  const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[4]])
+  const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription({ isMac })
 
@@ -125,14 +107,7 @@ export function BrowserPane({
 
   const scrollToSessionCookies = (): void => {
     cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
-    // Why: the "Session & Cookies" block is search-gated, so if the user has
-    // filtered to a query that excludes it the target element won't be in the
-    // DOM. Clear the search first, then scroll on the next frame so the block
-    // has mounted.
     useAppStore.getState().setSettingsSearchQuery('')
-    // Why: double RAF to ensure React has committed the re-render triggered by
-    // the store update before we query the DOM — a single RAF can fire before
-    // commit and miss the newly-mounted element.
     requestSessionCookieScrollFrame(() => {
       requestSessionCookieScrollFrame(() => {
         const el = document.getElementById('browser-session-cookies')
@@ -165,52 +140,12 @@ export function BrowserPane({
       ) : null}
 
       {showSearchEngine ? (
-        <SearchableSetting
-          title="Default Search Engine"
-          description="Search engine used when typing non-URL text in the address bar."
-          keywords={[
-            'browser',
-            'search',
-            'engine',
-            'google',
-            'duckduckgo',
-            'bing',
-            'kagi',
-            'session',
-            'private',
-            'token',
-            'omnibox'
-          ]}
-          className="flex items-start justify-between gap-4 py-2"
-        >
-          <div className="space-y-0.5">
-            <Label>Default Search Engine</Label>
-            <p className="text-xs text-muted-foreground">
-              Used when typing non-URL text in the address bar.
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-2">
-            <Select
-              value={selectedSearchEngine}
-              onValueChange={(value) => {
-                const engine = value as SearchEngine
-                setBrowserDefaultSearchEngine(engine === 'google' ? null : engine)
-              }}
-            >
-              <SelectTrigger className="h-7 w-36 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(Object.keys(SEARCH_ENGINE_LABELS) as SearchEngine[]).map((engine) => (
-                  <SelectItem key={engine} value={engine} className="text-xs">
-                    {SEARCH_ENGINE_LABELS[engine]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedSearchEngine === 'kagi' ? <KagiSessionLinkForm /> : null}
-          </div>
-        </SearchableSetting>
+        <BrowserSearchEngineSetting
+          selectedSearchEngine={selectedSearchEngine}
+          onSearchEngineChange={(engine) => {
+            setBrowserDefaultSearchEngine(engine === 'google' ? null : engine)
+          }}
+        />
       ) : null}
 
       {showDefaultZoom ? (
@@ -221,184 +156,28 @@ export function BrowserPane({
       ) : null}
 
       {showLinkRouting ? (
-        <SearchableSetting
-          title="Link Routing"
-          description={linkRoutingDescription}
-          keywords={[
-            'browser',
-            'preview',
-            'links',
-            'localhost',
-            'webview',
-            'markdown',
-            isMac ? 'cmd' : 'ctrl',
-            'file',
-            'editor'
-          ]}
-          className="flex items-center justify-between gap-4 py-2"
-        >
-          <div className="space-y-0.5">
-            <Label>Link Routing</Label>
-            <p className="text-xs text-muted-foreground">{linkRoutingDescription}</p>
-          </div>
-          <button
-            role="switch"
-            aria-checked={settings.openLinksInApp}
-            onClick={() => updateSettings({ openLinksInApp: !settings.openLinksInApp })}
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.openLinksInApp ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                settings.openLinksInApp ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </SearchableSetting>
+        <BrowserLinkRoutingSetting
+          settings={settings}
+          linkRoutingDescription={linkRoutingDescription}
+          isMac={isMac}
+          updateSettings={updateSettings}
+        />
       ) : null}
 
       {showCookies ? (
-        <SearchableSetting
-          id="browser-session-cookies"
-          title="Session & Cookies"
-          description="Manage browser profiles and import cookies from Chrome, Edge, Comet, or other browsers."
-          keywords={[
-            'cookies',
-            'session',
-            'import',
-            'auth',
-            'login',
-            'chrome',
-            'edge',
-            'arc',
-            'profile'
-          ]}
-          className="space-y-3 py-2"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="space-y-0.5">
-              <Label>Session &amp; Cookies</Label>
-              <p className="text-xs text-muted-foreground">
-                Select a default profile for new browser tabs. Import cookies and switch profiles
-                per-tab via the <strong>···</strong> toolbar menu.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => setNewProfileDialogOpen(true)}
-              className="shrink-0 gap-1.5"
-            >
-              <Plus className="size-3" />
-              Add Profile
-            </Button>
-          </div>
-
-          <div className="space-y-2">
-            <BrowserProfileRow
-              profile={
-                defaultProfile ?? {
-                  id: 'default',
-                  scope: 'default',
-                  partition: '',
-                  label: 'Default',
-                  source: null
-                }
-              }
-              detectedBrowsers={detectedBrowsers}
-              importState={browserSessionImportState}
-              isActive={(defaultBrowserSessionProfileId ?? 'default') === 'default'}
-              onSelect={() => setDefaultBrowserSessionProfileId(null)}
-              isDefault
-            />
-            {nonDefaultProfiles.map((profile) => (
-              <BrowserProfileRow
-                key={profile.id}
-                profile={profile}
-                detectedBrowsers={detectedBrowsers}
-                importState={browserSessionImportState}
-                isActive={(defaultBrowserSessionProfileId ?? 'default') === profile.id}
-                onSelect={() => setDefaultBrowserSessionProfileId(profile.id)}
-              />
-            ))}
-          </div>
-        </SearchableSetting>
+        <BrowserSessionCookiesSection
+          defaultProfile={defaultProfile}
+          nonDefaultProfiles={nonDefaultProfiles}
+          detectedBrowsers={detectedBrowsers}
+          importState={browserSessionImportState}
+          defaultBrowserSessionProfileId={defaultBrowserSessionProfileId}
+          onAddProfile={() => setNewProfileDialogOpen(true)}
+          onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}
+          onSelectProfile={setDefaultBrowserSessionProfileId}
+        />
       ) : null}
 
-      <Dialog
-        open={newProfileDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setNewProfileDialogOpen(false)
-            setNewProfileName('')
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-sm" showCloseButton={false}>
-          <DialogHeader>
-            <DialogTitle className="text-base">New Browser Profile</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault()
-              const trimmed = newProfileName.trim()
-              if (!trimmed) {
-                return
-              }
-              setIsCreatingProfile(true)
-              try {
-                const profile = await useAppStore
-                  .getState()
-                  .createBrowserSessionProfile('isolated', trimmed)
-                if (!mountedRef.current) {
-                  return
-                }
-                if (profile) {
-                  setNewProfileDialogOpen(false)
-                  setNewProfileName('')
-                  toast.success(`Profile "${profile.label}" created.`)
-                } else {
-                  toast.error('Failed to create profile.')
-                }
-              } finally {
-                if (mountedRef.current) {
-                  setIsCreatingProfile(false)
-                }
-              }
-            }}
-          >
-            <Input
-              value={newProfileName}
-              onChange={(e) => setNewProfileName(e.target.value)}
-              placeholder="Profile name"
-              autoFocus
-              maxLength={50}
-              className="mb-4"
-            />
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setNewProfileDialogOpen(false)
-                  setNewProfileName('')
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={!newProfileName.trim() || isCreatingProfile}
-              >
-                {isCreatingProfile ? 'Creating…' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <BrowserNewProfileDialog open={newProfileDialogOpen} onOpenChange={setNewProfileDialogOpen} />
     </div>
   )
 }

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { PullRequestIcon, checksLabel } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { IssueInfo } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 function MetadataStatusBadge({
   label,
@@ -33,7 +34,10 @@ export function IssueStateBadge({ state }: { state: IssueInfo['state'] }): React
   if (state === 'closed') {
     return (
       <MetadataStatusBadge
-        label="State: Closed"
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.e888362def',
+          'State: Closed'
+        )}
         className="border-purple-500/25 bg-purple-500/5 text-purple-600 dark:text-purple-300"
       >
         <CircleCheck />
@@ -43,7 +47,10 @@ export function IssueStateBadge({ state }: { state: IssueInfo['state'] }): React
 
   return (
     <MetadataStatusBadge
-      label="State: Open"
+      label={translate(
+        'auto.components.sidebar.WorktreeCardMetadataStatusBadges.fe188062a1',
+        'State: Open'
+      )}
       className="border-emerald-500/25 bg-emerald-500/5 text-emerald-600 dark:text-emerald-300"
     >
       <CircleDot />
@@ -66,7 +73,14 @@ export function LinearStateBadge({ stateName }: { stateName: string }): React.JS
         : 'border-border bg-muted/30 text-muted-foreground'
 
   return (
-    <MetadataStatusBadge label={`State: ${stateName}`} className={tone}>
+    <MetadataStatusBadge
+      label={translate(
+        'auto.components.sidebar.WorktreeCardMetadataStatusBadges.af2b07bda5',
+        'State: {{value0}}',
+        { value0: stateName }
+      )}
+      className={tone}
+    >
       <Icon />
     </MetadataStatusBadge>
   )
@@ -86,7 +100,10 @@ export function ReviewStateBadge({
   if (state === 'merged') {
     return (
       <MetadataStatusBadge
-        label="State: Merged"
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.f394b3e86e',
+          'State: Merged'
+        )}
         className="border-purple-500/25 bg-purple-500/5 text-purple-600 dark:text-purple-300"
       >
         <GitMerge />
@@ -97,7 +114,10 @@ export function ReviewStateBadge({
   if (state === 'closed') {
     return (
       <MetadataStatusBadge
-        label="State: Closed"
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.e888362def',
+          'State: Closed'
+        )}
         className="border-rose-500/25 bg-rose-500/5 text-rose-600 dark:text-rose-300"
       >
         <CircleX />
@@ -108,7 +128,11 @@ export function ReviewStateBadge({
   if (state === 'draft') {
     return (
       <MetadataStatusBadge
-        label={`State: Draft ${label}`}
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.2931b42b09',
+          'State: Draft {{value0}}',
+          { value0: label }
+        )}
         className="border-border bg-muted/30 text-muted-foreground"
       >
         <CircleDot />
@@ -118,7 +142,10 @@ export function ReviewStateBadge({
 
   return (
     <MetadataStatusBadge
-      label="State: Open"
+      label={translate(
+        'auto.components.sidebar.WorktreeCardMetadataStatusBadges.fe188062a1',
+        'State: Open'
+      )}
       className="border-emerald-500/25 bg-emerald-500/5 text-emerald-600 dark:text-emerald-300"
     >
       {label === 'MR' ? <GitMerge /> : <PullRequestIcon />}

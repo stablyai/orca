@@ -6,7 +6,7 @@ import {
   ensureOrcaCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/orchestration-install-command'
-import { ORCHESTRATION_USAGE_EXAMPLES } from '@/lib/orchestration-usage-examples'
+import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -14,11 +14,12 @@ import {
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { useAppStore } from '../../store'
-import { ORCHESTRATION_PANE_SEARCH_ENTRIES } from './orchestration-search'
+import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
 import { OrchestrationExampleDialog } from './OrchestrationExamplesDialog'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
+import { translate } from '@/i18n/i18n'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -30,7 +31,7 @@ const EXAMPLE_ICONS = {
 
 export function OrchestrationPane(): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const showOrchestration = matchesSettingsSearch(searchQuery, ORCHESTRATION_PANE_SEARCH_ENTRIES)
+  const showOrchestration = matchesSettingsSearch(searchQuery, getOrchestrationPaneSearchEntries())
   const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null)
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
 
@@ -50,14 +51,26 @@ export function OrchestrationPane(): React.JSX.Element {
 
   return (
     <SearchableSetting
-      title="Agent Orchestration"
-      description="Coordinate coding agents across handoffs, worktree handovers, and child-agent work."
-      keywords={ORCHESTRATION_PANE_SEARCH_ENTRIES[0].keywords}
+      title={translate(
+        'auto.components.settings.OrchestrationPane.191ac34567',
+        'Agent Orchestration'
+      )}
+      description={translate(
+        'auto.components.settings.OrchestrationPane.2aacdb0517',
+        'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'
+      )}
+      keywords={getOrchestrationPaneSearchEntries()[0].keywords}
       className="space-y-5 py-2"
     >
       <AgentSkillSetupPanel
-        title="Orchestration skill"
-        description="Enables agents to hand off context and coordinate work through Orca."
+        title={translate(
+          'auto.components.settings.OrchestrationPane.07641b9768',
+          'Orchestration skill'
+        )}
+        description={translate(
+          'auto.components.settings.OrchestrationPane.9bedd2a6e5',
+          'Enables agents to hand off context and coordinate work through Orca.'
+        )}
         command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
         terminalTitle="Orchestration setup"
         terminalAriaLabel="Orchestration skill install terminal"
@@ -73,13 +86,19 @@ export function OrchestrationPane(): React.JSX.Element {
         }}
         actionHint={
           <p className="text-[12px] leading-snug text-muted-foreground">
-            Prefer your own terminal?{' '}
+            {translate(
+              'auto.components.settings.OrchestrationPane.832f1f3ee6',
+              'Prefer your own terminal?'
+            )}{' '}
             <button
               type="button"
               className="font-medium text-foreground underline-offset-2 hover:underline"
               onClick={() => setSkillPromptOpen(true)}
             >
-              Copy install command
+              {translate(
+                'auto.components.settings.OrchestrationPane.7bc082f4de',
+                'Copy install command'
+              )}
             </button>
           </p>
         }
@@ -101,15 +120,19 @@ export function OrchestrationPane(): React.JSX.Element {
 
       <div className="space-y-4 border-t border-border/60 pt-6">
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-foreground">How to use it</h3>
+          <h3 className="text-sm font-medium text-foreground">
+            {translate('auto.components.settings.OrchestrationPane.ae79504732', 'How to use it')}
+          </h3>
           <p className="text-xs text-muted-foreground">
-            Ask a coordinator agent to use orchestration for handoffs, worktree handovers, and
-            sequential or parallel child agents.
+            {translate(
+              'auto.components.settings.OrchestrationPane.52e0634e2c',
+              'Ask a coordinator agent to use orchestration for handoffs, worktree handovers, and sequential or parallel child agents.'
+            )}
           </p>
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          {ORCHESTRATION_USAGE_EXAMPLES.map((example) => {
+          {getOrchestrationUsageExamples().map((example) => {
             const Icon = EXAMPLE_ICONS[example.id as keyof typeof EXAMPLE_ICONS] ?? Workflow
             return (
               <button
@@ -135,7 +158,7 @@ export function OrchestrationPane(): React.JSX.Element {
         </div>
       </div>
 
-      {ORCHESTRATION_USAGE_EXAMPLES.map((example) => {
+      {getOrchestrationUsageExamples().map((example) => {
         const Icon = EXAMPLE_ICONS[example.id as keyof typeof EXAMPLE_ICONS] ?? Workflow
         return (
           <OrchestrationExampleDialog

@@ -13,6 +13,7 @@ const TapParams = z.object({
 })
 
 const GesturePoint = z.object({
+  edge: z.number().int().min(0).max(4).optional(),
   type: z.enum(['begin', 'move', 'end']),
   x: z.number().min(0).max(1),
   y: z.number().min(0).max(1)

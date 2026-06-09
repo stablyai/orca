@@ -3,6 +3,7 @@ import type { Store } from '../persistence'
 import type { GlobalSettings, PersistedState } from '../../shared/types'
 import { listSystemFontFamilies } from '../system-fonts'
 import { previewGhosttyImport } from '../ghostty/index'
+import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
@@ -12,6 +13,7 @@ import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
+import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
@@ -69,6 +71,9 @@ export function registerSettingsHandlers(
     if ('appIcon' in args) {
       sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
     }
+    if ('uiLanguage' in args) {
+      sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
+    }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
@@ -93,6 +98,10 @@ export function registerSettingsHandlers(
       } catch (error) {
         console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
       }
+    }
+    if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
+      await setMainUiLanguage(result.uiLanguage)
+      rebuildAppMenu()
     }
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()

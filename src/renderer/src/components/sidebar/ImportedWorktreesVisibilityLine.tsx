@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { getExternalWorktreeParentPath } from '../../../../shared/external-worktree-visibility'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { translate } from '@/i18n/i18n'
 
 export type ImportedWorktreesVisibilityPlacement = 'repo-group' | 'pinned-fallback'
 
@@ -129,7 +130,11 @@ export default function ImportedWorktreesVisibilityLine({
           size="icon-xs"
           disabled={pending}
           aria-expanded={isExpanded}
-          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} hidden worktrees for ${repoDisplayName}`}
+          aria-label={translate(
+            'auto.components.sidebar.ImportedWorktreesVisibilityLine.f54f2bec5d',
+            '{{value0}} hidden worktrees for {{value1}}',
+            { value0: isExpanded ? 'Collapse' : 'Expand', value1: repoDisplayName }
+          )}
           onClick={() => setIsExpanded((value) => !value)}
           className="shrink-0 rounded-[4px] text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground"
         >
@@ -165,7 +170,10 @@ export default function ImportedWorktreesVisibilityLine({
       {isExpanded ? (
         <div
           className="ml-4 mt-0.5 grid gap-1 border-l border-worktree-sidebar-border pb-1 pl-2"
-          aria-label="Hidden worktree groups"
+          aria-label={translate(
+            'auto.components.sidebar.ImportedWorktreesVisibilityLine.2251d41ebb',
+            'Hidden worktree groups'
+          )}
         >
           {visibleWorktreeGroups.map((group) => (
             <div key={group.path} className="grid min-w-0 gap-0.5 rounded-md px-1.5 py-1">
@@ -189,7 +197,11 @@ export default function ImportedWorktreesVisibilityLine({
               </div>
               <ul
                 className="list-disc space-y-0.5 py-0 pl-5 pr-2 text-xs text-muted-foreground marker:text-muted-foreground"
-                aria-label={`${group.path} preview`}
+                aria-label={translate(
+                  'auto.components.sidebar.ImportedWorktreesVisibilityLine.b47ba1a9d2',
+                  '{{value0}} preview',
+                  { value0: group.path }
+                )}
               >
                 {group.worktrees
                   .slice(
@@ -219,8 +231,15 @@ export default function ImportedWorktreesVisibilityLine({
                       className="h-6 justify-start px-0 text-[11px] font-normal text-muted-foreground hover:text-worktree-sidebar-accent-foreground"
                     >
                       {expandedGroupPathKeys.has(normalizeRuntimePathForComparison(group.path))
-                        ? 'Show fewer'
-                        : `Show ${group.worktrees.length - PREVIEW_LIMIT} more`}
+                        ? translate(
+                            'auto.components.sidebar.ImportedWorktreesVisibilityLine.294de4aeb2',
+                            'Show fewer'
+                          )
+                        : translate(
+                            'auto.components.sidebar.ImportedWorktreesVisibilityLine.5a9688802a',
+                            'Show {{value0}} more',
+                            { value0: group.worktrees.length - PREVIEW_LIMIT }
+                          )}
                     </Button>
                   </li>
                 ) : null}
@@ -229,12 +248,19 @@ export default function ImportedWorktreesVisibilityLine({
           ))}
           {remainingGroupCount > 0 ? (
             <div className="py-1 pl-7 pr-2 text-[11px] leading-4 text-muted-foreground">
-              + {remainingGroupCount} more locations
+              + {remainingGroupCount}{' '}
+              {translate(
+                'auto.components.sidebar.ImportedWorktreesVisibilityLine.b2bc47c080',
+                'more locations'
+              )}
             </div>
           ) : null}
           <div className="grid gap-1 px-1.5 pb-1 pt-1">
             <p className="rounded-md bg-worktree-sidebar-accent px-2 py-1 text-[10px] font-medium leading-4 text-worktree-sidebar-accent-foreground">
-              Change this later from the project menu.
+              {translate(
+                'auto.components.sidebar.ImportedWorktreesVisibilityLine.9f4f14e821',
+                'Change this later from the project menu.'
+              )}
             </p>
             <div className="flex min-w-0 items-center gap-1.5">
               {onKeepHidden ? (
@@ -246,7 +272,10 @@ export default function ImportedWorktreesVisibilityLine({
                   onClick={onKeepHidden}
                   className="h-6 px-2 text-[11px] font-medium"
                 >
-                  Keep hidden
+                  {translate(
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.ad99f4eea9',
+                    'Keep hidden'
+                  )}
                 </Button>
               ) : null}
               {onShow ? (
@@ -258,7 +287,10 @@ export default function ImportedWorktreesVisibilityLine({
                   onClick={onShow}
                   className="h-6 px-2 text-[11px] font-medium"
                 >
-                  Show in worktree list
+                  {translate(
+                    'auto.components.sidebar.ImportedWorktreesVisibilityLine.b7a87dc32f',
+                    'Show in worktree list'
+                  )}
                 </Button>
               ) : null}
             </div>

@@ -815,15 +815,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       if (params.viewport && params.client?.id) {
         runtime.updateMobileSubscriberViewport(leaf.ptyId, params.client.id, params.viewport)
       }
+      if (params.client && params.client.type === 'mobile' && params.mode !== 'desktop') {
+        runtime.markMobileActor(leaf.ptyId, params.client.id)
+      }
       runtime.setMobileDisplayMode(leaf.ptyId, params.mode)
       await runtime.applyMobileDisplayMode(leaf.ptyId)
-      // Why: a deliberate mobile mode change is a take-floor action when
-      // moving to auto/phone (the user explicitly chose to drive at phone
-      // dims). Setting mode to desktop is intentionally NOT a take-floor
-      // action — that's a "watch from desktop dims" gesture.
-      if (params.client && params.client.type === 'mobile' && params.mode !== 'desktop') {
-        await runtime.mobileTookFloor(leaf.ptyId, params.client.id)
-      }
       return { mode: params.mode, seq: runtime.getLayout(leaf.ptyId)?.seq }
     }
   }),

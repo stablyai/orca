@@ -310,6 +310,16 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   )
 }
 
+export function resolveTerminalGpuAccelerationForRuntime(
+  activeRuntimeEnvironmentId: GlobalSettings['activeRuntimeEnvironmentId'] | null | undefined,
+  terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration'] | null | undefined
+): GlobalSettings['terminalGpuAcceleration'] {
+  if (activeRuntimeEnvironmentId?.trim()) {
+    return 'off'
+  }
+  return terminalGpuAcceleration ?? 'auto'
+}
+
 export function useTerminalPaneLifecycle({
   tabId,
   worktreeId,
@@ -1048,7 +1058,12 @@ export function useTerminalPaneLifecycle({
       // so PTYs survive navigation. Creating WebGL for those offscreen panes
       // still consumes Chromium's context budget and can blank visible panes.
       initialRenderingSuspended: !isVisibleRef.current,
-      terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
+      // Why: remote-runtime snapshots arrive after pane open; WebGL can hold an
+      // empty atlas/canvas while the server-side buffer is already populated.
+      terminalGpuAcceleration: resolveTerminalGpuAccelerationForRuntime(
+        settingsRef.current?.activeRuntimeEnvironmentId,
+        settingsRef.current?.terminalGpuAcceleration
+      ),
       debugLabel: `tab:${tabId}/wt:${worktreeId}`
     })
 
@@ -1367,8 +1382,15 @@ export function useTerminalPaneLifecycle({
   }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
 
   useEffect(() => {
-    managerRef.current?.setTerminalGpuAcceleration(settings?.terminalGpuAcceleration ?? 'auto')
-  }, [settings?.terminalGpuAcceleration, managerRef])
+    // Why: remote-runtime panes stay on DOM rendering; local panes still honor
+    // the user's GPU setting and can switch live when settings change.
+    managerRef.current?.setTerminalGpuAcceleration(
+      resolveTerminalGpuAccelerationForRuntime(
+        settings?.activeRuntimeEnvironmentId,
+        settings?.terminalGpuAcceleration
+      )
+    )
+  }, [settings?.activeRuntimeEnvironmentId, settings?.terminalGpuAcceleration, managerRef])
 
   useEffect(() => {
     const manager = managerRef.current

@@ -329,7 +329,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   }
 }
 
-export async function initDaemonPtyProvider(): Promise<void> {
+export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void> {
   const runtimeDir = getRuntimeDir()
 
   const newSpawner = new DaemonSpawner({
@@ -341,6 +341,11 @@ export async function initDaemonPtyProvider(): Promise<void> {
   // throws, a stale spawner would prevent shutdownDaemon() from cleaning up
   // correctly on retry.
   const info = await newSpawner.ensureRunning()
+  if (signal?.aborted) {
+    // Why: startup fail-open may already have allowed fallback LocalPtyProvider
+    // PTYs to spawn. A late daemon swap would strand those PTYs on the old owner.
+    return
+  }
 
   const newAdapter = new DaemonPtyAdapter({
     socketPath: info.socketPath,
@@ -368,10 +373,19 @@ export async function initDaemonPtyProvider(): Promise<void> {
   if (routedAdapter instanceof DaemonPtyRouter) {
     await routedAdapter.discoverLegacySessions()
   }
+  if (signal?.aborted) {
+    // Why: same late-swap guard after legacy discovery, which can also exceed
+    // the first-window startup timeout on slow or stale daemon state.
+    return
+  }
 
   spawner = newSpawner
   adapter = routedAdapter
   setLocalPtyProvider(routedAdapter)
+  // Why: desktop startup now lets the first window register PTY listeners
+  // before daemon init finishes. Rebind here so daemon PTYs still fan out
+  // data/exit events through the renderer and runtime listeners.
+  rebindLocalProviderListeners()
 }
 
 // Why: the Manage Sessions IPC handlers need read access to the current
