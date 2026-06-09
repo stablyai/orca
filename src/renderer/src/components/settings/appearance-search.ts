@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { getStatusBarToggles } from './appearance-status-bar-search'
 
 export { getStatusBarToggles }
@@ -202,7 +203,7 @@ export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[
 
 export const getAppearancePaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getThemeEntries(),
-  ...getLanguageEntries(),
+  ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
   ...getTypographyEntries(),
   ...getZoomEntries(),
   ...getTerminalAppearanceSearchEntries(),

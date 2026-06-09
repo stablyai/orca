@@ -11,6 +11,9 @@ import {
 
 export const DEFAULT_LOCALE = DEFAULT_UI_LOCALE
 
+// Why: System vs English is not meaningful until a second locale ships (e.g. ko).
+export const SHOW_UI_LANGUAGE_SETTING = false
+
 export type UiLanguageChoice = {
   value: UiLanguage
   labelKey: string

@@ -1,9 +1,9 @@
 /* eslint-disable max-lines -- Why: AppearancePane keeps theme, typography, zoom, and status-bar
    visibility settings together so the searchable settings rows share one filtered surface. */
 import type React from 'react'
-import { useTranslation } from 'react-i18next'
+
 import type { GlobalSettings } from '../../../../shared/types'
-import type { UiLanguage } from '../../../../shared/ui-language'
+
 import { Separator } from '../ui/separator'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -38,7 +38,7 @@ import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { AppIconSelector } from './AppIconSelector'
-import { UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
+import { SHOW_UI_LANGUAGE_SETTING, UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
 import { translate } from '@/i18n/i18n'
 export { getAppearancePaneSearchEntries }
 
@@ -91,11 +91,9 @@ export function AppearancePane({
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(getStatusBarToggles())
-  const { t } = useTranslation()
-
   const visibleSections = [
     matchesSettingsSearch(searchQuery, getThemeEntries()) ||
-    matchesSettingsSearch(searchQuery, getLanguageEntries()) ||
+    (SHOW_UI_LANGUAGE_SETTING && matchesSettingsSearch(searchQuery, getLanguageEntries())) ||
     matchesSettingsSearch(searchQuery, getZoomEntries()) ||
     matchesSettingsSearch(searchQuery, getTypographyEntries()) ? (
       <section key="interface" className="divide-y divide-border/40">
@@ -151,23 +149,29 @@ export function AppearancePane({
           </SearchableSetting>
         ) : null}
 
-        {matchesSettingsSearch(searchQuery, getLanguageEntries()) ? (
+        {SHOW_UI_LANGUAGE_SETTING && matchesSettingsSearch(searchQuery, getLanguageEntries()) ? (
           <SearchableSetting
-            title={t('settings.appearance.language.title')}
-            description={t('settings.appearance.language.description')}
+            title={translate('settings.appearance.language.title', 'Language')}
+            description={translate(
+              'settings.appearance.language.description',
+              'Choose the language used by the Orca interface.'
+            )}
             keywords={getLanguageEntries()[0]?.keywords ?? []}
           >
             <SettingsRow
-              label={t('settings.appearance.language.title')}
-              description={t('settings.appearance.language.description')}
+              label={translate('settings.appearance.language.title', 'Language')}
+              description={translate(
+                'settings.appearance.language.description',
+                'Choose the language used by the Orca interface.'
+              )}
               control={
                 <SettingsSegmentedControl
-                  ariaLabel={t('settings.appearance.language.title')}
+                  ariaLabel={translate('settings.appearance.language.title', 'Language')}
                   value={settings.uiLanguage}
-                  onChange={(value) => updateSettings({ uiLanguage: value as UiLanguage })}
+                  onChange={(value) => updateSettings({ uiLanguage: value })}
                   options={UI_LANGUAGE_CHOICES.map((choice) => ({
                     value: choice.value,
-                    label: t(choice.labelKey)
+                    label: translate(choice.labelKey, choice.value === 'en' ? 'English' : 'System')
                   }))}
                 />
               }

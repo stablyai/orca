@@ -92,7 +92,8 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'automations'
   })
 
-  it('renders the language selector with system and english options', async () => {
+  // Re-enable when SHOW_UI_LANGUAGE_SETTING is true (second locale shipped).
+  it.skip('renders the language selector with system and english options', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
