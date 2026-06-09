@@ -1,3 +1,5 @@
+import { KO_VALUE_OVERRIDES } from './locale-ko-value-overrides.mjs'
+
 export const LOCALE_VALUE_OVERRIDES = {
   ko: {
     Save: '저장',
@@ -149,7 +151,8 @@ export const LOCALE_VALUE_OVERRIDES = {
     worker: '워커',
     DAG: 'DAG',
     examples: '예시',
-    Timer: '타이머'
+    Timer: '타이머',
+    ...KO_VALUE_OVERRIDES
   },
   zh: {
     Save: '保存',
@@ -336,7 +339,25 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Unable to load Linear issues': '无法加载 Linear 议题',
     'Preview and edit the selected Linear issue.': '预览并编辑选定的 Linear 议题。',
     'Browse and start work on your assigned Linear issues directly from here.':
-      '直接从这里浏览并开始处理分配给您的 Linear 议题。'
+      '直接从这里浏览并开始处理分配给您的 Linear 议题。',
+    issue: '议题',
+    issues: '议题',
+    'No matching GitHub work': '没有匹配的 GitHub 工作项',
+    'Open on Linear': '在 Linear 中打开',
+    'Open in Linear': '在 Linear 中打开',
+    'Copy Linear URL': '复制 Linear URL',
+    'New Linear project': '新建 Linear 项目',
+    'Add Linear access': '添加 Linear 访问',
+    'Select one team to open in Linear': '选择一个团队在 Linear 中打开',
+    "Couldn't load issues from": '无法加载议题，来源',
+    'Reading issue #': '阅读议题 #',
+    'Connect Linear in Settings to search issues.': '在设置中连接 Linear 以搜索议题。',
+    'Show Titlebar App Name': '显示标题栏应用名称',
+    'Hide App Name': '隐藏应用名称',
+    'Refresh Linear': '刷新 Linear',
+    'Failed to update Linear state': '无法更新 Linear 状态',
+    'Add Linear access to browse and link issues.': '添加 Linear 访问以浏览和链接议题。',
+    'No issues match this Linear context.': '没有议题与此 Linear 上下文匹配。'
   },
   ja: {
     Save: '保存',
@@ -507,6 +528,28 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Select Team': 'チームを選択',
     'Choose project': 'プロジェクトを選択',
     'Add number': '番号を追加',
-    'Add text': 'テキストを追加'
+    'Add text': 'テキストを追加',
+    MR: 'MR',
+    mr: 'MR',
+    Gitea: 'Gitea',
+    gitea: 'Gitea',
+    glab: 'glab',
+    'GitHub Integration': 'GitHub 連携',
+    'GitLab Integration': 'GitLab 連携',
+    'Bitbucket Integration': 'Bitbucket 連携',
+    'Azure DevOps Integration': 'Azure DevOps 連携',
+    'Gitea Integration': 'Gitea 連携',
+    'Jira Integration': 'Jira 連携',
+    'Linear Integration': 'Linear 連携',
+    'Hide Jira': 'Jira を非表示',
+    'Linear issue': 'Linear イシュー',
+    'Linear issues': 'Linear イシュー',
+    'New Linear issue': '新規 Linear イシュー',
+    'Jira issue': 'Jira イシュー',
+    'Jira issues': 'Jira イシュー',
+    'New Jira issue': '新規 Jira イシュー',
+    'No Linear issues found': 'Linear イシューが見つかりません',
+    'Unable to load Linear issues': 'Linear イシューを読み込めません',
+    'No Jira issues found': 'Jira イシューが見つかりません'
   }
 }

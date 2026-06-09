@@ -137,6 +137,46 @@ describe('locale-translation-policy', () => {
         locale: 'ko'
       })
     ).toBe('DAG')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.CliSection.068552b191',
+        enValue: 'Removing…',
+        localeValue: '풀이…',
+        locale: 'ko'
+      })
+    ).toBe('제거 중…')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.status.bar.SshStatusSegment.63a2b965f6',
+        enValue: 'pulling',
+        localeValue: '풀 중',
+        locale: 'ko'
+      })
+    ).toBe('가져오는 중')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.TaskPage.be8cf68d9f',
+        enValue: 'view issues',
+        localeValue: '문제 보기',
+        locale: 'ko'
+      })
+    ).toBe('이슈 보기')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.8c45901789',
+        enValue: 'Request reviewer {{value0}}',
+        localeValue: '요청 검토자 {{value0}}',
+        locale: 'ko'
+      })
+    ).toBe('리뷰어 요청 {{value0}}')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.feature.wall.ReviewPRViewAnimatedVisual.25f6838e43',
+        enValue: 'lint',
+        localeValue: '보풀',
+        locale: 'ko'
+      })
+    ).toBe('lint')
   })
 
   it('fixes Chinese detected-state and skill terminology regressions', () => {
@@ -180,6 +220,105 @@ describe('locale-translation-policy', () => {
         locale: 'zh'
       })
     ).toBe('拉取请求已合并')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.3ab6ac0fc8',
+        enValue: 'Preview and edit the selected GitHub issue or pull request.',
+        localeValue: '预览并编辑选定的 GitHub 问题或拉取请求。',
+        locale: 'zh'
+      })
+    ).toBe('预览并编辑选定的 GitHub 议题或拉取请求。')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.LinearIssueWorkspace.0190b760c1',
+        enValue: 'Open on Linear',
+        localeValue: 'Linear打开',
+        locale: 'zh'
+      })
+    ).toBe('在 Linear 中打开')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.TaskPage.d0e3c8f933',
+        enValue: 'No matching GitHub work',
+        localeValue: '没有匹配的 GitHub 作品',
+        locale: 'zh'
+      })
+    ).toBe('没有匹配的 GitHub 工作项')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.hooks.useSettingsNavigationMetadata.4a728cd56b',
+        enValue: 'New features that are still taking shape. Give them a try.',
+        localeValue: '仍在形成的新特征。尝试一下。',
+        locale: 'zh'
+      })
+    ).toBe('仍在形成的新功能。尝试一下。')
+  })
+
+  it('fixes Japanese integration, merge, and search keyword regressions', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.integrations.search.f16e41cc72',
+        enValue: 'GitHub Integration',
+        localeValue: 'GitHubの統合',
+        locale: 'ja'
+      })
+    ).toBe('GitHub 連携')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitLabItemDialog.e089f62594',
+        enValue: 'Merged MR !{{value0}}',
+        localeValue: 'MR を統合しました !{{value0}}',
+        locale: 'ja'
+      })
+    ).toBe('MR をマージしました !{{value0}}')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.right.sidebar.source.control.primary.action.3d5dccef0b',
+        enValue: 'Nothing to commit. PR is already merged.',
+        localeValue: 'コミットするものは何もありません。 PR はすでに統合されています。',
+        locale: 'ja'
+      })
+    ).toBe('コミットするものはありません。PR はすでにマージされています。')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.integrations.search.581844769a',
+        enValue: 'mr',
+        localeValue: '氏',
+        locale: 'ja'
+      })
+    ).toBe('MR')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.integrations.search.e1263dd748',
+        enValue: 'jira',
+        localeValue: 'ジラ',
+        locale: 'ja'
+      })
+    ).toBe('Jira')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.terminal.advanced.search.b7c2cee442',
+        enValue: 'experimental',
+        localeValue: '実験的機能な',
+        locale: 'ja'
+      })
+    ).toBe('実験的機能')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.TaskPage.ef21405c6d',
+        enValue: 'Jira issue',
+        localeValue: 'Jira の問題',
+        locale: 'ja'
+      })
+    ).toBe('Jira イシュー')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.mobile.MobileHero.668016be7a',
+        enValue: 'on your computer and phone.',
+        localeValue: 'コンピューターと携帯電話で。',
+        locale: 'ja'
+      })
+    ).toBe('コンピューターとスマートフォンで。')
   })
 
   it('applies search keyword overrides for settings search synonyms', () => {

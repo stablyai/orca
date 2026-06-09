@@ -60,7 +60,9 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     coordination: '코디네이션',
     'multi-agent': '멀티 에이전트',
     orchestration: '오케스트레이션',
-    task: '작업'
+    task: '작업',
+    issue: '이슈',
+    issues: '이슈'
   },
   zh: {
     dark: '深色',
@@ -166,6 +168,17 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     update: '更新',
     cache: 'キャッシュ',
     timer: 'タイマー',
-    search: '検索'
+    search: '検索',
+    integration: '連携',
+    experimental: '実験的機能',
+    linear: 'Linear',
+    jira: 'Jira',
+    gitea: 'Gitea',
+    glab: 'glab',
+    mr: 'MR',
+    'azure devops': 'Azure DevOps',
+    issue: 'イシュー',
+    skill: 'スキル',
+    skills: 'スキル'
   }
 }

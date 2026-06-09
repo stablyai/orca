@@ -88,7 +88,41 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /제1터미널/g, replacement: '터미널 1', whenEnIncludes: 'Terminal 1' },
     { pattern: /알았어요/g, replacement: '확인', whenEnIncludes: 'Got it' },
     { pattern: /선택 해제/g, replacement: '거부', whenEnIncludes: 'Opt out' },
-    { pattern: /사이드바 전환/g, replacement: '사이드바 표시/숨기기', whenEnIncludes: 'Toggle' }
+    { pattern: /사이드바 전환/g, replacement: '사이드바 표시/숨기기', whenEnIncludes: 'Toggle' },
+    { pattern: /Jira 문제/g, replacement: 'Jira 이슈', whenEnIncludes: 'issue' },
+    { pattern: /GitLab 문제/g, replacement: 'GitLab 이슈', whenEnIncludes: 'issue' },
+    { pattern: /문제 소스/g, replacement: '이슈 소스', whenEnIncludes: 'issue source' },
+    { pattern: /문제 #/g, replacement: '이슈 #', whenEnIncludes: 'issue' },
+    { pattern: /문제에서/g, replacement: '이슈에서', whenEnIncludes: 'from issue' },
+    { pattern: /프로젝트 문제/g, replacement: '프로젝트 이슈', whenEnIncludes: 'project issues' },
+    { pattern: /할당된 문제/g, replacement: '할당된 이슈', whenEnIncludes: 'assigned issue' },
+    { pattern: /문제 보기/g, replacement: '이슈 보기', whenEnIncludes: 'view issues' },
+    { pattern: /문제를 제기하다/g, replacement: '이슈 등록', whenEnIncludes: 'file an issue' },
+    { pattern: /읽기 문제 #/g, replacement: '이슈 # 읽는 중', whenEnIncludes: 'Reading issue' },
+    { pattern: /병합 요청/g, replacement: 'MR', whenEnIncludes: 'merge request' },
+    { pattern: /병합요청/g, replacement: 'MR', whenEnIncludes: 'MergeRequest' },
+    { pattern: /풀이/g, replacement: '제거 중', whenEnIncludes: 'Removing' },
+    { pattern: /풀 중/g, replacement: '가져오는 중', whenEnIncludes: 'pulling' },
+    { pattern: /보풀/g, replacement: 'lint', whenEnIncludes: 'lint' },
+    { pattern: /모의 실험 장치/g, replacement: '시뮬레이터', whenEnIncludes: 'simulator' },
+    { pattern: /재방송/g, replacement: '재실행', whenEnIncludes: 'Rerun' },
+    {
+      pattern: /재방송 요청 확인/g,
+      replacement: '검사 재실행 요청됨',
+      whenEnIncludes: 'Check reruns'
+    },
+    { pattern: /요청 검토자/g, replacement: '리뷰어 요청', whenEnIncludes: 'Request reviewer' },
+    {
+      pattern: /요청 취소 검토자/g,
+      replacement: '리뷰 요청 취소',
+      whenEnIncludes: 'Unrequest reviewer'
+    },
+    { pattern: /검토가 요청됨/g, replacement: '리뷰 요청됨', whenEnIncludes: 'Review requested' },
+    { pattern: /문제 소스/g, replacement: '이슈 소스', whenEnIncludes: 'issue-source' },
+    { pattern: /PR, 문제/g, replacement: 'PR, 이슈', whenEnIncludes: 'issues' },
+    { pattern: /, 문제,/g, replacement: ', 이슈,', whenEnIncludes: 'issues' },
+    { pattern: /및 문제/g, replacement: '및 이슈', whenEnIncludes: 'issues' },
+    { pattern: /문제 자동화/g, replacement: '이슈 자동화', whenEnIncludes: 'issue-automation' }
   ],
   zh: [
     { pattern: /客服人员/g, replacement: '代理', whenEnIncludes: 'agent' },
@@ -165,7 +199,114 @@ export const LOCALE_PHRASE_FIXES = {
       whenEnIncludes: 'of {{value1}} done'
     },
     { pattern: /打开这个问题/g, replacement: '创建了此议题', whenEnIncludes: 'opened this issue' },
-    { pattern: /不和谐/g, replacement: 'Discord', whenEnIncludes: 'Discord' }
+    { pattern: /不和谐/g, replacement: 'Discord', whenEnIncludes: 'Discord' },
+    { pattern: /GitHub 问题/g, replacement: 'GitHub 议题', whenEnIncludes: 'issue' },
+    { pattern: /Jira 问题/g, replacement: 'Jira 议题', whenEnIncludes: 'issue' },
+    { pattern: /GitLab 问题/g, replacement: 'GitLab 议题', whenEnIncludes: 'issue' },
+    { pattern: /问题类型/g, replacement: '议题类型', whenEnIncludes: 'issue' },
+    { pattern: /问题来源/g, replacement: '议题来源', whenEnIncludes: 'issue' },
+    { pattern: /问题源/g, replacement: '议题源', whenEnIncludes: 'issue' },
+    { pattern: /问题标题/g, replacement: '议题标题', whenEnIncludes: 'issue' },
+    { pattern: /问题描述/g, replacement: '议题描述', whenEnIncludes: 'issue' },
+    { pattern: /问题标识符/g, replacement: '议题标识符', whenEnIncludes: 'issue' },
+    { pattern: /问题编号/g, replacement: '议题编号', whenEnIncludes: 'issue' },
+    { pattern: /问题自动化/g, replacement: '议题自动化', whenEnIncludes: 'issue' },
+    { pattern: /问题集/g, replacement: '议题集', whenEnIncludes: 'issue' },
+    { pattern: /从问题开始工作区/g, replacement: '从议题开始工作区', whenEnIncludes: 'issue' },
+    { pattern: /问题所附/g, replacement: '议题所附', whenEnIncludes: 'issue' },
+    { pattern: /此问题所附/g, replacement: '此议题所附', whenEnIncludes: 'issue' },
+    { pattern: /在提交此问题之前/g, replacement: '在提交此议题之前', whenEnIncludes: 'issue' },
+    { pattern: /在创建问题之前/g, replacement: '在创建议题之前', whenEnIncludes: 'issue' },
+    { pattern: /创建一个新问题/g, replacement: '创建一个新议题', whenEnIncludes: 'issue' },
+    { pattern: /从选定的问题开始/g, replacement: '从选定的议题开始', whenEnIncludes: 'issue' },
+    { pattern: /更新了问题/g, replacement: '更新了议题', whenEnIncludes: 'issue' },
+    { pattern: /更多问题工作区/g, replacement: '更多议题工作区', whenEnIncludes: 'issue' },
+    { pattern: /搜索 GitHub 问题/g, replacement: '搜索 GitHub 议题', whenEnIncludes: 'issue' },
+    { pattern: /刷新 Jira 问题/g, replacement: '刷新 Jira 议题', whenEnIncludes: 'issue' },
+    { pattern: /打开 GitHub 问题/g, replacement: '打开 GitHub 议题', whenEnIncludes: 'issue' },
+    {
+      pattern: /自定义 GitHub 问题命令/g,
+      replacement: '自定义 GitHub 议题命令',
+      whenEnIncludes: 'issue'
+    },
+    { pattern: /链接问题/g, replacement: '链接议题', whenEnIncludes: 'issue' },
+    { pattern: /链接的问题/g, replacement: '链接的议题', whenEnIncludes: 'issue' },
+    { pattern: /GH问题/g, replacement: 'GH 议题', whenEnIncludes: 'issue' },
+    { pattern: /问题 #/g, replacement: '议题 #', whenEnIncludes: 'issue' },
+    { pattern: /问题没有/g, replacement: '议题没有', whenEnIncludes: 'issue' },
+    { pattern: /问题上/g, replacement: '议题上', whenEnIncludes: 'Issues' },
+    { pattern: /项目问题/g, replacement: '项目议题', whenEnIncludes: 'issue' },
+    { pattern: /范围问题/g, replacement: '范围议题', whenEnIncludes: 'issue' },
+    { pattern: /提出问题/g, replacement: '提交议题', whenEnIncludes: 'file an issue' },
+    { pattern: /创建问题/g, replacement: '创建议题', whenEnIncludes: 'issue' },
+    { pattern: /分配问题/g, replacement: '分配议题', whenEnIncludes: 'issue' },
+    { pattern: /编辑问题/g, replacement: '编辑议题', whenEnIncludes: 'issue' },
+    { pattern: /查看问题/g, replacement: '查看议题', whenEnIncludes: 'issue' },
+    { pattern: /无法更新 Jira 问题/g, replacement: '无法更新 Jira 议题', whenEnIncludes: 'issue' },
+    { pattern: /无法创建 Jira 问题/g, replacement: '无法创建 Jira 议题', whenEnIncludes: 'issue' },
+    { pattern: /无法创建问题/g, replacement: '无法创建议题', whenEnIncludes: 'issue' },
+    { pattern: /未发现 Jira 问题/g, replacement: '未发现 Jira 议题', whenEnIncludes: 'issue' },
+    { pattern: /关闭 Jira 问题预览/g, replacement: '关闭 Jira 议题预览', whenEnIncludes: 'issue' },
+    { pattern: /无法加载问题/g, replacement: '无法加载议题', whenEnIncludes: 'issue' },
+    { pattern: /没有分配的问题/g, replacement: '没有分配的议题', whenEnIncludes: 'issue' },
+    {
+      pattern: /没有问题与此Linear上下文匹配/g,
+      replacement: '没有议题与此 Linear 上下文匹配',
+      whenEnIncludes: 'issue'
+    },
+    {
+      pattern: /没有与所选预设匹配的问题/g,
+      replacement: '没有与所选预设匹配的议题',
+      whenEnIncludes: 'issue'
+    },
+    {
+      pattern: /没有获取与所选团队匹配的问题/g,
+      replacement: '没有获取与所选团队匹配的议题',
+      whenEnIncludes: 'issue'
+    },
+    {
+      pattern: /浏览、编辑、创建 Jira 问题/g,
+      replacement: '浏览、编辑、创建 Jira 议题',
+      whenEnIncludes: 'issue'
+    },
+    { pattern: /浏览和链接问题/g, replacement: '浏览和链接议题', whenEnIncludes: 'issue' },
+    {
+      pattern: /浏览、创建和链接问题/g,
+      replacement: '浏览、创建和链接议题',
+      whenEnIncludes: 'issue'
+    },
+    {
+      pattern: /拉取请求、问题和检查/g,
+      replacement: '拉取请求、议题和检查',
+      whenEnIncludes: 'issue'
+    },
+    {
+      pattern: /合并请求、问题和管道/g,
+      replacement: '合并请求、议题和管道',
+      whenEnIncludes: 'issue'
+    },
+    { pattern: /提交、PR 和问题/g, replacement: '提交、PR 和议题', whenEnIncludes: 'issue' },
+    { pattern: /粘贴问题 URL/g, replacement: '粘贴议题 URL', whenEnIncludes: 'issue' },
+    { pattern: /阅读问题/g, replacement: '阅读议题', whenEnIncludes: 'issue' },
+    { pattern: /已打开问题/g, replacement: '已打开议题', whenEnIncludes: 'issue' },
+    {
+      pattern: /打开 {{value0}} 问题/g,
+      replacement: '打开 {{value0}} 议题',
+      whenEnIncludes: 'issue'
+    },
+    { pattern: /显示问题来自/g, replacement: '显示议题来自', whenEnIncludes: 'issue' },
+    { pattern: /搜索问题/g, replacement: '搜索议题', whenEnIncludes: 'search issues' },
+    { pattern: /浏览问题/g, replacement: '浏览议题', whenEnIncludes: 'browse issues' },
+    { pattern: /复制Linear/g, replacement: '复制 Linear', whenEnIncludes: 'Linear' },
+    { pattern: /刷新Linear/g, replacement: '刷新 Linear', whenEnIncludes: 'Linear' },
+    { pattern: /无法更新Linear/g, replacement: '无法更新 Linear', whenEnIncludes: 'Linear' },
+    { pattern: /新Linear项目/g, replacement: '新建 Linear 项目', whenEnIncludes: 'Linear' },
+    { pattern: /添加Linear访问/g, replacement: '添加 Linear 访问', whenEnIncludes: 'Linear' },
+    { pattern: /Linear打开/g, replacement: '在 Linear 中打开', whenEnIncludes: 'Linear' },
+    { pattern: /以Linear方式打开/g, replacement: '在 Linear 中打开', whenEnIncludes: 'Linear' },
+    { pattern: /Linear视图/g, replacement: 'Linear 视图', whenEnIncludes: 'Linear' },
+    { pattern: /队伍/g, replacement: '团队', whenEnIncludes: 'teams' },
+    { pattern: /新特征/g, replacement: '新功能', whenEnIncludes: 'New features' }
   ],
   ja: [
     { pattern: /解雇/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
@@ -210,7 +351,17 @@ export const LOCALE_PHRASE_FIXES = {
       whenEnIncludes: 'Hide sleeping'
     },
     { pattern: /インタフェース/g, replacement: 'インターフェース', whenEnIncludes: 'Interface' },
-    { pattern: /統合/g, replacement: '連携', whenEnIncludes: 'Integrations' },
+    { pattern: /統合/g, replacement: '連携', whenEnIncludes: 'Integration' },
+    {
+      pattern: /統合しました/g,
+      replacement: 'マージしました',
+      whenEnIncludes: 'Merged MR'
+    },
+    {
+      pattern: /統合されています/g,
+      replacement: 'マージされています',
+      whenEnIncludes: 'already merged'
+    },
     { pattern: /再起動します/g, replacement: '再起動', whenEnIncludes: 'Restart Orca' },
     { pattern: /オウムガイ/g, replacement: 'Nautilus', whenEnIncludes: 'Nautilus' },
     {
@@ -235,6 +386,32 @@ export const LOCALE_PHRASE_FIXES = {
       pattern: /壊れたチェック/g,
       replacement: '失敗したチェック',
       whenEnIncludes: 'broken check'
+    },
+    {
+      pattern: /コンピューターの使用/g,
+      replacement: 'コンピュータ操作',
+      whenEnIncludes: 'Computer Use'
+    },
+    {
+      pattern: /コンピューター使用/g,
+      replacement: 'コンピュータ操作',
+      whenEnIncludes: 'Computer Use'
+    },
+    { pattern: /携帯電話/g, replacement: 'スマートフォン', whenEnIncludes: 'phone' },
+    {
+      pattern: /実験的機能な/g,
+      replacement: '実験的機能',
+      whenEnIncludes: 'experimental'
+    },
+    { pattern: /ジラ/g, replacement: 'Jira', whenEnIncludes: 'Jira' },
+    { pattern: /ジラ/g, replacement: 'Jira', whenEnIncludes: 'jira' },
+    { pattern: /Linear問題/g, replacement: 'Linear イシュー', whenEnIncludes: 'Linear issue' },
+    { pattern: /Linearの問題/g, replacement: 'Linear イシュー', whenEnIncludes: 'Linear issue' },
+    { pattern: /Jira の問題/g, replacement: 'Jira イシュー', whenEnIncludes: 'Jira issue' },
+    {
+      pattern: /一般的なアクション/g,
+      replacement: 'よく使うアクション',
+      whenEnIncludes: 'common actions'
     }
   ]
 }

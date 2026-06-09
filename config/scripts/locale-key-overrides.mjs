@@ -362,5 +362,75 @@ export const LOCALE_KEY_OVERRIDES = {
     ko: '감지된 에이전트 없음',
     zh: '未检测到代理',
     ja: 'エージェントが検出されません'
+  },
+  'auto.components.onboarding.OnboardingFlow.04ae28d8ca': {
+    ko: '몇 시간 내내 보고 싶은 테마를 선택하세요.',
+    zh: '选择你想盯着看几个小时的主题。',
+    ja: '何時間も眺めていたくなるテーマを選んでください。'
+  },
+  'auto.components.GitLabItemDialog.e089f62594': {
+    ko: 'MR !{{value0}}을(를) 병합했습니다.',
+    zh: '合并 MR !{{value0}}',
+    ja: 'MR をマージしました !{{value0}}'
+  },
+  'auto.components.right.sidebar.source.control.primary.action.3d5dccef0b': {
+    ko: '커밋할 것이 없습니다. PR은 이미 병합되었습니다.',
+    zh: '没有可提交的内容。PR 已合并。',
+    ja: 'コミットするものはありません。PR はすでにマージされています。'
+  },
+  'auto.components.settings.integrations.search.16a486a49d': {
+    ko: 'Linear에 연결해 이슈를 탐색하고 연결합니다.',
+    zh: '连接 Linear 以浏览和链接议题。',
+    ja: 'Linear に接続してイシューを参照し、リンクします。'
+  },
+  'menu.showTitlebarAppName': {
+    ko: '제목 표시줄 앱 이름 표시',
+    zh: '显示标题栏应用名称',
+    ja: 'タイトルバーのアプリ名を表示'
+  },
+  'auto.App.e81217c1b7': {
+    ko: '앱 이름 숨기기',
+    zh: '隐藏应用名称',
+    ja: 'アプリ名を非表示'
+  },
+  'auto.components.settings.ExperimentalPane.0277901cf7': {
+    ko: '완료된 에이전트, 차단 질문, 읽지 않은 상태 및 작업 트리 생성 이벤트에 대한 스레드 작업 트리 피드가 있는 에이전트 항목을 왼쪽 사이드바에 추가합니다. 실험적 — 이벤트 모델과 UI가 변경될 수 있습니다.',
+    zh: '将代理条目添加到左侧边栏，其中包含已完成代理、阻塞待办、未读状态和工作树创建事件的线程工作树提要。实验性——事件模型和 UI 可能会改变。',
+    ja: '完了したエージェント、ブロック中の質問、未読状態、ワークツリー作成イベントのスレッドワークツリーフィード付きエージェント項目を左サイドバーに追加します。実験的 — イベントモデルと UI は変更される場合があります。'
+  },
+  'auto.fix.checks.agent.launch.9f00d7df0c': {
+    ko: '검사 프롬프트가 비어 있습니다. 소스 제어 AI 설정을 업데이트하세요.',
+    zh: '检查提示为空。请更新源代码管理 AI 设置。',
+    ja: 'チェック プロンプトが空です。ソース管理 AI 設定を更新してください。'
+  },
+  'auto.components.TaskPage.d0e3c8f933': {
+    ko: '일치하는 GitHub 작업이 없습니다',
+    zh: '没有匹配的 GitHub 工作项',
+    ja: '一致する GitHub 作業がありません'
+  },
+  'auto.components.TaskPage.2af3ab5c58': {
+    ko: 'Linear에서 열 팀을 하나 선택하세요',
+    zh: '选择一个团队在 Linear 中打开',
+    ja: 'Linear で開くチームを 1 つ選択'
+  },
+  'auto.components.TaskPage.8964184a8b': {
+    ko: 'Linear 새로고침',
+    zh: '刷新 Linear',
+    ja: 'Linear を更新'
+  },
+  'auto.components.TaskPage.6775c05483': {
+    ko: 'Linear 상태를 업데이트할 수 없습니다',
+    zh: '无法更新 Linear 状态',
+    ja: 'Linear の状態を更新できません'
+  },
+  'auto.components.TaskPage.25ff84769a': {
+    ko: '이 Linear 컨텍스트와 일치하는 이슈가 없습니다.',
+    zh: '没有议题与此 Linear 上下文匹配。',
+    ja: 'この Linear コンテキストに一致するイシューはありません。'
+  },
+  'auto.components.settings.IntegrationsPane.33ae9730a8': {
+    ko: 'Linear 액세스를 추가해 이슈를 탐색하고 연결합니다.',
+    zh: '添加 Linear 访问以浏览和链接议题。',
+    ja: 'Linear アクセスを追加してイシューを参照し、リンクします。'
   }
 }
