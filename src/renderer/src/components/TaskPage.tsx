@@ -183,6 +183,7 @@ import type {
   JiraIssue,
   JiraIssueType,
   JiraProject,
+  AsanaApprovalStatus,
   AsanaTask,
   AsanaProject,
   AsanaUser,
@@ -402,6 +403,37 @@ function getAsanaTaskWorkspaceSeed(task: AsanaTask): string {
       asanaIdentifier: task.gid
     })?.seedName ?? buildAsanaBranchName(task)
   )
+}
+
+const ASANA_GREEN_BADGE =
+  'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+const ASANA_MUTED_BADGE = 'border-border/50 bg-muted/40 text-muted-foreground'
+
+const ASANA_APPROVAL_BADGES: Record<AsanaApprovalStatus, { label: string; className: string }> = {
+  pending: {
+    label: 'Pending approval',
+    className: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-200'
+  },
+  approved: { label: 'Approved', className: ASANA_GREEN_BADGE },
+  rejected: {
+    label: 'Rejected',
+    className: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
+  },
+  changes_requested: {
+    label: 'Changes requested',
+    className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+  }
+}
+
+// Why: approval tasks carry an approval decision, not a plain done/open state,
+// so the list badge should read Approved/Rejected/Changes requested instead.
+function getAsanaTaskStatusBadge(task: AsanaTask): { label: string; className: string } {
+  if (task.resourceSubtype === 'approval' && task.approvalStatus) {
+    return ASANA_APPROVAL_BADGES[task.approvalStatus]
+  }
+  return task.completed
+    ? { label: 'Completed', className: ASANA_GREEN_BADGE }
+    : { label: task.section ?? 'Open', className: ASANA_MUTED_BADGE }
 }
 
 // Why: the row's px-3 left padding leaves a 12px gap between the scroll-viewport
@@ -8898,7 +8930,7 @@ export default function TaskPage(): React.JSX.Element {
                     {displayedAsanaTasks.map((task) => {
                       const selected = task.gid === selectedAsanaTaskGid
                       const projectLabel = task.projects[0]?.name ?? task.workspaceName ?? '—'
-                      const statusLabel = task.completed ? 'Completed' : (task.section ?? 'Open')
+                      const statusBadge = getAsanaTaskStatusBadge(task)
                       return (
                         <div
                           key={`${task.workspaceId ?? 'workspace'}:${task.gid}`}
@@ -8931,12 +8963,10 @@ export default function TaskPage(): React.JSX.Element {
                               <span
                                 className={cn(
                                   'inline-flex min-w-0 items-center rounded-full border px-1.5 py-0.5 text-[11px] font-medium',
-                                  task.completed
-                                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-                                    : 'border-border/50 bg-muted/40 text-muted-foreground'
+                                  statusBadge.className
                                 )}
                               >
-                                <span className="truncate">{statusLabel}</span>
+                                <span className="truncate">{statusBadge.label}</span>
                               </span>
                               <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                                 {task.assignee?.name ?? 'Unassigned'}
@@ -8948,12 +8978,10 @@ export default function TaskPage(): React.JSX.Element {
                             <span
                               className={cn(
                                 'inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[11px] font-medium',
-                                task.completed
-                                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-                                  : 'border-border/50 bg-muted/40 text-muted-foreground'
+                                statusBadge.className
                               )}
                             >
-                              <span className="truncate">{statusLabel}</span>
+                              <span className="truncate">{statusBadge.label}</span>
                             </span>
                           </div>
 
