@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AsanaClientForWorkspace } from './client'
 
-const { clearTokenMock, getClientsMock, asanaRequestMock } = vi.hoisted(() => ({
+const { clearTokenMock, getClientsMock, asanaRequestMock, searchUnavailable } = vi.hoisted(() => ({
   clearTokenMock: vi.fn(),
   getClientsMock: vi.fn(),
-  asanaRequestMock: vi.fn()
+  asanaRequestMock: vi.fn(),
+  searchUnavailable: new Set<string>()
 }))
 
 class FakeAsanaApiError extends Error {
@@ -23,7 +24,9 @@ vi.mock('./client', () => ({
   isAuthError: (error: unknown) =>
     error instanceof FakeAsanaApiError && (error.status === 401 || error.status === 403),
   AsanaApiError: FakeAsanaApiError,
-  asanaRequest: (...args: unknown[]) => asanaRequestMock(...args)
+  asanaRequest: (...args: unknown[]) => asanaRequestMock(...args),
+  isSearchUnavailable: (id: string) => searchUnavailable.has(id),
+  markSearchUnavailable: (id: string) => searchUnavailable.add(id)
 }))
 
 function makeEntry(id = 'ws-1', name = 'Example Workspace'): AsanaClientForWorkspace {
@@ -42,6 +45,7 @@ function makeEntry(id = 'ws-1', name = 'Example Workspace'): AsanaClientForWorks
 describe('Asana task operations', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    searchUnavailable.clear()
     getClientsMock.mockReturnValue([makeEntry()])
   })
 
@@ -194,6 +198,26 @@ describe('Asana task operations', () => {
 
     const tasks = await searchTasks('login', 30, 'ws-1')
     expect(tasks.map((task) => task.gid)).toEqual(['1'])
+  })
+
+  it('skips the premium search endpoint on repeat searches after a 402', async () => {
+    asanaRequestMock
+      // First search: premium probe fails, fallback fetches the assigned list.
+      .mockRejectedValueOnce(new FakeAsanaApiError('Payment Required', 402))
+      .mockResolvedValueOnce({ data: [{ gid: '1', name: 'Fix login bug', completed: false }] })
+      // Second search: should go straight to the assigned-list fetch, no probe.
+      .mockResolvedValueOnce({ data: [{ gid: '1', name: 'Fix login bug', completed: false }] })
+
+    const { searchTasks } = await import('./issues')
+
+    await searchTasks('login', 30, 'ws-1')
+    await searchTasks('login', 30, 'ws-1')
+
+    // Why: 1st call = failed search + fallback fetch (2 requests); 2nd call must
+    // be fallback-only (1 request), proving the premium probe was skipped.
+    expect(asanaRequestMock).toHaveBeenCalledTimes(3)
+    const requestedPaths = asanaRequestMock.mock.calls.map((call) => String(call[1]))
+    expect(requestedPaths.filter((path) => path.includes('/tasks/search'))).toHaveLength(1)
   })
 
   it('does not mask non-premium API errors with the local title filter', async () => {

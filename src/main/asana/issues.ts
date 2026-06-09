@@ -22,6 +22,8 @@ import {
   clearToken,
   getClients,
   isAuthError,
+  isSearchUnavailable,
+  markSearchUnavailable,
   release,
   type AsanaClientForWorkspace
 } from './client'
@@ -158,6 +160,17 @@ async function fetchTasksForClient(
   return tasks
 }
 
+// Why: free-tier fallback for the premium-only search endpoint — fetch the
+// assigned task set and match titles client-side.
+async function filterTasksLocally(
+  entry: AsanaClientForWorkspace,
+  text: string
+): Promise<AsanaTask[]> {
+  const tasks = await fetchTasksForClient(entry, 'all', 100)
+  const lowered = text.toLowerCase()
+  return tasks.filter((task) => task.title.toLowerCase().includes(lowered))
+}
+
 async function fanOut<T>(
   entries: AsanaClientForWorkspace[],
   selection: AsanaWorkspaceSelection | null | undefined,
@@ -217,6 +230,11 @@ export async function searchTasks(
   }
   const safeLimit = clampLimit(limit)
   const results = await fanOut(entries, workspaceId, 'searchTasks', async (entry) => {
+    // Why: Asana has no plan-tier API, so a prior 402 is the only signal that
+    // this workspace lacks premium search. Skip the doomed call once we know.
+    if (isSearchUnavailable(entry.workspace.id)) {
+      return filterTasksLocally(entry, text)
+    }
     try {
       // Why: the search endpoint's sort_by defaults to modified_at desc, but set
       // it explicitly so search order matches listTasks' "recently updated first".
@@ -234,14 +252,13 @@ export async function searchTasks(
       return (response.data ?? []).map((task) => mapAsanaTask(entry.workspace, task))
     } catch (error) {
       // Why: typeahead/search is a premium-only endpoint that returns 402 on free
-      // tiers. Only that status means "search unavailable" — fall back to filtering
-      // the assigned task list locally. Every other status (429/5xx/400) is a real
-      // failure that must propagate, not be masked by plausible-but-wrong results.
+      // tiers. Only that status means "search unavailable" — remember it so future
+      // searches skip straight to the local filter, then fall back now. Every other
+      // status (429/5xx/400) is a real failure that must propagate, not be masked.
       if (error instanceof AsanaApiError && error.status === 402) {
         console.warn('[asana] search endpoint unavailable (402), using local title filter')
-        const tasks = await fetchTasksForClient(entry, 'all', 100)
-        const lowered = text.toLowerCase()
-        return tasks.filter((task) => task.title.toLowerCase().includes(lowered))
+        markSearchUnavailable(entry.workspace.id)
+        return filterTasksLocally(entry, text)
       }
       throw error
     }

@@ -125,6 +125,29 @@ describe('Asana client workspace storage', () => {
     expect(clients[0].authorization).toBe('Bearer pat-1')
   })
 
+  it('clears the search-unavailable cache when connection state changes', async () => {
+    const asana = await loadClientModule()
+    mockFetchOnce({
+      data: { gid: 'user-1', name: 'Ada', workspaces: [{ gid: 'ws-1', name: 'Alpha' }] }
+    })
+    await asana.connect({ apiToken: 'pat-1' })
+
+    asana.markSearchUnavailable('ws-1')
+    expect(asana.isSearchUnavailable('ws-1')).toBe(true)
+
+    // Disconnecting a workspace forgets its premium-search verdict.
+    asana.disconnect('ws-1')
+    expect(asana.isSearchUnavailable('ws-1')).toBe(false)
+
+    // A fresh PAT (possibly a different plan tier) also resets the cache.
+    asana.markSearchUnavailable('ws-1')
+    mockFetchOnce({
+      data: { gid: 'user-1', name: 'Ada', workspaces: [{ gid: 'ws-1', name: 'Alpha' }] }
+    })
+    await asana.connect({ apiToken: 'pat-2' })
+    expect(asana.isSearchUnavailable('ws-1')).toBe(false)
+  })
+
   it('treats a token that cannot be decrypted as having no usable client', async () => {
     const writer = await loadClientModule(encryptedSafeStorage)
     mockFetchOnce({

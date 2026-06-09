@@ -66,6 +66,19 @@ export class AsanaApiError extends Error {
 let cachedWorkspaceFile: AsanaWorkspaceFile | null = null
 let workspaceFileLoaded = false
 const cachedTokens = new Map<string, string>()
+// Why: Asana exposes no API to detect a workspace's plan tier — the premium
+// search endpoint must be probed and returns 402 on free tiers. Remember that
+// once per workspace so repeat searches skip the doomed call and go straight to
+// the local-filter fallback. Reset whenever connection state changes.
+const searchUnavailableWorkspaces = new Set<string>()
+
+export function markSearchUnavailable(workspaceId: string): void {
+  searchUnavailableWorkspaces.add(workspaceId)
+}
+
+export function isSearchUnavailable(workspaceId: string): boolean {
+  return searchUnavailableWorkspaces.has(workspaceId)
+}
 
 function getOrcaDir(): string {
   return join(homedir(), '.orca')
@@ -396,6 +409,9 @@ export async function connect(
     for (const workspace of workspaces) {
       saveToken(workspace.id, apiToken)
     }
+    // Why: a new PAT may belong to a different plan tier, so forget any prior
+    // "search unavailable" verdict and let the next search re-probe.
+    searchUnavailableWorkspaces.clear()
     const file = getWorkspaceFile()
     const newIds = new Set(workspaces.map((workspace) => workspace.id))
     writeWorkspaceFile({
@@ -417,6 +433,7 @@ export function disconnect(workspaceId?: string): void {
   const ids = workspaceId ? [workspaceId] : file.workspaces.map((workspace) => workspace.id)
   for (const id of ids) {
     deleteToken(id)
+    searchUnavailableWorkspaces.delete(id)
   }
   writeWorkspaceFile({
     version: 1,
@@ -473,6 +490,7 @@ export async function testConnection(
 
 export function clearToken(workspaceId: string): void {
   deleteToken(workspaceId)
+  searchUnavailableWorkspaces.delete(workspaceId)
   const file = getWorkspaceFile()
   writeWorkspaceFile({
     ...file,
