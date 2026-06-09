@@ -34,15 +34,11 @@ import {
   RIGHT_SIDEBAR_TOP_ACTIVITY_STRIP_CLASS_NAME,
   RIGHT_SIDEBAR_WINDOWS_TOP_ACTIVITY_STRIP_CLASS_NAME
 } from './right-sidebar-titlebar-drag-regions'
-
-const MIN_WIDTH = 220
-// Why: long file names (e.g. construction drawing sheets, multi-part document
-// names) used to be truncated at a hard 500px cap that no drag could exceed.
-// We now let the user drag up to nearly the full window width and only keep a
-// small reserve so the rest of the app (left sidebar, editor) is not squeezed
-// to zero — the practical ceiling still scales with the user's window size.
-const MIN_NON_SIDEBAR_AREA = 320
-const ABSOLUTE_FALLBACK_MAX_WIDTH = 2000
+import {
+  RIGHT_SIDEBAR_MIN_WIDTH,
+  clampRightSidebarPanelWidth,
+  computeMaxRightSidebarPanelWidth
+} from './right-sidebar-width'
 
 const ACTIVITY_BAR_SIDE_WIDTH = 40
 
@@ -126,11 +122,17 @@ function RightSidebarInner(): React.JSX.Element {
     : visibleItems[0].id
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
-  const maxWidth = useWindowAwareMaxWidth()
+  const windowWidth = useWindowWidth()
+  const maxWidth = computeMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
+  const renderedRightSidebarWidth = clampRightSidebarPanelWidth(
+    rightSidebarWidth,
+    windowWidth,
+    activityBarSideWidth
+  )
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
-    width: rightSidebarWidth,
-    minWidth: MIN_WIDTH,
+    width: renderedRightSidebarWidth,
+    minWidth: RIGHT_SIDEBAR_MIN_WIDTH,
     maxWidth,
     deltaSign: -1,
     renderedExtraWidth: activityBarSideWidth,
@@ -372,28 +374,28 @@ function RightSidebarInner(): React.JSX.Element {
 const RightSidebar = React.memo(RightSidebarInner)
 export default RightSidebar
 
-// Why: the drag-resize max is a function of window width, not a constant, so
-// users with wide displays can expand the sidebar far enough to read long file
-// names. Falls back to a large constant in non-DOM environments (tests).
-function useWindowAwareMaxWidth(): number {
-  const [max, setMax] = useState(() => computeMaxRightSidebarWidth())
+// Why: persisted right-sidebar widths can outlive the window size they were
+// chosen in. Clamp from the current window so the terminal/editor never render
+// underneath the sidebar after resize or hydration.
+function useWindowWidth(): number | null {
+  const [windowWidth, setWindowWidth] = useState(() => getWindowWidth())
 
   useEffect(() => {
     function update(): void {
-      setMax(computeMaxRightSidebarWidth())
+      setWindowWidth(getWindowWidth())
     }
     window.addEventListener('resize', update)
     return () => window.removeEventListener('resize', update)
   }, [])
 
-  return max
+  return windowWidth
 }
 
-function computeMaxRightSidebarWidth(): number {
+function getWindowWidth(): number | null {
   if (typeof window === 'undefined' || !Number.isFinite(window.innerWidth)) {
-    return ABSOLUTE_FALLBACK_MAX_WIDTH
+    return null
   }
-  return Math.max(MIN_WIDTH, window.innerWidth - MIN_NON_SIDEBAR_AREA)
+  return window.innerWidth
 }
 
 function useMeasuredWidth(onWidth: (width: number | null) => void) {
