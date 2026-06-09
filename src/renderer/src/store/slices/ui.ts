@@ -92,6 +92,7 @@ import {
 } from '../../lib/running-agent-targets'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { translate } from '@/i18n/i18n'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -941,7 +942,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           : s
       )
       const { toast } = await import('sonner')
-      toast.error(`Couldn't send to ${label}`, { description: message })
+      toast.error(
+        translate('auto.store.slices.ui.53883b7bc3', "Couldn't send to {{value0}}", {
+          value0: label
+        }),
+        { description: message }
+      )
       return false
     }
 
@@ -952,7 +958,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       launch_source: mode.launchSource,
       request_kind: 'followup'
     })
-    toast.success(`Sent to ${label}`)
+    toast.success(
+      translate('auto.store.slices.ui.66e3bd7ce6', 'Sent to {{value0}}', { value0: label })
+    )
     get().closeAgentSendPopoverTargetMode(mode.id, mode.instanceId)
     return true
   },

@@ -13,6 +13,7 @@ import { useAppStore } from '../../store'
 import { STATUS_LABELS, statusColor } from '../settings/SshTargetCard'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { RemoteWorkspaceSyncStatus } from '../../store/slices/ssh'
+import { translate } from '@/i18n/i18n'
 
 function isConnecting(status: SshConnectionStatus): boolean {
   return ['connecting', 'deploying-relay', 'reconnecting'].includes(status)
@@ -125,7 +126,11 @@ function TargetRow({
       await window.api.ssh.connect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Connection failed')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.status.bar.SshStatusSegment.2c29e2de68', 'Connection failed')
+      )
     } finally {
       if (mountedRef.current) {
         setBusy(false)
@@ -139,7 +144,11 @@ function TargetRow({
       await window.api.ssh.disconnect({ targetId })
       recordFeatureInteraction('ssh')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Disconnect failed')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.status.bar.SshStatusSegment.bf07aee59e', 'Disconnect failed')
+      )
     } finally {
       if (mountedRef.current) {
         setBusy(false)
@@ -175,7 +184,7 @@ function TargetRow({
           onClick={() => void handleConnect()}
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-accent/70"
         >
-          Connect
+          {translate('auto.components.status.bar.SshStatusSegment.63f36455cc', 'Connect')}
         </button>
       ) : status === 'connected' ? (
         <button
@@ -183,7 +192,7 @@ function TargetRow({
           onClick={() => void handleDisconnect()}
           className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
         >
-          Disconnect
+          {translate('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')}
         </button>
       ) : null}
     </div>
@@ -244,7 +253,10 @@ export function SshStatusSegment({
         <button
           type="button"
           className="inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
-          aria-label="SSH connection status"
+          aria-label={translate(
+            'auto.components.status.bar.SshStatusSegment.fdc57e9970',
+            'SSH connection status'
+          )}
         >
           {iconOnly ? (
             <span className="inline-flex items-center gap-1">
@@ -276,7 +288,7 @@ export function SshStatusSegment({
               )}
               {!compact && (
                 <span className="text-[11px]">
-                  SSH{' '}
+                  {translate('auto.components.status.bar.SshStatusSegment.d09ec41831', 'SSH')}{' '}
                   <span className={syncProblem ? 'text-destructive' : 'text-muted-foreground'}>
                     {syncProblemLabel ?? overallLabel(overall)}
                   </span>
@@ -298,7 +310,7 @@ export function SshStatusSegment({
         className="w-[min(20rem,calc(100vw-1rem))]"
       >
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          SSH Connections
+          {translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'SSH Connections')}
         </div>
         {targets.map((t) => (
           <TargetRow
@@ -317,7 +329,7 @@ export function SshStatusSegment({
             setActiveView('settings')
           }}
         >
-          Manage SSH…
+          {translate('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage SSH…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/source-control-ai-actions'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { translate } from '@/i18n/i18n'
 
 type SourceControlActionVariableChipsProps = {
   actionId: SourceControlActionId
@@ -38,7 +39,11 @@ function SourceControlVariableTooltip({
     if (variable === 'basePrompt') {
       return (
         <pre className="scrollbar-sleek max-h-72 max-w-[min(32rem,calc(100vw-2rem))] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-          {preview || '(empty)'}
+          {preview ||
+            translate(
+              'auto.components.source.control.SourceControlActionVariableChips.4bf6d88039',
+              '(empty)'
+            )}
         </pre>
       )
     }
@@ -47,7 +52,11 @@ function SourceControlVariableTooltip({
       <div className="space-y-1.5">
         <div className="font-mono text-[11px] text-background/70">{`{${variable}}`}</div>
         <pre className="scrollbar-sleek max-h-72 max-w-[min(32rem,calc(100vw-2rem))] overflow-auto rounded-sm bg-background/10 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-          {preview || '(empty)'}
+          {preview ||
+            translate(
+              'auto.components.source.control.SourceControlActionVariableChips.4bf6d88039',
+              '(empty)'
+            )}
         </pre>
       </div>
     )
@@ -62,7 +71,10 @@ function SourceControlVariableTooltip({
       </div>
       <div className="space-y-1">
         <div className="text-[10px] font-semibold uppercase tracking-wide text-background/60">
-          Example
+          {translate(
+            'auto.components.source.control.SourceControlActionVariableChips.6b921a0ac2',
+            'Example'
+          )}
         </div>
         <pre className="scrollbar-sleek max-h-40 overflow-auto rounded-sm bg-background/10 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
           {info.example}
@@ -82,7 +94,10 @@ export function SourceControlActionVariableChips({
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
         <Braces className="size-3" />
-        Variables
+        {translate(
+          'auto.components.source.control.SourceControlActionVariableChips.1b77798d5f',
+          'Variables'
+        )}
       </span>
       {SOURCE_CONTROL_ACTION_VARIABLES[actionId].map((variable) => {
         const preview = hasVariablePreview(variablePreviews, variable)

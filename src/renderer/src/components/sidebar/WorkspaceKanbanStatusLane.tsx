@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import WorkspaceKanbanCard from './WorkspaceKanbanCard'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanStatusLaneProps = {
   status: WorkspaceStatusDefinition
@@ -100,7 +101,10 @@ export default function WorkspaceKanbanStatusLane({
         data-workspace-board-column-resize-handle=""
         role="separator"
         aria-orientation="vertical"
-        aria-label="Resize workspace board columns"
+        aria-label={translate(
+          'auto.components.sidebar.WorkspaceKanbanStatusLane.3611d1ae7f',
+          'Resize workspace board columns'
+        )}
         aria-valuemin={WORKSPACE_BOARD_COLUMN_WIDTH_MIN}
         aria-valuemax={WORKSPACE_BOARD_COLUMN_WIDTH_MAX}
         aria-valuenow={columnWidth}
@@ -168,7 +172,7 @@ export default function WorkspaceKanbanStatusLane({
           </div>
         ) : (
           <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-border/70 text-[11px] text-muted-foreground">
-            Empty
+            {translate('auto.components.sidebar.WorkspaceKanbanStatusLane.8ad104642b', 'Empty')}
           </div>
         )}
         <Tooltip>

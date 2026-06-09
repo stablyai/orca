@@ -8,6 +8,7 @@ import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { AgentSkillSetupPanel } from '@/components/settings/AgentSkillSetupPanel'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 export function BrowserUseSkillSetupCard(props: {
   compact?: boolean
@@ -25,8 +26,14 @@ export function BrowserUseSkillSetupCard(props: {
   const setupPanel = (
     <AgentSkillSetupPanel
       className={compact ? 'w-full max-w-[520px]' : undefined}
-      title="Browser Use skill"
-      description="Enables agents to navigate and verify pages in Orca's browser."
+      title={translate(
+        'auto.components.feature.wall.BrowserUseSkillSetupCard.d5bb1cd4ba',
+        'Browser Use skill'
+      )}
+      description={translate(
+        'auto.components.feature.wall.BrowserUseSkillSetupCard.cbc45022d4',
+        "Enables agents to navigate and verify pages in Orca's browser."
+      )}
       command={ORCA_CLI_SKILL_INSTALL_COMMAND}
       terminalTitle="Browser Use setup"
       terminalAriaLabel="Browser Use skill install terminal"

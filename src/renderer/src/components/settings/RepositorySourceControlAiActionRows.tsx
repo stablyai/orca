@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AgentIcon } from '@/lib/agent-catalog'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import {
-  ACTION_DESCRIPTIONS,
+  getActionDescriptions,
   SOURCE_CONTROL_TEXT_ACTION_ID_SET,
   getAgentCatalogForAction,
   getSourceControlAgentArgsPlaceholder
@@ -35,6 +35,7 @@ import {
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
 import { hasOwnActionOverride } from './repository-source-control-ai-draft'
+import { translate } from '@/i18n/i18n'
 
 type RepositorySourceControlAiActionRowsProps = {
   repoAi: RepoSourceControlAiOverrides
@@ -59,7 +60,12 @@ export function RepositorySourceControlAiActionRows({
 }: RepositorySourceControlAiActionRowsProps): React.JSX.Element {
   return (
     <div className="space-y-3">
-      <Label className="text-xs font-medium">Action recipes</Label>
+      <Label className="text-xs font-medium">
+        {translate(
+          'auto.components.settings.RepositorySourceControlAiActionRows.f0aa2cfaea',
+          'Action recipes'
+        )}
+      </Label>
       {SOURCE_CONTROL_ACTION_IDS.map((actionId) => {
         const hasOverride = hasOwnActionOverride(repoAi.actionOverrides, actionId)
         const override = repoAi.actionOverrides?.[actionId]
@@ -87,7 +93,9 @@ export function RepositorySourceControlAiActionRows({
                 <p className="text-xs font-medium text-foreground">
                   {SOURCE_CONTROL_ACTION_LABELS[actionId]}
                 </p>
-                <p className="text-[11px] text-muted-foreground">{ACTION_DESCRIPTIONS[actionId]}</p>
+                <p className="text-[11px] text-muted-foreground">
+                  {getActionDescriptions()[actionId]}
+                </p>
                 <div className="flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
                   <span>{actionScopeLabel(hasOverride)}</span>
                   <span>
@@ -110,14 +118,29 @@ export function RepositorySourceControlAiActionRows({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ACTION_MODE_INHERIT}>Use global</SelectItem>
-                  <SelectItem value={ACTION_MODE_OVERRIDE}>Customize</SelectItem>
+                  <SelectItem value={ACTION_MODE_INHERIT}>
+                    {translate(
+                      'auto.components.settings.RepositorySourceControlAiActionRows.403876bb48',
+                      'Use global'
+                    )}
+                  </SelectItem>
+                  <SelectItem value={ACTION_MODE_OVERRIDE}>
+                    {translate(
+                      'auto.components.settings.RepositorySourceControlAiActionRows.1cd88d470a',
+                      'Customize'
+                    )}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
               <div className="space-y-2">
-                <Label className="text-[11px] text-muted-foreground">Agent</Label>
+                <Label className="text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.RepositorySourceControlAiActionRows.f4310cf63f',
+                    'Agent'
+                  )}
+                </Label>
                 <Select
                   value={actionAgentSelectValue(effectiveAgent)}
                   onValueChange={(value) => onActionAgentChange(actionId, value)}
@@ -130,14 +153,20 @@ export function RepositorySourceControlAiActionRows({
                     <SelectItem value={DEFAULT_AGENT_VALUE}>
                       <span className="flex items-center gap-2">
                         <Terminal className="size-3.5 text-muted-foreground" />
-                        Use default agent
+                        {translate(
+                          'auto.components.settings.RepositorySourceControlAiActionRows.0ffb081b3a',
+                          'Use default agent'
+                        )}
                       </span>
                     </SelectItem>
                     {SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId) ? (
                       <SelectItem value={CUSTOM_AGENT_ID}>
                         <span className="flex items-center gap-2">
                           <Terminal className="size-3.5 text-muted-foreground" />
-                          Custom command
+                          {translate(
+                            'auto.components.settings.RepositorySourceControlAiActionRows.2b2f38652b',
+                            'Custom command'
+                          )}
                         </span>
                       </SelectItem>
                     ) : null}
@@ -151,7 +180,12 @@ export function RepositorySourceControlAiActionRows({
                     ))}
                   </SelectContent>
                 </Select>
-                <Label className="text-[11px] text-muted-foreground">CLI arguments</Label>
+                <Label className="text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.RepositorySourceControlAiActionRows.7a3a8e431d',
+                    'CLI arguments'
+                  )}
+                </Label>
                 <Input
                   value={agentArgsValue}
                   onChange={(event) => onActionAgentArgsChange(actionId, event.target.value)}
@@ -162,7 +196,12 @@ export function RepositorySourceControlAiActionRows({
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-[11px] text-muted-foreground">Command template</Label>
+                <Label className="text-[11px] text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.RepositorySourceControlAiActionRows.548a6e1281',
+                    'Command template'
+                  )}
+                </Label>
                 <textarea
                   rows={3}
                   value={templateValue}

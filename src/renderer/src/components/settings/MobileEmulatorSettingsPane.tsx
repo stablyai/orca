@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
-import { MOBILE_EMULATOR_SEARCH_ENTRIES } from './mobile-emulator-search'
+import { getMobileEmulatorSearchEntries } from './mobile-emulator-search'
+import { translate } from '@/i18n/i18n'
 
 type SimulatorDeviceRow = {
   name: string
@@ -136,21 +137,36 @@ export function MobileEmulatorSettingsPane({
   return (
     <div className="space-y-4">
       <SearchableSetting
-        title="Mobile Emulator"
-        description="Configure mobile emulator support for Orca and coding agents."
-        keywords={MOBILE_EMULATOR_SEARCH_ENTRIES.flatMap((entry) => entry.keywords ?? [])}
+        title={translate(
+          'auto.components.settings.MobileEmulatorSettingsPane.6593c9ddd3',
+          'Mobile Emulator'
+        )}
+        description={translate(
+          'auto.components.settings.MobileEmulatorSettingsPane.bc39d0f115',
+          'Configure mobile emulator support for Orca and coding agents.'
+        )}
+        keywords={getMobileEmulatorSearchEntries().flatMap((entry) => entry.keywords ?? [])}
         className="divide-y divide-border/40"
       >
         <SettingsSwitchRow
-          label="Enable Mobile Emulator"
-          description="Shows the New Mobile Emulator action and allows agents to attach to the active emulator."
+          label={translate(
+            'auto.components.settings.MobileEmulatorSettingsPane.700ddbf9b1',
+            'Enable Mobile Emulator'
+          )}
+          description={translate(
+            'auto.components.settings.MobileEmulatorSettingsPane.f9af91ea26',
+            'Shows the New Mobile Emulator action and allows agents to attach to the active emulator.'
+          )}
           checked={enabled}
           onChange={() => updateSettings({ mobileEmulatorEnabled: !enabled })}
         />
 
         <SettingsRow
           alignTop
-          label="Availability"
+          label={translate(
+            'auto.components.settings.MobileEmulatorSettingsPane.ae1612c58c',
+            'Availability'
+          )}
           description={availabilityDetail(availability)}
           control={
             <div className="flex items-center gap-2">
@@ -165,7 +181,10 @@ export function MobileEmulatorSettingsPane({
                 type="button"
                 variant="outline"
                 size="icon-xs"
-                aria-label="Refresh emulator availability"
+                aria-label={translate(
+                  'auto.components.settings.MobileEmulatorSettingsPane.8aec2f99a0',
+                  'Refresh emulator availability'
+                )}
                 onClick={() => void refreshAvailability()}
                 disabled={refreshing}
               >
@@ -181,7 +200,10 @@ export function MobileEmulatorSettingsPane({
 
         <SettingsRow
           alignTop
-          label="Default Device"
+          label={translate(
+            'auto.components.settings.MobileEmulatorSettingsPane.143961d031',
+            'Default Device'
+          )}
           description={defaultDeviceDescription}
           control={
             <Select
@@ -215,9 +237,15 @@ export function MobileEmulatorSettingsPane({
 
       {enabled ? (
         <SearchableSetting
-          title="Agent Mobile Emulator Control"
-          description="Let coding agents control the active mobile emulator with Orca CLI commands."
-          keywords={MOBILE_EMULATOR_SEARCH_ENTRIES[3]?.keywords}
+          title={translate(
+            'auto.components.settings.MobileEmulatorSettingsPane.f2f8d97bb6',
+            'Agent Mobile Emulator Control'
+          )}
+          description={translate(
+            'auto.components.settings.MobileEmulatorSettingsPane.19d39113b6',
+            'Let coding agents control the active mobile emulator with Orca CLI commands.'
+          )}
+          keywords={getMobileEmulatorSearchEntries()[3]?.keywords}
         >
           <MobileEmulatorAgentControlRow />
         </SearchableSetting>

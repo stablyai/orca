@@ -37,6 +37,22 @@ function lstatViaSftp(sftp: SFTPWrapper, filePath: string): Promise<FileStat> {
   })
 }
 
+function fastGetViaSftp(
+  sftp: SFTPWrapper,
+  sourcePath: string,
+  destinationPath: string
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    sftp.fastGet(sourcePath, destinationPath, (err) => {
+      if (err) {
+        reject(err)
+        return
+      }
+      resolve()
+    })
+  })
+}
+
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -120,6 +136,18 @@ export class SshFilesystemProvider implements IFilesystemProvider {
         return (await this.mux.request('fs.readFile', { filePath })) as FileReadResult
       }
       throw err
+    }
+  }
+
+  async downloadFile(sourcePath: string, destinationPath: string): Promise<void> {
+    if (!this.createSftp) {
+      throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
+    }
+    const sftp = await this.createSftp()
+    try {
+      await fastGetViaSftp(sftp, sourcePath, destinationPath)
+    } finally {
+      sftp.end()
     }
   }
 

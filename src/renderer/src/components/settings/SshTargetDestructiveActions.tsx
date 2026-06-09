@@ -8,6 +8,7 @@ import {
   shouldClearPendingSshReset,
   type SshTargetBusyAction
 } from './ssh-target-action-state'
+import { translate } from '@/i18n/i18n'
 
 type PendingTargetAction = { id: string; label: string }
 
@@ -158,8 +159,14 @@ export function SshTargetDestructiveActions({
 
       <SshDestructiveActionDialog
         open={!!pendingRemove}
-        title="Remove SSH Target"
-        description="This will remove the target and end any active remote terminals."
+        title={translate(
+          'auto.components.settings.SshTargetDestructiveActions.4808966c41',
+          'Remove SSH Target'
+        )}
+        description={translate(
+          'auto.components.settings.SshTargetDestructiveActions.3bb0cf0ee4',
+          'This will remove the target and end any active remote terminals.'
+        )}
         targetLabel={pendingRemove?.label}
         actionLabel="Remove"
         busyLabel="Removing"
@@ -179,8 +186,14 @@ export function SshTargetDestructiveActions({
 
       <SshDestructiveActionDialog
         open={!!dialogPendingReset && (!pendingResetBlockedByConnection || pendingResetIsBusy)}
-        title="Reset Remote Relay?"
-        description="This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end."
+        title={translate(
+          'auto.components.settings.SshTargetDestructiveActions.570a7a0574',
+          'Reset Remote Relay?'
+        )}
+        description={translate(
+          'auto.components.settings.SshTargetDestructiveActions.26be00392d',
+          'This force-stops the remote relay for this SSH target. Active remote terminals and port forwards for this target will end.'
+        )}
         targetLabel={dialogPendingReset?.label}
         actionLabel="Reset Relay"
         busyLabel="Resetting"
@@ -198,8 +211,14 @@ export function SshTargetDestructiveActions({
 
       <SshDestructiveActionDialog
         open={!!pendingTerminate}
-        title="End Remote Terminals?"
-        description="This will stop active terminal sessions on this SSH target. Reconnecting will not restore them."
+        title={translate(
+          'auto.components.settings.SshTargetDestructiveActions.accf177a03',
+          'End Remote Terminals?'
+        )}
+        description={translate(
+          'auto.components.settings.SshTargetDestructiveActions.7e66942808',
+          'This will stop active terminal sessions on this SSH target. Reconnecting will not restore them.'
+        )}
         targetLabel={pendingTerminate?.label}
         actionLabel="End Terminals"
         busyLabel="Ending"

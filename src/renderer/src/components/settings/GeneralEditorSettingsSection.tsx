@@ -15,6 +15,7 @@ import {
   SettingsSubsectionHeader,
   SettingsSwitchRow
 } from './SettingsFormControls'
+import { translate } from '@/i18n/i18n'
 
 export type AutoSaveDelayDraftState = {
   sourceDelayMs: number
@@ -109,34 +110,67 @@ export function GeneralEditorSettingsSection({
   return (
     <section key="editor" className="space-y-4">
       <SettingsSubsectionHeader
-        title="Editor"
-        description="Configure how Orca persists file edits."
+        title={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.45c6e85c4d',
+          'Editor'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.d21136d9ef',
+          'Configure how Orca persists file edits.'
+        )}
       />
 
       <SearchableSetting
-        title="Auto Save Files"
-        description="Save editor and editable diff changes automatically after a short pause."
+        title={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.0df2e4fd12',
+          'Auto Save Files'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.70bb30feb1',
+          'Save editor and editable diff changes automatically after a short pause.'
+        )}
         keywords={['autosave', 'save']}
       >
         <SettingsSwitchRow
-          label="Auto Save Files"
-          description="Save editor and editable diff changes automatically after a short pause."
+          label={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.0df2e4fd12',
+            'Auto Save Files'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.70bb30feb1',
+            'Save editor and editable diff changes automatically after a short pause.'
+          )}
           checked={settings.editorAutoSave}
           onChange={() => updateSettings({ editorAutoSave: !settings.editorAutoSave })}
         />
       </SearchableSetting>
 
       <SearchableSetting
-        title="Auto Save Delay"
-        description="How long Orca waits after your last edit before saving automatically."
+        title={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.d6cf227ca0',
+          'Auto Save Delay'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.1bec6d8318',
+          'How long Orca waits after your last edit before saving automatically.'
+        )}
         keywords={['autosave', 'delay', 'milliseconds']}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
-          <Label>Auto Save Delay</Label>
+          <Label>
+            {translate(
+              'auto.components.settings.GeneralEditorSettingsSection.d6cf227ca0',
+              'Auto Save Delay'
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            How long Orca waits after your last edit before saving automatically. First launch
-            defaults to {DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS} ms.
+            {translate(
+              'auto.components.settings.GeneralEditorSettingsSection.8112cd6dcf',
+              'How long Orca waits after your last edit before saving automatically. First launch defaults to'
+            )}
+            {DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS}{' '}
+            {translate('auto.components.settings.GeneralEditorSettingsSection.fc5c5306ff', 'ms.')}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
@@ -155,79 +189,163 @@ export function GeneralEditorSettingsSection({
             }}
             className="number-input-clean w-28 text-right tabular-nums"
           />
-          <span className="text-xs text-muted-foreground">ms</span>
+          <span className="text-xs text-muted-foreground">
+            {translate('auto.components.settings.GeneralEditorSettingsSection.a5db1d3975', 'ms')}
+          </span>
         </div>
       </SearchableSetting>
 
       <SearchableSetting
-        title="Default Diff View"
-        description="Preferred presentation format for showing git diffs by default."
+        title={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.7311f67ee7',
+          'Default Diff View'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.b492397d34',
+          'Preferred presentation format for showing git diffs by default.'
+        )}
         keywords={['diff', 'view', 'inline', 'side-by-side', 'split']}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
-          <Label>Default Diff View</Label>
+          <Label>
+            {translate(
+              'auto.components.settings.GeneralEditorSettingsSection.7311f67ee7',
+              'Default Diff View'
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            Preferred presentation format for showing git diffs by default.
+            {translate(
+              'auto.components.settings.GeneralEditorSettingsSection.b492397d34',
+              'Preferred presentation format for showing git diffs by default.'
+            )}
           </p>
         </div>
         <SettingsSegmentedControl
-          ariaLabel="Default Diff View"
+          ariaLabel={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.7311f67ee7',
+            'Default Diff View'
+          )}
           value={settings.diffDefaultView}
           onChange={(option) => updateSettings({ diffDefaultView: option })}
           options={[
-            { value: 'inline', label: 'Inline' },
-            { value: 'side-by-side', label: 'Side-by-side' }
+            {
+              value: 'inline',
+              label: translate(
+                'auto.components.settings.GeneralEditorSettingsSection.05b6df93b3',
+                'Inline'
+              )
+            },
+            {
+              value: 'side-by-side',
+              label: translate(
+                'auto.components.settings.GeneralEditorSettingsSection.12cbc0d0d6',
+                'Side-by-side'
+              )
+            }
           ]}
         />
       </SearchableSetting>
 
       <SearchableSetting
-        title="Default Diff File Tree"
-        description="Show or hide the file tree when opening combined diff views."
+        title={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.1de48ad940',
+          'Default Diff File Tree'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.1b87897af9',
+          'Show or hide the file tree when opening combined diff views.'
+        )}
         keywords={['diff', 'tree', 'file tree', 'combined diff', 'sidebar']}
         className="flex items-center justify-between gap-4 py-2"
       >
         <div className="min-w-0 flex-1 space-y-0.5">
-          <Label>Default Diff File Tree</Label>
+          <Label>
+            {translate(
+              'auto.components.settings.GeneralEditorSettingsSection.1de48ad940',
+              'Default Diff File Tree'
+            )}
+          </Label>
           <p className="text-xs text-muted-foreground">
-            Show or hide the file tree when opening combined diff views.
+            {translate(
+              'auto.components.settings.GeneralEditorSettingsSection.1b87897af9',
+              'Show or hide the file tree when opening combined diff views.'
+            )}
           </p>
         </div>
         <SettingsSegmentedControl
-          ariaLabel="Default Diff File Tree"
+          ariaLabel={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.1de48ad940',
+            'Default Diff File Tree'
+          )}
           value={settings.combinedDiffFileTreeVisibleByDefault ? 'shown' : 'hidden'}
           onChange={(option) =>
             updateSettings({ combinedDiffFileTreeVisibleByDefault: option === 'shown' })
           }
           options={[
-            { value: 'shown', label: 'Shown' },
-            { value: 'hidden', label: 'Hidden' }
+            {
+              value: 'shown',
+              label: translate(
+                'auto.components.settings.GeneralEditorSettingsSection.73a09aad63',
+                'Shown'
+              )
+            },
+            {
+              value: 'hidden',
+              label: translate(
+                'auto.components.settings.GeneralEditorSettingsSection.5a1ea6eaa2',
+                'Hidden'
+              )
+            }
           ]}
         />
       </SearchableSetting>
 
       <SearchableSetting
-        title="Minimap"
-        description="Show the minimap overview when editing a file."
+        title={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.6690b1ffb9',
+          'Minimap'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.51161d1647',
+          'Show the minimap overview when editing a file.'
+        )}
         keywords={['minimap', 'overview', 'code', 'scroll']}
       >
         <SettingsSwitchRow
-          label="Minimap"
-          description="Show the minimap overview when editing a file."
+          label={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.6690b1ffb9',
+            'Minimap'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.51161d1647',
+            'Show the minimap overview when editing a file.'
+          )}
           checked={settings.editorMinimapEnabled}
           onChange={() => updateSettings({ editorMinimapEnabled: !settings.editorMinimapEnabled })}
         />
       </SearchableSetting>
 
       <SearchableSetting
-        title="Markdown Review Notes"
-        description="Show local markdown review note controls in rich editor mode."
+        title={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.4edc104f0f',
+          'Markdown Review Notes'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralEditorSettingsSection.5f02e6fb21',
+          'Show local markdown review note controls in rich editor mode.'
+        )}
         keywords={['markdown', 'review', 'notes', 'annotations', 'agents']}
       >
         <SettingsSwitchRow
-          label="Markdown Review Notes"
-          description="Show local markdown note controls in rich editor mode and agent handoff actions."
+          label={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.4edc104f0f',
+            'Markdown Review Notes'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralEditorSettingsSection.f80603d293',
+            'Show local markdown note controls in rich editor mode and agent handoff actions.'
+          )}
           checked={settings.markdownReviewToolsEnabled}
           onChange={() =>
             updateSettings({ markdownReviewToolsEnabled: !settings.markdownReviewToolsEnabled })

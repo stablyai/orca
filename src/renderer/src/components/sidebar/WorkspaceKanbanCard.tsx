@@ -3,6 +3,7 @@ import { Pin } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import type { Repo, Worktree } from '../../../../shared/types'
 import WorktreeCard from './WorktreeCard'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceKanbanCardProps = {
   worktree: Worktree
@@ -45,7 +46,7 @@ function WorkspaceKanbanCard({
         <Badge
           variant="outline"
           className="pointer-events-none absolute right-2 top-1.5 z-10 flex size-4 items-center justify-center rounded-full bg-background/90 p-0 text-muted-foreground"
-          aria-label="Pinned"
+          aria-label={translate('auto.components.sidebar.WorkspaceKanbanCard.cefae8983e', 'Pinned')}
         >
           <Pin className="size-2.5" />
         </Badge>

@@ -162,6 +162,45 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
+  describe('downloadFile', () => {
+    it('downloads raw bytes through SFTP and closes the session', async () => {
+      const sftp = {
+        fastGet: vi.fn(
+          (_source: string, _destination: string, callback: (err?: Error | null) => void) =>
+            callback()
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
+
+      expect(sftp.fastGet).toHaveBeenCalledWith(
+        '/home/user/archive.zip',
+        '/tmp/archive.zip',
+        expect.any(Function)
+      )
+      expect(sftp.end).toHaveBeenCalled()
+    })
+
+    it('closes the SFTP session when raw download fails', async () => {
+      const sftp = {
+        fastGet: vi.fn(
+          (_source: string, _destination: string, callback: (err?: Error | null) => void) =>
+            callback(new Error('download failed'))
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await expect(
+        provider.downloadFile('/home/user/archive.zip', '/tmp/archive.zip')
+      ).rejects.toThrow('download failed')
+
+      expect(sftp.end).toHaveBeenCalled()
+    })
+  })
+
   describe('createDirNoClobber', () => {
     it('sends fs.createDirNoClobber request', async () => {
       await provider.createDirNoClobber('/home/user/new-dir')

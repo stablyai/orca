@@ -12,7 +12,6 @@ export type ComposerCreateGateInput = {
 
 function hasBlockingCreateState(input: ComposerCreateGateInput): boolean {
   return (
-    !input.repoId ||
     !input.workspaceSeedName ||
     input.creating ||
     input.selectedRepoRequiresConnection ||

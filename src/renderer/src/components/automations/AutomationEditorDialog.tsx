@@ -1,13 +1,6 @@
 import React from 'react'
-import { Info, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import AgentCombobox from '@/components/agent/AgentCombobox'
-import RepoCombobox from '@/components/repo/RepoCombobox'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
   AutomationSchedulePreset,
@@ -19,14 +12,12 @@ import {
   isValidAutomationSchedule
 } from '../../../../shared/automation-schedules'
 import { Field } from './automation-page-parts'
+import { AutomationEditorDialogFooter } from './AutomationEditorDialogFooter'
 import { AutomationEditorDialogHeader } from './AutomationEditorDialogHeader'
-import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
-import { AutomationPrecheckFields } from './AutomationPrecheckFields'
+import { AutomationEditorPromptSection } from './AutomationEditorPromptSection'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
-import { AutomationSessionField } from './AutomationSessionField'
-import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-templates'
-import { CreateFromPicker } from './CreateFromPicker'
-import { WorkspaceCombobox } from './WorkspaceCombobox'
+import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
+import { translate } from '@/i18n/i18n'
 
 const PICKER_TRIGGER_CLASS =
   'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
@@ -100,14 +91,18 @@ export function AutomationEditorDialog({
   const visibleAgents = React.useMemo(() => {
     const enabledIds = new Set(
       filterEnabledTuiAgents(
-        AGENT_CATALOG.map((agent) => agent.id),
+        getAgentCatalog().map((agent) => agent.id),
         settings?.disabledTuiAgents
       )
     )
-    return AGENT_CATALOG.filter((agent) => enabledIds.has(agent.id) || agent.id === draft.agentId)
+    return getAgentCatalog().filter(
+      (agent) => enabledIds.has(agent.id) || agent.id === draft.agentId
+    )
   }, [draft.agentId, settings?.disabledTuiAgents])
   const scheduleField = (
-    <Field label="Schedule">
+    <Field
+      label={translate('auto.components.automations.AutomationEditorDialog.c4b19094c2', 'Schedule')}
+    >
       <AutomationSchedulePicker
         draft={draft}
         triggerClassName={PICKER_TRIGGER_CLASS}
@@ -135,7 +130,7 @@ export function AutomationEditorDialog({
           createTarget={createTarget}
           draftName={draft.name}
           templateOpen={templateOpen}
-          templates={AUTOMATION_TEMPLATES}
+          templates={getAutomationTemplates()}
           modeToggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
           pickerTriggerClassName={PICKER_TRIGGER_CLASS}
           onCreateTargetChange={onCreateTargetChange}
@@ -147,222 +142,34 @@ export function AutomationEditorDialog({
           }}
         />
 
-        <div className="min-h-0 flex-1 overflow-auto px-5 py-4 scrollbar-sleek">
-          {draft.scheduleWarning ? (
-            <div className="mb-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              {draft.scheduleWarning}
-            </div>
-          ) : null}
-          <Field label="Prompt">
-            <textarea
-              value={draft.prompt}
-              placeholder="Run the weekly dependency audit and summarize risky changes."
-              onChange={(event) =>
-                onDraftChange((current) => ({ ...current, prompt: event.target.value }))
-              }
-              className="min-h-[260px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Supports skills, file paths, and built-in commands like{' '}
-              <code className="rounded bg-muted px-1 font-mono text-[11px]">/goal</code>.
-            </p>
-          </Field>
-          {/* Why: the Orca/Hermes target toggle changes form height; collapsing the
-              Orca-only precheck row keeps the dialog from snapping vertically. */}
-          <div
-            className={cn(
-              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
-              isHermesCreate ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
-            )}
-            aria-hidden={isHermesCreate}
-            inert={isHermesCreate}
-          >
-            <div className="min-h-0">
-              <div
-                className={cn(
-                  'mt-3 grid gap-3 transition-[opacity,transform] duration-150 ease-out sm:grid-cols-[minmax(0,1fr)_9rem]',
-                  isHermesCreate
-                    ? '-translate-y-1 opacity-0 delay-0'
-                    : 'translate-y-0 opacity-100 delay-200'
-                )}
-              >
-                <AutomationPrecheckFields
-                  draft={draft}
-                  disabled={isHermesCreate}
-                  pickerTriggerClassName={PICKER_TRIGGER_CLASS}
-                  onDraftChange={onDraftChange}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <AutomationEditorPromptSection
+          draft={draft}
+          isHermesCreate={isHermesCreate}
+          pickerTriggerClassName={PICKER_TRIGGER_CLASS}
+          onDraftChange={onDraftChange}
+        />
 
-        <div className="border-t border-border/50 px-5 py-4">
-          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
-            <Field label="Project">
-              <RepoCombobox
-                repos={repos}
-                value={draft.projectId}
-                onValueChange={onProjectChange}
-                placeholder="Select project"
-                triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
-                showStandaloneAddButton={false}
-              />
-            </Field>
-            <Field
-              label={
-                <span className="inline-flex items-center gap-1">
-                  Workspace
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        aria-label="Workspace mode help"
-                        className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                      >
-                        <Info className="size-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" sideOffset={6} className="max-w-72">
-                      Worktree runs in the selected workspace. New run creates a fresh workspace
-                      from the selected branch each time.
-                    </TooltipContent>
-                  </Tooltip>
-                </span>
-              }
-              className={isHermesTarget ? undefined : 'sm:col-span-2 lg:col-span-3'}
-            >
-              {isHermesTarget ? (
-                <WorkspaceCombobox
-                  worktrees={worktrees}
-                  value={draft.workspaceId}
-                  triggerClassName={PICKER_TRIGGER_CLASS}
-                  onValueChange={(workspaceId) =>
-                    onDraftChange((current) => ({ ...current, workspaceId }))
-                  }
-                />
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-                  <ToggleGroup
-                    type="single"
-                    value={draft.workspaceMode}
-                    onValueChange={(workspaceMode) =>
-                      workspaceMode &&
-                      onDraftChange((current) => ({
-                        ...current,
-                        workspaceMode: workspaceMode as AutomationWorkspaceMode,
-                        reuseSession: workspaceMode === 'existing' ? current.reuseSession : false
-                      }))
-                    }
-                    variant="outline"
-                    size="sm"
-                    className="grid w-full grid-cols-2"
-                  >
-                    <ToggleGroupItem value="existing" className={MODE_TOGGLE_ITEM_CLASS}>
-                      Worktree
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="new_per_run" className={MODE_TOGGLE_ITEM_CLASS}>
-                      New run
-                    </ToggleGroupItem>
-                  </ToggleGroup>
-                  {draft.workspaceMode === 'existing' ? (
-                    <WorkspaceCombobox
-                      worktrees={worktrees}
-                      value={draft.workspaceId}
-                      triggerClassName={`min-w-0 ${PICKER_TRIGGER_CLASS}`}
-                      onValueChange={(workspaceId) =>
-                        onDraftChange((current) => ({ ...current, workspaceId }))
-                      }
-                    />
-                  ) : (
-                    <CreateFromPicker
-                      // Why: branch search state belongs to the selected project,
-                      // so repo switches should reset it before the next paint.
-                      key={draft.projectId}
-                      repoId={draft.projectId}
-                      repoMap={repoMap}
-                      worktrees={worktrees}
-                      value={draft.baseBranch}
-                      triggerClassName={`min-w-0 ${PICKER_TRIGGER_CLASS}`}
-                      onValueChange={(baseBranch) =>
-                        onDraftChange((current) => ({ ...current, baseBranch }))
-                      }
-                    />
-                  )}
-                </div>
-              )}
-            </Field>
-            {isHermesTarget ? scheduleField : null}
-          </div>
-
-          {/* Why: Hermes uses one compact footer row, while Orca adds agent,
-              session, schedule, and missed-run controls. Animate that row so
-              switching the target changes the dialog height smoothly. */}
-          <div
-            className={cn(
-              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
-              isHermesTarget ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
-            )}
-            aria-hidden={isHermesTarget}
-            inert={isHermesTarget}
-          >
-            <div className="min-h-0">
-              <div
-                className={cn(
-                  'grid gap-3 pt-3 transition-[opacity,transform] duration-150 ease-out sm:grid-cols-2 lg:grid-cols-4',
-                  isHermesTarget
-                    ? '-translate-y-1 opacity-0 delay-0'
-                    : 'translate-y-0 opacity-100 delay-200'
-                )}
-              >
-                <Field label="Agent">
-                  <AgentCombobox
-                    agents={visibleAgents}
-                    value={draft.agentId}
-                    onValueChange={(agentId) =>
-                      agentId && onDraftChange((current) => ({ ...current, agentId }))
-                    }
-                    defaultAgent={settings?.defaultTuiAgent ?? null}
-                    triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
-                    allowNarrowTrigger
-                  />
-                </Field>
-                <AutomationSessionField
-                  draft={draft}
-                  toggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
-                  onDraftChange={onDraftChange}
-                />
-                {isHermesTarget ? null : scheduleField}
-                <AutomationMissedRunGraceField
-                  draft={draft}
-                  disabled={isHermesTarget}
-                  pickerTriggerClassName={PICKER_TRIGGER_CLASS}
-                  onDraftChange={onDraftChange}
-                />
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onSave}
-              disabled={isSaving || repos.length === 0 || !canSave}
-              className="border-foreground/25 bg-foreground/[0.04] text-foreground hover:bg-foreground/[0.08]"
-            >
-              {isEditing || isEditingExternal || isHermesCreate || isSaving ? null : (
-                <Plus className="size-4" />
-              )}
-              {isEditing || isEditingExternal
-                ? 'Save Changes'
-                : isSaving || isHermesCreate
-                  ? 'Save'
-                  : 'Create'}
-            </Button>
-          </div>
-        </div>
+        <AutomationEditorDialogFooter
+          isEditing={isEditing}
+          isEditingExternal={isEditingExternal}
+          isHermesTarget={isHermesTarget}
+          isHermesCreate={isHermesCreate}
+          isSaving={isSaving}
+          canSave={canSave}
+          repos={repos}
+          repoMap={repoMap}
+          worktrees={worktrees}
+          settings={settings}
+          draft={draft}
+          visibleAgents={visibleAgents}
+          scheduleField={scheduleField}
+          pickerTriggerClassName={PICKER_TRIGGER_CLASS}
+          modeToggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
+          onProjectChange={onProjectChange}
+          onDraftChange={onDraftChange}
+          onOpenChange={onOpenChange}
+          onSave={onSave}
+        />
       </DialogContent>
     </Dialog>
   )

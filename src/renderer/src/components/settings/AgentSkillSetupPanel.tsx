@@ -9,6 +9,7 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkil
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isOrcaCliAvailableOnPath } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type AgentSkillSetupPanelVariant = 'card' | 'inline'
 type SkillPrerequisiteStatus = Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>
@@ -131,9 +132,21 @@ export function AgentSkillSetupPanel({
   const copyInstallCommand = async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(command)
-      toast.success('Copied install command.')
+      toast.success(
+        translate(
+          'auto.components.settings.AgentSkillSetupPanel.378ad26865',
+          'Copied install command.'
+        )
+      )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy install command.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.AgentSkillSetupPanel.a31e2aa302',
+              'Failed to copy install command.'
+            )
+      )
     }
   }
 
@@ -172,7 +185,7 @@ export function AgentSkillSetupPanel({
           disabled={loading}
         >
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-          Re-check
+          {translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
       ) : null}
     </div>
@@ -205,11 +218,26 @@ export function AgentSkillSetupPanel({
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <h3 className="text-[15px] font-semibold leading-tight text-foreground">{title}</h3>
                 {loading && !installed ? (
-                  <IntegrationStatusPill tone="neutral">Checking...</IntegrationStatusPill>
+                  <IntegrationStatusPill tone="neutral">
+                    {translate(
+                      'auto.components.settings.AgentSkillSetupPanel.68a468752e',
+                      'Checking...'
+                    )}
+                  </IntegrationStatusPill>
                 ) : installed ? (
-                  <IntegrationStatusPill tone="connected">Installed</IntegrationStatusPill>
+                  <IntegrationStatusPill tone="connected">
+                    {translate(
+                      'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
+                      'Installed'
+                    )}
+                  </IntegrationStatusPill>
                 ) : (
-                  <IntegrationStatusPill tone="attention">Not installed</IntegrationStatusPill>
+                  <IntegrationStatusPill tone="attention">
+                    {translate(
+                      'auto.components.settings.AgentSkillSetupPanel.5289300939',
+                      'Not installed'
+                    )}
+                  </IntegrationStatusPill>
                 )}
               </div>
               {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
@@ -252,14 +280,20 @@ export function AgentSkillSetupPanel({
                   variant="ghost"
                   size="icon-sm"
                   className="shrink-0"
-                  aria-label="Copy install command"
+                  aria-label={translate(
+                    'auto.components.settings.AgentSkillSetupPanel.817d3f9f18',
+                    'Copy install command'
+                  )}
                   onClick={() => void copyInstallCommand()}
                 >
                   <Copy className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Copy command
+                {translate(
+                  'auto.components.settings.AgentSkillSetupPanel.ed197f59a2',
+                  'Copy command'
+                )}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -267,7 +301,10 @@ export function AgentSkillSetupPanel({
             worktreeId={terminalWorktreeId}
             command={command}
             title={terminalTitle}
-            description="Press Enter to run the install command."
+            description={translate(
+              'auto.components.settings.AgentSkillSetupPanel.0b810ec59f',
+              'Press Enter to run the install command.'
+            )}
             ariaLabel={terminalAriaLabel}
             terminalHeightPx={terminalHeightPx}
             shellOverride={terminalShellOverride}
