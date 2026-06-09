@@ -197,9 +197,8 @@ export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
-  const canCreateWorktree = repos.length > 0
   const createTargetLabel =
-    canCreateWorktree && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
+    repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
 
   const [preflightIssues, setPreflightIssues] = useState<PreflightIssue[]>([])
 
@@ -288,7 +287,7 @@ export default function Landing(): React.JSX.Element {
           {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} />}
 
           <p className="text-sm text-muted-foreground text-center">
-            {canCreateWorktree
+            {repos.length > 0
               ? 'Select a workspace from the sidebar to begin.'
               : 'Add a project to get started.'}
           </p>
@@ -303,9 +302,7 @@ export default function Landing(): React.JSX.Element {
             </button>
 
             <button
-              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
-              disabled={!canCreateWorktree}
-              title={!canCreateWorktree ? 'Add a project first' : undefined}
+              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer transition-colors hover:bg-accent"
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />

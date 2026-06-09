@@ -643,6 +643,15 @@ export function buildNewWorkspaceShortcutModalData(
   }
 }
 
+export function openNewWorkspaceFromShortcut(
+  state: Pick<AppState, 'activeModal' | 'activeView' | 'taskPageData' | 'openModal'>
+): void {
+  if (state.activeModal === 'new-workspace-composer') {
+    return
+  }
+  state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
+}
+
 export function resolveBrowserSessionTabTarget(
   state: Pick<AppState, 'browserTabsByWorktree' | 'unifiedTabsByWorktree'>,
   worktreeId: string,
@@ -985,16 +994,8 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onOpenNewWorkspace(() => {
-        // Why: keep the global shortcut quiet on a fresh install, but allow
-        // both Git projects and plain folder projects to create workspaces.
         const store = useAppStore.getState()
-        if (store.repos.length === 0) {
-          return
-        }
-        if (store.activeModal === 'new-workspace-composer') {
-          return
-        }
-        store.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(store))
+        openNewWorkspaceFromShortcut(store)
       })
     )
 

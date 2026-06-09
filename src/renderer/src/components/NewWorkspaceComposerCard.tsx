@@ -421,6 +421,11 @@ export default function NewWorkspaceComposerCard({
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             showStandaloneAddButton={false}
           />
+          {eligibleRepos.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground">
+              Add a project before creating a workspace.
+            </p>
+          ) : null}
           {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
             <div
               role="status"
