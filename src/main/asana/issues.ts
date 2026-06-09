@@ -155,9 +155,13 @@ export function mapAsanaTask(workspace: AsanaWorkspace, raw: AsanaRecord): Asana
 }
 
 function sortAndLimitTasks(tasks: AsanaTask[], limit: number): AsanaTask[] {
+  // Why: parse each updatedAt once into a sort key rather than re-parsing both
+  // operands on every comparator call (O(n log n) Date allocations otherwise).
   return tasks
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    .map((task) => ({ task, ts: new Date(task.updatedAt).getTime() }))
+    .sort((a, b) => b.ts - a.ts)
     .slice(0, limit)
+    .map((entry) => entry.task)
 }
 
 async function fetchTasksForClient(
