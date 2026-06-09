@@ -15,8 +15,10 @@ import {
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
-import type { TuiAgent } from '../../../../shared/types'
+import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
+import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
+import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 
 export type SourceControlAgentActionDeliveryPlanState =
   | { status: 'idle' }
@@ -36,6 +38,8 @@ type SourceControlAgentActionDialogFormProps = {
   baseCommandInput: string
   saveTargetValue: string
   saveTargets: { value: string; label: string }[]
+  settings: GlobalSettings | null
+  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   canSaveAgentDefault: boolean
   deliveryPlan: SourceControlAgentActionDeliveryPlanState
   canStart: boolean
@@ -47,6 +51,19 @@ type SourceControlAgentActionDialogFormProps = {
   onSaveAgentDefaultChange: (value: string) => void
   onOpenSettings?: () => void
   onStart: () => void
+}
+
+function sourceControlLaunchSaveTargetFromValue(
+  value: string,
+  repo: Pick<Repo, 'id'> | null
+): SourceControlAiWriteTarget | null {
+  if (value === 'repo' && repo?.id) {
+    return { type: 'repo', repoId: repo.id }
+  }
+  if (value === 'global') {
+    return { type: 'global' }
+  }
+  return null
 }
 
 export function SourceControlAgentActionDialogForm({
@@ -62,6 +79,8 @@ export function SourceControlAgentActionDialogForm({
   baseCommandInput,
   saveTargetValue,
   saveTargets,
+  settings,
+  repo,
   canSaveAgentDefault,
   deliveryPlan,
   canStart,
@@ -74,9 +93,34 @@ export function SourceControlAgentActionDialogForm({
   onOpenSettings,
   onStart
 }: SourceControlAgentActionDialogFormProps): React.JSX.Element {
+  const selectedRecipe = selectedAgent
+    ? {
+        agentId: selectedAgent,
+        commandInputTemplate: commandTemplate,
+        agentArgs
+      }
+    : null
+  const savableTargets = saveTargets
+    .map((target) => sourceControlLaunchSaveTargetFromValue(target.value, repo))
+    .filter((target): target is SourceControlAiWriteTarget => target !== null)
+  const allLaunchRecipesAlreadySaved = Boolean(
+    selectedRecipe &&
+    savableTargets.length > 0 &&
+    savableTargets.every((target) =>
+      sourceControlActionRecipeMatchesTarget({
+        actionId,
+        target,
+        recipe: selectedRecipe,
+        settings,
+        repo
+      })
+    )
+  )
+  const showSaveLaunchRecipe = canSaveAgentDefault && selectedAgent && !allLaunchRecipesAlreadySaved
+
   return (
     <>
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <div className="space-y-2">
           <Label className="text-xs">Agent</Label>
           {hasEnabledAgents || selectedAgent ? (
@@ -140,7 +184,7 @@ export function SourceControlAgentActionDialogForm({
             rows={12}
             value={commandTemplate}
             onChange={(event) => onCommandTemplateChange(event.target.value)}
-            className="min-h-[14rem] w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+            className="box-border min-h-[14rem] min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
           />
           <SourceControlActionVariableChips
             actionId={actionId}
@@ -153,7 +197,7 @@ export function SourceControlAgentActionDialogForm({
           />
         </div>
 
-        {canSaveAgentDefault && selectedAgent ? (
+        {showSaveLaunchRecipe ? (
           <div className="space-y-2">
             <Label className="text-xs">Save launch recipe</Label>
             <Select value={saveTargetValue} onValueChange={onSaveAgentDefaultChange}>
@@ -201,7 +245,7 @@ export function SourceControlAgentActionDialogForm({
         ) : null}
       </div>
 
-      <DialogFooter className="gap-2">
+      <DialogFooter className="flex-wrap gap-2 sm:justify-end">
         <Button type="button" size="sm" disabled={!canStart} onClick={onStart}>
           {isStarting ? (
             <RefreshCw className="size-4 animate-spin" />

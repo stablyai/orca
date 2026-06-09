@@ -10,6 +10,7 @@ import { AGENT_CATALOG, getAgentLabel } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { useAppStore } from '@/store'
+import { useRepoById } from '@/store/selectors'
 import {
   renderSourceControlActionCommandTemplate,
   type SourceControlActionRecipe,
@@ -26,6 +27,7 @@ import {
   SourceControlAgentActionDialogForm,
   type SourceControlAgentActionDeliveryPlanState
 } from './SourceControlAgentActionDialogForm'
+import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 
 export type SourceControlAgentActionDialogProps = {
   open: boolean
@@ -93,6 +95,7 @@ export function SourceControlAgentActionDialog({
   onStart
 }: SourceControlAgentActionDialogProps): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
+  const repo = useRepoById(repoId ?? null)
   const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
   const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
   const [commandTemplate, setCommandTemplate] = useState(
@@ -311,12 +314,23 @@ export function SourceControlAgentActionDialog({
           : saveTargetValue === 'global'
             ? ({ type: 'global' } as const)
             : null
-      if (saveTarget && onSaveAgentDefault) {
-        await onSaveAgentDefault(saveTarget, actionId, {
-          agentId: selectedAgent,
-          commandInputTemplate: commandTemplate,
-          agentArgs
+      const launchRecipe = {
+        agentId: selectedAgent,
+        commandInputTemplate: commandTemplate,
+        agentArgs
+      }
+      const launchRecipeAlreadySaved = Boolean(
+        saveTarget &&
+        sourceControlActionRecipeMatchesTarget({
+          actionId,
+          target: saveTarget,
+          recipe: launchRecipe,
+          settings,
+          repo
         })
+      )
+      if (saveTarget && onSaveAgentDefault && !launchRecipeAlreadySaved) {
+        await onSaveAgentDefault(saveTarget, actionId, launchRecipe)
       }
       onLaunched?.()
       handleOpenChange(false)
@@ -339,8 +353,10 @@ export function SourceControlAgentActionDialog({
     onStart,
     promptDelivery,
     refreshDetectedAgents,
+    repo,
     repoId,
     saveTargetValue,
+    settings,
     selectedAgent,
     trimmedCommandInput,
     worktreeId
@@ -356,7 +372,7 @@ export function SourceControlAgentActionDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="text-xs">{description}</DialogDescription>
@@ -374,6 +390,8 @@ export function SourceControlAgentActionDialog({
           baseCommandInput={baseCommandInput}
           saveTargetValue={saveTargetValue}
           saveTargets={saveTargets}
+          settings={settings}
+          repo={repo}
           canSaveAgentDefault={Boolean(onSaveAgentDefault)}
           deliveryPlan={deliveryPlan}
           canStart={canStart}

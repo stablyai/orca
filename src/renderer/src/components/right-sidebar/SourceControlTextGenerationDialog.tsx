@@ -105,7 +105,7 @@ export function SourceControlTextGenerationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="min-w-0 overflow-x-hidden sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="text-xs">{description}</DialogDescription>
@@ -123,6 +123,7 @@ export function SourceControlTextGenerationDialog({
           actionId={actionId}
           generateLabel={generateLabel}
           settings={settings}
+          repo={repo ?? null}
           baseParams={baseParams}
           saveTargets={saveTargets}
           onGenerate={onGenerate}
