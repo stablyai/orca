@@ -562,6 +562,17 @@ describe('SshConnection', () => {
     )
   })
 
+  it('can execute native remote commands without the POSIX shell wrapper', async () => {
+    const conn = new SshConnection(createTarget(), createCallbacks())
+    await conn.connect()
+
+    await conn.exec('powershell.exe -NoProfile -EncodedCommand AAAA', { wrapCommand: false })
+
+    expect(clientInstances[0].lastExecCommand).toBe(
+      'powershell.exe -NoProfile -EncodedCommand AAAA'
+    )
+  })
+
   it('times out when ssh2 never opens an exec channel', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()

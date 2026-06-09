@@ -1,11 +1,9 @@
 import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
+import type { SshExecOptions } from './ssh-connection-utils'
 import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
-import {
-  RelayVersionMismatchError,
-  RELAY_EXIT_CODE_VERSION_MISMATCH
-} from './ssh-relay-version-mismatch-error'
+import { buildRelayVersionMismatchError } from './ssh-relay-handshake-mismatch'
 
 export { uploadFile, uploadDirectory, mkdirSftp } from './sftp-upload'
 
@@ -126,9 +124,9 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
           // condition and skip backoff. The check still wins over a fired
           // timeout because the timeout handler defers settling for a small
           // grace window so the close handler can deliver the exit code.
-          if (lastExitCode === RELAY_EXIT_CODE_VERSION_MISMATCH) {
-            const { expected, got } = parseHandshakeMismatchStderr(stderrOutput)
-            reject(new RelayVersionMismatchError(expected, got, stderrOutput.trim()))
+          const versionMismatchError = buildRelayVersionMismatchError(lastExitCode, stderrOutput)
+          if (versionMismatchError) {
+            reject(versionMismatchError)
             return
           }
           const timeoutSuffix = timeoutFired
@@ -240,8 +238,12 @@ export function waitForSentinel(channel: ClientChannel): Promise<MultiplexerTran
 
 const EXEC_TIMEOUT_MS = 30_000
 
-export async function execCommand(conn: SshConnection, command: string): Promise<string> {
-  const channel = await conn.exec(command)
+export async function execCommand(
+  conn: SshConnection,
+  command: string,
+  options?: SshExecOptions
+): Promise<string> {
+  const channel = await conn.exec(command, options)
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
@@ -292,74 +294,4 @@ export async function execCommand(conn: SshConnection, command: string): Promise
     channel.stderr.on('data', onStderrData)
     channel.on('close', onClose)
   })
-}
-
-// ── Remote Node.js resolution ─────────────────────────────────────────
-
-// Why: non-login SSH shells (the default for `exec`) don't source
-// .bashrc/.zshrc, so node installed via nvm/fnm/Homebrew isn't in PATH.
-// We try common locations and fall back to a login-shell `which`.
-export async function resolveRemoteNodePath(conn: SshConnection): Promise<string> {
-  // Why: non-login SSH exec channels don't source .bashrc/.zshrc, so node
-  // installed via nvm/fnm/Homebrew may not be in PATH. We probe common
-  // locations directly, then fall back to sourcing the profile explicitly.
-  // The glob in $HOME/.nvm/... is expanded by the shell, not by `command -v`.
-  const script = [
-    'command -v node 2>/dev/null',
-    'command -v /usr/local/bin/node 2>/dev/null',
-    'command -v /opt/homebrew/bin/node 2>/dev/null',
-    // Why: nvm installs into a versioned directory. `ls -1` sorts
-    // alphabetically, which misorders versions (e.g. v9 > v18). Pipe
-    // through `sort -V` (version sort) so we pick the highest version.
-    'ls -1 $HOME/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1',
-    'command -v $HOME/.local/bin/node 2>/dev/null',
-    'command -v $HOME/.fnm/aliases/default/bin/node 2>/dev/null'
-  ].join(' || ')
-
-  try {
-    const result = await execCommand(conn, script)
-    const nodePath = result.trim().split('\n')[0]
-    if (nodePath) {
-      console.log(`[ssh-relay] Found node at: ${nodePath}`)
-      return nodePath
-    }
-  } catch {
-    // Fall through to login shell attempt
-  }
-
-  // Why: last resort — source the full login profile. This is separated into
-  // its own exec because `bash -lc` can hang on remotes with interactive
-  // shell configs (conda prompts, etc.). If this times out, the error message
-  // from execCommand will tell us it was the login shell attempt.
-  try {
-    console.log('[ssh-relay] Trying login shell to find node...')
-    const result = await execCommand(conn, "bash -lc 'command -v node' 2>/dev/null")
-    const nodePath = result.trim().split('\n')[0]
-    if (nodePath) {
-      console.log(`[ssh-relay] Found node via login shell: ${nodePath}`)
-      return nodePath
-    }
-  } catch {
-    // Fall through
-  }
-
-  throw new Error(
-    'Node.js not found on remote host. Orca relay requires Node.js 18+. ' +
-      'Install Node.js on the remote and try again.'
-  )
-}
-
-// Why: extract the expected/got version pair from --connect's stderr line
-// "Handshake mismatch: expected=<x>, daemon=<y>" so the typed error carries
-// actionable detail. Best-effort: returns undefined fields if the regex
-// doesn't match, preserving the raw stderr verbatim for diagnostics.
-function parseHandshakeMismatchStderr(stderr: string): {
-  expected: string | undefined
-  got: string | undefined
-} {
-  const match = /expected=([^,\s]+),\s*daemon=([^\s;]+)/.exec(stderr)
-  if (!match) {
-    return { expected: undefined, got: undefined }
-  }
-  return { expected: match[1], got: match[2] }
 }

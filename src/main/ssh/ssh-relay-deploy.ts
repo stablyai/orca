@@ -4,16 +4,13 @@ import { join } from 'path'
    relay launch, and GC — and splitting risks drift between the install
    sequence and the GC's live-socket invariant. */
 import { existsSync } from 'fs'
+import { createHash } from 'crypto'
 import { app } from 'electron'
 import type { SshConnection } from './ssh-connection'
-import { parseUnameToRelayPlatform, type RelayPlatform } from './relay-protocol'
+import type { RelayPlatform } from './relay-protocol'
 import type { MultiplexerTransport } from './ssh-channel-multiplexer'
-import {
-  uploadDirectory,
-  waitForSentinel,
-  execCommand,
-  resolveRemoteNodePath
-} from './ssh-relay-deploy-helpers'
+import { uploadDirectory, waitForSentinel, execCommand } from './ssh-relay-deploy-helpers'
+import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
   readLocalFullVersion,
   computeRemoteRelayDir,
@@ -24,6 +21,23 @@ import {
   gcOldRelayVersions
 } from './ssh-relay-versioned-install'
 import { shellEscape } from './ssh-connection-utils'
+import {
+  commandWithNodePath,
+  makeRemoteDirectoryCommand,
+  makeRemoteExecutableCommand,
+  readRemoteHomeCommand,
+  removeRemoteFileCommand
+} from './ssh-remote-commands'
+import {
+  isWindowsRemoteHost,
+  joinRemotePath,
+  normalizeRemoteHome,
+  remoteBasename,
+  validateRemoteHome,
+  type RemoteHostPlatform
+} from './ssh-remote-platform'
+import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -34,6 +48,7 @@ import {
 export type RelayDeployResult = {
   transport: MultiplexerTransport
   platform: RelayPlatform
+  hostPlatform?: RemoteHostPlatform
   remoteHome?: string
   remoteRelayDir?: string
   nodePath?: string
@@ -45,6 +60,14 @@ export type RelayDeployResult = {
 // launch) has no overall bound. A hanging `npm install` or slow SFTP
 // upload could block the connection indefinitely.
 const RELAY_DEPLOY_TIMEOUT_MS = 120_000
+
+function execHostCommand(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  command: string
+): Promise<string> {
+  return execCommand(conn, command, { wrapCommand: !isWindowsRemoteHost(hostPlatform) })
+}
 
 /**
  * Deploy the relay to the remote host and launch it.
@@ -88,12 +111,13 @@ async function deployAndLaunchRelayInner(
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
-  const platform = await detectRemotePlatform(conn)
-  if (!platform) {
+  const hostPlatform = await detectRemoteHostPlatform(conn)
+  if (!hostPlatform) {
     throw new Error(
-      'Unsupported remote platform. Orca relay supports: linux-x64, linux-arm64, darwin-x64, darwin-arm64.'
+      'Unsupported remote platform. Orca relay supports: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64.'
     )
   }
+  const platform = hostPlatform.relayPlatform
   console.log(`[ssh-relay] Platform: ${platform}`)
 
   const localRelayDir = getLocalRelayPath(platform)
@@ -109,73 +133,82 @@ async function deployAndLaunchRelayInner(
   // docs/ssh-relay-versioned-install-dirs.md "Data Flow: Upstream Error".
   const fullVersion = readLocalFullVersion(localRelayDir)
 
-  // Why: SFTP does not expand `~`, so we must resolve the remote home directory
-  // explicitly. `echo $HOME` over exec gives us the absolute path.
-  const remoteHome = (await execCommand(conn, 'echo $HOME')).trim()
+  // Why: SFTP does not expand `~`, so we must resolve the remote home
+  // explicitly with the host's native shell and normalize it before use.
+  const remoteHome = normalizeRemoteHome(
+    await execHostCommand(conn, hostPlatform, readRemoteHomeCommand(hostPlatform)),
+    hostPlatform
+  )
   // Why: we only interpolate $HOME into single-quoted shell strings later, so
   // this validation only needs to reject obviously unsafe control characters.
   // Allow spaces and non-ASCII so valid home directories are not rejected.
-  // oxlint-disable-next-line no-control-regex
-  if (!remoteHome || !remoteHome.startsWith('/') || /[\u0000\r\n]/.test(remoteHome)) {
-    throw new Error(`Remote $HOME is not a valid path: ${remoteHome.slice(0, 100)}`)
+  if (!validateRemoteHome(remoteHome, hostPlatform)) {
+    throw new Error(`Remote home is not a valid path: ${remoteHome.slice(0, 100)}`)
   }
-  const remoteRelayDir = computeRemoteRelayDir(remoteHome, fullVersion)
+  const remoteRelayDir = computeRemoteRelayDir(remoteHome, fullVersion, hostPlatform.pathFlavor)
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
 
   onProgress?.('Checking existing relay...')
-  const alreadyInstalled = await isRelayAlreadyInstalled(conn, remoteRelayDir)
+  const alreadyInstalled = await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
 
   if (alreadyInstalled) {
-    await repairInstalledNativeDeps(conn, remoteRelayDir, platform)
+    await repairInstalledNativeDeps(conn, remoteRelayDir, platform, hostPlatform)
   } else {
     // Why: serialize concurrent first-installs of the same version against
     // each other via an atomic mkdir lock. The losing caller polls and either
     // re-checks `alreadyInstalled` (now true) or steals a stale lock.
-    await acquireInstallLock(conn, remoteRelayDir)
+    await acquireInstallLock(conn, remoteRelayDir, hostPlatform)
     try {
       // Re-probe after acquiring the lock — a sibling installer may have
       // finished while we were waiting.
-      if (!(await isRelayAlreadyInstalled(conn, remoteRelayDir))) {
+      if (!(await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform))) {
         onProgress?.('Uploading relay...')
         console.log('[ssh-relay] Uploading relay...')
-        await uploadRelay(conn, platform, remoteRelayDir, fullVersion)
+        await uploadRelay(conn, platform, remoteRelayDir, fullVersion, hostPlatform)
         console.log('[ssh-relay] Upload complete')
 
         onProgress?.('Installing native dependencies...')
         console.log('[ssh-relay] Installing native dependencies...')
-        await installNativeDeps(conn, remoteRelayDir, platform)
+        await installNativeDeps(conn, remoteRelayDir, platform, hostPlatform)
         console.log('[ssh-relay] Native deps installed')
 
         // Why: write `.install-complete` BEFORE releasing the lock so a
         // sibling never observes the dir as "complete but locked", which
         // would lead GC to skip a recoverable dir indefinitely.
-        await finalizeInstall(conn, remoteRelayDir)
+        await finalizeInstall(conn, remoteRelayDir, hostPlatform)
       } else {
-        await abandonInstall(conn, remoteRelayDir)
+        await abandonInstall(conn, remoteRelayDir, hostPlatform)
       }
     } catch (err) {
       // Why: leave a partial install dir in place (no `.install-complete`)
       // so the next deploy detects the partial and re-runs upload + install.
       // Just release the lock so a concurrent caller can retry.
-      await abandonInstall(conn, remoteRelayDir)
+      await abandonInstall(conn, remoteRelayDir, hostPlatform)
       throw err
     }
   }
 
   onProgress?.('Starting relay...')
   console.log('[ssh-relay] Launching relay...')
-  const launched = await launchRelay(conn, remoteRelayDir, graceTimeSeconds, relayInstanceId)
+  const launched = await launchRelay(
+    conn,
+    remoteRelayDir,
+    hostPlatform,
+    graceTimeSeconds,
+    relayInstanceId
+  )
   console.log('[ssh-relay] Relay started successfully')
 
   // Why: best-effort cleanup of unreferenced sibling version dirs. Errors
   // are logged inside gcOldRelayVersions and never propagate, so a GC failure
   // can never block the user from connecting.
-  void gcOldRelayVersions(conn, remoteHome, remoteRelayDir).catch(() => {})
+  void gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform).catch(() => {})
 
   return {
     transport: launched.transport,
     platform,
+    hostPlatform,
     remoteHome,
     remoteRelayDir,
     nodePath: launched.nodePath,
@@ -183,20 +216,12 @@ async function deployAndLaunchRelayInner(
   }
 }
 
-async function detectRemotePlatform(conn: SshConnection): Promise<RelayPlatform | null> {
-  const output = await execCommand(conn, 'uname -sm')
-  const parts = output.trim().split(/\s+/)
-  if (parts.length < 2) {
-    return null
-  }
-  return parseUnameToRelayPlatform(parts[0], parts[1])
-}
-
 async function uploadRelay(
   conn: SshConnection,
   platform: RelayPlatform,
   remoteDir: string,
-  fullVersion: string
+  fullVersion: string,
+  hostPlatform: RemoteHostPlatform
 ): Promise<void> {
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
@@ -207,17 +232,21 @@ async function uploadRelay(
   }
 
   // Create remote directory
-  await execCommand(conn, `mkdir -p ${shellEscape(remoteDir)}`)
+  await execHostCommand(conn, hostPlatform, makeRemoteDirectoryCommand(hostPlatform, remoteDir))
 
   await uploadDirectoryForConnection(conn, localRelayDir, remoteDir)
 
   // Make the node binary executable
-  await execCommand(conn, `chmod +x ${shellEscape(`${remoteDir}/node`)} 2>/dev/null; true`)
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    makeRemoteExecutableCommand(hostPlatform, joinRemotePath(hostPlatform, remoteDir, 'node'))
+  )
 
   // Why: write `.version` via SFTP rather than shell to avoid quoting issues
   // with content-hashed version strings. The remote daemon reads this same
   // file on startup so the wire-handshake validates against it.
-  await writeRemoteFile(conn, `${remoteDir}/.version`, fullVersion)
+  await writeRemoteFile(conn, joinRemotePath(hostPlatform, remoteDir, '.version'), fullVersion)
 }
 
 async function uploadDirectoryForConnection(
@@ -269,17 +298,28 @@ const RELAY_NATIVE_DEPS = {
   '@parcel/watcher': '2.5.6'
 } as const
 
-async function hasRequiredNativeDeps(conn: SshConnection, remoteDir: string): Promise<boolean> {
-  const nodePath = await resolveRemoteNodePath(conn)
-  const nodeBinDir = nodePath.replace(/\/node$/, '')
-  const escapedDir = shellEscape(remoteDir)
-  const escapedBinDir = shellEscape(nodeBinDir)
+async function hasRequiredNativeDeps(
+  conn: SshConnection,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform
+): Promise<boolean> {
+  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
   const escapedNode = shellEscape(nodePath)
   try {
-    const probe = await execCommand(
-      conn,
-      `export PATH=${escapedBinDir}:$PATH && cd ${escapedDir} && (${escapedNode} -e 'require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")' 2>/dev/null || echo MISSING)`
-    )
+    const command = isWindowsRemoteHost(hostPlatform)
+      ? commandWithNodePath(
+          hostPlatform,
+          nodePath,
+          remoteDir,
+          `try { & ${powerShellLiteral(nodePath)} -e ${powerShellLiteral('require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")')} } catch { 'MISSING' }`
+        )
+      : commandWithNodePath(
+          hostPlatform,
+          nodePath,
+          remoteDir,
+          `(${escapedNode} -e 'require.resolve("node-pty"); require.resolve("@parcel/watcher"); console.log("ORCA-NATIVE-DEPS-OK")' 2>/dev/null || echo MISSING)`
+        )
+    const probe = await execHostCommand(conn, hostPlatform, command)
     return probe.includes('ORCA-NATIVE-DEPS-OK')
   } catch {
     return false
@@ -289,25 +329,26 @@ async function hasRequiredNativeDeps(conn: SshConnection, remoteDir: string): Pr
 async function repairInstalledNativeDeps(
   conn: SshConnection,
   remoteDir: string,
-  platform: RelayPlatform
+  platform: RelayPlatform,
+  hostPlatform: RemoteHostPlatform
 ): Promise<void> {
-  if (await hasRequiredNativeDeps(conn, remoteDir)) {
+  if (await hasRequiredNativeDeps(conn, remoteDir, hostPlatform)) {
     return
   }
 
   console.warn(`[ssh-relay] Repairing missing native deps at ${remoteDir}`)
-  await acquireInstallLock(conn, remoteDir)
+  await acquireInstallLock(conn, remoteDir, hostPlatform)
   try {
     // Why: older complete relay dirs were created before @parcel/watcher was
     // installed. Re-probe under the lock so only one reconnect mutates the dir.
-    if (!(await hasRequiredNativeDeps(conn, remoteDir))) {
-      await installNativeDeps(conn, remoteDir, platform)
-      await finalizeInstall(conn, remoteDir)
+    if (!(await hasRequiredNativeDeps(conn, remoteDir, hostPlatform))) {
+      await installNativeDeps(conn, remoteDir, platform, hostPlatform)
+      await finalizeInstall(conn, remoteDir, hostPlatform)
     } else {
-      await abandonInstall(conn, remoteDir)
+      await abandonInstall(conn, remoteDir, hostPlatform)
     }
   } catch (err) {
-    await abandonInstall(conn, remoteDir)
+    await abandonInstall(conn, remoteDir, hostPlatform)
     throw err
   }
 }
@@ -323,16 +364,14 @@ async function repairInstalledNativeDeps(
 async function installNativeDeps(
   conn: SshConnection,
   remoteDir: string,
-  platform: RelayPlatform
+  platform: RelayPlatform,
+  hostPlatform: RemoteHostPlatform
 ): Promise<void> {
-  const nodePath = await resolveRemoteNodePath(conn)
+  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
   // Why: node's bin directory must be in PATH for npm's child processes.
   // npm install runs node-pty's prebuild script (`node scripts/prebuild.js`)
   // which spawns `node` as a child — if node isn't in PATH, that child
   // fails with exit 127 even though we invoked npm via its full path.
-  const nodeBinDir = nodePath.replace(/\/node$/, '')
-  const escapedDir = shellEscape(remoteDir)
-  const escapedBinDir = shellEscape(nodeBinDir)
   const escapedNode = shellEscape(nodePath)
 
   // npm init -y rejects '+' in derived package names (content-hashed dir
@@ -346,16 +385,28 @@ async function installNativeDeps(
     type: 'commonjs',
     dependencies: RELAY_NATIVE_DEPS
   })}\n`
-  await writeRemoteFile(conn, `${remoteDir}/package.json`, pkgJson)
+  await writeRemoteFile(conn, joinRemotePath(hostPlatform, remoteDir, 'package.json'), pkgJson)
 
   try {
     const installArgs = Object.entries(RELAY_NATIVE_DEPS)
       .map(([dep, version]) => shellEscape(`${dep}@${version}`))
       .join(' ')
-    await execCommand(
-      conn,
-      `export PATH=${escapedBinDir}:$PATH && cd ${escapedDir} && npm install --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
-    )
+    const command = isWindowsRemoteHost(hostPlatform)
+      ? commandWithNodePath(
+          hostPlatform,
+          nodePath,
+          remoteDir,
+          `npm install --omit=dev --no-audit --no-fund ${Object.entries(RELAY_NATIVE_DEPS)
+            .map(([dep, version]) => powerShellLiteral(`${dep}@${version}`))
+            .join(' ')}`
+        )
+      : commandWithNodePath(
+          hostPlatform,
+          nodePath,
+          remoteDir,
+          `npm install --omit=dev --no-audit --no-fund ${installArgs} 2>&1`
+        )
+    await execHostCommand(conn, hostPlatform, command)
   } catch (err) {
     // Don't write .install-complete on hard fail; reconnect retries on a
     // partial install. Greppable token so user bug reports paste something
@@ -369,10 +420,13 @@ async function installNativeDeps(
 
   // SFTP doesn't preserve execute bits; node-pty's spawn-helper prebuild
   // must be +x for posix_spawnp.
-  await execCommand(
-    conn,
-    `find ${shellEscape(`${remoteDir}/node_modules/node-pty/prebuilds`)} -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
-  )
+  if (!isWindowsRemoteHost(hostPlatform)) {
+    await execHostCommand(
+      conn,
+      hostPlatform,
+      `find ${shellEscape(joinRemotePath(hostPlatform, remoteDir, 'node_modules/node-pty/prebuilds'))} -name spawn-helper -exec chmod +x {} + 2>/dev/null; true`
+    )
+  }
 
   // node -e require() catches unloadable installs (wrong arch, missing
   // prebuild, broken native binding) that test -d cannot. Stderr → file
@@ -381,21 +435,37 @@ async function installNativeDeps(
   // docs/ssh-relay-versioned-install-dirs.md (relay still serves
   // fs/git/preflight; only pty.spawn fails at runtime).
   const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
-  const stderrFile = `${remoteDir}/.npty-probe.stderr`
+  const stderrFile = joinRemotePath(hostPlatform, remoteDir, '.npty-probe.stderr')
   const escapedStderr = shellEscape(stderrFile)
-  const probeOutput = await execCommand(
-    conn,
-    `export PATH=${escapedBinDir}:$PATH && cd ${escapedDir} && (${escapedNode} -e 'require("node-pty"); console.log(process.argv[1])' ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
-  )
+  const probeCommand = isWindowsRemoteHost(hostPlatform)
+    ? commandWithNodePath(
+        hostPlatform,
+        nodePath,
+        remoteDir,
+        `try { & ${powerShellLiteral(nodePath)} -e ${powerShellLiteral('require("node-pty"); console.log(process.argv[1])')} ${powerShellLiteral(PROBE_OK)} } catch { 'MISSING' }`
+      )
+    : commandWithNodePath(
+        hostPlatform,
+        nodePath,
+        remoteDir,
+        `(${escapedNode} -e 'require("node-pty"); console.log(process.argv[1])' ${shellEscape(PROBE_OK)} 2>${escapedStderr} || echo MISSING)`
+      )
+  const probeOutput = await execHostCommand(conn, hostPlatform, probeCommand)
   if (!probeOutput.includes(PROBE_OK)) {
-    const remoteStderr = await execCommand(conn, `cat ${escapedStderr} 2>/dev/null; true`).catch(
-      () => ''
-    )
+    const remoteStderr = isWindowsRemoteHost(hostPlatform)
+      ? ''
+      : await execHostCommand(conn, hostPlatform, `cat ${escapedStderr} 2>/dev/null; true`).catch(
+          () => ''
+        )
     console.warn(
       `[ssh-relay][NPTY-MISSING] node-pty installed but require() failed at ${remoteDir} (${platform}). stdout=${probeOutput.trim().slice(-200)} stderr=${remoteStderr.trim().slice(-500)}`
     )
   }
-  await execCommand(conn, `rm -f ${escapedStderr} 2>/dev/null; true`).catch(() => {})
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    removeRemoteFileCommand(hostPlatform, stderrFile)
+  ).catch(() => {})
 }
 
 function getLocalRelayPath(platform: RelayPlatform): string | null {
@@ -432,6 +502,7 @@ export function getLocalRelayCandidates(platform: RelayPlatform): string[] {
 async function launchRelay(
   conn: SshConnection,
   remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
   graceTimeSeconds?: number,
   relayInstanceId?: string
 ): Promise<{ transport: MultiplexerTransport; nodePath: string; sockPath: string }> {
@@ -440,7 +511,7 @@ async function launchRelay(
   // package small (~100KB JS vs ~60MB with embedded node).
   // Non-login SSH shells may not have node in PATH, so we source the
   // user's profile to pick up nvm/fnm/brew PATH entries.
-  const nodePath = await resolveRemoteNodePath(conn)
+  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
   // Why: graceTimeSeconds originates from user-editable SshTarget config.
   // Clamping to integer prevents shell injection if the type ever loosened.
   const requestedGraceTime = Math.floor(graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
@@ -457,7 +528,18 @@ async function launchRelay(
   // account. Hashing the target ID into the socket name prevents one target
   // from attaching to another target's live relay.
   const sockName = relaySocketNameForInstanceId(relayInstanceId)
-  const sockFile = `${remoteDir}/${sockName}`
+  const sockFile = relayEndpointForHost(hostPlatform, remoteDir, sockName)
+  const endpointDir = relayHookEndpointDirForHost(hostPlatform, remoteDir, sockFile)
+
+  if (isWindowsRemoteHost(hostPlatform)) {
+    return launchWindowsRelay(conn, hostPlatform, {
+      remoteDir,
+      nodePath,
+      sockPath: sockFile,
+      endpointDir,
+      graceTime
+    })
+  }
 
   // Why: after an app restart a relay may still be running in its grace
   // period with live PTY sessions.  We check for its Unix socket and
@@ -567,4 +649,197 @@ async function launchRelay(
     `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)}`
   )
   return { transport: await waitForSentinel(channel), nodePath, sockPath: sockFile }
+}
+
+function relayEndpointForHost(
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  sockName: string
+): string {
+  if (!isWindowsRemoteHost(hostPlatform)) {
+    return joinRemotePath(hostPlatform, remoteDir, sockName)
+  }
+  const endpointHash = createHash('sha256')
+    .update(`${remoteDir}\0${sockName}`)
+    .digest('hex')
+    .slice(0, 20)
+  return `\\\\.\\pipe\\orca-relay-${endpointHash}`
+}
+
+function relayHookEndpointDirForHost(
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  sockPath: string
+): string {
+  return joinRemotePath(
+    hostPlatform,
+    remoteDir,
+    'agent-hooks',
+    remoteBasename(sockPath, hostPlatform)
+  )
+}
+
+async function launchWindowsRelay(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  opts: {
+    remoteDir: string
+    nodePath: string
+    sockPath: string
+    endpointDir: string
+    graceTime: number
+  }
+): Promise<{ transport: MultiplexerTransport; nodePath: string; sockPath: string }> {
+  if ((await probeWindowsRelayPipe(conn, hostPlatform, opts)) === 'READY') {
+    try {
+      const channel = await conn.exec(
+        windowsRelayConnectCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath),
+        { wrapCommand: false }
+      )
+      return {
+        transport: await waitForSentinel(channel),
+        nodePath: opts.nodePath,
+        sockPath: opts.sockPath
+      }
+    } catch (err) {
+      console.warn(
+        '[ssh-relay] Windows named pipe reconnect failed, launching fresh relay:',
+        err instanceof Error ? err.message : String(err)
+      )
+    }
+  }
+
+  const logFile = joinRemotePath(hostPlatform, opts.remoteDir, 'relay.log')
+  const errFile = joinRemotePath(hostPlatform, opts.remoteDir, 'relay.err.log')
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    windowsRelayLaunchCommand(
+      hostPlatform,
+      opts.nodePath,
+      opts.remoteDir,
+      opts.sockPath,
+      opts.endpointDir,
+      opts.graceTime,
+      logFile,
+      errFile
+    )
+  )
+
+  const POLL_INTERVAL_MS = 200
+  const POLL_TIMEOUT_MS = 10_000
+  const pollStart = Date.now()
+  while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
+    try {
+      if ((await probeWindowsRelayPipe(conn, hostPlatform, opts)) === 'READY') {
+        const channel = await conn.exec(
+          windowsRelayConnectCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath),
+          { wrapCommand: false }
+        )
+        return {
+          transport: await waitForSentinel(channel),
+          nodePath: opts.nodePath,
+          sockPath: opts.sockPath
+        }
+      }
+    } catch {
+      /* exec failed, retry */
+    }
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
+  }
+
+  const logOutput = await execHostCommand(
+    conn,
+    hostPlatform,
+    windowsRelayTailLogCommand(logFile, errFile)
+  ).catch(() => '(could not read log)')
+  throw new Error(`Relay failed to start within ${POLL_TIMEOUT_MS / 1000}s. Log:\n${logOutput}`)
+}
+
+function windowsRelayConnectCommand(
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  remoteDir: string,
+  sockPath: string
+): string {
+  return commandWithNodePath(
+    hostPlatform,
+    nodePath,
+    remoteDir,
+    `& ${powerShellLiteral(nodePath)} relay.js --connect --sock-path ${powerShellLiteral(sockPath)}`
+  )
+}
+
+function windowsRelayLaunchCommand(
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  remoteDir: string,
+  sockPath: string,
+  endpointDir: string,
+  graceTime: number,
+  logFile: string,
+  errFile: string
+): string {
+  const relayScript = joinRemotePath(hostPlatform, remoteDir, 'relay.js')
+  return commandWithNodePath(
+    hostPlatform,
+    nodePath,
+    remoteDir,
+    [
+      `$args = @(${windowsStartProcessArgumentLiteral(relayScript)}, '--detached', '--grace-time', ${powerShellLiteral(String(graceTime))}, '--sock-path', ${windowsStartProcessArgumentLiteral(sockPath)}, '--endpoint-dir', ${windowsStartProcessArgumentLiteral(endpointDir)})`,
+      `Start-Process -FilePath ${powerShellLiteral(nodePath)} -ArgumentList $args -WorkingDirectory ${powerShellLiteral(remoteDir)} -RedirectStandardOutput ${powerShellLiteral(logFile)} -RedirectStandardError ${powerShellLiteral(errFile)} -WindowStyle Hidden`
+    ].join('; ')
+  )
+}
+
+function windowsStartProcessArgumentLiteral(value: string): string {
+  return powerShellLiteral(`"${value.replace(/"/g, '\\"')}"`)
+}
+
+async function probeWindowsRelayPipe(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  opts: {
+    remoteDir: string
+    nodePath: string
+    sockPath: string
+  }
+): Promise<'READY' | 'WAITING'> {
+  const result = await execHostCommand(
+    conn,
+    hostPlatform,
+    windowsRelayProbeCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath)
+  )
+  return result.trim() === 'READY' ? 'READY' : 'WAITING'
+}
+
+function windowsRelayProbeCommand(
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  remoteDir: string,
+  sockPath: string
+): string {
+  const js = [
+    'const net=require("net");',
+    'const s=net.connect(process.argv[1]);',
+    's.on("connect",()=>{s.destroy();process.stdout.write("READY")});',
+    's.on("error",()=>{process.stdout.write("WAITING")});'
+  ].join('')
+  return commandWithNodePath(
+    hostPlatform,
+    nodePath,
+    remoteDir,
+    `& ${powerShellLiteral(nodePath)} -e ${powerShellLiteral(js)} ${powerShellLiteral(sockPath)}`
+  )
+}
+
+function windowsRelayTailLogCommand(logFile: string, errFile: string): string {
+  const script = [
+    `$out = if (Test-Path -LiteralPath ${powerShellLiteral(logFile)}) { Get-Content -LiteralPath ${powerShellLiteral(logFile)} -Tail 20 -ErrorAction SilentlyContinue } else { '(no stdout log)' }`,
+    `$err = if (Test-Path -LiteralPath ${powerShellLiteral(errFile)}) { Get-Content -LiteralPath ${powerShellLiteral(errFile)} -Tail 20 -ErrorAction SilentlyContinue } else { '(no stderr log)' }`,
+    'Write-Output $out',
+    "Write-Output '--- stderr ---'",
+    'Write-Output $err'
+  ].join('; ')
+  return powerShellCommand(script)
 }

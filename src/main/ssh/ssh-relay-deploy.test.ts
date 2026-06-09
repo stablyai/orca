@@ -16,7 +16,21 @@ vi.mock('fs', () => ({
 vi.mock('./relay-protocol', () => ({
   RELAY_VERSION: '0.1.0',
   RELAY_REMOTE_DIR: '.orca-remote',
-  parseUnameToRelayPlatform: vi.fn().mockReturnValue('linux-x64'),
+  parseUnameToRelayPlatform: vi.fn((os: string, arch: string) => {
+    const normalizedOs = os.toLowerCase()
+    const normalizedArch = arch.toLowerCase()
+    const relayArch = normalizedArch === 'arm64' || normalizedArch === 'aarch64' ? 'arm64' : 'x64'
+    if (normalizedOs === 'windows' || normalizedOs === 'win32') {
+      return `win32-${relayArch}`
+    }
+    if (normalizedOs === 'darwin') {
+      return `darwin-${relayArch}`
+    }
+    if (normalizedOs === 'linux') {
+      return `linux-${relayArch}`
+    }
+    return null
+  }),
   RELAY_SENTINEL: 'ORCA-RELAY v0.1.0 READY\n',
   RELAY_SENTINEL_TIMEOUT_MS: 10_000
 }))
@@ -28,7 +42,10 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
-  execCommand: vi.fn().mockResolvedValue('Linux x86_64'),
+  execCommand: vi.fn().mockResolvedValue('Linux x86_64')
+}))
+
+vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
@@ -51,11 +68,17 @@ vi.mock('./ssh-connection-utils', () => ({
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
+import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import type { SshConnection } from './ssh-connection'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../shared/ssh-types'
+
+function decodePowerShellCommand(command: string): string | null {
+  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+  return match ? Buffer.from(match[1], 'base64').toString('utf16le') : null
+}
 
 function makeMockConnection(): SshConnection {
   return {
@@ -253,5 +276,40 @@ describe('deployAndLaunchRelay', () => {
     expect(launchA).toContain('--sock-path')
     expect(launchB).toContain('--sock-path')
     expect(launchA).not.toEqual(launchB)
+  })
+
+  it('launches Windows remotes via a named pipe endpoint', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    mockExecCommand
+      .mockRejectedValueOnce(new Error('uname not found')) // uname -sm
+      .mockResolvedValueOnce('Windows X64') // PowerShell platform probe
+      .mockResolvedValueOnce('C:\\Users\\me user') // remote home
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
+      .mockResolvedValueOnce('WAITING') // named pipe probe
+      .mockResolvedValueOnce('') // Start-Process launch
+      .mockResolvedValueOnce('READY') // named pipe poll
+
+    const result = await deployAndLaunchRelay(conn, undefined, 300, 'target-a')
+
+    expect(result.platform).toBe('win32-x64')
+    expect(result.remoteHome).toBe('C:/Users/me user')
+    expect(result.sockPath).toMatch(/^\\\\\.\\pipe\\orca-relay-[0-9a-f]{20}$/)
+    const execCommands = vi.mocked(conn.exec).mock.calls.map(([cmd]) => cmd as string)
+    expect(execCommands).toHaveLength(1)
+    expect(execCommands[0]).toContain('powershell.exe')
+    const decodedScripts = mockExecCommand.mock.calls
+      .map(([, command]) => decodePowerShellCommand(command))
+      .filter((script): script is string => script !== null)
+    const launchScript = decodedScripts.find((script) => script.includes('Start-Process')) ?? ''
+    expect(launchScript).toContain(
+      '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/relay.js"'
+    )
+    expect(launchScript).toContain('--endpoint-dir')
+    expect(launchScript).toContain(
+      '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/agent-hooks/orca-relay-'
+    )
+    expect(launchScript).not.toContain('\\\\.\\pipe\\agent-hooks')
   })
 })

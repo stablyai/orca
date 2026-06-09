@@ -26,6 +26,7 @@ import {
   resolveEffectiveProxy,
   spawnProxyCommand,
   wrapRemoteCommandForPosixShell,
+  type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
@@ -84,20 +85,21 @@ export class SshConnection {
     return this.cachedPassphrase != null || this.cachedPassword != null
   }
 
-  async exec(cmd: string): Promise<ClientChannel> {
+  async exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
     if (this.useSystemSshTransport) {
       if (this.disposed || this.state.status !== 'connected') {
         throw new Error('Not connected')
       }
-      return this.spawnTrackedSystemSshCommand(cmd)
+      return this.spawnTrackedSystemSshCommand(cmd, options)
     }
     if (!this.client) {
       throw new Error('Not connected')
     }
     const client = this.client
+    const remoteCommand = options?.wrapCommand === false ? cmd : wrapRemoteCommandForPosixShell(cmd)
     return this.waitForSshCallback(
       'SSH exec channel timed out',
-      (callback) => client.exec(wrapRemoteCommandForPosixShell(cmd), callback),
+      (callback) => client.exec(remoteCommand, callback),
       (channel) => channel.close()
     )
   }
@@ -485,8 +487,11 @@ export class SshConnection {
     }
   }
 
-  private spawnTrackedSystemSshCommand(command: string): ClientChannel {
-    const channel = spawnSystemSshCommand(this.target, command)
+  private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
+    const channel =
+      options === undefined
+        ? spawnSystemSshCommand(this.target, command)
+        : spawnSystemSshCommand(this.target, command, options)
     this.systemCommandChannels.add(channel)
     const cleanup = (): void => {
       this.systemCommandChannels.delete(channel)

@@ -6,6 +6,7 @@ import { pipeline } from 'stream/promises'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import { wrapRemoteCommandForPosixShell, shellEscape } from './ssh-connection-utils'
+import type { SshExecOptions } from './ssh-connection-utils'
 
 const SYSTEM_SSH_PATHS =
   process.platform === 'win32'
@@ -68,7 +69,11 @@ export function spawnSystemSsh(target: SshTarget): SystemSshProcess {
   return wrapChildProcess(proc)
 }
 
-export function spawnSystemSshCommand(target: SshTarget, command: string): ClientChannel {
+export function spawnSystemSshCommand(
+  target: SshTarget,
+  command: string,
+  options?: SshExecOptions
+): ClientChannel {
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error(
@@ -76,7 +81,9 @@ export function spawnSystemSshCommand(target: SshTarget, command: string): Clien
     )
   }
 
-  const proc = spawn(sshPath, [...buildSshArgs(target), wrapRemoteCommandForPosixShell(command)], {
+  const remoteCommand =
+    options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
+  const proc = spawn(sshPath, [...buildSshArgs(target), remoteCommand], {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   })

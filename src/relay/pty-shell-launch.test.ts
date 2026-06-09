@@ -96,6 +96,21 @@ describe('getRelayShellLaunchConfig', () => {
     }
   )
 
+  it('does not pass POSIX login flags to Windows shells', () => {
+    expect(getRelayShellLaunchConfig('C:\\Windows\\System32\\cmd.exe', { HOME: homeDir })).toEqual({
+      args: [],
+      env: {}
+    })
+    expect(
+      getRelayShellLaunchConfig('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', {
+        HOME: homeDir
+      })
+    ).toEqual({
+      args: ['-NoLogo'],
+      env: {}
+    })
+  })
+
   it.skipIf(process.platform === 'win32')('rewrites stale persistent wrapper files', () => {
     const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
     mkdirSync(zshRoot, { recursive: true })
