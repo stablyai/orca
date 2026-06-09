@@ -184,6 +184,7 @@ import type {
   JiraProject,
   AsanaTask,
   AsanaProject,
+  AsanaUser,
   LinearIssue,
   LinearProjectDetail,
   LinearProjectSummary,
@@ -223,7 +224,11 @@ import {
   jiraListIssueTypes,
   jiraListProjects
 } from '@/runtime/runtime-jira-client'
-import { asanaCreateTask, asanaListProjects } from '@/runtime/runtime-asana-client'
+import {
+  asanaCreateTask,
+  asanaListAssignableUsers,
+  asanaListProjects
+} from '@/runtime/runtime-asana-client'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -3668,11 +3673,13 @@ export default function TaskPage(): React.JSX.Element {
     }
     if (taskSource !== 'asana' || !asanaStatus.connected) {
       setAvailableAsanaProjects([])
+      setAvailableAsanaUsers([])
       setAsanaProjectsLoading(false)
       return
     }
     let cancelled = false
     setAvailableAsanaProjects([])
+    setAvailableAsanaUsers([])
     setAsanaProjectsLoading(true)
     void asanaListProjects(settings, selectedAsanaWorkspaceId)
       .then((projects) => {
@@ -3688,6 +3695,18 @@ export default function TaskPage(): React.JSX.Element {
       .finally(() => {
         if (!cancelled) {
           setAsanaProjectsLoading(false)
+        }
+      })
+    // Why: assignable users feed the New Task dialog's assignee picker.
+    void asanaListAssignableUsers(settings, selectedAsanaWorkspaceId)
+      .then((users) => {
+        if (!cancelled) {
+          setAvailableAsanaUsers(users)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          console.warn('[TaskPage] Failed to fetch Asana assignable users')
         }
       })
     return () => {
@@ -4587,6 +4606,8 @@ export default function TaskPage(): React.JSX.Element {
   const [newAsanaTaskTitle, setNewAsanaTaskTitle] = useState('')
   const [newAsanaTaskNotes, setNewAsanaTaskNotes] = useState('')
   const [newAsanaTaskProjectId, setNewAsanaTaskProjectId] = useState<string | null>(null)
+  const [newAsanaTaskAssigneeGid, setNewAsanaTaskAssigneeGid] = useState<string | null>(null)
+  const [availableAsanaUsers, setAvailableAsanaUsers] = useState<AsanaUser[]>([])
   const [newAsanaTaskSubmitting, setNewAsanaTaskSubmitting] = useState(false)
   const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
   const [asanaConnectOpen, setAsanaConnectOpen] = useState(false)
@@ -6729,12 +6750,14 @@ export default function TaskPage(): React.JSX.Element {
             : undefined,
         projectId: newAsanaTaskProjectId ?? undefined,
         title,
-        notes: newAsanaTaskNotes.trim() || undefined
+        notes: newAsanaTaskNotes.trim() || undefined,
+        assigneeGid: newAsanaTaskAssigneeGid ?? undefined
       })
       if (result.ok) {
         setNewAsanaTaskOpen(false)
         setNewAsanaTaskTitle('')
         setNewAsanaTaskNotes('')
+        setNewAsanaTaskAssigneeGid(null)
         setAsanaRefreshNonce((n) => n + 1)
         toast.success('Asana task created')
       } else {
@@ -6746,6 +6769,7 @@ export default function TaskPage(): React.JSX.Element {
       setNewAsanaTaskSubmitting(false)
     }
   }, [
+    newAsanaTaskAssigneeGid,
     newAsanaTaskNotes,
     newAsanaTaskProjectId,
     newAsanaTaskTitle,
@@ -7614,6 +7638,7 @@ export default function TaskPage(): React.JSX.Element {
                                 setNewAsanaTaskTitle('')
                                 setNewAsanaTaskNotes('')
                                 setNewAsanaTaskProjectId(availableAsanaProjects[0]?.gid ?? null)
+                                setNewAsanaTaskAssigneeGid(null)
                                 setNewAsanaTaskOpen(true)
                               }}
                               aria-label="New Asana task"
@@ -11536,6 +11561,27 @@ export default function TaskPage(): React.JSX.Element {
                   {availableAsanaProjects.map((project) => (
                     <SelectItem key={project.gid} value={project.gid}>
                       {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            {availableAsanaUsers.length > 0 ? (
+              <Select
+                value={newAsanaTaskAssigneeGid ?? 'none'}
+                onValueChange={(value) =>
+                  setNewAsanaTaskAssigneeGid(value === 'none' ? null : value)
+                }
+                disabled={newAsanaTaskSubmitting}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Assignee (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Unassigned</SelectItem>
+                  {availableAsanaUsers.map((user) => (
+                    <SelectItem key={user.gid} value={user.gid}>
+                      {user.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

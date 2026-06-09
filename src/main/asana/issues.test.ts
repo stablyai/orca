@@ -205,6 +205,25 @@ describe('Asana task operations', () => {
     })
   })
 
+  it('assigns the task to a user when an assignee gid is given', async () => {
+    asanaRequestMock.mockResolvedValueOnce({
+      data: { gid: '999', permalink_url: 'https://app.asana.com/0/1/999' }
+    })
+
+    const { createTask } = await import('./issues')
+
+    await expect(
+      createTask({ workspaceId: 'ws-1', title: 'New task', assigneeGid: 'user-7' })
+    ).resolves.toEqual({ ok: true, gid: '999', url: 'https://app.asana.com/0/1/999' })
+
+    const requestInit = asanaRequestMock.mock.calls[0][2] as { body: string }
+    expect(JSON.parse(requestInit.body).data).toMatchObject({
+      name: 'New task',
+      workspace: 'ws-1',
+      assignee: 'user-7'
+    })
+  })
+
   it('toggles completion through updateTask', async () => {
     asanaRequestMock.mockResolvedValueOnce(null)
 
