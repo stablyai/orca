@@ -54,8 +54,18 @@ type SourceControlTextGenerationDialogFormProps = {
   ) => Promise<void> | void
 }
 
-function sourceControlTextGenerationSaveTargetKey(target: SourceControlAiWriteTarget): string {
+export function sourceControlTextGenerationSaveTargetKey(
+  target: SourceControlAiWriteTarget
+): string {
   return target.type === 'repo' ? `repo:${target.repoId}` : 'global'
+}
+
+export function getDefaultSourceControlTextGenerationSaveTargetKey(
+  saveTargets: SourceControlTextGenerationSaveTarget[]
+): string {
+  const defaultTarget =
+    saveTargets.find((saveTarget) => saveTarget.target.type === 'global') ?? saveTargets[0]
+  return defaultTarget ? sourceControlTextGenerationSaveTargetKey(defaultTarget.target) : 'global'
 }
 
 function agentLabel(agentId: TuiAgent): string {
@@ -86,9 +96,7 @@ export function SourceControlTextGenerationDialogForm({
   const [agentArgs, setAgentArgs] = useState(baseParams?.agentArgs ?? '')
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [savingTargetKey, setSavingTargetKey] = useState<string | null>(null)
-  const defaultSaveTargetKey = saveTargets[0]
-    ? sourceControlTextGenerationSaveTargetKey(saveTargets[0].target)
-    : 'global'
+  const defaultSaveTargetKey = getDefaultSourceControlTextGenerationSaveTargetKey(saveTargets)
   const [saveTargetKey, setSaveTargetKey] = useState(defaultSaveTargetKey)
   const commandTemplateId = `source-control-${actionId}-command-template`
   const selectedSaveTarget =

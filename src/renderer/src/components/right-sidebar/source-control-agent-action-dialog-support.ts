@@ -44,6 +44,10 @@ export function buildSourceControlAgentSaveTargets(repoId?: string | null): {
   return targets
 }
 
+export function getDefaultSourceControlAgentSaveTargetValue(): string {
+  return 'global'
+}
+
 export function buildSourceControlAgentConnectionErrorPlan(): SourceControlAgentActionDeliveryPlanState {
   return {
     status: 'error',

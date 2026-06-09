@@ -1,11 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { buildCommitMessageGenerationParams } from './SourceControlTextGenerationDialog'
+import { getDefaultSourceControlTextGenerationSaveTargetKey } from './SourceControlTextGenerationDialogForm'
 import {
   applyCommitMessageGenerationDefaults,
   applySourceControlTextGenerationDefaults
 } from './SourceControlTextGenerationDefaults'
 
 describe('buildCommitMessageGenerationParams', () => {
+  it('defaults saved text-generation recipes to the global target when repo and global are available', () => {
+    expect(
+      getDefaultSourceControlTextGenerationSaveTargetKey([
+        {
+          target: { type: 'repo', repoId: 'repo-1' },
+          label: 'Save for this repository only',
+          successMessage: ''
+        },
+        {
+          target: { type: 'global' },
+          label: 'Save as default for all repositories',
+          successMessage: ''
+        }
+      ])
+    ).toBe('global')
+  })
+
   it('preserves the resolved model and thinking level for the selected agent', () => {
     expect(
       buildCommitMessageGenerationParams({
