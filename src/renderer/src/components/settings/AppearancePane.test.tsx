@@ -92,8 +92,7 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'automations'
   })
 
-  // Re-enable when SHOW_UI_LANGUAGE_SETTING is true (second locale shipped).
-  it.skip('renders the language selector with system and english options', async () => {
+  it('renders the language selector with system, english, and chinese options', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
@@ -109,18 +108,19 @@ describe('AppearancePane', () => {
     expect(languageControl).not.toBeNull()
     expect(container.textContent).toContain('System')
     expect(container.textContent).toContain('English')
+    expect(container.textContent).toContain('中文（简体）')
 
-    const englishOption = Array.from(
+    const chineseOption = Array.from(
       languageControl?.querySelectorAll<HTMLButtonElement>('button') ?? []
-    ).find((button) => button.textContent?.includes('English'))
+    ).find((button) => button.textContent?.includes('中文（简体）'))
 
-    expect(englishOption).toBeDefined()
+    expect(chineseOption).toBeDefined()
 
     await act(async () => {
-      englishOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      chineseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'en' })
+    expect(updateSettings).toHaveBeenCalledWith({ uiLanguage: 'zh' })
   })
 
   it('restores the Automations sidebar button from the sidebar settings switch', async () => {

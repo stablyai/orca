@@ -45,6 +45,7 @@
     "verify:computer-native": "node config/scripts/verify-computer-native.mjs",
     "verify:cli-bin": "node config/scripts/verify-cli-bin.mjs",
     "verify:localization-catalog": "node config/scripts/verify-localization-catalog.mjs",
+    "bootstrap:zh-catalog": "node config/scripts/bootstrap-zh-catalog.mjs",
     "verify:localization-coverage": "node config/scripts/audit-localization-coverage.mjs --check",
     "audit:localization": "node config/scripts/audit-localization-coverage.mjs",
     "build:cli": "tsc -p config/tsconfig.cli.json --outDir out --composite false --incremental false && node config/scripts/verify-cli-bin.mjs --fix-executable && node config/scripts/install-dev-cli.mjs",

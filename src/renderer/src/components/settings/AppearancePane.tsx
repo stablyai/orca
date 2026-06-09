@@ -171,7 +171,14 @@ export function AppearancePane({
                   onChange={(value) => updateSettings({ uiLanguage: value })}
                   options={UI_LANGUAGE_CHOICES.map((choice) => ({
                     value: choice.value,
-                    label: translate(choice.labelKey, choice.value === 'en' ? 'English' : 'System')
+                    label: translate(
+                      choice.labelKey,
+                      choice.value === 'en'
+                        ? 'English'
+                        : choice.value === 'zh'
+                          ? '中文（简体）'
+                          : 'System'
+                    )
                   }))}
                 />
               }
