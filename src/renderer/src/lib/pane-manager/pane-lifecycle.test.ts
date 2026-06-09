@@ -14,6 +14,7 @@ import {
 
 const webglMock = vi.hoisted(() => ({
   contextLossHandler: null as (() => void) | null,
+  clearTextureAtlas: vi.fn(),
   dispose: vi.fn()
 }))
 
@@ -23,6 +24,7 @@ vi.mock('@xterm/addon-webgl', () => ({
       onContextLoss: vi.fn((handler: () => void) => {
         webglMock.contextLossHandler = handler
       }),
+      clearTextureAtlas: webglMock.clearTextureAtlas,
       dispose: webglMock.dispose
     }
   })
@@ -97,6 +99,7 @@ describe('buildDefaultTerminalOptions', () => {
 describe('attachWebgl', () => {
   beforeEach(() => {
     webglMock.contextLossHandler = null
+    webglMock.clearTextureAtlas.mockClear()
     webglMock.dispose.mockClear()
     vi.mocked(WebglAddon).mockClear()
     resetTerminalWebglSuggestion()
@@ -142,6 +145,34 @@ describe('attachWebgl', () => {
     attachWebgl(pane)
 
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('clears the WebGL texture atlas and refreshes the buffer on recovery', async () => {
+    const { resetWebglTextureAtlas } = await import('./pane-webgl-renderer')
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+
+    attachWebgl(pane)
+    vi.mocked(pane.terminal.refresh).mockClear()
+    resetWebglTextureAtlas(pane)
+
+    expect(webglMock.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('does not reset a WebGL atlas after context-loss fallback', async () => {
+    const { resetWebglTextureAtlas } = await import('./pane-webgl-renderer')
+    const pane = createPane()
+    pane.terminalGpuAcceleration = 'on'
+
+    attachWebgl(pane)
+    webglMock.contextLossHandler?.()
+    vi.mocked(pane.terminal.refresh).mockClear()
+    webglMock.clearTextureAtlas.mockClear()
+    resetWebglTextureAtlas(pane)
+
+    expect(webglMock.clearTextureAtlas).not.toHaveBeenCalled()
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
   })
 
   it('does not attach WebGL while initial rendering is deferred', () => {
