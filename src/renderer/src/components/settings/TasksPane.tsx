@@ -6,6 +6,7 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
 import { cn } from '@/lib/utils'
+import { AsanaIcon } from '@/components/icons/AsanaIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Label } from '../ui/label'
@@ -46,6 +47,12 @@ const TASK_PROVIDER_OPTIONS: readonly {
     label: 'Jira',
     description: 'Show Jira in the Tasks source picker and sidebar shortcuts.',
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  {
+    id: 'asana',
+    label: 'Asana',
+    description: 'Show Asana in the Tasks source picker and sidebar shortcuts.',
+    Icon: ({ className }) => <AsanaIcon className={className} />
   }
 ]
 
@@ -88,6 +95,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
             'linear',
             'jira',
             'atlassian',
+            'asana',
             'display',
             'hide'
           ]}

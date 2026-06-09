@@ -13,6 +13,7 @@ export const TASKS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'linear',
       'jira',
       'atlassian',
+      'asana',
       'display',
       'hide'
     ]
