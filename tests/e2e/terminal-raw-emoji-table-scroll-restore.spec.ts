@@ -141,6 +141,10 @@ process.stdout.write('\\x1b[?2026l')
 `
 }
 
+function rawEmojiFixtureCompletionMarker(runId: string): string {
+  return `RAW_EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
+}
+
 async function setWideRenderedTableViewport(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1480, height: 820 })
   await page.waitForTimeout(250)
@@ -412,10 +416,21 @@ async function closeFeatureTips(page: Page): Promise<void> {
 async function expectAutoWebgl(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const canvas = document.createElement('canvas')
-    return (
-      !navigator.platform.includes('Linux') &&
-      !navigator.userAgent.includes('Linux') &&
-      canvas.getContext('webgl2') !== null
+    const gl = canvas.getContext('webgl2')
+    if (!gl) {
+      return false
+    }
+    if (!navigator.platform.includes('Linux') && !navigator.userAgent.includes('Linux')) {
+      return true
+    }
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
+    if (!debugInfo) {
+      return false
+    }
+    const renderer = String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? '')
+    const vendor = String(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) ?? '')
+    return !/\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|virgl|svga3d)\b/i.test(
+      `${vendor} ${renderer}`
     )
   })
 }
@@ -503,7 +518,7 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
           timeout: 30_000,
           message: 'raw emoji table did not finish streaming after workspace switch'
         })
-        .toContain('Singer')
+        .toContain(rawEmojiFixtureCompletionMarker(runId))
 
       await scrollActiveTerminalToText(orcaPage, 'Singer')
       await closeFeatureTips(orcaPage)

@@ -9,6 +9,7 @@ import type { WebglAddon } from '@xterm/addon-webgl'
 import type { SerializeAddon } from '@xterm/addon-serialize'
 import type { GlobalSettings } from '../../../../shared/types'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
+import type { TerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 
 // ---------------------------------------------------------------------------
 // Public interfaces
@@ -84,6 +85,7 @@ export type PaneRenderingDiagnostics = {
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
   hasComplexScriptOutput: boolean
+  terminalWebglAutoDecision: TerminalWebglAutoDecision
   hasWebgl: boolean
 }
 
