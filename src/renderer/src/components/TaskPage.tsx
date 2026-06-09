@@ -8962,9 +8962,13 @@ export default function TaskPage(): React.JSX.Element {
                           </span>
 
                           <div className="flex min-w-0 items-center gap-2 text-[12px] text-muted-foreground max-lg:!hidden">
-                            <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
-                              {task.assignee?.name?.slice(0, 1) ?? '-'}
-                            </span>
+                            {task.assignee ? (
+                              <AsanaUserAvatar user={task.assignee} />
+                            ) : (
+                              <span className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px]">
+                                -
+                              </span>
+                            )}
                             <span className="truncate">{task.assignee?.name ?? 'Unassigned'}</span>
                           </div>
 
