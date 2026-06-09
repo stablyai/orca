@@ -1829,6 +1829,12 @@ export type PreloadApi = {
       filePath: string
       connectionId?: string
     }) => Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }>
+    downloadRemoteFile: (args: {
+      filePath: string
+      connectionId: string
+    }) => Promise<
+      { success: true; localPath: string } | { success: false; cancelled?: boolean; error?: string }
+    >
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string

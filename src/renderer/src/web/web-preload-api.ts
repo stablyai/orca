@@ -1120,6 +1120,11 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         relativePath: file.relativePath
       })
     },
+    downloadRemoteFile: async () => {
+      // Why: downloading to local disk requires a native save dialog, which the
+      // web build cannot offer; surface it as unsupported rather than failing.
+      return { success: false, error: 'Download is not available in the web app.' }
+    },
     listMarkdownDocuments: async ({ rootPath }) => {
       const file = await resolveRuntimeFilePath(rootPath)
       return callRuntimeResult('files.listMarkdownDocuments', {

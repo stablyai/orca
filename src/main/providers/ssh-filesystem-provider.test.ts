@@ -162,6 +162,50 @@ describe('SshFilesystemProvider', () => {
     })
   })
 
+  describe('downloadFileToLocal', () => {
+    it('streams the remote file to a local path via SFTP fastGet', async () => {
+      const sftp = {
+        fastGet: vi.fn((_remote: string, _local: string, callback: (err?: Error) => void) =>
+          callback()
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await provider.downloadFileToLocal('/home/user/logo.png', '/tmp/logo.png')
+
+      expect(sftp.fastGet).toHaveBeenCalledWith(
+        '/home/user/logo.png',
+        '/tmp/logo.png',
+        expect.any(Function)
+      )
+      expect(sftp.end).toHaveBeenCalled()
+    })
+
+    it('throws when SFTP is unavailable', async () => {
+      provider = new SshFilesystemProvider('conn-1', mux as never)
+
+      await expect(provider.downloadFileToLocal('/home/user/a', '/tmp/a')).rejects.toThrow(
+        'remote_download_unavailable'
+      )
+    })
+
+    it('ends the SFTP session even when the download fails', async () => {
+      const sftp = {
+        fastGet: vi.fn((_remote: string, _local: string, callback: (err?: Error) => void) =>
+          callback(new Error('boom'))
+        ),
+        end: vi.fn()
+      }
+      provider = new SshFilesystemProvider('conn-1', mux as never, async () => sftp as never)
+
+      await expect(
+        provider.downloadFileToLocal('/home/user/logo.png', '/tmp/logo.png')
+      ).rejects.toThrow('boom')
+      expect(sftp.end).toHaveBeenCalled()
+    })
+  })
+
   describe('createDirNoClobber', () => {
     it('sends fs.createDirNoClobber request', async () => {
       await provider.createDirNoClobber('/home/user/new-dir')

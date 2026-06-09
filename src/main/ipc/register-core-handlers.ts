@@ -7,6 +7,7 @@ import type { StatsCollector } from '../stats/collector'
 import { registerFilesystemHandlers } from './filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
+import { registerSshFileDownloadHandlers } from './ssh-file-download'
 import { registerClaudeUsageHandlers } from './claude-usage'
 import { registerCodexUsageHandlers } from './codex-usage'
 import { registerOpenCodeUsageHandlers } from './opencode-usage'
@@ -153,6 +154,7 @@ export function registerCoreHandlers(
     registerFilesystemHandlers(store)
   }
   registerFilesystemWatcherHandlers()
+  registerSshFileDownloadHandlers()
   registerRuntimeHandlers(runtime)
   registerRuntimeEnvironmentHandlers()
   registerClipboardHandlers()

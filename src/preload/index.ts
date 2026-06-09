@@ -2270,6 +2270,12 @@ const api = {
       connectionId?: string
     }): Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }> =>
       ipcRenderer.invoke('fs:readFile', args),
+    downloadRemoteFile: (args: {
+      filePath: string
+      connectionId: string
+    }): Promise<
+      { success: true; localPath: string } | { success: false; cancelled?: boolean; error?: string }
+    > => ipcRenderer.invoke('fs:downloadRemoteFile', args),
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string

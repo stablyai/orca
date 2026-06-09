@@ -65,6 +65,7 @@ describe('FileExplorerVirtualRows add-as-project action', () => {
       expanded: new Set([directoryNode.path]),
       dirCache: {},
       selectedPaths: new Set(),
+      connectionId: null,
       activeFileId: null,
       flashingPath: null,
       deleteShortcutLabel: 'Del',

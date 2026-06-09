@@ -530,6 +530,7 @@ function FileExplorerInner(): React.JSX.Element {
               expanded={expanded}
               dirCache={dirCache}
               selectedPaths={selectedPaths}
+              connectionId={activeRepo?.connectionId ?? null}
               activeFileId={activeFileId}
               flashingPath={flashingPath}
               deleteShortcutLabel={deleteShortcutLabel}

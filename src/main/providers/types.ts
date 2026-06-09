@@ -133,6 +133,9 @@ export type FileReadResult = {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
+  /** Stream a remote file to a local path. Only implemented by remote (SSH)
+   *  providers — local files are already on disk and need no transfer. */
+  downloadFileToLocal?(remotePath: string, localPath: string): Promise<void>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>

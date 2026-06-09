@@ -1,6 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
 import { uploadBuffer } from '../ssh/sftp-upload'
+import { downloadFileViaSftp } from '../ssh/sftp-download'
 import type { IFilesystemProvider, FileStat, FileReadResult } from './types'
 import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
@@ -161,6 +162,21 @@ export class SshFilesystemProvider implements IFilesystemProvider {
         append,
         exclusive: !append
       })
+    } finally {
+      sftp.end()
+    }
+  }
+
+  async downloadFileToLocal(remotePath: string, localPath: string): Promise<void> {
+    if (!this.createSftp) {
+      throw new Error('remote_download_unavailable')
+    }
+    const sftp = await this.createSftp()
+    try {
+      // Why: SFTP streams the bytes directly to disk, so binary files (images,
+      // archives, PDFs) download intact and large files are not capped by the
+      // relay's single-frame read budget.
+      await downloadFileViaSftp(sftp, remotePath, localPath)
     } finally {
       sftp.end()
     }

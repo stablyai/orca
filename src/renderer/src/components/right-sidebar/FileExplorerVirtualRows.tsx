@@ -21,6 +21,7 @@ type FileExplorerVirtualRowsProps = {
   expanded: Set<string>
   dirCache: Record<string, DirCache>
   selectedPaths: Set<string>
+  connectionId: string | null
   activeFileId: string | null
   flashingPath: string | null
   deleteShortcutLabel: string
@@ -61,6 +62,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     expanded,
     dirCache,
     selectedPaths,
+    connectionId,
     activeFileId,
     flashingPath,
     deleteShortcutLabel,
@@ -158,6 +160,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
               isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
               isSelected={selectedPaths.has(n.path) || activeFileId === n.path}
               selectedPaths={selectedPaths}
+              connectionId={connectionId}
               isFlashing={flashingPath === n.path}
               nodeStatus={nodeStatus}
               statusColor={nodeStatus ? STATUS_COLORS[nodeStatus] : null}

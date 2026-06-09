@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleSlash,
   Copy,
+  Download,
   ExternalLink,
   Eye,
   File,
@@ -261,6 +262,9 @@ type FileExplorerRowProps = {
   isSelected: boolean
   isFlashing: boolean
   selectedPaths: Set<string>
+  /** Remote SSH connection for the active repo, or null when local. Drives the
+   *  download action, which only makes sense for remote files. */
+  connectionId: string | null
   nodeStatus: GitFileStatus | null
   statusColor: string | null
   isIgnored: boolean
@@ -303,6 +307,7 @@ export function FileExplorerRow({
   isSelected,
   isFlashing,
   selectedPaths,
+  connectionId,
   nodeStatus,
   statusColor,
   isIgnored,
@@ -348,6 +353,26 @@ export function FileExplorerRow({
       onNativeDragExpandDir,
       onMoveDrop
     })
+  const handleDownload = useCallback(async () => {
+    if (!connectionId) {
+      return
+    }
+    try {
+      const result = await window.api.fs.downloadRemoteFile({
+        filePath: node.path,
+        connectionId
+      })
+      if (!result.success) {
+        if (!result.cancelled) {
+          toast.error(result.error ?? 'Failed to download file')
+        }
+        return
+      }
+      toast.success(`Downloaded ${node.name}`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to download file')
+    }
+  }, [connectionId, node.path, node.name])
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
@@ -534,6 +559,12 @@ export function FileExplorerRow({
           <ContextMenuItem onSelect={() => onDuplicate(node)}>
             <Files />
             Duplicate
+          </ContextMenuItem>
+        )}
+        {!node.isDirectory && connectionId && (
+          <ContextMenuItem onSelect={handleDownload}>
+            <Download />
+            Download...
           </ContextMenuItem>
         )}
         {canAddAsProject && (
