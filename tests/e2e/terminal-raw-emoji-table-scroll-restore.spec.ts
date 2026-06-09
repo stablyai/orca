@@ -14,8 +14,10 @@ import {
   getTerminalContent,
   sendToTerminal,
   waitForActivePanePtyId,
-  waitForActiveTerminalManager
+  waitForActiveTerminalManager,
+  waitForTerminalOutput
 } from './helpers/terminal'
+import { scrollActiveTerminalToText } from './artificial-opencode-active-terminal-scroll'
 
 type BrowserTerminalPane = {
   terminal: {
@@ -42,7 +44,6 @@ type BrowserTerminalPane = {
     }
   }
   container: HTMLElement
-  webglAddon?: unknown
 }
 
 type RawTableDebugWindow = Window & {
@@ -141,6 +142,10 @@ process.stdout.write('\\x1b[?2026l')
 `
 }
 
+function rawEmojiFixtureCompletionMarker(runId: string): string {
+  return `RAW_EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
+}
+
 async function setWideRenderedTableViewport(page: Page): Promise<void> {
   await page.setViewportSize({ width: 1480, height: 820 })
   await page.waitForTimeout(250)
@@ -151,61 +156,6 @@ async function setWideRenderedTableViewport(page: Page): Promise<void> {
     }
   })
   await page.waitForTimeout(250)
-}
-
-async function scrollActiveTerminalToText(page: Page, text: string): Promise<void> {
-  const target = await page.evaluate(() => {
-    const store = window.__store
-    const state = store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('Active terminal pane unavailable')
-    }
-    pane.terminal.focus()
-    pane.terminal.scrollToBottom()
-    const viewport =
-      pane.container.querySelector<HTMLElement>('.xterm-viewport') ??
-      pane.container.querySelector<HTMLElement>('.xterm')
-    if (!viewport) {
-      throw new Error('Active terminal viewport unavailable')
-    }
-    const rect = viewport.getBoundingClientRect()
-    return {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2
-    }
-  })
-  await page.mouse.move(target.x, target.y)
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    if ((await readActiveTerminalVisibleText(page)).includes(text)) {
-      return
-    }
-    await page.mouse.wheel(0, -600)
-    await page.waitForTimeout(50)
-  }
-  throw new Error(`Text not visible after scrolling terminal: ${text}`)
-}
-
-async function readActiveTerminalVisibleText(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    const pane = (window as RawTableDebugWindow).getActiveTestPane?.()
-    if (!pane) {
-      throw new Error('Active terminal pane unavailable')
-    }
-    const buffer = pane.terminal.buffer.active
-    return Array.from({ length: pane.terminal.rows }, (_, row) => {
-      const line = buffer.getLine(buffer.viewportY + row)
-      return line?.translateToString(true) ?? ''
-    }).join('\n')
-  })
 }
 
 async function readTerminalBoxTableWrapDiagnostics(page: Page): Promise<{
@@ -265,11 +215,21 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
     }
     const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
     const rows = pane.container.querySelector<HTMLElement>('.xterm-rows')
-    if (!screen || !rows) {
+    if (!screen) {
       throw new Error('Active terminal DOM unavailable')
     }
 
     const screenRect = screen.getBoundingClientRect()
+    if (!rows) {
+      // Why: WebGL renders rows into a canvas, so DOM-span overpaint checks only
+      // apply when the DOM renderer is active. Buffer wrap checks still run below.
+      return {
+        screenRight: screenRect.right,
+        offenderCount: 0,
+        offenders: []
+      }
+    }
+
     const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
     const maxRight = screenRect.right + Math.max(1, cellWidth * 0.5)
     const offenders = Array.from(rows.querySelectorAll<HTMLElement>('span'))
@@ -305,16 +265,42 @@ async function readVisibleSingerRowGeometry(page: Page): Promise<{
     }
     const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
     const rows = pane.container.querySelector<HTMLElement>('.xterm-rows')
-    if (!screen || !rows) {
+    if (!screen) {
       throw new Error('Active terminal DOM unavailable')
+    }
+    const screenRect = screen.getBoundingClientRect()
+    const buffer = pane.terminal.buffer.active
+    const visibleLine = Array.from(
+      { length: pane.terminal.rows },
+      (_, row) => buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
+    ).find((text) => text.includes('Singer'))
+    const scrollbackLine =
+      visibleLine ??
+      Array.from(
+        { length: buffer.baseY + buffer.length },
+        (_, index) => buffer.getLine(index)?.translateToString(true) ?? ''
+      ).find((text) => text.includes('Singer'))
+    if (!scrollbackLine) {
+      throw new Error('Singer row buffer line unavailable')
+    }
+    const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+    const bufferGeometry = {
+      cols: pane.terminal.cols,
+      screenRight: screenRect.right,
+      rowRight: screenRect.left + pane.terminal.cols * cellWidth,
+      rowText: scrollbackLine
+    }
+    if (!rows) {
+      return bufferGeometry
     }
     const row = Array.from(rows.children).find((element) =>
       (element.textContent ?? '').includes('Singer')
     ) as HTMLElement | undefined
     if (!row) {
-      throw new Error('Singer row DOM unavailable')
+      // Why: xterm can repaint DOM rows between scroll and measurement; the
+      // terminal buffer still gives a stable right-edge bound for the golden.
+      return bufferGeometry
     }
-    const screenRect = screen.getBoundingClientRect()
     const rowRect = row.getBoundingClientRect()
     return {
       cols: pane.terminal.cols,
@@ -327,7 +313,15 @@ async function readVisibleSingerRowGeometry(page: Page): Promise<{
 
 async function readTerminalRenderDiagnostics(page: Page): Promise<{
   hasWebgl: boolean
+  hasComplexScriptOutput: boolean
   cursorHidden: boolean | null
+  terminalGpuAcceleration?: string
+  gpuRenderingEnabled?: boolean
+  webglAttachmentDeferred?: boolean
+  webglDisabledAfterContextLoss?: boolean
+  platform: string
+  userAgent: string
+  webgl2Available: boolean
 }> {
   return page.evaluate(() => {
     const pane = (window as RawTableDebugWindow).getActiveTestPane?.()
@@ -335,9 +329,31 @@ async function readTerminalRenderDiagnostics(page: Page): Promise<{
       throw new Error('Active terminal pane unavailable')
     }
     const terminalCore = pane.terminal._core
+    const canvas = document.createElement('canvas')
+    const store = window.__store
+    const state = store?.getState()
+    const worktreeId = state?.activeWorktreeId
+    const tabId =
+      state?.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    const renderingDiagnostics = manager
+      ?.getRenderingDiagnostics()
+      .find((diagnostic) => diagnostic.paneId === pane.id)
     return {
-      hasWebgl: Boolean(pane.webglAddon),
-      cursorHidden: terminalCore?.coreService?.isCursorHidden ?? null
+      hasWebgl: renderingDiagnostics?.hasWebgl ?? false,
+      hasComplexScriptOutput: renderingDiagnostics?.hasComplexScriptOutput ?? false,
+      cursorHidden: terminalCore?.coreService?.isCursorHidden ?? null,
+      terminalGpuAcceleration: renderingDiagnostics?.terminalGpuAcceleration,
+      gpuRenderingEnabled: renderingDiagnostics?.gpuRenderingEnabled,
+      webglAttachmentDeferred: renderingDiagnostics?.webglAttachmentDeferred,
+      webglDisabledAfterContextLoss: renderingDiagnostics?.webglDisabledAfterContextLoss,
+      platform: navigator.platform,
+      userAgent: navigator.userAgent,
+      webgl2Available: canvas.getContext('webgl2') !== null
     }
   })
 }
@@ -349,6 +365,28 @@ async function closeFeatureTips(page: Page): Promise<void> {
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
+  })
+}
+
+async function expectAutoWebgl(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const canvas = document.createElement('canvas')
+    const gl = canvas.getContext('webgl2')
+    if (!gl) {
+      return false
+    }
+    if (!navigator.platform.includes('Linux') && !navigator.userAgent.includes('Linux')) {
+      return true
+    }
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
+    if (!debugInfo) {
+      return false
+    }
+    const renderer = String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? '')
+    const vendor = String(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) ?? '')
+    return !/\b(swiftshader|llvmpipe|softpipe|software rasterizer|software adapter|basic render|virgl|svga3d)\b/i.test(
+      `${vendor} ${renderer}`
+    )
   })
 }
 
@@ -375,7 +413,30 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     })
   })
 
-  test('keeps raw emoji box table aligned after restore and scroll', async ({
+  // Why: `auto` should start on the fast renderer for ordinary terminal output;
+  // the emoji table golden below proves complex output does not disable it.
+  test('uses WebGL by default for ordinary terminal output when available @terminal-rendering-golden', async ({
+    orcaPage
+  }) => {
+    await waitForSessionReady(orcaPage)
+    await closeFeatureTips(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const marker = `ORCA_AUTO_WEBGL_SMOKE_${randomUUID()}`
+
+    await sendToTerminal(orcaPage, ptyId, `printf ${JSON.stringify(`${marker}\\n`)}\r`)
+    await waitForTerminalOutput(orcaPage, marker, 10_000)
+
+    const diagnostics = await readTerminalRenderDiagnostics(orcaPage)
+    expect(diagnostics.hasComplexScriptOutput).toBe(false)
+    expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
+    expect(diagnostics.cursorHidden).toBe(false)
+  })
+
+  // Why: this is the minimal golden for the v1.4.51 regression. It fails if
+  // xterm underfits by one scrollbar column or counts ZWJ emoji as width 4.
+  test('keeps raw emoji box table aligned after restore and scroll @terminal-rendering-golden', async ({
     orcaPage,
     testRepoPath
   }, testInfo: TestInfo) => {
@@ -395,7 +456,6 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const runId = randomUUID()
-    const marker = `RAW_EMOJI_FIXTURE_TABLE_RESTORE_${runId}`
     const scriptPath = path.join(testRepoPath, `.orca-raw-emoji-fixture-table-${runId}.mjs`)
     writeFileSync(scriptPath, rawEmojiFixtureBoxTableScript(EMOJI_TABLE_FIXTURE, runId))
 
@@ -410,10 +470,10 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await expect
         .poll(() => getTerminalContent(orcaPage, 30_000), {
-          timeout: 10_000,
-          message: 'raw emoji table marker did not survive workspace switch'
+          timeout: 30_000,
+          message: 'raw emoji table did not finish streaming after workspace switch'
         })
-        .toContain(marker)
+        .toContain(rawEmojiFixtureCompletionMarker(runId))
 
       await scrollActiveTerminalToText(orcaPage, 'Singer')
       await closeFeatureTips(orcaPage)
@@ -441,7 +501,8 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
         contentType: 'image/png'
       })
 
-      expect(diagnostics.hasWebgl).toBe(false)
+      expect(diagnostics.hasComplexScriptOutput).toBe(false)
+      expect(diagnostics.hasWebgl).toBe(await expectAutoWebgl(orcaPage))
       expect(diagnostics.cursorHidden).toBe(false)
       expect(overpaint.offenders).toEqual([])
       expect(wrapDiagnostics.wrappedBoxLines).toEqual([])

@@ -42,9 +42,8 @@ type RepoUpdate = Partial<
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'projectGroupId'
     | 'projectGroupOrder'
-    | 'sourceControlAi'
   >
->
+> & { sourceControlAi?: Repo['sourceControlAi'] | null }
 
 type NestedRepoScanControls = {
   scanId?: string
@@ -663,16 +662,38 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       try {
         const sanitizedUpdates = sanitizeRepoUpdate(updates)
         const target = getActiveRuntimeTarget(get().settings)
-        await (target.kind === 'local'
-          ? window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
-          : callRuntimeRpc(
-              target,
-              'repo.update',
-              { repo: projectId, updates: sanitizedUpdates },
-              { timeoutMs: 15_000 }
-            ))
+        const updatedRepo =
+          target.kind === 'local'
+            ? await window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
+            : (
+                await callRuntimeRpc<{ repo: Repo }>(
+                  target,
+                  'repo.update',
+                  { repo: projectId, updates: sanitizedUpdates },
+                  { timeoutMs: 15_000 }
+                )
+              ).repo
         set((s) => ({
-          repos: s.repos.map((r) => (r.id === projectId ? { ...r, ...sanitizedUpdates } : r))
+          repos: s.repos.map((r) => {
+            if (r.id !== projectId) {
+              return r
+            }
+            if (updatedRepo) {
+              return updatedRepo
+            }
+            if (sanitizedUpdates.sourceControlAi === null) {
+              const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } = r
+              const { sourceControlAi: _clearedSourceControlAi, ...updatesWithoutSourceControlAi } =
+                sanitizedUpdates
+              return { ...repoWithoutSourceControlAi, ...updatesWithoutSourceControlAi }
+            }
+            const { sourceControlAi, ...updatesWithoutSourceControlAi } = sanitizedUpdates
+            return {
+              ...r,
+              ...updatesWithoutSourceControlAi,
+              ...(sourceControlAi !== undefined ? { sourceControlAi } : {})
+            }
+          })
         }))
         return true
       } catch (err) {

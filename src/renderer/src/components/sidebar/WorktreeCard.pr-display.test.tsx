@@ -218,7 +218,7 @@ describe('WorktreeCard linked PR display', () => {
   })
 
   it('keeps issue, Linear issue, PR, and notes metadata out of compact cards', async () => {
-    settings = { experimentalCompactWorktreeCards: true }
+    settings = { compactWorktreeCards: true }
     worktreeCardProperties = ['issue', 'linear-issue', 'pr', 'comment']
     const { default: WorktreeCard } = await import('./WorktreeCard')
 

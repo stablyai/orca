@@ -20,6 +20,7 @@ import {
   Workflow
 } from 'lucide-react'
 import { useAppStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
 import {
   getAllWorktreesFromState,
@@ -28,6 +29,7 @@ import {
   useWorktreeMap
 } from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
+import { PendingWorktreeRow } from './PendingWorktreeRow'
 import WorktreeCardAgents, {
   SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT
 } from './WorktreeCardAgents'
@@ -121,7 +123,7 @@ import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
   type ScrollToCurrentWorkspaceRevealRequestDetail
 } from '@/lib/scroll-to-current-workspace-status'
-import { useRepoHeaderDrag } from './project-header-drag'
+import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
 import WorktreeContextMenu from './WorktreeContextMenu'
 import {
   buildManualOrderUpdatesForGroupDrop,
@@ -199,7 +201,6 @@ import {
 import { buildImportedWorktreesCardCandidates } from './imported-worktrees-card-candidates'
 import {
   WORKTREE_SECTION_HEADER_PADDING_LEFT,
-  SIDEBAR_TREE_INDENT,
   getProjectGroupHeaderPaddingLeft,
   getWorktreeCardContentIndent
 } from './worktree-list-indentation'
@@ -295,6 +296,14 @@ function stopNestedWorktreeCardBubble(event: React.SyntheticEvent<HTMLElement>):
   event.stopPropagation()
 }
 
+function handleRepoHeaderActionPointerDown(event: React.PointerEvent<HTMLElement>): void {
+  event.stopPropagation()
+}
+
+function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLElement>): boolean {
+  return isRepoHeaderActionTarget(event.target, event.currentTarget)
+}
+
 function getWorktreeOptionId(worktreeId: string): string {
   return `worktree-list-option-${encodeURIComponent(worktreeId)}`
 }
@@ -348,7 +357,9 @@ function getWorktreeVisibilityMenuLabel(repo: Repo): string {
   return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
 }
 
-const LINEAGE_INDENT = SIDEBAR_TREE_INDENT
+// Why: child workspace cards are already nested inside the parent card body;
+// using the full tree step makes the second-level card drift too far right.
+const LINEAGE_INDENT = 14
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
 
 type VirtualizedWorktreeViewportProps = {
@@ -639,6 +650,9 @@ export function getRenderRowKey(row: RenderRow): string {
   if (row.type === 'imported-worktrees-card') {
     return `imported:${row.key}`
   }
+  if (row.type === 'pending-creation') {
+    return `pending:${row.creationId}`
+  }
   return `wt:${row.worktree.id}`
 }
 
@@ -652,7 +666,7 @@ export function getWorktreeDragGroups(rows: Row[]): WorktreeDragGroup[] {
       groups.push({ key: current.key, worktreeIds: current.ids })
       continue
     }
-    if (row.type === 'imported-worktrees-card') {
+    if (row.type === 'imported-worktrees-card' || row.type === 'pending-creation') {
       continue
     }
     if (!current) {
@@ -2923,8 +2937,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? (event) => handleWorkspaceStatusDrop(event, headerWorkspaceStatus)
                         : undefined
                     }
-                    onClick={() => toggleGroupWithScrollAnchor(row.key)}
+                    onClick={(event) => {
+                      if (shouldIgnoreRepoHeaderToggle(event)) {
+                        return
+                      }
+                      toggleGroupWithScrollAnchor(row.key)
+                    }}
                     onKeyDown={(e) => {
+                      if (shouldIgnoreRepoHeaderToggle(e)) {
+                        return
+                      }
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault()
                         toggleGroupWithScrollAnchor(row.key)
@@ -2977,11 +2999,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             type="button"
                             variant="ghost"
                             size="icon-xs"
+                            data-repo-header-action=""
                             className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                             aria-label={`Group actions for ${row.label}`}
                             onClick={(event) => event.stopPropagation()}
                             onKeyDown={stopRepoHeaderKeyboardToggle}
-                            onPointerDown={(event) => event.stopPropagation()}
+                            onPointerDown={handleRepoHeaderActionPointerDown}
                           >
                             <Ellipsis className="size-3.5" />
                           </Button>
@@ -3024,11 +3047,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 type="button"
                                 variant="ghost"
                                 size="icon-xs"
+                                data-repo-header-action=""
                                 className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
                                 aria-label={`Project actions for ${row.label}`}
                                 onClick={(event) => event.stopPropagation()}
                                 onKeyDown={stopRepoHeaderKeyboardToggle}
-                                onPointerDown={(event) => event.stopPropagation()}
+                                onPointerDown={handleRepoHeaderActionPointerDown}
                               >
                                 <Ellipsis className="size-3.5" />
                               </Button>
@@ -3145,12 +3169,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <TooltipTrigger asChild>
                           {createState?.disabled ? (
                             <span
+                              data-repo-header-action=""
                               className="inline-flex cursor-not-allowed opacity-0 transition-opacity focus:opacity-100 group-hover:opacity-100"
                               tabIndex={0}
                               aria-label={createState.ariaLabel}
                               onKeyDown={stopRepoHeaderKeyboardToggle}
                               onClick={(event) => event.stopPropagation()}
-                              onPointerDown={(event) => event.stopPropagation()}
+                              onPointerDown={handleRepoHeaderActionPointerDown}
                             >
                               <Button
                                 type="button"
@@ -3168,6 +3193,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               type="button"
                               variant="ghost"
                               size="icon-xs"
+                              data-repo-header-action=""
                               className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
                               aria-label={
                                 createState?.ariaLabel ?? `Create workspace for ${row.label}`
@@ -3559,6 +3585,24 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         : undefined
                     }
                   />
+                </div>
+              )
+            }
+
+            if (row.type === 'pending-creation') {
+              return (
+                <div
+                  key={vItem.key}
+                  role="presentation"
+                  data-worktree-virtual-row
+                  data-worktree-virtual-row-key={String(vItem.key)}
+                  data-worktree-virtual-row-start={vItem.start}
+                  data-index={vItem.index}
+                  ref={measureVirtualRowElement}
+                  className="absolute left-0 right-0 top-0 px-2 pb-1.5"
+                  style={{ transform: getVirtualRowTransform(vItem.start) }}
+                >
+                  <PendingWorktreeRow creationId={row.creationId} />
                 </div>
               )
             }
@@ -4082,6 +4126,27 @@ const WorktreeList = React.memo(function WorktreeList({
   }, [filterRepoIds, groupBy, repos, worktreesByRepo])
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
 
+  // Why: buildRows only needs which creates exist and their repo. Subscribe on a
+  // flat key array (value-compared by useShallow) so progress updates
+  // (phase/loaderVisible) don't churn it and rebuild the whole sidebar row model
+  // on every creation tick. Split on the first space — the creationId is a UUID,
+  // so it has none and the repoId (which may contain spaces) stays intact.
+  const pendingCreationKeys = useAppStore(
+    useShallow((s) =>
+      Object.values(s.pendingWorktreeCreations ?? {}).map(
+        (creation) => `${creation.creationId} ${creation.request.repoId}`
+      )
+    )
+  )
+  const pendingCreations = useMemo(
+    () =>
+      pendingCreationKeys.map((key) => {
+        const separator = key.indexOf(' ')
+        return { creationId: key.slice(0, separator), repoId: key.slice(separator + 1) }
+      }),
+    [pendingCreationKeys]
+  )
+
   // Build flat row list for rendering
   const rows: Row[] = useMemo(
     () =>
@@ -4100,7 +4165,8 @@ const WorktreeList = React.memo(function WorktreeList({
         settings,
         projectGroups,
         placeholderRepoIds,
-        importedWorktreesByRepo
+        importedWorktreesByRepo,
+        pendingCreations
       ),
     [
       groupBy,
@@ -4116,7 +4182,8 @@ const WorktreeList = React.memo(function WorktreeList({
       settings,
       projectGroups,
       placeholderRepoIds,
-      importedWorktreesByRepo
+      importedWorktreesByRepo,
+      pendingCreations
     ]
   )
   // Why: status headers change during wake (inactive -> active). Key only on

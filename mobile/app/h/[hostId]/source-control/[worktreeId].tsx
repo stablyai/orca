@@ -39,12 +39,18 @@ import {
 } from '../../../../src/components/ActionSheetModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../../src/components/BottomDrawer'
+import { MobileSyntaxSegments } from '../../../../src/components/MobileSyntaxSegments'
 import { triggerError, triggerSelection, triggerSuccess } from '../../../../src/platform/haptics'
 import { colors, radii, spacing, typography } from '../../../../src/theme/mobile-theme'
 import {
   buildMobileDiffLines,
   type MobileDiffLine
 } from '../../../../src/session/mobile-diff-lines'
+import {
+  highlightMobileDiffLines,
+  resolveMobileSyntaxLanguage,
+  type MobileHighlightedDiffLine
+} from '../../../../src/session/mobile-file-syntax'
 import {
   buildMobileBranchCompareSection,
   canOpenMobileBranchCompareDiff,
@@ -53,6 +59,7 @@ import {
   type MobileGitBranchCompareResult,
   type MobileGitBranchCompareSummary
 } from '../../../../src/source-control/mobile-branch-compare'
+import { formatMobileBranchEntryMeta } from '../../../../src/source-control/mobile-branch-entry-format'
 import {
   MOBILE_GIT_STATUS_LABELS,
   buildMobileSourceControlSections,
@@ -70,6 +77,10 @@ import {
   type MobileGitUpstreamStatus,
   type MobileSourceControlSection
 } from '../../../../src/source-control/mobile-git-status'
+import {
+  mobileDiffLineNumber,
+  mobileDiffLinePrefix
+} from '../../../../src/source-control/mobile-diff-format'
 
 type ScreenState =
   | { kind: 'loading' }
@@ -117,7 +128,7 @@ type MobileBranchDiffPreviewState =
       kind: 'ready'
       entry: MobileGitBranchChangeEntry
       summary: MobileGitBranchCompareSummary
-      lines: MobileDiffLine[]
+      lines: MobileHighlightedDiffLine<MobileDiffLine>[]
       truncated: boolean
     }
   | { kind: 'error'; entry: MobileGitBranchChangeEntry; message: string }
@@ -222,31 +233,6 @@ function statusColor(status: MobileGitFileStatus): string {
     default:
       return colors.textSecondary
   }
-}
-
-function formatBranchEntryMeta(entry: MobileGitBranchChangeEntry): string | null {
-  const stats =
-    entry.added !== undefined || entry.removed !== undefined
-      ? `+${entry.added ?? 0} -${entry.removed ?? 0}`
-      : null
-  if (entry.oldPath) {
-    return stats ? `from ${entry.oldPath}; ${stats}` : `from ${entry.oldPath}`
-  }
-  return stats
-}
-
-function diffLinePrefix(kind: MobileDiffLine['kind']): string {
-  if (kind === 'add') {
-    return '+'
-  }
-  if (kind === 'delete') {
-    return '-'
-  }
-  return ' '
-}
-
-function diffLineNumber(line: MobileDiffLine): string {
-  return String(line.newLineNumber ?? line.oldLineNumber ?? '')
 }
 
 export default function MobileSourceControlScreen() {
@@ -924,6 +910,7 @@ export default function MobileSourceControlScreen() {
           throw new Error('Binary branch diff preview unavailable on mobile')
         }
         const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
+        const syntaxLanguage = resolveMobileSyntaxLanguage(entry.path)
         if (!mountedRef.current) {
           return
         }
@@ -931,7 +918,7 @@ export default function MobileSourceControlScreen() {
           kind: 'ready',
           entry,
           summary,
-          lines: diff.lines,
+          lines: highlightMobileDiffLines(diff.lines, syntaxLanguage),
           truncated: diff.truncated
         })
         triggerSelection()
@@ -1272,7 +1259,7 @@ export default function MobileSourceControlScreen() {
               busyAction !== null ||
               openingPath !== null ||
               openingBranchPath !== null
-            const meta = formatBranchEntryMeta(entry)
+            const meta = formatMobileBranchEntryMeta(entry)
             return (
               <Pressable
                 key={`${entry.path}:${entry.oldPath ?? ''}`}
@@ -1360,7 +1347,6 @@ export default function MobileSourceControlScreen() {
             <X size={18} color={colors.textSecondary} strokeWidth={2.1} />
           </Pressable>
         </View>
-
         {branchDiffPreview.kind === 'loading' ? (
           <View style={styles.diffState}>
             <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -1384,9 +1370,11 @@ export default function MobileSourceControlScreen() {
                   line.kind === 'delete' && styles.diffLineDelete
                 ]}
               >
-                <Text style={styles.diffLineNumber}>{diffLineNumber(line)}</Text>
-                <Text style={styles.diffLinePrefix}>{diffLinePrefix(line.kind)}</Text>
-                <Text style={styles.diffLineText}>{line.text || ' '}</Text>
+                <Text style={styles.diffLineNumber}>{mobileDiffLineNumber(line)}</Text>
+                <Text style={styles.diffLinePrefix}>{mobileDiffLinePrefix(line.kind)}</Text>
+                <Text style={styles.diffLineText}>
+                  {line.text ? <MobileSyntaxSegments segments={line.segments} /> : ' '}
+                </Text>
               </View>
             ))}
           </View>
@@ -1626,7 +1614,6 @@ export default function MobileSourceControlScreen() {
           </View>
         </>
       )}
-
       {renderBranchDiffPreview()}
 
       <ActionSheetModal
@@ -2056,8 +2043,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.xs,
     paddingVertical: 2,
-    paddingHorizontal: spacing.xs,
-    borderRadius: radii.row
+    paddingHorizontal: spacing.xs
   },
   diffLineAdd: {
     backgroundColor: colors.diffAddedBg

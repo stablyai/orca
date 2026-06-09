@@ -327,6 +327,7 @@ describePosix('local PTY shell-ready launch config', () => {
       '[[ -n "${ORCA_PI_CODING_AGENT_DIR:-}" ]] && export PI_CODING_AGENT_DIR="${ORCA_PI_CODING_AGENT_DIR}"'
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
+    const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompRestoreLine =
       'if [[ -z "${ORCA_PI_CODING_AGENT_DIR:-}" && -n "${ORCA_OMP_CODING_AGENT_DIR:-}" ]]; then'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
@@ -338,6 +339,9 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(bashRc).toContain(piRestoreLine)
     expect(zshrc).toContain(codexRestoreLine)
     expect(zlogin).toContain(codexRestoreLine)
+    expect(zshrc).toContain(agentTeamsPathRestoreLine)
+    expect(zlogin).toContain(agentTeamsPathRestoreLine)
+    expect(bashRc).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(codexRestoreLine)
     expect(zshrc).toContain(ompRestoreLine)
     expect(zlogin).toContain(ompRestoreLine)

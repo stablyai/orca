@@ -132,7 +132,7 @@ import { AsanaIcon } from '@/components/icons/AsanaIcon'
 import { cn } from '@/lib/utils'
 import {
   getLinkedWorkItemSuggestedName,
-  getWorkspaceIntentName,
+  getLinkedWorkItemWorkspaceName,
   getTaskPresetQuery,
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT
@@ -360,48 +360,40 @@ const GITHUB_TASK_ROW_HOVER_SURFACE_CLASS =
   'group-hover/github-task-row:[background:color-mix(in_srgb,var(--muted)_70%,var(--background))]'
 
 function getGitHubWorkItemWorkspaceSeed(item: GitHubWorkItem): string {
-  return (
-    getWorkspaceIntentName({ workItem: item })?.seedName ?? getLinkedWorkItemSuggestedName(item)
-  )
+  return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
 }
 
 function getGitLabWorkItemWorkspaceSeed(item: GitLabWorkItem): string {
   return (
-    getWorkspaceIntentName({
-      workItem: {
-        type: item.type,
-        provider: 'gitlab',
-        number: item.number,
-        title: item.title
-      }
+    getLinkedWorkItemWorkspaceName({
+      type: item.type,
+      provider: 'gitlab',
+      number: item.number,
+      title: item.title
     })?.seedName ?? getLinkedWorkItemSuggestedName(item)
   )
 }
 
 function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
   return (
-    getWorkspaceIntentName({
-      workItem: {
-        type: 'issue',
-        provider: 'jira',
-        number: 0,
-        title: `${issue.key} ${issue.title}`,
-        jiraIdentifier: issue.key
-      }
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'jira',
+      number: 0,
+      title: `${issue.key} ${issue.title}`,
+      jiraIdentifier: issue.key
     })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
   )
 }
 
 function getAsanaTaskWorkspaceSeed(task: AsanaTask): string {
   return (
-    getWorkspaceIntentName({
-      workItem: {
-        type: 'issue',
-        provider: 'asana',
-        number: 0,
-        title: task.title,
-        asanaIdentifier: task.gid
-      }
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'asana',
+      number: 0,
+      title: task.title,
+      asanaIdentifier: task.gid
     })?.seedName ?? buildAsanaBranchName(task)
   )
 }

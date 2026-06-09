@@ -16,7 +16,7 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../../../shared/types'
-import { resolveRuntimePaneTitleLeafId } from './runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 
 function tabFromAttributedStatusEntry(entry: AgentStatusEntry): TerminalTab | null {

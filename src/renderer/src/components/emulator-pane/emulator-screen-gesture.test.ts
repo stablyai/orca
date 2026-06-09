@@ -58,6 +58,27 @@ describe('emulator screen gestures', () => {
     })
   })
 
+  it('marks drags that start at the home indicator as bottom-edge gestures', () => {
+    const action = resolveEmulatorPointerAction(
+      [
+        { clientX: 110, clientY: 396 },
+        { clientX: 110, clientY: 260 },
+        { clientX: 110, clientY: 120 }
+      ],
+      rect,
+      null
+    )
+
+    expect(action).toEqual({
+      kind: 'gesture',
+      points: [
+        { type: 'begin', x: 0.5, y: 0.94, edge: 3 },
+        { type: 'move', x: 0.5, y: 0.6, edge: 3 },
+        { type: 'end', x: 0.5, y: 0.25, edge: 3 }
+      ]
+    })
+  })
+
   it('maps wheel deltas into opposite-direction touch movement', () => {
     const delta = resolveEmulatorWheelDelta(
       { clientX: 110, clientY: 220, deltaX: 0, deltaY: 80 },

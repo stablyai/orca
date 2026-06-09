@@ -17,8 +17,8 @@ import type { PtyConnectionDeps } from './pty-connection-types'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { getFitOverrideForPty, bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
-import { isPaneReplaying, replayIntoTerminal } from './replay-guard'
-import { terminalOutputPrefersDomRenderer } from '@/lib/pane-manager/terminal-complex-script'
+import { isPaneReplaying, replayIntoTerminal, replayIntoTerminalAsync } from './replay-guard'
+import { terminalOutputPrefersRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
   queuePanePtyResizeIfHeld,
@@ -895,11 +895,14 @@ export function connectPanePty(
   })
   commandLifecycle.attachXtermConsumer(pane.terminal)
   const onTerminalKeyDown = (event: KeyboardEvent): void => {
-    deps.clearTerminalTabUnread(deps.tabId)
-    deps.clearTerminalPaneUnread(cacheKey)
-    deps.clearWorktreeUnread(deps.worktreeId)
     if (isPlainEscapeKeyEvent(event)) {
       setPendingTerminalInputIntent('plain-escape')
+      // Why: plain Escape produces real terminal input (\x1b), so it is a
+      // genuine "user is here" signal and must still dismiss attention before
+      // the early return for interrupt-intent inference.
+      deps.clearTerminalTabUnread(deps.tabId)
+      deps.clearTerminalPaneUnread(cacheKey)
+      deps.clearWorktreeUnread(deps.worktreeId)
       return
     }
     if (isCtrlCKeyEvent(event)) {
@@ -908,6 +911,30 @@ export function connectPanePty(
       }
       setPendingTerminalInputIntent('ctrl-c')
     }
+    // Why: only treat keydowns that will produce real terminal input as the
+    // "user is here" signal. Modifier-only presses, autorepeat, and Cmd/Ctrl+C
+    // copy chords with an active selection must not dismiss attention on a
+    // sibling pane before the user has seen it.
+    if (
+      event.repeat ||
+      event.key === 'Alt' ||
+      event.key === 'AltGraph' ||
+      event.key === 'Control' ||
+      event.key === 'Meta' ||
+      event.key === 'Shift'
+    ) {
+      return
+    }
+    if (
+      (event.metaKey || event.ctrlKey) &&
+      event.key.toLowerCase() === 'c' &&
+      pane.terminal.hasSelection()
+    ) {
+      return
+    }
+    deps.clearTerminalTabUnread(deps.tabId)
+    deps.clearTerminalPaneUnread(cacheKey)
+    deps.clearWorktreeUnread(deps.worktreeId)
   }
   // Why: infer only from focused xterm key events. Raw PTY bytes cannot
   // distinguish plain Escape from Alt/meta sequences, and programmatic writes
@@ -1776,19 +1803,7 @@ export function connectPanePty(
       pendingSpawnByPaneKey.set(pendingSpawnKey, trackedPromise)
     }
 
-    let rendererRiskScanTail = ''
     let foregroundRefreshRiskScanTail = ''
-
-    function terminalOutputChunkPrefersDomRenderer(data: string): boolean {
-      if (!data) {
-        return false
-      }
-      // Why: PTY chunk boundaries can split ASCII SGR sequences; keep a small
-      // tail so Codex background-color redraws still trigger the DOM fallback.
-      const scanData = rendererRiskScanTail ? `${rendererRiskScanTail}${data}` : data
-      rendererRiskScanTail = scanData.slice(-TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
-      return terminalOutputPrefersDomRenderer(scanData)
-    }
 
     function trailingIncompleteCsiSequence(data: string): string {
       const escapeIndex = data.lastIndexOf('\x1b[')
@@ -1813,7 +1828,7 @@ export function connectPanePty(
         ? `${foregroundRefreshRiskScanTail}${data}`
         : data
       const prefersRefresh =
-        scanData.includes('\x1b[') && terminalOutputPrefersDomRenderer(scanData)
+        scanData.includes('\x1b[') && terminalOutputPrefersRenderRefresh(scanData)
       foregroundRefreshRiskScanTail = trailingIncompleteCsiSequence(scanData)
       return prefersRefresh
     }
@@ -1826,19 +1841,32 @@ export function connectPanePty(
       // Why: drain any queued background bytes BEFORE the replay paint, so the
       // scheduler's deferred drain cannot land older bytes on top of the replay.
       flushTerminalOutput(pane.terminal)
-      // Why: replay rebuilds terminal pixels from serialized bytes. Keep it off
-      // WebGL so stale atlas/canvas cells cannot survive restore + scroll.
-      manager.markPaneHasComplexScriptOutput(pane.id)
       replayIntoTerminal(pane, deps.replayingPanesRef, data)
     }
 
+    const writeReplayDataAsync = (data: string): Promise<void> => {
+      // Why: WebGL must be rebuilt after xterm has parsed replay bytes, not
+      // merely after the write was queued.
+      flushTerminalOutput(pane.terminal)
+      return replayIntoTerminalAsync(pane, deps.replayingPanesRef, data)
+    }
+
     const replayDataCallback = (data: string): void => {
-      // Relay replay buffer holds the last 100 KB of output, which may
-      // overlap with content already rendered in xterm before the
-      // disconnect. Clear first to prevent duplication on SSH reconnect.
-      writeReplayData('\x1b[2J\x1b[3J\x1b[H')
-      writeReplayData(data)
-      writeReplayData(POST_REPLAY_REATTACH_RESET)
+      void (async () => {
+        // Relay replay buffer holds the last 100 KB of output, which may
+        // overlap with content already rendered in xterm before the
+        // disconnect. Clear first to prevent duplication on SSH reconnect.
+        await writeReplayDataAsync('\x1b[2J\x1b[3J\x1b[H')
+        await writeReplayDataAsync(data)
+        await writeReplayDataAsync(POST_REPLAY_REATTACH_RESET)
+        if (disposed) {
+          return
+        }
+        // Why: remote-runtime snapshots can arrive after WebGL attached to an
+        // empty buffer; rebuilding after replay parses seeds the glyph atlas
+        // from the now-populated xterm state.
+        manager.rebuildPaneWebgl(pane.id)
+      })()
     }
 
     type PendingHiddenOutputRestoreChunk = {
@@ -1921,20 +1949,8 @@ export function connectPanePty(
       transport.sendInput(mode2031SequenceFor(mode))
       recordHiddenMode2031Reply()
     }
-    function beforeTerminalOutputWrite(chunk: string): void {
-      // Why: hidden tab output is coalesced by the scheduler. Run per-byte
-      // renderer checks at the xterm write boundary so background PTY bursts
-      // do not spend foreground event-loop time scanning bytes we will delay.
-      if (terminalOutputChunkPrefersDomRenderer(chunk) || containsNonAsciiOutput(chunk)) {
-        manager.markPaneHasComplexScriptOutput(pane.id)
-      }
+    function beforeTerminalOutputWrite(): void {
       recordTerminalOutput(pane.terminal)
-    }
-
-    function markRendererRiskForSkippedOutput(): void {
-      // Why: hidden-output recovery skips xterm.write entirely, so WebGL does
-      // not see the bytes it would later need to repaint during restore/scroll.
-      manager.markPaneHasComplexScriptOutput(pane.id)
     }
 
     function consumeForegroundImmediateBudget(dataLength: number): boolean {
@@ -2115,7 +2131,6 @@ export function connectPanePty(
     }
 
     function skipHiddenRendererOutput(data: string): void {
-      markRendererRiskForSkippedOutput()
       respondToSkippedMode2031Subscribe(data)
       markHiddenOutputRestoreNeeded()
       if (hiddenOutputRestoreInFlight) {

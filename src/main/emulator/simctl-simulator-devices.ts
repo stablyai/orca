@@ -1,4 +1,5 @@
 import { execFile } from 'child_process'
+import type { ExecFileException } from 'child_process'
 import { platform } from 'os'
 import { EmulatorError } from './emulator-errors'
 import { execServeSimCommand, type ServeSimExecutable } from './serve-sim-execution'
@@ -23,6 +24,8 @@ type SimctlDeviceList = {
 }
 
 const UDID_RE = /^[0-9A-F]{8}-([0-9A-F]{4}-){3}[0-9A-F]{12}$/i
+const SIMCTL_UNAVAILABLE_MESSAGE =
+  'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.'
 
 function parseSimctlDevices(stdout: string): SimulatorDevice[] {
   const data = JSON.parse(stdout || '{}') as SimctlDeviceList
@@ -44,22 +47,42 @@ function parseSimctlDevices(stdout: string): SimulatorDevice[] {
   return devices
 }
 
+function mapSimctlError(error: ExecFileException, stderr?: string | Buffer): EmulatorError {
+  const raw = `${error.message}\n${stderr?.toString() ?? ''}`
+  const lower = raw.toLowerCase()
+  if (
+    error.code === 'ENOENT' ||
+    (lower.includes('unable to find utility') && lower.includes('simctl')) ||
+    lower.includes('not a developer tool')
+  ) {
+    // Why: xcrun exposes setup problems as raw execFile text; UI and CLI need
+    // the actionable Xcode fix instead of "Command failed: xcrun ...".
+    return new EmulatorError('emulator_simctl_unavailable', SIMCTL_UNAVAILABLE_MESSAGE)
+  }
+  return new EmulatorError('emulator_error', raw.trim() || 'xcrun simctl command failed.')
+}
+
 export async function listSimulatorDevices(): Promise<SimulatorDevice[]> {
   if (platform() !== 'darwin') {
     return []
   }
   return new Promise((resolve, reject) => {
-    execFile('xcrun', ['simctl', 'list', 'devices', '-j'], { timeout: 15_000 }, (error, stdout) => {
-      if (error) {
-        reject(error)
-        return
+    execFile(
+      'xcrun',
+      ['simctl', 'list', 'devices', '-j'],
+      { timeout: 15_000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          reject(mapSimctlError(error, stderr))
+          return
+        }
+        try {
+          resolve(parseSimctlDevices(stdout))
+        } catch (parseError) {
+          reject(parseError)
+        }
       }
-      try {
-        resolve(parseSimctlDevices(stdout))
-      } catch (parseError) {
-        reject(parseError)
-      }
-    })
+    )
   })
 }
 
@@ -119,14 +142,14 @@ export async function ensureSimulatorBooted(udid: string): Promise<void> {
 
   try {
     await new Promise<void>((resolve, reject) => {
-      execFile('xcrun', ['simctl', 'boot', udid], { timeout: 45_000 }, (error) => {
+      execFile('xcrun', ['simctl', 'boot', udid], { timeout: 45_000 }, (error, _stdout, stderr) => {
         if (error) {
           const message = error.message.toLowerCase()
           if (message.includes('booted') || message.includes('current state')) {
             resolve()
             return
           }
-          reject(error)
+          reject(mapSimctlError(error, stderr))
           return
         }
         resolve()
@@ -159,17 +182,22 @@ export async function shutdownSimulatorDevice(udid: string): Promise<void> {
   }
 
   await new Promise<void>((resolve, reject) => {
-    execFile('xcrun', ['simctl', 'shutdown', udid], { timeout: 30_000 }, (error) => {
-      if (!error) {
-        resolve()
-        return
+    execFile(
+      'xcrun',
+      ['simctl', 'shutdown', udid],
+      { timeout: 30_000 },
+      (error, _stdout, stderr) => {
+        if (!error) {
+          resolve()
+          return
+        }
+        const message = error.message.toLowerCase()
+        if (message.includes('shutdown') || message.includes('current state')) {
+          resolve()
+          return
+        }
+        reject(mapSimctlError(error, stderr))
       }
-      const message = error.message.toLowerCase()
-      if (message.includes('shutdown') || message.includes('current state')) {
-        resolve()
-        return
-      }
-      reject(error)
-    })
+    )
   })
 }

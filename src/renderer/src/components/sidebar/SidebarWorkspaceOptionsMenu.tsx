@@ -128,7 +128,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
   const projectOrderLabel =
     PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
-  const cardLayout = settings?.experimentalCompactWorktreeCards ? 'compact' : 'detailed'
+  const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
   const cardLayoutLabel =
     CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
   const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
@@ -305,7 +305,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               value={cardLayout}
               onValueChange={(value) => {
                 void updateSettings({
-                  experimentalCompactWorktreeCards: value === 'compact'
+                  compactWorktreeCards: value === 'compact'
                 })
               }}
             >

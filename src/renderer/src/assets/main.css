@@ -546,7 +546,9 @@
   align-items: center;
   overflow: hidden;
   flex-shrink: 0;
-  background: var(--bg-titlebar, var(--card));
+  /* Why: in workspace view this strip sits directly above the worktree
+     sidebar — match its surface so the left column reads as one panel. */
+  background: var(--worktree-sidebar);
   /* Why: draw the divider via inset shadow instead of border-bottom so the
      flex content area spans the full 36px. With border-bottom + border-box,
      the content area shrinks to 35px and flex-centered controls land at
@@ -558,6 +560,12 @@
   box-shadow: inset 0 -1px 0 var(--border);
   -webkit-app-region: drag;
   user-select: none;
+}
+
+/* Why: when the sidebar is collapsed this header floats over the tab strip,
+   so keep the standard titlebar surface instead of the sidebar tint. */
+.titlebar-left-floating {
+  background: var(--bg-titlebar, var(--card));
 }
 
 .titlebar-traffic-light-pad {

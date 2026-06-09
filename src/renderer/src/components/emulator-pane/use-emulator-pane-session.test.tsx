@@ -61,6 +61,15 @@ function runtimeSuccess<T>(result: T) {
   }
 }
 
+function runtimeFailure(code: string, message: string) {
+  return {
+    id: 'test',
+    ok: false,
+    error: { code, message },
+    _meta: { runtimeId: 'test-runtime' }
+  }
+}
+
 function Probe(): React.JSX.Element {
   const state = useEmulatorPaneSession({
     worktreeId: WORKTREE_ID,
@@ -72,6 +81,14 @@ function Probe(): React.JSX.Element {
       Switch
     </button>
   )
+}
+
+function AutoAttachProbe(): React.JSX.Element | null {
+  latest = useEmulatorPaneSession({
+    worktreeId: WORKTREE_ID,
+    autoAttachOnMount: true
+  })
+  return null
 }
 
 async function flushEffects(): Promise<void> {
@@ -168,5 +185,34 @@ describe('useEmulatorPaneSession', () => {
     expect(latest?.loading).toBe(false)
     expect(latest?.isLive).toBe(true)
     expect(latest?.previewUrl).toBe('http://127.0.0.1:3200/stream.mjpeg')
+  })
+
+  it('keeps simulator discovery setup errors during auto attach', async () => {
+    const message =
+      'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.'
+    consumePrelaunchedSimulatorSession(WORKTREE_ID)
+    const runtimeCall = vi.fn(async ({ method }: RuntimeCallRequest) => {
+      if (method === 'emulator.listSimulators') {
+        return runtimeFailure('emulator_simctl_unavailable', message)
+      }
+      if (method === 'emulator.attach') {
+        throw new Error('attach should not run without a discovered target')
+      }
+      throw new Error(`Unexpected RPC method: ${method}`)
+    })
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { runtime: { call: runtimeCall } }
+    })
+
+    await act(async () => {
+      root.render(<AutoAttachProbe />)
+    })
+
+    await vi.waitFor(() => expect(latest?.error).toBe(message))
+    expect(latest?.loading).toBe(false)
+    expect(runtimeCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'emulator.attach' })
+    )
   })
 })

@@ -68,7 +68,7 @@ function EmulatorPaneContent({ tab, worktreeId, isActive = true }: EmulatorPaneP
         </div>
       ) : null}
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6">
         {!isLive && !loading ? (
           <p className="mb-4 text-center text-xs text-muted-foreground">No emulator connected</p>
         ) : null}

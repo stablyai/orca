@@ -12,6 +12,7 @@ export type EmulatorErrorCode =
   | 'emulator_no_active'
   | 'emulator_device_not_found'
   | 'emulator_helper_failed'
+  | 'emulator_simctl_unavailable'
   | 'emulator_not_macos'
   | 'emulator_disabled'
   | 'emulator_error'

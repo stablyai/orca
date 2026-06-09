@@ -13,9 +13,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
   const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
   const workspaceBoardOpenRef = useRef(workspaceBoardOpen)
-  const repos = useAppStore((s) => s.repos)
   const groupBy = useAppStore((s) => s.groupBy)
-  const canCreateWorkspace = repos.length > 0
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
   workspaceBoardOpenRef.current = workspaceBoardOpen
 
@@ -129,24 +127,18 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 variant="ghost"
                 size="icon-xs"
                 onClick={() => {
-                  if (!canCreateWorkspace) {
-                    return
-                  }
                   // Why: the parallel-work tour must click the real sidebar
                   // control so it can hand off to the workspace-creation tour.
                   openWorkspaceCreationComposerWithTourHandoff()
                 }}
                 aria-label="New workspace"
-                disabled={!canCreateWorkspace}
                 data-contextual-tour-target="workspace-create-control"
               >
                 <Plus className="size-3.5" strokeWidth={2.25} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={6}>
-              {canCreateWorkspace
-                ? `New workspace (${newWorktreeShortcutLabel})`
-                : 'Add a project to create workspaces'}
+              {`New workspace (${newWorktreeShortcutLabel})`}
             </TooltipContent>
           </Tooltip>
         </div>

@@ -3,18 +3,25 @@ import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/hover-card'
 import {
   CircleDot,
+  Ellipsis,
   ExternalLink,
-  GitMerge,
   MonitorUp,
   Pencil,
   StickyNote,
   Unlink
 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import CommentMarkdown from './CommentMarkdown'
-import { PullRequestIcon } from './WorktreeCardHelpers'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
 import {
   WorktreeCardDetailSection,
@@ -27,50 +34,22 @@ import {
   ReviewChecksBadge,
   ReviewStateBadge
 } from './WorktreeCardMetadataStatusBadges'
-import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import type { IssueInfo } from '../../../../shared/types'
+import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
+import { getReviewLabel, getProviderName, ReviewIcon } from './worktree-review-helpers'
+import type {
+  WorktreeCardIssueDisplay,
+  WorktreeCardLinearIssueDisplay,
+  WorktreeCardMetaBadgesProps,
+  WorktreeCardMetaBadgesRootProps,
+  WorktreeCardDetailsHoverProps
+} from './worktree-card-meta-types'
 
-export type WorktreeCardIssueDisplay =
-  | IssueInfo
-  | {
-      number: number
-      title: string
-      state?: IssueInfo['state']
-      url?: string
-      labels?: string[]
-    }
-
-export type WorktreeCardLinearIssueDisplay = {
-  identifier: string
-  title: string
-  url?: string
-  stateName?: string
-  labels?: string[]
-}
-
-type WorktreeCardMetaBadgesProps = {
-  issue: WorktreeCardIssueDisplay | null
-  linearIssue: WorktreeCardLinearIssueDisplay | null
-  review: WorktreeCardPrDisplay | null
-  comment: string | null
-}
-
-type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &
-  React.HTMLAttributes<HTMLDivElement>
-
-type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
-  children: React.ReactElement
-  branchName?: string
-  workspaceTitle?: string
-  detailsAfter?: React.ReactNode
-  openDelay?: number
-  closeDelay?: number
-  onEditIssue: (event: React.MouseEvent) => void
-  onEditComment: (event: React.MouseEvent) => void
-  onOpenGitHubIssueInOrca?: (event: React.MouseEvent) => void
-  onOpenLinearIssueInOrca?: (event: React.MouseEvent) => void
-  onOpenReviewInOrca?: (event: React.MouseEvent) => void
-  onUnlinkReview?: (event: React.MouseEvent) => void
+export type {
+  WorktreeCardIssueDisplay,
+  WorktreeCardLinearIssueDisplay,
+  WorktreeCardMetaBadgesProps,
+  WorktreeCardMetaBadgesRootProps,
+  WorktreeCardDetailsHoverProps
 }
 
 function hasComment(comment: string | null): boolean {
@@ -84,61 +63,6 @@ export function hasWorktreeCardDetails({
   comment
 }: WorktreeCardMetaBadgesProps): boolean {
   return Boolean(issue || linearIssue || review || hasComment(comment))
-}
-
-function getReviewLabel(review: WorktreeCardPrDisplay): 'MR' | 'PR' {
-  return review.provider === 'gitlab' ? 'MR' : 'PR'
-}
-
-function getProviderName(review: WorktreeCardPrDisplay): string {
-  if (review.provider === 'gitlab') {
-    return 'GitLab'
-  }
-  if (review.provider === 'bitbucket') {
-    return 'Bitbucket'
-  }
-  if (review.provider === 'azure-devops') {
-    return 'Azure DevOps'
-  }
-  if (review.provider === 'gitea') {
-    return 'Gitea'
-  }
-  return 'GitHub'
-}
-
-function ReviewIcon({
-  review,
-  className
-}: {
-  review: WorktreeCardPrDisplay
-  className?: string
-}): React.JSX.Element {
-  const Icon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  // Why: the standalone CI glyph was removed from the card header, so linked
-  // PR metadata carries check health unless the review is already merged.
-  const checkTone =
-    review.state !== 'merged' && review.status === 'failure'
-      ? 'text-rose-500/85'
-      : review.state !== 'merged' && review.status === 'pending'
-        ? 'text-amber-500/85'
-        : review.state === 'open' && review.status === 'success'
-          ? 'text-emerald-500/80'
-          : null
-  return (
-    <Icon
-      className={cn(
-        className,
-        checkTone,
-        review.state === 'merged' && 'text-purple-600/70 dark:text-purple-400/70',
-        !checkTone && review.state === 'open' && 'text-emerald-500/80',
-        !checkTone && review.state === 'closed' && 'text-muted-foreground/60',
-        !checkTone && review.state === 'draft' && 'text-muted-foreground/50',
-        !checkTone &&
-          (!review.state || !['merged', 'open', 'closed', 'draft'].includes(review.state)) &&
-          'text-muted-foreground opacity-70'
-      )}
-    />
-  )
 }
 
 export const WorktreeCardMetaBadges = React.forwardRef<
@@ -201,15 +125,23 @@ export function WorktreeCardDetailsHover({
   onOpenGitHubIssueInOrca,
   onOpenLinearIssueInOrca,
   onOpenReviewInOrca,
-  onUnlinkReview
+  onUnlinkReview,
+  hoverControl
 }: WorktreeCardDetailsHoverProps): React.JSX.Element {
-  const [open, setOpen] = React.useState(false)
+  const internalHoverControl = useWorktreeCardDetailsHoverControl()
+  const {
+    hoverOpen,
+    reviewMenuOpen,
+    handleHoverOpenChange,
+    handleReviewMenuOpenChange,
+    closeHover
+  } = hoverControl ?? internalHoverControl
   const dismissAndRun = React.useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
-      setOpen(false)
+      closeHover()
       handler?.(event)
     },
-    []
+    [closeHover]
   )
 
   const showIdentityHeader = Boolean(branchName || workspaceTitle)
@@ -227,7 +159,12 @@ export function WorktreeCardDetailsHover({
   const issueLabels = issue?.labels ?? []
 
   return (
-    <HoverCard open={open} onOpenChange={setOpen} openDelay={openDelay} closeDelay={closeDelay}>
+    <HoverCard
+      open={hoverOpen}
+      onOpenChange={handleHoverOpenChange}
+      openDelay={openDelay}
+      closeDelay={closeDelay}
+    >
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
       <HoverCardContent
         side="right"
@@ -351,6 +288,44 @@ export function WorktreeCardDetailsHover({
                 label={`${reviewLabel} #${review.number}`}
                 actions={
                   <>
+                    {onUnlinkReview && (
+                      <DropdownMenu
+                        modal={false}
+                        open={reviewMenuOpen}
+                        onOpenChange={handleReviewMenuOpenChange}
+                      >
+                        <Tooltip open={reviewMenuOpen ? false : undefined}>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-xs"
+                                className="size-6"
+                                aria-label={`More ${reviewLabel} actions`}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <Ellipsis className="size-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" sideOffset={4}>
+                            More {reviewLabel} actions
+                          </TooltipContent>
+                        </Tooltip>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              closeHover()
+                              onUnlinkReview?.()
+                            }}
+                          >
+                            <Unlink className="size-3.5" />
+                            Unlink {reviewLabel}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                     {review.url && onOpenReviewInOrca && (
                       <MetadataActionIcon
                         label="Open in Orca"
@@ -362,14 +337,6 @@ export function WorktreeCardDetailsHover({
                     {review.url && (
                       <MetadataActionIcon label={`View on ${reviewProvider}`} href={review.url}>
                         <ExternalLink className="size-3" />
-                      </MetadataActionIcon>
-                    )}
-                    {onUnlinkReview && (
-                      <MetadataActionIcon
-                        label={`Unlink ${reviewLabel}`}
-                        onClick={dismissAndRun(onUnlinkReview)}
-                      >
-                        <Unlink className="size-3" />
                       </MetadataActionIcon>
                     )}
                   </>

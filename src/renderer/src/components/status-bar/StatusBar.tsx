@@ -46,6 +46,7 @@ import { ResourceUsageStatusSegment } from './ResourceUsageStatusSegment'
 import { PortsStatusSegment } from './PortsStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { isProviderConfigured } from './status-bar-provider-visibility'
+import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { PetStatusSegment } from './PetStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
@@ -605,10 +606,7 @@ function ClaudeSwitcherMenu({
   const claudeTarget = useAppStore((s) => s.rateLimits.claudeTarget)
   const settings = useAppStore((s) => s.settings)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget(settings),
-    [settings?.activeRuntimeEnvironmentId]
-  )
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
@@ -1101,10 +1099,7 @@ function CodexSwitcherMenu({
   const codexTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const settings = useAppStore((s) => s.settings)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget(settings),
-    [settings?.activeRuntimeEnvironmentId]
-  )
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
@@ -1518,6 +1513,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // purely by the experimentalPet settings flag.
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
+  const usageEmptyStateDismissed = useAppStore((s) => s.usageEmptyStateDismissed)
   const containerRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -1621,6 +1617,20 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
   const anyVisible =
     showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
+  // Why: a brand-new user with no provider configured would otherwise see an
+  // empty left side of the status bar and wonder what's missing. The CTA
+  // names the surface and points to the setup path. Detection is on
+  // configuration (not user toggles) so users who intentionally hid a
+  // provider's bar don't get the teaching prompt back.
+  const isEmptyUsageState =
+    !isProviderConfigured(claude) &&
+    !isProviderConfigured(codex) &&
+    !isProviderConfigured(gemini) &&
+    !isProviderConfigured(opencodeGo) &&
+    !isProviderConfigured(kimi)
+  // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
+  // hidden even after providers are disconnected again.
+  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
@@ -1656,33 +1666,43 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       }}
     >
       <div className="flex items-center gap-3">
-        {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
-        {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
-        {showGemini && (
-          <ProviderDetailsMenu
-            provider={gemini}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open Gemini usage details"
-          />
+        {isEmptyUsageState ? (
+          showEmptyUsageCta ? (
+            <StatusBarUsageEmptyCta />
+          ) : null
+        ) : (
+          <>
+            {showClaude && (
+              <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />
+            )}
+            {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+            {showGemini && (
+              <ProviderDetailsMenu
+                provider={gemini}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open Gemini usage details"
+              />
+            )}
+            {showOpencodeGo && (
+              <ProviderDetailsMenu
+                provider={opencodeGo}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open OpenCode Go usage details"
+              />
+            )}
+            {showKimi && (
+              <ProviderDetailsMenu
+                provider={kimi}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open Kimi usage details"
+              />
+            )}
+          </>
         )}
-        {showOpencodeGo && (
-          <ProviderDetailsMenu
-            provider={opencodeGo}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open OpenCode Go usage details"
-          />
-        )}
-        {showKimi && (
-          <ProviderDetailsMenu
-            provider={kimi}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open Kimi usage details"
-          />
-        )}
-        {anyVisible && (
+        {anyVisible && !isEmptyUsageState && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button

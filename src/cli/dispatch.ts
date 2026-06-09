@@ -26,6 +26,7 @@ export type HandlerContext = {
   client: RuntimeClient
   cwd: string
   json: boolean
+  rawArgs?: string[]
 }
 
 export type CommandHandler = (ctx: HandlerContext) => Promise<void>

@@ -29,10 +29,9 @@ export {
 export function isWebRuntimeSessionActive(
   activeRuntimeEnvironmentId: string | null | undefined
 ): boolean {
-  return (
-    Boolean((globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) &&
-    Boolean(activeRuntimeEnvironmentId?.trim())
-  )
+  // Why: headless serve sessions are owned by the remote runtime, regardless
+  // of whether the attaching client is web or desktop Electron.
+  return Boolean(activeRuntimeEnvironmentId?.trim())
 }
 
 const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()

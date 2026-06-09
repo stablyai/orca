@@ -21,6 +21,7 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
+  getTabStripBorderClasses,
   type DropIndicator
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
@@ -40,7 +41,8 @@ export default function EditorFileTab({
   onTogglePin,
   onSplitGroup,
   dragData,
-  dropIndicator
+  dropIndicator,
+  includeTopTabBorder = true
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
@@ -56,6 +58,7 @@ export default function EditorFileTab({
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
+  includeTopTabBorder?: boolean
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
@@ -200,7 +203,7 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         if (e.button !== 0) {
           return

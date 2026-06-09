@@ -745,6 +745,8 @@ export type UISlice = {
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
   browserImportHintHidden: boolean
   setBrowserImportHintHidden: (hidden: boolean) => void
+  usageEmptyStateDismissed: boolean
+  dismissUsageEmptyState: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
@@ -1469,15 +1471,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (!s.activeContextualTourId) {
         return s
       }
+      const tour = getContextualTour(s.activeContextualTourId)
       const nextStepIndex = getNextVisibleContextualTourStepIndex({
-        tour: getContextualTour(s.activeContextualTourId),
+        tour,
         currentStepIndex: s.activeContextualTourStepIndex,
         targetExists: hasContextualTourTarget
       })
-      if (nextStepIndex === null) {
-        return s
+      if (nextStepIndex !== null) {
+        return { activeContextualTourStepIndex: nextStepIndex }
       }
-      return { activeContextualTourStepIndex: nextStepIndex }
+      // Why: browser step 3's target lives in a closed menu until that step is active.
+      if (
+        s.activeContextualTourId === 'browser' &&
+        s.activeContextualTourStepIndex + 1 < tour.steps.length
+      ) {
+        return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
+      }
+      return s
     }),
   regressContextualTour: () =>
     set((s) => {
@@ -1653,6 +1663,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       window.api.ui.set({ browserImportHintHidden: hidden }).catch(console.error)
       return { browserImportHintHidden: hidden }
+    }),
+  usageEmptyStateDismissed: false,
+  dismissUsageEmptyState: () =>
+    set((s) => {
+      if (s.usageEmptyStateDismissed) {
+        return s
+      }
+      window.api.ui.set({ usageEmptyStateDismissed: true }).catch(console.error)
+      return { usageEmptyStateDismissed: true }
     }),
 
   groupBy: 'repo',
@@ -2003,6 +2022,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
         browserImportHintHidden: ui.browserImportHintHidden === true,
+        // Why: default false when undefined so existing users still see the CTA;
+        // only an explicit dismissal persists true.
+        usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
         // Why: restore visited-row acks alongside the persisted hook entries
         // they pair with. Stale acks for paneKeys whose tab/PTY no longer
         // exists are inert (no row references them); a paneKey reuse stamps a

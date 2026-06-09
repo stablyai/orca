@@ -186,6 +186,7 @@ describe('client UI RPC methods', () => {
       },
       contextualToursSeenIds: ['tasks'],
       contextualToursAutoEligible: true,
+      usageEmptyStateDismissed: true,
       browserDefaultZoomLevel: 1.5
     }
     const runtime = {
@@ -220,6 +221,7 @@ describe('client UI RPC methods', () => {
       },
       contextualToursSeenIds: ['tasks'],
       contextualToursAutoEligible: true,
+      usageEmptyStateDismissed: true,
       browserDefaultZoomLevel: 1.5
     }
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))

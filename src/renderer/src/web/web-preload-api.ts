@@ -1035,6 +1035,9 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         manualOrder: args.manualOrder
       })
     },
+    // Why: the runtime create path emits no two-phase progress, so the web
+    // client's creation panel simply falls back to an indeterminate spinner.
+    onCreateProgress: () => noopUnsubscribe,
     prefetchCreateBase: async ({ repoId, baseBranch }) => {
       await callRuntimeResult('worktree.prefetchCreateBase', {
         repo: repoId,
@@ -1116,6 +1119,9 @@ function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
       })
+    },
+    downloadFile: async () => {
+      throw new Error('Remote file download is unavailable in paired web clients.')
     },
     listMarkdownDocuments: async ({ rootPath }) => {
       const file = await resolveRuntimeFilePath(rootPath)

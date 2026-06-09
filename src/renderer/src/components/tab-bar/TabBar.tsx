@@ -108,6 +108,8 @@ type TabBarProps = {
     sourceVisibleTabId?: string
   ) => void
   hoveredTabInsertion?: HoveredTabInsertion | null
+  /** Floating workspace panels are rounded; skip tab top borders that clash with the curve. */
+  tabStripChrome?: 'default' | 'floating-panel'
 }
 
 type TabItem =
@@ -206,8 +208,10 @@ function TabBarInner({
   onPinFile,
   tabBarOrder,
   onCreateSplitGroup,
-  hoveredTabInsertion
+  hoveredTabInsertion,
+  tabStripChrome = 'default'
 }: TabBarProps): React.JSX.Element {
+  const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const newTerminalShortcut = useShortcutLabel('tab.newTerminal')
   const newBrowserShortcut = useShortcutLabel('tab.newBrowser')
   const newSimulatorShortcut = useShortcutLabel('tab.newSimulator')
@@ -237,17 +241,11 @@ function TabBarInner({
     const repo = worktree ? s.repos?.find((entry) => entry.id === worktree.repoId) : null
     return Boolean(repo?.connectionId)
   })
-  const unifiedNewTabLauncherEnabled = useAppStore(
-    (s) => s.settings?.experimentalUnifiedNewTabLauncher === true
-  )
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
   const agentCmdOverrides = useAppStore(
     (s) => s.settings?.agentCmdOverrides ?? EMPTY_AGENT_CMD_OVERRIDES
   )
   const connectionId = useAppStore((s) => {
-    if (!unifiedNewTabLauncherEnabled) {
-      return undefined
-    }
     const allWorktrees = Object.values(s.worktreesByRepo ?? {}).flat()
     const worktree = allWorktrees.find((w) => w.id === worktreeId)
     if (!worktree) {
@@ -865,6 +863,7 @@ function TabBarInner({
                   }
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                  includeTopTabBorder={includeTopTabBorder}
                 />
               )
             }
@@ -886,6 +885,7 @@ function TabBarInner({
                   onTogglePin={() => togglePinned(item)}
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                  includeTopTabBorder={includeTopTabBorder}
                 />
               )
             }
@@ -921,6 +921,7 @@ function TabBarInner({
                   }
                   dragData={dragData}
                   dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                  includeTopTabBorder={includeTopTabBorder}
                 />
               )
             }
@@ -946,6 +947,7 @@ function TabBarInner({
                 }
                 dragData={dragData}
                 dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
+                includeTopTabBorder={includeTopTabBorder}
               />
             )
           })}
@@ -969,7 +971,7 @@ function TabBarInner({
         <DropdownMenuContent
           align="start"
           sideOffset={6}
-          className={`${unifiedNewTabLauncherEnabled ? 'w-72 max-w-[calc(100vw-1rem)]' : 'min-w-[11rem]'} rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]`}
+          className="w-72 max-w-[calc(100vw-1rem)] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
           onCloseAutoFocus={(e) => {
             // Why: terminal-producing menu actions activate a freshly-mounted
             // xterm. Radix's default focus restore sends focus back to the "+"
@@ -978,7 +980,7 @@ function TabBarInner({
             runPendingNewTabMenuFocusAfterClose()
           }}
         >
-          {!terminalOnly && onOpenEntry && unifiedNewTabLauncherEnabled ? (
+          {!terminalOnly && onOpenEntry ? (
             <>
               <TabBarCreateEntry
                 worktreeId={worktreeId}

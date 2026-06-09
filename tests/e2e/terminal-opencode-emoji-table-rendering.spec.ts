@@ -83,6 +83,9 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
     if (!pane) {
       throw new Error('No active terminal pane')
     }
+    const renderingDiagnostics = manager
+      ?.getRenderingDiagnostics()
+      .find((diagnostic) => diagnostic.paneId === pane.id)
 
     const cursorElements = Array.from(
       pane.container.querySelectorAll<HTMLElement>('.xterm-cursor, .xterm-cursor-layer *')
@@ -129,9 +132,9 @@ async function readActiveTerminalRenderState(page: Page): Promise<TerminalRender
       cursorAnimationDuration: cursorStyle?.animationDuration ?? '',
       rowContainerClassName: rowContainer?.className ?? '',
       xtermClassName: xterm?.className ?? '',
-      hasWebglCanvas: pane.container.querySelector('.xterm-webgl canvas') !== null,
-      hasComplexScriptOutput: pane.hasComplexScriptOutput === true,
-      renderer: pane.webglAddon ? 'webgl' : 'dom'
+      hasWebglCanvas: renderingDiagnostics?.hasWebgl ?? false,
+      hasComplexScriptOutput: renderingDiagnostics?.hasComplexScriptOutput ?? false,
+      renderer: renderingDiagnostics?.hasWebgl ? 'webgl' : 'dom'
     }
   })
 }
@@ -227,6 +230,15 @@ async function enableRiskyTerminalRendererPath(page: Page): Promise<void> {
         theme: 'dark'
       }
     })
+    const worktreeId = state.activeWorktreeId
+    const tabId =
+      state.activeTabType === 'terminal'
+        ? state.activeTabId
+        : worktreeId
+          ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
+          : null
+    const manager = tabId ? window.__paneManagers?.get(tabId) : null
+    manager?.setTerminalGpuAcceleration('auto')
   })
 }
 
@@ -261,12 +273,14 @@ test.describe('OpenCode emoji table terminal rendering', () => {
         description: JSON.stringify({ renderState, blinkSamples })
       })
 
-      expect(renderState.renderer).toBe('dom')
-      expect(renderState.hasWebglCanvas).toBe(false)
+      expect(renderState.hasComplexScriptOutput).toBe(false)
+      expect(renderState.renderer).toBe(renderState.hasWebglCanvas ? 'webgl' : 'dom')
       expect(renderState.coreCursorHidden).toBe(false)
-      expect(renderState.cursorVisibleElementCount).toBeGreaterThan(0)
-      expect(renderState.cursorBlink).toBe(true)
-      expect(renderState.cursorAnimationName).not.toBe('none')
+      if (!renderState.hasWebglCanvas) {
+        expect(renderState.cursorVisibleElementCount).toBeGreaterThan(0)
+        expect(renderState.cursorBlink).toBe(true)
+        expect(renderState.cursorAnimationName).not.toBe('none')
+      }
       expect(blinkSamples.some((sample) => sample.paintedCursorCellCount > 0)).toBe(true)
       expect(blinkSamples.some((sample) => sample.paintedCursorCellCount === 0)).toBe(true)
     } finally {

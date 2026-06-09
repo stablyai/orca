@@ -240,6 +240,7 @@ function Settings(): React.JSX.Element {
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
+  const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
   // Why: the hidden-experimental group is an unlock — Shift-clicking the
@@ -258,9 +259,8 @@ function Settings(): React.JSX.Element {
   const shortcutsEscapeConfirmUntilRef = useRef(0)
   const sourceControlAiWriteQueueRef = useRef<Promise<void>>(Promise.resolve())
 
-  // Why: the commit pane now owns every Git AI Author prompt draft (commit, PR,
-  // and branch name), so its single dirty signal covers all unsaved prompt edits.
-  const hasUnsavedSourceControlAiPromptChanges = hasUnsavedCommitPromptChanges
+  const hasUnsavedSourceControlAiPromptChanges =
+    hasUnsavedCommitPromptChanges || hasUnsavedBranchPromptChanges
 
   const writeSourceControlAiSettings = useCallback(
     (patch: SourceControlAiSettingsPatch): Promise<void> => {
@@ -308,14 +308,15 @@ function Settings(): React.JSX.Element {
       return true
     }
     const shouldDiscard = await confirm({
-      title: 'Discard unsaved Git AI Author prompt changes?',
-      description: 'You have unsaved Git AI Author prompt changes. Leaving will discard them.',
+      title: 'Discard unsaved Git AI Author changes?',
+      description: 'You have unsaved Git AI Author changes. Leaving will discard them.',
       confirmLabel: 'Discard',
       confirmVariant: 'destructive'
     })
     if (shouldDiscard) {
       setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
       setHasUnsavedCommitPromptChanges(false)
+      setHasUnsavedBranchPromptChanges(false)
     }
     return shouldDiscard
   }, [confirm, hasUnsavedSourceControlAiPromptChanges])
@@ -377,7 +378,7 @@ function Settings(): React.JSX.Element {
         return
       }
       // Why: nested dialogs and menus own Escape before Settings page-level
-      // navigation, including the unsaved Source Control AI prompt confirmation dialog.
+      // navigation, including the unsaved Source Control AI confirmation dialog.
       if (hasVisibleOverlay()) {
         return
       }
@@ -584,10 +585,7 @@ function Settings(): React.JSX.Element {
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget(settings),
-    [settings?.activeRuntimeEnvironmentId]
-  )
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const shouldLoadWindowsTerminalCapabilities =
     hasActiveRuntimeEnvironment ||
@@ -884,6 +882,8 @@ function Settings(): React.JSX.Element {
   const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
   const isFocusedShortcutsPane =
     activeSectionId === 'shortcuts' && settingsSearchQuery.trim() === ''
+  const isFocusedSetupGuidePane =
+    activeSectionId === 'setup-guide' && settingsSearchQuery.trim() === ''
 
   return (
     <div
@@ -912,8 +912,9 @@ function Settings(): React.JSX.Element {
         >
           <div
             className={cn(
-              'mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
-              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24'
+              'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
+              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
+              isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
             )}
           >
             {visibleNavSections.length === 0 ? (
@@ -997,7 +998,7 @@ function Settings(): React.JSX.Element {
                   title="Onboarding checklist"
                   description="Finish the core workflows that make Orca useful for parallel agent work."
                   searchEntries={getSectionSearchEntries('setup-guide')}
-                  bodyClassName="overflow-hidden p-0"
+                  bodyClassName="overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none"
                 >
                   {isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
                 </SettingsSection>
@@ -1040,7 +1041,12 @@ function Settings(): React.JSX.Element {
                       <GitPane
                         settings={settings}
                         updateSettings={updateSettings}
+                        writeSourceControlAiSettings={writeSourceControlAiSettings}
                         displayedGitUsername={displayedGitUsername}
+                        hasUnsavedBranchPromptChanges={hasUnsavedBranchPromptChanges}
+                        onBranchPromptDirtyChange={setHasUnsavedBranchPromptChanges}
+                        branchPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
+                        settingsSearchQuery={settingsSearchQuery}
                       />
                       <CommitMessageAiPane
                         settings={settings}

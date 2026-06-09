@@ -533,6 +533,7 @@ function FileExplorerInner(): React.JSX.Element {
               activeFileId={activeFileId}
               flashingPath={flashingPath}
               deleteShortcutLabel={deleteShortcutLabel}
+              connectionId={activeRepo?.connectionId ?? null}
               onClick={handleRowClick}
               onDoubleClick={handleDoubleClick}
               onContextMenuSelect={preserveSelectionForContextMenu}

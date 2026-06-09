@@ -124,7 +124,10 @@ export function agentHasOrchestrationSkill(
 }
 
 export function sortOrchestrationAgents(agents: readonly TuiAgent[]): TuiAgent[] {
-  const order = new Map(TUI_AGENT_AUTO_PICK_ORDER.map((agent, index) => [agent, index]))
+  const order = new Map<TuiAgent, number>()
+  for (const [index, agent] of TUI_AGENT_AUTO_PICK_ORDER.entries()) {
+    order.set(agent, index)
+  }
   return [...agents].sort(
     (left, right) =>
       (order.get(left) ?? Number.MAX_SAFE_INTEGER) - (order.get(right) ?? Number.MAX_SAFE_INTEGER)

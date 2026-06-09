@@ -233,7 +233,10 @@ function QuickTabBody({
       </DialogHeader>
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
-        containerClassName="min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-sleek"
+        // Why: the scroll container clips children, while Orca's standard
+        // field focus ring paints 3px outside the control. Inset both sides so
+        // keyboard focus stays fully visible at the dialog edges.
+        containerClassName="min-h-0 flex-1 overflow-y-auto px-1 scrollbar-sleek"
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}

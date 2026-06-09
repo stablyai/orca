@@ -25,6 +25,8 @@ describe('Electron runtime package contract', () => {
       'build:mac:release',
       'build:linux',
       'test:e2e',
+      'test:e2e:terminal-rendering-golden',
+      'test:e2e:terminal-rendering-release-evidence',
       'test:e2e:headful'
     ]
 
@@ -210,5 +212,65 @@ describe('Electron runtime package contract', () => {
     }
     expect(uploadStep.uses).toBe('actions/upload-artifact@v7')
     expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
+  })
+
+  it('keeps terminal rendering regressions in the fast golden E2E gate', () => {
+    const packageScripts = packageJson.scripts
+    const goldenWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/golden-e2e-experiment.yml'), 'utf8')
+    )
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const steps = goldenWorkflow.jobs['golden-e2e'].steps
+    const linuxRunStep = steps.find((step) => step.name === 'Run golden E2E tests on Linux')
+    const macRunStep = steps.find((step) => step.name === 'Run golden E2E tests on macOS')
+    const windowsRunStep = steps.find((step) => step.name === 'Run golden E2E tests on Windows')
+    const pullRequestPaths = goldenWorkflow.on.pull_request.paths
+    const releaseGoldenJob = releaseWorkflow.jobs['terminal-rendering-golden']
+    const releaseEvidenceJob = releaseWorkflow.jobs['terminal-rendering-release-evidence']
+    const releaseBuildNeeds = releaseWorkflow.jobs.build.needs
+    const publishReleaseNeeds = releaseWorkflow.jobs['publish-release'].needs
+
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      '@terminal-rendering-golden'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      'terminal-raw-emoji-table-scroll-restore.spec.ts'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
+      'terminal-long-table-scroll-restore.spec.ts'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-release-evidence']).toContain(
+      'terminal-opencode-emoji-table-rendering.spec.ts'
+    )
+    expect(packageScripts['test:e2e:terminal-rendering-release-evidence']).toContain(
+      'terminal-long-table-scroll-restore.spec.ts'
+    )
+    for (const runStep of [linuxRunStep, macRunStep, windowsRunStep]) {
+      expect(runStep.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
+    }
+    expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
+    expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
+    expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
+    expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')
+    expect(releaseBuildNeeds).not.toContain('terminal-rendering-release-evidence')
+    expect(publishReleaseNeeds).toContain('terminal-rendering-golden')
+    expect(publishReleaseNeeds).toContain('build')
+    expect(publishReleaseNeeds).not.toContain('terminal-rendering-release-evidence')
+    expect(releaseGoldenJob['continue-on-error']).toBeUndefined()
+    expect(releaseGoldenJob.strategy.matrix.include.map(({ platform }) => platform).sort()).toEqual(
+      ['linux', 'mac', 'windows']
+    )
+    expect(releaseGoldenJob.steps.map((step) => step.run ?? '')).toContain(
+      'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden'
+    )
+    expect(releaseEvidenceJob['continue-on-error']).toBe(true)
+    expect(
+      releaseEvidenceJob.strategy.matrix.include.map(({ platform }) => platform).sort()
+    ).toEqual(['linux', 'mac', 'windows'])
+    expect(releaseEvidenceJob.steps.map((step) => step.run ?? '')).toContain(
+      'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence'
+    )
   })
 })

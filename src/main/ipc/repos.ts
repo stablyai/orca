@@ -1071,9 +1071,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'projectGroupId'
             | 'projectGroupOrder'
-            | 'sourceControlAi'
           >
-        >
+        > & { sourceControlAi?: Repo['sourceControlAi'] | null }
       }
     ) => {
       // Why: validate the persisted preference string at the IPC boundary
@@ -1144,7 +1143,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       ) {
         delete updates.externalWorktreeVisibilityPromptDismissedAt
       }
-      if ('sourceControlAi' in updates && updates.sourceControlAi !== undefined) {
+      // Why: null is the transport sentinel for clearing Source Control AI.
+      // Other invalid fields are deleted; this one must flow as undefined.
+      if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
+        updates.sourceControlAi = undefined
+      } else if ('sourceControlAi' in updates && updates.sourceControlAi !== undefined) {
         const normalizedSourceControlAi = normalizeRepoSourceControlAiOverrides(
           updates.sourceControlAi
         )

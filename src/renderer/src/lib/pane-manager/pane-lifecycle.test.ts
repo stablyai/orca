@@ -165,13 +165,13 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
   })
 
-  it('uses DOM rendering for auto GPU acceleration', () => {
+  it('uses WebGL rendering for auto GPU acceleration on non-Linux platforms', () => {
     const pane = createPane()
 
     attachWebgl(pane)
 
-    expect(pane.webglAddon).toBeNull()
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
   it('uses DOM rendering for auto GPU acceleration on Linux', () => {
@@ -187,6 +187,48 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
   })
 
+  it('uses WebGL rendering for Linux auto GPU acceleration on hardware renderers', () => {
+    const rendererKey = 0x9246
+    const vendorKey = 0x9245
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    vi.stubGlobal('document', {
+      createElement: vi.fn((tagName: string) => {
+        if (tagName !== 'canvas') {
+          return {}
+        }
+        return {
+          getContext: vi.fn((contextName: string) =>
+            contextName === 'webgl2'
+              ? {
+                  getExtension: vi.fn(() => ({
+                    UNMASKED_RENDERER_WEBGL: rendererKey,
+                    UNMASKED_VENDOR_WEBGL: vendorKey
+                  })),
+                  getParameter: vi.fn((key: number) =>
+                    key === rendererKey
+                      ? 'Mesa Intel(R) UHD Graphics 770'
+                      : key === vendorKey
+                        ? 'Intel'
+                        : null
+                  )
+                }
+              : null
+          )
+        }
+      })
+    })
+    resetTerminalWebglSuggestion()
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
   it('still allows forced WebGL on Linux', () => {
     vi.stubGlobal('navigator', {
       platform: 'Linux x86_64',
@@ -200,24 +242,41 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps auto-mode panes on DOM after complex-script output', () => {
+  it('keeps auto-mode panes on WebGL after complex-script output', () => {
     const pane = createPane()
 
     attachWebgl(pane)
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+    vi.mocked(pane.terminal.loadAddon).mockClear()
 
     markComplexScriptOutput(pane)
 
     expect(pane.hasComplexScriptOutput).toBe(true)
-    expect(pane.webglAddon).toBeNull()
+    expect(pane.webglAddon).not.toBeNull()
     expect(webglMock.dispose).not.toHaveBeenCalled()
+    expect(pane.fitAddon.fit).not.toHaveBeenCalled()
 
     attachWebgl(pane)
 
-    expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
   })
 
-  it('allows explicit on mode to override complex-script DOM fallback', () => {
+  it('keeps later auto panes on DOM after WebGL attach fails', () => {
+    vi.mocked(WebglAddon).mockImplementationOnce(() => {
+      throw new Error('webgl unavailable')
+    })
+    const firstPane = createPane()
+    const secondPane = createPane()
+
+    attachWebgl(firstPane)
+    attachWebgl(secondPane)
+
+    expect(firstPane.webglAddon).toBeNull()
+    expect(secondPane.webglAddon).toBeNull()
+    expect(secondPane.terminal.loadAddon).not.toHaveBeenCalled()
+  })
+
+  it('keeps forced WebGL on after complex-script output', () => {
     const pane = createPane()
 
     markComplexScriptOutput(pane)

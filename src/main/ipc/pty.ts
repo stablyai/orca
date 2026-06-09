@@ -325,6 +325,44 @@ function readInheritedPath(baseEnv: Record<string, string>): string {
   return baseEnv.PATH ?? baseEnv.Path ?? process.env.PATH ?? process.env.Path ?? ''
 }
 
+function firstPathEntry(pathValue: string | undefined): string | null {
+  const first = pathValue?.split(delimiter).find((entry) => entry.trim().length > 0)
+  return first ?? null
+}
+
+function promoteAgentTeamsShimPath(
+  env: Record<string, string> | undefined,
+  requestedPath: string | undefined
+): void {
+  if (!env?.ORCA_AGENT_TEAMS_TEAM_ID) {
+    return
+  }
+  const shimPath = firstPathEntry(requestedPath)
+  if (!shimPath) {
+    return
+  }
+  const currentPathKey = env.PATH !== undefined || env.Path === undefined ? 'PATH' : 'Path'
+  const currentPath = env[currentPathKey] ?? ''
+  const remaining = currentPath
+    .split(delimiter)
+    .filter((entry) => entry.length > 0 && entry !== shimPath)
+  // Why: host env injection can prepend Orca's attribution/dev shims. Claude
+  // Agent Teams must still resolve our fake tmux before any real tmux.
+  env[currentPathKey] = [shimPath, ...remaining].join(delimiter)
+}
+
+function deleteRequestedEnvKeys(
+  env: Record<string, string> | undefined,
+  keys: string[] | undefined
+): void {
+  if (!env || !keys) {
+    return
+  }
+  for (const key of keys) {
+    delete env[key]
+  }
+}
+
 function isWslShellName(shellPath: string | undefined): boolean {
   const shellName = shellPath?.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   return shellName === 'wsl.exe' || shellName === 'wsl'
@@ -1587,6 +1625,7 @@ export function registerPtyHandlers(
       let env: Record<string, string> | undefined = claudeAuth
         ? { ...sshScopedEnv, ...claudeAuth.envPatch }
         : sshScopedEnv
+      const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID ? env.PATH : undefined
       if (args.preAllocatedHandle) {
         env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
@@ -1616,8 +1655,12 @@ export function registerPtyHandlers(
           agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
           networkProxySettings: getSettings?.()
         })
+        promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       }
 
+      const authEnvToDelete = claudeAuth?.stripAuthEnv
+        ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
+        : undefined
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,
@@ -1626,10 +1669,8 @@ export function registerPtyHandlers(
         ...(isMintedSessionId ? { isNewSession: true } : {})
       }
       spawnOptions.envToDelete = mergePtyEnvDeletions(
-        claudeAuth?.stripAuthEnv
-          ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
-          : undefined,
-        args.connectionId ? [] : getInheritedAgentHookEnvKeysToDelete(env)
+        mergePtyEnvDeletions(authEnvToDelete, args.envToDelete ?? []),
+        isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : []
       )
       if (skipCodexHomeEnv) {
         spawnOptions.envToDelete = mergePtyEnvDeletions(
@@ -1637,6 +1678,8 @@ export function registerPtyHandlers(
           CODEX_HOME_ENV_KEYS
         )
       }
+      deleteRequestedEnvKeys(env, spawnOptions.envToDelete)
+      promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
       if (args.command !== undefined) {
         spawnOptions.command = args.command
       }
@@ -1939,6 +1982,7 @@ export function registerPtyHandlers(
         rows: number
         cwd?: string
         env?: Record<string, string>
+        envToDelete?: string[]
         command?: string
         connectionId?: string | null
         worktreeId?: string
@@ -2064,6 +2108,7 @@ export function registerPtyHandlers(
           : null
       const stablePaneKey = verifiedPaneKey ?? migrationUnsupportedPaneKey
       const baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+      const requestedAgentTeamsPath = baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID ? baseEnv.PATH : undefined
       if (baseEnv && stablePaneKey) {
         baseEnv.ORCA_PANE_KEY = stablePaneKey
         if (typeof args.tabId === 'string') {
@@ -2142,6 +2187,7 @@ export function registerPtyHandlers(
             agentStatusHooksEnabled: isAgentStatusHooksEnabled(getSettings?.()),
             networkProxySettings: getSettings?.()
           })
+          promoteAgentTeamsShimPath(env, requestedAgentTeamsPath)
         } catch (err) {
           // Why: buildPtyHostEnv has filesystem side-effects (Pi overlay
           // materialization). If it throws before we reach provider.spawn,
@@ -2165,11 +2211,13 @@ export function registerPtyHandlers(
         : undefined
       const combinedEnvToDelete = mergePtyEnvDeletions(
         mergePtyEnvDeletions(
-          envToDelete,
-          args.connectionId ? [] : getInheritedAgentHookEnvKeysToDelete(spawnEnv)
+          mergePtyEnvDeletions(envToDelete, args.envToDelete ?? []),
+          isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : []
         ),
         skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : []
       )
+      deleteRequestedEnvKeys(spawnEnv, combinedEnvToDelete)
+      promoteAgentTeamsShimPath(spawnEnv, requestedAgentTeamsPath)
       const spawnOptions: PtySpawnOptions = {
         cols: args.cols,
         rows: args.rows,

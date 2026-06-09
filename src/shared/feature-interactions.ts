@@ -71,7 +71,7 @@ export const FEATURE_INTERACTIONS = [
   },
   {
     id: 'browser',
-    interaction: 'non-blank browser page viewed'
+    interaction: 'in-app browser opened'
   },
   {
     id: 'tasks',

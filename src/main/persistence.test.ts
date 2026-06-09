@@ -31,9 +31,23 @@ import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
 } from '../shared/constants'
+import { SshConnectionStore } from './ssh/ssh-connection-store'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
+
+// Stub the ~/.ssh/config parser so the SSH-import integration test below drives
+// the real Store (real normalizeSshTarget + disk round-trip) with deterministic
+// config hosts instead of the operator's actual ~/.ssh/config.
+const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
+  loadUserSshConfigMock: vi.fn(),
+  sshConfigHostsToTargetsMock: vi.fn()
+}))
+
+vi.mock('./ssh/ssh-config-parser', () => ({
+  loadUserSshConfig: loadUserSshConfigMock,
+  sshConfigHostsToTargets: sshConfigHostsToTargetsMock
+}))
 const TEST_LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const TEST_LEAF_2 = '22222222-2222-4222-8222-222222222222'
 const TEST_LEAF_LIVE = '33333333-3333-4333-8333-333333333333'
@@ -732,6 +746,78 @@ describe('Store', () => {
     }
   })
 
+  it('persists the SSH target source field through add, update, and disk round-trip', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-src-1',
+      label: 'cluster',
+      configHost: 'cluster',
+      host: '10.0.0.5',
+      port: 2200,
+      username: 'dev',
+      source: 'ssh-config'
+    })
+
+    // normalizeSshTarget must not strip `source` on update, and the new port
+    // must take effect — this is the persistence-layer guard for #4684 item #1.
+    const updated = store.updateSshTarget('ssh-src-1', { port: 2222, source: 'ssh-config' })
+    expect(updated?.port).toBe(2222)
+    expect(updated?.source).toBe('ssh-config')
+
+    expect(store.getSshTarget('ssh-src-1')?.source).toBe('ssh-config')
+    expect(store.getSshTarget('ssh-src-1')?.port).toBe(2222)
+
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const onDisk = persisted.sshTargets?.find((t) => t.id === 'ssh-src-1')
+    expect(onDisk?.source).toBe('ssh-config')
+    expect(onDisk?.port).toBe(2222)
+  })
+
+  it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
+    loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+    const candidate = (port: number, id: string) => [
+      { id, label: 'cluster', configHost: 'cluster', host: '10.0.0.5', port, username: 'dev' }
+    ]
+
+    const store = await createStore()
+    const sshStore = new SshConnectionStore(store)
+
+    // First sync inserts the config host, stamped as config-managed.
+    sshConfigHostsToTargetsMock.mockReturnValue(candidate(2200, 'ssh-cfg-1'))
+    const inserted = sshStore.importFromSshConfig()
+    expect(inserted).toHaveLength(1)
+    expect(inserted[0]?.source).toBe('ssh-config')
+    expect(inserted[0]?.port).toBe(2200)
+
+    // Rotated port: the upsert must update the SAME target in place — and the
+    // real normalizeSshTarget must keep `source` and not falsely re-derive
+    // configHost into a permanently-dirty state.
+    sshConfigHostsToTargetsMock.mockReturnValue(candidate(2222, 'ssh-cfg-2'))
+    const changed = sshStore.importFromSshConfig()
+    expect(changed).toHaveLength(1)
+    expect(changed[0]?.port).toBe(2222)
+    expect(changed[0]?.source).toBe('ssh-config')
+
+    // A third identical sync is a no-op (dirty-check against the real persisted
+    // fields) — proving repeated auto-sync on every pane open writes nothing.
+    expect(sshStore.importFromSshConfig()).toHaveLength(0)
+
+    // Exactly one cluster target on disk with the rotated port and source kept.
+    store.flush()
+    const onDisk = (readDataFile() as { sshTargets?: Record<string, unknown>[] }).sshTargets
+    const clusterTargets = (onDisk ?? []).filter((t) => t.configHost === 'cluster')
+    expect(clusterTargets).toHaveLength(1)
+    expect(clusterTargets[0]?.port).toBe(2222)
+    expect(clusterTargets[0]?.source).toBe('ssh-config')
+
+    // Survives a fresh load from the same data file.
+    const reloaded = await createStore()
+    const reloadedCluster = reloaded.getSshTargets().find((t) => t.configHost === 'cluster')
+    expect(reloadedCluster?.port).toBe(2222)
+    expect(reloadedCluster?.source).toBe('ssh-config')
+  })
+
   it('drops malformed migration-unsupported PTY entries on load', async () => {
     const repo = makeRepo()
     writeDataFile({
@@ -1377,6 +1463,77 @@ describe('Store', () => {
       selectedModelByAgent: { claude: 'legacy-model' },
       customPrompt: 'Rollback commit prompt',
       customAgentCommand: 'claude'
+    })
+    store.flush()
+    const persisted = JSON.parse(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8'))
+    expect(persisted.settings.sourceControlAi.actions.commitMessage).toEqual({
+      agentId: 'claude',
+      commandInputTemplate: '{basePrompt}\n\nRollback commit prompt'
+    })
+    expect(persisted.settings.sourceControlAi.actions.branchName).toEqual({
+      agentId: 'claude',
+      commandInputTemplate: '{basePrompt}\n\nRollback commit prompt'
+    })
+  })
+
+  it('does not let rollback projection clobber existing source-control action templates on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        sourceControlAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          customAgentCommand: '',
+          instructionsByOperation: {
+            commitMessage: '',
+            pullRequest: '',
+            branchName: ''
+          },
+          actions: {
+            commitMessage: {
+              agentId: 'codex',
+              commandInputTemplate: 'use $best-commit-msg to write a commit'
+            },
+            branchName: {
+              agentId: 'claude',
+              commandInputTemplate: 'name this branch from {firstPrompt}'
+            }
+          },
+          prCreationDefaults: {}
+        },
+        commitMessageAi: {
+          enabled: true,
+          agentId: 'codex',
+          selectedModelByAgent: {},
+          selectedModelByAgentByHost: {},
+          discoveredModelsByAgent: {},
+          discoveredModelsByAgentByHost: {},
+          selectedThinkingByModel: {},
+          customPrompt: 'use $best-commit-msg to write a commit',
+          customAgentCommand: ''
+        }
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().sourceControlAi?.actions?.commitMessage).toEqual({
+      agentId: 'codex',
+      commandInputTemplate: 'use $best-commit-msg to write a commit'
+    })
+    expect(store.getSettings().sourceControlAi?.actions?.branchName).toEqual({
+      agentId: 'claude',
+      commandInputTemplate: 'name this branch from {firstPrompt}'
     })
   })
 
@@ -2258,6 +2415,28 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.sourceControlAi).toBeUndefined()
   })
 
+  it('updateRepo treats source-control AI null as a transport clear sentinel', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        sourceControlAi: {
+          enabled: true,
+          customAgentCommand: 'repo-agent {prompt}'
+        }
+      })
+    )
+
+    store.updateRepo('r1', {
+      sourceControlAi: null
+    })
+
+    expect(store.getRepo('r1')!.sourceControlAi).toBeUndefined()
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.sourceControlAi).toBeUndefined()
+  })
+
   it('updateRepo normalizes source-control AI overrides before storing', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
@@ -2290,6 +2469,11 @@ describe('Store', () => {
       instructionsByOperation: {
         commitMessage: 'Repo style'
       },
+      actionOverrides: {
+        commitMessage: {
+          commandInputTemplate: '{basePrompt}\n\nRepo style'
+        }
+      },
       prCreationDefaults: {
         draft: true,
         useTemplate: null
@@ -2316,7 +2500,12 @@ describe('Store', () => {
     const updated = store.updateRepo('r1', { sourceControlAi: 'bad' as never })
 
     expect(updated!.sourceControlAi).toEqual({
-      instructionsByOperation: { commitMessage: 'Keep me' }
+      instructionsByOperation: { commitMessage: 'Keep me' },
+      actionOverrides: {
+        commitMessage: {
+          commandInputTemplate: '{basePrompt}\n\nKeep me'
+        }
+      }
     })
   })
 
@@ -2424,7 +2613,7 @@ describe('Store', () => {
     )
     const store = await createStore()
 
-    expect(store.getSettings().disabledTuiAgents).toEqual(['codex', 'claude'])
+    expect(store.getSettings().disabledTuiAgents).toEqual(['codex', 'claude', 'claude-agent-teams'])
 
     const updated = store.updateSettings({
       disabledTuiAgents: ['gemini', 'not-real', 'gemini', 'opencode'] as never
@@ -3283,6 +3472,23 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getSettings().experimentalPet).toBe(true)
+  })
+
+  it('migrates the legacy experimental compact worktree cards setting', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { experimentalCompactWorktreeCards: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().compactWorktreeCards).toBe(true)
+    expect(store.getSettings().experimentalCompactWorktreeCards).toBeUndefined()
   })
 
   it('defaults legacy experimentalActivity profiles off once', async () => {

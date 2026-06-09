@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { createElement, useMemo } from 'react'
+import { useMemo } from 'react'
 // Why: this registry mirrors the Settings sidebar in one neutral module so
 // Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
 // imports; the boundary is enforced by a focused architecture test.
@@ -31,8 +31,7 @@ import {
   UserCog,
   Wrench
 } from 'lucide-react'
-import type { LucideProps } from 'lucide-react'
-import logo from '../../../../resources/logo.svg'
+import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
 import type { Repo } from '../../../shared/types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import { useAppStore } from '@/store'
@@ -69,20 +68,10 @@ import { SHORTCUTS_PANE_SEARCH_ENTRIES } from '@/components/settings/shortcuts-s
 import { STATS_PANE_SEARCH_ENTRIES } from '@/components/stats/stats-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
-import { cn } from '@/lib/utils'
 import {
   getCachedWindowsTerminalCapabilities,
   getWindowsTerminalCapabilityOwnerKey
 } from '@/lib/windows-terminal-capabilities'
-
-function OrcaLogoSettingsIcon({ className }: LucideProps) {
-  return createElement('img', {
-    src: logo,
-    alt: '',
-    'aria-hidden': true,
-    className: cn('object-contain invert dark:invert-0', className)
-  })
-}
 
 export function isWebClientLocation(): boolean {
   return (

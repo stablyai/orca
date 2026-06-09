@@ -18,12 +18,13 @@ import type {
   GitPushTarget,
   GlobalSettings,
   LocalBaseRefRefreshResult,
+  LocalBaseRefUpdateSuggestion,
   Repo,
   Worktree,
   WorktreeMeta
 } from '../../shared/types'
 import { getPRForBranch } from '../github/client'
-import { listWorktrees, addWorktree, addSparseWorktree, parseWorktreeList } from '../git/worktree'
+import { listWorktrees, addWorktree, addSparseWorktree } from '../git/worktree'
 import type { AddWorktreeResult } from '../git/worktree'
 import { getGitUsername, getDefaultBaseRef, getBranchConflictKind } from '../git/repo'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -110,8 +111,27 @@ type StagedStartupResult = {
   warning?: string
 }
 
+type RemoteLocalBaseRefRefreshability =
+  | {
+      refreshable: true
+      baseRef: string
+      localBranch: string
+      fullRef: string
+      remoteTrackingRef: string
+      behind: number
+      ownerWorktreePath?: string
+    }
+  | {
+      refreshable: false
+      result: LocalBaseRefRefreshResult
+    }
+
 function appendWorktreeCreateWarning(current: string | undefined, next: string): string {
   return current ? `${current} Also ${next[0]?.toLowerCase() ?? ''}${next.slice(1)}` : next
+}
+
+function countNonEmptyGitOutputLines(output: string): number {
+  return output.split(/\r?\n/).filter((line) => line.trim().length > 0).length
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
@@ -871,13 +891,17 @@ async function resolveRemoteTrackingBaseSsh(
     return null
   }
 
+  const remoteRefPrefix = 'refs/remotes/'
+  const shortBaseBranch = baseBranch.startsWith(remoteRefPrefix)
+    ? baseBranch.slice(remoteRefPrefix.length)
+    : baseBranch
   const remote = remotes
-    .filter((candidate) => baseBranch.startsWith(`${candidate}/`))
+    .filter((candidate) => shortBaseBranch.startsWith(`${candidate}/`))
     .sort((a, b) => b.length - a.length)[0]
   if (!remote) {
     return null
   }
-  const branch = baseBranch.slice(remote.length + 1)
+  const branch = shortBaseBranch.slice(remote.length + 1)
   if (!branch) {
     return null
   }
@@ -885,7 +909,7 @@ async function resolveRemoteTrackingBaseSsh(
     remote,
     branch,
     ref: `refs/remotes/${remote}/${branch}`,
-    base: baseBranch
+    base: `${remote}/${branch}`
   }
 }
 
@@ -973,49 +997,128 @@ async function refreshLocalBaseRefForRemoteWorktreeCreate(
   repoPath: string,
   remoteTrackingBase: RemoteTrackingBase
 ): Promise<LocalBaseRefRefreshResult> {
+  const evaluation = await evaluateRemoteLocalBaseRefRefreshability(
+    provider,
+    repoPath,
+    remoteTrackingBase
+  )
+  if (!evaluation.refreshable) {
+    return evaluation.result
+  }
+
+  const resultBase = { baseRef: evaluation.baseRef, localBranch: evaluation.localBranch }
+  try {
+    await provider.refreshLocalBaseRefForWorktreeCreate({
+      repoPath,
+      fullRef: evaluation.fullRef,
+      remoteTrackingRef: evaluation.remoteTrackingRef,
+      ...(evaluation.ownerWorktreePath ? { ownerWorktreePath: evaluation.ownerWorktreePath } : {})
+    })
+    return {
+      ...resultBase,
+      status: 'updated',
+      ...(evaluation.ownerWorktreePath ? { ownerWorktreePath: evaluation.ownerWorktreePath } : {})
+    }
+  } catch {
+    return { ...resultBase, status: 'skipped_error' }
+  }
+}
+
+async function evaluateRemoteLocalBaseRefRefreshability(
+  provider: SshGitProvider,
+  repoPath: string,
+  remoteTrackingBase: RemoteTrackingBase
+): Promise<RemoteLocalBaseRefRefreshability> {
   const resultBase = {
     baseRef: remoteTrackingBase.base,
     localBranch: remoteTrackingBase.branch
   }
   const fullRef = `refs/heads/${remoteTrackingBase.branch}`
 
+  let behind = 0
   try {
-    await provider.exec(
-      ['merge-base', '--is-ancestor', remoteTrackingBase.branch, remoteTrackingBase.ref],
+    // Why: SSH generic git.exec is allowlisted. `merge-base` and `log` are
+    // allowed read-only probes; `rev-list` is intentionally not exposed there.
+    await provider.exec(['merge-base', '--is-ancestor', fullRef, remoteTrackingBase.ref], repoPath)
+    const { stdout } = await provider.exec(
+      ['log', '--format=%H', `${fullRef}..${remoteTrackingBase.ref}`],
       repoPath
     )
+    behind = countNonEmptyGitOutputLines(stdout)
   } catch {
-    return { ...resultBase, status: 'skipped_not_fast_forward' }
+    return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
   }
 
   try {
-    const { stdout: worktreeListOutput } = await provider.exec(
-      ['worktree', 'list', '--porcelain'],
-      repoPath
-    )
-    const worktrees = parseWorktreeList(worktreeListOutput)
+    const worktrees = await provider.listWorktrees(repoPath)
     const ownerWorktree = worktrees.find((wt) => wt.branch === fullRef)
 
     if (ownerWorktree) {
-      const { stdout: status } = await provider.exec(
-        ['status', '--porcelain', '--untracked-files=no'],
-        ownerWorktree.path
-      )
-      if (status.trim()) {
+      const status = await provider.worktreeIsClean(ownerWorktree.path, {
+        includeUntracked: false
+      })
+      if (!status.clean) {
         return {
-          ...resultBase,
-          status: 'skipped_dirty_worktree',
-          ownerWorktreePath: ownerWorktree.path
+          refreshable: false,
+          result: {
+            ...resultBase,
+            status: 'skipped_dirty_worktree',
+            ownerWorktreePath: ownerWorktree.path
+          }
         }
       }
-      await provider.exec(['reset', '--hard', remoteTrackingBase.ref], ownerWorktree.path)
-      return { ...resultBase, status: 'updated', ownerWorktreePath: ownerWorktree.path }
+      return {
+        refreshable: true,
+        ...resultBase,
+        fullRef,
+        remoteTrackingRef: remoteTrackingBase.ref,
+        behind,
+        ownerWorktreePath: ownerWorktree.path
+      }
     }
 
-    await provider.exec(['update-ref', fullRef, remoteTrackingBase.ref], repoPath)
-    return { ...resultBase, status: 'updated' }
+    // Why: not checked out anywhere — a bare ref fast-forward is safe. Omitting
+    // ownerWorktreePath tells the relay to update-ref instead of reset --hard.
+    return {
+      refreshable: true,
+      ...resultBase,
+      fullRef,
+      remoteTrackingRef: remoteTrackingBase.ref,
+      behind
+    }
   } catch {
-    return { ...resultBase, status: 'skipped_error' }
+    return { refreshable: false, result: { ...resultBase, status: 'skipped_error' } }
+  }
+}
+
+async function getRemoteLocalBaseRefUpdateSuggestionForWorktreeCreate(
+  provider: SshGitProvider,
+  repoPath: string,
+  remoteTrackingBase: RemoteTrackingBase
+): Promise<LocalBaseRefUpdateSuggestion | undefined> {
+  const evaluation = await evaluateRemoteLocalBaseRefRefreshability(
+    provider,
+    repoPath,
+    remoteTrackingBase
+  )
+  if (!evaluation.refreshable || evaluation.behind <= 0) {
+    return undefined
+  }
+  try {
+    await provider.refreshLocalBaseRefForWorktreeCreate({
+      repoPath,
+      fullRef: evaluation.fullRef,
+      remoteTrackingRef: evaluation.remoteTrackingRef,
+      ...(evaluation.ownerWorktreePath ? { ownerWorktreePath: evaluation.ownerWorktreePath } : {}),
+      checkOnly: true
+    })
+  } catch {
+    return undefined
+  }
+  return {
+    baseRef: evaluation.baseRef,
+    localBranch: evaluation.localBranch,
+    behind: evaluation.behind
   }
 }
 
@@ -1031,10 +1134,11 @@ export function notifyWorktreesChanged(mainWindow: BrowserWindow, repoId: string
 // "Creating worktree..." label if no event arrives.
 export function emitCreateWorktreeProgress(
   mainWindow: BrowserWindow,
-  phase: 'fetching' | 'creating'
+  phase: 'fetching' | 'creating',
+  creationId?: string
 ): void {
   if (!mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('createWorktree:progress', { phase })
+    mainWindow.webContents.send('createWorktree:progress', { creationId, phase })
   }
 }
 
@@ -1174,9 +1278,42 @@ export async function createRemoteWorktree(
       /* best-effort */
     }
   }
+
+  const mux = getActiveMultiplexer(repo.connectionId!)
+  if (!mux) {
+    throw new Error('SSH connection is not available. Please reconnect and try again.')
+  }
+  // Why: register before the local-base advisory probe as well as addWorktree.
+  // Fresh/older relays may gate generic git.exec calls on registered roots; if
+  // the probe runs first it degrades to "no suggestion" even though create works.
+  try {
+    await Promise.all([
+      mux.request('session.registerRoot', { rootPath: repo.path }),
+      mux.request('session.registerRoot', { rootPath: remotePath })
+    ])
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('Method not found')) {
+      mux.notify('session.registerRoot', { rootPath: repo.path })
+      mux.notify('session.registerRoot', { rootPath: remotePath })
+    } else {
+      throw err
+    }
+  }
+
   const localBaseRefRefresh =
     settings.refreshLocalBaseRefOnWorktreeCreate && !checkoutExistingBranch && remoteTrackingBase
       ? await refreshLocalBaseRefForRemoteWorktreeCreate(provider, repo.path, remoteTrackingBase)
+      : undefined
+  const localBaseRefUpdateSuggestion =
+    !settings.refreshLocalBaseRefOnWorktreeCreate &&
+    !settings.localBaseRefSuggestionDismissed &&
+    !checkoutExistingBranch &&
+    remoteTrackingBase
+      ? await getRemoteLocalBaseRefUpdateSuggestionForWorktreeCreate(
+          provider,
+          repo.path,
+          remoteTrackingBase
+        )
       : undefined
 
   if (fsProvider) {
@@ -1197,31 +1334,6 @@ export async function createRemoteWorktree(
       store,
       repo.id
     )
-  }
-
-  const mux = getActiveMultiplexer(repo.connectionId!)
-  if (!mux) {
-    throw new Error('SSH connection is not available. Please reconnect and try again.')
-  }
-  // Why: kept for back-compat with old relay binaries during the upgrade
-  // window — those still gate git.addWorktree on registered roots, so we
-  // must prime them synchronously to close fresh-host / reconnect windows.
-  // New relays no-op these calls. Notify-fallback handles older relays that
-  // pre-date the request-form session.registerRoot handler. Tracked for
-  // removal once the relay-version floor moves past the cutover (see
-  // docs/relay-fs-allowlist-removal.md).
-  try {
-    await Promise.all([
-      mux.request('session.registerRoot', { rootPath: repo.path }),
-      mux.request('session.registerRoot', { rootPath: remotePath })
-    ])
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('Method not found')) {
-      mux.notify('session.registerRoot', { rootPath: repo.path })
-      mux.notify('session.registerRoot', { rootPath: remotePath })
-    } else {
-      throw err
-    }
   }
 
   // Create worktree via relay
@@ -1403,6 +1515,7 @@ export async function createRemoteWorktree(
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
+    ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {}),
     timing: timing.finish()
   }
 }
@@ -1452,7 +1565,7 @@ export async function createLocalWorktree(
     remoteTrackingBase = await runtime.resolveRemoteTrackingBase(repo.path, baseBranch)
     if (remoteTrackingBase) {
       const hasLocalBaseRef = await runtime.hasRemoteTrackingRef(repo.path, remoteTrackingBase)
-      emitCreateWorktreeProgress(mainWindow, 'fetching')
+      emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
       remoteTrackingRefresh = {
         base: remoteTrackingBase,
         hadLocalBaseRef: hasLocalBaseRef,
@@ -1469,14 +1582,14 @@ export async function createLocalWorktree(
         .fetchRemoteWithCache(repo.path, fallbackRemote)
         .then(() => undefined)
         .catch(() => undefined)
-      emitCreateWorktreeProgress(mainWindow, 'fetching')
+      emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
     }
   } else {
     const remote = baseBranch.includes('/') ? baseBranch.split('/')[0] : 'origin'
     legacyFetchPromise = gitExecFileAsync(['fetch', remote], { cwd: repo.path })
       .then(() => undefined)
       .catch(() => undefined)
-    emitCreateWorktreeProgress(mainWindow, 'fetching')
+    emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
   }
   const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
 
@@ -1662,7 +1775,7 @@ export async function createLocalWorktree(
       await legacyFetchPromise
     })
   }
-  emitCreateWorktreeProgress(mainWindow, 'creating')
+  emitCreateWorktreeProgress(mainWindow, 'creating', args.creationId)
 
   let preparedPushTarget: GitPushTarget | undefined
   if (args.pushTarget) {
@@ -1672,11 +1785,42 @@ export async function createLocalWorktree(
     preparedPushTarget = await prepareWorktreePushTarget(repo.path, args.pushTarget, store, repo.id)
   }
 
-  const existingBranchOption = { checkoutExistingBranch }
+  const suggestLocalBaseRefUpdate =
+    !settings.refreshLocalBaseRefOnWorktreeCreate &&
+    !settings.localBaseRefSuggestionDismissed &&
+    Boolean(remoteTrackingBase)
+  const remoteTrackingBaseOption = remoteTrackingBase ? { remoteTrackingBase } : undefined
+  const existingBranchOption = {
+    checkoutExistingBranch,
+    ...remoteTrackingBaseOption,
+    ...(suggestLocalBaseRefUpdate ? { suggestLocalBaseRefUpdate } : {})
+  }
   const addResult: AddWorktreeResult =
-    (await timing.time('git_worktree_add', async () =>
-      sparseDirectories.length > 0
-        ? checkoutExistingBranch
+    (await timing.time('git_worktree_add', async () => {
+      if (sparseDirectories.length > 0) {
+        if (checkoutExistingBranch) {
+          return addSparseWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            sparseDirectories,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate,
+            existingBranchOption
+          )
+        }
+        if (suggestLocalBaseRefUpdate) {
+          return addSparseWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            sparseDirectories,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate,
+            { ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate }
+          )
+        }
+        return remoteTrackingBaseOption
           ? addSparseWorktree(
               repo.path,
               worktreePath,
@@ -1684,7 +1828,7 @@ export async function createLocalWorktree(
               sparseDirectories,
               baseBranch,
               settings.refreshLocalBaseRefOnWorktreeCreate,
-              existingBranchOption
+              remoteTrackingBaseOption
             )
           : addSparseWorktree(
               repo.path,
@@ -1694,24 +1838,48 @@ export async function createLocalWorktree(
               baseBranch,
               settings.refreshLocalBaseRefOnWorktreeCreate
             )
-        : checkoutExistingBranch
-          ? addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate,
-              false,
-              existingBranchOption
-            )
-          : addWorktree(
-              repo.path,
-              worktreePath,
-              branchName,
-              baseBranch,
-              settings.refreshLocalBaseRefOnWorktreeCreate
-            )
-    )) ?? {}
+      }
+
+      if (checkoutExistingBranch) {
+        return addWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate,
+          false,
+          existingBranchOption
+        )
+      }
+      if (suggestLocalBaseRefUpdate) {
+        return addWorktree(
+          repo.path,
+          worktreePath,
+          branchName,
+          baseBranch,
+          settings.refreshLocalBaseRefOnWorktreeCreate,
+          false,
+          { ...remoteTrackingBaseOption, suggestLocalBaseRefUpdate }
+        )
+      }
+      return remoteTrackingBaseOption
+        ? addWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate,
+            false,
+            remoteTrackingBaseOption
+          )
+        : addWorktree(
+            repo.path,
+            worktreePath,
+            branchName,
+            baseBranch,
+            settings.refreshLocalBaseRefOnWorktreeCreate
+          )
+    })) ?? {}
 
   let configuredPushTarget: GitPushTarget | undefined
   if (preparedPushTarget) {
@@ -1876,6 +2044,9 @@ export async function createLocalWorktree(
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }
+      : {}),
+    ...(addResult.localBaseRefUpdateSuggestion
+      ? { localBaseRefUpdateSuggestion: addResult.localBaseRefUpdateSuggestion }
       : {}),
     ...(stagedStartup.startupTerminal ? { startupTerminal: stagedStartup.startupTerminal } : {}),
     ...(stagedStartup.warning ? { warning: stagedStartup.warning } : {}),

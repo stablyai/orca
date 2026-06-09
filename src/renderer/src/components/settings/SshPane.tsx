@@ -56,7 +56,20 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   useEffect(() => {
     const abortController = new AbortController()
-    void loadTargets({ signal: abortController.signal })
+    // Why: auto-sync ~/.ssh/config when the Manage pane opens so rotated ports
+    // and newly added hosts appear without a manual Import click. Best-effort —
+    // a sync failure must not block listing the already-known targets.
+    void (async () => {
+      try {
+        await window.api.ssh.importConfig()
+      } catch {
+        // Surfaced on demand via the explicit Import button; ignore here.
+      }
+      if (abortController.signal.aborted) {
+        return
+      }
+      await loadTargets({ signal: abortController.signal })
+    })()
     return () => abortController.abort()
   }, [loadTargets])
 
@@ -80,6 +93,10 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       return
     }
 
+    const identityFile = form.identityFile.trim() || undefined
+    const proxyCommand = form.proxyCommand.trim() || undefined
+    const jumpHost = form.jumpHost.trim() || undefined
+
     const target = {
       label: form.label.trim() || (username ? `${username}@${host}` : configHost),
       configHost,
@@ -87,14 +104,23 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       port,
       username,
       relayGracePeriodSeconds: graceSeconds,
-      ...(form.identityFile.trim() ? { identityFile: form.identityFile.trim() } : {}),
-      ...(form.proxyCommand.trim() ? { proxyCommand: form.proxyCommand.trim() } : {}),
-      ...(form.jumpHost.trim() ? { jumpHost: form.jumpHost.trim() } : {})
+      ...(identityFile ? { identityFile } : {}),
+      ...(proxyCommand ? { proxyCommand } : {}),
+      ...(jumpHost ? { jumpHost } : {})
     }
 
     try {
       await (editingId
-        ? window.api.ssh.updateTarget({ id: editingId, updates: target })
+        ? // Why: an explicit edit takes ownership of the target, so mark it
+          // `manual` — otherwise the next ~/.ssh/config sync would silently
+          // revert the user's change back to the config value. Carry the
+          // optional fields even when cleared (undefined) so removing e.g. a
+          // config-derived ProxyCommand actually deletes it — updateTarget
+          // merges partially, so an omitted key would keep the stale value.
+          window.api.ssh.updateTarget({
+            id: editingId,
+            updates: { ...target, identityFile, proxyCommand, jumpHost, source: 'manual' }
+          })
         : window.api.ssh.addTarget({ target }))
       recordFeatureInteraction('ssh')
       if (!mountedRef.current) {
@@ -220,13 +246,13 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const handleImport = async (): Promise<void> => {
     try {
-      const imported = (await window.api.ssh.importConfig()) as SshTarget[]
+      const synced = (await window.api.ssh.importConfig()) as SshTarget[]
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
-        if (imported.length === 0) {
-          toast('No new hosts found in ~/.ssh/config')
+        if (synced.length === 0) {
+          toast('~/.ssh/config already in sync')
         } else {
-          toast.success(`Imported ${imported.length} host${imported.length > 1 ? 's' : ''}`)
+          toast.success(`Synced ${synced.length} server${synced.length > 1 ? 's' : ''}`)
         }
       }
       await loadTargets()

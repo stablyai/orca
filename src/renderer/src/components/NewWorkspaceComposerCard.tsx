@@ -68,6 +68,7 @@ type NewWorkspaceComposerCardProps = {
   advancedOpen: boolean
   onToggleAdvanced: () => void
   createDisabled: boolean
+  projectError: string | null
   creating: boolean
   onCreate: () => void
   note: string
@@ -236,6 +237,7 @@ export default function NewWorkspaceComposerCard({
   advancedOpen,
   onToggleAdvanced,
   createDisabled,
+  projectError,
   creating,
   onCreate,
   note,
@@ -358,6 +360,7 @@ export default function NewWorkspaceComposerCard({
   const handleAddRepo = React.useCallback((): void => {
     openModal('add-repo')
   }, [openModal])
+  const projectDescriptionId = React.useId()
   useContextualTour(
     'workspace-creation',
     eligibleRepos.length > 0 && Boolean(repoId),
@@ -420,7 +423,18 @@ export default function NewWorkspaceComposerCard({
             // focus state.
             triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
             showStandaloneAddButton={false}
+            invalid={Boolean(projectError)}
+            describedBy={projectDescriptionId}
           />
+          {projectError ? (
+            <p id={projectDescriptionId} className="text-[11px] text-destructive">
+              {projectError}
+            </p>
+          ) : eligibleRepos.length === 0 ? (
+            <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
+              Add a project before creating a workspace.
+            </p>
+          ) : null}
           {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
             <div
               role="status"

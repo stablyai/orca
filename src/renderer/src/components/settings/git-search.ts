@@ -1,4 +1,5 @@
 import type { SettingsSearchEntry } from './settings-search'
+import { AUTO_RENAME_BRANCH_SEARCH_ENTRIES } from './auto-rename-branch-search'
 
 export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
@@ -7,19 +8,25 @@ export const GIT_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['branch naming', 'git username', 'custom']
   },
   {
-    title: 'Refresh Local Base Ref',
-    description: 'Safely fast-forward local main or master so AI tools and diffs use a fresh base.',
+    title: 'Keep Local Main Up to Date',
+    description:
+      'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.',
     keywords: [
       'main',
       'master',
       'origin/main',
       'git diff',
+      'behind main',
+      'up to date',
+      'stale main',
+      'refresh local main',
       'base ref',
       'fresh base',
       'safely',
       'worktree'
     ]
   },
+  ...AUTO_RENAME_BRANCH_SEARCH_ENTRIES,
   {
     title: 'GitHub API Budget',
     description: 'Current GitHub CLI REST, Search, and GraphQL rate limits.',

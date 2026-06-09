@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- Why: duplicated from GitHubItemDialog so the dedicated PR full-page surface can evolve its Primer-styled header without destabilizing the issue dialog; planned to refactor shared parts out later. */
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: PR pages hydrate provider data, diff sections, snippets, and cache refetches from async provider/virtualizer lifecycles. */
 import React, {
   Suspense,
   lazy,
@@ -85,6 +84,7 @@ import {
 import type { DiffSection } from '@/components/editor/diff-section-types'
 import type { CombinedDiffFileTreeEntry } from '@/components/editor/combined-diff-file-tree-model'
 import { CHECK_COLOR, CHECK_ICON } from '@/components/right-sidebar/checks-panel-content'
+import { SourceControlAgentActionDialog } from '@/components/right-sidebar/SourceControlAgentActionDialog'
 import {
   createGitHubChecksTabState,
   resolveGitHubChecksTabState,
@@ -142,17 +142,25 @@ import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
 } from '../../../shared/github-pr-merge-methods'
-import { AGENT_CATALOG } from '@/lib/agent-catalog'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
-import { getConnectionId } from '@/lib/connection-context'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import {
   findGithubPrWorkspaceAttachment,
   getGithubPrWorkspaceAttachmentLabel
 } from '@/lib/github-work-item-workspace-attachment'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { readSourceControlLaunchRecipeAgentId } from '@/lib/source-control-launch-agent-selection'
+import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { buildFixBrokenChecksPrompt, getBrokenChecks } from '@/components/pr-checks-fix-prompt'
+import { resolveSourceControlActionRecipe } from '../../../shared/source-control-ai'
+import {
+  type SourceControlActionRecipe,
+  type SourceControlLaunchActionId
+} from '../../../shared/source-control-ai-actions'
+import {
+  saveSourceControlActionRecipe,
+  type SourceControlAiWriteTarget
+} from '../../../shared/source-control-ai-recipe-save'
 import type {
   GitHubOwnerRepo,
   GitHubPRFile,
@@ -166,8 +174,7 @@ import type {
   GitBranchChangeEntry,
   GitDiffResult,
   PRCheckDetail,
-  PRComment,
-  TuiAgent
+  PRComment
 } from '../../../shared/types'
 
 // Why: the GH item dialog can be opened from any work-item list surface and
@@ -3507,52 +3514,6 @@ function getChecksSummaryLabel(checks: PRCheckDetail[]): string {
   return `${counts.passing} of ${checks.length} checks passing`
 }
 
-function getBrokenChecks(checks: PRCheckDetail[]): PRCheckDetail[] {
-  return checks.filter((check) =>
-    ['failure', 'cancelled', 'timed_out'].includes(getCheckConclusion(check))
-  )
-}
-
-function buildFixBrokenChecksPrompt(item: GitHubWorkItem, checks: PRCheckDetail[]): string {
-  const brokenChecks = getBrokenChecks(checks)
-  const checkLines =
-    brokenChecks.length > 0
-      ? brokenChecks.map((check) => {
-          const details = [
-            getCheckStatusLabel(check),
-            check.checkRunId ? `check run ${check.checkRunId}` : null,
-            check.workflowRunId ? `workflow run ${check.workflowRunId}` : null,
-            check.url ? `details: ${check.url}` : null
-          ]
-            .filter(Boolean)
-            .join(', ')
-          return `- ${check.name}${details ? ` (${details})` : ''}`
-        })
-      : ['- No failing check is currently listed; refresh PR checks first, then inspect CI.']
-
-  return [
-    `Fix the broken checks for PR #${item.number}: ${item.title}`,
-    `PR: ${item.url}`,
-    '',
-    'Broken checks:',
-    ...checkLines,
-    '',
-    'Focus only on making the failing checks pass. Inspect the CI output first, make the smallest correct code or test changes, and do not work on unrelated cleanup.'
-  ].join('\n')
-}
-
-function pickDefaultAgent(
-  defaultAgent: TuiAgent | 'blank' | null | undefined,
-  detectedAgents: TuiAgent[],
-  disabledAgents?: TuiAgent[]
-): TuiAgent | null {
-  const enabledAgents = filterEnabledTuiAgents(detectedAgents, disabledAgents)
-  if (defaultAgent && defaultAgent !== 'blank' && enabledAgents.includes(defaultAgent)) {
-    return defaultAgent
-  }
-  return AGENT_CATALOG.find((entry) => enabledAgents.includes(entry.id))?.id ?? null
-}
-
 function getCheckDetailsKey(check: PRCheckDetail): string {
   return String(check.checkRunId ?? check.workflowRunId ?? check.url ?? check.name)
 }
@@ -3592,9 +3553,17 @@ function ChecksTab({
   variant?: 'compact' | 'page'
   onChecksUpdated: (checks: PRCheckDetail[]) => void
 }): React.JSX.Element {
+  const targetRepoId = repoId ?? item.repoId
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const updateRepo = useAppStore((s) => s.updateRepo)
+  const repo = useAppStore((s) =>
+    targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
+  )
   const [refreshing, setRefreshing] = useState(false)
   const [rerunning, setRerunning] = useState(false)
   const [fixingChecks, setFixingChecks] = useState(false)
+  const [fixChecksComposerPrompt, setFixChecksComposerPrompt] = useState<string | null>(null)
   const [checksState, setChecksState] = useState(() => createGitHubChecksTabState(checks))
   const mountedRef = useMountedRef()
   const resolvedChecksState = resolveGitHubChecksTabState(checksState, checks)
@@ -3605,6 +3574,81 @@ function ChecksTab({
   }
   const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
+  const fixChecksRecipe = useMemo(
+    () =>
+      resolveSourceControlActionRecipe({
+        settings,
+        repo,
+        actionId: 'fixChecks'
+      }),
+    [repo, settings]
+  )
+  const fixChecksLaunchPlatform = useMemo(
+    () =>
+      resolveSourceControlLaunchPlatform({
+        connectionId: repo?.connectionId ?? null,
+        worktreePath: repo?.path ?? null
+      }),
+    [repo?.connectionId, repo?.path]
+  )
+  const saveFixChecksActionDefault = useCallback(
+    async (
+      target: SourceControlAiWriteTarget,
+      actionId: SourceControlLaunchActionId,
+      recipe: SourceControlActionRecipe
+    ): Promise<void> => {
+      const state = useAppStore.getState()
+      const latestSettings = state.settings
+      if (!latestSettings) {
+        throw new Error('Settings are not loaded.')
+      }
+      const latestRepo =
+        target.type === 'repo'
+          ? (state.repos.find((candidate) => candidate.id === target.repoId) ?? null)
+          : null
+      const result = saveSourceControlActionRecipe({
+        target,
+        settings: latestSettings,
+        repo: latestRepo,
+        actionId,
+        recipe
+      })
+      if ('sourceControlAi' in result) {
+        await updateSettings({ sourceControlAi: result.sourceControlAi })
+        return
+      }
+      await updateRepo(result.target.repoId, result.update)
+    },
+    [updateRepo, updateSettings]
+  )
+  const handleStartFixChecksFromDialog = useCallback(
+    async ({
+      agent,
+      commandInput,
+      agentArgs
+    }: {
+      agent: Parameters<typeof launchWorkItemDirect>[0]['agentOverride']
+      commandInput: string
+      agentArgs: string
+    }): Promise<boolean> => {
+      if (!targetRepoId) {
+        return false
+      }
+      return await launchWorkItemDirect({
+        item: { ...item, repoId: targetRepoId, pasteContent: commandInput },
+        repoId: targetRepoId,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        promptDelivery: 'submit-after-ready',
+        agentOverride: agent,
+        agentArgs,
+        openModalFallback: () => {
+          toast.error('Unable to create a fix workspace automatically.')
+        }
+      })
+    },
+    [item, targetRepoId]
+  )
   const prRepo = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const sorted = [...list].sort(
     (a, b) =>
@@ -3687,7 +3731,6 @@ function ChecksTab({
   )
 
   const handleFixBrokenChecks = useCallback(async (): Promise<void> => {
-    const targetRepoId = repoId ?? item.repoId
     if (!targetRepoId || fixingChecks) {
       return
     }
@@ -3696,74 +3739,36 @@ function ChecksTab({
       return
     }
 
+    const basePrompt = buildFixBrokenChecksPrompt({
+      reviewKind: 'PR',
+      reviewNumber: item.number,
+      reviewTitle: item.title,
+      reviewUrl: item.url,
+      checks: list
+    })
     setFixingChecks(true)
     try {
-      const prompt = buildFixBrokenChecksPrompt(item, list)
-      const store = useAppStore.getState()
-      const attachedWorkspace = findGithubPrWorkspaceAttachment(
-        store.allWorktrees(),
-        targetRepoId,
-        item.number
-      )
-
-      if (!attachedWorkspace) {
-        await launchWorkItemDirect({
-          item: { ...item, pasteContent: prompt },
-          repoId: targetRepoId,
-          launchSource: 'task_page',
-          telemetrySource: 'sidebar',
-          openModalFallback: () => {
-            toast.error('Unable to create a fix workspace automatically.')
-          }
-        })
-        return
-      }
-
-      if (!activateAndRevealWorktree(attachedWorkspace.id)) {
-        toast.error('Unable to open the workspace attached to this pull request.')
-        return
-      }
-
-      const connectionId = getConnectionId(attachedWorkspace.id)
-      if (connectionId === undefined) {
-        toast.error('Unable to resolve the workspace connection.')
-        return
-      }
-
-      const activeStore = useAppStore.getState()
-      const detectedAgents =
-        typeof connectionId === 'string'
-          ? await activeStore.ensureRemoteDetectedAgents(connectionId)
-          : await activeStore.ensureDetectedAgents()
-      const agent = pickDefaultAgent(
-        activeStore.settings?.defaultTuiAgent,
-        detectedAgents,
-        activeStore.settings?.disabledTuiAgents
-      )
-      if (!agent) {
-        toast.error('No enabled AI agents. Configure agents in Settings.')
-        return
-      }
-
-      const result = launchAgentInNewTab({
-        agent,
-        worktreeId: attachedWorkspace.id,
-        prompt,
-        promptDelivery: 'draft',
-        launchSource: 'task_page'
+      const started = await startFixChecksAgent({
+        item,
+        repoId: targetRepoId,
+        basePrompt,
+        launchSource: 'task_page',
+        telemetrySource: 'sidebar',
+        openModalFallback: () => {
+          setFixChecksComposerPrompt(basePrompt)
+        }
       })
-      if (!result) {
-        toast.error('Could not build the agent launch command.')
-        return
+      if (started) {
+        toast.success('Started an AI agent for the broken checks.')
       }
-      if (result.tabId) {
-        focusTerminalTabSurface(result.tabId)
-      }
-      toast.success('Started an AI agent for the broken checks.')
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('Failed to start fix checks agent', err)
+      toast.error(`Failed to start an AI agent for the broken checks: ${message}`)
     } finally {
       setFixingChecks(false)
     }
-  }, [failedChecks.length, fixingChecks, item, list, repoId])
+  }, [failedChecks.length, fixingChecks, item, list, targetRepoId])
 
   const handleToggleCheckDetails = useCallback(
     (check: PRCheckDetail): void => {
@@ -4157,6 +4162,34 @@ function ChecksTab({
     )
   }
 
+  const fixChecksAgentDialog = (
+    <SourceControlAgentActionDialog
+      open={fixChecksComposerPrompt !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          setFixChecksComposerPrompt(null)
+        }
+      }}
+      actionId="fixChecks"
+      title="Fix Broken Checks With AI"
+      description="Choose the agent and edit the full command input before launch."
+      baseCommandInput={fixChecksComposerPrompt ?? ''}
+      connectionId={repo?.connectionId ?? null}
+      repoId={targetRepoId}
+      promptDelivery="submit-after-ready"
+      launchPlatform={fixChecksLaunchPlatform}
+      launchSource="task_page"
+      savedAgentId={readSourceControlLaunchRecipeAgentId(fixChecksRecipe)}
+      savedCommandInputTemplate={fixChecksRecipe.commandInputTemplate ?? null}
+      savedAgentArgs={fixChecksRecipe.agentArgs ?? null}
+      onSaveAgentDefault={saveFixChecksActionDefault}
+      onLaunched={() => {
+        toast.success('Started an AI agent for the broken checks.')
+      }}
+      onStart={handleStartFixChecksFromDialog}
+    />
+  )
+
   if (loading && list.length === 0) {
     return (
       <>
@@ -4214,41 +4247,46 @@ function ChecksTab({
       })
     }
     return (
-      <div className="flex flex-col gap-3 px-4 py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <SummaryIcon
-            className={cn(
-              'size-4 shrink-0',
-              summaryColor,
-              counts.pending > 0 && counts.failing === 0 && 'animate-spin'
-            )}
-          />
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="truncate text-[13px] font-medium text-foreground">{summaryLabel}</span>
-            {countChips.length > 1 && (
-              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                {countChips.map((chip, i) => (
-                  <React.Fragment key={chip.label}>
-                    {i > 0 && <span className="opacity-40">·</span>}
-                    <span className={chip.className}>{chip.label}</span>
-                  </React.Fragment>
-                ))}
+      <>
+        <div className="flex flex-col gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <SummaryIcon
+              className={cn(
+                'size-4 shrink-0',
+                summaryColor,
+                counts.pending > 0 && counts.failing === 0 && 'animate-spin'
+              )}
+            />
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate text-[13px] font-medium text-foreground">
+                {summaryLabel}
               </span>
-            )}
-          </div>
-          {actions}
-        </div>
-        <div className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
-          {sorted.map((check, index) => (
-            <div
-              key={getCheckDetailsKey(check)}
-              className={cn(index > 0 && 'border-t border-border/40')}
-            >
-              {renderCheckRow(check)}
+              {countChips.length > 1 && (
+                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                  {countChips.map((chip, i) => (
+                    <React.Fragment key={chip.label}>
+                      {i > 0 && <span className="opacity-40">·</span>}
+                      <span className={chip.className}>{chip.label}</span>
+                    </React.Fragment>
+                  ))}
+                </span>
+              )}
             </div>
-          ))}
+            {actions}
+          </div>
+          <div className="overflow-hidden rounded-lg border border-border/50 bg-card shadow-xs">
+            {sorted.map((check, index) => (
+              <div
+                key={getCheckDetailsKey(check)}
+                className={cn(index > 0 && 'border-t border-border/40')}
+              >
+                {renderCheckRow(check)}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+        {fixChecksAgentDialog}
+      </>
     )
   }
   return (
@@ -4257,6 +4295,7 @@ function ChecksTab({
       <div className="max-h-[280px] overflow-y-auto p-1 scrollbar-sleek">
         {sorted.map(renderCheckRow)}
       </div>
+      {fixChecksAgentDialog}
     </>
   )
 }

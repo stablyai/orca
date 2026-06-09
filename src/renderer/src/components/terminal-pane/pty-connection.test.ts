@@ -90,6 +90,7 @@ type StoreState = {
 
 type ConnectCallbacks = {
   onData?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+  onReplayData?: (data: string) => void
   onError?: (msg: string) => void
 }
 
@@ -299,6 +300,7 @@ function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
+    rebuildPaneWebgl: vi.fn(),
     getPanes: vi.fn(() =>
       Array.from({ length: paneCount }, (_, index) => ({
         id: index + 1,
@@ -4027,7 +4029,43 @@ describe('connectPanePty', () => {
     disposable.dispose()
   })
 
-  it('marks panes that receive Arabic output for DOM rendering', async () => {
+  it('rebuilds WebGL after remote buffered replay arrives on an already-open pane', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedReplayCallback: {
+      current: ((data: string) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return { id: 'remote:env-1@@terminal-1', replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const refresh = vi.fn()
+    const terminal = pane.terminal as typeof pane.terminal & {
+      _core?: { refresh: typeof refresh }
+    }
+    terminal._core = { refresh }
+    terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps()
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedReplayCallback.current?.('remote prompt\r\n$ ')
+    await flushAsyncTicks(6)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('remote prompt\r\n$ ', expect.any(Function))
+    expect(refresh).toHaveBeenCalledWith(0, 39, true)
+    expect(manager.rebuildPaneWebgl).toHaveBeenCalledWith(1)
+    disposable.dispose()
+  })
+
+  it('does not switch renderers for Arabic output', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4046,14 +4084,14 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('Arabic: السلام عليكم\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(pane.terminal.write).toHaveBeenCalledWith(
       'Arabic: السلام عليكم\r\n',
       expect.any(Function)
     )
   })
 
-  it('marks panes for DOM rendering when background SGR is split across PTY chunks', async () => {
+  it('does not switch renderers when background SGR is split across PTY chunks', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4075,10 +4113,10 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.(';2;52;52;52m codex block \x1b[0m\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
   })
 
-  it('keeps renderer-risk scan state across more than two split PTY chunks', async () => {
+  it('does not switch renderers across split background SGR PTY chunks', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4101,7 +4139,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.(';52;52m codex block \x1b[0m\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
   })
 
   it('forces a viewport refresh for foreground Codex-style background redraws', async () => {
@@ -4130,7 +4168,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('\x1b[2J\x1b[H\x1b[48;2;52;52;52m codex block text \x1b[0m\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
   })
 
@@ -4163,7 +4201,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.(';2;52;52;52m codex block text \x1b[0m\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
   })
 
@@ -4199,7 +4237,7 @@ describe('connectPanePty', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 
-  it('switches terminal UI drawing glyphs to the DOM renderer for release safety', async () => {
+  it('keeps terminal UI drawing glyphs on the active renderer', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -4218,7 +4256,7 @@ describe('connectPanePty', () => {
 
     capturedDataCallback.current?.('⠋ Working ├─ file.ts █ progress \uE0B0 prompt\r\n')
 
-    expect(manager.markPaneHasComplexScriptOutput).toHaveBeenCalledWith(1)
+    expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
     expect(pane.terminal.write).toHaveBeenCalledWith(
       '⠋ Working ├─ file.ts █ progress \uE0B0 prompt\r\n',
       expect.any(Function)
@@ -5441,6 +5479,35 @@ describe('connectPanePty', () => {
     expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
     expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
     expect(transport.sendInput).not.toHaveBeenCalled()
+  })
+
+  it('clears tab, pane, and worktree unread on plain Escape keydown', async () => {
+    // Why: plain Escape produces real terminal input (\x1b) and so is a genuine
+    // "user is here" signal. The interrupt-intent early return must not skip the
+    // unread clears, or the attention dot would linger after the user presses Escape.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    pane.terminal.element = createPaneContainer()
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    connectPanePty(pane as never, manager as never, deps as never)
+
+    const keydown = new Event('keydown')
+    Object.defineProperty(keydown, 'key', { value: 'Escape' })
+    Object.defineProperty(keydown, 'repeat', { value: false })
+    Object.defineProperty(keydown, 'ctrlKey', { value: false })
+    Object.defineProperty(keydown, 'metaKey', { value: false })
+    Object.defineProperty(keydown, 'altKey', { value: false })
+    Object.defineProperty(keydown, 'shiftKey', { value: false })
+    ;(pane.terminal.element as EventTarget).dispatchEvent(keydown)
+
+    expect(deps.clearTerminalTabUnread).toHaveBeenCalledWith('tab-1')
+    expect(deps.clearTerminalPaneUnread).toHaveBeenCalledWith(makePaneKey('tab-1', LEAF_1))
+    expect(deps.clearWorktreeUnread).toHaveBeenCalledWith('wt-1')
   })
 
   it('does not clear pane attention from raw onData after a bell', async () => {

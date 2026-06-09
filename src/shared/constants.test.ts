@@ -49,8 +49,8 @@ describe('getDefaultSettings', () => {
     })
   })
 
-  it('keeps compact worktree cards experimental and disabled by default', () => {
-    expect(getDefaultSettings('/tmp').experimentalCompactWorktreeCards).toBe(false)
+  it('keeps compact worktree cards disabled by default', () => {
+    expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 })
 

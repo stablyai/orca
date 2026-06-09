@@ -123,10 +123,6 @@ export type WebSessionTabsSyncState = Pick<
   | 'sortEpoch'
 >
 
-function isWebClient(): boolean {
-  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
-}
-
 function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
     Boolean(value) &&
@@ -226,6 +222,19 @@ export function shouldRespawnWebRuntimeTerminalAfterWake(args: {
   }
   const hostTerminalTabCount = args.event.tabs.filter((tab) => tab.type === 'terminal').length
   return hostTerminalTabCount === 0
+}
+
+export function shouldSyncRuntimeSessionTabs(args: {
+  activeRuntimeEnvironmentId: string | null | undefined
+  activeWorktreeId?: string | null
+  workspaceSessionReady: boolean
+  requireActiveWorktree?: boolean
+}): boolean {
+  const environmentId = args.activeRuntimeEnvironmentId?.trim()
+  if (!environmentId || !args.workspaceSessionReady) {
+    return false
+  }
+  return args.requireActiveWorktree === true ? Boolean(args.activeWorktreeId) : true
 }
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
@@ -490,6 +499,10 @@ function buildMirroredTerminalTabs(
       surfaces
         .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
         .find((tab): tab is TerminalTab => Boolean(tab))
+    const quickCommandLabel =
+      activeSurface.quickCommandLabel?.trim() ||
+      surfaces.find((surface) => surface.quickCommandLabel?.trim())?.quickCommandLabel?.trim() ||
+      existing?.quickCommandLabel?.trim()
     return {
       tab: {
         id: localTabId,
@@ -497,6 +510,7 @@ function buildMirroredTerminalTabs(
         worktreeId: snapshot.worktree,
         title,
         defaultTitle: existing?.defaultTitle ?? title,
+        ...(quickCommandLabel ? { quickCommandLabel } : {}),
         customTitle: existing?.customTitle ?? null,
         color: existing?.color ?? null,
         sortOrder: sortOffset + index,
@@ -627,6 +641,7 @@ function buildTerminalUnifiedTab(tab: TerminalTab, groupId: string): Tab {
     worktreeId: tab.worktreeId,
     contentType: 'terminal',
     label: tab.title,
+    ...(tab.quickCommandLabel?.trim() ? { quickCommandLabel: tab.quickCommandLabel.trim() } : {}),
     ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
     customLabel: tab.customTitle,
     color: tab.color,
@@ -1265,6 +1280,7 @@ function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.worktreeId === b.worktreeId &&
     a.title === b.title &&
     a.defaultTitle === b.defaultTitle &&
+    a.quickCommandLabel === b.quickCommandLabel &&
     a.generatedTitle === b.generatedTitle &&
     a.customTitle === b.customTitle &&
     a.color === b.color &&
@@ -2142,7 +2158,13 @@ export function useWebSessionTabsSync(): void {
     const environmentId = activeRuntimeEnvironmentId?.trim()
     // Why: startup hydration writes browser-local session state; applying the
     // host snapshot before that point gets clobbered and leaves the sidebar stale.
-    if (!isWebClient() || !environmentId || !workspaceSessionReady) {
+    if (
+      !shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId,
+        workspaceSessionReady
+      }) ||
+      !environmentId
+    ) {
       return
     }
 
@@ -2251,7 +2273,16 @@ export function useWebSessionTabsSync(): void {
 
   useEffect(() => {
     const environmentId = activeRuntimeEnvironmentId?.trim()
-    if (!isWebClient() || !activeWorktreeId || !environmentId || !workspaceSessionReady) {
+    if (
+      !shouldSyncRuntimeSessionTabs({
+        activeRuntimeEnvironmentId,
+        activeWorktreeId,
+        workspaceSessionReady,
+        requireActiveWorktree: true
+      }) ||
+      !environmentId ||
+      !activeWorktreeId
+    ) {
       return
     }
 

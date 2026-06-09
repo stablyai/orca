@@ -58,6 +58,7 @@ import type {
 // should map to concrete values; see `tuiAgentToAgentKind`.
 export const AGENT_KIND_VALUES = [
   'claude-code',
+  'claude-agent-teams',
   'openclaude',
   'codex',
   'autohand',
@@ -278,7 +279,6 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalActivity',
   'experimentalTerminalAttention',
   'experimentalWorktreeSymlinks',
-  'experimentalUnifiedNewTabLauncher',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
+  getLinkedWorkItemWorkspaceName,
   getWorkspaceIntentName,
   resolveWorkspaceCreateName,
   slugifyForWorkspaceName
@@ -32,6 +33,36 @@ describe('getLinkedWorkItemSuggestedName', () => {
     expect(getLinkedWorkItemSuggestedName({ title: 'Add mobile drawer (#812)' })).toBe(
       'add-mobile-drawer'
     )
+  })
+})
+
+describe('getLinkedWorkItemWorkspaceName', () => {
+  it('uses the resolved GitHub title instead of the source URL or provider number', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'pr',
+        number: 2049,
+        title: 'Fix pasted URL workspace names'
+      })
+    ).toEqual({
+      displayName: 'Fix pasted URL workspace names',
+      seedName: 'fix-pasted-url-workspace-names'
+    })
+  })
+
+  it('keeps external provider identifiers without duplicating title prefixes', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'jira',
+        number: 0,
+        title: 'PROJ-7 Fix flaky import',
+        jiraIdentifier: 'PROJ-7'
+      })
+    ).toEqual({
+      displayName: 'PROJ-7 Fix flaky import',
+      seedName: 'proj-7-fix-flaky-import'
+    })
   })
 })
 

@@ -146,6 +146,32 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex --profile work 'resume' 's1'")
   })
 
+  it('appends shell-quoted CLI arguments before prompt delivery flags', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: '--model sonnet --add-dir "path with spaces"',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "claude '--model' 'sonnet' '--add-dir' 'path with spaces' 'fix it'"
+    )
+  })
+
+  it('uses PowerShell quoting for CLI arguments on Windows', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      agentArgs: '--model sonnet --name "Bob\'s"',
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--model' 'sonnet' '--name' 'Bob''s' 'fix it'")
+  })
+
   it('clears draft environment variables with the target shell syntax', () => {
     expect(
       buildAgentDraftLaunchPlan({

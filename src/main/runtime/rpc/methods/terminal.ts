@@ -485,6 +485,19 @@ const TerminalStop = z.object({
   worktree: requiredString('Missing worktree selector')
 })
 
+const AgentTeamsTmuxCompat = z.object({
+  teamId: requiredString('Missing agent team ID'),
+  token: requiredString('Missing agent team token'),
+  envPane: requiredString('Missing tmux pane identity'),
+  cwd: OptionalString,
+  argv: z.array(z.string())
+})
+
+const AgentTeamsPrepareLaunch = z.object({
+  paneKey: requiredString('Missing pane key'),
+  env: z.record(z.string(), z.string()).optional()
+})
+
 const TerminalResizeForClient = z.discriminatedUnion('mode', [
   z.object({
     terminal: requiredString('Missing terminal handle'),
@@ -769,6 +782,23 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       close: await runtime.closeTerminal(params.terminal)
+    })
+  }),
+  defineMethod({
+    name: 'agentTeams.tmuxCompat',
+    params: AgentTeamsTmuxCompat,
+    handler: async (params, { runtime }) => ({
+      tmux: await runtime.handleAgentTeamsTmuxCompat(params)
+    })
+  }),
+  defineMethod({
+    name: 'agentTeams.prepareLaunch',
+    params: AgentTeamsPrepareLaunch,
+    handler: async (params, { runtime }) => ({
+      launch: await runtime.prepareClaudeAgentTeamsLeader({
+        paneKey: params.paneKey,
+        baseEnv: params.env
+      })
     })
   }),
   defineMethod({

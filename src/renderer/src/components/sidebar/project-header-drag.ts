@@ -52,6 +52,18 @@ export type RepoHeaderDragController = {
 // Pixels the pointer must travel before we promote a pending press into a
 // real drag. Below this we treat the press as a normal click (toggle group).
 const DRAG_THRESHOLD_PX = 4
+const REPO_HEADER_ACTION_SELECTOR =
+  '[data-repo-header-action], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
+
+export function isRepoHeaderActionTarget(
+  target: EventTarget | null,
+  currentTarget: HTMLElement
+): boolean {
+  if (!(target instanceof HTMLElement) || target === currentTarget) {
+    return false
+  }
+  return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null
+}
 
 export function useRepoHeaderDrag({
   orderedRepoIds,
@@ -286,11 +298,9 @@ export function useRepoHeaderDrag({
       if (event.button !== 0) {
         return
       }
-      // Don't intercept presses that originated on a nested control (the
-      // `+` create-worktree button or the chevron). Those have their own
-      // click semantics and shouldn't arm a drag.
-      const target = event.target as HTMLElement | null
-      if (target && target !== event.currentTarget && target.closest('button')) {
+      // Don't intercept presses from nested action surfaces; Radix triggers
+      // and disabled wrappers are not always plain button descendants.
+      if (isRepoHeaderActionTarget(event.target, event.currentTarget)) {
         return
       }
       const container = getContainerRef.current()

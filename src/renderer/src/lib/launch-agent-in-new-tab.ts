@@ -31,12 +31,16 @@ export type LaunchAgentInNewTabArgs = {
   /** Optional initial prompt. Delivery depends on `promptDelivery` and the
    *  agent's prompt mode. */
   prompt?: string
+  /** Optional CLI arguments appended to the selected agent command. */
+  agentArgs?: string | null
   /** Force generated prompt text out of the shell launch command. `draft`
    *  leaves it editable; `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar
    *  quick-launch entry point so existing callers stay unchanged. */
   launchSource?: LaunchSource
+  /** User-authored Quick Command label for local tabs created from the tab bar. */
+  quickCommandLabel?: string | null
   /** Shell platform that will execute the startup command. Defaults to the
    * renderer OS; SSH and WSL worktrees run a Linux shell even from Windows. */
   launchPlatform?: NodeJS.Platform
@@ -121,8 +125,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     worktreeId,
     groupId,
     prompt,
+    agentArgs,
     promptDelivery = 'auto-submit',
     launchSource,
+    quickCommandLabel,
     launchPlatform = CLIENT_PLATFORM,
     onPromptDelivered
   } = args
@@ -150,6 +156,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -160,7 +167,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       agent,
       draft: trimmedPrompt,
       cmdOverrides,
-      platform: launchPlatform
+      platform: launchPlatform,
+      agentArgs
     })
     if (draftLaunchPlan && canUseInlineDraftLaunchPlan(draftLaunchPlan, launchPlatform)) {
       startupPlan = {
@@ -176,6 +184,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         prompt: '',
         cmdOverrides,
         platform: launchPlatform,
+        agentArgs,
         allowEmptyPromptLaunch: true
       })
       pasteDraftAfterLaunch = trimmedPrompt
@@ -186,6 +195,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs,
       allowEmptyPromptLaunch: true
     })
     pasteDraftAfterLaunch = trimmedPrompt
@@ -195,6 +205,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       prompt: hasPrompt ? trimmedPrompt : '',
       cmdOverrides,
       platform: launchPlatform,
+      agentArgs,
       allowEmptyPromptLaunch: !hasPrompt
     })
   }
@@ -244,7 +255,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   //
   // Why: stamp the launched agent on the tab so the tab bar shows the provider
   // icon immediately, before the agent's first hook event arrives.
-  const tab = store.createTab(worktreeId, groupId, undefined, { launchAgent: agent })
+  const tab = store.createTab(worktreeId, groupId, undefined, {
+    launchAgent: agent,
+    quickCommandLabel
+  })
   store.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
     ...(startupPlan.env ? { env: startupPlan.env } : {}),

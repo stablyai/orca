@@ -6,6 +6,7 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { MobileEmulatorAgentControlRow } from './MobileEmulatorAgentControlRow'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsRow, SettingsSwitchRow } from './SettingsFormControls'
 import { MOBILE_EMULATOR_SEARCH_ENTRIES } from './mobile-emulator-search'
@@ -211,6 +212,16 @@ export function MobileEmulatorSettingsPane({
           }
         />
       </SearchableSetting>
+
+      {enabled ? (
+        <SearchableSetting
+          title="Agent Mobile Emulator Control"
+          description="Let coding agents control the active mobile emulator with Orca CLI commands."
+          keywords={MOBILE_EMULATOR_SEARCH_ENTRIES[3]?.keywords}
+        >
+          <MobileEmulatorAgentControlRow />
+        </SearchableSetting>
+      ) : null}
     </div>
   )
 }

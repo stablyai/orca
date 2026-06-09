@@ -13,6 +13,9 @@ export const MOBILE_EMULATOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'ipad',
       'xcode',
       'serve-sim',
+      'orca cli',
+      'orca emulator',
+      'emulator skill',
       'default device',
       'agent emulator'
     ]
@@ -26,5 +29,10 @@ export const MOBILE_EMULATOR_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Emulator Availability',
     description: 'Check whether Xcode, simctl, serve-sim, and emulator devices are ready.',
     keywords: ['availability', 'xcrun', 'simctl', 'xcode command line tools', 'runtime']
+  },
+  {
+    title: 'Agent CLI Control',
+    description: 'Use Orca CLI commands to list, attach, tap, and type into a mobile emulator.',
+    keywords: ['agent cli', 'emulator tap', 'emulator attach', 'emulator type', 'mobile skill']
   }
 ]

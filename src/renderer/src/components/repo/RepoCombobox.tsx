@@ -26,6 +26,8 @@ type RepoComboboxProps = {
   triggerClassName?: string
   autoOpenOnMount?: boolean
   showStandaloneAddButton?: boolean
+  invalid?: boolean
+  describedBy?: string
 }
 
 export default function RepoCombobox({
@@ -36,7 +38,9 @@ export default function RepoCombobox({
   placeholder = 'Select repo...',
   triggerClassName,
   autoOpenOnMount = false,
-  showStandaloneAddButton = true
+  showStandaloneAddButton = true,
+  invalid = false,
+  describedBy
 }: RepoComboboxProps): React.JSX.Element {
   const [open, setOpen] = useState(autoOpenOnMount)
   const [query, setQuery] = useState('')
@@ -185,6 +189,8 @@ export default function RepoCombobox({
             variant="outline"
             role="combobox"
             aria-expanded={open}
+            aria-invalid={invalid ? true : undefined}
+            aria-describedby={describedBy}
             onKeyDown={handleTriggerKeyDown}
             className={cn(
               'h-8 min-w-[184px] justify-between px-3 text-xs font-normal',

@@ -346,6 +346,7 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
               tabs.map((tab) => ({
                 id: tab.id,
                 title: tab.title,
+                quickCommandLabel: tab.quickCommandLabel,
                 generatedTitle: tab.generatedTitle,
                 customTitle: tab.customTitle,
                 launchAgent: tab.launchAgent
@@ -365,7 +366,7 @@ function buildRuntimeMobileTabsProjection(tabsByWorktree: AppState['tabsByWorktr
 }
 
 function resolveRuntimeTerminalTitle(
-  tab: Pick<TerminalTab, 'customTitle' | 'generatedTitle' | 'title'>,
+  tab: Pick<TerminalTab, 'customTitle' | 'quickCommandLabel' | 'generatedTitle' | 'title'>,
   generatedTitlesEnabled: boolean,
   liveTitle = tab.title
 ): string {
@@ -1032,6 +1033,9 @@ function buildMobileTerminalSurfaceTabs(
         generatedTitlesEnabled,
         paneTitle ?? terminal.title ?? 'Terminal'
       ),
+      ...(terminal.quickCommandLabel?.trim()
+        ? { quickCommandLabel: terminal.quickCommandLabel.trim() }
+        : {}),
       parentTabId: terminal.id,
       leafId,
       ptyId,

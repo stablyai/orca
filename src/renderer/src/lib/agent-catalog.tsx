@@ -32,6 +32,12 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
     homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
   },
   {
+    id: 'claude-agent-teams',
+    label: 'Claude Agent Teams',
+    cmd: 'orca claude-teams',
+    homepageUrl: 'https://code.claude.com/docs/agent-teams'
+  },
+  {
     id: 'openclaude',
     label: 'OpenClaude',
     cmd: 'openclaude',
@@ -261,7 +267,7 @@ export function AgentIcon({
   if (!agent) {
     return <AgentLetterIcon letter="?" size={size} />
   }
-  if (agent === 'claude') {
+  if (agent === 'claude' || agent === 'claude-agent-teams') {
     return <ClaudeIcon size={size} />
   }
   if (agent === 'codex') {
