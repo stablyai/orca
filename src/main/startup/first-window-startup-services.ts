@@ -1,6 +1,6 @@
 type FirstWindowStartupServices = {
-  startDaemonPtyProvider: () => Promise<void>
-  startAgentHookServer: () => Promise<void>
+  startDaemonPtyProvider: (signal: AbortSignal) => Promise<void>
+  startAgentHookServer: (signal: AbortSignal) => Promise<void>
   onDaemonError: (error: unknown) => void
   onAgentHookServerError: (error: unknown) => void
 }
@@ -9,16 +9,18 @@ export const FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS = 12_000
 
 async function startServiceWithTimeout(
   label: string,
-  start: () => Promise<void>,
+  start: (signal: AbortSignal) => Promise<void>,
   onError: (error: unknown) => void
 ): Promise<void> {
+  const abortController = new AbortController()
   let timeout: ReturnType<typeof setTimeout> | null = null
   try {
-    const startPromise = start()
+    const startPromise = start(abortController.signal)
     await Promise.race([
       startPromise,
       new Promise<never>((_resolve, reject) => {
         timeout = setTimeout(() => {
+          abortController.abort()
           reject(new Error(`${label} startup timed out`))
         }, FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
       })

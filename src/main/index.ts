@@ -408,7 +408,7 @@ function startDesktopFirstWindowStartupServices(): Promise<void> {
     // Why: the persistent-terminal daemon is desktop-only. Headless `orca serve`
     // registers its PTY runtime separately and must not spawn the desktop daemon
     // or hook loopback listener.
-    startDaemonPtyProvider: () => initDaemonPtyProvider(),
+    startDaemonPtyProvider: (signal) => initDaemonPtyProvider(signal),
     // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state, so
     // the renderer awaits this barrier before restored terminals reconnect.
     startAgentHookServer: () =>

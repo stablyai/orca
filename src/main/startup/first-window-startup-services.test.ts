@@ -63,10 +63,14 @@ describe('startFirstWindowStartupServices', () => {
     vi.useFakeTimers()
     const onDaemonError = vi.fn()
     const onAgentHookServerError = vi.fn()
+    let daemonSignal: AbortSignal | undefined
 
     try {
       const started = startFirstWindowStartupServices({
-        startDaemonPtyProvider: () => new Promise<void>(() => {}),
+        startDaemonPtyProvider: (signal) => {
+          daemonSignal = signal
+          return new Promise<void>(() => {})
+        },
         startAgentHookServer: () => Promise.resolve(),
         onDaemonError,
         onAgentHookServerError
@@ -77,6 +81,8 @@ describe('startFirstWindowStartupServices', () => {
 
       expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
       expect(onAgentHookServerError).not.toHaveBeenCalled()
+      expect(daemonSignal).toBeDefined()
+      expect(daemonSignal!.aborted).toBe(true)
     } finally {
       vi.useRealTimers()
     }
