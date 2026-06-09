@@ -207,5 +207,36 @@ export const JA_PHRASE_FIXES = [
     pattern: /レビューが要求されました/g,
     replacement: 'レビュー依頼済み',
     whenEnIncludes: 'Review requested'
-  }
+  },
+  // Round 5: inline/launch/action homographs, MR phrases, concise UI prompts.
+  { pattern: /列をなして/g, replacement: 'インライン', whenEnIncludes: 'Inline' },
+  { pattern: /列をなして/g, replacement: 'インライン', whenEnIncludes: 'inline' },
+  { pattern: /打ち上げ/g, replacement: '起動', whenEnIncludes: 'Launch' },
+  { pattern: /打ち上げ/g, replacement: '起動', whenEnIncludes: 'launch' },
+  { pattern: /遊ぶ/g, replacement: 'Play', whenEnIncludes: 'Play' },
+  { pattern: /指揮者/g, replacement: 'Conductor', whenEnIncludes: 'Conductor' },
+  { pattern: /マージリクエスト/g, replacement: 'MR', whenEnIncludes: 'merge request' },
+  { pattern: /マージ リクエスト/g, replacement: 'MR', whenEnIncludes: 'merge request' },
+  { pattern: /レビュー者/g, replacement: 'レビュアー', whenEnIncludes: 'Reviewed by' },
+  { pattern: /肩書き/g, replacement: 'タイトル', whenEnIncludes: 'title is required' },
+  { pattern: /見直しが必要/g, replacement: 'レビュー待ち', whenEnIncludes: 'Needs review' },
+  {
+    pattern: /実用的な問題/g,
+    replacement: '対応が必要なイシュー',
+    whenEnIncludes: 'actionable issues'
+  },
+  { pattern: /アクションレシピ/g, replacement: '操作レシピ', whenEnIncludes: 'Action recipes' },
+  { pattern: /クイックアクション/g, replacement: 'クイック操作', whenEnIncludes: 'Quick Actions' },
+  { pattern: /さらなるアクション/g, replacement: 'その他の操作', whenEnIncludes: 'More actions' },
+  {
+    pattern: /その他の PR アクション/g,
+    replacement: 'その他の PR 操作',
+    whenEnIncludes: 'More PR actions'
+  },
+  { pattern: /アクション/g, replacement: '操作', whenEnIncludes: 'action' },
+  { pattern: /を選択してください/g, replacement: 'を選択', whenEnIncludes: 'Select' },
+  { pattern: /を選択してください/g, replacement: 'を選択', whenEnIncludes: 'Choose' },
+  { pattern: /入力してください/g, replacement: '入力', whenEnIncludes: 'Enter' },
+  { pattern: /追加してください/g, replacement: '追加', whenEnIncludes: 'Add' },
+  { pattern: /試してください/g, replacement: '試す', whenEnIncludes: 'Try' }
 ]
