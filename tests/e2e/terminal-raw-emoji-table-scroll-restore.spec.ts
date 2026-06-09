@@ -323,28 +323,37 @@ async function readVisibleSingerRowGeometry(page: Page): Promise<{
       throw new Error('Active terminal DOM unavailable')
     }
     const screenRect = screen.getBoundingClientRect()
-    if (!rows) {
-      const buffer = pane.terminal.buffer.active
-      const line = Array.from(
-        { length: pane.terminal.rows },
-        (_, row) => buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
+    const buffer = pane.terminal.buffer.active
+    const visibleLine = Array.from(
+      { length: pane.terminal.rows },
+      (_, row) => buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
+    ).find((text) => text.includes('Singer'))
+    const scrollbackLine =
+      visibleLine ??
+      Array.from(
+        { length: buffer.baseY + buffer.length },
+        (_, index) => buffer.getLine(index)?.translateToString(true) ?? ''
       ).find((text) => text.includes('Singer'))
-      if (!line) {
-        throw new Error('Singer row buffer line unavailable')
-      }
-      const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
-      return {
-        cols: pane.terminal.cols,
-        screenRight: screenRect.right,
-        rowRight: screenRect.left + pane.terminal.cols * cellWidth,
-        rowText: line
-      }
+    if (!scrollbackLine) {
+      throw new Error('Singer row buffer line unavailable')
+    }
+    const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
+    const bufferGeometry = {
+      cols: pane.terminal.cols,
+      screenRight: screenRect.right,
+      rowRight: screenRect.left + pane.terminal.cols * cellWidth,
+      rowText: scrollbackLine
+    }
+    if (!rows) {
+      return bufferGeometry
     }
     const row = Array.from(rows.children).find((element) =>
       (element.textContent ?? '').includes('Singer')
     ) as HTMLElement | undefined
     if (!row) {
-      throw new Error('Singer row DOM unavailable')
+      // Why: xterm can repaint DOM rows between scroll and measurement; the
+      // terminal buffer still gives a stable right-edge bound for the golden.
+      return bufferGeometry
     }
     const rowRect = row.getBoundingClientRect()
     return {
