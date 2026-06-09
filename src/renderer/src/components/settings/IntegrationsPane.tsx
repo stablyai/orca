@@ -24,6 +24,7 @@ import {
   type PreflightRefreshProvider
 } from './integrations-pane-status'
 import { JiraIntegrationCard } from './jira-integration-card'
+import { AsanaIntegrationCard } from './asana-integration-card'
 export { INTEGRATIONS_PANE_SEARCH_ENTRIES } from './integrations-search'
 
 function LinearIcon({ className }: { className?: string }): React.JSX.Element {
@@ -643,6 +644,8 @@ export function IntegrationsPane(): React.JSX.Element {
       </div>
 
       <JiraIntegrationCard />
+
+      <AsanaIntegrationCard />
 
       <LinearApiKeyDialog
         open={linearDialogOpen}

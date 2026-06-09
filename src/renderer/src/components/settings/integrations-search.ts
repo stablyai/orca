@@ -43,5 +43,18 @@ export const INTEGRATIONS_PANE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     title: 'Linear Integration',
     description: 'Connect Linear to browse and link issues.',
     keywords: ['linear', 'integration', 'api key', 'connect', 'disconnect']
+  },
+  {
+    title: 'Asana Integration',
+    description: 'Connect Asana with a Personal Access Token to browse and link tasks.',
+    keywords: [
+      'asana',
+      'integration',
+      'personal access token',
+      'pat',
+      'api token',
+      'connect',
+      'disconnect'
+    ]
   }
 ]
