@@ -941,7 +941,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  Auto-name failed. Click for details
+                  Auto-name failed. Click to see details.
                 </TooltipContent>
               </Tooltip>
             ) : worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
