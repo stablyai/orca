@@ -1,6 +1,5 @@
 import { readFile, stat } from 'fs/promises'
-import path from 'path'
-import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from 'electron'
+import type { WebContents } from 'electron'
 import type { Store } from '../persistence'
 import type {
   WarpThemeImportPreview,
@@ -12,13 +11,22 @@ import { getWarpThemeDirectories } from './discovery'
 import { parseWarpThemeYamlWithTimeout } from './parser-runner'
 import { BUNDLED_WARP_THEMES, BUNDLED_WARP_THEME_SOURCE_LABEL } from './bundled-themes'
 import {
-  compareThemeFileLabels,
-  isYamlFile,
-  MAX_THEME_FILES,
   sanitizeReadError,
   scanWarpThemeDirectory,
   type ThemeFileCandidate
 } from './theme-file-scanner'
+import {
+  createPreviewOperationBudget,
+  pushPreviewBudgetSkippedFile,
+  type PreviewOperationBudget,
+  type WarpThemePreviewOptions
+} from './preview-operation-budget'
+import { validateWarpThemeImportSource } from './warp-theme-import-source-validation'
+import {
+  chooseManualWarpThemeFiles,
+  chooseManualWarpThemeFolderPath,
+  manualWarpThemeContentDiscriminator
+} from './manual-warp-theme-files'
 
 const MAX_THEME_FILE_BYTES = 1_000_000
 
@@ -27,25 +35,39 @@ type ThemeSourceSelection =
   | {
       canceled: false
       sourceLabel: string
+      sampleFallback?: boolean
       files: ThemeFileCandidate[]
       skippedFiles: WarpThemeImportSkippedFile[]
+      rootReadable?: boolean
     }
+
+type ThemeSourceResolution = {
+  selection: ThemeSourceSelection
+  budget: PreviewOperationBudget
+}
 
 async function filesFromDirectory(
   directoryPath: string,
-  sourceLabelOverride?: string
+  sourceLabelOverride?: string,
+  budget?: PreviewOperationBudget
 ): Promise<ThemeSourceSelection> {
-  const { sourceLabel, files, skippedFiles } = await scanWarpThemeDirectory(directoryPath)
+  const { sourceLabel, rootReadable, files, skippedFiles } = await scanWarpThemeDirectory(
+    directoryPath,
+    budget
+  )
   const effectiveSourceLabel = sourceLabelOverride ?? sourceLabel
   return {
     canceled: false,
     sourceLabel: effectiveSourceLabel,
     files: files.map((file) => ({ ...file, sourceLabel: effectiveSourceLabel })),
-    skippedFiles
+    skippedFiles,
+    rootReadable
   }
 }
 
-async function filesFromAutoDirectories(): Promise<ThemeSourceSelection> {
+async function filesFromAutoDirectories(
+  budget?: PreviewOperationBudget
+): Promise<ThemeSourceSelection> {
   const bundledFiles = BUNDLED_WARP_THEMES.map((theme) => ({
     path: theme.label,
     label: theme.label,
@@ -54,7 +76,13 @@ async function filesFromAutoDirectories(): Promise<ThemeSourceSelection> {
   }))
   const directories = getWarpThemeDirectories()
   let localSelection: ThemeSourceSelection | null = null
+  const unreadableSkippedFiles: WarpThemeImportSkippedFile[] = []
+  let autoDiscoveryExpired = false
   for (const directoryPath of directories) {
+    if (budget?.isExpired()) {
+      autoDiscoveryExpired = true
+      break
+    }
     try {
       const info = await stat(directoryPath)
       if (!info.isDirectory()) {
@@ -63,93 +91,89 @@ async function filesFromAutoDirectories(): Promise<ThemeSourceSelection> {
     } catch {
       continue
     }
-    const selection = await filesFromDirectory(directoryPath, 'Local Warp themes')
-    if (!selection.canceled && (selection.files.length > 0 || selection.skippedFiles.length > 0)) {
+    const selection = await filesFromDirectory(directoryPath, 'Local Warp themes', budget)
+    if (!selection.canceled && selection.rootReadable) {
       localSelection = selection
       break
+    }
+    if (!selection.canceled) {
+      unreadableSkippedFiles.push(...selection.skippedFiles)
+    }
+  }
+  if (localSelection) {
+    return {
+      canceled: false,
+      sourceLabel: 'Warp themes',
+      files: localSelection.files,
+      skippedFiles: localSelection.skippedFiles
+    }
+  }
+  if (autoDiscoveryExpired) {
+    return {
+      canceled: false,
+      sourceLabel: 'Warp themes',
+      files: [],
+      skippedFiles: [
+        {
+          label: 'Warp themes',
+          reason: 'Preview budget expired before local Warp theme folders could be scanned.'
+        }
+      ]
     }
   }
   return {
     canceled: false,
-    sourceLabel: localSelection ? 'Warp themes' : BUNDLED_WARP_THEME_SOURCE_LABEL,
-    files: [...bundledFiles, ...(localSelection?.files ?? [])],
-    skippedFiles: localSelection?.skippedFiles ?? []
+    sampleFallback: true,
+    sourceLabel: BUNDLED_WARP_THEME_SOURCE_LABEL,
+    files: bundledFiles,
+    skippedFiles: unreadableSkippedFiles
   }
-}
-
-async function chooseThemeFile(webContents?: WebContents): Promise<ThemeSourceSelection> {
-  const ownerWindow = webContents ? BrowserWindow.fromWebContents(webContents) : null
-  const options: OpenDialogOptions = {
-    title: 'Import Warp Theme',
-    properties: ['openFile', 'multiSelections'],
-    filters: [{ name: 'Warp theme YAML', extensions: ['yaml', 'yml'] }]
-  }
-  const result = ownerWindow
-    ? await dialog.showOpenDialog(ownerWindow, options)
-    : await dialog.showOpenDialog(options)
-  if (result.canceled || result.filePaths.length === 0) {
-    return { canceled: true }
-  }
-  const selectedYamlFiles = result.filePaths.filter(isYamlFile)
-  const files = selectedYamlFiles
-    .map((filePath) => ({
-      path: filePath,
-      label: path.basename(filePath)
-    }))
-    .sort(compareThemeFileLabels)
-    .slice(0, MAX_THEME_FILES)
-  const skippedFiles: WarpThemeImportSkippedFile[] =
-    selectedYamlFiles.length > MAX_THEME_FILES
-      ? [
-          {
-            label: 'Selected Warp themes',
-            reason: `Only the first ${MAX_THEME_FILES} theme files were scanned.`
-          }
-        ]
-      : []
-  return {
-    canceled: false,
-    sourceLabel: files.length === 1 ? (files[0]?.label ?? 'Warp theme') : 'Selected Warp themes',
-    files,
-    skippedFiles
-  }
-}
-
-async function chooseThemeFolder(webContents?: WebContents): Promise<ThemeSourceSelection> {
-  const ownerWindow = webContents ? BrowserWindow.fromWebContents(webContents) : null
-  const options: OpenDialogOptions = {
-    title: 'Import Warp Theme Folder',
-    properties: ['openDirectory']
-  }
-  const result = ownerWindow
-    ? await dialog.showOpenDialog(ownerWindow, options)
-    : await dialog.showOpenDialog(options)
-  if (result.canceled || result.filePaths.length === 0) {
-    return { canceled: true }
-  }
-  return filesFromDirectory(result.filePaths[0]!)
 }
 
 async function resolveThemeSource(
   source: WarpThemeImportSource,
-  webContents?: WebContents
-): Promise<ThemeSourceSelection> {
+  webContents?: WebContents,
+  options: WarpThemePreviewOptions = {}
+): Promise<ThemeSourceResolution> {
   switch (source.kind) {
-    case 'auto':
-      return filesFromAutoDirectories()
-    case 'chooseFile':
-      return chooseThemeFile(webContents)
-    case 'chooseFolder':
-      return chooseThemeFolder(webContents)
+    case 'auto': {
+      const budget = createPreviewOperationBudget(options)
+      return { selection: await filesFromAutoDirectories(budget), budget }
+    }
+    case 'chooseFile': {
+      const selection = await chooseManualWarpThemeFiles(webContents)
+      return { selection, budget: createPreviewOperationBudget(options) }
+    }
+    case 'chooseFolder': {
+      const folderPath = await chooseManualWarpThemeFolderPath(webContents)
+      const budget = createPreviewOperationBudget(options)
+      return {
+        selection: folderPath
+          ? await filesFromDirectory(folderPath, undefined, budget)
+          : { canceled: true },
+        budget
+      }
+    }
   }
 }
 
 export async function previewWarpThemeImport(
   _store: Store,
-  source: WarpThemeImportSource = { kind: 'auto' },
-  webContents?: WebContents
+  source: unknown = { kind: 'auto' },
+  webContents?: WebContents,
+  options: WarpThemePreviewOptions = {}
 ): Promise<WarpThemeImportPreview> {
-  const selection = await resolveThemeSource(source, webContents)
+  const validatedSource = validateWarpThemeImportSource(source)
+  if (!validatedSource) {
+    return {
+      found: false,
+      themes: [],
+      skippedFiles: [],
+      error: 'Invalid Warp theme import source.'
+    }
+  }
+
+  const { selection, budget } = await resolveThemeSource(validatedSource, webContents, options)
   if (selection.canceled) {
     return { found: false, themes: [], skippedFiles: [] }
   }
@@ -159,7 +183,15 @@ export async function previewWarpThemeImport(
   const idCounts = new Map<string, number>()
   const importedAt = new Date().toISOString()
 
-  for (const file of selection.files) {
+  for (const [index, file] of selection.files.entries()) {
+    if (budget.isExpired()) {
+      pushPreviewBudgetSkippedFile(
+        skippedFiles,
+        selection.sourceLabel,
+        budget.remainingThemeFiles(index, selection.files.length)
+      )
+      break
+    }
     let content: string
     if (file.content !== undefined) {
       content = file.content
@@ -186,11 +218,31 @@ export async function previewWarpThemeImport(
         continue
       }
     }
+    if (budget.isExpired()) {
+      pushPreviewBudgetSkippedFile(
+        skippedFiles,
+        selection.sourceLabel,
+        budget.remainingThemeFiles(index, selection.files.length)
+      )
+      break
+    }
 
-    const parsed = await parseWarpThemeYamlWithTimeout(content, file.label, {
-      importedAt,
-      sourceLabel: file.sourceLabel ?? selection.sourceLabel
-    })
+    const parsed = await parseWarpThemeYamlWithTimeout(
+      content,
+      file.label,
+      {
+        idDiscriminator:
+          file.idDiscriminator ||
+          (file.contentHashDiscriminator
+            ? manualWarpThemeContentDiscriminator(file.label, content)
+            : file.label || file.sourceLabel || selection.sourceLabel),
+        importedAt,
+        sourceLabel: file.sourceLabel ?? selection.sourceLabel
+      },
+      {
+        timeoutMs: budget.remainingMs()
+      }
+    )
     if (!parsed.ok) {
       skippedFiles.push({ label: file.label, reason: parsed.reason })
       continue
@@ -212,6 +264,7 @@ export async function previewWarpThemeImport(
 
   return {
     found: themes.length > 0,
+    ...(selection.sampleFallback ? { sampleFallback: true } : {}),
     sourceLabel: selection.sourceLabel,
     themes,
     skippedFiles,

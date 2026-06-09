@@ -35,6 +35,7 @@ export type WarpThemeImportSkippedFile = {
 export type WarpThemeImportPreview = {
   found: boolean
   desktopOnly?: boolean
+  sampleFallback?: boolean
   sourceLabel?: string
   themes: WarpThemeImportPreviewTheme[]
   skippedFiles: WarpThemeImportSkippedFile[]

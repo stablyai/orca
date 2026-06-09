@@ -31,11 +31,12 @@ import {
   TYPOGRAPHY_ENTRIES,
   ZOOM_ENTRIES
 } from './appearance-search'
-import { TERMINAL_APPEARANCE_SEARCH_ENTRIES } from './terminal-search'
+import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
+import { isWebClientLocation } from '@/hooks/useSettingsNavigationMetadata'
 export { APPEARANCE_PANE_SEARCH_ENTRIES }
 
 type AppearancePaneProps = {
@@ -85,6 +86,9 @@ export function AppearancePane({
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const visibleStatusBarToggles = useAvailableStatusBarToggles(STATUS_BAR_TOGGLES)
+  const terminalAppearanceSearchEntries = getTerminalAppearanceSearchEntries({
+    showWarpImport: !isWebClientLocation()
+  })
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, THEME_ENTRIES) ||
@@ -164,7 +168,7 @@ export function AppearancePane({
         ) : null}
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, TERMINAL_APPEARANCE_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, terminalAppearanceSearchEntries) ? (
       <TerminalAppearanceSection
         key="terminal-appearance"
         settings={settings}

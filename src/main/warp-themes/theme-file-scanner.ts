@@ -13,7 +13,13 @@ export type ThemeFileCandidate = {
   path: string
   label: string
   content?: string
+  contentHashDiscriminator?: boolean
+  idDiscriminator?: string
   sourceLabel?: string
+}
+
+export type WarpThemeScanBudget = {
+  isExpired: () => boolean
 }
 
 type DirectoryScanBudget = {
@@ -21,6 +27,11 @@ type DirectoryScanBudget = {
   directoryLimitReported: boolean
   entryLimitReported: boolean
   themeFileLimitHit: boolean
+  previewBudgetReported: boolean
+}
+
+type DirectoryScanState = {
+  rootReadable: boolean
 }
 
 export function isYamlFile(filePath: string): boolean {
@@ -42,6 +53,21 @@ function couldContainThemeFile(entry: Dirent<string>): boolean {
   return (entry.isFile() && isYamlFile(entry.name)) || entry.isDirectory()
 }
 
+function reportPreviewBudgetExpired(
+  sourceLabel: string,
+  skippedFiles: WarpThemeImportSkippedFile[],
+  budget: DirectoryScanBudget
+): void {
+  if (budget.previewBudgetReported) {
+    return
+  }
+  skippedFiles.push({
+    label: sourceLabel,
+    reason: 'Preview budget expired before all theme files were scanned.'
+  })
+  budget.previewBudgetReported = true
+}
+
 export function sanitizeReadError(fallback: string): string {
   // Why: importer previews cross the IPC boundary, so filesystem paths must stay in main.
   return fallback
@@ -54,8 +80,14 @@ async function collectYamlFilesFromDirectory(
   depth: number,
   files: ThemeFileCandidate[],
   skippedFiles: WarpThemeImportSkippedFile[],
-  budget: DirectoryScanBudget
+  budget: DirectoryScanBudget,
+  state: DirectoryScanState,
+  scanBudget?: WarpThemeScanBudget
 ): Promise<void> {
+  if (scanBudget?.isExpired()) {
+    reportPreviewBudgetExpired(sourceLabel, skippedFiles, budget)
+    return
+  }
   if (files.length >= MAX_THEME_FILES) {
     return
   }
@@ -73,9 +105,18 @@ async function collectYamlFilesFromDirectory(
 
   const entries: Dirent<string>[] = []
   let entryLimitHit = false
+  let previewBudgetExpiredWhileReading = false
   try {
     const directory = await opendir(directoryPath, { encoding: 'utf8' })
+    if (depth === 0) {
+      state.rootReadable = true
+    }
     for await (const entry of directory) {
+      if (scanBudget?.isExpired()) {
+        previewBudgetExpiredWhileReading = true
+        reportPreviewBudgetExpired(sourceLabel, skippedFiles, budget)
+        break
+      }
       if (entries.length >= MAX_THEME_ENTRIES_PER_DIRECTORY) {
         entryLimitHit = true
         break
@@ -91,6 +132,9 @@ async function collectYamlFilesFromDirectory(
   }
 
   const sortedEntries = entries.sort(compareDirentNames)
+  if (previewBudgetExpiredWhileReading) {
+    return
+  }
   if (entryLimitHit && !budget.entryLimitReported) {
     skippedFiles.push({
       label: relativeDirectory || sourceLabel,
@@ -100,6 +144,12 @@ async function collectYamlFilesFromDirectory(
   }
 
   for (const [index, entry] of sortedEntries.entries()) {
+    if (scanBudget?.isExpired()) {
+      if (sortedEntries.slice(index).some(couldContainThemeFile)) {
+        reportPreviewBudgetExpired(sourceLabel, skippedFiles, budget)
+      }
+      return
+    }
     if (files.length >= MAX_THEME_FILES) {
       if (sortedEntries.slice(index).some(couldContainThemeFile)) {
         budget.themeFileLimitHit = true
@@ -127,7 +177,9 @@ async function collectYamlFilesFromDirectory(
         depth + 1,
         files,
         skippedFiles,
-        budget
+        budget,
+        state,
+        scanBudget
       )
       if (
         files.length >= MAX_THEME_FILES &&
@@ -140,8 +192,12 @@ async function collectYamlFilesFromDirectory(
   }
 }
 
-export async function scanWarpThemeDirectory(directoryPath: string): Promise<{
+export async function scanWarpThemeDirectory(
+  directoryPath: string,
+  scanBudget?: WarpThemeScanBudget
+): Promise<{
   sourceLabel: string
+  rootReadable: boolean
   files: ThemeFileCandidate[]
   skippedFiles: WarpThemeImportSkippedFile[]
 }> {
@@ -152,8 +208,10 @@ export async function scanWarpThemeDirectory(directoryPath: string): Promise<{
     directoriesVisited: 0,
     directoryLimitReported: false,
     entryLimitReported: false,
-    themeFileLimitHit: false
+    themeFileLimitHit: false,
+    previewBudgetReported: false
   }
+  const state: DirectoryScanState = { rootReadable: false }
   await collectYamlFilesFromDirectory(
     directoryPath,
     sourceLabel,
@@ -161,7 +219,9 @@ export async function scanWarpThemeDirectory(directoryPath: string): Promise<{
     0,
     files,
     skippedFiles,
-    budget
+    budget,
+    state,
+    scanBudget
   )
   if (budget.themeFileLimitHit) {
     skippedFiles.push({
@@ -169,5 +229,5 @@ export async function scanWarpThemeDirectory(directoryPath: string): Promise<{
       reason: `Only the first ${MAX_THEME_FILES} theme files were scanned.`
     })
   }
-  return { sourceLabel, files, skippedFiles }
+  return { sourceLabel, rootReadable: state.rootReadable, files, skippedFiles }
 }

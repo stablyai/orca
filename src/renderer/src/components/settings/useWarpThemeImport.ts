@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/types'
 import {
+  MAX_TERMINAL_CUSTOM_THEMES,
   normalizeTerminalCustomThemes,
   type TerminalCustomTheme,
   type WarpThemeImportPreview,
@@ -46,7 +47,9 @@ export function useWarpThemeImport(
       const result = await window.api.settings.previewWarpThemeImport(source)
       if (mountedRef.current) {
         setPreview(result)
-        setSelectedThemeIds(new Set(result.themes.map((theme) => theme.id)))
+        setSelectedThemeIds(
+          new Set(result.sampleFallback ? [] : result.themes.map((theme) => theme.id))
+        )
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
@@ -91,6 +94,16 @@ export function useWarpThemeImport(
     const byId = new Map<string, TerminalCustomTheme>()
     for (const theme of normalizeTerminalCustomThemes(settings.terminalCustomThemes)) {
       byId.set(theme.id, theme)
+    }
+    const newThemeCount = selectedThemes.filter((theme) => !byId.has(theme.id)).length
+    const overflowCount = byId.size + newThemeCount - MAX_TERMINAL_CUSTOM_THEMES
+    if (overflowCount > 0) {
+      setApplyError(
+        `Importing these themes would exceed the ${MAX_TERMINAL_CUSTOM_THEMES} custom terminal theme limit. Deselect ${overflowCount} new theme${
+          overflowCount === 1 ? '' : 's'
+        } and try again.`
+      )
+      return
     }
     for (const theme of selectedThemes) {
       const { selectionValue: _selectionValue, ...themeRecord } = theme

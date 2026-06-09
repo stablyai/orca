@@ -3,7 +3,7 @@ export type BundledWarpTheme = {
   content: string
 }
 
-export const BUNDLED_WARP_THEME_SOURCE_LABEL = 'Warp bundled themes'
+export const BUNDLED_WARP_THEME_SOURCE_LABEL = 'Warp sample themes'
 
 export const BUNDLED_WARP_THEMES: BundledWarpTheme[] = [
   {

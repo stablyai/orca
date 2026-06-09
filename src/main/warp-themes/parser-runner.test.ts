@@ -79,4 +79,27 @@ describe('parseWarpThemeYamlWithTimeout', () => {
     })
     expect(worker?.terminated).toBe(true)
   })
+
+  it('uses the shorter operation-budget timeout when provided', async () => {
+    const resultPromise = parseWarpThemeYamlWithTimeout(
+      'name: Slow',
+      'slow.yaml',
+      {},
+      {
+        timeoutMs: 25
+      }
+    )
+    const worker = workerState.instances[0]
+
+    await vi.advanceTimersByTimeAsync(24)
+    expect(worker?.terminated).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toEqual({
+      ok: false,
+      reason: 'Theme file took too long to parse.'
+    })
+    expect(worker?.terminated).toBe(true)
+  })
 })

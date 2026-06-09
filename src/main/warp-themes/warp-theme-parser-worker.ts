@@ -1,5 +1,6 @@
 import { parentPort, workerData } from 'worker_threads'
 import { parseWarpThemeYaml } from './parser'
+import type { ParseWarpThemeOptions } from './parser'
 
 const data = workerData as {
   content?: unknown
@@ -7,9 +8,7 @@ const data = workerData as {
   options?: unknown
 }
 const options =
-  data.options && typeof data.options === 'object'
-    ? (data.options as { idSuffix?: string; importedAt?: string; sourceLabel?: string })
-    : {}
+  data.options && typeof data.options === 'object' ? (data.options as ParseWarpThemeOptions) : {}
 
 if (!parentPort) {
   throw new Error('Warp theme parser worker must run with a parent port.')

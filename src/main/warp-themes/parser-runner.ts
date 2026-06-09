@@ -1,9 +1,13 @@
 import { Worker } from 'worker_threads'
 import { app } from 'electron'
 import { join } from 'path'
-import type { ParsedWarpThemeResult } from './parser'
+import type { ParsedWarpThemeResult, ParseWarpThemeOptions } from './parser'
 
 export const WARP_THEME_PARSE_TIMEOUT_MS = 1_000
+
+type ParseWarpThemeTimeoutOptions = {
+  timeoutMs?: number
+}
 
 function getParserWorkerPath(): string {
   if (app.isPackaged) {
@@ -23,17 +27,22 @@ function isParsedWarpThemeResult(value: unknown): value is ParsedWarpThemeResult
 export function parseWarpThemeYamlWithTimeout(
   content: string,
   fileLabel: string,
-  options: { idSuffix?: string; importedAt?: string; sourceLabel?: string } = {}
+  options: ParseWarpThemeOptions = {},
+  timeoutOptions: ParseWarpThemeTimeoutOptions = {}
 ): Promise<ParsedWarpThemeResult> {
   return new Promise((resolve) => {
     const worker = new Worker(getParserWorkerPath(), {
       workerData: { content, fileLabel, options }
     })
     let settled = false
+    const timeoutMs = Math.max(
+      0,
+      Math.min(WARP_THEME_PARSE_TIMEOUT_MS, timeoutOptions.timeoutMs ?? WARP_THEME_PARSE_TIMEOUT_MS)
+    )
     const timeout = setTimeout(() => {
       settle({ ok: false, reason: 'Theme file took too long to parse.' })
       void worker.terminate()
-    }, WARP_THEME_PARSE_TIMEOUT_MS)
+    }, timeoutMs)
     timeout.unref?.()
 
     function settle(result: ParsedWarpThemeResult): void {

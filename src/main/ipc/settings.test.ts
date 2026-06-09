@@ -117,6 +117,30 @@ describe('registerSettingsHandlers', () => {
     expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, { kind: 'auto' }, sender)
   })
 
+  it('settings:previewWarpThemeImport forwards malformed sources for main validation', async () => {
+    const expected = {
+      found: false,
+      themes: [],
+      skippedFiles: [],
+      error: 'Invalid Warp theme import source.'
+    }
+    previewWarpThemeImportMock.mockResolvedValue(expected)
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find(
+      (call) => call[0] === 'settings:previewWarpThemeImport'
+    )?.[1] as (event: { sender: unknown }, args: unknown) => Promise<unknown>
+
+    const invalidSource = { kind: 'unknown' }
+    const sender = { id: 3 }
+    const result = await handler!({ sender }, invalidSource)
+    expect(result).toEqual(expected)
+    expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, invalidSource, sender)
+
+    await handler!({ sender }, null)
+    expect(previewWarpThemeImportMock).toHaveBeenCalledWith(store, null, sender)
+  })
+
   it('broadcasts store-level settings changes to open windows', () => {
     const send = vi.fn()
     browserWindowGetAllWindowsMock.mockReturnValue([

@@ -280,16 +280,24 @@ export const TERMINAL_SETUP_SCRIPT_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   }
 ]
 
-export const TERMINAL_APPEARANCE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
-  ...TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
-  ...TERMINAL_CURSOR_SEARCH_ENTRIES,
-  ...TERMINAL_PANE_APPEARANCE_SEARCH_ENTRIES,
-  ...TERMINAL_DARK_THEME_SEARCH_ENTRIES,
-  ...TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
-  ...TERMINAL_WINDOW_SEARCH_ENTRIES,
-  ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
-  ...TERMINAL_WARP_IMPORT_SEARCH_ENTRIES
-]
+export function getTerminalAppearanceSearchEntries(
+  options: { showWarpImport?: boolean } = {}
+): SettingsSearchEntry[] {
+  const showWarpImport = options.showWarpImport ?? true
+  return [
+    ...TERMINAL_TYPOGRAPHY_SEARCH_ENTRIES,
+    ...TERMINAL_CURSOR_SEARCH_ENTRIES,
+    ...TERMINAL_PANE_APPEARANCE_SEARCH_ENTRIES,
+    ...TERMINAL_DARK_THEME_SEARCH_ENTRIES,
+    ...TERMINAL_LIGHT_THEME_SEARCH_ENTRIES,
+    ...TERMINAL_WINDOW_SEARCH_ENTRIES,
+    ...TERMINAL_GHOSTTY_IMPORT_SEARCH_ENTRIES,
+    ...(showWarpImport ? TERMINAL_WARP_IMPORT_SEARCH_ENTRIES : [])
+  ]
+}
+
+export const TERMINAL_APPEARANCE_SEARCH_ENTRIES: SettingsSearchEntry[] =
+  getTerminalAppearanceSearchEntries()
 
 export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean

@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/types'
-import type { WarpThemeImportPreview } from '../../../../shared/terminal-custom-themes'
+import {
+  MAX_TERMINAL_CUSTOM_THEMES,
+  type WarpThemeImportPreview
+} from '../../../../shared/terminal-custom-themes'
 
 const mockStateValues: unknown[] = []
 let mockStateIndex = 0
@@ -214,5 +217,125 @@ describe('useWarpThemeImport', () => {
     warp = useWarpThemeImport(vi.fn(), baseSettings)
 
     expect(warp.desktopOnly).toBe(true)
+  })
+
+  it('does not preselect sample fallback themes', async () => {
+    const previewResponse: WarpThemeImportPreview = {
+      found: true,
+      sampleFallback: true,
+      sourceLabel: 'Warp sample themes',
+      skippedFiles: [],
+      themes: [
+        {
+          id: 'warp:sample:sample-yaml',
+          selectionValue: 'custom:warp:sample:sample-yaml',
+          name: 'Sample',
+          source: 'warp',
+          mode: 'dark',
+          terminal: { background: '#000000', foreground: '#ffffff', black: '#111111' },
+          importedAt: '2026-06-05T00:00:00.000Z',
+          sourceLabel: 'Warp sample themes'
+        }
+      ]
+    }
+    vi.stubGlobal('window', {
+      api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
+    })
+
+    let warp = useWarpThemeImport(vi.fn(), baseSettings)
+    await warp.handleClick()
+    resetMockState()
+    warp = useWarpThemeImport(vi.fn(), baseSettings)
+
+    expect(warp.selectedThemeIds.size).toBe(0)
+  })
+
+  it('blocks applying new distinct themes that exceed the custom theme cap', async () => {
+    const fullSettings = {
+      ...baseSettings,
+      terminalCustomThemes: Array.from({ length: MAX_TERMINAL_CUSTOM_THEMES }, (_, index) => ({
+        id: `warp:existing-${index}`,
+        name: `Existing ${index}`,
+        source: 'warp' as const,
+        mode: 'dark' as const,
+        terminal: { background: '#000000', foreground: '#ffffff', black: '#111111' },
+        importedAt: '2026-06-01T00:00:00.000Z'
+      }))
+    } as GlobalSettings
+    const previewResponse: WarpThemeImportPreview = {
+      found: true,
+      skippedFiles: [],
+      themes: [
+        {
+          id: 'warp:new-theme:new-theme-yaml',
+          selectionValue: 'custom:warp:new-theme:new-theme-yaml',
+          name: 'New Theme',
+          source: 'warp',
+          mode: 'dark',
+          terminal: { background: '#000000', foreground: '#ffffff', black: '#222222' },
+          importedAt: '2026-06-05T00:00:00.000Z'
+        }
+      ]
+    }
+    vi.stubGlobal('window', {
+      api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
+    })
+    const updateSettings = vi.fn()
+
+    let warp = useWarpThemeImport(updateSettings, fullSettings)
+    await warp.handleClick()
+    resetMockState()
+    warp = useWarpThemeImport(updateSettings, fullSettings)
+    await warp.handleApply()
+    resetMockState()
+    warp = useWarpThemeImport(updateSettings, fullSettings)
+
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(warp.applyError).toContain('custom terminal theme limit')
+  })
+
+  it('allows replacements when the custom theme list is already at the cap', async () => {
+    const fullSettings = {
+      ...baseSettings,
+      terminalCustomThemes: Array.from({ length: MAX_TERMINAL_CUSTOM_THEMES }, (_, index) => ({
+        id: index === 0 ? 'warp:replacement' : `warp:existing-${index}`,
+        name: `Existing ${index}`,
+        source: 'warp' as const,
+        mode: 'dark' as const,
+        terminal: { background: '#000000', foreground: '#ffffff', black: '#111111' },
+        importedAt: '2026-06-01T00:00:00.000Z'
+      }))
+    } as GlobalSettings
+    const previewResponse: WarpThemeImportPreview = {
+      found: true,
+      skippedFiles: [],
+      themes: [
+        {
+          id: 'warp:replacement',
+          selectionValue: 'custom:warp:replacement',
+          name: 'Replacement',
+          source: 'warp',
+          mode: 'dark',
+          terminal: { background: '#000000', foreground: '#ffffff', black: '#222222' },
+          importedAt: '2026-06-05T00:00:00.000Z'
+        }
+      ]
+    }
+    vi.stubGlobal('window', {
+      api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
+    })
+    const updateSettings = vi.fn()
+
+    let warp = useWarpThemeImport(updateSettings, fullSettings)
+    await warp.handleClick()
+    resetMockState()
+    warp = useWarpThemeImport(updateSettings, fullSettings)
+    await warp.handleApply()
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      terminalCustomThemes: expect.arrayContaining([
+        expect.objectContaining({ id: 'warp:replacement', name: 'Replacement' })
+      ])
+    })
   })
 })

@@ -51,6 +51,13 @@ export type ParsedWarpThemeResult =
   | { ok: true; theme: WarpThemeImportPreviewTheme }
   | { ok: false; reason: string }
 
+export type ParseWarpThemeOptions = {
+  idDiscriminator?: string
+  idSuffix?: string
+  importedAt?: string
+  sourceLabel?: string
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
@@ -132,7 +139,7 @@ function detectUnsupportedFeatures(input: Record<string, unknown>): string[] | u
 export function parseWarpThemeYaml(
   content: string,
   fileLabel: string,
-  options: { idSuffix?: string; importedAt?: string; sourceLabel?: string } = {}
+  options: ParseWarpThemeOptions = {}
 ): ParsedWarpThemeResult {
   let value: unknown
   const parseStartedAt = Date.now()
@@ -193,7 +200,10 @@ export function parseWarpThemeYaml(
     }
   }
 
-  const idBase = normalizeTerminalThemeId(`warp:${name}`)
+  const safeDiscriminator = normalizeTerminalThemeId(options.idDiscriminator, '')
+  const idBase = normalizeTerminalThemeId(
+    safeDiscriminator ? `warp:${name}:${safeDiscriminator}` : `warp:${name}`
+  )
   const id = options.idSuffix ? `${idBase}-${options.idSuffix}` : idBase
   const unsupportedFeatures = detectUnsupportedFeatures(value)
   const theme: TerminalCustomTheme = {

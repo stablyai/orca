@@ -15,7 +15,6 @@ import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/netwo
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
-import type { WarpThemeImportSource } from '../../shared/terminal-custom-themes'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -152,8 +151,9 @@ export function registerSettingsHandlers(
     return previewGhosttyImport(store)
   })
 
-  ipcMain.handle('settings:previewWarpThemeImport', (event, args?: WarpThemeImportSource) => {
-    return previewWarpThemeImport(store, args ?? { kind: 'auto' }, event.sender)
+  ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {
+    const source = args === undefined ? { kind: 'auto' } : args
+    return previewWarpThemeImport(store, source, event.sender)
   })
 
   ipcMain.handle('cache:getGitHub', () => {

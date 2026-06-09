@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
-import { APPEARANCE_PANE_SEARCH_ENTRIES, SIDEBAR_ENTRIES } from './appearance-search'
+import {
+  APPEARANCE_PANE_SEARCH_ENTRIES,
+  SIDEBAR_ENTRIES,
+  getAppearancePaneSearchEntries
+} from './appearance-search'
 
 describe('getTerminalPaneSearchEntries', () => {
   it('includes the Windows right-click setting on Windows', () => {
@@ -80,6 +84,15 @@ describe('getTerminalPaneSearchEntries', () => {
     ).toBe(true)
     expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Font Size')).toBe(true)
     expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Dark Theme')).toBe(true)
+  })
+
+  it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
+    const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
+    const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
+
+    expect(desktopEntries.some((entry) => entry.title === 'Import themes from Warp')).toBe(true)
+    expect(webEntries.some((entry) => entry.title === 'Import themes from Warp')).toBe(false)
+    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
   })
 
   it('keeps sidebar shortcut restore settings in the Appearance search index', () => {
