@@ -1,4 +1,5 @@
 import { KO_PHRASE_FIXES_ROUND4 } from './locale-ko-phrase-fixes.mjs'
+import { ZH_PHRASE_FIXES_ROUND5 } from './locale-zh-phrase-fixes-round5.mjs'
 
 import { JA_PHRASE_FIXES } from './locale-ja-phrase-fixes.mjs'
 
@@ -371,7 +372,8 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /蓝色的/g, replacement: 'Blue', whenEnIncludes: 'Blue' },
     { pattern: /中性的/g, replacement: 'Neutral', whenEnIncludes: 'Neutral' },
     { pattern: /破坏性的/g, replacement: 'destructive', whenEnIncludes: 'destructive' },
-    { pattern: /注解/g, replacement: '批注', whenEnIncludes: 'Annotation' }
+    { pattern: /注解/g, replacement: '批注', whenEnIncludes: 'Annotation' },
+    ...ZH_PHRASE_FIXES_ROUND5
   ],
   ja: JA_PHRASE_FIXES
 }

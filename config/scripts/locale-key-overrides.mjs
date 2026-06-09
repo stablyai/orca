@@ -4,6 +4,11 @@ import { KO_KEY_OVERRIDES } from './locale-ko-key-overrides.mjs'
 // Why: some fixes depend on full key context, not English value alone.
 export const LOCALE_KEY_OVERRIDES = {
   'menu.reportCrash': { ko: '크래시 신고...', zh: '报告崩溃...', ja: 'クラッシュを報告...' },
+  'menu.showMobileButton': {
+    ko: 'Orca 모바일 버튼 표시',
+    zh: '显示 Orca Mobile 按钮',
+    ja: 'Orca モバイル ボタンを表示'
+  },
   'menu.toggleLeftSidebar': {
     ko: '왼쪽 사이드바 표시/숨기기',
     zh: '显示/隐藏左侧边栏',
@@ -548,12 +553,12 @@ export const LOCALE_KEY_OVERRIDES = {
   'auto.components.github.pr.merge.state.bf5e4c6c92': {
     ko: '차단됨',
     zh: '已阻塞',
-    ja: 'ブロック'
+    ja: 'ブロック中'
   },
   'auto.components.sidebar.workspace.status.93ac840dcb': {
     ko: '차단됨',
     zh: '已阻塞',
-    ja: 'ブロック'
+    ja: 'ブロック中'
   },
   'auto.components.sidebar.workspace.status.6c1efa2cf8': {
     ko: '검토 중',

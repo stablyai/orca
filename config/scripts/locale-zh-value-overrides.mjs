@@ -1,4 +1,4 @@
-// Chinese value overrides from high-visibility UI audit round 4.
+// Chinese value overrides from high-visibility UI audit rounds 4–5.
 // Why: keep locale-value-overrides.mjs under max-lines while preserving exact-match repairs.
 export const ZH_VALUE_OVERRIDES = {
   phone: '手机',
@@ -118,5 +118,74 @@ export const ZH_VALUE_OVERRIDES = {
   'Run hosted review detail generation once when the editor opens.':
     '编辑器打开时运行一次托管评审详情生成。',
   'Show local Markdown review notes controls in rich editor mode.':
-    '在富文本编辑器模式下显示本地 Markdown 评审笔记控件。'
+    '在富文本编辑器模式下显示本地 Markdown 评审笔记控件。',
+  'Orca IDE': 'Orca IDE',
+  'Orca first': 'Orca 优先',
+  'Orca Mobile': 'Orca Mobile',
+  'Orca logo': 'Orca 标志',
+  'Enjoying Orca?': '喜欢 Orca 吗？',
+  'Get to know Orca': '了解 Orca',
+  'Expand Orca': '展开 Orca',
+  'Support Orca': '支持 Orca',
+  'Restarting Orca…': '正在重启 Orca…',
+  'Orca Attribution': 'Orca 归因',
+  'Show Orca Mobile Button': '显示 Orca Mobile 按钮',
+  'Codex Accounts': 'Codex 账户',
+  'Codex Account': 'Codex 账户',
+  'Active Codex Account': '活跃 Codex 账户',
+  'Claude Accounts': 'Claude 账户',
+  'Remove Claude Account?': '删除 Claude 账户？',
+  'Claude account updated.': 'Claude 账户已更新。',
+  'Claude account update failed.': 'Claude 账户更新失败。',
+  'Could not load Claude accounts.': '无法加载 Claude 账户。',
+  'Claude sign-in failed.': 'Claude 登录失败。',
+  'Claude account added.': '已添加 Claude 账户。',
+  'Claude Code session started': 'Claude Code 会话已开始',
+  'Codex session started': 'Codex 会话已开始',
+  'Enable Codex': '启用 Codex',
+  'Most recent local Codex sessions in this scope.': '此范围内最近的本地 Codex 会话。',
+  'Hosted-review creation defaults': '托管评审创建默认值',
+  'Defaults used when the hosted-review composer opens.': '打开托管评审编辑器时使用的默认值。',
+  'Run hosted-review detail generation once when the composer opens.':
+    '编辑器打开时运行一次托管评审详情生成。',
+  'Show local markdown review note controls in rich editor mode.':
+    '在富文本编辑器模式下显示本地 Markdown 评审笔记控件。',
+  'Start an agent for local or hosted-review merge conflicts.':
+    '启动用于解决本地或托管评审合并冲突的代理。',
+  'changed since you last approved. Re-review before it runs':
+    '自您上次批准以来已发生变化。运行前请重新评审',
+  'Run the weekly dependency audit and summarize risky changes.':
+    '每周运行依赖项审计并总结有风险的更改。',
+  "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see.":
+    '让代理直接访问 Orca 的浏览器，以便测试页面、捕获屏幕截图并根据所见内容执行操作。',
+  'X finishes, send it the review task.”': 'X 完成后，把评审任务发给它。”',
+  'Branch naming, base refs, attribution, and Git AI Author.':
+    '分支命名、基础引用、归因和 Git AI Author。',
+  'You have unsaved Git AI Author changes. Leaving will discard them.':
+    '您有未保存的 Git AI Author 更改。离开将丢弃它们。',
+  'Discard unsaved Git AI Author changes?': '放弃未保存的 Git AI Author 更改？',
+  'Create a Linear project for the selected team.': '为所选团队创建 Linear 项目。',
+  'Linear task mode': 'Linear 任务模式',
+  'Failed to switch Linear workspace.': '无法切换 Linear 工作区。',
+  'Linear project is missing workspace context.': 'Linear 项目缺少工作区上下文。',
+  'No Linear projects found': '未找到 Linear 项目',
+  'Unable to load Linear projects': '无法加载 Linear 项目',
+  'Change Linear state from {{value0}}': '将 Linear 状态从 {{value0}} 更改为',
+  'GitHub & Linear tasks': 'GitHub 和 Linear 任务',
+  'Each connected Linear workspace has one key stored by the active runtime. Full-access keys can cover all teams the key owner can access; restricted keys can be replaced any time.':
+    '每个已连接的 Linear 工作区都有一个由活动运行时存储的密钥。全权限密钥可覆盖密钥所有者可访问的所有团队；受限密钥可随时更换。',
+  'Show Linear in the Tasks source picker and sidebar shortcuts.':
+    '在任务源选择器和侧边栏快捷方式中显示 Linear。',
+  'Optional account switching for Claude while preserving shared chat context.':
+    'Claude 的可选账户切换，同时保留共享聊天上下文。',
+  'Countdown timer showing time until prompt cache expires (Claude agents).':
+    '显示提示词缓存到期倒计时的计时器（Claude 代理）。',
+  'Claude caches your conversation to reduce costs. When idle too long the cache expires and the next message resends full context at higher cost. This shows a countdown so you know when to resume.':
+    'Claude 会缓存对话以降低成本。空闲过久后缓存会过期，下一条消息将以更高成本重新发送完整上下文。此倒计时可帮助您了解何时继续。',
+  'from Orca. It is still on your disk.': '来自 Orca。它仍保留在您的磁盘上。',
+  'Pull request reopened': '拉取请求已重新打开',
+  'Reopen PR': '重新打开 PR',
+  'Reopened MR !{{value0}}': '已重新打开 MR !{{value0}}',
+  reopen: '重新打开',
+  'Replace key': '更换密钥'
 }

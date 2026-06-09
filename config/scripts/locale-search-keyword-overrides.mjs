@@ -90,7 +90,14 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     'api token': 'API 토큰',
     'api key': 'API 키',
     disconnect: '연결 해제',
-    connect: '연결'
+    connect: '연결',
+    trace: '추적',
+    launch: '실행',
+    display: '표시',
+    compose: '작성',
+    verify: '검증',
+    keep: '유지',
+    'check #': '체크 #'
   },
   zh: {
     dark: '深色',
@@ -144,6 +151,17 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     search: '搜索',
     linear: 'Linear',
     jira: 'Jira',
+    codex: 'Codex',
+    claude: 'Claude',
+    integration: '集成',
+    integrations: '集成',
+    pr: 'PR',
+    mr: 'MR',
+    github: 'GitHub',
+    gitlab: 'GitLab',
+    gitea: 'Gitea',
+    oauth: 'OAuth',
+    attribution: '归因',
     skill: '技能',
     skills: '技能',
     phone: '手机',
@@ -222,6 +240,18 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     'pull request': 'PR',
     phone: 'スマートフォン',
     skill: 'スキル',
-    skills: 'スキル'
+    skills: 'スキル',
+    launch: '起動',
+    inline: 'インライン',
+    action: '操作',
+    actions: '操作',
+    blocked: 'ブロック中',
+    play: 'Play',
+    review: 'レビュー',
+    reviewer: 'レビュアー',
+    'merge request': 'MR',
+    'font features': 'フォント特性',
+    conductor: 'Conductor',
+    'needs review': 'レビュー待ち'
   }
 }
