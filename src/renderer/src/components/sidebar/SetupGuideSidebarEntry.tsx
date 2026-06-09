@@ -9,7 +9,6 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import {
-  FEATURE_WALL_SETUP_STEP_IDS,
   getFirstIncompleteFeatureWallSetupStepId,
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
@@ -34,17 +33,8 @@ export function getSetupGuideSidebarEntryReady(
   return persistedUIReady && setupProgressReady
 }
 
-const PRE_BROWSER_SETUP_GUIDE_STEP_IDS = FEATURE_WALL_SETUP_STEP_IDS.filter(
-  (stepId) => stepId !== 'browser'
-)
-
 function isSetupGuideSidebarComplete(progress: FeatureWallSetupProgress): boolean {
-  if (progress.coreDoneCount >= progress.coreTotal) {
-    return true
-  }
-  // Why: adding the browser milestone should not make the sidebar checklist pop
-  // back up and surprise users who had already finished it.
-  return PRE_BROWSER_SETUP_GUIDE_STEP_IDS.every((stepId) => progress.stepDone[stepId])
+  return progress.coreDoneCount >= progress.coreTotal
 }
 
 export function SetupGuideSidebarEntry(): React.JSX.Element | null {

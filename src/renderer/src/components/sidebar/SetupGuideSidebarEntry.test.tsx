@@ -81,7 +81,7 @@ function makeAllDoneProgress(
   })
 }
 
-function makePreBrowserDoneProgress(): FeatureWallSetupProgress {
+function makeOnlyBrowserIncompleteProgress(): FeatureWallSetupProgress {
   return makeAllDoneProgress({
     stepDone: {
       ...makeAllDoneProgress().stepDone,
@@ -135,13 +135,14 @@ describe('SetupGuideSidebarEntry', () => {
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
   })
 
-  it('does not render for users who finished the checklist before the browser step existed', () => {
-    mocks.useSetupGuideProgress.mockReturnValue(makePreBrowserDoneProgress())
+  it('renders for fresh active users when only the browser step is incomplete', () => {
+    mocks.useSetupGuideProgress.mockReturnValue(makeOnlyBrowserIncompleteProgress())
 
-    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
+    expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).toContain('Onboarding checklist')
   })
 
-  it('does not render when the sidebar entry was dismissed', () => {
+  it('does not render when the sidebar entry was dismissed with only browser incomplete', () => {
+    mocks.useSetupGuideProgress.mockReturnValue(makeOnlyBrowserIncompleteProgress())
     setupGuideSidebarDismissed = true
 
     expect(renderToStaticMarkup(<SetupGuideSidebarEntry />)).not.toContain('Onboarding checklist')
