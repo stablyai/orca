@@ -428,6 +428,8 @@ export function getDefaultUIState(): PersistedUIState {
     setupScriptPromptDismissedRepoIds: [],
     acknowledgedAgentsByPaneKey: {},
     setupGuideSidebarDismissed: false,
+    setupGuideBrowserMilestoneMigrated: true,
+    setupGuideBrowserMilestoneLegacyComplete: false,
     browserImportHintHidden: false,
     workspaceCleanup: { dismissals: {} },
     featureTipsSeenIds: [],

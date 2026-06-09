@@ -17,6 +17,7 @@ import {
   getFeatureWallSetupProgress,
   type FeatureWallSetupProgress
 } from '../feature-wall/feature-wall-setup-progress'
+import { useSetupGuideBrowserMilestoneProgress } from './setup-guide-browser-milestone-progress'
 import {
   getComputerUsePermissionSetupState,
   getCurrentSetupScriptProbeState,
@@ -245,7 +246,7 @@ export function useSetupGuideProgress(
     computerUsePermissionStatusChecked: currentComputerUsePermissionStatusChecked
   })
 
-  return useMemo(
+  const rawProgress = useMemo(
     () =>
       getFeatureWallSetupProgress({
         ready,
@@ -283,4 +284,5 @@ export function useSetupGuideProgress(
       worktreesByRepo
     ]
   )
+  return useSetupGuideBrowserMilestoneProgress(rawProgress)
 }
