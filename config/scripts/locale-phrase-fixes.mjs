@@ -1,3 +1,7 @@
+import { KO_PHRASE_FIXES_ROUND4 } from './locale-ko-phrase-fixes.mjs'
+
+import { JA_PHRASE_FIXES } from './locale-ja-phrase-fixes.mjs'
+
 export const LOCALE_PHRASE_FIXES = {
   ko: [
     { pattern: /해고하다/g, replacement: '닫기', whenEnIncludes: 'Dismiss' },
@@ -122,7 +126,8 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /PR, 문제/g, replacement: 'PR, 이슈', whenEnIncludes: 'issues' },
     { pattern: /, 문제,/g, replacement: ', 이슈,', whenEnIncludes: 'issues' },
     { pattern: /및 문제/g, replacement: '및 이슈', whenEnIncludes: 'issues' },
-    { pattern: /문제 자동화/g, replacement: '이슈 자동화', whenEnIncludes: 'issue-automation' }
+    { pattern: /문제 자동화/g, replacement: '이슈 자동화', whenEnIncludes: 'issue-automation' },
+    ...KO_PHRASE_FIXES_ROUND4
   ],
   zh: [
     { pattern: /客服人员/g, replacement: '代理', whenEnIncludes: 'agent' },
@@ -311,112 +316,62 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /以Linear方式打开/g, replacement: '在 Linear 中打开', whenEnIncludes: 'Linear' },
     { pattern: /Linear视图/g, replacement: 'Linear 视图', whenEnIncludes: 'Linear' },
     { pattern: /队伍/g, replacement: '团队', whenEnIncludes: 'teams' },
-    { pattern: /新特征/g, replacement: '新功能', whenEnIncludes: 'New features' }
+    { pattern: /新特征/g, replacement: '新功能', whenEnIncludes: 'New features' },
+    { pattern: /审稿人/g, replacement: '评审人', whenEnIncludes: 'reviewer' },
+    { pattern: /审阅者/g, replacement: '评审人', whenEnIncludes: 'reviewer' },
+    { pattern: /电话/g, replacement: '手机', whenEnIncludes: 'phone' },
+    { pattern: /发射器/g, replacement: '启动器', whenEnIncludes: 'launcher' },
+    { pattern: /发射/g, replacement: '启动', whenEnIncludes: 'launch' },
+    { pattern: /完全的/g, replacement: '已完成', whenEnIncludes: 'Completed' },
+    { pattern: /排队/g, replacement: '内联', whenEnIncludes: 'Inline' },
+    { pattern: /床单/g, replacement: 'sheet', whenEnIncludes: 'sheet' },
+    { pattern: /评论评论/g, replacement: '评审评论', whenEnIncludes: 'Review comment' },
+    { pattern: /需要审查/g, replacement: '待评审', whenEnIncludes: 'Needs review' },
+    { pattern: /需要审查/g, replacement: '待评审', whenEnIncludes: 'need review' },
+    { pattern: /审核中/g, replacement: '评审中', whenEnIncludes: 'In review' },
+    { pattern: /已请求审核/g, replacement: '已请求评审', whenEnIncludes: 'Review requested' },
+    { pattern: /托管审核/g, replacement: '托管评审', whenEnIncludes: 'hosted review' },
+    { pattern: /托管审核/g, replacement: '托管评审', whenEnIncludes: 'Hosted review' },
+    { pattern: /审查冲突/g, replacement: '评审冲突', whenEnIncludes: 'Review conflicts' },
+    { pattern: /审查笔记/g, replacement: '评审笔记', whenEnIncludes: 'Review Notes' },
+    { pattern: /例如特征/g, replacement: '例如 feature', whenEnIncludes: 'e.g. feature' },
+    { pattern: /字体特征/g, replacement: '字体特性', whenEnIncludes: 'font features' },
+    { pattern: /审核批准/g, replacement: '评审批准', whenEnIncludes: 'review approval' },
+    { pattern: /行动食谱/g, replacement: '操作方案', whenEnIncludes: 'action recipes' },
+    { pattern: /更多行动/g, replacement: '更多操作', whenEnIncludes: 'More actions' },
+    { pattern: /更多PR行动/g, replacement: '更多 PR 操作', whenEnIncludes: 'More PR actions' },
+    {
+      pattern: /更多PR工作区行动/g,
+      replacement: '更多 PR 工作区操作',
+      whenEnIncludes: 'More PR workspace actions'
+    },
+    { pattern: /的集体行动/g, replacement: '的分组操作', whenEnIncludes: 'Group actions' },
+    {
+      pattern: /没有阻碍PR行动/g,
+      replacement: '没有阻塞 PR 操作',
+      whenEnIncludes: 'blocking PR action'
+    },
+    { pattern: /项目行动/g, replacement: '项目操作', whenEnIncludes: 'project actions' },
+    { pattern: /快速行动/g, replacement: '快捷操作', whenEnIncludes: 'Quick actions' },
+    {
+      pattern: /没有审稿人要求/g,
+      replacement: '未请求评审人',
+      whenEnIncludes: 'reviewers requested'
+    },
+    { pattern: /审稿人被删除/g, replacement: '已移除评审人', whenEnIncludes: 'Reviewers removed' },
+    { pattern: /审稿人已删除/g, replacement: '已移除评审人', whenEnIncludes: 'Reviewer removed' },
+    { pattern: /审稿人要求/g, replacement: '已请求评审', whenEnIncludes: 'Reviewers requested' },
+    { pattern: /被阻止/g, replacement: '已阻塞', whenEnIncludes: 'pull request is blocked' },
+    { pattern: /查看的文件/g, replacement: '已查看文件', whenEnIncludes: 'files viewed' },
+    { pattern: /查看 ＃/g, replacement: '检查 #', whenEnIncludes: 'check #' },
+    { pattern: /指挥进展/g, replacement: 'Conductor 进度', whenEnIncludes: 'Conductor Progress' },
+    { pattern: /指挥评论/g, replacement: 'Conductor 评审', whenEnIncludes: 'Conductor Review' },
+    { pattern: /指挥完成/g, replacement: 'Conductor 完成', whenEnIncludes: 'Conductor Done' },
+    { pattern: /琥珀色/g, replacement: 'Amber', whenEnIncludes: 'Amber' },
+    { pattern: /蓝色的/g, replacement: 'Blue', whenEnIncludes: 'Blue' },
+    { pattern: /中性的/g, replacement: 'Neutral', whenEnIncludes: 'Neutral' },
+    { pattern: /破坏性的/g, replacement: 'destructive', whenEnIncludes: 'destructive' },
+    { pattern: /注解/g, replacement: '批注', whenEnIncludes: 'Annotation' }
   ],
-  ja: [
-    { pattern: /解雇/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
-    { pattern: /却下/g, replacement: '閉じる', whenEnIncludes: 'Dismiss' },
-    { pattern: /代理人/g, replacement: 'エージェント', whenEnIncludes: 'agent' },
-    { pattern: /支店/g, replacement: 'ブランチ', whenEnIncludes: 'ranch' },
-    { pattern: /港(?!口)/g, replacement: 'ポート', whenEnIncludes: 'ort' },
-    { pattern: /会議/g, replacement: 'セッション', whenEnIncludes: 'session' },
-    { pattern: /広報/g, replacement: 'PR', whenEnIncludes: 'PR' },
-    { pattern: /端末/g, replacement: 'ターミナル', whenEnIncludes: 'erminal' },
-    { pattern: /シャチ:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' },
-    { pattern: /線形/g, replacement: 'Linear', whenEnIncludes: 'Linear' },
-    { pattern: /不和/g, replacement: 'Discord', whenEnIncludes: 'Discord' },
-    { pattern: /爽やか/g, replacement: '更新中', whenEnIncludes: 'Refreshing' },
-    { pattern: /殺害/g, replacement: '終了中', whenEnIncludes: 'Killing' },
-    { pattern: /殺す/g, replacement: '強制終了', whenEnIncludes: 'Kill' },
-    { pattern: /皆殺し/g, replacement: 'すべて終了', whenEnIncludes: 'kill all' },
-    { pattern: /崩壊させる/g, replacement: '折りたたむ', whenEnIncludes: 'Collapse Orca' },
-    { pattern: /崩壊/g, replacement: '折りたたむ', whenEnIncludes: 'Collapse' },
-    { pattern: /一般的な/g, replacement: '一般', whenEnIncludes: 'General' },
-    { pattern: /高度な/g, replacement: '詳細設定', whenEnIncludes: 'Advanced' },
-    { pattern: /実験的(?!機能)/g, replacement: '実験的機能', whenEnIncludes: 'Experimental' },
-    {
-      pattern: /コンピュータの使用/g,
-      replacement: 'コンピュータ操作',
-      whenEnIncludes: 'Computer Use'
-    },
-    { pattern: /検索設定/g, replacement: '設定を検索', whenEnIncludes: 'Search settings' },
-    { pattern: /検索スキル/g, replacement: 'スキルを検索', whenEnIncludes: 'Search skills' },
-    { pattern: /検索ブロック/g, replacement: 'ブロックを検索', whenEnIncludes: 'Search blocks' },
-    { pattern: /暗い/g, replacement: 'ダーク', whenEnIncludes: 'Dark' },
-    { pattern: /もう一度やり直してください/g, replacement: '再試行', whenEnIncludes: 'Try Again' },
-    {
-      pattern: /今すぐ再起動してください/g,
-      replacement: '今すぐ再起動',
-      whenEnIncludes: 'Restart now'
-    },
-    { pattern: /待っている/g, replacement: '待機中', whenEnIncludes: 'Waiting' },
-    {
-      pattern: /眠っているのを隠す/g,
-      replacement: 'スリープ中を非表示',
-      whenEnIncludes: 'Hide sleeping'
-    },
-    { pattern: /インタフェース/g, replacement: 'インターフェース', whenEnIncludes: 'Interface' },
-    { pattern: /統合/g, replacement: '連携', whenEnIncludes: 'Integration' },
-    {
-      pattern: /統合しました/g,
-      replacement: 'マージしました',
-      whenEnIncludes: 'Merged MR'
-    },
-    {
-      pattern: /統合されています/g,
-      replacement: 'マージされています',
-      whenEnIncludes: 'already merged'
-    },
-    { pattern: /再起動します/g, replacement: '再起動', whenEnIncludes: 'Restart Orca' },
-    { pattern: /オウムガイ/g, replacement: 'Nautilus', whenEnIncludes: 'Nautilus' },
-    {
-      pattern: /Kim サブスクリプション/g,
-      replacement: 'Kimi サブスクリプション',
-      whenEnIncludes: 'Kimi subscription'
-    },
-    { pattern: /空き状況/g, replacement: '利用可否', whenEnIncludes: 'availability' },
-    { pattern: /指示/g, replacement: 'コマンド', whenEnIncludes: 'Command' },
-    { pattern: /弦/g, replacement: '文字列', whenEnIncludes: 'string' },
-    { pattern: /新しい/g, replacement: '新規', whenEnIncludes: 'New' },
-    {
-      pattern: /Open Linearタスク/g,
-      replacement: 'Linear タスクを開く',
-      whenEnIncludes: 'Open Linear tasks'
-    },
-    { pattern: /小切手/g, replacement: 'チェック', whenEnIncludes: 'checks' },
-    { pattern: /査読者/g, replacement: 'レビュアー', whenEnIncludes: 'reviewer' },
-    { pattern: /レビュー担当者/g, replacement: 'レビュアー', whenEnIncludes: 'reviewer' },
-    { pattern: /電話機/g, replacement: 'スマートフォン', whenEnIncludes: 'phone' },
-    {
-      pattern: /壊れたチェック/g,
-      replacement: '失敗したチェック',
-      whenEnIncludes: 'broken check'
-    },
-    {
-      pattern: /コンピューターの使用/g,
-      replacement: 'コンピュータ操作',
-      whenEnIncludes: 'Computer Use'
-    },
-    {
-      pattern: /コンピューター使用/g,
-      replacement: 'コンピュータ操作',
-      whenEnIncludes: 'Computer Use'
-    },
-    { pattern: /携帯電話/g, replacement: 'スマートフォン', whenEnIncludes: 'phone' },
-    {
-      pattern: /実験的機能な/g,
-      replacement: '実験的機能',
-      whenEnIncludes: 'experimental'
-    },
-    { pattern: /ジラ/g, replacement: 'Jira', whenEnIncludes: 'Jira' },
-    { pattern: /ジラ/g, replacement: 'Jira', whenEnIncludes: 'jira' },
-    { pattern: /Linear問題/g, replacement: 'Linear イシュー', whenEnIncludes: 'Linear issue' },
-    { pattern: /Linearの問題/g, replacement: 'Linear イシュー', whenEnIncludes: 'Linear issue' },
-    { pattern: /Jira の問題/g, replacement: 'Jira イシュー', whenEnIncludes: 'Jira issue' },
-    {
-      pattern: /一般的なアクション/g,
-      replacement: 'よく使うアクション',
-      whenEnIncludes: 'common actions'
-    }
-  ]
+  ja: JA_PHRASE_FIXES
 }

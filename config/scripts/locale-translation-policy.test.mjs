@@ -177,6 +177,86 @@ describe('locale-translation-policy', () => {
         locale: 'ko'
       })
     ).toBe('lint')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitLabItemDialog.4168eb2c51',
+        enValue: 'Resolve',
+        localeValue: '해결하다',
+        locale: 'ko'
+      })
+    ).toBe('해결')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.934add88b6',
+        enValue: 'Reviewer',
+        localeValue: '검토자',
+        locale: 'ko'
+      })
+    ).toBe('리뷰어')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.skills.SkillsPage.f43ad6edf3',
+        enValue: 'Skills',
+        localeValue: '기술',
+        locale: 'ko'
+      })
+    ).toBe('스킬')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.integrations.search.581844769a',
+        enValue: 'mr',
+        localeValue: '~ 씨',
+        locale: 'ko'
+      })
+    ).toBe('MR')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.integrations.search.e1263dd748',
+        enValue: 'jira',
+        localeValue: '지라',
+        locale: 'ko'
+      })
+    ).toBe('Jira')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.integrations.search.aab86d64e5',
+        enValue: 'Gitea Integration',
+        localeValue: '지테아 통합',
+        locale: 'ko'
+      })
+    ).toBe('Gitea 연동')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.hooks.useSettingsNavigationMetadata.2b043783ef',
+        enValue: 'Integrations',
+        localeValue: '통합',
+        locale: 'ko'
+      })
+    ).toBe('연동')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.e52bed9264',
+        enValue: 'No checks reported yet',
+        localeValue: '아직 보고된 검사가 없습니다.',
+        locale: 'ko'
+      })
+    ).toBe('아직 보고된 체크가 없습니다.')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.right.sidebar.source.control.primary.action.7aad2c0240',
+        enValue: 'Hosted review operation in progress…',
+        localeValue: '호스팅 검토 작업 진행 중…',
+        locale: 'ko'
+      })
+    ).toBe('호스팅 PR 작업 진행 중…')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.integrations.search.933deaf732',
+        enValue: 'oauth',
+        localeValue: '맹세하다',
+        locale: 'ko'
+      })
+    ).toBe('OAuth')
   })
 
   it('fixes Chinese detected-state and skill terminology regressions', () => {
@@ -319,6 +399,170 @@ describe('locale-translation-policy', () => {
         locale: 'ja'
       })
     ).toBe('コンピューターとスマートフォンで。')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.3ab6ac0fc8',
+        enValue: 'Preview and edit the selected GitHub issue or pull request.',
+        localeValue: '選択した GitHub の課題またはプル リクエストをプレビューおよび編集します。',
+        locale: 'ja'
+      })
+    ).toBe('選択した GitHub イシューまたは PR をプレビュー・編集します。')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.a2495e4784',
+        enValue: 'Pull request',
+        localeValue: 'プルリクエスト',
+        locale: 'ja'
+      })
+    ).toBe('PR')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.TaskPage.be8cf68d9f',
+        enValue: 'view issues',
+        localeValue: '問題を表示する',
+        locale: 'ja'
+      })
+    ).toBe('イシューを表示')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.editor.EditorContent.e4b074749d',
+        enValue: 'Front Matter',
+        localeValue: '前の問題',
+        locale: 'ja'
+      })
+    ).toBe('フロントマター')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.IntegrationsPane.c0c8575e05',
+        enValue: 'Install the GitHub CLI to enable pull requests, issues, and checks.',
+        localeValue:
+          'GitHub CLI をインストールして、プル リクエスト、発行、チェックを有効にします。',
+        locale: 'ja'
+      })
+    ).toBe('GitHub CLI をインストールして PR、イシュー、チェックを有効にします。')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.mobile.MobilePage.e17393c6a3',
+        enValue: 'Phone preview',
+        localeValue: '電話プレビュー',
+        locale: 'ja'
+      })
+    ).toBe('スマートフォンプレビュー')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.8c45901789',
+        enValue: 'Request reviewer {{value0}}',
+        localeValue: 'レビュアー {{value0}} をリクエスト',
+        locale: 'ja'
+      })
+    ).toBe('レビュアーをリクエスト {{value0}}')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.appearance.search.5e5b8878bf',
+        enValue: 'phone',
+        localeValue: '電話',
+        locale: 'ja'
+      })
+    ).toBe('スマートフォン')
+  })
+
+  it('fixes Chinese round 4 phone, review, PR, and status chip regressions', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.appearance.search.5e5b8878bf',
+        enValue: 'phone',
+        localeValue: '电话',
+        locale: 'zh'
+      })
+    ).toBe('手机')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.mobile.slides.TerminalSlide.985373052e',
+        enValue: 'Switch to phone mode',
+        localeValue: '切换到电话模式',
+        locale: 'zh'
+      })
+    ).toBe('切换到手机模式')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.GitPane.b559bf9899',
+        enValue: 'e.g. feature',
+        localeValue: '例如特征',
+        locale: 'zh'
+      })
+    ).toBe('例如 feature')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.terminal.search.d5e6c7fab1',
+        enValue: 'font features',
+        localeValue: '字体特征',
+        locale: 'zh'
+      })
+    ).toBe('字体特性')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.934add88b6',
+        enValue: 'Reviewer',
+        localeValue: '审稿人',
+        locale: 'zh'
+      })
+    ).toBe('评审人')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.a341343303',
+        enValue: 'Review comment added.',
+        localeValue: '添加了评论评论。',
+        locale: 'zh'
+      })
+    ).toBe('已添加评审评论。')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.GitHubItemDialog.6e43a16435',
+        enValue: 'Inline',
+        localeValue: '排队',
+        locale: 'zh'
+      })
+    ).toBe('内联')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.github.pr.merge.state.bf5e4c6c92',
+        enValue: 'Blocked',
+        localeValue: '被阻止',
+        locale: 'zh'
+      })
+    ).toBe('已阻塞')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.sidebar.workspace.status.6c1efa2cf8',
+        enValue: 'In review',
+        localeValue: '审核中',
+        locale: 'zh'
+      })
+    ).toBe('评审中')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.sidebar.workspace.status.2c19d1db33',
+        enValue: 'Play',
+        localeValue: '玩',
+        locale: 'zh'
+      })
+    ).toBe('Play')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bc0bdbb5e',
+        enValue: 'Launch:',
+        localeValue: '发射：',
+        locale: 'zh'
+      })
+    ).toBe('启动：')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.UpdateCard.actionBadge',
+        enValue: 'Action',
+        localeValue: '行动',
+        locale: 'zh'
+      })
+    ).toBe('操作')
   })
 
   it('applies search keyword overrides for settings search synonyms', () => {

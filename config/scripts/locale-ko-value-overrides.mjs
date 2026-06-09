@@ -1,4 +1,4 @@
-// Korean value overrides from high-visibility UI audit rounds 2–3.
+// Korean value overrides from high-visibility UI audit rounds 2–4.
 // Why: keep locale-value-overrides.mjs under max-lines while preserving exact-match repairs.
 export const KO_VALUE_OVERRIDES = {
   issue: '이슈',
@@ -65,5 +65,120 @@ export const KO_VALUE_OVERRIDES = {
     'Orca는 GitHub CLI(gh)를 사용하여 PR, 이슈 및 검사를 표시합니다.',
   'Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.':
     '공유 후크 및 이슈 자동화 기본값은 저장소에 정의되어 있으며 이를 사용하는 모든 사람이 사용할 수 있습니다.',
-  DRAFT_ISSUE: 'DRAFT_ISSUE'
+  DRAFT_ISSUE: 'DRAFT_ISSUE',
+  Reviewer: '리뷰어',
+  Reviewers: '리뷰어',
+  Review: '리뷰',
+  Resolve: '해결',
+  Reply: '회신',
+  Manage: '관리',
+  Quote: '인용',
+  Confirm: '확인',
+  Enter: '입력',
+  Move: '이동',
+  Resume: '재개',
+  Register: '등록',
+  Restart: '다시 시작',
+  Block: '차단',
+  Duplicate: '복제',
+  Restore: '복원',
+  Configure: '구성',
+  Focus: '집중',
+  Start: '시작',
+  Work: '작업',
+  Show: '표시',
+  Pass: '통과',
+  Maintain: '유지',
+  Approve: '승인',
+  Support: '지원',
+  Track: '추적',
+  Share: '공유',
+  'Re-authenticate': '재인증',
+  Skills: '스킬',
+  skill: '스킬',
+  Gitea: 'Gitea',
+  gitea: 'Gitea',
+  glab: 'glab',
+  gh: 'gh',
+  oauth: 'OAuth',
+  ado: 'ADO',
+  github: 'GitHub',
+  gitlab: 'gitlab',
+  atlassian: 'Atlassian',
+  jira: 'Jira',
+  Jira: 'Jira',
+  integrations: '연동',
+  mr: 'MR',
+  integration: '연동',
+  credentials: '자격 증명',
+  'push to talk': '누르고 말하기',
+  'Start work': '작업 시작',
+  Found: '발견됨',
+  found: '발견됨',
+  'Review needed': '리뷰 필요',
+  'need review': '리뷰 필요',
+  check: '확인',
+  generate: '생성',
+  reauthenticate: '재인증',
+  wrk: '작업',
+  'Reviewed by': '리뷰어',
+  'Review from': '리뷰 출처',
+  'Review comment added.': '리뷰 댓글이 추가되었습니다.',
+  'Agent skills': '에이전트 스킬',
+  'Agent Skills': '에이전트 스킬',
+  'Agent skill': '에이전트 스킬',
+  'Scanning skills': '스킬 스캔 중',
+  'No local skills found': '로컬 스킬을 찾을 수 없습니다.',
+  'Browser Use skill': 'Browser Use 스킬',
+  'Computer Use skill': 'Computer Use 스킬',
+  'CLI skill': 'CLI 스킬',
+  'Orca CLI skill': 'Orca CLI 스킬',
+  'No checks reported yet': '아직 보고된 체크가 없습니다.',
+  'This pull request has no reported checks yet': '이 PR에는 아직 보고된 체크가 없습니다.',
+  'Keyboard shortcuts for common actions.': '일반 작업에 대한 키보드 단축키입니다.',
+  'Common emulator commands': '일반 에뮬레이터 명령',
+  'GitHub Integration': 'GitHub 연동',
+  'GitLab Integration': 'GitLab 연동',
+  'Bitbucket Integration': 'Bitbucket 연동',
+  'Azure DevOps Integration': 'Azure DevOps 연동',
+  'Gitea Integration': 'Gitea 연동',
+  'Jira Integration': 'Jira 연동',
+  'Linear Integration': 'Linear 연동',
+  'hosted review': '호스팅 PR',
+  'Hosted review operation in progress…': '호스팅 PR 작업 진행 중…',
+  'Open hosted review after creation': '생성 후 호스팅 PR 열기',
+  'Reviewer id is unavailable for this GitLab user.':
+    '이 GitLab 사용자의 리뷰어 ID를 사용할 수 없습니다.',
+  'You have unsaved Git AI Author changes. Leaving will discard them.':
+    '저장되지 않은 Git AI Author 변경사항이 있습니다. 떠나면 폐기됩니다.',
+  'Discard unsaved Git AI Author changes?':
+    '저장되지 않은 Git AI Author 변경사항을 삭제하시겠습니까?',
+  'Branch naming, base refs, attribution, and Git AI Author.':
+    '브랜치 이름 지정, 기본 참조, 속성 및 Git AI Author.',
+  'Used by repositories that inherit global hosted-review defaults.':
+    '전역 호스팅 PR 기본값을 상속하는 저장소에서 사용됩니다.',
+  'Defaults used when the hosted-review composer opens.':
+    '호스팅 PR 작성기가 열릴 때 사용되는 기본값입니다.',
+  'Run hosted-review detail generation once when the composer opens.':
+    '작성기가 열리면 호스팅 PR 세부 정보 생성을 한 번 실행합니다.',
+  'Checks require a Git branch and hosted review context':
+    '검사에는 Git 브랜치 및 호스팅 PR 컨텍스트가 필요합니다.',
+  'Start an agent from failed hosted-review checks.':
+    '실패한 호스팅 PR 체크에서 에이전트를 시작합니다.',
+  'Start an agent for local or hosted-review merge conflicts.':
+    '로컬 또는 호스팅 PR 병합 충돌에 대한 에이전트를 시작합니다.',
+  'Review the workspace error below, then refresh.':
+    '아래 워크스페이스 오류를 확인한 후 새로고침하세요.',
+  'Review inactive workspaces before deleting their local files and Orca state.':
+    '로컬 파일과 Orca 상태를 삭제하기 전에 비활성 워크스페이스를 확인하세요.',
+  'Review inactive workspaces (': '비활성 워크스페이스 확인(',
+  'Review the settings that will be imported from your Ghostty config.':
+    'Ghostty 구성에서 가져올 설정을 확인하세요.',
+  'GitHub requires review approval before this pull request can merge':
+    '이 PR을 병합하려면 GitHub에서 리뷰 승인이 필요합니다.',
+  'Prefer domain nouns from the task, avoid ticket IDs, and keep names reviewer-friendly.':
+    '작업에서 도메인 명사를 선호하고, 티켓 ID를 피하고, 리뷰어 친화적인 이름을 유지하세요.',
+  'Enable AI author': 'AI author 활성화',
+  'AI author': 'AI author',
+  'This pull request has no reported checks yet.': '이 PR에는 아직 보고된 체크가 없습니다.'
 }

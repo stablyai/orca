@@ -1,4 +1,5 @@
 import { KO_VALUE_OVERRIDES } from './locale-ko-value-overrides.mjs'
+import { ZH_VALUE_OVERRIDES } from './locale-zh-value-overrides.mjs'
 
 export const LOCALE_VALUE_OVERRIDES = {
   ko: {
@@ -86,7 +87,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Computer Use': '컴퓨터 사용',
     Shortcuts: '단축키',
     'Onboarding checklist': '온보딩 체크리스트',
-    Integrations: '통합',
+    Integrations: '연동',
     split: '분할',
     space: '스페이스',
     mobile: '모바일',
@@ -361,7 +362,8 @@ export const LOCALE_VALUE_OVERRIDES = {
     'No issues match this Linear context.': '没有议题与此 Linear 上下文匹配。',
     'Fix checks prompt is empty. Update Source Control AI settings.':
       '检查提示为空。请更新源代码管理 AI 设置。',
-    Question: '疑问'
+    Question: '疑问',
+    ...ZH_VALUE_OVERRIDES
   },
   ja: {
     Save: '保存',
@@ -558,6 +560,37 @@ export const LOCALE_VALUE_OVERRIDES = {
     issue: 'イシュー',
     issues: 'イシュー',
     Issues: 'イシュー',
-    'Common emulator commands': 'よく使うエミュレータコマンド'
+    'Common emulator commands': 'よく使うエミュレータコマンド',
+    'Pull request': 'PR',
+    'pull request': 'PR',
+    'Pull request merged': 'PR がマージされました',
+    'Pull request reopened': 'PR が再オープンされました',
+    'Pull request closed': 'PR がクローズされました',
+    'Preview and edit the selected GitHub issue or pull request.':
+      '選択した GitHub イシューまたは PR をプレビュー・編集します。',
+    'view issues': 'イシューを表示',
+    'Review requested': 'レビュー依頼済み',
+    'Request reviewer {{value0}}': 'レビュアーをリクエスト {{value0}}',
+    'Unrequest reviewer {{value0}}': 'レビュアーのリクエストを取り消す {{value0}}',
+    'Phone preview': 'スマートフォンプレビュー',
+    'Switch to phone mode': 'スマートフォンモードに切り替え',
+    phone: 'スマートフォン',
+    'Front Matter': 'フロントマター',
+    'Publish Branch': 'ブランチを公開',
+    'Issue source': 'イシューソース',
+    'Sub-issue data is unavailable for your token.':
+      'トークンではサブイシューデータを利用できません。',
+    'Start workspace from issue': 'イシューからワークスペースを開始',
+    'Install the GitHub CLI to enable pull requests, issues, and checks.':
+      'GitHub CLI をインストールして PR、イシュー、チェックを有効にします。',
+    'Search GitHub issues...': 'GitHub イシューを検索...',
+    'file an issue': 'イシューを登録',
+    sending: '送信中',
+    'Pull requests, issues, and checks via the': 'PR、イシュー、チェックは',
+    'Pull requests, issues, and check status.': 'PR、イシュー、チェックの状態。',
+    'Pull requests and build statuses': 'PR とビルドステータス',
+    'Pull requests and commit statuses for detected repositories':
+      '検出されたリポジトリの PR とコミットステータス',
+    'Keep at phone size (default)': 'スマートフォンサイズを維持（デフォルト）'
   }
 }
