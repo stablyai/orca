@@ -285,6 +285,11 @@ export const LOCALE_PHRASE_FIXES = {
       replacement: '合并请求、议题和管道',
       whenEnIncludes: 'issue'
     },
+    {
+      pattern: /合并请求、问题、待办/g,
+      replacement: '合并请求、议题、待办',
+      whenEnIncludes: 'issue'
+    },
     { pattern: /提交、PR 和问题/g, replacement: '提交、PR 和议题', whenEnIncludes: 'issue' },
     { pattern: /粘贴问题 URL/g, replacement: '粘贴议题 URL', whenEnIncludes: 'issue' },
     { pattern: /阅读问题/g, replacement: '阅读议题', whenEnIncludes: 'issue' },

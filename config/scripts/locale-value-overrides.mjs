@@ -360,7 +360,8 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Add Linear access to browse and link issues.': '添加 Linear 访问以浏览和链接议题。',
     'No issues match this Linear context.': '没有议题与此 Linear 上下文匹配。',
     'Fix checks prompt is empty. Update Source Control AI settings.':
-      '检查提示为空。请更新源代码管理 AI 设置。'
+      '检查提示为空。请更新源代码管理 AI 设置。',
+    Question: '疑问'
   },
   ja: {
     Save: '保存',
