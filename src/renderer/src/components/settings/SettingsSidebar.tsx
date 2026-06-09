@@ -116,6 +116,8 @@ export function SettingsSidebar({
 }: SettingsSidebarProps): React.JSX.Element {
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
   const setupActive = activeSectionId === 'setup-guide'
+  // Why: "Hide from sidebar" only hides the top-left app sidebar prompt;
+  // Settings should remain a stable place to reopen the checklist.
   const showSetupGuideTopRow =
     setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
   const searchShortcutHint = useShortcutLabel('settings.search')

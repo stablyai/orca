@@ -34,11 +34,7 @@ export function getSettingsSetupGuideProgress(progress: {
 export function useSettingsSetupGuideProgress(
   shouldRefreshCoreState: boolean
 ): SettingsSetupGuideProgress {
-  const fullProgress = useSetupGuideProgress(shouldRefreshCoreState, false, false, {
-    // Why: the Settings nav row mirrors full checklist totals without starting
-    // uncached setup-script probes; the opened setup-guide pane runs them.
-    probeSetupScript: false
-  })
+  const fullProgress = useSetupGuideProgress(shouldRefreshCoreState, false, false)
 
   return useMemo(() => getSettingsSetupGuideProgress(fullProgress), [fullProgress])
 }

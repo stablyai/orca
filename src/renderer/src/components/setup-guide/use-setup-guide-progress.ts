@@ -28,10 +28,6 @@ import {
 
 const SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS = 15_000
 
-type SetupGuideProgressOptions = {
-  probeSetupScript?: boolean
-}
-
 const setupScriptProbeCacheListeners = new Set<() => void>()
 let setupScriptProbeCache = INITIAL_SETUP_SCRIPT_PROBE_STATE
 
@@ -60,22 +56,11 @@ function setSetupScriptProbeCache(next: SetupScriptProbeState): void {
   }
 }
 
-function getCachedOrPassiveSetupScriptProbeState(
-  current: SetupScriptProbeState,
-  signature: string | null
-): SetupScriptProbeState {
-  return current.signature === signature
-    ? current
-    : { signature, ready: true, hasSetupScript: false }
-}
-
 export function useSetupGuideProgress(
   shouldRefreshCoreState: boolean,
   orchestrationSkillInstalled: boolean,
-  browserUseSkillInstalled: boolean,
-  options: SetupGuideProgressOptions = {}
+  browserUseSkillInstalled: boolean
 ): FeatureWallSetupProgress {
-  const shouldProbeSetupScript = options.probeSetupScript ?? true
   const settings = useAppStore((s) => s.settings)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
@@ -152,12 +137,7 @@ export function useSetupGuideProgress(
   activeSetupScriptProbeSignatureRef.current = setupScriptProbeSignature
 
   useEffect(() => {
-    if (
-      !shouldRefreshCoreState ||
-      !shouldProbeSetupScript ||
-      !settings ||
-      setupScriptProbeSignature === null
-    ) {
+    if (!shouldRefreshCoreState || !settings || setupScriptProbeSignature === null) {
       return
     }
     const signature = setupScriptProbeSignature
@@ -196,13 +176,7 @@ export function useSetupGuideProgress(
       stale = true
       window.clearTimeout(timeoutId)
     }
-  }, [
-    orderedGitRepos,
-    settings,
-    setupScriptProbeSignature,
-    shouldProbeSetupScript,
-    shouldRefreshCoreState
-  ])
+  }, [orderedGitRepos, settings, setupScriptProbeSignature, shouldRefreshCoreState])
 
   const readComputerUsePermissions = useCallback(async (isStale: () => boolean): Promise<void> => {
     const status = await window.api.computerUsePermissions.getStatus().catch(() => null)
@@ -248,9 +222,10 @@ export function useSetupGuideProgress(
     (preflightStatus?.glab?.installed === true && preflightStatus.glab.authenticated === true) ||
     linearStatus.connected === true
   const gitRepoCount = orderedGitRepos.length
-  const currentSetupScriptProbe = shouldProbeSetupScript
-    ? getCurrentSetupScriptProbeState(setupScriptProbe, setupScriptProbeSignature)
-    : getCachedOrPassiveSetupScriptProbeState(setupScriptProbe, setupScriptProbeSignature)
+  const currentSetupScriptProbe = getCurrentSetupScriptProbeState(
+    setupScriptProbe,
+    setupScriptProbeSignature
+  )
   const currentComputerUsePermissionStatusChecked =
     shouldRefreshCoreState && computerUseSkillInstalled ? computerUsePermissionStatusChecked : false
   const currentComputerUsePermissionsReady =
