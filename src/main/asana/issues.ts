@@ -38,6 +38,8 @@ const TASK_FIELDS = [
   'due_on',
   'assignee.name',
   'assignee.email',
+  'assignee.photo.image_60x60',
+  'assignee.photo.image_36x36',
   'projects.name',
   'created_at',
   'modified_at',
