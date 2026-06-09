@@ -4,6 +4,7 @@ import type * as NodePty from 'node-pty'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
   resolveDefaultShell,
+  resolveDefaultCwd,
   resolveProcessCwd,
   processHasChildren,
   getForegroundProcessName,
@@ -417,7 +418,7 @@ export class PtyHandler {
 
     const cols = (params.cols as number) || 80
     const rows = (params.rows as number) || 24
-    const cwd = (params.cwd as string) || process.env.HOME || '/'
+    const cwd = (params.cwd as string) || resolveDefaultCwd()
     const env = params.env as Record<string, string> | undefined
     const shell = resolveDefaultShell()
     const id = `pty-${this.nextId++}`

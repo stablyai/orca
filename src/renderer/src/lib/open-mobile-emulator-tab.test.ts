@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { openMobileEmulatorTab } from './open-mobile-emulator-tab'
@@ -6,11 +6,13 @@ import {
   consumePrelaunchedSimulatorSession,
   isManualSimulatorLaunchPending
 } from './simulator-launch-coordination'
+import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from './ensure-simulator-tab'
 
 const mockStoreState = vi.hoisted(() => ({
   activeGroupIdByWorktree: { 'wt-1': 'group-1' } as Record<string, string>,
   groupsByWorktree: { 'wt-1': [{ id: 'group-1' }] } as Record<string, { id: string }[]>,
+  unifiedTabsByWorktree: {} as Record<string, { id: string; contentType: string }[]>,
   settings: { mobileEmulatorEnabled: true } as { mobileEmulatorEnabled?: boolean }
 }))
 
@@ -49,13 +51,23 @@ describe('openMobileEmulatorTab', () => {
   beforeEach(() => {
     mockStoreState.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
     mockStoreState.groupsByWorktree = { 'wt-1': [{ id: 'group-1' }] }
+    mockStoreState.unifiedTabsByWorktree = {}
     mockStoreState.settings = { mobileEmulatorEnabled: true }
     vi.mocked(callRuntimeRpc).mockReset()
     vi.mocked(ensureSimulatorTab).mockReset()
+    vi.mocked(ensureSimulatorTab).mockImplementation((worktreeId) => {
+      mockStoreState.unifiedTabsByWorktree[worktreeId] = [{ id: 'sim-1', contentType: 'simulator' }]
+      return 'sim-1'
+    })
     vi.mocked(getSimulatorTabForWorktree).mockReset()
     vi.mocked(getSimulatorTabForWorktree).mockReturnValue(null)
     vi.mocked(toast.error).mockReset()
     consumePrelaunchedSimulatorSession('wt-1')
+  })
+
+  afterEach(() => {
+    cancelPendingSimulatorPaneShutdown('wt-1')
+    vi.useRealTimers()
   })
 
   it('surfaces the simulator tab before attaching the emulator stream', async () => {
@@ -66,6 +78,7 @@ describe('openMobileEmulatorTab', () => {
     })
     vi.mocked(ensureSimulatorTab).mockImplementation(() => {
       calls.push('ensure')
+      mockStoreState.unifiedTabsByWorktree['wt-1'] = [{ id: 'sim-1', contentType: 'simulator' }]
       return 'sim-1'
     })
 
@@ -92,7 +105,6 @@ describe('openMobileEmulatorTab', () => {
           resolveAttach = resolve
         })
     )
-    vi.mocked(ensureSimulatorTab).mockReturnValue('sim-1')
 
     const launched = openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })
 
@@ -105,7 +117,6 @@ describe('openMobileEmulatorTab', () => {
 
   it('keeps the simulator tab open and reports an error when attach fails', async () => {
     vi.mocked(callRuntimeRpc).mockRejectedValue(new Error('Xcode is not installed'))
-    vi.mocked(ensureSimulatorTab).mockReturnValue('sim-1')
 
     await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBe('sim-1')
 
@@ -123,7 +134,6 @@ describe('openMobileEmulatorTab', () => {
           resolveAttach = resolve
         })
     )
-    vi.mocked(ensureSimulatorTab).mockReturnValue('sim-1')
 
     const firstLaunch = openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })
     await expect(openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })).resolves.toBe('sim-1')
@@ -131,6 +141,33 @@ describe('openMobileEmulatorTab', () => {
     expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
     resolveAttach(mockAttachResult)
     await firstLaunch
+  })
+
+  it('shuts down the managed emulator if the tab closes before attach resolves', async () => {
+    let resolveAttach: (value: typeof mockAttachResult) => void = () => {}
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
+      if (method === 'emulator.attach') {
+        return new Promise((resolve) => {
+          resolveAttach = resolve
+        })
+      }
+      if (method === 'emulator.shutdown') {
+        return { ok: true }
+      }
+      throw new Error(`Unexpected RPC method: ${method}`)
+    })
+
+    const launched = openMobileEmulatorTab('wt-1', { targetGroupId: 'group-1' })
+    mockStoreState.unifiedTabsByWorktree['wt-1'] = []
+    resolveAttach(mockAttachResult)
+
+    await expect(launched).resolves.toBe('sim-1')
+
+    expect(callRuntimeRpc).toHaveBeenCalledWith({ kind: 'local' }, 'emulator.shutdown', {
+      worktree: 'wt-1',
+      managedOnly: true
+    })
+    expect(consumePrelaunchedSimulatorSession('wt-1')).toBeNull()
   })
 
   it('does nothing when the workspace already has an emulator tab', async () => {

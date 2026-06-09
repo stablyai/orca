@@ -10,6 +10,7 @@ import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type SettingsSwitchProps = {
   checked: boolean
@@ -291,8 +292,7 @@ export function ThemePicker({
 
   // Why: imported themes render below the built-in list inside a fixed-height
   // scroll area, so after an import they sit off-screen. On each import signal,
-  // scroll the Imported group into view (bubbling through the inner scroll area
-  // and the settings page) and flash a highlight so it's easy to spot.
+  // scroll the Imported group into view and flash a highlight so it's easy to spot.
   useEffect(() => {
     if (!importedHighlightSignal) {
       return
@@ -311,13 +311,13 @@ export function ThemePicker({
     themeOptions.find((option) => option.value === selectedTheme)?.label ?? selectedTheme
   const groupedThemes = [
     {
-      label: 'Built-in',
+      label: translate('auto.components.settings.SettingsFormControls.builtin_themes', 'Built-in'),
       themes: matchingThemes
         .filter((theme) => theme.group === 'built-in')
         .slice(0, MAX_THEME_RESULTS)
     },
     {
-      label: 'Imported',
+      label: translate('auto.components.settings.SettingsFormControls.imported_themes', 'Imported'),
       themes: matchingThemes
         .filter((theme) => theme.group === 'imported')
         .slice(0, MAX_THEME_RESULTS)
@@ -334,20 +334,42 @@ export function ThemePicker({
       <Input
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="Search terminal themes"
+        placeholder={translate(
+          'auto.components.settings.SettingsFormControls.search_terminal_themes',
+          'Search terminal themes'
+        )}
       />
       <div className="rounded-lg border border-border/50">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>Selected: {selectedThemeLabel}</span>
           <span>
-            Showing {visibleThemeCount}
-            {normalizedQuery ? ` matching "${query.trim()}"` : ` of ${themeOptions.length}`}
+            {translate('auto.components.settings.SettingsFormControls.fbb428db98', 'Selected:')}{' '}
+            {selectedThemeLabel}
+          </span>
+          <span>
+            {translate('auto.components.settings.SettingsFormControls.4e11f87ca6', 'Showing')}{' '}
+            {visibleThemeCount}
+            {normalizedQuery
+              ? translate(
+                  'auto.components.settings.SettingsFormControls.c822571b2e',
+                  ' matching "{{value0}}"',
+                  { value0: query.trim() }
+                )
+              : translate(
+                  'auto.components.settings.SettingsFormControls.cb330ef7f8',
+                  ' of {{value0}}',
+                  { value0: themeOptions.length }
+                )}
           </span>
         </div>
         <ScrollArea className="h-64">
           <div className="space-y-1 p-2">
             {groupedThemes.map((group) => {
-              const isImported = group.label === 'Imported'
+              const isImported =
+                group.label ===
+                translate(
+                  'auto.components.settings.SettingsFormControls.imported_themes',
+                  'Imported'
+                )
               return (
                 <div
                   key={group.label}
@@ -375,7 +397,11 @@ export function ThemePicker({
                         <span className="block truncate">{theme.label}</span>
                         {theme.sourceLabel ? (
                           <span className="block truncate text-[11px] font-normal text-muted-foreground">
-                            Imported from {theme.sourceLabel}
+                            {translate(
+                              'auto.components.settings.SettingsFormControls.imported_from',
+                              'Imported from {{value0}}',
+                              { value0: theme.sourceLabel }
+                            )}
                             {theme.mode && theme.mode !== 'unknown' ? ` · ${theme.mode}` : ''}
                           </span>
                         ) : null}
@@ -405,8 +431,11 @@ export function ThemePicker({
                         </span>
                       ) : null}
                       {selectedTheme === theme.value ? (
-                        <span className="shrink-0 text-[11px] uppercase tracking-[0.16em]">
-                          Current
+                        <span className="ml-3 shrink-0 text-[11px] uppercase tracking-[0.16em]">
+                          {translate(
+                            'auto.components.settings.SettingsFormControls.9119fb2268',
+                            'Current'
+                          )}
                         </span>
                       ) : null}
                     </button>
@@ -415,7 +444,12 @@ export function ThemePicker({
               )
             })}
             {visibleThemeCount === 0 ? (
-              <div className="px-3 py-6 text-sm text-muted-foreground">No themes found.</div>
+              <div className="px-3 py-6 text-sm text-muted-foreground">
+                {translate(
+                  'auto.components.settings.SettingsFormControls.ceefb9d7f1',
+                  'No themes found.'
+                )}
+              </div>
             ) : null}
           </div>
         </ScrollArea>
@@ -502,7 +536,10 @@ export function NumberField({
         <>
           {description}
           {defaultValue !== undefined ? (
-            <span className="ml-1 text-muted-foreground/70">· Default: {defaultValue}</span>
+            <span className="ml-1 text-muted-foreground/70">
+              {translate('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
+              {defaultValue}
+            </span>
           ) : null}
         </>
       }
@@ -708,8 +745,11 @@ export function FontAutocomplete({
                 focusInput()
               }}
               className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="Clear font selection"
-              title="Clear"
+              aria-label={translate(
+                'auto.components.settings.SettingsFormControls.a4ff6143f8',
+                'Clear font selection'
+              )}
+              title={translate('auto.components.settings.SettingsFormControls.74bcecd5ec', 'Clear')}
             >
               <CircleX className="size-3.5" />
             </button>
@@ -725,8 +765,11 @@ export function FontAutocomplete({
               }
             }}
             className="rounded-sm p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="Toggle font suggestions"
-            title="Fonts"
+            aria-label={translate(
+              'auto.components.settings.SettingsFormControls.c766f8ac75',
+              'Toggle font suggestions'
+            )}
+            title={translate('auto.components.settings.SettingsFormControls.b55371ea18', 'Fonts')}
           >
             <ChevronsUpDown className="size-3.5" />
           </button>
@@ -764,7 +807,12 @@ export function FontAutocomplete({
                   </button>
                 ))
               ) : (
-                <div className="px-3 py-3 text-sm text-muted-foreground">No matching fonts.</div>
+                <div className="px-3 py-3 text-sm text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.SettingsFormControls.42a4d15a30',
+                    'No matching fonts.'
+                  )}
+                </div>
               )}
             </div>
           </ScrollArea>

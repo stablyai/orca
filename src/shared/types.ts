@@ -27,6 +27,7 @@ import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-custom-themes'
+import type { UiLanguage } from './ui-language'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -273,6 +274,10 @@ export type Worktree = {
   /** True while an auto-named workspace is waiting for the first agent message
    *  to drive the branch/title rename. */
   pendingFirstAgentMessageRename?: boolean
+  /** Holds the last auto-rename generation failure message so the sidebar can
+   *  show a "rename failed" badge. null/undefined when there is no failure
+   *  (never attempted, succeeded, or only a benign skip). */
+  firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
@@ -331,6 +336,8 @@ export type WorktreeMeta = {
   createdWithAgent?: TuiAgent
   /** See {@link Worktree.pendingFirstAgentMessageRename}. */
   pendingFirstAgentMessageRename?: boolean
+  /** See {@link Worktree.firstAgentMessageRenameError}. */
+  firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
@@ -466,6 +473,7 @@ export type Tab = {
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
+  quickCommandLabel?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -500,6 +508,8 @@ export type TerminalTab = {
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
   generatedTitle?: string | null
+  /** Stable label from the tab-bar Quick Command that created this terminal. */
+  quickCommandLabel?: string | null
   customTitle: string | null
   color: string | null
   sortOrder: number
@@ -1989,6 +1999,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
@@ -2010,8 +2021,8 @@ export type GlobalSettings = {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
-  /** Mirrors VS Code's terminal.integrated.gpuAcceleration shape.
-   *  - 'auto': use DOM on Linux; otherwise try xterm WebGL and fall back to DOM if the renderer fails.
+  /** Terminal renderer policy.
+   *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
    *  - 'off': keep terminal rendering on xterm's DOM renderer. */
   terminalGpuAcceleration: 'auto' | 'on' | 'off'
@@ -2029,10 +2040,10 @@ export type GlobalSettings = {
   terminalCursorStyleDefaultedToBlock?: boolean
   terminalCursorBlink: boolean
   terminalThemeDark: string
+  terminalCustomThemes?: TerminalCustomTheme[]
   terminalDividerColorDark: string
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
-  terminalCustomThemes?: TerminalCustomTheme[]
   terminalDividerColorLight: string
   terminalInactivePaneOpacity: number
   terminalActivePaneOpacity: number
@@ -2299,9 +2310,12 @@ export type GlobalSettings = {
    *  and agent-completion events. Opt-in while the signal/noise balance is
    *  being tested. */
   experimentalTerminalAttention: boolean
-  /** Experimental: compact worktree cards by hiding a redundant metadata row
-   *  when the title and branch already say the same thing. */
-  experimentalCompactWorktreeCards: boolean
+  /** Compact worktree cards by hiding a redundant metadata row when the title
+   *  and branch already say the same thing. */
+  compactWorktreeCards: boolean
+  /** Legacy persisted key from the Experimental rollout. New writes use
+   *  compactWorktreeCards. */
+  experimentalCompactWorktreeCards?: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the

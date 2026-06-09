@@ -118,6 +118,54 @@ async function getUnreadTerminalTabIds(page: Page): Promise<string[]> {
   })
 }
 
+async function getUnreadTerminalPaneKeys(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      return []
+    }
+    return Object.keys(store.getState().unreadTerminalPanes)
+  })
+}
+
+async function getActivePaneKey(page: Page, tabId: string): Promise<string> {
+  return page.evaluate((targetTabId) => {
+    const manager = window.__paneManagers?.get(targetTabId)
+    const pane = manager?.getActivePane?.()
+    const leafId = pane?.leafId ?? null
+    if (!leafId) {
+      throw new Error(`No active pane leaf for terminal tab ${targetTabId}`)
+    }
+    return `${targetTabId}:${leafId}`
+  }, tabId)
+}
+
+async function focusActiveXterm(page: Page, tabId: string): Promise<void> {
+  await page.evaluate((targetTabId) => {
+    const manager = window.__paneManagers?.get(targetTabId)
+    const pane = manager?.getActivePane?.()
+    const textarea = pane?.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+    if (!pane || !textarea) {
+      throw new Error(`No active xterm textarea for terminal tab ${targetTabId}`)
+    }
+    pane.terminal.focus()
+    textarea.focus()
+  }, tabId)
+
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => document.activeElement?.classList.contains('xterm-helper-textarea') ?? false
+        ),
+      {
+        timeout: 5_000,
+        message: 'xterm helper textarea did not receive keyboard focus'
+      }
+    )
+    .toBe(true)
+}
+
 test.describe('Terminal attention', () => {
   // Why: pty-connection unit tests own raw BEL-byte detection. This E2E owns
   // the cross-component attention contract: background terminal attention
@@ -237,6 +285,74 @@ test.describe('Terminal attention', () => {
       .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId), {
         timeout: 5_000,
         message: 'Unread state did not clear after interacting with the pane'
+      })
+      .toBe(false)
+    await expect(activeTabBell).toBeHidden()
+  })
+
+  // Why (plain Escape regression): Escape also emits real terminal input, but
+  // the interrupt-intent branch returns early. It must still dismiss focused
+  // terminal attention just like other user key input.
+  test('a BEL on the focused tab raises, then clears on plain Escape', async ({ orcaPage }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+
+    const activeTabId = await getActiveTabId(orcaPage)
+    if (!activeTabId) {
+      throw new Error('Expected an active terminal tab')
+    }
+    const activePaneKey = await getActivePaneKey(orcaPage, activeTabId)
+    const activePtyId = await waitForActivePanePtyId(orcaPage)
+    await proveShellReadyWithSingleWrite(orcaPage, activePtyId)
+    await installRendererTitleLog(orcaPage)
+
+    await emitBellAndWaitForTitleFlush(
+      orcaPage,
+      activePtyId,
+      `focused-tab-escape-marker-${Date.now()}`
+    )
+
+    await expect
+      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId), {
+        timeout: 10_000,
+        message: 'Focused tab did not become unread after BEL'
+      })
+      .toBe(true)
+
+    // Focused BEL owns the tab indicator; seed pane attention separately so the
+    // Escape path proves it clears both store surfaces that pty-connection owns.
+    await orcaPage.evaluate((paneKey) => {
+      window.__store?.getState().markTerminalPaneUnread(paneKey)
+    }, activePaneKey)
+    await expect
+      .poll(async () => (await getUnreadTerminalPaneKeys(orcaPage)).includes(activePaneKey), {
+        timeout: 5_000,
+        message: 'Seeded focused pane attention did not land'
+      })
+      .toBe(true)
+
+    const activeTabBell = orcaPage
+      .locator(
+        `[data-testid="sortable-tab"][data-tab-id="${activeTabId}"] [data-testid="tab-activity-bell"]`
+      )
+      .first()
+    await expect(activeTabBell).toBeVisible()
+
+    await focusActiveXterm(orcaPage, activeTabId)
+    await orcaPage.keyboard.press('Escape')
+
+    await expect
+      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(activeTabId), {
+        timeout: 5_000,
+        message: 'Unread tab state did not clear after pressing Escape in xterm'
+      })
+      .toBe(false)
+    await expect
+      .poll(async () => (await getUnreadTerminalPaneKeys(orcaPage)).includes(activePaneKey), {
+        timeout: 5_000,
+        message: 'Unread pane state did not clear after pressing Escape in xterm'
       })
       .toBe(false)
     await expect(activeTabBell).toBeHidden()

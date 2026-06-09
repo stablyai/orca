@@ -4,6 +4,7 @@ import type { GlobalSettings, PersistedState } from '../../shared/types'
 import { listSystemFontFamilies } from '../system-fonts'
 import { previewGhosttyImport } from '../ghostty/index'
 import { previewWarpThemeImport } from '../warp-themes'
+import { setMainUiLanguage } from '../i18n/main-i18n'
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { track } from '../telemetry/client'
 import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../shared/telemetry-events'
@@ -13,6 +14,7 @@ import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
+import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
 
@@ -74,6 +76,9 @@ export function registerSettingsHandlers(
     if ('terminalCustomThemes' in args) {
       sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
     }
+    if ('uiLanguage' in args) {
+      sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
+    }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
@@ -98,6 +103,10 @@ export function registerSettingsHandlers(
       } catch (error) {
         console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
       }
+    }
+    if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
+      await setMainUiLanguage(result.uiLanguage)
+      rebuildAppMenu()
     }
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()

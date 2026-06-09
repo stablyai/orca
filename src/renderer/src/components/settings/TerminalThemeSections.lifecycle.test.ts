@@ -43,7 +43,7 @@ function findButtonTexts(node: unknown): string[] {
   if (typeName === 'WarpThemeImportButton') {
     return ['Import themes from Warp']
   }
-  return findButtonTexts(element.props?.children)
+  return [...findButtonTexts(element.props?.children), ...findButtonTexts(element.props?.action)]
 }
 
 function renderDarkSection(showWarpThemeImport: boolean): React.JSX.Element {

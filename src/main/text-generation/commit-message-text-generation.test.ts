@@ -549,7 +549,7 @@ describe('generateCommitMessageFromContext', () => {
     })
   })
 
-  it('does not fall back to raw agent stdout or stderr on failures', async () => {
+  it('does not expose unstructured raw CLI failure output', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -567,7 +567,7 @@ describe('generateCommitMessageFromContext', () => {
         missingBinaryLocation: 'remote PATH',
         execute: async () => ({
           stdout: 'You are generating a single git commit message for /secret/repo',
-          stderr: 'raw failure output with /secret/repo',
+          stderr: 'raw failure output with /Users/thebr/My Repo/secret/file.ts',
           exitCode: 1,
           timedOut: false
         })
@@ -576,11 +576,11 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed with code 1.'
     })
   })
 
-  it('does not expose extracted agent error details to the renderer', async () => {
+  it('formats nonzero exit failures with extracted sanitized CLI details', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -597,7 +597,7 @@ describe('generateCommitMessageFromContext', () => {
         cwd: '/repo',
         missingBinaryLocation: 'remote PATH',
         execute: async () => ({
-          stdout: 'ERROR: fatal: /secret/repo/config failed',
+          stdout: 'ERROR: fatal: C:\\Users\\Brennan Doe\\secret\\file.ts failed',
           stderr: '',
           exitCode: 1,
           timedOut: false
@@ -607,11 +607,42 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed: fatal: [path] failed'
     })
   })
 
-  it('treats empty stdout plus an error on stderr as an agent failure', async () => {
+  it('redacts UNC paths in CLI failure details', async () => {
+    const result = await generateCommitMessageFromContext(
+      {
+        branch: 'main',
+        stagedSummary: 'M\tREADME.md',
+        stagedPatch: '+hello'
+      },
+      {
+        agentId: 'custom',
+        model: '',
+        customAgentCommand: 'agent'
+      },
+      {
+        kind: 'remote',
+        cwd: '/repo',
+        missingBinaryLocation: 'remote PATH',
+        execute: async () => ({
+          stdout: '',
+          stderr: 'ERROR: failed at \\\\server\\share\\Brennan Repo\\secret\\file.ts',
+          exitCode: 1,
+          timedOut: false
+        })
+      }
+    )
+
+    expect(result).toEqual({
+      success: false,
+      error: 'agent CLI command failed: failed at [path]'
+    })
+  })
+
+  it('treats empty stdout plus stderr on exit 0 as an agent CLI failure', async () => {
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -638,7 +669,7 @@ describe('generateCommitMessageFromContext', () => {
 
     expect(result).toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error: 'agent CLI command failed: No payment method'
     })
   })
 
@@ -773,7 +804,8 @@ describe('generateCommitMessageFromContext', () => {
 
     await expect(pending).resolves.toEqual({
       success: false,
-      error: 'agent failed. Check the agent CLI configuration and try again.'
+      error:
+        'agent CLI command produced too much output. Check the agent CLI configuration and try again.'
     })
     expect(child.kill).toHaveBeenCalledWith('SIGKILL')
   })

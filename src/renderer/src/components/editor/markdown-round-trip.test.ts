@@ -152,6 +152,24 @@ describe('rich markdown round trip', () => {
     expect(roundTripMarkdown('| a | b |\n| - | - |\n| 1 | 2 |\n')).toContain('| a')
   })
 
+  it('does not surface Linear issue reference definitions as description text', () => {
+    const input = [
+      '- [x] [H-279]',
+      '- [ ] [H-284]',
+      '',
+      '[H-279]: https://linear.app/acme/issue/H-279/child-one "Child one"',
+      '[H-284]: https://linear.app/acme/issue/H-284/child-two "Child two"',
+      ''
+    ].join('\n')
+
+    expect(roundTripMarkdown(input)).toBe(
+      [
+        '- [x] [H-279](https://linear.app/acme/issue/H-279/child-one "Child one")',
+        '- [ ] [H-284](https://linear.app/acme/issue/H-284/child-two "Child two")'
+      ].join('\n')
+    )
+  })
+
   it('preserves doc links', () => {
     expect(roundTripMarkdown('See [[setup-guide]] for details\n')).toBe(
       'See [[setup-guide]] for details'

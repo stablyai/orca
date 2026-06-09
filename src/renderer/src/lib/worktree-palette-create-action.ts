@@ -6,14 +6,13 @@ export type WorktreePaletteCreateActionState = {
 }
 
 export function getWorktreePaletteCreateActionState({
-  canCreateWorktree,
   query
 }: {
   canCreateWorktree: boolean
   query: string
 }): WorktreePaletteCreateActionState {
   const createWorktreeName = query.trim()
-  const showCreateAction = canCreateWorktree && createWorktreeName.length > 0
+  const showCreateAction = createWorktreeName.length > 0
   return {
     createWorktreeName,
     showCreateAction

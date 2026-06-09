@@ -1048,6 +1048,14 @@ describe('web file preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('rejects native save-dialog downloads in paired web clients', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(
+      api.fs.downloadFile({ filePath: '/workspace/repo/file.txt', connectionId: 'ssh-1' })
+    ).rejects.toThrow('Remote file download is unavailable in paired web clients.')
+  })
+
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const worktree = {

@@ -22,6 +22,8 @@ import { normalizeTaskProviderSettings } from '../../../../shared/task-providers
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
+import { normalizeUiLanguage } from '../../../../shared/ui-language'
+import { translate } from '@/i18n/i18n'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -308,6 +310,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       if ('disabledTuiAgents' in updates) {
         sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
       }
+      if ('uiLanguage' in updates) {
+        sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
+      }
       const nextSettings = await window.api.settings.set(sanitizedUpdates)
       set((s) => ({ settings: (nextSettings as GlobalSettings | undefined) ?? s.settings }))
     } catch (err) {
@@ -322,7 +327,12 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       return true
     }
     if (hasUnsavedEditorState(get())) {
-      toast.error('Save or close unsaved editor tabs before switching servers.')
+      toast.error(
+        translate(
+          'auto.store.slices.settings.faa8fb83dd',
+          'Save or close unsaved editor tabs before switching servers.'
+        )
+      )
       return false
     }
     try {
@@ -355,7 +365,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       return true
     } catch (err) {
       console.error('Failed to switch runtime environment:', err)
-      toast.error('Failed to switch servers', {
+      toast.error(translate('auto.store.slices.settings.e12dab333b', 'Failed to switch servers'), {
         description: err instanceof Error ? err.message : String(err)
       })
       return false

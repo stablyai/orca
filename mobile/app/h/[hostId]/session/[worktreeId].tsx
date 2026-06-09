@@ -14,8 +14,7 @@ import {
   Platform,
   ActivityIndicator,
   type KeyboardEvent,
-  type ListRenderItem,
-  type TextStyle
+  type ListRenderItem
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
@@ -85,6 +84,7 @@ import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileRichMarkdownEditor } from '../../../../src/components/MobileRichMarkdownEditor'
+import { MobileSyntaxSegments } from '../../../../src/components/MobileSyntaxSegments'
 import {
   CustomKeyModal,
   loadCustomKeys,
@@ -108,8 +108,7 @@ import {
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage,
   type MobileHighlightedDiffLine,
-  type MobileSyntaxSegment,
-  type MobileSyntaxTokenKind
+  type MobileSyntaxSegment
 } from '../../../../src/session/mobile-file-syntax'
 import {
   getTerminalRecordsFromSessionTabs,
@@ -124,6 +123,7 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
+import { resolveMarkdownFloatingActionsBottom } from '../../../../src/session/markdown-floating-actions-layout'
 import {
   createMobileSessionCreateWarningState,
   dismissMobileSessionCreateWarningState,
@@ -412,7 +412,8 @@ function MarkdownReader({
   onChange,
   onSave,
   onCopy,
-  onDiscard
+  onDiscard,
+  keyboardLift
 }: {
   documentId: string
   doc: MarkdownDocState | undefined
@@ -421,6 +422,7 @@ function MarkdownReader({
   onSave: () => void
   onCopy: () => void
   onDiscard: () => void
+  keyboardLift: number
 }) {
   if (!doc || doc.status === 'loading') {
     return (
@@ -462,7 +464,21 @@ function MarkdownReader({
         onChange={onChange}
       />
       {showFloatingActions ? (
-        <View pointerEvents="box-none" style={styles.markdownFloatingBar}>
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.markdownFloatingBar,
+            // Why: the editor focus lives inside a WebView, so keep native
+            // Save/Discard controls lifted instead of resizing that surface.
+            {
+              bottom: resolveMarkdownFloatingActionsBottom({
+                keyboardLift,
+                restingBottom: spacing.lg,
+                liftedClearance: spacing.md
+              })
+            }
+          ]}
+        >
           {statusText ? (
             <Text
               style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
@@ -509,18 +525,6 @@ function MarkdownReader({
         </View>
       ) : null}
     </View>
-  )
-}
-
-function SyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
-  return (
-    <>
-      {segments.map((segment, index) => (
-        <Text key={`${index}:${segment.kind}`} style={syntaxTokenStyles[segment.kind]}>
-          {segment.text}
-        </Text>
-      ))}
-    </>
   )
 }
 
@@ -581,7 +585,7 @@ function DiffLineRow({
           >
             {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
           </Text>
-          <SyntaxSegments segments={line.segments} />
+          <MobileSyntaxSegments segments={line.segments} />
         </Text>
         {canComment ? (
           <Pressable
@@ -888,7 +892,7 @@ function FileReader({
         contentContainerStyle={styles.filePreviewContent}
       >
         <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
-          <SyntaxSegments
+          <MobileSyntaxSegments
             segments={
               fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
                 ? fileSyntax.segments
@@ -3948,7 +3952,7 @@ export default function SessionScreen() {
             </View>
           </View>
         ) : activeMarkdownTab ? (
-          <View style={[styles.markdownFrame, { paddingBottom: keyboardLift }]}>
+          <View style={styles.markdownFrame}>
             <MarkdownReader
               documentId={activeMarkdownTab.id}
               doc={markdownDocs.get(activeMarkdownTab.id)}
@@ -3957,6 +3961,7 @@ export default function SessionScreen() {
               onSave={() => void saveMarkdownTab(activeMarkdownTab)}
               onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
               onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
+              keyboardLift={keyboardLift}
             />
             {toastMessage && (
               <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
@@ -5288,35 +5293,5 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.35
-  }
-})
-
-const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
-  plain: {
-    color: colors.textPrimary
-  },
-  comment: {
-    color: colors.syntaxComment
-  },
-  keyword: {
-    color: colors.syntaxKeyword
-  },
-  string: {
-    color: colors.syntaxString
-  },
-  number: {
-    color: colors.syntaxNumber
-  },
-  type: {
-    color: colors.syntaxType
-  },
-  function: {
-    color: colors.syntaxFunction
-  },
-  variable: {
-    color: colors.syntaxVariable
-  },
-  meta: {
-    color: colors.syntaxMeta
   }
 })

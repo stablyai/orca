@@ -13,6 +13,7 @@ import {
   SHIP_FILES
 } from './review-animated-visual-shared'
 import { ReviewShipVisualStyles } from './review-animated-visual-ship-styles'
+import { translate } from '@/i18n/i18n'
 
 // Why: paired with ReviewNotesAnimatedVisual — same imperative pattern, but
 // targets the Source Control commit-message box and the Create PR dialog so
@@ -255,7 +256,11 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
         <div className="ravs-sc-card">
           <div className="ravs-sc-header">
             <span className="ravs-sc-ahead">
-              <ArrowUpIcon /> 3 commits ahead
+              <ArrowUpIcon />{' '}
+              {translate(
+                'auto.components.feature.wall.ReviewShipAnimatedVisual.cd8a3a39d7',
+                '3 commits ahead'
+              )}
             </span>
           </div>
           <div className="ravs-sc-commit-area">
@@ -264,19 +269,29 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
                 type="button"
                 className="ravs-sc-sparkle"
                 data-commit-sparkle
-                aria-label="Generate commit message with AI"
+                aria-label={translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.d1a7f15876',
+                  'Generate commit message with AI'
+                )}
               >
                 <Sparkles className="size-3.5" />
               </button>
               <span className="ravs-placeholder" data-commit-placeholder>
-                Message
+                {translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.7347fa5839',
+                  'Message'
+                )}
               </span>
               <span data-commit-typed />
               <span className="ravs-caret" />
             </div>
             <div className="ravs-sc-split" data-sc-split>
               <span className="ravs-primary">
-                <CheckTinyIcon /> Commit
+                <CheckTinyIcon />{' '}
+                {translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.a079083a6c',
+                  'Commit'
+                )}
               </span>
               <span className="ravs-chev">
                 <ChevDownIcon />
@@ -285,9 +300,18 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
           </div>
           <div className="ravs-sc-changes-header">
             <span>
-              Changes <span className="ravs-sc-changes-count">{SHIP_FILES.length}</span>
+              {translate(
+                'auto.components.feature.wall.ReviewShipAnimatedVisual.e725000cd7',
+                'Changes'
+              )}
+              <span className="ravs-sc-changes-count">{SHIP_FILES.length}</span>
             </span>
-            <span className="ravs-sc-view-all">View all</span>
+            <span className="ravs-sc-view-all">
+              {translate(
+                'auto.components.feature.wall.ReviewShipAnimatedVisual.ea0100dd15',
+                'View all'
+              )}
+            </span>
           </div>
           <div className="ravs-sc-files">
             {SHIP_FILES.map((name) => (
@@ -304,44 +328,90 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
 
         <div className="ravs-pr-dialog">
           <div className="ravs-pr-head">
-            <div className="ravs-pr-title-text">Create Pull Request</div>
+            <div className="ravs-pr-title-text">
+              {translate(
+                'auto.components.feature.wall.ReviewShipAnimatedVisual.c30cd930ff',
+                'Create Pull Request'
+              )}
+            </div>
             <button
               type="button"
               className="ravs-pr-gen-btn"
               data-pr-gen-btn
-              aria-label="Generate with AI"
-              title="Generate with AI"
+              aria-label={translate(
+                'auto.components.feature.wall.ReviewShipAnimatedVisual.e4473d438f',
+                'Generate with AI'
+              )}
+              title={translate(
+                'auto.components.feature.wall.ReviewShipAnimatedVisual.e4473d438f',
+                'Generate with AI'
+              )}
             >
               <Sparkles className="size-3.5" />
             </button>
           </div>
           <div className="ravs-pr-body">
             <div className="ravs-pr-field">
-              <div className="ravs-pr-field-label">Base branch</div>
+              <div className="ravs-pr-field-label">
+                {translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.ce7d5d3a18',
+                  'Base branch'
+                )}
+              </div>
               <span className="ravs-pr-base">
-                <GitBranch className="size-3" /> main
+                <GitBranch className="size-3" />{' '}
+                {translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.3b9b96d6a6',
+                  'main'
+                )}
               </span>
             </div>
             <div className="ravs-pr-field">
-              <div className="ravs-pr-field-label">Title</div>
+              <div className="ravs-pr-field-label">
+                {translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.54a093c52d',
+                  'Title'
+                )}
+              </div>
               <div className="ravs-pr-input" data-pr-title>
-                <span className="ravs-placeholder">Pull request title</span>
+                <span className="ravs-placeholder">
+                  {translate(
+                    'auto.components.feature.wall.ReviewShipAnimatedVisual.07da9245cc',
+                    'Pull request title'
+                  )}
+                </span>
                 <span data-pr-title-typed />
               </div>
             </div>
             <div className="ravs-pr-field">
-              <div className="ravs-pr-field-label">Description</div>
+              <div className="ravs-pr-field-label">
+                {translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.3774b80eae',
+                  'Description'
+                )}
+              </div>
               <div className="ravs-pr-input is-body" data-pr-body>
-                <span className="ravs-placeholder">Pull request description</span>
+                <span className="ravs-placeholder">
+                  {translate(
+                    'auto.components.feature.wall.ReviewShipAnimatedVisual.bcd5cae3c4',
+                    'Pull request description'
+                  )}
+                </span>
                 <span data-pr-body-typed />
               </div>
             </div>
             <div className="ravs-pr-footer">
               <button type="button" className="ravs-pr-btn is-outline">
-                Cancel
+                {translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.62544e0852',
+                  'Cancel'
+                )}
               </button>
               <button type="button" className="ravs-pr-btn is-solid" data-pr-create-btn>
-                Create PR
+                {translate(
+                  'auto.components.feature.wall.ReviewShipAnimatedVisual.4d99496b8c',
+                  'Create PR'
+                )}
               </button>
             </div>
           </div>

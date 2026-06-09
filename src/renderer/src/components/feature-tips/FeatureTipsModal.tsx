@@ -32,6 +32,7 @@ import {
   trackOrcaCliFeatureTipSetupResult
 } from './feature-tip-telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
 const WAVEFORM_BAR_HEIGHTS = [30, 60, 90, 70, 100, 50, 80, 35, 65]
 
@@ -197,7 +198,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
               return
             }
             enableOrchestrationSkillSetup()
-            toast.success('Registered `orca` in PATH.')
+            toast.success(
+              translate(
+                'auto.components.feature.tips.FeatureTipsModal.ce13a742d0',
+                'Registered `orca` in PATH.'
+              )
+            )
             setSkillTerminalOpen(true)
             return
           }
@@ -206,9 +212,20 @@ export default function FeatureTipsModal(): JSX.Element | null {
           if (!canApplySetupResult()) {
             return
           }
-          toast.warning('Orca CLI needs attention', {
-            description: result.status.detail ?? 'Open Settings to finish CLI setup.'
-          })
+          toast.warning(
+            translate(
+              'auto.components.feature.tips.FeatureTipsModal.1da82af45b',
+              'Orca CLI needs attention'
+            ),
+            {
+              description:
+                result.status.detail ??
+                translate(
+                  'auto.components.feature.tips.FeatureTipsModal.d1a86c7eb5',
+                  'Open Settings to finish CLI setup.'
+                )
+            }
+          )
           closeModal()
           openCliSettings()
         } catch (error) {
@@ -222,7 +239,12 @@ export default function FeatureTipsModal(): JSX.Element | null {
               return
             }
             enableOrchestrationSkillSetup()
-            toast.info('Development preview: opening skills setup terminal.')
+            toast.info(
+              translate(
+                'auto.components.feature.tips.FeatureTipsModal.53905bd076',
+                'Development preview: opening skills setup terminal.'
+              )
+            )
             setSkillTerminalOpen(true)
             return
           }
@@ -277,14 +299,43 @@ export default function FeatureTipsModal(): JSX.Element | null {
                       : 'mt-3 max-h-64 translate-y-0 border-border/70 bg-muted/35 p-3 opacity-100'
                   }`}
                 >
-                  <p className="font-medium text-foreground">Try asking:</p>
-                  <p>
-                    “Split this PR into two <WorktreePromptTerm>worktrees</WorktreePromptTerm> and
-                    create PRs for each.”
+                  <p className="font-medium text-foreground">
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.4795ac2d4a',
+                      'Try asking:'
+                    )}
                   </p>
                   <p>
-                    “When the agent in <WorktreePromptTerm>worktree</WorktreePromptTerm> X finishes,
-                    send it the review task.”
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.55846c7f95',
+                      '“Split this PR into two'
+                    )}
+                    <WorktreePromptTerm>
+                      {translate(
+                        'auto.components.feature.tips.FeatureTipsModal.27c567a89c',
+                        'worktrees'
+                      )}
+                    </WorktreePromptTerm>{' '}
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.7fc6f02099',
+                      'and create PRs for each.”'
+                    )}
+                  </p>
+                  <p>
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.864e2db28f',
+                      '“When the agent in'
+                    )}
+                    <WorktreePromptTerm>
+                      {translate(
+                        'auto.components.feature.tips.FeatureTipsModal.298301b7a0',
+                        'worktree'
+                      )}
+                    </WorktreePromptTerm>{' '}
+                    {translate(
+                      'auto.components.feature.tips.FeatureTipsModal.3c6c478462',
+                      'X finishes, send it the review task.”'
+                    )}
                   </p>
                 </div>
               </div>
@@ -294,7 +345,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
             <DialogFooter className="mt-8 flex sm:justify-stretch">
               {skillTerminalOpen ? (
                 <Button className="w-full" onClick={handleSkip}>
-                  Done
+                  {translate('auto.components.feature.tips.FeatureTipsModal.c169298e4d', 'Done')}
                 </Button>
               ) : (
                 <FeatureTipActions

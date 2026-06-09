@@ -54,6 +54,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-launch-options'
+import { translate } from '@/i18n/i18n'
 
 const isWindows = navigator.userAgent.includes('Windows')
 const isMacOs = navigator.userAgent.includes('Mac')
@@ -365,7 +366,13 @@ function TabBarInner({
       launchSource: 'tab_bar_quick_launch'
     })
     if (!result) {
-      toast.error(`Could not build launch command for ${option?.label ?? agent}.`)
+      toast.error(
+        translate(
+          'auto.components.tab.bar.TabBar.ab589350e5',
+          'Could not build launch command for {{value0}}.',
+          { value0: option?.label ?? agent }
+        )
+      )
       return
     }
     if (result.tabId) {
@@ -422,13 +429,29 @@ function TabBarInner({
           label: string
           shell: BuiltInWindowsTerminalShell
         }[] = [
-          { label: 'PowerShell', shell: 'powershell.exe' },
-          { label: 'CMD Prompt', shell: 'cmd.exe' },
+          {
+            label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
+            shell: 'powershell.exe'
+          },
+          {
+            label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
+            shell: 'cmd.exe'
+          },
           ...(windowsTerminalCapabilities.gitBashAvailable
-            ? ([{ label: 'Git Bash', shell: WINDOWS_GIT_BASH_SHELL }] as const)
+            ? ([
+                {
+                  label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
+                  shell: WINDOWS_GIT_BASH_SHELL
+                }
+              ] as const)
             : []),
           ...(windowsTerminalCapabilities.wslAvailable
-            ? ([{ label: 'WSL', shell: 'wsl.exe' }] as const)
+            ? ([
+                {
+                  label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
+                  shell: 'wsl.exe'
+                }
+              ] as const)
             : [])
         ]
         const defaultEntry = allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
@@ -459,7 +482,10 @@ function TabBarInner({
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             >
               <ShellIcon shell={entry.shell} size={14} />
-              <span className="flex-1">New Terminal: {entry.label}</span>
+              <span className="flex-1">
+                {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')}{' '}
+                {entry.label}
+              </span>
               {isDefault ? (
                 <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
               ) : null}
@@ -476,7 +502,7 @@ function TabBarInner({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <TerminalSquare className="size-4 text-muted-foreground" />
-        New Terminal
+        {translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
         <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     )
@@ -486,7 +512,7 @@ function TabBarInner({
       className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
     >
       <Globe className="size-4 text-muted-foreground" />
-      New Browser Tab
+      {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
       <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
     </DropdownMenuItem>
   ) : null
@@ -500,12 +526,15 @@ function TabBarInner({
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             >
               <Smartphone className="size-4 text-muted-foreground" />
-              Go to Mobile Emulator
+              {translate('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
               <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8} className="z-[80]">
-            Open the existing emulator tab.
+            {translate(
+              'auto.components.tab.bar.TabBar.aea43b5748',
+              'Open the existing emulator tab.'
+            )}
           </TooltipContent>
         </Tooltip>
       ) : (
@@ -514,7 +543,7 @@ function TabBarInner({
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
         >
           <Smartphone className="size-4 text-muted-foreground" />
-          New Mobile Emulator
+          {translate('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')}
           <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
       )
@@ -526,7 +555,7 @@ function TabBarInner({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <FilePlus className="size-4 text-muted-foreground" />
-        New Markdown
+        {translate('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')}
         <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
@@ -537,7 +566,7 @@ function TabBarInner({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <FileText className="size-4 text-muted-foreground" />
-        Open Markdown...
+        {translate('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')}
       </DropdownMenuItem>
     ) : null
   const standardCreateMenuItems =
@@ -958,12 +987,12 @@ function TabBarInner({
           <button
             className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            title="New tab"
+            title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             // Why: aria-label matches the tooltip so E2E can locate the "+"
             // affordance via getByRole('button', { name: 'New tab' }). The
             // store-only createTab() round-trip that preceded this was a
             // tautology — it would pass even if the + button had been deleted.
-            aria-label="New tab"
+            aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
           >
             <Plus className="w-3.5 h-3.5" />
           </button>

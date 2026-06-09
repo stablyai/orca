@@ -7,18 +7,19 @@ import SidebarNav from './SidebarNav'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './WorktreeList'
 import SidebarToolbar from './SidebarToolbar'
-import WorktreeMetaDialog from './WorktreeMetaDialog'
-import NonGitFolderDialog from './NonGitFolderDialog'
-import RemoveFolderDialog from './RemoveFolderDialog'
-import AddRepoDialog from './AddRepoDialog'
-import AddProjectFromFolderDialog from './AddProjectFromFolderDialog'
-import ProjectAddedDialog from './ProjectAddedDialog'
-import WorktreeVisibilityDialog from './WorktreeVisibilityDialog'
-import OrcaYamlTrustDialog from './OrcaYamlTrustDialog'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
+
+const WorktreeMetaDialog = React.lazy(() => import('./WorktreeMetaDialog'))
+const NonGitFolderDialog = React.lazy(() => import('./NonGitFolderDialog'))
+const RemoveFolderDialog = React.lazy(() => import('./RemoveFolderDialog'))
+const AddRepoDialog = React.lazy(() => import('./AddRepoDialog'))
+const AddProjectFromFolderDialog = React.lazy(() => import('./AddProjectFromFolderDialog'))
+const ProjectAddedDialog = React.lazy(() => import('./ProjectAddedDialog'))
+const WorktreeVisibilityDialog = React.lazy(() => import('./WorktreeVisibilityDialog'))
+const OrcaYamlTrustDialog = React.lazy(() => import('./OrcaYamlTrustDialog'))
 
 const MIN_WIDTH = 220
 const MAX_WIDTH = 500
@@ -40,7 +41,10 @@ function Sidebar({
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
+  const activeModal = useAppStore((s) => s.activeModal)
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
+  const [shouldMountAddRepoDialog, setShouldMountAddRepoDialog] = React.useState(false)
+  const unmountAddRepoDialogTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const setLiveSidebarWidth = React.useCallback((width: number) => {
     document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
@@ -53,6 +57,31 @@ function Sidebar({
       fetchAllWorktrees()
     }
   }, [repoCount, fetchAllWorktrees])
+
+  useEffect(() => {
+    if (activeModal === 'add-repo') {
+      if (unmountAddRepoDialogTimerRef.current) {
+        clearTimeout(unmountAddRepoDialogTimerRef.current)
+        unmountAddRepoDialogTimerRef.current = null
+      }
+      setShouldMountAddRepoDialog(true)
+      return
+    }
+    if (shouldMountAddRepoDialog && !unmountAddRepoDialogTimerRef.current) {
+      // Why: AddRepoDialog's close effect aborts in-flight clone/nested work.
+      // Keep one closed render, then remove hidden SSH/remote subscriptions.
+      unmountAddRepoDialogTimerRef.current = setTimeout(() => {
+        setShouldMountAddRepoDialog(false)
+        unmountAddRepoDialogTimerRef.current = null
+      }, 0)
+    }
+    return () => {
+      if (unmountAddRepoDialogTimerRef.current) {
+        clearTimeout(unmountAddRepoDialogTimerRef.current)
+        unmountAddRepoDialogTimerRef.current = null
+      }
+    }
+  }, [activeModal, shouldMountAddRepoDialog])
 
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
@@ -119,15 +148,18 @@ function Sidebar({
         )}
       </div>
 
-      {/* Dialog (rendered outside sidebar to avoid clipping) */}
-      <WorktreeMetaDialog />
-      <NonGitFolderDialog />
-      <RemoveFolderDialog />
-      <AddRepoDialog />
-      <AddProjectFromFolderDialog />
-      <ProjectAddedDialog />
-      <WorktreeVisibilityDialog />
-      <OrcaYamlTrustDialog />
+      {/* Dialogs render outside sidebar to avoid clipping. Lazy-load them only
+      for the modal that needs their flow-specific hooks and UI. */}
+      <React.Suspense fallback={null}>
+        {activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null}
+        {activeModal === 'confirm-non-git-folder' ? <NonGitFolderDialog /> : null}
+        {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}
+        {shouldMountAddRepoDialog ? <AddRepoDialog /> : null}
+        {activeModal === 'confirm-add-project-from-folder' ? <AddProjectFromFolderDialog /> : null}
+        {activeModal === 'project-added' ? <ProjectAddedDialog /> : null}
+        {activeModal === 'worktree-visibility' ? <WorktreeVisibilityDialog /> : null}
+        {activeModal === 'confirm-orca-yaml-hooks' ? <OrcaYamlTrustDialog /> : null}
+      </React.Suspense>
     </TooltipProvider>
   )
 }

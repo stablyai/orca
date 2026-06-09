@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { Loader2 } from 'lucide-react'
 import type { FeatureTip, FeatureTipAction } from '../../../../shared/feature-tips'
 import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
 
 function getPrimaryBusyLabel(action: FeatureTipAction): string {
   if (action === 'setup-cli') {
@@ -29,7 +30,7 @@ export function FeatureTipActions({
     <>
       {showSkip ? (
         <Button variant="ghost" onClick={onSkip} disabled={primaryBusy}>
-          Maybe Later
+          {translate('auto.components.feature.tips.FeatureTipActions.eb04abece8', 'Maybe Later')}
         </Button>
       ) : null}
       <Button

@@ -187,6 +187,48 @@ describe('attachWebgl', () => {
     expect(pane.terminal.loadAddon).not.toHaveBeenCalled()
   })
 
+  it('uses WebGL rendering for Linux auto GPU acceleration on hardware renderers', () => {
+    const rendererKey = 0x9246
+    const vendorKey = 0x9245
+    vi.stubGlobal('navigator', {
+      platform: 'Linux x86_64',
+      userAgent: 'Mozilla/5.0 (X11; Linux x86_64)'
+    })
+    vi.stubGlobal('document', {
+      createElement: vi.fn((tagName: string) => {
+        if (tagName !== 'canvas') {
+          return {}
+        }
+        return {
+          getContext: vi.fn((contextName: string) =>
+            contextName === 'webgl2'
+              ? {
+                  getExtension: vi.fn(() => ({
+                    UNMASKED_RENDERER_WEBGL: rendererKey,
+                    UNMASKED_VENDOR_WEBGL: vendorKey
+                  })),
+                  getParameter: vi.fn((key: number) =>
+                    key === rendererKey
+                      ? 'Mesa Intel(R) UHD Graphics 770'
+                      : key === vendorKey
+                        ? 'Intel'
+                        : null
+                  )
+                }
+              : null
+          )
+        }
+      })
+    })
+    resetTerminalWebglSuggestion()
+    const pane = createPane()
+
+    attachWebgl(pane)
+
+    expect(pane.webglAddon).not.toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(1)
+  })
+
   it('still allows forced WebGL on Linux', () => {
     vi.stubGlobal('navigator', {
       platform: 'Linux x86_64',

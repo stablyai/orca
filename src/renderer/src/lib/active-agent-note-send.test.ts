@@ -2,11 +2,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   getActiveAgentNoteTarget,
+  getActiveAgentRuntimeProbeDescriptor,
   getActiveTerminalNoteTarget,
+  probeActiveAgentNoteTarget,
   sendNotesToActiveAgentSession
 } from './active-agent-note-send'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import type { TerminalLayoutSnapshot } from '../../../shared/types'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -24,6 +27,7 @@ const testState = vi.hoisted(() => ({
     ptyIdsByTabId: {
       'tab-1': ['pty-1']
     },
+    runtimePaneTitlesByTabId: {},
     terminalLayoutsByTabId: {
       'tab-1': {
         activeLeafId: '11111111-1111-4111-8111-111111111111',
@@ -37,11 +41,16 @@ const testState = vi.hoisted(() => ({
     activeTabType: 'terminal' | 'editor'
     activeTabId: string | null
     activeTabIdByWorktree: Record<string, string | null>
-    tabsByWorktree: Record<string, { id: string }[]>
+    tabsByWorktree: Record<string, { id: string; launchAgent?: string }[]>
     ptyIdsByTabId: Record<string, string[]>
+    runtimePaneTitlesByTabId: Record<string, Record<number, string>>
     terminalLayoutsByTabId: Record<
       string,
-      { activeLeafId: string | null; ptyIdsByLeafId?: Record<string, string | undefined> }
+      {
+        activeLeafId: string | null
+        root?: TerminalLayoutSnapshot['root']
+        ptyIdsByLeafId?: Record<string, string | undefined>
+      }
     >
     agentStatusByPaneKey: Record<string, AgentStatusEntry>
     settings: Record<string, unknown>
@@ -77,6 +86,7 @@ describe('active agent note send', () => {
       ptyIdsByTabId: {
         'tab-1': ['pty-1']
       },
+      runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {
         'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' } }
       },
@@ -116,6 +126,117 @@ describe('active agent note send', () => {
   })
 
   it('does not offer the active terminal send target when the focused pane has no agent status', () => {
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
+  })
+
+  it('runtime-probes a manually started agent before title or hooks report it', async () => {
+    testState.callRuntimeRpc.mockImplementation(async (_target, method) => {
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-1',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-1',
+              leafId: LEAF_ID,
+              title: 'repo terminal',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.isRunningAgent') {
+        return { isRunningAgent: true }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    const descriptor = getActiveAgentRuntimeProbeDescriptor(testState.appState, 'wt-1')
+
+    expect(descriptor).toMatchObject({
+      key: `local:wt-1:tab-1:${LEAF_ID}:pty-1`,
+      noteTarget: { tabId: 'tab-1', leafId: LEAF_ID }
+    })
+    await expect(probeActiveAgentNoteTarget(descriptor!)).resolves.toBe(true)
+  })
+
+  it('offers the active terminal send target for a fresh title-detected agent before hooks report', () => {
+    testState.appState.runtimePaneTitlesByTabId = {
+      'tab-1': { 1: 'Codex' }
+    }
+
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toEqual({
+      tabId: 'tab-1',
+      leafId: LEAF_ID
+    })
+  })
+
+  it('offers the active terminal send target for an Orca-launched agent before hooks report', () => {
+    testState.appState.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-1', launchAgent: 'codex' }]
+    }
+
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toEqual({
+      tabId: 'tab-1',
+      leafId: LEAF_ID
+    })
+  })
+
+  it('does not let an old launch marker override a focused shell title', () => {
+    testState.appState.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-1', launchAgent: 'codex' }]
+    }
+    testState.appState.runtimePaneTitlesByTabId = {
+      'tab-1': { 1: 'zsh' }
+    }
+
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
+  })
+
+  it('does not offer the active terminal send target for another split pane title', () => {
+    testState.appState.runtimePaneTitlesByTabId = {
+      'tab-1': { 1: 'zsh', 2: 'Codex' }
+    }
+    testState.appState.terminalLayoutsByTabId = {
+      'tab-1': {
+        activeLeafId: LEAF_ID,
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: LEAF_ID },
+          second: { type: 'leaf', leafId: OTHER_LEAF_ID }
+        },
+        ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+      }
+    }
+
+    expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
+  })
+
+  it('does not treat a lone background split-pane title as the focused pane', () => {
+    testState.appState.runtimePaneTitlesByTabId = {
+      'tab-1': { 2: 'Codex' }
+    }
+    testState.appState.terminalLayoutsByTabId = {
+      'tab-1': {
+        activeLeafId: LEAF_ID,
+        root: {
+          type: 'split',
+          direction: 'horizontal',
+          first: { type: 'leaf', leafId: LEAF_ID },
+          second: { type: 'leaf', leafId: OTHER_LEAF_ID }
+        },
+        ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+      }
+    }
+
     expect(getActiveAgentNoteTarget(testState.appState, 'wt-1', NOW)).toBeNull()
   })
 

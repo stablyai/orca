@@ -11,6 +11,7 @@ import {
   getVisibleContextualTourStepIndexes
 } from './contextual-tour-gate'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
+import { translate } from '@/i18n/i18n'
 
 export type ContextualTourMeasurementAction =
   | { kind: 'wait' }
@@ -117,7 +118,13 @@ export function measureContextualTourOverlayRenderState(args: {
   const sidebarAlreadyVisible =
     activeStep.primaryAction?.kind === 'show-worktrees' && args.sidebarOpen
   const primaryAction = sidebarAlreadyVisible
-    ? ({ kind: 'next', label: 'Next' } as const)
+    ? ({
+        kind: 'next',
+        label: translate(
+          'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
+          'Next'
+        )
+      } as const)
     : activeStep.primaryAction
   const secondaryAction = sidebarAlreadyVisible ? undefined : activeStep.secondaryAction
 

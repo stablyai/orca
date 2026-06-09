@@ -7,6 +7,7 @@ import { Label } from '../ui/label'
 import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
+import { translate } from '@/i18n/i18n'
 
 type GeneralWorkspaceSettingsSectionProps = {
   settings: GlobalSettings
@@ -27,17 +28,34 @@ export function GeneralWorkspaceSettingsSection({
   return (
     <section key="workspace" className="space-y-4">
       <SettingsSubsectionHeader
-        title="Workspace"
-        description="Configure where new workspaces are created."
+        title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.7511097c5d',
+          'Workspace'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.e2955d9ccb',
+          'Configure where new workspaces are created.'
+        )}
       />
 
       <SearchableSetting
-        title="Workspace Directory"
-        description="Root directory where workspace folders are created."
+        title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
+          'Workspace Directory'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.a246f5ce6f',
+          'Root directory where workspace folders are created.'
+        )}
         keywords={['workspace', 'folder', 'path', 'worktree']}
         className="space-y-2"
       >
-        <Label>Workspace Directory</Label>
+        <Label>
+          {translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.0e9fc0eadc',
+            'Workspace Directory'
+          )}
+        </Label>
         <div className="flex gap-2">
           <Input
             value={settings.workspaceDir}
@@ -51,22 +69,40 @@ export function GeneralWorkspaceSettingsSection({
             className="shrink-0 gap-1.5"
           >
             <FolderOpen className="size-3.5" />
-            Browse
+            {translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.5567191a6e',
+              'Browse'
+            )}
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Root directory where workspace folders are created.
+          {translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.a246f5ce6f',
+            'Root directory where workspace folders are created.'
+          )}
         </p>
       </SearchableSetting>
 
       <SearchableSetting
-        title="Nest Workspaces"
-        description="Create workspaces inside a repo-named subfolder."
+        title={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
+          'Nest Workspaces'
+        )}
+        description={translate(
+          'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
+          'Create workspaces inside a repo-named subfolder.'
+        )}
         keywords={['nested', 'subfolder', 'directory']}
       >
         <SettingsSwitchRow
-          label="Nest Workspaces"
-          description="Create workspaces inside a repo-named subfolder."
+          label={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
+            'Nest Workspaces'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
+            'Create workspaces inside a repo-named subfolder.'
+          )}
           checked={settings.nestWorkspaces}
           onChange={() => updateSettings({ nestWorkspaces: !settings.nestWorkspaces })}
         />
@@ -77,13 +113,25 @@ export function GeneralWorkspaceSettingsSection({
           breaks that toast action even though this pane still renders fine. */}
       <div id="general-skip-delete-worktree-confirm" className="scroll-mt-6">
         <SearchableSetting
-          title="Ask Before Deleting Workspaces"
-          description="Show a confirmation dialog before deleting a workspace."
+          title={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.9f380934cf',
+            'Ask Before Deleting Workspaces'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.5734db82af',
+            'Show a confirmation dialog before deleting a workspace.'
+          )}
           keywords={['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']}
         >
           <SettingsSwitchRow
-            label="Ask Before Deleting Workspaces"
-            description="Show a confirmation before deleting a workspace from the context menu. Failed deletes still surface a Force Delete fallback."
+            label={translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.9f380934cf',
+              'Ask Before Deleting Workspaces'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.28bc3d085e',
+              'Show a confirmation before deleting a workspace from the context menu. Failed deletes still surface a Force Delete fallback.'
+            )}
             checked={!settings.skipDeleteWorktreeConfirm}
             onChange={() =>
               updateSettings({
@@ -96,13 +144,25 @@ export function GeneralWorkspaceSettingsSection({
 
       <div id="general-skip-delete-automation-confirm" className="scroll-mt-6">
         <SearchableSetting
-          title="Ask Before Deleting Automations"
-          description="Show a confirmation dialog before deleting an automation and its run history."
+          title={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.ea98373cd8',
+            'Ask Before Deleting Automations'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.d2dd2ca2e3',
+            'Show a confirmation dialog before deleting an automation and its run history.'
+          )}
           keywords={['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']}
         >
           <SettingsSwitchRow
-            label="Ask Before Deleting Automations"
-            description="Show a confirmation before deleting automations and their run history."
+            label={translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.ea98373cd8',
+              'Ask Before Deleting Automations'
+            )}
+            description={translate(
+              'auto.components.settings.GeneralWorkspaceSettingsSection.824b98a0d9',
+              'Show a confirmation before deleting automations and their run history.'
+            )}
             checked={!settings.skipDeleteAutomationConfirm}
             onChange={() =>
               updateSettings({
@@ -119,8 +179,14 @@ export function GeneralWorkspaceSettingsSection({
         className="scroll-mt-6"
       >
         <SearchableSetting
-          title="Open In Apps"
-          description="Choose apps available from a workspace's Open in menu."
+          title={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.008f92085f',
+            'Open In Apps'
+          )}
+          description={translate(
+            'auto.components.settings.GeneralWorkspaceSettingsSection.3d538a98f7',
+            "Choose apps available from a workspace's Open in menu."
+          )}
           keywords={[
             'open in',
             'open menu',

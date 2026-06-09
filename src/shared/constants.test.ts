@@ -31,6 +31,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
   })
 
+  it('uses system language by default', () => {
+    expect(getDefaultSettings('/tmp').uiLanguage).toBe('system')
+  })
+
   it('enables Source Control AI by default without pinning a separate agent', () => {
     expect(getDefaultSettings('/tmp').commitMessageAi).toMatchObject({
       enabled: true,
@@ -49,8 +53,8 @@ describe('getDefaultSettings', () => {
     })
   })
 
-  it('keeps compact worktree cards experimental and disabled by default', () => {
-    expect(getDefaultSettings('/tmp').experimentalCompactWorktreeCards).toBe(false)
+  it('keeps compact worktree cards disabled by default', () => {
+    expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 })
 

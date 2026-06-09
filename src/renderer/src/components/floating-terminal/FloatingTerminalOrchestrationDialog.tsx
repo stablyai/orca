@@ -19,6 +19,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 type FloatingTerminalOrchestrationDialogProps = {
   open: boolean
@@ -56,23 +57,52 @@ export function FloatingTerminalOrchestrationDialog({
           {/* Why: the panel renders with hideHeader, so the modal owns the title
               and status pill — avoiding a duplicate heading inside the modal. */}
           <div className="flex flex-wrap items-center gap-2 pr-6">
-            <DialogTitle>Enable orchestration</DialogTitle>
+            <DialogTitle>
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.543f325a14',
+                'Enable orchestration'
+              )}
+            </DialogTitle>
             {orchestrationSkillLoading && !orchestrationSkillDetected ? (
-              <IntegrationStatusPill tone="neutral">Checking...</IntegrationStatusPill>
+              <IntegrationStatusPill tone="neutral">
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.dfd021ce46',
+                  'Checking...'
+                )}
+              </IntegrationStatusPill>
             ) : orchestrationSkillDetected ? (
-              <IntegrationStatusPill tone="connected">Installed</IntegrationStatusPill>
+              <IntegrationStatusPill tone="connected">
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.630c0ac8c8',
+                  'Installed'
+                )}
+              </IntegrationStatusPill>
             ) : (
-              <IntegrationStatusPill tone="attention">Not installed</IntegrationStatusPill>
+              <IntegrationStatusPill tone="attention">
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.05d7aabc20',
+                  'Not installed'
+                )}
+              </IntegrationStatusPill>
             )}
           </div>
           <DialogDescription className="sr-only">
-            Install the Orca CLI and orchestration skill so agents can coordinate through Orca.
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.6f0aed26b8',
+              'Install the Orca CLI and orchestration skill so agents can coordinate through Orca.'
+            )}
           </DialogDescription>
         </DialogHeader>
 
         <AgentSkillSetupPanel
-          title="Orchestration skill"
-          description="Enables agents to hand off context and coordinate work through Orca."
+          title={translate(
+            'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.1cd3f8af64',
+            'Orchestration skill'
+          )}
+          description={translate(
+            'auto.components.floating.terminal.FloatingTerminalOrchestrationDialog.f726054620',
+            'Enables agents to hand off context and coordinate work through Orca.'
+          )}
           command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
           terminalTitle="Orchestration setup"
           terminalAriaLabel="Orchestration skill install terminal"

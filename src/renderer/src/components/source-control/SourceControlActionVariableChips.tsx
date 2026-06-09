@@ -6,7 +6,8 @@ import {
   type SourceControlActionId
 } from '../../../../shared/source-control-ai-actions'
 import { Button } from '../ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card'
+import { translate } from '@/i18n/i18n'
 
 type SourceControlActionVariableChipsProps = {
   actionId: SourceControlActionId
@@ -27,7 +28,7 @@ function hasVariablePreview(
   )
 }
 
-function SourceControlVariableTooltip({
+function SourceControlVariableDetails({
   variable,
   preview
 }: {
@@ -37,17 +38,25 @@ function SourceControlVariableTooltip({
   if (preview !== undefined) {
     if (variable === 'basePrompt') {
       return (
-        <pre className="scrollbar-sleek max-h-72 max-w-[min(32rem,calc(100vw-2rem))] overflow-auto whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-          {preview || '(empty)'}
+        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+          {preview ||
+            translate(
+              'auto.components.source.control.SourceControlActionVariableChips.4bf6d88039',
+              '(empty)'
+            )}
         </pre>
       )
     }
 
     return (
       <div className="space-y-1.5">
-        <div className="font-mono text-[11px] text-background/70">{`{${variable}}`}</div>
-        <pre className="scrollbar-sleek max-h-72 max-w-[min(32rem,calc(100vw-2rem))] overflow-auto rounded-sm bg-background/10 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-          {preview || '(empty)'}
+        <div className="font-mono text-[11px] text-muted-foreground">{`{${variable}}`}</div>
+        <pre className="rounded-sm bg-background/60 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+          {preview ||
+            translate(
+              'auto.components.source.control.SourceControlActionVariableChips.4bf6d88039',
+              '(empty)'
+            )}
         </pre>
       </div>
     )
@@ -58,13 +67,16 @@ function SourceControlVariableTooltip({
     <div className="max-w-80 space-y-2 text-left leading-relaxed">
       <div className="space-y-0.5">
         <div className="font-mono text-[11px]">{`{${variable}}`}</div>
-        <div className="text-background/80">{info.description}</div>
+        <div className="text-muted-foreground">{info.description}</div>
       </div>
       <div className="space-y-1">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-background/60">
-          Example
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {translate(
+            'auto.components.source.control.SourceControlActionVariableChips.6b921a0ac2',
+            'Example'
+          )}
         </div>
-        <pre className="scrollbar-sleek max-h-40 overflow-auto rounded-sm bg-background/10 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+        <pre className="rounded-sm bg-background/60 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
           {info.example}
         </pre>
       </div>
@@ -82,15 +94,18 @@ export function SourceControlActionVariableChips({
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
         <Braces className="size-3" />
-        Variables
+        {translate(
+          'auto.components.source.control.SourceControlActionVariableChips.1b77798d5f',
+          'Variables'
+        )}
       </span>
       {SOURCE_CONTROL_ACTION_VARIABLES[actionId].map((variable) => {
         const preview = hasVariablePreview(variablePreviews, variable)
           ? variablePreviews?.[variable]
           : undefined
         return (
-          <Tooltip key={variable}>
-            <TooltipTrigger asChild>
+          <HoverCard key={variable} openDelay={150} closeDelay={120}>
+            <HoverCardTrigger asChild>
               <span className="inline-flex">
                 <Button
                   type="button"
@@ -103,11 +118,16 @@ export function SourceControlActionVariableChips({
                   {`{${variable}}`}
                 </Button>
               </span>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={6} className="px-2 py-2 text-left">
-              <SourceControlVariableTooltip variable={variable} preview={preview} />
-            </TooltipContent>
-          </Tooltip>
+            </HoverCardTrigger>
+            <HoverCardContent
+              side="top"
+              sideOffset={6}
+              collisionPadding={12}
+              className="scrollbar-sleek max-h-[min(18rem,calc(100vh-2rem))] w-[min(32rem,calc(100vw-2rem))] overflow-y-auto p-2 text-left text-xs"
+            >
+              <SourceControlVariableDetails variable={variable} preview={preview} />
+            </HoverCardContent>
+          </HoverCard>
         )
       })}
     </div>

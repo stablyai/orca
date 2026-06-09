@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { DiffCommentPopover } from '../diff-comments/DiffCommentPopover'
 import { combinedDiffSectionScrollbarOptions } from './diff-editor-scrollbar-options'
 import type { DiffSection } from './diff-section-types'
+import { translate } from '@/i18n/i18n'
 
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 
@@ -84,7 +85,9 @@ export function DiffSectionBody({
       {section.loading ? (
         <div className="flex h-full items-center gap-2 bg-muted/10 px-3 text-[11px] text-muted-foreground">
           <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
-          <span>Loading diff...</span>
+          <span>
+            {translate('auto.components.editor.DiffSectionBody.f5cf81cec2', 'Loading diff...')}
+          </span>
         </div>
       ) : section.error ? (
         <div className="flex h-full items-center justify-between gap-3 bg-muted/10 px-3 text-[11px] text-muted-foreground">
@@ -103,7 +106,7 @@ export function DiffSectionBody({
             }}
           >
             <RefreshCw className="size-3" />
-            Retry
+            {translate('auto.components.editor.DiffSectionBody.cef4cf0ff5', 'Retry')}
           </Button>
         </div>
       ) : section.diffResult?.kind === 'binary' ? (
@@ -119,11 +122,22 @@ export function DiffSectionBody({
         ) : (
           <div className="flex h-full items-center justify-center px-6 text-center">
             <div className="space-y-2">
-              <div className="text-sm font-medium text-foreground">Binary file changed</div>
+              <div className="text-sm font-medium text-foreground">
+                {translate(
+                  'auto.components.editor.DiffSectionBody.35d6afb5be',
+                  'Binary file changed'
+                )}
+              </div>
               <div className="text-xs text-muted-foreground">
                 {isBranchMode
-                  ? 'Text diff is unavailable for this file in branch compare.'
-                  : 'Text diff is unavailable for this file.'}
+                  ? translate(
+                      'auto.components.editor.DiffSectionBody.7ce8436458',
+                      'Text diff is unavailable for this file in branch compare.'
+                    )
+                  : translate(
+                      'auto.components.editor.DiffSectionBody.72f71f52eb',
+                      'Text diff is unavailable for this file.'
+                    )}
               </div>
             </div>
           </div>

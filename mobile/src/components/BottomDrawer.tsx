@@ -255,16 +255,10 @@ function MountedBottomDrawer({
     return { opacity: progress.value * dragFade }
   })
 
-  const pointerStyle = useAnimatedStyle(
-    () =>
-      ({
-        pointerEvents: progress.value > 0 ? 'auto' : 'none'
-      }) as { pointerEvents: 'auto' | 'none' }
-  )
-
   return (
     <Animated.View
-      style={[styles.overlay, { zIndex, elevation: zIndex }, pointerStyle]}
+      pointerEvents={visible ? 'auto' : 'none'}
+      style={[styles.overlay, { zIndex, elevation: zIndex }]}
       accessibilityViewIsModal
       aria-modal
     >

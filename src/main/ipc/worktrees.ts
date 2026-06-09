@@ -1388,7 +1388,11 @@ export function registerWorktreeHandlers(
     (_event, args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => {
       const updates =
         args.updates.displayName !== undefined
-          ? { ...args.updates, pendingFirstAgentMessageRename: false }
+          ? {
+              ...args.updates,
+              pendingFirstAgentMessageRename: false,
+              firstAgentMessageRenameError: null
+            }
           : args.updates
       const meta = store.setWorktreeMeta(args.worktreeId, stripOrcaProvenanceMetaUpdates(updates))
       // Do NOT call notifyWorktreesChanged here. The renderer applies meta

@@ -303,6 +303,9 @@ export function mergeWorktree(
     ...(meta?.pendingFirstAgentMessageRename !== undefined
       ? { pendingFirstAgentMessageRename: meta.pendingFirstAgentMessageRename }
       : {}),
+    ...(meta?.firstAgentMessageRenameError !== undefined
+      ? { firstAgentMessageRenameError: meta.firstAgentMessageRenameError }
+      : {}),
     ...(git.isSparse === true
       ? {
           sparseDirectories: meta?.sparseDirectories,

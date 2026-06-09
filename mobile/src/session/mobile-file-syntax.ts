@@ -110,6 +110,9 @@ export function highlightMobileDiffLines<TLine extends { text: string }>(
 
     attemptedLines += 1
     attemptedChars += line.text.length
+    if (line.text.trim().length === 0) {
+      return plainHighlightedLine(line)
+    }
     const result = highlightMobileCode(
       line.text,
       language,

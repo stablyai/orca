@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { translate } from '@/i18n/i18n'
 
 const FIRST_FRAME_TIMEOUT_MS = 6_000
 
@@ -46,7 +47,13 @@ export function useEmulatorFrameStream(
       setState((current) =>
         current.streamIdentity !== streamIdentity || current.frameUrl
           ? current
-          : { ...current, error: 'Stream is not producing frames.' }
+          : {
+              ...current,
+              error: translate(
+                'auto.components.emulator.pane.use.emulator.frame.stream.f1c0179002',
+                'Stream is not producing frames.'
+              )
+            }
       )
     }, FIRST_FRAME_TIMEOUT_MS)
 

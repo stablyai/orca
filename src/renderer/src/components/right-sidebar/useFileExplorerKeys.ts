@@ -18,6 +18,7 @@ import {
   type SelectionMode
 } from './file-explorer-keyboard-navigation'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { translate } from '@/i18n/i18n'
 
 /**
  * Keyboard shortcuts for the file explorer.
@@ -148,7 +149,14 @@ export function useFileExplorerKeys(opts: {
         e.preventDefault()
         const run = wantRedo ? redoFileExplorer() : undoFileExplorer()
         void run.catch((err: unknown) => {
-          toast.error(err instanceof Error ? err.message : 'Operation failed')
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : translate(
+                  'auto.components.right.sidebar.useFileExplorerKeys.8adb953095',
+                  'Operation failed'
+                )
+          )
         })
         return
       }

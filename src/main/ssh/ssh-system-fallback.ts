@@ -1,11 +1,17 @@
 /* eslint-disable max-lines -- Why: system-ssh process wrapping and fallback file operations share cleanup contracts. */
 import { spawn, type ChildProcess } from 'child_process'
+import { constants } from 'node:fs'
 import { existsSync } from 'fs'
+import { lstat, open, readdir } from 'fs/promises'
+import { join as pathJoin } from 'path'
 import { Duplex } from 'stream'
 import { pipeline } from 'stream/promises'
 import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../shared/ssh-types'
 import { wrapRemoteCommandForPosixShell, shellEscape } from './ssh-connection-utils'
+import type { SshExecOptions } from './ssh-connection-utils'
+import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 
 const SYSTEM_SSH_PATHS =
   process.platform === 'win32'
@@ -27,6 +33,7 @@ type SystemSshCommandChannel = ClientChannel & {
 
 type SystemSshOperationOptions = {
   signal?: AbortSignal
+  hostPlatform?: RemoteHostPlatform
 }
 
 /**
@@ -68,7 +75,11 @@ export function spawnSystemSsh(target: SshTarget): SystemSshProcess {
   return wrapChildProcess(proc)
 }
 
-export function spawnSystemSshCommand(target: SshTarget, command: string): ClientChannel {
+export function spawnSystemSshCommand(
+  target: SshTarget,
+  command: string,
+  options?: SshExecOptions
+): ClientChannel {
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error(
@@ -76,7 +87,9 @@ export function spawnSystemSshCommand(target: SshTarget, command: string): Clien
     )
   }
 
-  const proc = spawn(sshPath, [...buildSshArgs(target), wrapRemoteCommandForPosixShell(command)], {
+  const remoteCommand =
+    options?.wrapCommand === false ? command : wrapRemoteCommandForPosixShell(command)
+  const proc = spawn(sshPath, [...buildSshArgs(target), remoteCommand], {
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   })
@@ -90,6 +103,11 @@ export async function uploadDirectoryViaSystemSsh(
   options?: SystemSshOperationOptions
 ): Promise<void> {
   throwIfAborted(options?.signal)
+  if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
+    await uploadDirectoryViaSystemSshWindows(target, localDir, remoteDir, options)
+    return
+  }
+
   const sshPath = findSystemSsh()
   if (!sshPath) {
     throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
@@ -145,6 +163,16 @@ export async function writeFileViaSystemSsh(
   options?: SystemSshOperationOptions
 ): Promise<void> {
   throwIfAborted(options?.signal)
+  if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
+    await writeBufferViaSystemSshWindows(
+      target,
+      remotePath,
+      Buffer.from(contents, 'utf-8'),
+      options
+    )
+    return
+  }
+
   const channel = spawnSystemSshCommand(target, `cat > ${shellEscape(remotePath)}`)
   const closePromise = awaitWithSystemSshAbort(
     options?.signal,
@@ -155,6 +183,161 @@ export async function writeFileViaSystemSsh(
     channel.stdin.end(contents)
   }
   await closePromise
+}
+
+async function uploadDirectoryViaSystemSshWindows(
+  target: SshTarget,
+  localDir: string,
+  remoteDir: string,
+  options: SystemSshOperationOptions
+): Promise<void> {
+  const hostPlatform = options.hostPlatform
+  if (!hostPlatform) {
+    throw new Error('Windows system SSH upload requires a remote host platform')
+  }
+  const entries = await collectWindowsUploadEntries(
+    localDir,
+    remoteDir,
+    hostPlatform,
+    options.signal
+  )
+  await writeWindowsUploadPackageViaSystemSsh(target, entries, options)
+}
+
+type WindowsUploadEntry =
+  | {
+      kind: 'directory'
+      path: string
+    }
+  | {
+      kind: 'file'
+      path: string
+      contentsBase64: string
+    }
+
+async function collectWindowsUploadEntries(
+  localDir: string,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  signal: AbortSignal | undefined
+): Promise<WindowsUploadEntry[]> {
+  const entries: WindowsUploadEntry[] = [{ kind: 'directory', path: remoteDir }]
+  const dirEntries = await readdir(localDir, { withFileTypes: true })
+  for (const entry of dirEntries) {
+    throwIfAborted(signal)
+    const localPath = pathJoin(localDir, entry.name)
+    const remotePath = joinRemotePath(hostPlatform, remoteDir, entry.name)
+    const statResult = await lstat(localPath)
+    if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
+      continue
+    }
+    if (statResult.isDirectory()) {
+      entries.push(
+        ...(await collectWindowsUploadEntries(localPath, remotePath, hostPlatform, signal))
+      )
+      continue
+    }
+    const buffer = await readLocalUploadFile(localPath, statResult)
+    entries.push({ kind: 'file', path: remotePath, contentsBase64: buffer.toString('base64') })
+  }
+  return entries
+}
+
+async function writeWindowsUploadPackageViaSystemSsh(
+  target: SshTarget,
+  entries: WindowsUploadEntry[],
+  options: SystemSshOperationOptions
+): Promise<void> {
+  throwIfAborted(options.signal)
+  const channel = spawnSystemSshCommand(target, makeWindowsUploadPackageCommand(), {
+    wrapCommand: false
+  })
+  const closePromise = awaitWithSystemSshAbort(
+    options.signal,
+    () => channel.close(),
+    waitForChannelClose(channel, 'windows relay upload')
+  )
+  if (!options.signal?.aborted) {
+    channel.stdin.end(JSON.stringify(entries))
+  }
+  await closePromise
+}
+
+async function readLocalUploadFile(
+  localPath: string,
+  statResult: Awaited<ReturnType<typeof lstat>>
+): Promise<Buffer> {
+  const handle = await open(localPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+  try {
+    const openedStat = await handle.stat()
+    if (
+      !openedStat.isFile() ||
+      openedStat.size !== statResult.size ||
+      (statResult.ino !== 0 && openedStat.ino !== 0 && openedStat.ino !== statResult.ino) ||
+      (statResult.dev !== 0 && openedStat.dev !== 0 && openedStat.dev !== statResult.dev)
+    ) {
+      throw new Error(`File changed during upload: ${localPath}`)
+    }
+    return await handle.readFile()
+  } finally {
+    await handle.close()
+  }
+}
+
+async function writeBufferViaSystemSshWindows(
+  target: SshTarget,
+  remotePath: string,
+  contents: Buffer,
+  options: SystemSshOperationOptions
+): Promise<void> {
+  throwIfAborted(options.signal)
+  const channel = spawnSystemSshCommand(target, makeWindowsWriteFileCommand(remotePath), {
+    wrapCommand: false
+  })
+  const closePromise = awaitWithSystemSshAbort(
+    options.signal,
+    () => channel.close(),
+    waitForChannelClose(channel, `write ${remotePath}`)
+  )
+  if (!options.signal?.aborted) {
+    channel.stdin.end(contents)
+  }
+  await closePromise
+}
+
+function makeWindowsWriteFileCommand(remotePath: string): string {
+  return powerShellCommand(
+    [
+      '$ErrorActionPreference = "Stop"',
+      `$path = ${powerShellLiteral(remotePath)}`,
+      '$parent = [System.IO.Path]::GetDirectoryName($path)',
+      'if ($parent) { $null = [System.IO.Directory]::CreateDirectory($parent) }',
+      '$inputStream = [Console]::OpenStandardInput()',
+      '$outputStream = [System.IO.File]::Open($path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)',
+      'try { $inputStream.CopyTo($outputStream) } finally { $outputStream.Dispose() }'
+    ].join('; ')
+  )
+}
+
+function makeWindowsUploadPackageCommand(): string {
+  return powerShellCommand(
+    [
+      '$ErrorActionPreference = "Stop"',
+      '$json = [Console]::In.ReadToEnd()',
+      'if ([string]::IsNullOrWhiteSpace($json)) { return }',
+      '$items = $json | ConvertFrom-Json',
+      'foreach ($item in @($items)) {',
+      '  $path = [string]$item.path',
+      '  if ($item.kind -eq "directory") {',
+      '    $null = [System.IO.Directory]::CreateDirectory($path)',
+      '    continue',
+      '  }',
+      '  $parent = [System.IO.Path]::GetDirectoryName($path)',
+      '  if ($parent) { $null = [System.IO.Directory]::CreateDirectory($parent) }',
+      '  [System.IO.File]::WriteAllBytes($path, [Convert]::FromBase64String([string]$item.contentsBase64))',
+      '}'
+    ].join('; ')
+  )
 }
 
 export function buildSshArgs(target: SshTarget): string[] {

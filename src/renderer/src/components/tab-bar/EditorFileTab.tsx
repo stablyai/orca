@@ -26,6 +26,7 @@ import {
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
+import { translate } from '@/i18n/i18n'
 
 export default function EditorFileTab({
   file,
@@ -257,7 +258,11 @@ export default function EditorFileTab({
           <Input
             ref={setRenameInputElement}
             data-tab-rename-input="true"
-            aria-label={`Rename file ${basename(file.filePath)}`}
+            aria-label={translate(
+              'auto.components.tab.bar.EditorFileTab.3da7445c84',
+              'Rename file {{value0}}',
+              { value0: basename(file.filePath) }
+            )}
             defaultValue={basename(file.filePath)}
             // Why: keep the inline field compact enough for the titlebar while
             // giving filenames a little more room than the static tab label.

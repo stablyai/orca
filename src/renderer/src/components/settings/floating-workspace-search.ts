@@ -1,24 +1,39 @@
-import type { SettingsSearchEntry } from './settings-search'
+import { translate } from '@/i18n/i18n'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const FLOATING_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
+export const getFloatingWorkspaceSearchEntries = createLocalizedCatalog(() => [
   {
-    title: 'Floating Workspace',
-    description:
-      'Enable the floating workspace, choose where new tabs start, and choose where the toggle button appears.',
+    title: translate(
+      'auto.components.settings.floating.workspace.search.b2b60e7163',
+      'Floating Workspace'
+    ),
+    description: translate(
+      'auto.components.settings.floating.workspace.search.b96b5ee6cf',
+      'Enable the floating workspace, choose where new tabs start, and choose where the toggle button appears.'
+    ),
     keywords: [
-      'floating workspace',
-      'floating terminal',
-      'quick terminal',
-      'global',
-      'terminal',
-      'browser',
-      'markdown',
-      'note',
-      'notes',
-      'quick panel',
-      'launch directory',
-      'toggle button',
-      'status bar'
+      translate(
+        'auto.components.settings.floating.workspace.search.a08e482f6d',
+        'floating workspace'
+      ),
+      translate(
+        'auto.components.settings.floating.workspace.search.6f183fa1b9',
+        'floating terminal'
+      ),
+      translate('auto.components.settings.floating.workspace.search.ebeedb2f6a', 'quick terminal'),
+      translate('auto.components.settings.floating.workspace.search.2b5efa55c9', 'global'),
+      translate('auto.components.settings.floating.workspace.search.6410fe83d8', 'terminal'),
+      translate('auto.components.settings.floating.workspace.search.49db74a92d', 'browser'),
+      translate('auto.components.settings.floating.workspace.search.884e5e6132', 'markdown'),
+      translate('auto.components.settings.floating.workspace.search.156ffeee08', 'note'),
+      translate('auto.components.settings.floating.workspace.search.52db6e3baf', 'notes'),
+      translate('auto.components.settings.floating.workspace.search.a38bfc3f77', 'quick panel'),
+      translate(
+        'auto.components.settings.floating.workspace.search.6765b85e48',
+        'launch directory'
+      ),
+      translate('auto.components.settings.floating.workspace.search.a452146574', 'toggle button'),
+      translate('auto.components.settings.floating.workspace.search.94f4d013c8', 'status bar')
     ]
   }
-]
+])
