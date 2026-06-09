@@ -243,16 +243,14 @@ trap '__orca_osc133_preexec' DEBUG
 
 export function getRelayShellLaunchConfig(
   shellPath: string,
-  env: Record<string, string>
+  env: Record<string, string>,
+  platform: NodeJS.Platform = process.platform
 ): RelayShellLaunchConfig {
   const shellName = shellBasename(shellPath)
-  const windowsArgs = windowsShellArgs(shellName)
-  if (windowsArgs) {
-    return { args: windowsArgs, env: {} }
-  }
-
-  if (process.platform === 'win32') {
-    return { args: [], env: {} }
+  if (platform === 'win32') {
+    // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
+    // only apply when the relay itself is running on native Windows.
+    return { args: windowsShellArgs(shellName) ?? [], env: {} }
   }
 
   if (shellName !== 'zsh' && shellName !== 'bash') {
