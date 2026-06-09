@@ -1,5 +1,5 @@
 import type * as NodePath from 'node:path'
-import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -112,7 +112,7 @@ describe('filesystem-auth path containment', () => {
   })
 
   it.skipIf(process.platform === 'win32')(
-    'rejects missing descendants under a symlinked ancestor outside the repo',
+    'allows access to missing descendants under a symlinked ancestor outside the repo',
     async () => {
       const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-symlink-'))
       try {
@@ -125,7 +125,30 @@ describe('filesystem-auth path containment', () => {
 
         await expect(
           resolveAuthorizedPath(join(repoPath, 'linked-outside', 'new', 'file.ts'), store)
-        ).rejects.toThrow('Access denied')
+        ).resolves.toBe(join(await realpath(outsidePath), 'new', 'file.ts'))
+      } finally {
+        await rm(tempRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'allows reading an existing file through a workspace symlink to an external directory',
+    async () => {
+      const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-symlink-file-'))
+      try {
+        const repoPath = join(tempRoot, 'repo')
+        const outsidePath = join(tempRoot, 'outside')
+        const externalFile = join(outsidePath, 'data.bin')
+        await mkdir(repoPath)
+        await mkdir(outsidePath)
+        await writeFile(externalFile, 'content')
+        await symlink(outsidePath, join(repoPath, 'ext-link'), 'dir')
+        const store = makeStore([{ ...repo, id: 'repo-temp', path: repoPath }])
+
+        await expect(
+          resolveAuthorizedPath(join(repoPath, 'ext-link', 'data.bin'), store)
+        ).resolves.toBe(join(await realpath(outsidePath), 'data.bin'))
       } finally {
         await rm(tempRoot, { recursive: true, force: true })
       }
