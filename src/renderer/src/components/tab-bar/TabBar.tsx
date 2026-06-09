@@ -54,6 +54,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 import { buildTabAgentLaunchOptions, orderTabLaunchAgents } from './tab-agent-launch-options'
+import { buildTabCreateMenuOptions, type TabCreateMenuOption } from './tab-create-menu-options'
 import { translate } from '@/i18n/i18n'
 
 const isWindows = navigator.userAgent.includes('Windows')
@@ -304,6 +305,7 @@ function TabBarInner({
   // clicks, so it misses webview clicks entirely. Listening for window blur
   // catches the moment focus leaves the renderer (including into a webview).
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
+  const [createMenuQuery, setCreateMenuQuery] = useState('')
   const pendingNewTabMenuFocusRef = useRef<(() => void) | null>(null)
   const pendingNewTabMenuFocusAnimationRef = useRef<number | null>(null)
   const pendingNewTabMenuFocusRetryRef = useRef<number | null>(null)
@@ -356,6 +358,109 @@ function TabBarInner({
   }
   const queueTerminalTabFocusAfterNewTabMenuClose = (tabId: string): void => {
     pendingNewTabMenuFocusRef.current = () => focusTerminalTabSurface(tabId)
+  }
+  const windowsShellEntries = useMemo(() => {
+    if (!shouldShowWindowsShellMenu || !onNewTerminalWithShell) {
+      return undefined
+    }
+    const allShells: {
+      label: string
+      shell: BuiltInWindowsTerminalShell
+    }[] = [
+      {
+        label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
+        shell: 'powershell.exe'
+      },
+      {
+        label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
+        shell: 'cmd.exe'
+      },
+      ...(windowsTerminalCapabilities.gitBashAvailable
+        ? ([
+            {
+              label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
+              shell: WINDOWS_GIT_BASH_SHELL
+            }
+          ] as const)
+        : []),
+      ...(windowsTerminalCapabilities.wslAvailable
+        ? ([
+            {
+              label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
+              shell: 'wsl.exe'
+            }
+          ] as const)
+        : [])
+    ]
+    const defaultEntry =
+      allShells.find((shell) => shell.shell === defaultWindowsShell) ?? allShells[0]
+    const orderedShells = [
+      defaultEntry,
+      ...allShells.filter((shell) => shell.shell !== defaultEntry.shell)
+    ]
+    return orderedShells.map((entry) => ({ label: entry.label, shell: entry.shell }))
+  }, [
+    defaultWindowsShell,
+    onNewTerminalWithShell,
+    shouldShowWindowsShellMenu,
+    windowsTerminalCapabilities.gitBashAvailable,
+    windowsTerminalCapabilities.wslAvailable
+  ])
+  const createMenuOptions = useMemo(
+    () =>
+      buildTabCreateMenuOptions({
+        terminalOnly,
+        windowsShellEntries,
+        hasNewBrowser: !terminalOnly,
+        hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
+        hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
+        hasSimulator:
+          !terminalOnly && isMacOs && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
+        simulatorIsGoTo: workspaceHasSimulatorTab
+      }),
+    [
+      mobileEmulatorEnabled,
+      onNewFileTab,
+      onNewSimulatorTab,
+      onOpenFileTab,
+      terminalOnly,
+      windowsShellEntries,
+      workspaceHasSimulatorTab
+    ]
+  )
+  const handleSelectCreateMenuOption = (option: TabCreateMenuOption): void => {
+    switch (option.kind) {
+      case 'new-terminal':
+        queueNewActiveTerminalFocusAfterNewTabMenuClose()
+        onNewTerminalTab()
+        break
+      case 'new-terminal-shell':
+        if (!onNewTerminalWithShell || !option.shell) {
+          break
+        }
+        queueNewActiveTerminalFocusAfterNewTabMenuClose()
+        onNewTerminalWithShell(
+          resolveWindowsShellLaunchTarget(
+            option.shell,
+            defaultWindowsPowerShellImplementation,
+            windowsTerminalCapabilities.pwshAvailable
+          )
+        )
+        break
+      case 'new-browser':
+        onNewBrowserTab()
+        break
+      case 'new-markdown':
+        onNewFileTab?.()
+        break
+      case 'open-markdown':
+        onOpenFileTab?.()
+        break
+      case 'new-simulator':
+      case 'go-to-simulator':
+        onNewSimulatorTab?.()
+        break
+    }
   }
   const launchAgentFromNewTabEntry = (agent: TuiAgent): void => {
     const option = agentLaunchOptions.find((candidate) => candidate.agent === agent)
@@ -412,87 +517,38 @@ function TabBarInner({
   const clearPendingNewTabMenuFocusOnUnmount = clearPendingNewTabMenuFocusOnUnmountRef.current
 
   const defaultTerminalMenuItems =
-    shouldShowWindowsShellMenu && onNewTerminalWithShell ? (
-      // Why: previously the Windows path nested shell choices under a
-      // Radix submenu. In practice the submenu frequently failed to open
-      // on hover/click, and even when it worked the two-step expansion
-      // hid the fact that multiple shells were available. Inlining all
-      // shells as flat items — default pinned to the top with the
-      // Ctrl+T hint — matches the "no popouts, show all options at
-      // once" rec. Each entry uses a shell-specific icon (ShellIcon)
-      // so PowerShell / CMD / Git Bash / WSL are distinguishable at a glance.
-      // Labels use "CMD Prompt" instead of "Command Prompt" to keep
-      // each row narrow enough that the shortcut hint fits without
-      // wrapping.
-      (() => {
-        const allShells: {
-          label: string
-          shell: BuiltInWindowsTerminalShell
-        }[] = [
-          {
-            label: translate('auto.components.tab.bar.TabBar.2148f65e04', 'PowerShell'),
-            shell: 'powershell.exe'
-          },
-          {
-            label: translate('auto.components.tab.bar.TabBar.1a8af49530', 'CMD Prompt'),
-            shell: 'cmd.exe'
-          },
-          ...(windowsTerminalCapabilities.gitBashAvailable
-            ? ([
-                {
-                  label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
-                  shell: WINDOWS_GIT_BASH_SHELL
-                }
-              ] as const)
-            : []),
-          ...(windowsTerminalCapabilities.wslAvailable
-            ? ([
-                {
-                  label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
-                  shell: 'wsl.exe'
-                }
-              ] as const)
-            : [])
-        ]
-        const defaultEntry = allShells.find((s) => s.shell === defaultWindowsShell) ?? allShells[0]
-        const orderedShells = [
-          defaultEntry,
-          ...allShells.filter((s) => s.shell !== defaultEntry.shell)
-        ]
-        return orderedShells.map((entry, idx) => {
-          const isDefault = idx === 0
-          return (
-            <DropdownMenuItem
-              key={entry.shell}
-              onSelect={() => {
-                // Why: the top-level Windows shell menu models shell
-                // categories, not concrete executables. When the user
-                // picked PowerShell 7+ in advanced settings, launching the
-                // "PowerShell" menu item must preserve that implementation
-                // instead of forcing inbox powershell.exe.
-                queueNewActiveTerminalFocusAfterNewTabMenuClose()
-                onNewTerminalWithShell(
-                  resolveWindowsShellLaunchTarget(
-                    entry.shell,
-                    defaultWindowsPowerShellImplementation,
-                    windowsTerminalCapabilities.pwshAvailable
-                  )
+    windowsShellEntries && onNewTerminalWithShell ? (
+      windowsShellEntries.map((entry, idx) => {
+        const isDefault = idx === 0
+        return (
+          <DropdownMenuItem
+            key={entry.shell}
+            onSelect={() => {
+              // Why: the top-level Windows shell menu models shell
+              // categories, not concrete executables. When the user
+              // picked PowerShell 7+ in advanced settings, launching the
+              // "PowerShell" menu item must preserve that implementation
+              // instead of forcing inbox powershell.exe.
+              queueNewActiveTerminalFocusAfterNewTabMenuClose()
+              onNewTerminalWithShell(
+                resolveWindowsShellLaunchTarget(
+                  entry.shell,
+                  defaultWindowsPowerShellImplementation,
+                  windowsTerminalCapabilities.pwshAvailable
                 )
-              }}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <ShellIcon shell={entry.shell} size={14} />
-              <span className="flex-1">
-                {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')}{' '}
-                {entry.label}
-              </span>
-              {isDefault ? (
-                <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-              ) : null}
-            </DropdownMenuItem>
-          )
-        })
-      })()
+              )
+            }}
+            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+          >
+            <ShellIcon shell={entry.shell} size={14} />
+            <span className="flex-1">
+              {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')}{' '}
+              {entry.label}
+            </span>
+            {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
+          </DropdownMenuItem>
+        )
+      })
     ) : (
       <DropdownMenuItem
         onSelect={() => {
@@ -596,6 +652,14 @@ function TabBarInner({
     window.addEventListener('blur', dismiss)
     return () => window.removeEventListener('blur', dismiss)
   }, [newTabMenuOpen])
+
+  useEffect(() => {
+    if (!newTabMenuOpen) {
+      setCreateMenuQuery('')
+    }
+  }, [newTabMenuOpen])
+
+  const showStaticCreateMenuItems = createMenuQuery.trim().length === 0
 
   const terminalMap = useMemo(() => new Map(tabs.map((t) => [t.id, t])), [tabs])
   const editorMap = useMemo(
@@ -1015,6 +1079,7 @@ function TabBarInner({
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
                 menuOpen={newTabMenuOpen}
+                menuOptions={createMenuOptions}
                 agentOptions={agentLaunchOptions}
                 onLaunchAgent={launchAgentFromNewTabEntry}
                 onOpenDefaultTerminal={() => {
@@ -1022,13 +1087,15 @@ function TabBarInner({
                   onNewTerminalTab()
                 }}
                 onOpenEntry={onOpenEntry}
+                onQueryChange={setCreateMenuQuery}
+                onSelectMenuOption={handleSelectCreateMenuOption}
                 onDidOpenEntry={() => setNewTabMenuOpen(false)}
               />
-              <DropdownMenuSeparator />
+              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}
-          {standardCreateMenuItems}
-          {showAgentLaunchItems ? (
+          {showStaticCreateMenuItems ? standardCreateMenuItems : null}
+          {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />
               <QuickLaunchAgentMenuItems
