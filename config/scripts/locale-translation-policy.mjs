@@ -51,6 +51,35 @@ export const NEVER_TRANSLATE_VALUES = new Set([
 
 export const LOCALE_VALUE_OVERRIDES = {
   ko: {
+    Save: '저장',
+    Close: '닫기',
+    Connect: '연결',
+    Edit: '편집',
+    Add: '추가',
+    Create: '생성',
+    Delete: '삭제',
+    Install: '설치',
+    Remove: '제거',
+    Refresh: '새로고침',
+    Reset: '재설정',
+    Enable: '활성화',
+    Disabled: '비활성',
+    Ready: '준비됨',
+    Select: '선택',
+    Clear: '지우기',
+    Back: '뒤로',
+    Reopen: '다시 열기',
+    Closed: '닫힘',
+    Agents: '에이전트',
+    agents: '에이전트',
+    orchestration: '오케스트레이션',
+    conflict: '충돌',
+    Disconnect: '연결 해제',
+    Cancel: '취소',
+    Copy: '복사',
+    Done: '완료',
+    Next: '다음',
+    Beta: '베타',
     Dismiss: '닫기',
     Optional: '선택 사항',
     Ports: '포트',
@@ -66,7 +95,9 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Not installed': '설치되지 않음',
     Checking: '확인 중',
     'Checking...': '확인 중...',
-    Connected: '연결됨'
+    Connected: '연결됨',
+    Search: '검색',
+    'Search...': '검색...'
   },
   zh: {
     Dismiss: '关闭',
@@ -89,7 +120,9 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Not installed': '未安装',
     Checking: '检查中',
     'Checking...': '检查中...',
-    Connected: '已连接'
+    Connected: '已连接',
+    Search: '搜索',
+    'Search...': '搜索...'
   },
   ja: {
     Dismiss: '閉じる',
@@ -112,7 +145,9 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Not installed': '未インストール',
     Checking: '確認中',
     'Checking...': '確認中...',
-    Connected: '接続済み'
+    Connected: '接続済み',
+    Search: '検索',
+    'Search...': '検索...'
   }
 }
 
@@ -184,7 +219,18 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /홍보/g, replacement: 'PR', whenEnIncludes: 'PR' },
     { pattern: /선형/g, replacement: 'Linear', whenEnIncludes: 'Linear' },
     { pattern: /관현악법/g, replacement: '오케스트레이션', whenEnIncludes: 'Orchestration' },
-    { pattern: /자치령 대표/g, replacement: '에이전트', whenEnIncludes: 'Agents' }
+    { pattern: /자치령 대표/g, replacement: '에이전트', whenEnIncludes: 'Agents' },
+    { pattern: /찾다\.\.\./g, replacement: '검색...', whenEnIncludes: 'Search' },
+    { pattern: /찾다/g, replacement: '검색', whenEnIncludes: 'Search' },
+    { pattern: /구하다/g, replacement: '저장', whenEnIncludes: 'Save' },
+    { pattern: /설치하다/g, replacement: '설치', whenEnIncludes: 'Install' },
+    { pattern: /장애가 있는/g, replacement: '비활성', whenEnIncludes: 'Disabled' },
+    { pattern: /준비가 된/g, replacement: '준비됨', whenEnIncludes: 'Ready' },
+    { pattern: /다시 놓기/g, replacement: '재설정', whenEnIncludes: 'Reset' },
+    { pattern: /새로 고치다/g, replacement: '새로고침', whenEnIncludes: 'Refresh' },
+    { pattern: /분명한/g, replacement: '지우기', whenEnIncludes: 'Clear' },
+    { pattern: /할 수 있게 하다/g, replacement: '활성화', whenEnIncludes: 'Enable' },
+    { pattern: /갈등/g, replacement: '충돌', whenEnIncludes: 'conflict' }
   ],
   zh: [
     { pattern: /客服人员/g, replacement: '代理', whenEnIncludes: 'agent' },
