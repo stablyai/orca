@@ -22,6 +22,7 @@ import {
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE } from '../../../../shared/constants'
 import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
+import { translate } from '@/i18n/i18n'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
   'orca-suppress-worktree-list-scroll-adjustment'
@@ -393,10 +394,10 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         onMouseDown={stopBubble}
         onPointerDown={stopBubble}
         role={hasLineage ? 'tree' : 'group'}
-        aria-label="Agents"
+        aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
         data-compact-agent-list="true"
       >
-        {shouldUseSummaryRow ? (
+        {agents.length === 0 ? null : shouldUseSummaryRow ? (
           // Why: the worktree card is already the surface. Expanded compact
           // agents stay a quiet tree; only the collapsed summary reads as a pill.
           <div
@@ -435,7 +436,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       onMouseDown={stopBubble}
       onPointerDown={stopBubble}
       role={hasLineage ? 'tree' : 'group'}
-      aria-label="Agents"
+      aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
     >
       {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
     </div>

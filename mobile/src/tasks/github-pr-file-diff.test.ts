@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  highlightMobileDiffLines,
+  resolveMobileSyntaxLanguage
+} from '../session/mobile-file-syntax'
 import { buildGitHubPrFileDiffLines, buildGitHubPrFileDiffPreview } from './github-pr-file-diff'
 
 describe('buildGitHubPrFileDiffLines', () => {
@@ -73,5 +77,21 @@ describe('buildGitHubPrFileDiffLines', () => {
     const preview = buildGitHubPrFileDiffPreview('', modified, 0)
 
     expect(preview).toEqual({ lines: [], totalLineCount: 20 })
+  })
+
+  it('supports mobile syntax highlighting for rendered PR diff rows', () => {
+    const preview = buildGitHubPrFileDiffPreview(
+      'const label: string = "Old"',
+      'const label: string = "New"'
+    )
+
+    const highlighted = highlightMobileDiffLines(
+      preview.lines,
+      resolveMobileSyntaxLanguage('src/App.tsx')
+    )
+
+    expect(highlighted[0]?.segments).toContainEqual({ text: 'const', kind: 'keyword' })
+    expect(highlighted[1]?.segments).toContainEqual({ text: '"New"', kind: 'string' })
+    expect(highlighted[1]).toMatchObject({ kind: 'added', newLineNumber: 1 })
   })
 })

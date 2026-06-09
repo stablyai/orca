@@ -5,11 +5,14 @@ import { homedir } from 'os'
 // have been stored with `~` or `~/…` paths before the client-side fix, so the
 // relay must expand them to absolute paths as a safety net.
 export function expandTilde(p: string): string {
-  if (p === '~' || p === '~/') {
+  if (p === '~' || p === '~/' || p === '~\\') {
     return homedir()
   }
   if (p.startsWith('~/')) {
     return resolve(homedir(), p.slice(2))
+  }
+  if (p.startsWith('~\\')) {
+    return `${homedir()}\\${p.slice(2)}`
   }
   return p
 }

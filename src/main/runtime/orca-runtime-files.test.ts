@@ -182,7 +182,7 @@ describe('RuntimeFileCommands', () => {
     vi.useRealTimers()
   })
 
-  it('opens source control diffs through the renderer host', async () => {
+  it('opens source control diffs through the renderer host (inheriting active runtime env)', async () => {
     const openDiff = vi.fn()
     const { commands } = createRuntimeFileCommands({ openDiff })
 
@@ -193,7 +193,7 @@ describe('RuntimeFileCommands', () => {
       '/repo/docs/readme.md',
       'docs/readme.md',
       true,
-      'runtime-1'
+      undefined
     )
     expect(result).toEqual({
       worktree: 'wt-1',
@@ -203,7 +203,7 @@ describe('RuntimeFileCommands', () => {
     })
   })
 
-  it('opens text files through the renderer host with the runtime owner', async () => {
+  it('opens text files through the renderer host (inheriting active runtime env)', async () => {
     const openFile = vi.fn()
     const { commands } = createRuntimeFileCommands({ openFile })
 
@@ -213,7 +213,7 @@ describe('RuntimeFileCommands', () => {
       'wt-1',
       '/repo/docs/readme.md',
       'docs/readme.md',
-      'runtime-1'
+      undefined
     )
     expect(result).toEqual({
       worktree: 'wt-1',

@@ -1,7 +1,8 @@
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
-import { AGENT_AWAKE_TITLE, getAgentAwakeDescription } from '../settings/agent-awake-copy'
+import { getAgentAwakeDescription, getAgentAwakeTitle } from '../settings/agent-awake-copy'
 import type { GlobalSettings } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 export function KeepAwakeCard(props: {
   settings: GlobalSettings
@@ -9,16 +10,15 @@ export function KeepAwakeCard(props: {
 }): JSX.Element {
   const { settings, updateSettings } = props
   const enabled = settings.keepComputerAwakeWhileAgentsRun
+  const title = getAgentAwakeTitle()
   return (
     <div className="rounded-xl border border-border bg-muted/20 p-4">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 shrink space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-[15px] font-semibold leading-tight text-foreground">
-              {AGENT_AWAKE_TITLE}
-            </div>
+            <div className="text-[15px] font-semibold leading-tight text-foreground">{title}</div>
             <span className="rounded-full border border-border bg-background px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              Optional
+              {translate('auto.components.feature.wall.KeepAwakeCard.209713d3c7', 'Optional')}
             </span>
           </div>
           <p className="text-[13px] leading-snug text-muted-foreground">
@@ -27,7 +27,7 @@ export function KeepAwakeCard(props: {
         </div>
         <button
           role="switch"
-          aria-label={AGENT_AWAKE_TITLE}
+          aria-label={title}
           aria-checked={enabled}
           onClick={() => updateSettings({ keepComputerAwakeWhileAgentsRun: !enabled })}
           className={cn(

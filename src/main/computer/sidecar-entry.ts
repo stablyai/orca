@@ -1,12 +1,5 @@
-/* eslint-disable max-lines -- Why: sidecar dispatch keeps one method table shared across native providers. */
-import {
-  MacOSNativeProviderClient,
-  shouldUseMacOSNativeProvider
-} from './macos-native-provider-client'
-import {
-  DesktopScriptProviderClient,
-  shouldUseDesktopScriptProvider
-} from './desktop-script-provider-client'
+import { computerProviderUnavailableMessage } from './computer-provider-unavailable-message'
+import { currentComputerProvider, shutdownComputerProviders } from './computer-provider-lifecycle'
 import { RuntimeClientError } from './runtime-client-error'
 
 type SidecarRequest = {
@@ -14,11 +7,6 @@ type SidecarRequest = {
   method: string
   params?: Record<string, unknown>
 }
-
-const nativeMacOSProvider = shouldUseMacOSNativeProvider() ? new MacOSNativeProviderClient() : null
-const desktopScriptProvider = shouldUseDesktopScriptProvider()
-  ? new DesktopScriptProviderClient()
-  : null
 
 process.once('disconnect', shutdownProviders)
 process.once('SIGTERM', () => {
@@ -50,11 +38,11 @@ async function handleMessage(message: unknown): Promise<void> {
 }
 
 async function dispatch(method: string, params: Record<string, unknown>): Promise<unknown> {
-  const provider = nativeMacOSProvider ?? desktopScriptProvider
+  const provider = currentComputerProvider()
   if (!provider) {
     throw new RuntimeClientError(
       'unsupported_capability',
-      `computer-use has no native provider for ${process.platform}`
+      computerProviderUnavailableMessage(process.platform)
     )
   }
 
@@ -133,5 +121,5 @@ function errorToResponse(error: unknown): { code: string; message: string } {
 }
 
 function shutdownProviders(): void {
-  nativeMacOSProvider?.shutdown()
+  shutdownComputerProviders()
 }

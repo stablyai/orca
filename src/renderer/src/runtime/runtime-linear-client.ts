@@ -31,6 +31,9 @@ export type LinearConnectResult = { ok: true; viewer: LinearViewer } | { ok: fal
 export type LinearCreateIssueResult =
   | { ok: true; id: string; identifier: string; title: string; url: string }
   | { ok: false; error: string }
+export type LinearCreateProjectResult =
+  | { ok: true; project: LinearProjectDetail }
+  | { ok: false; error: string }
 export type LinearMutationResult = { ok: true } | { ok: false; error: string }
 export type LinearCommentResult = { ok: true; id: string } | { ok: false; error: string }
 export type LinearReadOptions = { force?: boolean }
@@ -321,6 +324,30 @@ export async function linearListProjects(
           ...linearReadForce(options)
         })
       : { items: [] }
+}
+
+export async function linearCreateProject(
+  settings: RuntimeLinearSettings,
+  args: {
+    name: string
+    description?: string
+    content?: string
+    teamIds: string[]
+    workspaceId?: string
+    leadId?: string | null
+    memberIds?: string[]
+    labelIds?: string[]
+    priority?: number
+    startDate?: string
+    targetDate?: string
+  }
+): Promise<LinearCreateProjectResult> {
+  const target = getActiveRuntimeTarget(settings)
+  return target.kind === 'environment'
+    ? callRuntimeRpc<LinearCreateProjectResult>(target, 'linear.createProject', args, {
+        timeoutMs: 30_000
+      })
+    : window.api.linear.createProject(args)
 }
 
 export async function linearGetProject(

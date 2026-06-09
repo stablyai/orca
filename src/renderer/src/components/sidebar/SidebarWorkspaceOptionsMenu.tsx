@@ -21,6 +21,7 @@ import type { AgentActivityDisplayMode, WorktreeCardProperty } from '../../../..
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
+import { translate } from '@/i18n/i18n'
 
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
@@ -28,47 +29,138 @@ type SidebarWorkspaceOptionsMenuProps = {
 }
 
 const GROUP_BY_OPTIONS = [
-  { id: 'none', label: 'None' },
-  { id: 'workspace-status', label: 'Status' },
-  { id: 'pr-status', label: 'PR' },
-  { id: 'repo', label: 'Project' }
+  {
+    id: 'none',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.c2c7a45cda', 'None')
+  },
+  {
+    id: 'workspace-status',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.e029a2d775', 'Status')
+  },
+  {
+    id: 'pr-status',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.0f9b959b31', 'PR')
+  },
+  {
+    id: 'repo',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project')
+  }
 ] as const
 
 const CARD_LAYOUT_OPTIONS = [
-  { id: 'detailed', label: 'Detailed' },
-  { id: 'compact', label: 'Compact' }
+  {
+    id: 'detailed',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b', 'Detailed')
+  },
+  {
+    id: 'compact',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
+  }
 ] as const
 
 const PROPERTY_OPTIONS: { id: WorktreeCardProperty; label: string }[] = [
-  { id: 'issue', label: 'GitHub ticket' },
-  { id: 'linear-issue', label: 'Linear issue' },
-  { id: 'pr', label: 'PR/MR link' },
-  { id: 'comment', label: 'Notes' },
-  { id: 'ports', label: 'Ports' },
+  {
+    id: 'issue',
+    label: translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.91dfc653e8',
+      'GitHub ticket'
+    )
+  },
+  {
+    id: 'linear-issue',
+    label: translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ca4d3c522e',
+      'Linear issue'
+    )
+  },
+  {
+    id: 'pr',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b8dcc6f321', 'PR/MR link')
+  },
+  {
+    id: 'comment',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.26c71e536c', 'Notes')
+  },
+  {
+    id: 'ports',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b64d8bcca0', 'Ports')
+  },
   // Why: toggles the inline "Agent activity" list rendered below each
   // workspace card body (see WorktreeCard -> WorktreeCardAgents). Off hides
   // the list; there is no alternate surface.
-  { id: 'inline-agents', label: 'Agent activity' }
+  {
+    id: 'inline-agents',
+    label: translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.d7084e8bc8',
+      'Agent activity'
+    )
+  }
 ]
 
 const AGENT_ACTIVITY_DISPLAY_OPTIONS: { id: AgentActivityDisplayMode; label: string }[] = [
-  { id: 'compact', label: 'Compact' },
-  { id: 'full', label: 'Full list' }
+  {
+    id: 'compact',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb', 'Compact')
+  },
+  {
+    id: 'full',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2a81e07366', 'Full list')
+  }
 ]
 
 const SORT_OPTIONS = [
-  { id: 'name', label: 'Name', description: null },
+  {
+    id: 'name',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.3728165cdd', 'Name'),
+    description: null
+  },
   {
     id: 'smart',
-    label: 'Agent Activity',
-    description: 'Agents that need attention, then most recent activity.'
+    label: translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.503462f2b4',
+      'Agent Activity'
+    ),
+    description: translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.b759bb87ee',
+      'Agents that need attention, then most recent activity.'
+    )
   },
-  { id: 'recent', label: 'Recent', description: null },
-  { id: 'repo', label: 'Project', description: null },
+  {
+    id: 'recent',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent'),
+    description: null
+  },
+  {
+    id: 'repo',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2170d553cf', 'Project'),
+    description: null
+  },
   {
     id: 'manual',
-    label: 'Manual',
-    description: 'Drag workspaces to arrange them within each group.'
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7b316bdd51', 'Manual'),
+    description: translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.7153d07485',
+      'Drag workspaces to arrange them within each group.'
+    )
+  }
+] as const
+
+const PROJECT_ORDER_OPTIONS = [
+  {
+    id: 'manual',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.7b316bdd51', 'Manual'),
+    description: translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.6664282a7b',
+      'Drag projects to arrange them'
+    )
+  },
+  {
+    id: 'recent',
+    label: translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.b451c8b162', 'Recent'),
+    description: translate(
+      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.af9249c505',
+      'Most recent workspace activity'
+    )
   }
 ] as const
 
@@ -90,6 +182,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
+  const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
 
   const [open, setOpen] = useState(false)
 
@@ -119,7 +213,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
-  const cardLayout = settings?.experimentalCompactWorktreeCards ? 'compact' : 'detailed'
+  const projectOrderLabel =
+    PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+  const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
   const cardLayoutLabel =
     CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
   const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
@@ -138,8 +234,15 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               className="relative text-muted-foreground"
               aria-label={
                 hasAnyFilter
-                  ? `Workspace options (${activeFilterLabel} active)`
-                  : 'Workspace options'
+                  ? translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
+                      'Workspace options ({{value0}} active)',
+                      { value0: activeFilterLabel }
+                    )
+                  : translate(
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
+                      'Workspace options'
+                    )
               }
               data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
             >
@@ -158,7 +261,16 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {hasAnyFilter ? `Workspace options (${activeFilterLabel})` : 'Workspace options'}
+          {hasAnyFilter
+            ? translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
+                'Workspace options ({{value0}})',
+                { value0: activeFilterLabel }
+              )
+            : translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
+                'Workspace options'
+              )}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -168,7 +280,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
-        <DropdownMenuLabel>Group by</DropdownMenuLabel>
+        <DropdownMenuLabel>
+          {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.dc0bb670bc', 'Group by')}
+        </DropdownMenuLabel>
         <div className="px-2 pt-0.5 pb-1">
           <ToggleGroup
             type="single"
@@ -198,7 +312,12 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
-              <span>Sort by</span>
+              <span>
+                {translate(
+                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.7bada3b1ab',
+                  'Sort by'
+                )}
+              </span>
               <span className="text-[11px] font-medium text-muted-foreground">{sortLabel}</span>
             </span>
           </DropdownMenuSubTrigger>
@@ -238,10 +357,61 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
+        {/* Why: project order only has a visible effect when grouping by
+            project; hide it in none/status/PR modes to avoid a dead control. */}
+        {groupBy === 'repo' && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <span className="flex flex-1 items-center justify-between">
+                <span>
+                  {translate(
+                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.09faabd875',
+                    'Project order'
+                  )}
+                </span>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {projectOrderLabel}
+                </span>
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent
+              className="w-44"
+              data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+            >
+              <DropdownMenuRadioGroup
+                value={projectOrderBy}
+                onValueChange={(v) => setProjectOrderBy(v as typeof projectOrderBy)}
+              >
+                {PROJECT_ORDER_OPTIONS.map((opt) => (
+                  <Tooltip key={opt.id}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuRadioItem
+                        value={opt.id}
+                        // Keep the menu open so people can compare order modes.
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {opt.label}
+                      </DropdownMenuRadioItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={6}>
+                      {opt.description}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
-              <span>Card layout</span>
+              <span>
+                {translate(
+                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.320b675c9a',
+                  'Card layout'
+                )}
+              </span>
               <span className="text-[11px] font-medium text-muted-foreground">
                 {cardLayoutLabel}
               </span>
@@ -255,7 +425,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               value={cardLayout}
               onValueChange={(value) => {
                 void updateSettings({
-                  experimentalCompactWorktreeCards: value === 'compact'
+                  compactWorktreeCards: value === 'compact'
                 })
               }}
             >
@@ -275,9 +445,19 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
-              <span>Show properties</span>
+              <span>
+                {translate(
+                  'auto.components.sidebar.SidebarWorkspaceOptionsMenu.ba87080fb7',
+                  'Show properties'
+                )}
+              </span>
               {cardLayout === 'compact' ? (
-                <span className="text-[11px] font-medium text-muted-foreground">Hover</span>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {translate(
+                    'auto.components.sidebar.SidebarWorkspaceOptionsMenu.3d4b9c4997',
+                    'Hover'
+                  )}
+                </span>
               ) : visiblePropertyCount > 0 ? (
                 <span className="text-[11px] font-medium text-muted-foreground">
                   {visiblePropertyCount}
@@ -301,7 +481,10 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
             ))}
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
-              Agent activity layout
+              {translate(
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.95c9754653',
+                'Agent activity layout'
+              )}
             </DropdownMenuLabel>
             <DropdownMenuRadioGroup
               value={agentActivityDisplayMode}

@@ -93,6 +93,19 @@ function extractUncHost(value: string | undefined): string | null {
   return match?.[1] || null
 }
 
+function reportActiveRendererPtyForPane(
+  paneTransports: Map<number, PtyTransport>,
+  activePaneId: number | null
+): void {
+  for (const [paneId, transport] of paneTransports) {
+    const ptyId = transport.getPtyId()
+    if (!ptyId || ptyId.startsWith('remote:')) {
+      continue
+    }
+    window.api.pty.setActiveRendererPty?.(ptyId, activePaneId === paneId)
+  }
+}
+
 type UseTerminalPaneLifecycleDeps = {
   tabId: string
   worktreeId: string
@@ -295,6 +308,16 @@ export function shouldDetachPaneTransportOnUnmount(args: {
   return Boolean(
     args.worktreeTabs?.some((tab) => tab.id !== args.tabId && tab.ptyId === args.ptyId)
   )
+}
+
+export function resolveTerminalGpuAccelerationForRuntime(
+  activeRuntimeEnvironmentId: GlobalSettings['activeRuntimeEnvironmentId'] | null | undefined,
+  terminalGpuAcceleration: GlobalSettings['terminalGpuAcceleration'] | null | undefined
+): GlobalSettings['terminalGpuAcceleration'] {
+  if (activeRuntimeEnvironmentId?.trim()) {
+    return 'off'
+  }
+  return terminalGpuAcceleration ?? 'auto'
 }
 
 export function useTerminalPaneLifecycle({
@@ -930,6 +953,7 @@ export function useTerminalPaneLifecycle({
         // stay stuck on the closed pane's last title.
         const newActivePane = managerRef.current?.getActivePane()
         if (newActivePane) {
+          reportActiveRendererPtyForPane(paneTransportsRef.current, newActivePane.id)
           const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
           const activeTitle = paneTitles[newActivePane.id]
           if (activeTitle) {
@@ -943,6 +967,7 @@ export function useTerminalPaneLifecycle({
         if (shouldPersistLayout) {
           persistLayoutSnapshot()
         }
+        reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
         // Why: when the user switches focus between split panes, update the
         // tab title to the newly active pane's last-known title so the tab
         // label reflects the focused agent — not a stale title from the
@@ -975,7 +1000,7 @@ export function useTerminalPaneLifecycle({
       terminalOptions: () => {
         const currentSettings = settingsRef.current
         const terminalFontWeights = resolveTerminalFontWeights(currentSettings?.terminalFontWeight)
-        const cursorStyle = currentSettings?.terminalCursorStyle ?? 'bar'
+        const cursorStyle = currentSettings?.terminalCursorStyle ?? 'block'
         const storeState = useAppStore.getState()
         const currentTab = storeState.tabsByWorktree[worktreeId]?.find(
           (candidate) => candidate.id === tabId
@@ -1033,7 +1058,12 @@ export function useTerminalPaneLifecycle({
       // so PTYs survive navigation. Creating WebGL for those offscreen panes
       // still consumes Chromium's context budget and can blank visible panes.
       initialRenderingSuspended: !isVisibleRef.current,
-      terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
+      // Why: remote-runtime snapshots arrive after pane open; WebGL can hold an
+      // empty atlas/canvas while the server-side buffer is already populated.
+      terminalGpuAcceleration: resolveTerminalGpuAccelerationForRuntime(
+        settingsRef.current?.activeRuntimeEnvironmentId,
+        settingsRef.current?.terminalGpuAcceleration
+      ),
       debugLabel: `tab:${tabId}/wt:${worktreeId}`
     })
 
@@ -1352,8 +1382,15 @@ export function useTerminalPaneLifecycle({
   }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
 
   useEffect(() => {
-    managerRef.current?.setTerminalGpuAcceleration(settings?.terminalGpuAcceleration ?? 'auto')
-  }, [settings?.terminalGpuAcceleration, managerRef])
+    // Why: remote-runtime panes stay on DOM rendering; local panes still honor
+    // the user's GPU setting and can switch live when settings change.
+    managerRef.current?.setTerminalGpuAcceleration(
+      resolveTerminalGpuAccelerationForRuntime(
+        settings?.activeRuntimeEnvironmentId,
+        settings?.terminalGpuAcceleration
+      )
+    )
+  }, [settings?.activeRuntimeEnvironmentId, settings?.terminalGpuAcceleration, managerRef])
 
   useEffect(() => {
     const manager = managerRef.current

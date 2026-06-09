@@ -6,7 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { ModelManager } from './model-manager'
 
-const { httpsGetMock, spawnMock } = vi.hoisted(() => ({
+const { hasOpenAiSpeechApiKeyMock, httpsGetMock, spawnMock } = vi.hoisted(() => ({
+  hasOpenAiSpeechApiKeyMock: vi.fn(),
   httpsGetMock: vi.fn(),
   spawnMock: vi.fn()
 }))
@@ -26,6 +27,10 @@ vi.mock('https', async () => {
   const actual = await vi.importActual('https')
   return { ...(actual as Record<string, unknown>), get: httpsGetMock }
 })
+
+vi.mock('./openai-api-key-store', () => ({
+  hasOpenAiSpeechApiKey: hasOpenAiSpeechApiKeyMock
+}))
 
 type ModelManagerInternals = {
   verifyArchiveSha256: (archivePath: string, expectedSha256: string) => Promise<void>
@@ -48,11 +53,16 @@ type ModelManagerInternals = {
 describe('ModelManager', () => {
   beforeEach(() => {
     httpsGetMock.mockReset()
+    hasOpenAiSpeechApiKeyMock.mockReset()
+    hasOpenAiSpeechApiKeyMock.mockReturnValue(false)
     spawnMock.mockReset()
   })
 
   it('requires pinned SHA-256 hashes for every catalog archive', () => {
     for (const manifest of SPEECH_MODEL_CATALOG) {
+      if (manifest.provider !== 'local') {
+        continue
+      }
       expect(manifest.archiveSha256).toMatch(/^[a-f0-9]{64}$/)
     }
   })
@@ -88,6 +98,27 @@ describe('ModelManager', () => {
           () => false
         )
       ).rejects.toThrow(/HTTPS/)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('marks OpenAI transcription models ready only when an API key is configured', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    try {
+      const manager = new ModelManager(dir)
+
+      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
+        id: 'openai-gpt-4o-mini-transcribe',
+        status: 'not-downloaded'
+      })
+
+      hasOpenAiSpeechApiKeyMock.mockReturnValue(true)
+
+      await expect(manager.getModelState('openai-gpt-4o-mini-transcribe')).resolves.toEqual({
+        id: 'openai-gpt-4o-mini-transcribe',
+        status: 'ready'
+      })
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

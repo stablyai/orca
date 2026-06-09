@@ -3,13 +3,11 @@
 </h1>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Windows%20%7C%20Linux-blue?style=for-the-badge" alt="Supported Platforms" />
-  <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-Join-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" /></a>
-  <a href="https://x.com/orca_build"><img src="https://img.shields.io/badge/%E2%80%8E-Follow_@orca__build-000000?style=for-the-badge&logo=x&logoColor=white" alt="Follow on X" /></a>
+  <a href="https://github.com/stablyai/orca/stargazers"><img src="https://badgen.net/github/stars/stablyai/orca?label=%E2%98%85" alt="GitHub stars" /></a>
 </p>
 
 <p align="center">
-  <a href="README.md">English</a> · <a href="docs/readme/README.zh-CN.md">中文</a> · <a href="docs/readme/README.ja.md">日本語</a> · <a href="docs/readme/README.ko.md">한국어</a> · <a href="docs/readme/README.es.md">Español</a>
+  <a href="README.md">English</a> · <a href="docs/readme/README.es.md">Español</a> · <a href="docs/readme/README.zh-CN.md">中文</a> · <a href="docs/readme/README.ja.md">日本語</a> · <a href="docs/readme/README.ko.md">한국어</a>
 </p>
 
 <p align="center">
@@ -22,7 +20,15 @@
   <a href="#install"><strong>Download 🐋</strong></a>
 </p>
 
-![Orca worktree IDE demo showing Claude Code, Codex, and OpenCode running in parallel across isolated git worktrees](docs/assets/file-drag.gif)
+<p align="center">
+  <img src="https://badgen.net/github/release/stablyai/orca/stable" alt="Latest stable release" />
+  <img src="https://badgen.net/github/license/stablyai/orca" alt="License" />
+  <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="Supported platforms: macOS, Windows, and Linux" />
+</p>
+
+<p align="center">
+  <img src="docs/assets/readme-feature-showcase.gif" alt="Orca feature showcase cycling through parallel worktrees, terminal splits, design mode, GitHub and Linear workflows, CLI agents, and SSH worktrees" width="960" />
+</p>
 
 ## Supported Agents
 
@@ -63,13 +69,25 @@ Orca supports any CLI agent (_not just this list_).
 
 ## Features
 
-- **No login required** — Bring your own Claude Code, OpenClaude, Codex, Grok, or Antigravity subscription.
-- **Worktree-native** — Every feature gets its own worktree. No stashing, no branch juggling. Spin up and switch instantly.
-- **Multi-agent terminals** — Run multiple AI agents side-by-side in tabs and panes. See which ones are active at a glance.
-- **Built-in source control** — Review AI-generated diffs, make quick edits, and commit without leaving Orca.
-- **GitHub integration** — PRs, issues, and Actions checks linked to each worktree automatically.
-- **SSH support** — Connect to remote machines and run agents on them directly from Orca.
-- **Notifications** — Know when an agent finishes or needs attention. Mark threads unread to come back later.
+**Run agents in parallel**
+
+- **Bring your own subscription** — Use Claude Code, OpenClaude, Codex, Grok, Antigravity, OpenCode, or any other CLI agent without an Orca login.
+- **Worktree-native tasks** — Give each task its own worktree so agents can work side-by-side without stashing or branch juggling.
+- **Multi-agent terminals** — Run agents in tabs and split panes, then see active, waiting, and finished sessions at a glance.
+
+**Review and ship**
+
+- **Agent-ready browser** — Open local apps, inspect pages, annotate UI, and pass precise browser context back to agents.
+- **Design Mode** — Iterate on frontend changes with an embedded browser built for visual review and quick fixes.
+- **Source control built in** — Review AI-generated diffs, make quick edits, and commit without leaving Orca.
+- **GitHub workflow links** — Keep PRs, issues, and Actions checks connected to the worktree doing the work.
+
+**Work anywhere**
+
+- **SSH support** — Connect to remote machines and run agents there directly from Orca.
+- **Mobile companion** — Monitor and steer agents from your phone, with emulator-friendly mobile workflows.
+- **Computer Use** — Let agents operate desktop apps and visible UI when a workflow needs real interaction.
+- **Notifications and unread state** — Know when an agent finishes or needs attention, then mark threads unread to come back later.
 
 ---
 

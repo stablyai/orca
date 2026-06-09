@@ -1,5 +1,5 @@
 import type { GitHubWorkItem } from '../../../shared/types'
-import { getWorkspaceIntentName } from '../../../shared/workspace-name'
+import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from './new-workspace'
 import { parseGitHubIssueOrPRLink } from './github-links'
 
@@ -179,15 +179,11 @@ export function getSmartGitHubSubmitLookupCacheSizeForTests(): number {
 }
 
 export function getSmartGitHubSubmitResolution(
-  item: Pick<GitHubWorkItem, 'number' | 'title' | 'type' | 'url'>,
-  options: { sourceText?: string } = {}
+  item: Pick<GitHubWorkItem, 'number' | 'title' | 'type' | 'url'>
 ): SmartGitHubSubmitResolution {
   const fallbackName = `${item.type}-${item.number}`
-  const intentName = getWorkspaceIntentName({
-    sourceText: options.sourceText,
-    workItem: item
-  })
-  const workspaceName = intentName?.seedName || fallbackName
+  const titleName = getLinkedWorkItemWorkspaceName(item)
+  const workspaceName = titleName?.seedName || fallbackName
   const linkedWorkItem: LinkedWorkItemSummary = {
     type: item.type,
     number: item.number,
@@ -197,7 +193,7 @@ export function getSmartGitHubSubmitResolution(
 
   return {
     workspaceName,
-    displayName: intentName?.displayName ?? fallbackName,
+    displayName: titleName?.displayName ?? fallbackName,
     linkedWorkItem,
     linkedIssueNumber: item.type === 'issue' ? item.number : null,
     linkedPR: item.type === 'pr' ? item.number : null

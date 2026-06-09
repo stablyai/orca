@@ -23,6 +23,7 @@ export type TerminalSnapshot = {
   cols: number
   rows: number
   scrollbackLines: number
+  lastTitle?: string
 }
 
 export type TerminalModes = {

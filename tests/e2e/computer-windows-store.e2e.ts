@@ -1,12 +1,19 @@
 import { describe, expect, test } from 'vitest'
 import type { ComputerListAppsResult, ComputerSnapshotResult } from '../../src/shared/runtime-types'
-import { findRoleIndex, parseJsonOutput, runOrcaCli } from './helpers/computer-driver'
+import {
+  ensureOrcaRuntimeLaunched,
+  findRoleIndex,
+  parseJsonOutput,
+  runOrcaCli,
+  stopOrcaRuntime
+} from './helpers/computer-driver'
 
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Store apps)', () => {
   test('Store app windows are discoverable by title and clickable', async () => {
+    await ensureOrcaRuntimeLaunched()
     await launchCalculator()
     try {
       const apps = parseJsonOutput<{ result: ComputerListAppsResult }>(
@@ -30,13 +37,9 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Store apps)'
           ])
         ).stdout
       )
-      const one = findRoleIndex(state.result.snapshot.treeText, 'button One')
-      const plus = findRoleIndex(state.result.snapshot.treeText, 'button Plus')
-      const two = findRoleIndex(state.result.snapshot.treeText, 'button Two')
-      const equals = findRoleIndex(state.result.snapshot.treeText, 'button Equals')
-      expect([one, plus, two, equals].every((index) => index >= 0)).toBe(true)
-
-      for (const index of [one, plus, two, equals]) {
+      for (const buttonName of ['One', 'Plus', 'Two', 'Equals']) {
+        const index = findRoleIndex(state.result.snapshot.treeText, `button ${buttonName}`)
+        expect(index).toBeGreaterThanOrEqual(0)
         state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
           (
             await runOrcaCli([
@@ -55,6 +58,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Store apps)'
       expect(state.result.snapshot.treeText).toMatch(/Display is 3\b/)
     } finally {
       await killCalculator()
+      await stopOrcaRuntime()
     }
   })
 })

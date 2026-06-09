@@ -35,6 +35,7 @@ import {
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
+import { translate } from '@/i18n/i18n'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -123,6 +124,7 @@ function FileExplorerInner(): React.JSX.Element {
     setSelectedPaths,
     resetSelection,
     selectRowWithModifiers,
+    moveSelection,
     preserveSelectionForContextMenu,
     copyPathsForNode
   } = useFileExplorerSelection(rowProjection, isMac)
@@ -322,17 +324,6 @@ function FileExplorerInner(): React.JSX.Element {
     () => rowProjection.getRowsByPaths(selectedPaths),
     [rowProjection, selectedPaths]
   )
-  useFileExplorerKeys({
-    containerRef: explorerShellRef,
-    rowProjection,
-    inlineInput,
-    selectedPaths,
-    selectedNode,
-    startRename,
-    requestDelete,
-    requestDeleteAll
-  })
-
   const { handleClick, handleDoubleClick, handleWheelCapture } = useFileExplorerHandlers({
     activeWorktreeId,
     openFile,
@@ -343,6 +334,38 @@ function FileExplorerInner(): React.JSX.Element {
     markPathAsDirectory,
     setSelectedPath: setSingleSelectedPath,
     scrollRef
+  })
+
+  // Why: pass a stable activator so arrow-key navigation can hand the same
+  // activate-toggles-folder / open-file-preview behavior the click handler
+  // already uses, without the keyboard path re-implementing symlink handling.
+  const activateNode = useCallback(
+    (node: TreeNode) => {
+      void handleClick(node)
+    },
+    [handleClick]
+  )
+  const scrollToIndex = useCallback(
+    (index: number) => {
+      virtualizer.scrollToIndex(index, { align: 'auto' })
+    },
+    [virtualizer]
+  )
+
+  useFileExplorerKeys({
+    containerRef: explorerShellRef,
+    rowProjection,
+    inlineInput,
+    selectedPaths,
+    selectedNode,
+    activateNode,
+    moveSelection,
+    toggleDir,
+    startRename,
+    requestDelete,
+    requestDeleteAll,
+    scrollToIndex,
+    activeWorktreeId
   })
 
   // Why: context-menu Delete should respect the multi-selection — if the
@@ -408,7 +431,10 @@ function FileExplorerInner(): React.JSX.Element {
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        Select a workspace to browse files
+        {translate(
+          'auto.components.right.sidebar.FileExplorer.79b1537dd3',
+          'Select a workspace to browse files'
+        )}
       </div>
     )
   }
@@ -511,6 +537,7 @@ function FileExplorerInner(): React.JSX.Element {
               activeFileId={activeFileId}
               flashingPath={flashingPath}
               deleteShortcutLabel={deleteShortcutLabel}
+              connectionId={activeRepo?.connectionId ?? null}
               onClick={handleRowClick}
               onDoubleClick={handleDoubleClick}
               onContextMenuSelect={preserveSelectionForContextMenu}

@@ -1,6 +1,22 @@
+function normalizeApostrophes(input: string): string {
+  return input.replace(/[‘’]/g, "'")
+}
+
+// Why: contractions and possessives should not become stray `t` / `s` tokens
+// in display names or extra hyphen segments in branch-safe workspace seeds.
+function removeIntraWordApostrophes(input: string): string {
+  return normalizeApostrophes(input).replace(/([\p{L}\p{N}])'(?=[\p{L}\p{N}])/gu, '$1')
+}
+
+function stripDanglingDisplayApostrophes(input: string): string {
+  return normalizeApostrophes(input)
+    .replace(/(^|[^\p{L}\p{N}])'(?=[\p{L}\p{N}])/gu, '$1')
+    .replace(/([\p{L}\p{N}])'(?=$|[^\p{L}\p{N}])/gu, '$1')
+}
+
 export function slugifyForWorkspaceName(input: string): string {
   return (
-    input
+    removeIntraWordApostrophes(input)
       .trim()
       .toLowerCase()
       .replace(/[\\/]+/g, '-')
@@ -17,14 +33,7 @@ export function slugifyForWorkspaceName(input: string): string {
 }
 
 export function getLinkedWorkItemSuggestedName(item: { title: string }): string {
-  const withoutLeadingNumber = item.title
-    .trim()
-    .replace(/^(?:issue|pr|pull request)\s*#?\d+\s*[:-]\s*/i, '')
-    .replace(/^#\d+\s*[:-]\s*/, '')
-    .replace(/\(#\d+\)/gi, '')
-    .replace(/\b#\d+\b/g, '')
-    .trim()
-  const seed = withoutLeadingNumber || item.title.trim()
+  const seed = getLinkedWorkItemTitleSubject(item) || item.title.trim()
   return slugifyForWorkspaceName(seed)
 }
 
@@ -40,6 +49,16 @@ export type WorkspaceIntentWorkItem = {
 export type WorkspaceIntentName = {
   displayName: string
   seedName: string
+}
+
+function getLinkedWorkItemTitleSubject(item: { title: string }): string {
+  return item.title
+    .trim()
+    .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
+    .replace(/^#\d+\s*[:-]\s*/, '')
+    .replace(/\([#!]?\d+\)/g, '')
+    .replace(/\b#\d+\b/g, '')
+    .trim()
 }
 
 // Why: generated workspace seeds are hyphenated; `issue-123-fix-title`
@@ -84,17 +103,26 @@ function detectIntentAction(sourceText: string): string | null {
 }
 
 function titleCaseWord(word: string): string {
-  const lower = word.toLowerCase()
-  if (/^[A-Z]{2,}\d*$/.test(word) || /^[A-Z]+-\d+$/i.test(word)) {
-    return word.toUpperCase()
+  const normalized = normalizeApostrophes(word)
+  if (/^[A-Z]{2,}\d*$/.test(normalized) || /^[A-Z]+-\d+$/i.test(normalized)) {
+    return normalized.toUpperCase()
+  }
+  const acronymPossessive = normalized.match(/^([A-Z]{2,}\d*)'([sS])$/)
+  if (acronymPossessive) {
+    return `${acronymPossessive[1].toUpperCase()}'s`
+  }
+  const lower = normalized.toLowerCase()
+  const apostropheParts = lower.split("'")
+  if (apostropheParts.length === 2 && apostropheParts[0].length === 1 && apostropheParts[1]) {
+    return `${apostropheParts[0].toUpperCase()}'${apostropheParts[1]}`
   }
   return lower.charAt(0).toUpperCase() + lower.slice(1)
 }
 
 function compactWords(input: string, maxWords = 4): string {
-  return input
+  return stripDanglingDisplayApostrophes(input)
     .replace(/https?:\/\/\S+/gi, ' ')
-    .replace(/[()[\]{}"']/g, ' ')
+    .replace(/[()[\]{}"]/g, ' ')
     .replace(/[#/\\:_-]+/g, ' ')
     .split(/\s+/)
     .map((word) => word.trim())
@@ -142,6 +170,24 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
     return `MR ${item.number}`
   }
   return `Issue ${item.number}`
+}
+
+export function getLinkedWorkItemWorkspaceName(
+  item: WorkspaceIntentWorkItem
+): WorkspaceIntentName | null {
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
+  if (identifier) {
+    subject = subject
+      .replace(new RegExp(`^${escapeRegExp(identifier)}\\s*[:-]?\\s*`, 'i'), '')
+      .trim()
+  }
+  const displayName = [identifier, subject].filter(Boolean).join(' ') || workItemIdentity(item)
+  const seedName = slugifyForWorkspaceName(displayName)
+  if (!seedName) {
+    return null
+  }
+  return { displayName, seedName }
 }
 
 function defaultActionForWorkItem(item: WorkspaceIntentWorkItem): string | null {

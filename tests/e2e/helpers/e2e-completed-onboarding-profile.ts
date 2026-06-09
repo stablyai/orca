@@ -1,7 +1,7 @@
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../src/shared/constants'
 import { FEATURE_INTERACTION_IDS } from '../../../src/shared/feature-interactions'
+import { FEATURE_TIP_IDS } from '../../../src/shared/feature-tips'
 
-const SEEN_FIRST_RUN_FEATURE_TIP_IDS = ['voice-dictation', 'orca-cli'] as const
 const SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS = [
   'workspace-board',
   'browser',
@@ -29,7 +29,7 @@ export function getE2ECompletedOnboardingProfile() {
     ui: {
       // Why: completed-onboarding E2E profiles should not be interrupted by
       // first-run education modals that cover the UI under test.
-      featureTipsSeenIds: [...SEEN_FIRST_RUN_FEATURE_TIP_IDS],
+      featureTipsSeenIds: [...FEATURE_TIP_IDS],
       featureInteractions: Object.fromEntries(
         FEATURE_INTERACTION_IDS.map((id) => [
           id,

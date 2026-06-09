@@ -48,6 +48,7 @@ describe('ChecksPanelReviewHeader', () => {
 
     expect(markup).toContain('Open on GitHub')
     expect(markup).toContain('#2964')
+    expect(markup).toContain('underline decoration-border underline-offset-2')
     expect(markup).toContain('More PR actions')
     expect(markup).toContain('unlink PR')
     expect(markup).toContain('Link another PR')

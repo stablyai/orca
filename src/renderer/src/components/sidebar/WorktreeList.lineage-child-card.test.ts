@@ -518,7 +518,7 @@ describe('WorktreeList lineage child card renderer', () => {
     setLineageFixtureState()
     const markup = await renderWorktreeListMarkup()
 
-    expect(markup).toContain('<div style="padding-left:18px"><div id="worktree-list-option-child"')
+    expect(markup).toContain('<div style="padding-left:14px"><div id="worktree-list-option-child"')
   })
 
   it('shows deleting feedback on nested lineage child cards', async () => {

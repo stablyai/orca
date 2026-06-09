@@ -2,7 +2,7 @@
    preflight validation, and lifecycle guards that must stay in one execution path. */
 import * as pty from 'node-pty'
 import { statSync } from 'fs'
-import { win32 as pathWin32 } from 'path'
+import { delimiter, win32 as pathWin32 } from 'path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
 import {
@@ -72,6 +72,21 @@ function removeUnspecifiedPaneIdentityEnv(
       delete env[key]
     }
   }
+}
+
+function promoteAgentTeamsShimPath(
+  env: Record<string, string>,
+  requestedPath: string | undefined
+): void {
+  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
+    return
+  }
+  const shimDir = requestedPath.split(delimiter)[0]
+  if (!shimDir) {
+    return
+  }
+  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
 }
 
 function removeInheritedDevAgentHookEndpoint(
@@ -248,6 +263,9 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   for (const key of opts.envToDelete ?? []) {
     delete env[key]
   }
+  if (opts.env?.TERM) {
+    env.TERM = opts.env.TERM
+  }
   // Why: the daemon is forked from Electron and can inherit the pane identity
   // of the terminal that launched `pn dev`; each PTY must opt into its own.
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
@@ -377,6 +395,14 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       addOrcaWslInteropEnv(env)
     }
   } else {
+    // Why: relay-side launch modes can ask for host defaults to stay scrubbed
+    // even after environment normalization above.
+    for (const key of opts.envToDelete ?? []) {
+      delete env[key]
+    }
+    if (opts.env?.TERM) {
+      env.TERM = opts.env.TERM
+    }
     // Why: any Orca-injected overlay env that user rc files can clobber
     // needs the wrapper so the post-rc restore line runs.
     const shellLaunch = opts.command
@@ -385,7 +411,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
           env.ORCA_OPENCODE_CONFIG_DIR ||
           env.ORCA_PI_CODING_AGENT_DIR ||
           env.ORCA_OMP_CODING_AGENT_DIR ||
-          env.ORCA_CODEX_HOME
+          env.ORCA_CODEX_HOME ||
+          env.ORCA_AGENT_TEAMS_SHIM_DIR
         ? getAttributionShellLaunchConfig(shellPath)
         : null
     if (shellLaunch) {
@@ -393,6 +420,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
     shellArgs = shellLaunch?.args ?? ['-l']
   }
+  promoteAgentTeamsShimPath(env, opts.env?.PATH)
 
   // Why: asar packaging can strip the +x bit from node-pty's spawn-helper
   // binary. The main process fixes this via LocalPtyProvider, but the daemon
@@ -407,7 +435,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let proc: pty.IPty
   try {
     proc = pty.spawn(shellPath, shellArgs, {
-      name: 'xterm-256color',
+      name: env.TERM ?? 'xterm-256color',
       cols: size.cols,
       rows: size.rows,
       cwd: spawnCwd,

@@ -20,6 +20,7 @@ import type {
   UpdateStatus,
   WorkspaceStatusDefinition,
   AgentActivityDisplayMode,
+  ProjectOrderBy,
   WorktreeCardProperty
 } from '../../../../shared/types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
@@ -57,6 +58,10 @@ import {
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
+  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  normalizeBrowserPageZoomLevel
+} from '../../../../shared/browser-page-zoom'
+import {
   WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -87,6 +92,7 @@ import {
 } from '../../lib/running-agent-targets'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { translate } from '@/i18n/i18n'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -232,6 +238,9 @@ function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarI
   }
   return out as StatusBarItem[]
 }
+
+const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
+const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 
 function normalizePersistedRightSidebarTab(
   tab: PersistedUIState['rightSidebarTab'] | unknown
@@ -718,10 +727,19 @@ export type UISlice = {
   dismissSetupScriptPrompt: (repoId: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
+  setupGuideBrowserMilestoneMigrated: boolean
+  setupGuideBrowserMilestoneLegacyComplete: boolean
+  markSetupGuideBrowserMilestoneMigrated: (legacyComplete: boolean) => void
+  browserImportHintHidden: boolean
+  setBrowserImportHintHidden: (hidden: boolean) => void
+  usageEmptyStateDismissed: boolean
+  dismissUsageEmptyState: () => void
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   setGroupBy: (g: UISlice['groupBy']) => void
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
   setSortBy: (s: UISlice['sortBy']) => void
+  projectOrderBy: ProjectOrderBy
+  setProjectOrderBy: (p: ProjectOrderBy) => void
   showActiveOnly: boolean
   setShowActiveOnly: (v: boolean) => void
   showSleepingWorkspaces: boolean
@@ -800,6 +818,10 @@ export type UISlice = {
   // rich content (title/media/description) during downloading, error, and downloaded
   // states. Cleared on idle/checking/not-available to prevent stale leakage.
   updateChangelog: ChangelogData | null
+  // Why: UpdateCard is lazy-loaded, so it may miss the transient
+  // checking/userInitiated status. Keep manual-check intent in the store until
+  // the resulting available/error/not-available state can consume it.
+  updateUserInitiatedCycle: boolean
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
@@ -816,6 +838,8 @@ export type UISlice = {
   setBrowserDefaultUrl: (url: string | null) => void
   browserDefaultSearchEngine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
   setBrowserDefaultSearchEngine: (engine: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null) => void
+  browserDefaultZoomLevel: number
+  setBrowserDefaultZoomLevel: (level: number) => void
   browserKagiSessionLink: string | null
   setBrowserKagiSessionLink: (link: string | null) => void
 }
@@ -921,7 +945,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           : s
       )
       const { toast } = await import('sonner')
-      toast.error(`Couldn't send to ${label}`, { description: message })
+      toast.error(
+        translate('auto.store.slices.ui.53883b7bc3', "Couldn't send to {{value0}}", {
+          value0: label
+        }),
+        { description: message }
+      )
       return false
     }
 
@@ -932,7 +961,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       launch_source: mode.launchSource,
       request_kind: 'followup'
     })
-    toast.success(`Sent to ${label}`)
+    toast.success(
+      translate('auto.store.slices.ui.66e3bd7ce6', 'Sent to {{value0}}', { value0: label })
+    )
     get().closeAgentSendPopoverTargetMode(mode.id, mode.instanceId)
     return true
   },
@@ -1438,15 +1469,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (!s.activeContextualTourId) {
         return s
       }
+      const tour = getContextualTour(s.activeContextualTourId)
       const nextStepIndex = getNextVisibleContextualTourStepIndex({
-        tour: getContextualTour(s.activeContextualTourId),
+        tour,
         currentStepIndex: s.activeContextualTourStepIndex,
         targetExists: hasContextualTourTarget
       })
-      if (nextStepIndex === null) {
-        return s
+      if (nextStepIndex !== null) {
+        return { activeContextualTourStepIndex: nextStepIndex }
       }
-      return { activeContextualTourStepIndex: nextStepIndex }
+      // Why: browser step 3's target lives in a closed menu until that step is active.
+      if (
+        s.activeContextualTourId === 'browser' &&
+        s.activeContextualTourStepIndex + 1 < tour.steps.length
+      ) {
+        return { activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1 }
+      }
+      return s
     }),
   regressContextualTour: () =>
     set((s) => {
@@ -1614,6 +1653,41 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ setupGuideSidebarDismissed: dismissed }).catch(console.error)
       return { setupGuideSidebarDismissed: dismissed }
     }),
+  setupGuideBrowserMilestoneMigrated: true,
+  setupGuideBrowserMilestoneLegacyComplete: false,
+  markSetupGuideBrowserMilestoneMigrated: (legacyComplete) =>
+    set((s) => {
+      if (
+        s.setupGuideBrowserMilestoneMigrated &&
+        s.setupGuideBrowserMilestoneLegacyComplete === legacyComplete
+      ) {
+        return s
+      }
+      const updates = {
+        setupGuideBrowserMilestoneMigrated: true,
+        setupGuideBrowserMilestoneLegacyComplete: legacyComplete
+      }
+      window.api.ui.set(updates).catch(console.error)
+      return updates
+    }),
+  browserImportHintHidden: false,
+  setBrowserImportHintHidden: (hidden) =>
+    set((s) => {
+      if (s.browserImportHintHidden === hidden) {
+        return s
+      }
+      window.api.ui.set({ browserImportHintHidden: hidden }).catch(console.error)
+      return { browserImportHintHidden: hidden }
+    }),
+  usageEmptyStateDismissed: false,
+  dismissUsageEmptyState: () =>
+    set((s) => {
+      if (s.usageEmptyStateDismissed) {
+        return s
+      }
+      window.api.ui.set({ usageEmptyStateDismissed: true }).catch(console.error)
+      return { usageEmptyStateDismissed: true }
+    }),
 
   groupBy: 'repo',
   // Why: group keys are mode-specific (e.g. repo id vs PR status), so
@@ -1626,6 +1700,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   sortBy: 'recent',
   setSortBy: (s) => set({ sortBy: s }),
+
+  // Why: like setSortBy, this is a bare set — it persists only via the
+  // debounced window.api.ui.set writer in App.tsx, not on its own.
+  projectOrderBy: 'manual',
+  setProjectOrderBy: (p) => set({ projectOrderBy: p }),
 
   showActiveOnly: false,
   setShowActiveOnly: (v) => set({ showActiveOnly: v }),
@@ -1850,13 +1929,24 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       //     'recent' sort keep it across restarts.
       const sortBy = ui.sortBy
       const migratedStatusBarItems = migrateStatusBarItems(ui.statusBarItems)
-      const statusBarItems =
+      const statusBarItemsWithPorts =
         ui._portsStatusBarDefaultAdded || migratedStatusBarItems.includes('ports')
           ? migratedStatusBarItems
-          : [...migratedStatusBarItems, 'ports' as const]
-      if (!ui._portsStatusBarDefaultAdded && typeof window !== 'undefined') {
+          : [...migratedStatusBarItems, DEFAULT_ON_PORTS_STATUS_BAR_ITEM]
+      const statusBarItems =
+        ui._kimiStatusBarDefaultAdded || statusBarItemsWithPorts.includes('kimi')
+          ? statusBarItemsWithPorts
+          : [...statusBarItemsWithPorts, DEFAULT_ON_KIMI_STATUS_BAR_ITEM]
+      if (
+        (!ui._portsStatusBarDefaultAdded || !ui._kimiStatusBarDefaultAdded) &&
+        typeof window !== 'undefined'
+      ) {
         window.api.ui
-          .set({ statusBarItems, _portsStatusBarDefaultAdded: true })
+          .set({
+            statusBarItems,
+            _portsStatusBarDefaultAdded: true,
+            _kimiStatusBarDefaultAdded: true
+          })
           .catch(console.error)
       }
       return {
@@ -1878,6 +1968,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         rightSidebarTab: normalizePersistedRightSidebarTab(ui.rightSidebarTab),
         groupBy: (ui.groupBy as UISlice['groupBy'] | 'parent') === 'parent' ? 'repo' : ui.groupBy,
         sortBy,
+        // Why: main-process getUI() already normalized this to a valid value
+        // (defaulting to 'manual'); read it through without migrating sortBy.
+        projectOrderBy: ui.projectOrderBy,
         // Why: Active-only was retired. Force the old persisted flag off so an
         // old profile cannot invisibly keep narrowing the workspace list.
         showActiveOnly: false,
@@ -1924,6 +2017,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
+        browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
@@ -1942,6 +2036,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           validRepoIds
         ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
+        setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
+        setupGuideBrowserMilestoneLegacyComplete:
+          ui.setupGuideBrowserMilestoneLegacyComplete === true,
+        browserImportHintHidden: ui.browserImportHintHidden === true,
+        // Why: default false when undefined so existing users still see the CTA;
+        // only an explicit dismissal persists true.
+        usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
         // Why: restore visited-row acks alongside the persisted hook entries
         // they pair with. Stale acks for paneKeys whose tab/PTY no longer
         // exists are inert (no row references them); a paneKey reuse stamps a
@@ -1963,9 +2064,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setUpdateStatus: (status) => {
     const prevState = get().updateStatus.state
     const update: Partial<
-      Pick<UISlice, 'updateStatus' | 'updateChangelog' | 'updateCardCollapsed'>
+      Pick<
+        UISlice,
+        'updateStatus' | 'updateChangelog' | 'updateCardCollapsed' | 'updateUserInitiatedCycle'
+      >
     > = {
       updateStatus: status
+    }
+    if (status.state === 'checking') {
+      update.updateUserInitiatedCycle = status.userInitiated === true
+    } else if (status.state === 'idle') {
+      update.updateUserInitiatedCycle = false
     }
     if (status.state === 'available') {
       // Why: cache changelog from each 'available' payload so the card retains
@@ -1992,6 +2101,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set(update)
   },
   updateChangelog: null,
+  updateUserInitiatedCycle: false,
   dismissedUpdateVersion: null,
   clearDismissedUpdateVersion: () => {
     set({ dismissedUpdateVersion: null })
@@ -2014,7 +2124,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (activeNudgeId) {
         void window.api.updater.dismissNudge().catch(console.error)
       }
-      return { dismissedUpdateVersion }
+      return { dismissedUpdateVersion, updateUserInitiatedCycle: false }
     }),
   updateCardCollapsed: false,
   setUpdateCardCollapsed: (collapsed) => set({ updateCardCollapsed: collapsed }),
@@ -2034,6 +2144,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setBrowserDefaultSearchEngine: (engine) => {
     void window.api.ui.set({ browserDefaultSearchEngine: engine }).catch(console.error)
     set({ browserDefaultSearchEngine: engine })
+  },
+  browserDefaultZoomLevel: DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  setBrowserDefaultZoomLevel: (level) => {
+    const normalized = normalizeBrowserPageZoomLevel(level)
+    void window.api.ui.set({ browserDefaultZoomLevel: normalized }).catch(console.error)
+    set({ browserDefaultZoomLevel: normalized })
   },
   browserKagiSessionLink: null,
   setBrowserKagiSessionLink: (link) => {

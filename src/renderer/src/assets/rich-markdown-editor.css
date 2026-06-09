@@ -25,9 +25,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 6px 14px;
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 72%, transparent);
   background: color-mix(in srgb, var(--background) 84%, transparent);
+}
+
+/* Why: the TOC header uses the same 40px chrome row; swap its border for an inset shadow so both dividers align. */
+.rich-markdown-editor-layout:has(.markdown-toc-panel) .markdown-toc-header {
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--border) 72%, transparent);
 }
 
 .rich-markdown-toolbar-button {
@@ -123,7 +132,7 @@
 }
 
 .rich-markdown-editor-shell.has-rich-markdown-review-notes .rich-markdown-editor {
-  padding-right: min(360px, 34%);
+  padding-right: clamp(252px, 28%, 308px);
 }
 
 .rich-markdown-review-rail-actions {
@@ -178,7 +187,8 @@
   position: absolute;
   top: 0;
   right: 16px;
-  width: min(300px, 30%);
+  /* Why: the card action pill needs the same minimum rail width as preview mode. */
+  width: clamp(220px, 24%, 250px);
   pointer-events: none;
   z-index: 30;
 }
@@ -191,8 +201,8 @@
 }
 
 .rich-markdown-review-note-card.is-active > .orca-diff-comment-card {
-  border-color: color-mix(in srgb, var(--foreground) 32%, transparent);
-  background: color-mix(in srgb, var(--foreground) 8%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+  background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
 }
 
 .rich-markdown-review-note-card.is-attention > .orca-diff-comment-card {

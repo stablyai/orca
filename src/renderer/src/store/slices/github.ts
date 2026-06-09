@@ -19,7 +19,8 @@ import type {
   PRComment,
   Repo,
   Worktree,
-  GitHubWorkItem
+  GitHubWorkItem,
+  ListWorkItemsResult
 } from '../../../../shared/types'
 import type {
   GetProjectViewTableArgs,
@@ -42,6 +43,7 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-revi
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
+import { translate } from '@/i18n/i18n'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: declared separately from CacheEntry<T> (not a generified E parameter)
@@ -105,6 +107,91 @@ function getRuntimeRepoTarget(
   }
   const repo = state.repos.find((candidate) => candidate.path === repoPath)
   return repo ? { target, repo } : null
+}
+
+type GitHubWorkItemRequestContext = {
+  repoId: string
+  repoPath: string
+  target: GitHubWorkItemRequestTarget
+}
+
+type GitHubWorkItemRequestTarget =
+  | { kind: 'environment'; environmentId: string; runtimeRepoId: string }
+  | { kind: 'local' }
+
+type GitHubWorkItemsListArgs = {
+  limit: number
+  query?: string
+  before?: string
+  noCache?: true
+}
+
+function activeRuntimeEnvironmentId(settings: AppState['settings']): string | null {
+  return settings?.activeRuntimeEnvironmentId ?? null
+}
+
+function getGitHubWorkItemRequestContext(
+  state: AppState,
+  settings: AppState['settings'],
+  repoId: string,
+  repoPath: string
+): GitHubWorkItemRequestContext {
+  const runtimeRepo = getRuntimeRepoTarget(state, repoPath, settings)
+  return {
+    repoId,
+    repoPath,
+    target: runtimeRepo
+      ? {
+          kind: 'environment',
+          environmentId: runtimeRepo.target.environmentId,
+          runtimeRepoId: runtimeRepo.repo.id
+        }
+      : { kind: 'local' }
+  }
+}
+
+function listGitHubWorkItemsForRepo(
+  context: GitHubWorkItemRequestContext,
+  args: GitHubWorkItemsListArgs
+): Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>> {
+  if (context.target.kind === 'environment') {
+    return callRuntimeRpc<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>(
+      { kind: 'environment', environmentId: context.target.environmentId },
+      'github.listWorkItems',
+      {
+        repo: context.target.runtimeRepoId,
+        ...args
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.listWorkItems({
+    repoPath: context.repoPath,
+    repoId: context.repoId,
+    ...args
+  })
+}
+
+function countGitHubWorkItemsForRepo(
+  context: GitHubWorkItemRequestContext,
+  args: { query?: string }
+): Promise<number> {
+  if (context.target.kind === 'environment') {
+    return callRuntimeRpc<number>(
+      { kind: 'environment', environmentId: context.target.environmentId },
+      'github.countWorkItems',
+      {
+        repo: context.target.runtimeRepoId,
+        ...args
+      },
+      { timeoutMs: 30_000 }
+    )
+  }
+  return window.api.gh.countWorkItems({
+    repoPath: context.repoPath,
+    repoId: context.repoId,
+    ...args
+  })
 }
 
 export function projectViewCacheKey(
@@ -412,6 +499,15 @@ function releaseWorkItemSlot(): void {
 
 export function workItemsCacheKey(repoId: string, limit: number, query: string): string {
   return `${repoId}::${limit}::${query}`
+}
+
+function workItemsInflightRequestKey(
+  cacheKey: string,
+  target: GitHubWorkItemRequestTarget
+): string {
+  const targetPart =
+    target.kind === 'environment' ? `env:${target.environmentId}:${target.runtimeRepoId}` : 'local'
+  return `${cacheKey}::${targetPart}`
 }
 
 function repoScopedCacheKey(repoPath: string, repoId: string | undefined, suffix: string): string {
@@ -1411,14 +1507,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1467,14 +1569,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1517,14 +1625,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1534,7 +1648,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         ok: false,
         error: {
           type: 'validation_error',
-          message: 'Row has no owner/repo/number — cannot patch underlying item'
+          message: translate(
+            'auto.store.slices.github.87020f6605',
+            'Row has no owner/repo/number — cannot patch underlying item'
+          )
         }
       }
     }
@@ -1651,23 +1768,44 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const entry = state.projectViewCache[cacheKey]
     const table = entry?.data
     if (!table) {
-      return { ok: false, error: { type: 'unknown', message: 'Project view not loaded' } }
+      return {
+        ok: false,
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
+      }
     }
     const row = table.rows.find((r) => r.id === rowId)
     if (!row) {
-      return { ok: false, error: { type: 'unknown', message: 'Row not found' } }
+      return {
+        ok: false,
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
+      }
     }
     if (row.itemType !== 'ISSUE') {
       return {
         ok: false,
-        error: { type: 'validation_error', message: 'Issue Type can only be set on Issues.' }
+        error: {
+          type: 'validation_error',
+          message: translate(
+            'auto.store.slices.github.83f9b126ad',
+            'Issue Type can only be set on Issues.'
+          )
+        }
       }
     }
     const { owner, repo, number } = parseSlugAndNumber(row) ?? {}
     if (!owner || !repo || !number) {
       return {
         ok: false,
-        error: { type: 'validation_error', message: 'Row has no owner/repo/number.' }
+        error: {
+          type: 'validation_error',
+          message: translate('auto.store.slices.github.683a21264b', 'Row has no owner/repo/number.')
+        }
       }
     }
     const previousRow = row
@@ -1777,7 +1915,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return cached.data ?? []
     }
 
-    const existing = inflightWorkItemsRequests.get(key)
+    const requestState = get()
+    const requestSettings = requestState.settings
+    const requestRuntimeEnvironmentId = activeRuntimeEnvironmentId(requestSettings)
+    const requestContext = getGitHubWorkItemRequestContext(
+      requestState,
+      requestSettings,
+      repoId,
+      repoPath
+    )
+    const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
+    const existing = inflightWorkItemsRequests.get(inflightKey)
     if (existing) {
       // Why: a user-initiated refresh (force=true) must not silently dedupe to
       // a less-fresh fetch already in flight. noCache=true is stricter than a
@@ -1792,9 +1940,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const request = (async () => {
       await acquireWorkItemSlot()
       try {
-        const envelope = await window.api.gh.listWorkItems({
-          repoPath,
-          repoId,
+        const envelope = await listGitHubWorkItemsForRepo(requestContext, {
           limit,
           query: query || undefined,
           ...(options?.noCache ? { noCache: true } : {})
@@ -1822,6 +1968,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           issuesError && envelope.sources.issues
             ? { ...issuesError, source: envelope.sources.issues }
             : undefined
+        // Why: runtime switches reset server-scoped caches; queued old-runtime
+        // responses can still satisfy callers but must not revive reset entries.
+        if (activeRuntimeEnvironmentId(get().settings) !== requestRuntimeEnvironmentId) {
+          return items
+        }
         set((s) => ({
           workItemsCache: withBoundedCacheEntry(s.workItemsCache, key, {
             data: items,
@@ -1841,11 +1992,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         throw err
       } finally {
         releaseWorkItemSlot()
-        inflightWorkItemsRequests.delete(key)
+        inflightWorkItemsRequests.delete(inflightKey)
       }
     })()
 
-    inflightWorkItemsRequests.set(key, {
+    inflightWorkItemsRequests.set(inflightKey, {
       promise: request,
       force: Boolean(options?.force),
       noCache: Boolean(options?.noCache)
@@ -1890,11 +2041,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     let failedCount = 0
     const perProjectResults = await Promise.all(
       repos.map(async (r) => {
+        const requestState = get()
+        const requestSettings = requestState.settings
+        const requestContext = getGitHubWorkItemRequestContext(
+          requestState,
+          requestSettings,
+          r.repoId,
+          r.path
+        )
         await acquireWorkItemSlot()
         try {
-          const envelope = await window.api.gh.listWorkItems({
-            repoPath: r.path,
-            repoId: r.repoId,
+          const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
             query: query || undefined,
             before
@@ -1933,11 +2090,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const counts = await Promise.all(
       repos.map(async (r) => {
         try {
-          return await window.api.gh.countWorkItems({
-            repoPath: r.path,
-            repoId: r.repoId,
-            query: query || undefined
-          })
+          const requestState = get()
+          const requestSettings = requestState.settings
+          const requestContext = getGitHubWorkItemRequestContext(
+            requestState,
+            requestSettings,
+            r.repoId,
+            r.path
+          )
+          return await countGitHubWorkItemsForRepo(requestContext, { query: query || undefined })
         } catch {
           return 0
         }
@@ -1949,8 +2110,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   prefetchWorkItems: (repoId, repoPath, limit = PER_REPO_FETCH_LIMIT, query = '') => {
     const key = workItemsCacheKey(repoId, limit, query)
     const cached = get().workItemsCache[key]
+    const requestState = get()
+    const requestContext = getGitHubWorkItemRequestContext(
+      requestState,
+      requestState.settings,
+      repoId,
+      repoPath
+    )
+    const inflightKey = workItemsInflightRequestKey(key, requestContext.target)
     // Skip when the cache is fresh or a request is already in flight.
-    if (isFresh(cached, WORK_ITEMS_CACHE_TTL) || inflightWorkItemsRequests.has(key)) {
+    if (isFresh(cached, WORK_ITEMS_CACHE_TTL) || inflightWorkItemsRequests.has(inflightKey)) {
       return
     }
     void get()
@@ -2445,7 +2614,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return { ok: false, error }
     }
     if (!hasUsableCommentPayload(result)) {
-      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+      return result.ok
+        ? {
+            ok: false,
+            error: translate(
+              'auto.store.slices.github.f129c42773',
+              'GitHub did not return the new comment.'
+            )
+          }
+        : result
     }
     set((s) => {
       const entry = s.commentsCache[cacheKey]
@@ -2507,7 +2684,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return { ok: false, error }
     }
     if (!hasUsableCommentPayload(result)) {
-      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+      return result.ok
+        ? {
+            ok: false,
+            error: translate(
+              'auto.store.slices.github.f129c42773',
+              'GitHub did not return the new comment.'
+            )
+          }
+        : result
     }
     const comment: PRComment = {
       ...result.comment,
@@ -3002,9 +3187,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // pill visually reverts (optimistic patch above → resync via
       // fetchRepos below). Without this toast, the UI silently snaps back
       // and the user has no clue the write failed.
-      toast.error('Failed to save issue-source preference', {
-        duration: ERROR_TOAST_DURATION
-      })
+      toast.error(
+        translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),
+        {
+          duration: ERROR_TOAST_DURATION
+        }
+      )
       // Why: the optimistic patch above may now disagree with disk. Resync
       // rather than leave a lie on screen. We only refetch repos — the cache
       // eviction below is still safe to run; worst case we trigger a

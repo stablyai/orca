@@ -36,6 +36,17 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca status', 'orca status --json']
   },
   {
+    path: ['claude-teams'],
+    summary: 'Start Claude Code Agent Teams in the current Orca terminal',
+    usage: 'orca claude-teams [claude args...]',
+    allowedFlags: [...GLOBAL_FLAGS],
+    notes: [
+      'Passes all following arguments through to Claude Code after enabling Agent Teams native panes.',
+      'Must be run from inside an Orca terminal. Starts Claude Code Agent Teams in the current pane and opens teammates as native Orca splits.'
+    ],
+    examples: ['orca claude-teams', 'orca claude-teams --resume <session-id>']
+  },
+  {
     path: ['repo', 'list'],
     summary: 'List repos registered in Orca',
     usage: 'orca repo list [--json]',

@@ -243,8 +243,8 @@ describe('tab title tooltips', () => {
 
     expectTooltipContent(markup, 'Custom terminal title')
     expect(markup).not.toContain('Runtime terminal title')
+    expect(markup).toContain('data-tooltip-trigger="true"')
     const root = openingTag(markup, 'data-testid', 'sortable-tab')
-    expect(root).toContain('data-tooltip-trigger="true"')
     expect(root).toContain('role="tab"')
     expect(root).toContain('tabindex="0"')
   })
@@ -274,7 +274,8 @@ describe('tab title tooltips', () => {
 
     expect(markup).toContain('data-agent-icon="claude"')
     expectTooltipContent(markup, 'Claude Code')
-    expect(markup).toContain('<span class="truncate max-w-[72px] mr-1">Claude Code</span>')
+    expect(markup).toContain('data-tooltip-trigger="true"')
+    expect(markup).toContain('>Claude Code</span>')
     expect(markup).not.toContain('data-shell-icon="generic"')
     expect(markup).not.toContain('>✳ Claude Code</span>')
   })

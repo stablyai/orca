@@ -32,6 +32,7 @@ import {
   resolveRendererWebContents,
   setupGrabShortcutForwarding,
   setupGuestContextMenu,
+  setupGuestMouseWheelZoomForwarding,
   setupGuestShortcutForwarding
 } from './browser-guest-ui'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
@@ -165,7 +166,12 @@ function safeOrigin(rawUrl: string): string {
 }
 
 export class BrowserManager {
-  private settingsResolver: (() => { keybindings?: KeybindingOverrides }) | null = null
+  private settingsResolver:
+    | (() => {
+        keybindings?: KeybindingOverrides
+        mobileEmulatorEnabled?: boolean
+      })
+    | null = null
   private readonly webContentsIdByTabId = new Map<string, number>()
   // Why: reverse map enables O(1) guest→tab lookups instead of O(N) linear
   // scans on every mouse event, load failure, permission, and popup event.
@@ -184,6 +190,7 @@ export class BrowserManager {
   private readonly contextMenuCleanupByTabId = new Map<string, () => void>()
   private readonly grabShortcutCleanupByTabId = new Map<string, () => void>()
   private readonly shortcutForwardingCleanupByTabId = new Map<string, () => void>()
+  private readonly mouseWheelZoomCleanupByTabId = new Map<string, () => void>()
   private readonly annotationViewportBridgeOpsByTabId = new Map<string, Promise<unknown>>()
   private readonly worktreeIdByTabId = new Map<string, string>()
   private readonly policyAttachedGuestIds = new Set<number>()
@@ -203,7 +210,12 @@ export class BrowserManager {
   private readonly downloadsById = new Map<string, ActiveDownload>()
   private readonly grabSessionController = new BrowserGrabSessionController()
 
-  setSettingsResolver(resolver: () => { keybindings?: KeybindingOverrides }): void {
+  setSettingsResolver(
+    resolver: () => {
+      keybindings?: KeybindingOverrides
+      mobileEmulatorEnabled?: boolean
+    }
+  ): void {
     this.settingsResolver = resolver
   }
 
@@ -751,6 +763,7 @@ export class BrowserManager {
     this.setupContextMenu(browserTabId, guest)
     this.setupGrabShortcut(browserTabId, guest)
     this.setupShortcutForwarding(browserTabId, guest)
+    this.setupMouseWheelZoomForwarding(browserTabId, guest)
     this.flushPendingLoadFailure(browserTabId, webContentsId)
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
@@ -785,6 +798,11 @@ export class BrowserManager {
     if (fwdCleanup) {
       fwdCleanup()
       this.shortcutForwardingCleanupByTabId.delete(browserTabId)
+    }
+    const mouseWheelZoomCleanup = this.mouseWheelZoomCleanupByTabId.get(browserTabId)
+    if (mouseWheelZoomCleanup) {
+      mouseWheelZoomCleanup()
+      this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
     }
     // Why: paused downloads wait for explicit product approval. If the owning
     // browser tab disappears first, cancel the request so the app does not
@@ -834,6 +852,7 @@ export class BrowserManager {
     this.pendingPermissionEventsByGuestId.clear()
     this.pendingPopupEventsByGuestId.clear()
     this.pendingDownloadIdsByGuestId.clear()
+    this.mouseWheelZoomCleanupByTabId.clear()
     this.annotationViewportBridgeOpsByTabId.clear()
   }
 
@@ -1412,7 +1431,26 @@ export class BrowserManager {
         resolveRenderer: (tabId) =>
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
         shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
+        isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
         getKeybindings: () => this.settingsResolver?.().keybindings
+      })
+    )
+  }
+
+  private setupMouseWheelZoomForwarding(browserTabId: string, guest: Electron.WebContents): void {
+    const previousCleanup = this.mouseWheelZoomCleanupByTabId.get(browserTabId)
+    if (previousCleanup) {
+      previousCleanup()
+      this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
+    }
+
+    this.mouseWheelZoomCleanupByTabId.set(
+      browserTabId,
+      setupGuestMouseWheelZoomForwarding({
+        browserTabId,
+        guest,
+        resolveRenderer: (tabId) =>
+          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId)
       })
     )
   }

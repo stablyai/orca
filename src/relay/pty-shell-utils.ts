@@ -1,14 +1,49 @@
 import { execFile as execFileCb } from 'child_process'
 import { existsSync, readFileSync } from 'fs'
+import { homedir } from 'os'
+import { win32 as pathWin32 } from 'path'
 import { promisify } from 'util'
 
 const execFile = promisify(execFileCb)
+
+export function resolveWindowsDefaultShell(
+  env: NodeJS.ProcessEnv = process.env,
+  existsPath: (path: string) => boolean = existsSync
+): string {
+  const envShell = env.SHELL
+  if (envShell && existsPath(envShell)) {
+    return envShell
+  }
+
+  const systemRoot = env.SystemRoot || env.WINDIR || env.windir || 'C:\\Windows'
+  const windowsPowerShell = pathWin32.join(
+    systemRoot,
+    'System32',
+    'WindowsPowerShell',
+    'v1.0',
+    'powershell.exe'
+  )
+  if (existsPath(windowsPowerShell)) {
+    return windowsPowerShell
+  }
+
+  const comspec = env.ComSpec || env.COMSPEC
+  if (comspec && existsPath(comspec)) {
+    return comspec
+  }
+
+  return comspec || 'powershell.exe'
+}
 
 /**
  * Resolve the default shell for PTY spawning.
  * Prefers $SHELL, then common fallbacks.
  */
 export function resolveDefaultShell(): string {
+  if (process.platform === 'win32') {
+    return resolveWindowsDefaultShell()
+  }
+
   const envShell = process.env.SHELL
   if (envShell && existsSync(envShell)) {
     return envShell
@@ -20,6 +55,19 @@ export function resolveDefaultShell(): string {
     }
   }
   return '/bin/sh'
+}
+
+export function resolveDefaultCwd(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  homeDir = homedir()
+): string {
+  if (platform === 'win32') {
+    const driveHome = env.HOMEDRIVE && env.HOMEPATH ? `${env.HOMEDRIVE}${env.HOMEPATH}` : undefined
+    return env.USERPROFILE || env.HOME || driveHome || homeDir || `${env.SystemDrive || 'C:'}\\`
+  }
+
+  return env.HOME || homeDir || '/'
 }
 
 /**

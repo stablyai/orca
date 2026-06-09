@@ -34,6 +34,30 @@ describe('GitHandler', () => {
     await fs.rm(tmpDir, { recursive: true, force: true })
   })
 
+  function currentBranch(cwd: string): string {
+    return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd,
+      encoding: 'utf-8'
+    }).trim()
+  }
+
+  function currentBranchFullRef(cwd: string): string {
+    return `refs/heads/${currentBranch(cwd)}`
+  }
+
+  function reportedWorktreePath(cwd: string): string {
+    return (
+      execFileSync('git', ['worktree', 'list', '--porcelain'], {
+        cwd,
+        encoding: 'utf-8'
+      })
+        .split(/\r?\n/)
+        .find((line) => line.startsWith('worktree '))
+        ?.slice('worktree '.length)
+        .trim() ?? cwd
+    )
+  }
+
   it('registers all expected handlers', () => {
     const methods = Array.from(dispatcher._requestHandlers.keys())
     expect(methods).toContain('git.status')
@@ -63,6 +87,7 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.addWorktree')
     expect(methods).toContain('git.removeWorktree')
     expect(methods).toContain('git.worktreeIsClean')
+    expect(methods).toContain('git.refreshLocalBaseRefForWorktreeCreate')
     expect(methods).toContain('git.renameCurrentBranch')
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.isGitRepo')
@@ -1100,6 +1125,357 @@ describe('GitHandler', () => {
         }
       }
     )
+  })
+
+  describe('worktreeIsClean', () => {
+    it('can ignore untracked files', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'tracked.txt'), 'initial')
+      gitCommit(tmpDir, 'initial')
+      writeFileSync(path.join(tmpDir, 'scratch.txt'), 'untracked')
+
+      await expect(
+        dispatcher.callRequest('git.worktreeIsClean', { worktreePath: tmpDir })
+      ).resolves.toEqual({
+        clean: false,
+        stdout: expect.stringContaining('scratch.txt')
+      })
+      await expect(
+        dispatcher.callRequest('git.worktreeIsClean', {
+          worktreePath: tmpDir,
+          includeUntracked: false
+        })
+      ).resolves.toEqual({ clean: true })
+    })
+  })
+
+  describe('refreshLocalBaseRefForWorktreeCreate', () => {
+    function setupMockedRefreshHandler() {
+      const localDispatcher = createMockDispatcher()
+      const localHandler = new GitHandler(
+        localDispatcher as unknown as RelayDispatcher,
+        new RelayContext()
+      )
+      const gitMock =
+        vi.fn<
+          (
+            args: string[],
+            cwd: string,
+            opts?: { maxBuffer?: number }
+          ) => Promise<{ stdout: string; stderr: string }>
+        >()
+      ;(localHandler as unknown as { git: typeof gitMock }).git = gitMock
+      return { localDispatcher, gitMock }
+    }
+
+    it('resets the owning worktree to the remote-tracking ref', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+      const branchRef = currentBranchFullRef(tmpDir)
+      const ownerPath = reportedWorktreePath(tmpDir)
+      const firstSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'remote')
+      gitCommit(tmpDir, 'remote update')
+      const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['reset', '--hard', firstSha], { cwd: tmpDir, stdio: 'pipe' })
+
+      await dispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+        repoPath: tmpDir,
+        fullRef: branchRef,
+        remoteTrackingRef: 'refs/remotes/origin/main',
+        ownerWorktreePath: ownerPath
+      })
+
+      const actual = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(actual).toBe(remoteSha)
+      await expect(fs.readFile(path.join(tmpDir, 'base.txt'), 'utf-8')).resolves.toBe('remote')
+    })
+
+    it('fast-forwards a non-checked-out local branch via update-ref', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+      execFileSync('git', ['branch', 'main-copy'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'remote')
+      gitCommit(tmpDir, 'remote update')
+      const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+
+      await dispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+        repoPath: tmpDir,
+        fullRef: 'refs/heads/main-copy',
+        remoteTrackingRef: 'refs/remotes/origin/main'
+      })
+
+      // No working tree owns main-copy, so the bare ref fast-forwards.
+      const actual = execFileSync('git', ['rev-parse', 'refs/heads/main-copy'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(actual).toBe(remoteSha)
+    })
+
+    it('does not move a non-checked-out local branch when checkOnly is set', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+      execFileSync('git', ['branch', 'main-copy'], { cwd: tmpDir, stdio: 'pipe' })
+      const originalSha = execFileSync('git', ['rev-parse', 'refs/heads/main-copy'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'remote')
+      gitCommit(tmpDir, 'remote update')
+      const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+
+      await dispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+        repoPath: tmpDir,
+        fullRef: 'refs/heads/main-copy',
+        remoteTrackingRef: 'refs/remotes/origin/main',
+        checkOnly: true
+      })
+
+      const actual = execFileSync('git', ['rev-parse', 'refs/heads/main-copy'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(actual).toBe(originalSha)
+    })
+
+    it('rejects invalid local base ref refresh refs', async () => {
+      gitInit(tmpDir)
+
+      await expect(
+        dispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+          repoPath: tmpDir,
+          fullRef: 'refs/tags/main',
+          remoteTrackingRef: 'refs/remotes/origin/main'
+        })
+      ).rejects.toThrow('Invalid local base ref refresh refs.')
+    })
+
+    it('rejects a dirty owner worktree before resetting', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+      const branchRef = currentBranchFullRef(tmpDir)
+      const ownerPath = reportedWorktreePath(tmpDir)
+      const firstSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'remote')
+      gitCommit(tmpDir, 'remote update')
+      const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['reset', '--hard', firstSha], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'local dirty')
+
+      await expect(
+        dispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+          repoPath: tmpDir,
+          fullRef: branchRef,
+          remoteTrackingRef: 'refs/remotes/origin/main',
+          ownerWorktreePath: ownerPath
+        })
+      ).rejects.toThrow('Local base ref worktree has tracked changes.')
+
+      const actual = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(actual).toBe(firstSha)
+      await expect(fs.readFile(path.join(tmpDir, 'base.txt'), 'utf-8')).resolves.toBe('local dirty')
+    })
+
+    it('rejects when the caller-supplied owner path is not the checked-out branch owner', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+      const branchRef = currentBranchFullRef(tmpDir)
+      const headSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      execFileSync('git', ['update-ref', 'refs/remotes/origin/main', headSha], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+
+      await expect(
+        dispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+          repoPath: tmpDir,
+          fullRef: branchRef,
+          remoteTrackingRef: 'refs/remotes/origin/main',
+          ownerWorktreePath: path.join(path.dirname(tmpDir), 'different-owner')
+        })
+      ).rejects.toThrow('Local base ref is checked out in a different worktree.')
+    })
+
+    it('rejects diverged local refs before mutating', async () => {
+      gitInit(tmpDir)
+      writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+      gitCommit(tmpDir, 'initial')
+      execFileSync('git', ['branch', 'main-copy'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'remote.txt'), 'remote')
+      gitCommit(tmpDir, 'remote update')
+      const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
+        cwd: tmpDir,
+        stdio: 'pipe'
+      })
+      execFileSync('git', ['checkout', 'main-copy'], { cwd: tmpDir, stdio: 'pipe' })
+      writeFileSync(path.join(tmpDir, 'local.txt'), 'local')
+      gitCommit(tmpDir, 'local update')
+      const localSha = execFileSync('git', ['rev-parse', 'refs/heads/main-copy'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+
+      await expect(
+        dispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+          repoPath: tmpDir,
+          fullRef: 'refs/heads/main-copy',
+          remoteTrackingRef: 'refs/remotes/origin/main',
+          ownerWorktreePath: tmpDir
+        })
+      ).rejects.toThrow('Local base ref is not a fast-forward update.')
+
+      const actual = execFileSync('git', ['rev-parse', 'refs/heads/main-copy'], {
+        cwd: tmpDir,
+        encoding: 'utf-8'
+      }).trim()
+      expect(actual).toBe(localSha)
+    })
+
+    it('resets owner worktree to captured remote OID without update-ref', async () => {
+      const { localDispatcher, gitMock } = setupMockedRefreshHandler()
+      gitMock.mockImplementation(async (args: string[]) => {
+        if (args[0] === 'check-ref-format') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
+          return { stdout: 'remote-oid\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse') {
+          return { stdout: 'old-local-oid\n', stderr: '' }
+        }
+        if (args[0] === 'merge-base') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'worktree') {
+          return {
+            stdout: 'worktree /repo\nHEAD old-local-oid\nbranch refs/heads/main\n',
+            stderr: ''
+          }
+        }
+        if (args[0] === 'status') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'reset') {
+          return { stdout: '', stderr: '' }
+        }
+        throw new Error(`unexpected git call: ${args.join(' ')}`)
+      })
+
+      await expect(
+        localDispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+          repoPath: '/repo',
+          fullRef: 'refs/heads/main',
+          remoteTrackingRef: 'refs/remotes/origin/main'
+        })
+      ).resolves.toBeUndefined()
+
+      expect(gitMock).toHaveBeenCalledWith(
+        ['merge-base', '--is-ancestor', 'old-local-oid', 'remote-oid'],
+        '/repo'
+      )
+      expect(gitMock).toHaveBeenCalledWith(['reset', '--hard', 'remote-oid'], '/repo')
+      expect(gitMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+        'update-ref',
+        'refs/heads/main',
+        'remote-oid',
+        'old-local-oid'
+      ])
+    })
+
+    it('fails closed when worktree ownership cannot be listed', async () => {
+      const { localDispatcher, gitMock } = setupMockedRefreshHandler()
+      gitMock.mockImplementation(async (args: string[]) => {
+        if (args[0] === 'check-ref-format') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
+          return { stdout: 'remote-oid\n', stderr: '' }
+        }
+        if (args[0] === 'rev-parse') {
+          return { stdout: 'old-local-oid\n', stderr: '' }
+        }
+        if (args[0] === 'merge-base') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'worktree') {
+          throw new Error('worktree list failed')
+        }
+        throw new Error(`unexpected git call: ${args.join(' ')}`)
+      })
+
+      await expect(
+        localDispatcher.callRequest('git.refreshLocalBaseRefForWorktreeCreate', {
+          repoPath: '/repo',
+          fullRef: 'refs/heads/main',
+          remoteTrackingRef: 'refs/remotes/origin/main'
+        })
+      ).rejects.toThrow('worktree list failed')
+
+      expect(gitMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+        'update-ref',
+        'refs/heads/main',
+        'refs/remotes/origin/main',
+        'old-local-oid'
+      ])
+      expect(gitMock.mock.calls.map((call) => call[0])).not.toContainEqual([
+        'reset',
+        '--hard',
+        'refs/heads/main'
+      ])
+    })
   })
 
   describe('addWorktree', () => {

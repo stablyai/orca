@@ -4,6 +4,7 @@ import { Files, GitBranch, ListChecks, MessageSquare, Search } from 'lucide-reac
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { ReviewPRViewVisualStyles } from './review-animated-visual-pr-view-styles'
 import { CheckTinyIcon, ChevDownIcon, CursorIcon } from './review-animated-visual-shared'
+import { translate } from '@/i18n/i18n'
 
 type SidebarTabId = 'explorer' | 'search' | 'source-control' | 'checks'
 
@@ -12,10 +13,32 @@ const SIDEBAR_TABS: readonly {
   icon: ComponentType<{ className?: string; size?: number }>
   label: string
 }[] = [
-  { id: 'explorer', icon: Files, label: 'Explorer' },
-  { id: 'search', icon: Search, label: 'Search' },
-  { id: 'source-control', icon: GitBranch, label: 'Source Control' },
-  { id: 'checks', icon: ListChecks, label: 'Checks' }
+  {
+    id: 'explorer',
+    icon: Files,
+    label: translate(
+      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.6e3f5223c5',
+      'Explorer'
+    )
+  },
+  {
+    id: 'search',
+    icon: Search,
+    label: translate('auto.components.feature.wall.ReviewPRViewAnimatedVisual.8e715588e4', 'Search')
+  },
+  {
+    id: 'source-control',
+    icon: GitBranch,
+    label: translate(
+      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.d7f80060ca',
+      'Source Control'
+    )
+  },
+  {
+    id: 'checks',
+    icon: ListChecks,
+    label: translate('auto.components.feature.wall.ReviewPRViewAnimatedVisual.ab2901bce6', 'Checks')
+  }
 ]
 
 function SidebarTabs(props: { active: SidebarTabId; interactiveChecks?: boolean }): JSX.Element {
@@ -311,7 +334,12 @@ export function ReviewPRViewAnimatedVisual(props: { reducedMotion: boolean }): J
         <div className="ravpr-sidebar is-visible" data-checks-sidebar-peek>
           <SidebarTabs active="explorer" interactiveChecks />
           <div className="ravpr-explorer">
-            <div className="ravpr-heading">Explorer</div>
+            <div className="ravpr-heading">
+              {translate(
+                'auto.components.feature.wall.ReviewPRViewAnimatedVisual.6e3f5223c5',
+                'Explorer'
+              )}
+            </div>
             <div className="ravpr-file-list">
               <ExplorerSkeletonRow active width={190} />
               <ExplorerSkeletonRow width={158} />
@@ -326,12 +354,25 @@ export function ReviewPRViewAnimatedVisual(props: { reducedMotion: boolean }): J
           <div className="ravpr-body">
             <div className="ravpr-number-row">
               <span className="ravpr-number">#2351</span>
-              <span className="ravpr-open">OPEN</span>
+              <span className="ravpr-open">
+                {translate(
+                  'auto.components.feature.wall.ReviewPRViewAnimatedVisual.dfe313e0c9',
+                  'OPEN'
+                )}
+              </span>
             </div>
-            <div className="ravpr-title">Add local diagnostics error tracking</div>
+            <div className="ravpr-title">
+              {translate(
+                'auto.components.feature.wall.ReviewPRViewAnimatedVisual.0aab7ab84a',
+                'Add local diagnostics error tracking'
+              )}
+            </div>
             <button className="ravpr-merge" data-merge-btn type="button">
               <GitBranch className="size-3" />
-              Squash and merge
+              {translate(
+                'auto.components.feature.wall.ReviewPRViewAnimatedVisual.2f37142229',
+                'Squash and merge'
+              )}
               <ChevDownIcon />
             </button>
 
@@ -339,29 +380,63 @@ export function ReviewPRViewAnimatedVisual(props: { reducedMotion: boolean }): J
               <div className="ravpr-section-row" data-check-summary>
                 <StatusCell />
                 <span className="ravpr-label" data-check-summary-label>
-                  1 pending
+                  {translate(
+                    'auto.components.feature.wall.ReviewPRViewAnimatedVisual.9a097cae12',
+                    '1 pending'
+                  )}
                 </span>
                 <span className="ravpr-meta" data-check-summary-meta>
-                  verify
+                  {translate(
+                    'auto.components.feature.wall.ReviewPRViewAnimatedVisual.d340c052fb',
+                    'verify'
+                  )}
                 </span>
               </div>
               <div className="ravpr-check-list">
                 <div className="ravpr-check-row" data-check-row="verify">
                   <StatusCell />
-                  <span>verify</span>
+                  <span>
+                    {translate(
+                      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.d340c052fb',
+                      'verify'
+                    )}
+                  </span>
                   <span className="ravpr-check-state" data-check-verify-state>
-                    Running
+                    {translate(
+                      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.8ed213397c',
+                      'Running'
+                    )}
                   </span>
                 </div>
                 <div className="ravpr-check-row is-done">
                   <StatusCell />
-                  <span>typecheck</span>
-                  <span className="ravpr-check-state">Passed</span>
+                  <span>
+                    {translate(
+                      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.2ef0b97954',
+                      'typecheck'
+                    )}
+                  </span>
+                  <span className="ravpr-check-state">
+                    {translate(
+                      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.ca36f7b27c',
+                      'Passed'
+                    )}
+                  </span>
                 </div>
                 <div className="ravpr-check-row is-done">
                   <StatusCell />
-                  <span>lint</span>
-                  <span className="ravpr-check-state">Passed</span>
+                  <span>
+                    {translate(
+                      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.25f6838e43',
+                      'lint'
+                    )}
+                  </span>
+                  <span className="ravpr-check-state">
+                    {translate(
+                      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.ca36f7b27c',
+                      'Passed'
+                    )}
+                  </span>
                 </div>
               </div>
             </div>
@@ -369,17 +444,42 @@ export function ReviewPRViewAnimatedVisual(props: { reducedMotion: boolean }): J
             <div className="ravpr-reveal" data-comments-block>
               <div className="ravpr-section-row">
                 <MessageSquare className="size-3.5" />
-                <span className="ravpr-label">Comments</span>
+                <span className="ravpr-label">
+                  {translate(
+                    'auto.components.feature.wall.ReviewPRViewAnimatedVisual.7a8b896e11',
+                    'Comments'
+                  )}
+                </span>
                 <span className="ravpr-meta">
-                  <span data-comments-count>0</span> open
+                  <span data-comments-count>0</span>{' '}
+                  {translate(
+                    'auto.components.feature.wall.ReviewPRViewAnimatedVisual.fb1a856b6d',
+                    'open'
+                  )}
                 </span>
               </div>
               <div className="ravpr-comment-list">
                 <CommentCard index={0} path="src/main/diagnostics.ts">
-                  Can we include the failing command in the diagnostic payload?
+                  {translate(
+                    'auto.components.feature.wall.ReviewPRViewAnimatedVisual.71828fba75',
+                    'Can we include the failing command in the diagnostic payload?'
+                  )}
                 </CommentCard>
                 <CommentCard index={1} path="tests/diagnostics.test.ts">
-                  Add a coverage case for <code>stderr</code> truncation before merge.
+                  {translate(
+                    'auto.components.feature.wall.ReviewPRViewAnimatedVisual.6f4c2d7cb7',
+                    'Add a coverage case for'
+                  )}
+                  <code>
+                    {translate(
+                      'auto.components.feature.wall.ReviewPRViewAnimatedVisual.c2062da7ec',
+                      'stderr'
+                    )}
+                  </code>{' '}
+                  {translate(
+                    'auto.components.feature.wall.ReviewPRViewAnimatedVisual.7c2808ecff',
+                    'truncation before merge.'
+                  )}
                 </CommentCard>
               </div>
             </div>

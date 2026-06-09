@@ -7,6 +7,7 @@ import {
   createMobileDriverOverlayCollapseState,
   getMobileDriverOverlayCollapseState
 } from './mobile-driver-overlay-collapse'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   driver: DriverState
@@ -73,7 +74,10 @@ export function MobileDriverOverlay({
     return (
       <LoudOverlay
         eyebrow="Held at phone size"
-        title="This terminal is sized for your mobile app"
+        title={translate(
+          'auto.components.terminal.pane.MobileDriverOverlay.faa367dc74',
+          'This terminal is sized for your mobile app'
+        )}
         body="The session is still being held at the dimensions your phone last reported. Restore to use it on your desktop."
         actionLabel="Restore desktop size"
         actionPending={actionPending}
@@ -100,7 +104,10 @@ export function MobileDriverOverlay({
   return (
     <LoudOverlay
       eyebrow="Mobile is driving this terminal"
-      title="Your keyboard is paused"
+      title={translate(
+        'auto.components.terminal.pane.MobileDriverOverlay.3eed73394f',
+        'Your keyboard is paused'
+      )}
       body="Output below is being typed from your phone. Take back to resume typing on the desktop, or collapse to keep watching."
       actionLabel="Take back"
       actionPending={actionPending}
@@ -193,7 +200,10 @@ function LoudOverlay({
         <div className="mt-1 flex justify-end gap-2">
           {onCollapse && (
             <Button type="button" variant="outline" size="sm" onClick={onCollapse}>
-              Collapse
+              {translate(
+                'auto.components.terminal.pane.MobileDriverOverlay.7cffad954c',
+                'Collapse'
+              )}
             </Button>
           )}
           {/* Focus is moved to this button only when no user input is active; see effect above. */}
@@ -244,10 +254,13 @@ function LockChip({
         className="px-1 font-medium"
         onClick={onExpand}
       >
-        Mobile driving
+        {translate(
+          'auto.components.terminal.pane.MobileDriverOverlay.c44659e09f',
+          'Mobile driving'
+        )}
       </Button>
       <Button type="button" variant="default" size="xs" onClick={onAction} disabled={actionPending}>
-        Take back
+        {translate('auto.components.terminal.pane.MobileDriverOverlay.c6460cf584', 'Take back')}
       </Button>
     </div>
   )

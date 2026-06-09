@@ -7,6 +7,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     description:
       'Highest accuracy for 25 European languages. Punctuation, capitalization, and word-level timestamps.',
     type: 'transducer',
+    provider: 'local',
     language: 'multilingual',
     sizeBytes: 180_000_000,
     downloadUrl:
@@ -25,6 +26,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     description:
       'English only. Faster than v3 with similar accuracy. Punctuation and capitalization.',
     type: 'transducer',
+    provider: 'local',
     language: 'en',
     sizeBytes: 170_000_000,
     downloadUrl:
@@ -41,6 +43,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     label: 'Zipformer Bilingual',
     description: 'Chinese + English with code-switching. Low-latency real-time streaming.',
     type: 'transducer',
+    provider: 'local',
     language: 'zh-en',
     sizeBytes: 130_000_000,
     downloadUrl:
@@ -63,6 +66,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     description:
       'Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.',
     type: 'paraformer',
+    provider: 'local',
     language: 'zh-en',
     sizeBytes: 115_000_000,
     downloadUrl:
@@ -78,6 +82,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     label: 'Zipformer Streaming EN',
     description: 'English only. Lightweight 20M-param model, good balance of speed and size.',
     type: 'transducer',
+    provider: 'local',
     language: 'en',
     sizeBytes: 128_000_000,
     downloadUrl:
@@ -99,6 +104,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     label: 'Zipformer Streaming ZH',
     description: 'Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.',
     type: 'transducer',
+    provider: 'local',
     language: 'zh',
     sizeBytes: 74_000_000,
     downloadUrl:
@@ -120,6 +126,7 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     label: 'Whisper Tiny',
     description: '90+ languages. Lower accuracy than Parakeet but broadest language coverage.',
     type: 'whisper',
+    provider: 'local',
     language: 'multilingual',
     sizeBytes: 116_000_000,
     downloadUrl:
@@ -129,9 +136,34 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     files: ['tiny-encoder.onnx', 'tiny-decoder.onnx', 'tiny-tokens.txt'],
     sampleRate: 16000,
     streaming: false
+  },
+  {
+    id: 'openai-gpt-4o-mini-transcribe',
+    label: 'GPT-4o mini Transcribe',
+    description:
+      'Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.',
+    type: 'openai',
+    provider: 'openai',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'openai-gpt-4o-transcribe',
+    label: 'GPT-4o Transcribe',
+    description: 'Cloud transcription with higher accuracy. Requires an OpenAI API key.',
+    type: 'openai',
+    provider: 'openai',
+    language: 'multilingual',
+    sampleRate: 16000,
+    streaming: false
   }
 ]
 
 export function getCatalogModel(id: string): SpeechModelManifest | undefined {
   return SPEECH_MODEL_CATALOG.find((m) => m.id === id)
+}
+
+export function isLocalSpeechModel(manifest: SpeechModelManifest): boolean {
+  return manifest.provider === 'local'
 }

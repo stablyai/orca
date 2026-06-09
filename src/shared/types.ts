@@ -24,6 +24,9 @@ import type {
   SourceControlAiSettings
 } from './source-control-ai-types'
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
+import type { SleepingAgentSessionRecord } from './agent-session-resume'
+import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { UiLanguage } from './ui-language'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -39,6 +42,7 @@ export type {
   GitStagingArea,
   GitStatusEntry,
   GitStatusResult,
+  GitSubmoduleStatus,
   GitUncommittedEntry,
   GitUpstreamStatus
 } from './git-status-types'
@@ -269,6 +273,10 @@ export type Worktree = {
   /** True while an auto-named workspace is waiting for the first agent message
    *  to drive the branch/title rename. */
   pendingFirstAgentMessageRename?: boolean
+  /** Holds the last auto-rename generation failure message so the sidebar can
+   *  show a "rename failed" badge. null/undefined when there is no failure
+   *  (never attempted, succeeded, or only a benign skip). */
+  firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
   /** ID of the saved preset this worktree was created from, if any. Cleared
@@ -297,6 +305,8 @@ export type GitHubPrStartPoint = {
   headSha?: string
   /** Exact local branch name to create/reuse when the PR head is a safe same-repo branch. */
   branchNameOverride?: string
+  /** Fork PRs: false when "Allow edits from maintainers" is off; a push to the fork may be rejected. */
+  maintainerCanModify?: boolean
 }
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -325,6 +335,8 @@ export type WorktreeMeta = {
   createdWithAgent?: TuiAgent
   /** See {@link Worktree.pendingFirstAgentMessageRename}. */
   pendingFirstAgentMessageRename?: boolean
+  /** See {@link Worktree.firstAgentMessageRenameError}. */
+  firstAgentMessageRenameError?: string | null
   sparseDirectories?: string[]
   sparseBaseRef?: string
   sparsePresetId?: string
@@ -441,9 +453,15 @@ export type TabGroupLayoutNode =
     }
 
 // ─── Unified Tab ────────────────────────────────────────────────────
-export type TabContentType = 'terminal' | 'editor' | 'diff' | 'conflict-review' | 'browser'
+export type TabContentType =
+  | 'terminal'
+  | 'editor'
+  | 'diff'
+  | 'conflict-review'
+  | 'browser'
+  | 'simulator'
 
-export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser'
+export type WorkspaceVisibleTabType = 'terminal' | 'editor' | 'browser' | 'simulator'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
 export type Tab = {
@@ -454,6 +472,7 @@ export type Tab = {
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
+  quickCommandLabel?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -488,6 +507,8 @@ export type TerminalTab = {
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
   generatedTitle?: string | null
+  /** Stable label from the tab-bar Quick Command that created this terminal. */
+  quickCommandLabel?: string | null
   customTitle: string | null
   color: string | null
   sortOrder: number
@@ -725,6 +746,8 @@ export type WorkspaceSessionState = {
    *  considered. Persisted so closing all tabs and re-opening the workspace
    *  does not recreate the template. */
   defaultTerminalTabsAppliedByWorktreeId?: Record<string, true>
+  /** Provider-session resume records captured when workspaces sleep. */
+  sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>
@@ -1622,6 +1645,10 @@ export type CreateWorktreeArgs = {
   /** Optional startup command for callers that want the backend to spawn the
    *  first terminal as soon as the worktree is registered. */
   startup?: WorktreeStartupLaunch
+  /** Correlates `createWorktree:progress` events back to a specific pending
+   *  creation in the renderer, so concurrent background creates each drive
+   *  their own status surface. Omitted by synchronous callers. */
+  creationId?: string
 }
 
 export type CreateWorktreeResult = {
@@ -1638,6 +1665,7 @@ export type CreateWorktreeResult = {
   warning?: string
   initialBaseStatus?: WorktreeBaseStatusEvent
   localBaseRefRefresh?: LocalBaseRefRefreshResult
+  localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
   startupTerminal?: {
     spawned: boolean
     surface?: 'visible' | 'background'
@@ -1663,6 +1691,12 @@ export type LocalBaseRefRefreshResult = {
   baseRef: string
   localBranch: string
   ownerWorktreePath?: string
+}
+
+export type LocalBaseRefUpdateSuggestion = {
+  baseRef: string
+  localBranch: string
+  behind: number
 }
 
 export type WorktreeBaseStatusKind = 'checking' | 'current' | 'drift' | 'base_changed' | 'unknown'
@@ -1830,6 +1864,7 @@ export type ClaudeManagedAccountRuntimeSelection = {
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
   | 'claude' // Claude Code
+  | 'claude-agent-teams' // Claude Code Agent Teams via Orca native panes
   | 'openclaude' // OpenClaude
   | 'codex' // OpenAI Codex
   | 'autohand' // Autohand Code CLI
@@ -1951,14 +1986,21 @@ export type GlobalSettings = {
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean
+  /** Set once the user dismisses the "local main is behind" suggestion toast, so
+   *  the nudge to enable refreshLocalBaseRefOnWorktreeCreate never shows again. */
+  localBaseRefSuggestionDismissed: boolean
   /** When enabled, Orca renames a workspace's auto-generated creature branch to
-   *  a short name derived from the first prompt once work begins. Opt-in;
-   *  uses the same agent configured for AI commit messages. */
+   *  a short name derived from the first prompt once work begins. Users can
+   *  still turn this off from global Git settings. */
   autoRenameBranchFromWork: boolean
+  /** One-shot migration guard for the default-on rollout. Existing profiles
+   *  without the guard are flipped on once; later explicit opt-outs stick. */
+  autoRenameBranchFromWorkDefaultedOn?: boolean
   branchPrefix: 'git-username' | 'custom' | 'none'
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
@@ -1980,8 +2022,8 @@ export type GlobalSettings = {
   terminalFontFamily: string
   terminalFontWeight: number
   terminalLineHeight: number
-  /** Mirrors VS Code's terminal.integrated.gpuAcceleration shape.
-   *  - 'auto': use DOM on Linux; otherwise try xterm WebGL and fall back to DOM if the renderer fails.
+  /** Terminal renderer policy.
+   *  - 'auto': try xterm WebGL and fall back to DOM when unsupported or risky.
    *  - 'on': always try xterm WebGL.
    *  - 'off': keep terminal rendering on xterm's DOM renderer. */
   terminalGpuAcceleration: 'auto' | 'on' | 'off'
@@ -1995,6 +2037,8 @@ export type GlobalSettings = {
    *    switches fonts, so "off" always stays off. */
   terminalLigatures: 'auto' | 'on' | 'off'
   terminalCursorStyle: 'bar' | 'block' | 'underline'
+  /** One-shot migration guard for moving inherited cursor defaults to block. */
+  terminalCursorStyleDefaultedToBlock?: boolean
   terminalCursorBlink: boolean
   terminalThemeDark: string
   terminalDividerColorDark: string
@@ -2054,6 +2098,9 @@ export type GlobalSettings = {
    *  — can silently rewrite the user's clipboard). Opt-in preserves the
    *  conservative default while making the capability one toggle away. */
   terminalAllowOsc52Clipboard: boolean
+  /** Experimental Claude Code Agent Teams integration. Native panes use a
+   *  tmux-compatible shim so teammate output stays on Orca's normal PTY path. */
+  claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   /** Where the repo setup script runs on workspace create. Defaults to a
    *  background "Setup" tab so the user's main terminal stays immediately
    *  usable without the setup output crowding the initial pane. */
@@ -2156,6 +2203,9 @@ export type GlobalSettings = {
   /** Agents hidden from future picker and automatic launch choices. Detection
    *  remains a raw PATH capability snapshot. */
   disabledTuiAgents: TuiAgent[]
+  /** One-shot guard so the experimental Claude Agent Teams launch mode starts
+   *  hidden for existing profiles without overriding later user opt-ins. */
+  claudeAgentTeamsDefaultDisabledMigrated?: boolean
   /** Why: worktree deletion is destructive (git worktree remove + rm -rf of the
    *  working directory), so Orca shows a confirmation dialog by default. Users
    *  who delete frequently can opt into skipping the dialog via a "Don't ask
@@ -2231,6 +2281,11 @@ export type GlobalSettings = {
    *  key to a backslash, matching the common terminal expectation for that key. */
   terminalJISYenToBackslash: boolean
   experimentalMobile: boolean
+  /** Why: the iOS Simulator feature is default-on for capable macOS hosts, but
+   *  users need a durable off switch that hides UI affordances and blocks CLI attach. */
+  mobileEmulatorEnabled?: boolean
+  /** Preferred iOS Simulator UDID for UI auto-attach and agent CLI attach. */
+  mobileEmulatorDefaultDeviceUdid?: string | null
   /** Auto-restore window for a phone-fit PTY after the last mobile
    *  subscriber leaves. `null` (default) holds the PTY at phone size
    *  indefinitely; the desktop "Restore" banner remains the explicit
@@ -2257,18 +2312,19 @@ export type GlobalSettings = {
    *  and agent-completion events. Opt-in while the signal/noise balance is
    *  being tested. */
   experimentalTerminalAttention: boolean
-  /** Experimental: compact worktree cards by hiding a redundant metadata row
-   *  when the title and branch already say the same thing. */
-  experimentalCompactWorktreeCards: boolean
+  /** Compact worktree cards by hiding a redundant metadata row when the title
+   *  and branch already say the same thing. */
+  compactWorktreeCards: boolean
+  /** Legacy persisted key from the Experimental rollout. New writes use
+   *  compactWorktreeCards. */
+  experimentalCompactWorktreeCards?: boolean
   /** Experimental: when creating a worktree, automatically symlink a
    *  user-configured set of files/folders from the primary checkout (e.g.
    *  `.env`, `node_modules`) into the new worktree. Opt-in while the
    *  configuration surface and edge cases (conflicts with existing paths,
    *  cleanup on worktree delete) are still being worked out. */
   experimentalWorktreeSymlinks: boolean
-  /** Experimental: replaces the New Tab menu's static preview row with a
-   *  command-style launcher for terminals, detected agents, URLs, and files. */
-  experimentalUnifiedNewTabLauncher: boolean
+
   /** Active non-local runtime environment for client-routed RPC. `null`
    *  preserves the current local desktop behavior. */
   activeRuntimeEnvironmentId?: string | null
@@ -2508,6 +2564,7 @@ export type StatusBarItem =
   | 'codex'
   | 'gemini'
   | 'opencode-go'
+  | 'kimi'
   | 'ssh'
   | 'resource-usage'
   | 'ports'
@@ -2533,6 +2590,8 @@ export type TaskResumeState = {
 
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'
 
+export type ProjectOrderBy = 'manual' | 'recent'
+
 export type PersistedUIState = {
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
@@ -2542,6 +2601,11 @@ export type PersistedUIState = {
   rightSidebarWidth: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'
+  /** Project header ordering in `groupBy: 'repo'`, independent of workspace
+   *  `sortBy`. 'manual' (default) uses the persisted repo order and enables
+   *  header drag; 'recent' orders by each project's most recent visible
+   *  workspace activity. */
+  projectOrderBy: ProjectOrderBy
   /** Deprecated; the Active only filter is retired and ignored on hydration. */
   showActiveOnly: boolean
   /** Hide sleeping/inactive workspaces from workspace navigation. Off by default. */
@@ -2579,6 +2643,8 @@ export type PersistedUIState = {
   _workspaceStatusesDefaultVisualsMigrated?: boolean
   /** One-shot migration flag for adding the default-on Ports status item. */
   _portsStatusBarDefaultAdded?: boolean
+  /** One-shot migration flag for adding the default-on Kimi status item. */
+  _kimiStatusBarDefaultAdded?: boolean
   statusBarItems: StatusBarItem[]
   statusBarVisible: boolean
   dismissedUpdateVersion: string | null
@@ -2603,10 +2669,26 @@ export type PersistedUIState = {
   /** User-hidden sidebar entry for the setup guide. The Help menu remains
    *  available so this is a reversible declutter preference, not completion. */
   setupGuideSidebarDismissed?: boolean
+  /** One-shot migration marker for the browser setup-guide milestone. Existing
+   *  profiles missing this marker are evaluated once in the renderer because
+   *  full checklist completion depends on runtime probes. */
+  setupGuideBrowserMilestoneMigrated?: boolean
+  /** Existing users who completed or dismissed the pre-browser checklist stay
+   *  complete after the browser milestone is added. */
+  setupGuideBrowserMilestoneLegacyComplete?: boolean
+  /** User-dismissed browser import hint in the browser toolbar. Import remains
+   *  available from Settings > Browser and the toolbar overflow menu. */
+  browserImportHintHidden?: boolean
+  /** User-hidden empty-state usage CTA in the status bar. Permanently hides the
+   *  "Connect AI accounts to see usage" prompt even if all providers are later
+   *  disconnected — a dismissed teaching nudge stays dismissed. */
+  usageEmptyStateDismissed?: boolean
   /** URL to navigate to when a new browser tab is opened. Null means blank tab.
    *  Phase 3 will expand this to a full BrowserSessionProfile per workspace. */
   browserDefaultUrl?: string | null
   browserDefaultSearchEngine?: 'google' | 'duckduckgo' | 'bing' | 'kagi' | null
+  /** Electron browser zoom level applied when a new local browser tab is created. */
+  browserDefaultZoomLevel?: number
   /** Optional Kagi private-session link used only when Kagi is the search engine. */
   browserKagiSessionLink?: string | null
   /** Saved window bounds so the app restores to the user's last position/size

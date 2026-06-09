@@ -42,6 +42,7 @@ const mockApi = {
     addPRReviewCommentReply: vi.fn(),
     resolveReviewThread: vi.fn(),
     listWorkItems: vi.fn(),
+    countWorkItems: vi.fn().mockResolvedValue(0),
     getProjectViewTable: vi.fn()
   },
   hostedReview: {
@@ -3231,13 +3232,22 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     })
   })
 
-  it('routes work item fetches through repo-scoped IPC even when a runtime is active', async () => {
+  it('routes work item fetches through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items',
+      ok: true,
+      result: {
+        items: [{ type: 'issue', number: 7, title: 'Server issue', url: 'https://example.test/7' }],
+        sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       repos: [
         {
-          id: 'repo-id',
+          id: 'runtime-repo-id',
           path: '/server/repo',
           displayName: 'repo',
           badgeColor: 'blue',
@@ -3245,24 +3255,258 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         }
       ]
     } as Partial<AppState>)
+
+    await store.getState().fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', {
+      force: true,
+      noCache: true
+    })
+
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        limit: 24,
+        query: 'is:open',
+        noCache: true
+      },
+      timeoutMs: 30_000
+    })
+    expect(store.getState().workItemsCache['caller-repo-id::24::is:open'].data?.[0]).toMatchObject({
+      repoId: 'caller-repo-id',
+      number: 7
+    })
+  })
+
+  it('falls back to local work-item IPC when no runtime environment is active', async () => {
+    const store = createTestStore()
     mockApi.gh.listWorkItems.mockResolvedValueOnce({
-      items: [{ type: 'issue', number: 7, title: 'Server issue', url: 'https://example.test/7' }],
+      items: [{ type: 'issue', number: 7, title: 'Local issue', url: 'https://example.test/7' }],
       sources: { issues: { owner: 'up', repo: 'r' }, prs: { owner: 'up', repo: 'r' } }
     })
 
-    await store.getState().fetchWorkItems('repo-id', '/server/repo', 24, '')
+    await store.getState().fetchWorkItems('repo-id', '/local/repo', 24, '')
 
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(mockApi.gh.listWorkItems).toHaveBeenCalledWith({
-      repoPath: '/server/repo',
+      repoPath: '/local/repo',
       repoId: 'repo-id',
       limit: 24,
       query: undefined
     })
-    expect(store.getState().workItemsCache['repo-id::24::'].data?.[0]).toMatchObject({
+  })
+
+  it('falls back to local work-item IPC when the active runtime has no matching repo path', async () => {
+    const store = createTestStore()
+    const error = new Error('Access denied: unknown repository path')
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/known-repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    mockApi.gh.listWorkItems.mockRejectedValueOnce(error)
+
+    try {
+      await expect(
+        store.getState().fetchWorkItems('repo-id', '/server/missing-repo', 24, '')
+      ).rejects.toThrow(error)
+    } finally {
+      consoleError.mockRestore()
+    }
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.listWorkItems).toHaveBeenCalledWith({
+      repoPath: '/server/missing-repo',
       repoId: 'repo-id',
-      number: 7
+      limit: 24,
+      query: undefined
     })
+  })
+
+  it('uses the request-start runtime repo snapshot and skips cache writes after a runtime switch', async () => {
+    const store = createTestStore()
+    type WorkItemsEnvelope = {
+      items: GitHubWorkItem[]
+      sources: { issues: null; prs: null; upstreamCandidate: null }
+    }
+    const blockingResolvers: ((value: WorkItemsEnvelope) => void)[] = []
+    for (let i = 0; i < 8; i++) {
+      mockApi.gh.listWorkItems.mockImplementationOnce(
+        () =>
+          new Promise<WorkItemsEnvelope>((resolve) => {
+            blockingResolvers.push(resolve)
+          })
+      )
+    }
+
+    const blockers = Array.from({ length: 8 }, (_, i) =>
+      store.getState().fetchWorkItems(`blocker-${i}`, `/local/blocker-${i}`, 24, '')
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(blockingResolvers).toHaveLength(8)
+
+    const item = {
+      type: 'issue',
+      number: 42,
+      title: 'Started before switch',
+      url: 'https://example.test/42',
+      updatedAt: '2026-05-22T00:00:00Z'
+    } as GitHubWorkItem
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-started-before-switch',
+      ok: true,
+      result: {
+        items: [item],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-start' },
+      repos: [{ id: 'repo-start', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    const queued = store
+      .getState()
+      .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', { force: true })
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-switched' },
+      repos: [{ id: 'repo-switched', path: '/server/repo', name: 'repo', kind: 'git' }],
+      workItemsCache: {}
+    } as unknown as Partial<AppState>)
+    for (const resolve of blockingResolvers) {
+      resolve({ items: [], sources: { issues: null, prs: null, upstreamCandidate: null } })
+    }
+
+    const result = await queued
+    await Promise.all(blockers)
+
+    expect(result).toEqual([{ ...item, repoId: 'caller-repo-id' }])
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-start',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'repo-start',
+        limit: 24,
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+    expect(
+      store.getState().workItemsCache[workItemsCacheKey('caller-repo-id', 24, 'is:open')]
+    ).toBeUndefined()
+  })
+
+  it('does not reuse an old-runtime in-flight work-item fetch after a runtime switch', async () => {
+    const store = createTestStore()
+    type WorkItemsEnvelope = {
+      items: GitHubWorkItem[]
+      sources: { issues: null; prs: null; upstreamCandidate: null }
+    }
+    type WorkItemsRpcResponse = {
+      id: string
+      ok: true
+      result: WorkItemsEnvelope
+      _meta: { runtimeId: string }
+    }
+    let resolveOldRuntime: (value: WorkItemsRpcResponse) => void = () => {}
+    let resolveNewRuntime: (value: WorkItemsRpcResponse) => void = () => {}
+    runtimeEnvironmentCall
+      .mockImplementationOnce(
+        () =>
+          new Promise<WorkItemsRpcResponse>((resolve) => {
+            resolveOldRuntime = resolve
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<WorkItemsRpcResponse>((resolve) => {
+            resolveNewRuntime = resolve
+          })
+      )
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-old' },
+      repos: [{ id: 'repo-old-runtime', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+    const oldFetch = store
+      .getState()
+      .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
+
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-new' },
+      repos: [{ id: 'repo-new-runtime', path: '/server/repo', name: 'repo', kind: 'git' }],
+      workItemsCache: {}
+    } as unknown as Partial<AppState>)
+    const newFetch = store
+      .getState()
+      .fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open')
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2))
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(2)
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
+      selector: 'env-old',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'repo-old-runtime',
+        limit: 24,
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'env-new',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'repo-new-runtime',
+        limit: 24,
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+
+    const newRuntimeItem = {
+      type: 'issue',
+      number: 2,
+      title: 'New runtime item',
+      url: 'https://example.test/new',
+      updatedAt: '2026-05-22T00:00:00Z'
+    } as GitHubWorkItem
+    resolveNewRuntime({
+      id: 'rpc-new-work-items',
+      ok: true,
+      result: {
+        items: [newRuntimeItem],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      },
+      _meta: { runtimeId: 'new-runtime' }
+    })
+    await expect(newFetch).resolves.toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
+
+    const oldRuntimeItem = {
+      type: 'issue',
+      number: 1,
+      title: 'Old runtime item',
+      url: 'https://example.test/old',
+      updatedAt: '2026-05-21T00:00:00Z'
+    } as GitHubWorkItem
+    resolveOldRuntime({
+      id: 'rpc-old-work-items',
+      ok: true,
+      result: {
+        items: [oldRuntimeItem],
+        sources: { issues: null, prs: null, upstreamCandidate: null }
+      },
+      _meta: { runtimeId: 'old-runtime' }
+    })
+    await expect(oldFetch).resolves.toEqual([{ ...oldRuntimeItem, repoId: 'caller-repo-id' }])
+    expect(
+      store.getState().workItemsCache[workItemsCacheKey('caller-repo-id', 24, 'is:open')]?.data
+    ).toEqual([{ ...newRuntimeItem, repoId: 'caller-repo-id' }])
   })
 
   it('bounds work-item cache entries across many repos', async () => {
@@ -3365,6 +3609,104 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     } finally {
       consoleWarn.mockRestore()
     }
+  })
+
+  it('routes work-item next-page fetches through the active runtime environment', async () => {
+    const item = {
+      type: 'pr',
+      number: 9,
+      title: 'Server PR',
+      url: 'https://example.test/9',
+      updatedAt: '2026-05-22T00:00:00Z'
+    } as GitHubWorkItem
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-page',
+      ok: true,
+      result: {
+        items: [item],
+        sources: { issues: null, prs: { owner: 'up', repo: 'r' }, upstreamCandidate: null }
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .fetchWorkItemsNextPage(
+        [{ repoId: 'caller-repo-id', path: '/server/repo' }],
+        24,
+        100,
+        'is:open',
+        '2026-05-22T00:00:00Z'
+      )
+
+    expect(mockApi.gh.listWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.listWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        limit: 24,
+        query: 'is:open',
+        before: '2026-05-22T00:00:00Z'
+      },
+      timeoutMs: 30_000
+    })
+    expect(result).toEqual({
+      items: [{ ...item, repoId: 'caller-repo-id' }],
+      failedCount: 0
+    })
+  })
+
+  it('routes work-item counts through the active runtime environment', async () => {
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-work-items-count',
+      ok: true,
+      result: 12,
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      repos: [{ id: 'runtime-repo-id', path: '/server/repo', name: 'repo', kind: 'git' }]
+    } as unknown as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .countWorkItemsAcrossRepos([{ repoId: 'caller-repo-id', path: '/server/repo' }], 'is:open')
+
+    expect(result).toBe(12)
+    expect(mockApi.gh.countWorkItems).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'github.countWorkItems',
+      params: {
+        repo: 'runtime-repo-id',
+        query: 'is:open'
+      },
+      timeoutMs: 30_000
+    })
+  })
+
+  it('falls back to local IPC for work-item counts without an active runtime environment', async () => {
+    const store = createTestStore()
+    mockApi.gh.countWorkItems.mockResolvedValueOnce(7)
+
+    const result = await store
+      .getState()
+      .countWorkItemsAcrossRepos([{ repoId: 'repo-id', path: '/local/repo' }], '')
+
+    expect(result).toBe(7)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(mockApi.gh.countWorkItems).toHaveBeenCalledWith({
+      repoPath: '/local/repo',
+      repoId: 'repo-id',
+      query: undefined
+    })
   })
 
   it('routes project table fetches through the active runtime environment', async () => {

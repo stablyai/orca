@@ -201,6 +201,15 @@ function findButtons(node: unknown): { text: string; onClick: (() => void) | und
       const text = extractText(el.props.children)
       buttons.push({ text, onClick: el.props.onClick as (() => void) | undefined })
     }
+    // Why: appearance controls were split into subcomponents; expand them so
+    // this wiring test can still find nested buttons without a full render tree.
+    if (typeof el.type === 'function' && typeName !== 'Button') {
+      try {
+        traverse((el.type as (props: Record<string, unknown>) => unknown)(el.props))
+      } catch {
+        // Ignore components that need runtime context the test does not provide.
+      }
+    }
     if (el.props?.children) {
       traverse(el.props.children)
     }

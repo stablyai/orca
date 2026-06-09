@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 import type { MouseEvent, ReactElement, ReactNode } from 'react'
+import { translate } from '@/i18n/i18n'
 
 export function DiffSectionHeader({
   path,
@@ -55,7 +56,7 @@ export function DiffSectionHeader({
               console.error('Failed to copy diff path:', error)
             })
           }}
-          title="Copy path"
+          title={translate('auto.components.editor.DiffSectionHeader.8915726e93', 'Copy path')}
         >
           {path}
         </span>

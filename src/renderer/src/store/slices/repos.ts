@@ -16,11 +16,13 @@ import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
+import { reconcileFetchedRepos } from './repo-identity-reconcile'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
+import { translate } from '@/i18n/i18n'
 
 const ERROR_TOAST_DURATION = 60_000
 
@@ -41,9 +43,8 @@ type RepoUpdate = Partial<
     | 'externalWorktreeVisibilityPromptDismissedAt'
     | 'projectGroupId'
     | 'projectGroupOrder'
-    | 'sourceControlAi'
   >
->
+> & { sourceControlAi?: Repo['sourceControlAi'] | null }
 
 type NestedRepoScanControls = {
   scanId?: string
@@ -170,8 +171,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             ).repos
       set((s) => {
         const validRepoIds = new Set(repos.map((repo) => repo.id))
+        const reconciledRepos = reconcileFetchedRepos(s.repos, repos)
         return {
-          repos,
+          repos: reconciledRepos,
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
           setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
@@ -283,9 +285,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return result
     } catch (err) {
       console.error('Failed to import nested repos:', err)
-      toast.error('Failed to import repositories', {
-        description: err instanceof Error ? err.message : String(err)
-      })
+      toast.error(
+        translate('auto.store.slices.repos.6d3318e813', 'Failed to import repositories'),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
       return null
     }
   },
@@ -451,18 +456,25 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return { repos: [...s.repos, repo] }
       })
       if (alreadyAdded) {
-        toast.info('Project already added', { description: repo.displayName })
-      } else {
-        toast.success(isGitRepoKind(repo) ? 'Project added' : 'Folder added', {
+        toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
           description: repo.displayName
         })
+      } else {
+        toast.success(
+          isGitRepoKind(repo)
+            ? translate('auto.store.slices.repos.8bb3ad7935', 'Project added')
+            : translate('auto.store.slices.repos.90d129b48b', 'Folder added'),
+          {
+            description: repo.displayName
+          }
+        )
       }
       return repo
     } catch (err) {
       console.error('Failed to add project:', err)
       const message = err instanceof Error ? err.message : String(err)
       const duration = ERROR_TOAST_DURATION
-      toast.error('Failed to add project', {
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
         description: message,
         duration
       })
@@ -475,7 +487,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     if (target.kind !== 'local') {
       // Why: OS folder pickers return client-local paths. Remote environments
       // need an explicit server path, which the Add Project dialog handles.
-      toast.error('Use a server path to add projects from a remote runtime.')
+      toast.error(
+        translate(
+          'auto.store.slices.repos.e649269645',
+          'Use a server path to add projects from a remote runtime.'
+        )
+      )
       return null
     }
     const path = await window.api.repos.pickFolder()
@@ -521,7 +538,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error('Failed to add folder:', err)
       const message = err instanceof Error ? err.message : String(err)
-      toast.error('Failed to add folder', { description: message, duration: ERROR_TOAST_DURATION })
+      toast.error(translate('auto.store.slices.repos.b7e14472ae', 'Failed to add folder'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
       return null
     }
   },
@@ -661,16 +681,38 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       try {
         const sanitizedUpdates = sanitizeRepoUpdate(updates)
         const target = getActiveRuntimeTarget(get().settings)
-        await (target.kind === 'local'
-          ? window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
-          : callRuntimeRpc(
-              target,
-              'repo.update',
-              { repo: projectId, updates: sanitizedUpdates },
-              { timeoutMs: 15_000 }
-            ))
+        const updatedRepo =
+          target.kind === 'local'
+            ? await window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
+            : (
+                await callRuntimeRpc<{ repo: Repo }>(
+                  target,
+                  'repo.update',
+                  { repo: projectId, updates: sanitizedUpdates },
+                  { timeoutMs: 15_000 }
+                )
+              ).repo
         set((s) => ({
-          repos: s.repos.map((r) => (r.id === projectId ? { ...r, ...sanitizedUpdates } : r))
+          repos: s.repos.map((r) => {
+            if (r.id !== projectId) {
+              return r
+            }
+            if (updatedRepo) {
+              return updatedRepo
+            }
+            if (sanitizedUpdates.sourceControlAi === null) {
+              const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } = r
+              const { sourceControlAi: _clearedSourceControlAi, ...updatesWithoutSourceControlAi } =
+                sanitizedUpdates
+              return { ...repoWithoutSourceControlAi, ...updatesWithoutSourceControlAi }
+            }
+            const { sourceControlAi, ...updatesWithoutSourceControlAi } = sanitizedUpdates
+            return {
+              ...r,
+              ...updatesWithoutSourceControlAi,
+              ...(sourceControlAi !== undefined ? { sourceControlAi } : {})
+            }
+          })
         }))
         return true
       } catch (err) {

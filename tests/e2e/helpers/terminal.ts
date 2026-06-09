@@ -532,10 +532,11 @@ export async function countVisibleTerminalPanes(page: Page): Promise<number> {
 export async function waitForTerminalOutput(
   page: Page,
   expected: string,
-  timeoutMs = 10_000
+  timeoutMs = 10_000,
+  charLimit = 4000
 ): Promise<void> {
   await expect
-    .poll(async () => (await getTerminalContent(page)).includes(expected), {
+    .poll(async () => (await getTerminalContent(page, charLimit)).includes(expected), {
       timeout: timeoutMs,
       message: `Terminal did not contain "${expected}"`
     })

@@ -35,7 +35,10 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     onData: vi.fn(),
     onClose: vi.fn()
   }),
-  execCommand: vi.fn(),
+  execCommand: vi.fn()
+}))
+
+vi.mock('./ssh-remote-node-resolution', () => ({
   resolveRemoteNodePath: vi.fn().mockResolvedValue('/usr/bin/node')
 }))
 
@@ -56,6 +59,7 @@ vi.mock('./ssh-connection-utils', () => ({
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { parseUnameToRelayPlatform } from './relay-protocol'
+import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import {
   acquireInstallLock,
   abandonInstall,
@@ -117,6 +121,11 @@ function makeMockConnection(capture: SftpWriteCapture): SshConnection {
 }
 
 type ExecResponse = string | { reject: string }
+
+function decodePowerShellCommand(command: string): string | null {
+  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+  return match ? Buffer.from(match[1], 'base64').toString('utf16le') : null
+}
 
 // Exec call order under our mocks (deploy happy path):
 //   1: uname              2: $HOME            3: mkdir remoteDir (uploadRelay)
@@ -426,6 +435,41 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
     // Absence of PROBE_OK is what triggers the warn, regardless of what
     // appears around it. finalize still runs (degraded-mode by design).
+    const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
+    expect(warnMessages.some((m) => m.includes('[ssh-relay][NPTY-MISSING]'))).toBe(true)
+    expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(abandonInstall)).not.toHaveBeenCalled()
+  })
+
+  it('keeps Windows node-pty probe failures non-fatal by checking LASTEXITCODE', async () => {
+    vi.mocked(parseUnameToRelayPlatform).mockReturnValueOnce('win32-x64')
+    vi.mocked(resolveRemoteNodePath).mockResolvedValueOnce('C:/Program Files/nodejs/node.exe')
+    const conn = makeMockConnection(sftpCapture)
+    feed([
+      'Windows AMD64',
+      'C:\\Users\\u',
+      '', // mkdir remoteDir
+      '', // npm install native deps
+      'MISSING\n', // native process exit normalized by PowerShell command
+      '', // remove probe stderr file
+      '', // no persisted active pipe marker
+      'WAITING',
+      '', // Start-Process launch
+      'READY',
+      '' // persist active pipe marker
+    ])
+
+    await deployAndLaunchRelay(conn)
+
+    const probeCommand =
+      vi
+        .mocked(execCommand)
+        .mock.calls.map(([, c]) => c)
+        .find((command) => decodePowerShellCommand(command)?.includes('require("node-pty")')) ?? ''
+    const probeScript = decodePowerShellCommand(probeCommand) ?? ''
+    expect(probeScript).toContain('$LASTEXITCODE -ne 0')
+    expect(probeScript).toContain("'MISSING'")
+
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
     expect(warnMessages.some((m) => m.includes('[ssh-relay][NPTY-MISSING]'))).toBe(true)
     expect(vi.mocked(finalizeInstall)).toHaveBeenCalledTimes(1)

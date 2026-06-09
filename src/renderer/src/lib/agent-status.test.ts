@@ -226,14 +226,15 @@ describe('detectAgentStatusFromTitle', () => {
     expect(detectAgentStatusFromTitle('Codex Working')).toBe('working')
   })
 
-  // Why: `detectAgentStatusFromTitle` uses a substring-based `containsAgentName`
-  // fallback, so a cwd-path containing an agent-name fragment without a strong
-  // keyword or ". "/"* " prefix still falls through to the 'idle' branch. Pin
-  // the behavior so a future tightening (or deliberate relaxation) of
-  // `containsAgentName` is an explicit decision.
-  it('still returns idle for cwd-path containing agent name (known containsAgentName gap)', () => {
-    expect(detectAgentStatusFromTitle('~/codex-scratch')).toBe('idle')
-    expect(detectAgentStatusFromTitle('~/codex already built')).toBe('idle')
+  // Why: `containsAgentName` token-matches legacy agent names, so a cwd-path
+  // fragment like "~/codex-scratch" (hyphen-adjacent) or "opencode-blinker"
+  // (the worktree name that mislabeled Codex tabs as OpenCode) no longer mints
+  // an 'idle' agent signal. A bare "~/codex" path still has no strong keyword.
+  it('does not treat cwd-path agent-name fragments as agent activity', () => {
+    expect(detectAgentStatusFromTitle('~/codex-scratch')).toBeNull()
+    expect(detectAgentStatusFromTitle('~/codex already built')).toBeNull()
+    expect(detectAgentStatusFromTitle('opencode-blinker')).toBeNull()
+    expect(detectAgentStatusFromTitle('claude-scratch')).toBeNull()
   })
 
   // Why: short agent names are unsafe under substring detection. Telemetry now
@@ -417,6 +418,27 @@ describe('getAgentLabel', () => {
   it('does not label Android titles as Droid', () => {
     expect(getAgentLabel('android emulator ready')).toBeNull()
   })
+
+  // Why: cwd/worktree titles embed agent-name fragments. Substring matching
+  // mislabeled a Codex tab whose title fell back to the "opencode-blinker"
+  // worktree name as OpenCode. Token matching must reject these fragments for
+  // every legacy agent name.
+  it('does not label cwd/worktree path fragments as an agent', () => {
+    expect(getAgentLabel('opencode-blinker')).toBeNull()
+    expect(getAgentLabel('claude-scratch')).toBeNull()
+    expect(getAgentLabel('~/projects/codex-scratch')).toBeNull()
+    expect(getAgentLabel('~/cursor-rules')).toBeNull()
+    expect(getAgentLabel('grok-fixtures')).toBeNull()
+    expect(getAgentLabel('aider-config')).toBeNull()
+  })
+
+  it('still labels real agent titles that contain the name as a token', () => {
+    expect(getAgentLabel('OpenCode ready')).toBe('OpenCode')
+    expect(getAgentLabel('claude.exe')).toBe('Claude Code')
+    expect(getAgentLabel('openclaude.cmd')).toBe('OpenClaude')
+    expect(getAgentLabel('⠋ Codex')).toBe('Codex')
+    expect(getAgentLabel('Aider idle')).toBe('Aider')
+  })
 })
 
 describe('isClaudeAgent', () => {
@@ -424,6 +446,11 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ Claude Code')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
     expect(isClaudeAgent('OpenClaude ready')).toBe(false)
+  })
+
+  it('does not classify non-prefix Claude mentions as Claude agent titles', () => {
+    expect(isClaudeAgent('ask claude later')).toBe(false)
+    expect(getAgentLabel('ask claude later')).toBeNull()
   })
 })
 

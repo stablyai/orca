@@ -42,6 +42,7 @@ import { getLineageRenderInfo } from './worktree-list-groups'
 import { getWorkspaceStatus, getWorkspaceStatusVisualMeta } from './workspace-status'
 import { WorktreeOpenInSubMenu } from './WorktreeOpenInMenu'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   worktree: Worktree
@@ -511,12 +512,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               />
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
-                Copy Path
+                {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
                 {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
-                {worktree.isPinned ? 'Unpin' : 'Pin'}
+                {worktree.isPinned
+                  ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
+                  : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
                 {worktree.isUnread ? (
@@ -524,20 +527,31 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                 ) : (
                   <Bell className="size-3.5" />
                 )}
-                {worktree.isUnread ? 'Mark Read' : 'Mark Unread'}
+                {worktree.isUnread
+                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
+                  : translate(
+                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
+                      'Mark Unread'
+                    )}
               </DropdownMenuItem>
               {repo ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={handleCreateGroupFromRepo} disabled={isDeleting}>
                     <FolderPlus className="size-3.5" />
-                    New group from project
+                    {translate(
+                      'auto.components.sidebar.WorktreeContextMenu.503ec0f8e6',
+                      'New group from project'
+                    )}
                   </DropdownMenuItem>
                   {projectGroups.length > 0 ? (
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger disabled={isDeleting}>
                         <FolderInput className="size-3.5" />
-                        Move to group
+                        {translate(
+                          'auto.components.sidebar.WorktreeContextMenu.76865d827f',
+                          'Move to group'
+                        )}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent>
                         {projectGroups.map((group) => (
@@ -555,7 +569,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   {repo.projectGroupId ? (
                     <DropdownMenuItem onSelect={handleRemoveProjectFromGroup} disabled={isDeleting}>
                       <CircleX className="size-3.5" />
-                      Remove from group
+                      {translate(
+                        'auto.components.sidebar.WorktreeContextMenu.d35dfeae58',
+                        'Remove from group'
+                      )}
                     </DropdownMenuItem>
                   ) : null}
                 </>
@@ -566,13 +583,19 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
                   {validParentWorktreeId && (
                     <DropdownMenuItem onSelect={handleOpenParent} disabled={isDeleting}>
                       <Workflow className="size-3.5" />
-                      Open Parent Workspace
+                      {translate(
+                        'auto.components.sidebar.WorktreeContextMenu.8d9cd19d09',
+                        'Open Parent Workspace'
+                      )}
                     </DropdownMenuItem>
                   )}
                   {lineage && (
                     <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
                       <Unlink className="size-3.5" />
-                      Remove from Parent
+                      {translate(
+                        'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
+                        'Remove from Parent'
+                      )}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
@@ -585,7 +608,10 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
               {hasAnyContextLineage && (
                 <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
                   <Unlink className="size-3.5" />
-                  Remove from Parent
+                  {translate(
+                    'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
+                    'Remove from Parent'
+                  )}
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
@@ -594,7 +620,15 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           <DropdownMenuSub>
             <DropdownMenuSubTrigger disabled={deletingContext}>
               <Kanban className="size-3.5" />
-              {isMultiContext ? 'Move Statuses To' : 'Move to Status'}
+              {isMultiContext
+                ? translate(
+                    'auto.components.sidebar.WorktreeContextMenu.56cde9e8e6',
+                    'Move Statuses To'
+                  )
+                : translate(
+                    'auto.components.sidebar.WorktreeContextMenu.84cdbb7e30',
+                    'Move to Status'
+                  )}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-44">
               <DropdownMenuRadioGroup value={contextWorkspaceStatus}>
@@ -617,7 +651,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
               <Pencil className="size-3.5" />
-              Update
+              {translate('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
             </DropdownMenuItem>
           )}
           <DropdownMenuSeparator />
@@ -633,8 +667,14 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
               {isMultiContext
-                ? 'Close all active panels in the selected workspaces to free up memory and CPU.'
-                : 'Close all active panels in this workspace to free up memory and CPU.'}
+                ? translate(
+                    'auto.components.sidebar.WorktreeContextMenu.7d190f7d2b',
+                    'Close all active panels in the selected workspaces to free up memory and CPU.'
+                  )
+                : translate(
+                    'auto.components.sidebar.WorktreeContextMenu.0918b35e4f',
+                    'Close all active panels in this workspace to free up memory and CPU.'
+                  )}
             </TooltipContent>
           </Tooltip>
           {/* Why: primary checkout rows remove the project from Orca instead of
@@ -651,25 +691,37 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
             }
             title={
               !isMultiContext && worktree.isMainWorktree && !removesProject
-                ? 'The project could not be found'
+                ? translate(
+                    'auto.components.sidebar.WorktreeContextMenu.e091caab15',
+                    'The project could not be found'
+                  )
                 : undefined
             }
           >
             <Trash2 className="size-3.5" />
             {deletingContext
-              ? 'Deleting…'
+              ? translate('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
               : isMultiContext
                 ? deleteLabel
                 : removesProject
-                  ? 'Remove Project from Orca'
-                  : 'Delete'}
+                  ? translate(
+                      'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
+                      'Remove Project from Orca'
+                    )
+                  : translate('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
       <ProjectGroupNameDialog
         open={createGroupDialogOpen}
-        title="New Project Group"
-        description="Create a group and move this project into it."
+        title={translate(
+          'auto.components.sidebar.WorktreeContextMenu.6664418e98',
+          'New Project Group'
+        )}
+        description={translate(
+          'auto.components.sidebar.WorktreeContextMenu.c39c37676a',
+          'Create a group and move this project into it.'
+        )}
         initialName={repo ? `${repo.displayName} group` : ''}
         confirmLabel="Create"
         onOpenChange={setCreateGroupDialogOpen}

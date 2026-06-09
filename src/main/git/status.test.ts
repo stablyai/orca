@@ -463,6 +463,32 @@ describe('getStatus', () => {
     ])
   })
 
+  it('preserves porcelain v2 submodule dirtiness flags on status rows', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '1 AM S..U 000000 160000 160000 0000000000000000000000000000000000000000 7844cb64e631f17a9ca5b548f3500ef7cecd2f17 nested-repo\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.entries).toEqual([
+      {
+        path: 'nested-repo',
+        status: 'added',
+        area: 'staged',
+        submodule: { commitChanged: false, trackedChanges: false, untrackedChanges: true }
+      },
+      {
+        path: 'nested-repo',
+        status: 'modified',
+        area: 'unstaged',
+        submodule: { commitChanged: false, trackedChanges: false, untrackedChanges: true }
+      }
+    ])
+  })
+
   it('omits ignored files by default and parses them when requested', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)

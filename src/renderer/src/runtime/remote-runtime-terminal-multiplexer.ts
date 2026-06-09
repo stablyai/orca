@@ -3,6 +3,7 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
+  decodeTerminalStreamJson,
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
@@ -35,7 +36,7 @@ type TerminalMultiplexEvent =
   | { type: string; streamId?: number; [key: string]: unknown }
 
 export type RemoteRuntimeMultiplexedTerminalCallbacks = {
-  onData: (data: string) => void
+  onData: (data: string, meta?: { seq?: number; rawLength?: number }) => void
   onSnapshot: (data: string) => void
   onSubscribed?: () => void
   onEnd?: () => void
@@ -55,6 +56,13 @@ export type RemoteRuntimeMultiplexedTerminal = {
   streamId: number
   sendInput: (text: string) => boolean
   resize: (cols: number, rows: number) => boolean
+  serializeBuffer: (opts?: { scrollbackRows?: number }) => Promise<{
+    data: string
+    cols: number
+    rows: number
+    seq?: number
+    source?: 'headless' | 'renderer'
+  } | null>
   close: () => void
 }
 
@@ -65,10 +73,39 @@ type RemoteRuntimeMultiplexedTerminalState = {
   snapshotChunks: Uint8Array<ArrayBufferLike>[]
   snapshotBytes: number
   snapshotOverflowed: boolean
+  snapshotTarget: 'initial' | 'request'
+  snapshotInfo: RemoteRuntimeSnapshotInfo | null
+  initialSnapshotReceived: boolean
+  pendingSnapshotRequest: RemoteRuntimeSnapshotRequest | null
+}
+
+type RemoteRuntimeSnapshotInfo = {
+  cols?: number
+  rows?: number
+  seq?: number
+  source?: 'headless' | 'renderer'
+  requestId?: number
+  truncated?: boolean
+}
+
+type RemoteRuntimeSnapshotRequest = {
+  requestId: number
+  resolve: (
+    snapshot: {
+      data: string
+      cols: number
+      rows: number
+      seq?: number
+      source?: 'headless' | 'renderer'
+    } | null
+  ) => void
+  reject: (error: Error) => void
+  timer: ReturnType<typeof setTimeout>
 }
 
 const CONTROL_STREAM_ID = 0
 const MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES = 2 * 1024 * 1024
+const REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS = 10_000
 const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
   'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
 
@@ -80,6 +117,7 @@ class RemoteRuntimeTerminalMultiplexer {
   private readyRejecter: ((error: Error) => void) | null = null
   private ready = false
   private nextStreamId = 1
+  private nextSnapshotRequestId = 1
 
   constructor(
     private readonly environmentId: string,
@@ -102,7 +140,11 @@ class RemoteRuntimeTerminalMultiplexer {
       callbacks: args.callbacks,
       snapshotChunks: [],
       snapshotBytes: 0,
-      snapshotOverflowed: false
+      snapshotOverflowed: false,
+      snapshotTarget: 'initial',
+      snapshotInfo: null,
+      initialSnapshotReceived: false,
+      pendingSnapshotRequest: null
     }
     this.streams.set(streamId, state)
 
@@ -116,9 +158,11 @@ class RemoteRuntimeTerminalMultiplexer {
           TerminalStreamOpcode.Resize,
           encodeTerminalStreamJson({ cols, rows })
         ),
+      serializeBuffer: (opts) => this.requestSnapshot(state, opts),
       close: () => {
         if (this.streams.get(streamId) === state) {
           this.sendFrame(streamId, TerminalStreamOpcode.Unsubscribe)
+          rejectPendingSnapshotRequest(state, 'Remote terminal stream closed.')
           this.streams.delete(streamId)
           this.closeIfIdle()
         }
@@ -240,11 +284,16 @@ class RemoteRuntimeTerminalMultiplexer {
     }
     if (event.type === 'end') {
       clearSnapshot(stream)
+      rejectPendingSnapshotRequest(stream, 'Remote terminal stream ended.')
       this.streams.delete(event.streamId)
       stream.callbacks.onEnd?.()
       this.closeIfIdle()
     } else if (event.type === 'error') {
       clearSnapshot(stream)
+      rejectPendingSnapshotRequest(
+        stream,
+        typeof event.message === 'string' ? event.message : 'Remote terminal stream failed.'
+      )
       stream.callbacks.onError?.(
         typeof event.message === 'string' ? event.message : 'Remote terminal stream failed.'
       )
@@ -279,11 +328,22 @@ class RemoteRuntimeTerminalMultiplexer {
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Output) {
-      stream.callbacks.onData(decodeTerminalStreamText(frame.payload))
+      const data = decodeTerminalStreamText(frame.payload)
+      stream.callbacks.onData(data, {
+        seq: typeof frame.seq === 'number' && frame.seq > 0 ? frame.seq : undefined,
+        rawLength: data.length
+      })
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
       clearSnapshot(stream)
+      stream.snapshotInfo = decodeSnapshotInfo(frame.payload)
+      const requestId = stream.snapshotInfo?.requestId
+      stream.snapshotTarget =
+        typeof requestId === 'number' ||
+        (stream.initialSnapshotReceived && stream.pendingSnapshotRequest)
+          ? 'request'
+          : 'initial'
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
@@ -292,26 +352,110 @@ class RemoteRuntimeTerminalMultiplexer {
       }
       stream.snapshotBytes += frame.payload.byteLength
       if (stream.snapshotBytes > MAX_REMOTE_TERMINAL_SNAPSHOT_BYTES) {
-        clearSnapshot(stream)
         stream.snapshotOverflowed = true
-        stream.callbacks.onError?.(REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE)
+        if (stream.snapshotTarget === 'initial') {
+          stream.callbacks.onError?.(REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE)
+        }
         return
       }
       stream.snapshotChunks.push(frame.payload)
       return
     }
     if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
-      if (!stream.snapshotOverflowed) {
-        stream.callbacks.onSnapshot(decodeTerminalStreamText(concatBytes(stream.snapshotChunks)))
+      const data = stream.snapshotOverflowed
+        ? null
+        : decodeTerminalStreamText(concatBytes(stream.snapshotChunks))
+      const target = stream.snapshotTarget
+      const info = stream.snapshotInfo
+      const pendingRequest = stream.pendingSnapshotRequest
+      const matchesPendingRequest =
+        target === 'request' &&
+        pendingRequest &&
+        (typeof info?.requestId === 'number'
+          ? info.requestId === pendingRequest.requestId
+          : stream.initialSnapshotReceived)
+      if (!stream.snapshotOverflowed && info?.truncated !== true) {
+        if (matchesPendingRequest) {
+          pendingRequest.resolve({
+            data: data ?? '',
+            cols: info?.cols ?? 80,
+            rows: info?.rows ?? 24,
+            seq: info?.seq,
+            source: info?.source
+          })
+          clearPendingSnapshotRequest(stream)
+        } else if (target === 'initial') {
+          stream.callbacks.onSnapshot(data ?? '')
+        }
+      } else if (matchesPendingRequest) {
+        pendingRequest.resolve(null)
+        clearPendingSnapshotRequest(stream)
       }
       clearSnapshot(stream)
-      stream.callbacks.onSubscribed?.()
+      if (target === 'initial') {
+        stream.initialSnapshotReceived = true
+        stream.callbacks.onSubscribed?.()
+      }
       return
     }
     if (frame.opcode === TerminalStreamOpcode.Error) {
       clearSnapshot(stream)
+      const pendingSnapshotRequest = stream.pendingSnapshotRequest
+      if (pendingSnapshotRequest) {
+        clearPendingSnapshotRequest(stream)
+        pendingSnapshotRequest.reject(new Error(decodeTerminalStreamText(frame.payload)))
+        return
+      }
       stream.callbacks.onError?.(decodeTerminalStreamText(frame.payload))
     }
+  }
+
+  private requestSnapshot(
+    stream: RemoteRuntimeMultiplexedTerminalState,
+    opts?: { scrollbackRows?: number }
+  ): Promise<{
+    data: string
+    cols: number
+    rows: number
+    seq?: number
+    source?: 'headless' | 'renderer'
+  } | null> {
+    if (this.streams.get(stream.streamId) !== stream || !this.ready || !this.subscription) {
+      return Promise.resolve(null)
+    }
+    if (stream.pendingSnapshotRequest) {
+      return Promise.reject(new Error('Remote terminal snapshot already in flight.'))
+    }
+    const requestId = this.allocateSnapshotRequestId()
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (stream.pendingSnapshotRequest?.timer === timer) {
+          stream.pendingSnapshotRequest = null
+          reject(new Error('Remote terminal snapshot timed out.'))
+        }
+      }, REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS)
+      if (typeof timer.unref === 'function') {
+        timer.unref()
+      }
+      stream.pendingSnapshotRequest = { requestId, resolve, reject, timer }
+      if (
+        !this.sendFrame(
+          stream.streamId,
+          TerminalStreamOpcode.SnapshotRequest,
+          encodeTerminalStreamJson({ requestId, scrollbackRows: opts?.scrollbackRows })
+        )
+      ) {
+        clearPendingSnapshotRequest(stream)
+        resolve(null)
+      }
+    })
+  }
+
+  private allocateSnapshotRequestId(): number {
+    const id = this.nextSnapshotRequestId
+    this.nextSnapshotRequestId =
+      this.nextSnapshotRequestId >= 0x7fffffff ? 1 : this.nextSnapshotRequestId + 1
+    return id
   }
 
   private sendFrame(
@@ -357,6 +501,7 @@ class RemoteRuntimeTerminalMultiplexer {
     this.streams.clear()
     for (const stream of streams) {
       clearSnapshot(stream)
+      rejectPendingSnapshotRequest(stream, message ?? 'Remote runtime connection closed.')
       const canHandleClose = Boolean(stream.callbacks.onTransportClose)
       stream.callbacks.onTransportClose?.()
       if (message && !canHandleClose) {
@@ -429,6 +574,52 @@ function clearSnapshot(stream: RemoteRuntimeMultiplexedTerminalState): void {
   stream.snapshotChunks = []
   stream.snapshotBytes = 0
   stream.snapshotOverflowed = false
+  stream.snapshotTarget = 'initial'
+  stream.snapshotInfo = null
+}
+
+function clearPendingSnapshotRequest(stream: RemoteRuntimeMultiplexedTerminalState): void {
+  const request = stream.pendingSnapshotRequest
+  stream.pendingSnapshotRequest = null
+  if (request) {
+    clearTimeout(request.timer)
+  }
+}
+
+function rejectPendingSnapshotRequest(
+  stream: RemoteRuntimeMultiplexedTerminalState,
+  message: string
+): void {
+  const request = stream.pendingSnapshotRequest
+  if (!request) {
+    return
+  }
+  clearPendingSnapshotRequest(stream)
+  request.reject(new Error(message))
+}
+
+function decodeSnapshotInfo(
+  payload: Uint8Array<ArrayBufferLike>
+): RemoteRuntimeSnapshotInfo | null {
+  const raw = decodeTerminalStreamJson<{
+    cols?: unknown
+    rows?: unknown
+    seq?: unknown
+    source?: unknown
+    requestId?: unknown
+    truncated?: unknown
+  }>(payload)
+  if (!raw) {
+    return null
+  }
+  return {
+    cols: typeof raw.cols === 'number' ? raw.cols : undefined,
+    rows: typeof raw.rows === 'number' ? raw.rows : undefined,
+    seq: typeof raw.seq === 'number' ? raw.seq : undefined,
+    source: raw.source === 'headless' || raw.source === 'renderer' ? raw.source : undefined,
+    requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
+    truncated: raw.truncated === true
+  }
 }
 
 function isTerminalDriverState(

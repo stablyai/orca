@@ -169,6 +169,7 @@ const UiUpdate = z
       .enum(['google', 'duckduckgo', 'bing', 'kagi'])
       .nullable()
       .optional(),
+    browserDefaultZoomLevel: z.number().finite().optional(),
     browserKagiSessionLink: NullableString.optional(),
     windowBounds: z
       .object({
@@ -189,6 +190,7 @@ const UiUpdate = z
     starNagCompleted: z.boolean().optional(),
     trustedOrcaHooks: z.record(z.string(), z.unknown()).optional(),
     setupScriptPromptDismissedRepoIds: StringArray.optional(),
+    usageEmptyStateDismissed: z.boolean().optional(),
     petVisible: z.boolean().optional(),
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),

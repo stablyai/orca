@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { FilePlus, FileText, Globe, Loader2, Search } from 'lucide-react'
+import { FilePlus, FileText, Globe, Loader2, Smartphone, TerminalSquare } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -14,18 +14,27 @@ import {
   findMatchingTabAgentLaunchOptions,
   type TabAgentLaunchOption
 } from './tab-agent-launch-options'
+import {
+  findMatchingTabCreateMenuOptions,
+  type TabCreateMenuOption
+} from './tab-create-menu-options'
 import type { TuiAgent } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 const EMPTY_AGENT_OPTIONS: readonly TabAgentLaunchOption[] = []
+const EMPTY_MENU_OPTIONS: readonly TabCreateMenuOption[] = []
 
 type TabBarCreateEntryProps = {
   agentOptions?: readonly TabAgentLaunchOption[]
   groupId: string
   menuOpen: boolean
+  menuOptions?: readonly TabCreateMenuOption[]
   onDidOpenEntry?: () => void
   onLaunchAgent?: (agent: TuiAgent) => void
   onOpenDefaultTerminal?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
+  onQueryChange?: (query: string) => void
+  onSelectMenuOption?: (option: TabCreateMenuOption) => void
   worktreeId: string
 }
 
@@ -33,10 +42,13 @@ export default function TabBarCreateEntry({
   agentOptions = EMPTY_AGENT_OPTIONS,
   groupId,
   menuOpen,
+  menuOptions = EMPTY_MENU_OPTIONS,
   onDidOpenEntry,
   onLaunchAgent,
   onOpenDefaultTerminal,
   onOpenEntry,
+  onQueryChange,
+  onSelectMenuOption,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
   const [query, setQuery] = useState('')
@@ -56,11 +68,26 @@ export default function TabBarCreateEntry({
     return () => cancelAnimationFrame(focusFrame)
   }, [menuOpen])
 
-  const options = useMemo(() => getTabEntryOptions(query, fileList), [fileList, query])
+  const matchingMenuOptions = useMemo(
+    () => findMatchingTabCreateMenuOptions(query, menuOptions),
+    [menuOptions, query]
+  )
+  const options = useMemo(() => {
+    const entryOptions = getTabEntryOptions(query, fileList)
+    if (matchingMenuOptions.length === 0) {
+      return entryOptions
+    }
+    // Why: a matched create-menu action should win over a generic new-file fallback.
+    return entryOptions.filter((option) => option.classification.kind !== 'new-file')
+  }, [fileList, matchingMenuOptions.length, query])
   const matchingAgentOptions = useMemo(
     () => findMatchingTabAgentLaunchOptions(query, agentOptions),
     [agentOptions, query]
   )
+
+  useEffect(() => {
+    onQueryChange?.(query)
+  }, [onQueryChange, query])
 
   if (selectedIndexQuery !== query) {
     setSelectedIndexQuery(query)
@@ -83,6 +110,10 @@ export default function TabBarCreateEntry({
   const disabled = !onOpenEntry
   const hasQuery = query.trim().length > 0
   const activeOptions: ActiveOption[] = [
+    ...matchingMenuOptions.map((option) => ({
+      kind: 'menu' as const,
+      option
+    })),
     ...matchingAgentOptions.map((option) => ({
       kind: 'agent' as const,
       option
@@ -100,7 +131,7 @@ export default function TabBarCreateEntry({
   const statusMessage =
     statusOption?.classification.kind === 'empty' || statusOption?.classification.kind === 'blocked'
       ? statusOption.classification.message
-      : 'URL, file, or new file'
+      : 'Open any file, URL, agent, ...'
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
@@ -114,6 +145,11 @@ export default function TabBarCreateEntry({
         return
       }
       setError(statusMessage)
+      return
+    }
+    if (selectedOption.kind === 'menu') {
+      onSelectMenuOption?.(selectedOption.option)
+      onDidOpenEntry?.()
       return
     }
     if (selectedOption.kind === 'agent') {
@@ -143,7 +179,7 @@ export default function TabBarCreateEntry({
 
   return (
     <form
-      className="px-1 pb-1"
+      className="pb-1"
       onSubmit={(event) => {
         event.preventDefault()
         submitOption()
@@ -164,11 +200,7 @@ export default function TabBarCreateEntry({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
+      <div className="-mx-1 flex items-center px-3">
         <Input
           ref={inputRef}
           value={query}
@@ -177,14 +209,20 @@ export default function TabBarCreateEntry({
             setError(null)
           }}
           disabled={disabled}
-          aria-label="Open URL, file, or new file"
+          aria-label={translate(
+            'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
+            'Open any file, URL, agent, ...'
+          )}
           aria-invalid={error ? true : undefined}
-          placeholder="URL, file, or new file"
-          className="h-8 rounded-[7px] pl-7 pr-2 text-[12px]"
+          placeholder={translate(
+            'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
+            'Open any file, URL, agent, ...'
+          )}
+          className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
       </div>
       {error || activeOptions.length > 0 || hasQuery ? (
-        <div className="mt-1 space-y-0.5">
+        <div className="mt-1 space-y-0.5 px-1">
           {error ? (
             <EntryStatusRow message={error} />
           ) : activeOptions.length > 0 ? (
@@ -218,13 +256,23 @@ type ActiveOption =
       kind: 'entry'
       option: ActiveEntryOption
     }
+  | {
+      kind: 'menu'
+      option: TabCreateMenuOption
+    }
 
 function isActiveEntryOption(option: TabEntryOption): option is ActiveEntryOption {
   return option.classification.kind !== 'empty' && option.classification.kind !== 'blocked'
 }
 
 function getActiveOptionId(option: ActiveOption): string {
-  return option.kind === 'agent' ? `agent:${option.option.agent}` : option.option.id
+  if (option.kind === 'agent') {
+    return `agent:${option.option.agent}`
+  }
+  if (option.kind === 'menu') {
+    return `menu:${option.option.id}`
+  }
+  return option.option.id
 }
 
 function EntryStatusRow({
@@ -265,11 +313,17 @@ function EntryActionRow({
       onClick={onClick}
     >
       {presentation.icon}
-      <span className="shrink-0 font-medium">{presentation.label}</span>
-      <span className="text-muted-foreground/70" aria-hidden="true">
-        ·
+      <span className={cn('min-w-0 truncate font-medium', presentation.showDetail && 'shrink-0')}>
+        {presentation.label}
       </span>
-      <span className="min-w-0 truncate">{presentation.detail}</span>
+      {presentation.showDetail ? (
+        <>
+          <span className="text-muted-foreground/70" aria-hidden="true">
+            ·
+          </span>
+          <span className="min-w-0 truncate">{presentation.detail}</span>
+        </>
+      ) : null}
     </button>
   )
 }
@@ -278,12 +332,34 @@ function getActionPresentation(option: ActiveOption): {
   detail: string
   icon: React.ReactNode
   label: string
+  showDetail: boolean
 } {
+  if (option.kind === 'menu') {
+    const icon =
+      option.option.kind === 'new-browser' ? (
+        <Globe className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-markdown' ? (
+        <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'open-markdown' ? (
+        <FileText className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'new-simulator' || option.option.kind === 'go-to-simulator' ? (
+        <Smartphone className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : (
+        <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
+      )
+    return {
+      detail: '',
+      icon,
+      label: option.option.label,
+      showDetail: false
+    }
+  }
   if (option.kind === 'agent') {
     return {
       detail: option.option.label,
       icon: <AgentIcon agent={option.option.agent} size={14} />,
-      label: 'Launch agent'
+      label: translate('auto.components.tab.bar.TabBarCreateEntry.b27864279e', 'Launch agent'),
+      showDetail: true
     }
   }
   const { classification } = option.option
@@ -291,19 +367,22 @@ function getActionPresentation(option: ActiveOption): {
     return {
       detail: classification.url,
       icon: <Globe className="size-3.5 shrink-0" aria-hidden="true" />,
-      label: 'Open URL'
+      label: translate('auto.components.tab.bar.TabBarCreateEntry.7cdf8ee0c8', 'Open URL'),
+      showDetail: true
     }
   }
   if (classification.kind === 'existing-file') {
     return {
       detail: classification.relativePath,
       icon: <FileText className="size-3.5 shrink-0" aria-hidden="true" />,
-      label: 'Open file'
+      label: translate('auto.components.tab.bar.TabBarCreateEntry.25dc1cd653', 'Open file'),
+      showDetail: true
     }
   }
   return {
     detail: classification.relativePath,
     icon: <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />,
-    label: 'Create file'
+    label: translate('auto.components.tab.bar.TabBarCreateEntry.d62d63b807', 'Create file'),
+    showDetail: true
   }
 }

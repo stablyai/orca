@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '../../store'
-import { GitPane, GIT_PANE_SEARCH_ENTRIES, SourceControlGroupOrderSetting } from './GitPane'
+import { GitPane, getGitPaneSearchEntries, SourceControlGroupOrderSetting } from './GitPane'
 import { matchesSettingsSearch } from './settings-search'
 
 type ReactElementLike = {
@@ -81,7 +81,7 @@ describe('GitPane', () => {
   })
 
   it('includes Source Control group order search metadata', () => {
-    expect(matchesSettingsSearch('staged', GIT_PANE_SEARCH_ENTRIES)).toBe(true)
-    expect(matchesSettingsSearch('group order', GIT_PANE_SEARCH_ENTRIES)).toBe(true)
+    expect(matchesSettingsSearch('staged', getGitPaneSearchEntries())).toBe(true)
+    expect(matchesSettingsSearch('group order', getGitPaneSearchEntries())).toBe(true)
   })
 })

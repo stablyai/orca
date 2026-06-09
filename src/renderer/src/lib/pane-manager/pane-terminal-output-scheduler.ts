@@ -51,7 +51,9 @@ type QueueEntry = {
   backgroundBacklogDropped: boolean
   highPriority: boolean
   foregroundHold: boolean
+  foregroundHoldSafetyDelayMs: number
   foregroundCoalesce: boolean
+  foregroundCoalesceDelayMs: number
   foregroundHoldSafetyTimer: ReturnType<typeof setTimeout> | null
   foregroundCoalesceTimer: ReturnType<typeof setTimeout> | null
 }
@@ -69,6 +71,10 @@ const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
 const PARSE_SETTLE_TIMEOUT_MS = 250
 const FOREGROUND_COALESCE_DELAY_MS = 1000
 const FOREGROUND_HOLD_SAFETY_DELAY_MS = 250
+// Why: key repeat can tick every 30-50ms; one frame catches split restores
+// without batching multiple typed-character redraws behind the fallback.
+const LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS = 16
+const LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS = 32
 const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
 const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
@@ -98,6 +104,12 @@ type TerminalOutputSchedulerDebugSnapshot = {
   deferredForegroundWriteCount: number
   flushWriteCount: number
   scheduledDrainCount: number
+  queuedTerminalCount: number
+  queuedChars: number
+  peakQueuedTerminalCount: number
+  peakQueuedChars: number
+  peakQueuedCharsByTerminal: number
+  droppedBacklogCount: number
   drainWrites: number[]
 }
 
@@ -114,6 +126,12 @@ const debugState: TerminalOutputSchedulerDebugSnapshot = {
   deferredForegroundWriteCount: 0,
   flushWriteCount: 0,
   scheduledDrainCount: 0,
+  queuedTerminalCount: 0,
+  queuedChars: 0,
+  peakQueuedTerminalCount: 0,
+  peakQueuedChars: 0,
+  peakQueuedCharsByTerminal: 0,
+  droppedBacklogCount: 0,
   drainWrites: []
 }
 
@@ -125,7 +143,49 @@ function resetDebugState(): void {
   debugState.deferredForegroundWriteCount = 0
   debugState.flushWriteCount = 0
   debugState.scheduledDrainCount = 0
+  debugState.queuedTerminalCount = 0
+  debugState.queuedChars = 0
+  debugState.peakQueuedTerminalCount = 0
+  debugState.peakQueuedChars = 0
+  debugState.peakQueuedCharsByTerminal = 0
+  debugState.droppedBacklogCount = 0
   debugState.drainWrites = []
+}
+
+function readQueueDebugSnapshot(): {
+  queuedTerminalCount: number
+  queuedChars: number
+  queuedCharsByTerminal: number
+} {
+  let queuedChars = 0
+  let queuedCharsByTerminal = 0
+  for (const entry of queuedByTerminal.values()) {
+    queuedChars += entry.queuedChars
+    queuedCharsByTerminal = Math.max(queuedCharsByTerminal, entry.queuedChars)
+  }
+  return {
+    queuedTerminalCount: queuedByTerminal.size,
+    queuedChars,
+    queuedCharsByTerminal
+  }
+}
+
+function recordQueueDebugPressure(): void {
+  if (!debugEnabled) {
+    return
+  }
+  const current = readQueueDebugSnapshot()
+  debugState.queuedTerminalCount = current.queuedTerminalCount
+  debugState.queuedChars = current.queuedChars
+  debugState.peakQueuedTerminalCount = Math.max(
+    debugState.peakQueuedTerminalCount,
+    current.queuedTerminalCount
+  )
+  debugState.peakQueuedChars = Math.max(debugState.peakQueuedChars, current.queuedChars)
+  debugState.peakQueuedCharsByTerminal = Math.max(
+    debugState.peakQueuedCharsByTerminal,
+    current.queuedCharsByTerminal
+  )
 }
 
 function exposeDebugApi(): void {
@@ -139,10 +199,13 @@ function exposeDebugApi(): void {
   }
   target.__terminalOutputSchedulerDebug ??= {
     reset: resetDebugState,
-    snapshot: () => ({
-      ...debugState,
-      drainWrites: [...debugState.drainWrites]
-    })
+    snapshot: () => {
+      recordQueueDebugPressure()
+      return {
+        ...debugState,
+        drainWrites: [...debugState.drainWrites]
+      }
+    }
   }
 }
 
@@ -179,7 +242,9 @@ function createQueueEntry(
     backgroundBacklogDropped: false,
     highPriority: true,
     foregroundHold: false,
+    foregroundHoldSafetyDelayMs: FOREGROUND_HOLD_SAFETY_DELAY_MS,
     foregroundCoalesce: false,
+    foregroundCoalesceDelayMs: FOREGROUND_COALESCE_DELAY_MS,
     foregroundHoldSafetyTimer: null,
     foregroundCoalesceTimer: null
   }
@@ -191,6 +256,7 @@ function clearForegroundHoldSafety(entry: QueueEntry): void {
   }
   clearTimeout(entry.foregroundHoldSafetyTimer)
   entry.foregroundHoldSafetyTimer = null
+  entry.foregroundHoldSafetyDelayMs = FOREGROUND_HOLD_SAFETY_DELAY_MS
 }
 
 function clearForegroundCoalesce(entry: QueueEntry): void {
@@ -199,6 +265,7 @@ function clearForegroundCoalesce(entry: QueueEntry): void {
     entry.foregroundCoalesceTimer = null
   }
   entry.foregroundCoalesce = false
+  entry.foregroundCoalesceDelayMs = FOREGROUND_COALESCE_DELAY_MS
 }
 
 function scheduleForegroundHoldSafety(entry: QueueEntry): void {
@@ -210,13 +277,20 @@ function scheduleForegroundHoldSafety(entry: QueueEntry): void {
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)
     }
-  }, FOREGROUND_HOLD_SAFETY_DELAY_MS)
+  }, entry.foregroundHoldSafetyDelayMs)
 }
 
-function scheduleForegroundCoalesceRelease(entry: QueueEntry): void {
+function scheduleForegroundCoalesceRelease(
+  entry: QueueEntry,
+  options?: { rescheduleEarlier?: boolean }
+): void {
   if (entry.foregroundCoalesceTimer !== null) {
-    entry.foregroundCoalesce = true
-    return
+    if (options?.rescheduleEarlier !== true) {
+      entry.foregroundCoalesce = true
+      return
+    }
+    clearTimeout(entry.foregroundCoalesceTimer)
+    entry.foregroundCoalesceTimer = null
   }
   entry.foregroundCoalesce = true
   entry.foregroundCoalesceTimer = setTimeout(() => {
@@ -225,11 +299,34 @@ function scheduleForegroundCoalesceRelease(entry: QueueEntry): void {
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)
     }
-  }, FOREGROUND_COALESCE_DELAY_MS)
+  }, entry.foregroundCoalesceDelayMs)
 }
 
 function isEntryDrainable(entry: QueueEntry): boolean {
   return !entry.foregroundHold && !entry.foregroundCoalesce
+}
+
+function findCursorPositionSequenceEnd(
+  data: string,
+  fromIndex: number,
+  toIndex = data.length
+): number {
+  let offset = data.indexOf('\x1b[', fromIndex)
+  while (offset !== -1 && offset < toIndex) {
+    let index = offset + 2
+    while (index < toIndex) {
+      const char = data[index]
+      if (char === 'G' || char === 'H' || char === 'f') {
+        return index + 1
+      }
+      if ((char < '0' || char > '9') && char !== ';') {
+        break
+      }
+      index += 1
+    }
+    offset = data.indexOf('\x1b[', offset + 2)
+  }
+  return -1
 }
 
 function removeTransientCursorShowSequences(data: string): string {
@@ -241,8 +338,35 @@ function removeTransientCursorShowSequences(data: string): string {
       CURSOR_HIDE_SEQUENCE,
       showIndex + CURSOR_SHOW_SEQUENCE.length
     )
+    const nextPositionEnd = findCursorPositionSequenceEnd(
+      data,
+      showIndex + CURSOR_SHOW_SEQUENCE.length,
+      nextHideIndex === -1 ? data.length : nextHideIndex
+    )
     if (nextHideIndex === -1) {
-      break
+      if (nextPositionEnd === -1) {
+        const synchronizedEndIndex = data.indexOf(
+          SYNCHRONIZED_OUTPUT_END_SEQUENCE,
+          showIndex + CURSOR_SHOW_SEQUENCE.length
+        )
+        if (synchronizedEndIndex === -1) {
+          break
+        }
+        // Why: a synchronized frame can end while parked on footer/status
+        // text. Do not expose that transient cell as the visible cursor.
+        result += data.slice(offset, showIndex)
+        offset = showIndex + CURSOR_SHOW_SEQUENCE.length
+        showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
+        continue
+      }
+      // Why: Codex can show the cursor before its final synchronized-frame
+      // placement. Place first so xterm cannot rasterize the stale cell.
+      result += data.slice(offset, showIndex)
+      result += data.slice(showIndex + CURSOR_SHOW_SEQUENCE.length, nextPositionEnd)
+      result += CURSOR_SHOW_SEQUENCE
+      offset = nextPositionEnd
+      showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
+      continue
     }
     result += data.slice(offset, showIndex)
     offset = showIndex + CURSOR_SHOW_SEQUENCE.length
@@ -286,6 +410,58 @@ function containsDrainableCursorRestore(data: string): boolean {
   )
 }
 
+function containsFinalCursorPlacementBeforeSynchronizedEnd(data: string): boolean {
+  const synchronizedEndIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
+  if (synchronizedEndIndex === -1) {
+    return false
+  }
+  const lastShowIndex = data.lastIndexOf(CURSOR_SHOW_SEQUENCE, synchronizedEndIndex)
+  if (lastShowIndex === -1) {
+    return false
+  }
+  const lastHideIndex = data.lastIndexOf(CURSOR_HIDE_SEQUENCE, synchronizedEndIndex)
+  if (lastHideIndex > lastShowIndex) {
+    return false
+  }
+  return (
+    findCursorPositionSequenceEnd(
+      data,
+      lastShowIndex + CURSOR_SHOW_SEQUENCE.length,
+      synchronizedEndIndex
+    ) !== -1
+  )
+}
+
+function previewQueuedData(entry: QueueEntry, limit: number): string {
+  let data = ''
+  for (let index = entry.chunkIndex; index < entry.chunks.length; index += 1) {
+    const chunk = entry.chunks[index]
+    const remaining = limit - data.length
+    if (remaining <= 0) {
+      break
+    }
+    data += chunk.data.slice(0, remaining)
+  }
+  return data
+}
+
+function coalescedQueuedDataNeedsCursorRestore(entry: QueueEntry): boolean {
+  const data = previewQueuedData(entry, SYNC_FOREGROUND_FLUSH_CHARS)
+  const synchronizedEndIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
+  if (synchronizedEndIndex === -1) {
+    return false
+  }
+  const synchronizedFrame = data.slice(
+    0,
+    synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
+  )
+  return (
+    containsCursorRestore(synchronizedFrame) &&
+    !containsFinalCursorPlacementBeforeSynchronizedEnd(synchronizedFrame) &&
+    !containsDrainableCursorRestore(data)
+  )
+}
+
 function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   let remaining = limit
   let data = ''
@@ -324,6 +500,7 @@ function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
   if (entry.queuedChars < 0) {
     entry.queuedChars = 0
   }
+  recordQueueDebugPressure()
   return data
     ? {
         data,
@@ -368,6 +545,7 @@ function enqueueChunk(
     stripTransientCursorShows: options?.stripTransientCursorShows === true
   })
   entry.queuedChars += data.length
+  recordQueueDebugPressure()
 }
 
 function replaceBacklogWithWarning(entry: QueueEntry): void {
@@ -387,7 +565,11 @@ function replaceBacklogWithWarning(entry: QueueEntry): void {
   entry.backgroundBacklogDropped = true
   entry.highPriority = true
   entry.foregroundHold = false
+  if (debugEnabled && shouldNotify) {
+    debugState.droppedBacklogCount++
+  }
   clearForegroundCoalesce(entry)
+  recordQueueDebugPressure()
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
   }
@@ -459,6 +641,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
     entry.queuedChars = 0
     clearForegroundHoldSafety(entry)
     clearForegroundCoalesce(entry)
+    recordQueueDebugPressure()
     return null
   }
   return queuedWrite.foreground ? 'foreground' : 'background'
@@ -501,6 +684,7 @@ function drainQueuedOutput(): void {
   if (debugEnabled && writes > 0) {
     debugState.drainWrites.push(writes)
   }
+  recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
     scheduleDrain(
       hasHighPriorityBacklog() ? HIGH_PRIORITY_DRAIN_INTERVAL_MS : BACKGROUND_DRAIN_INTERVAL_MS
@@ -539,6 +723,17 @@ export function writeTerminalOutput(
       if (options.holdForeground) {
         // Why: synchronized-output start/body chunks contain transient cursor
         // moves. Holding them prevents Chromium from rasterizing those states.
+        if (options.latencySensitive === true) {
+          // Why: Codex composer redraws can split the end marker from the
+          // input-triggered frame; keep cursor protection without adding a
+          // human-visible fallback delay to typed characters.
+          queued.foregroundHoldSafetyDelayMs = Math.min(
+            queued.foregroundHoldSafetyDelayMs,
+            LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS
+          )
+        } else if (!queued.foregroundHold) {
+          queued.foregroundHoldSafetyDelayMs = FOREGROUND_HOLD_SAFETY_DELAY_MS
+        }
         queued.foregroundHold = true
         clearForegroundCoalesce(queued)
         scheduleForegroundHoldSafety(queued)
@@ -547,7 +742,19 @@ export function writeTerminalOutput(
       if (options.coalesceForeground || queued.foregroundCoalesce) {
         queued.foregroundHold = false
         clearForegroundHoldSafety(queued)
-        if (containsDrainableCursorRestore(data)) {
+        const shouldShortenCoalesceForLatencySensitiveForeground = options.latencySensitive === true
+        if (shouldShortenCoalesceForLatencySensitiveForeground) {
+          // Why: user input echo must not inherit the normal synchronized-frame
+          // restore fallback; wait briefly for the restore, then paint.
+          queued.foregroundCoalesceDelayMs = Math.min(
+            queued.foregroundCoalesceDelayMs,
+            LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS
+          )
+        }
+        const shouldDrainForLatencySensitiveForeground =
+          shouldShortenCoalesceForLatencySensitiveForeground &&
+          !coalescedQueuedDataNeedsCursorRestore(queued)
+        if (containsDrainableCursorRestore(data) || shouldDrainForLatencySensitiveForeground) {
           clearForegroundCoalesce(queued)
           scheduleDrain(0)
           return
@@ -555,7 +762,9 @@ export function writeTerminalOutput(
         // Why: TUI synchronized-output end markers can be split from the
         // immediate cursor-restoring bytes by the PTY transport. Wait only
         // until the restore arrives; the timer is a bounded fallback.
-        scheduleForegroundCoalesceRelease(queued)
+        scheduleForegroundCoalesceRelease(queued, {
+          rescheduleEarlier: shouldShortenCoalesceForLatencySensitiveForeground
+        })
         return
       }
       queued.foregroundHold = false
@@ -673,6 +882,7 @@ export function flushTerminalOutput(
     entry.highPriority = false
     clearForegroundHoldSafety(entry)
     clearForegroundCoalesce(entry)
+    recordQueueDebugPressure()
     return
   }
 
@@ -705,6 +915,7 @@ export function flushTerminalOutput(
       // the scheduler for other panes still draining.
       clearForegroundHoldSafety(entry)
       clearForegroundCoalesce(entry)
+      recordQueueDebugPressure()
       return
     }
     if (options?.maxChars !== undefined && flushedChars >= options.maxChars) {
@@ -721,6 +932,7 @@ export function flushTerminalOutput(
     clearForegroundCoalesce(entry)
     clearForegroundHoldSafety(entry)
   }
+  recordQueueDebugPressure()
 }
 
 function requestRegisteredTerminalBacklogRecovery(terminal: TerminalOutputTarget): boolean {
@@ -777,6 +989,7 @@ export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
   queuedByTerminal.delete(terminal)
   discardForegroundRenderSettle(terminal)
+  recordQueueDebugPressure()
 }
 
 exposeDebugApi()

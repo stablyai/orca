@@ -37,6 +37,13 @@ const FileTreePath = WorktreeSelector.extend({
     .pipe(z.string())
 })
 
+const ServerDirectoryBrowse = z.object({
+  path: z
+    .unknown()
+    .transform((v) => (typeof v === 'string' ? v : ''))
+    .pipe(z.string())
+})
+
 // Why: write content must be a real string. Coercing a missing/non-string value
 // to '' silently truncated the target file to empty instead of erroring. An
 // explicit '' is still accepted (writing an empty file is legitimate).
@@ -155,6 +162,11 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: FileTreePath,
     handler: async (params, { runtime }) =>
       runtime.readFileExplorerDir(params.worktree, params.relativePath)
+  }),
+  defineMethod({
+    name: 'files.browseServerDir',
+    params: ServerDirectoryBrowse,
+    handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
   }),
   defineMethod({
     name: 'files.write',

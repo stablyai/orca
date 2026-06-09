@@ -17,6 +17,10 @@ export function cancelPendingSidebarWorktreeActivation(): void {
 }
 
 function shouldDeferSidebarWorktreeActivation(worktreeId: string): boolean {
+  // Why: web clients should activate immediately to avoid host/session churn and wake lag.
+  if ((globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true) {
+    return false
+  }
   const state = useAppStore.getState()
   const tabs = state.tabsByWorktree[worktreeId] ?? []
   if (tabs.length === 0) {

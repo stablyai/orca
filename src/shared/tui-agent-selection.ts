@@ -5,6 +5,7 @@ import { isTuiAgent } from './tui-agent-config'
 // automatic fallback priority when the user has not chosen a default agent.
 export const TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
+  'claude-agent-teams',
   'openclaude',
   'codex',
   'grok',
@@ -34,6 +35,10 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'rovo',
   'hermes',
   'openclaw'
+] as const satisfies readonly TuiAgent[]
+
+export const DEFAULT_DISABLED_TUI_AGENTS = [
+  'claude-agent-teams'
 ] as const satisfies readonly TuiAgent[]
 
 export function pickTuiAgent(
