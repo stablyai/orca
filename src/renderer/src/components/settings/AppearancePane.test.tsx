@@ -143,7 +143,7 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'automations'
   })
 
-  it('renders the language dropdown with system, english, and chinese options', async () => {
+  it('renders the language dropdown with system, english, chinese, and korean options', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
@@ -164,6 +164,7 @@ describe('AppearancePane', () => {
     expect(container.textContent).toContain('System')
     expect(container.textContent).toContain('English')
     expect(container.textContent).toContain('中文（简体）')
+    expect(container.textContent).toContain('한국어')
 
     await act(async () => {
       chineseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

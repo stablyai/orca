@@ -2,6 +2,7 @@ import i18next, { type i18n as I18nInstance, type TOptions } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
 import en from './locales/en.json'
+import ko from './locales/ko.json'
 import zh from './locales/zh.json'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from './pseudo-localization'
 import { DEFAULT_LOCALE, resolveUiLocale } from './supported-languages'
@@ -18,6 +19,9 @@ void i18n.use(initReactI18next).init({
     },
     zh: {
       translation: zh
+    },
+    ko: {
+      translation: ko
     }
   },
   interpolation: {

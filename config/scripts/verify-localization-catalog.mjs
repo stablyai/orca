@@ -232,9 +232,27 @@ export async function main(root = process.cwd()) {
 
   console.log(`Verified ${references.length} localization key references against en.json.`)
 
-  const zhCatalogPath = path.join(localesDir, 'zh.json')
-  const zhCatalog = JSON.parse(await fs.readFile(zhCatalogPath, 'utf8'))
-  return verifyLocaleParity(catalog, 'zh', zhCatalog)
+  const localeFiles = (await fs.readdir(localesDir))
+    .filter(
+      (fileName) =>
+        fileName.endsWith('.json') &&
+        fileName !== 'en.json' &&
+        !fileName.startsWith('.') &&
+        !fileName.includes('-catalog-cache')
+    )
+    .sort()
+
+  for (const fileName of localeFiles) {
+    const localeName = fileName.replace(/\.json$/, '')
+    const localeCatalogPath = path.join(localesDir, fileName)
+    const localeCatalog = JSON.parse(await fs.readFile(localeCatalogPath, 'utf8'))
+    const exitCode = verifyLocaleParity(catalog, localeName, localeCatalog)
+    if (exitCode !== 0) {
+      return exitCode
+    }
+  }
+
+  return 0
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

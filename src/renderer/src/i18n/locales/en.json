@@ -14,7 +14,8 @@
         "description": "Choose the language used by the Orca interface.",
         "system": "System",
         "english": "English",
-        "chinese": "中文（简体）"
+        "chinese": "中文（简体）",
+        "korean": "한국어"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",

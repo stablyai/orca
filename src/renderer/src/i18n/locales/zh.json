@@ -14,7 +14,8 @@
         "description": "选择 Orca 界面使用的语言。",
         "system": "系统",
         "english": "英语",
-        "chinese": "中文（简体）"
+        "chinese": "中文（简体）",
+        "korean": "한국어"
       },
       "statusBar": {
         "claudeToggleDescription": "显示活动工作区的 Claude 令牌和成本使用情况。",

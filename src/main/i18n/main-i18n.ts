@@ -2,6 +2,7 @@ import { app } from 'electron'
 import i18next, { type i18n as I18nInstance, type TOptions } from 'i18next'
 
 import en from '../../renderer/src/i18n/locales/en.json'
+import ko from '../../renderer/src/i18n/locales/ko.json'
 import zh from '../../renderer/src/i18n/locales/zh.json'
 import { isPseudoLocalizationLocale, pseudoLocalizeString } from '../../shared/pseudo-localization'
 import { DEFAULT_UI_LOCALE, resolveUiLocale, type SupportedUiLocale } from '../../shared/ui-locale'
@@ -30,6 +31,9 @@ export async function ensureMainI18n(): Promise<I18nInstance> {
         },
         zh: {
           translation: zh
+        },
+        ko: {
+          translation: ko
         }
       },
       interpolation: {

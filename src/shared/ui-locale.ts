@@ -1,11 +1,12 @@
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SYSTEM,
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -37,6 +38,9 @@ export function resolveUiLocale(
   }
   if (language === UI_LANGUAGE_CHINESE) {
     return 'zh'
+  }
+  if (language === UI_LANGUAGE_KOREAN) {
+    return 'ko'
   }
   return normalizeSupportedUiLocale(systemLocale)
 }
