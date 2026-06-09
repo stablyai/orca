@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog(() => [
@@ -12,10 +13,22 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
       'macOS permissions for terminal-launched developer tools.'
     ),
     keywords: [
-      translate('auto.components.settings.developer.permissions.search.a98aa11a9c', 'permissions'),
-      translate('auto.components.settings.developer.permissions.search.2270ccff3f', 'privacy'),
-      translate('auto.components.settings.developer.permissions.search.0c13b249e3', 'tcc'),
-      translate('auto.components.settings.developer.permissions.search.6db4fca386', 'macos'),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.a98aa11a9c',
+        'permissions'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.2270ccff3f',
+        'privacy'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.0c13b249e3',
+        'tcc'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.6db4fca386',
+        'macos'
+      ),
       translate(
         'auto.components.settings.developer.permissions.search.4e225e7c56',
         'developer tools'
@@ -32,14 +45,38 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
       'Allow voice, transcription, webcam, and media capture tools.'
     ),
     keywords: [
-      translate('auto.components.settings.developer.permissions.search.ed7c12bdb4', 'microphone'),
-      translate('auto.components.settings.developer.permissions.search.259b829b84', 'camera'),
-      translate('auto.components.settings.developer.permissions.search.af122938a3', 'voice'),
-      translate('auto.components.settings.developer.permissions.search.b192432ef0', 'audio'),
-      translate('auto.components.settings.developer.permissions.search.a765112513', 'video'),
-      translate('auto.components.settings.developer.permissions.search.f061f08b7b', 'sox'),
-      translate('auto.components.settings.developer.permissions.search.1e6e27b202', 'ffmpeg'),
-      translate('auto.components.settings.developer.permissions.search.00e954319e', 'whisper')
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.ed7c12bdb4',
+        'microphone'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.259b829b84',
+        'camera'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.af122938a3',
+        'voice'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.b192432ef0',
+        'audio'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.a765112513',
+        'video'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.f061f08b7b',
+        'sox'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.1e6e27b202',
+        'ffmpeg'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.00e954319e',
+        'whisper'
+      )
     ]
   },
   {
@@ -60,9 +97,18 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
         'auto.components.settings.developer.permissions.search.08f8039ca9',
         'accessibility'
       ),
-      translate('auto.components.settings.developer.permissions.search.0a467b750e', 'screenshot'),
-      translate('auto.components.settings.developer.permissions.search.5610022e1e', 'automation'),
-      translate('auto.components.settings.developer.permissions.search.7f145a3984', 'window')
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.0a467b750e',
+        'screenshot'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.5610022e1e',
+        'automation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.7f145a3984',
+        'window'
+      )
     ]
   },
   {
@@ -79,10 +125,22 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
         'auto.components.settings.developer.permissions.search.c10e36cbd1',
         'full disk access'
       ),
-      translate('auto.components.settings.developer.permissions.search.4438f81bfa', 'documents'),
-      translate('auto.components.settings.developer.permissions.search.a0c19119fb', 'downloads'),
-      translate('auto.components.settings.developer.permissions.search.ce07159ff5', 'desktop'),
-      translate('auto.components.settings.developer.permissions.search.3e0131e45d', 'icloud')
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.4438f81bfa',
+        'documents'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.a0c19119fb',
+        'downloads'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.ce07159ff5',
+        'desktop'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.3e0131e45d',
+        'icloud'
+      )
     ]
   },
   {
@@ -99,11 +157,26 @@ export const getDeveloperPermissionsPaneSearchEntries = createLocalizedCatalog((
         'auto.components.settings.developer.permissions.search.fa3239cd42',
         'local network'
       ),
-      translate('auto.components.settings.developer.permissions.search.c4a4a02ea4', 'usb'),
-      translate('auto.components.settings.developer.permissions.search.e3fbc48083', 'bluetooth'),
-      translate('auto.components.settings.developer.permissions.search.78a10b826f', 'bonjour'),
-      translate('auto.components.settings.developer.permissions.search.11653d3f42', 'mdns'),
-      translate('auto.components.settings.developer.permissions.search.6c82846f66', 'device')
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.c4a4a02ea4',
+        'usb'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.e3fbc48083',
+        'bluetooth'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.78a10b826f',
+        'bonjour'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.11653d3f42',
+        'mdns'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.developer.permissions.search.6c82846f66',
+        'device'
+      )
     ]
   }
 ])

@@ -1,5 +1,6 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
@@ -10,13 +11,13 @@ export const getAccountsLocationSearchEntries = createLocalizedCatalog(() => [
       'Choose whether provider accounts are inspected and added on this device or in WSL.'
     ),
     keywords: [
-      translate('auto.components.settings.accounts.search.06662af91e', 'account'),
-      translate('auto.components.settings.accounts.search.593720c17f', 'location'),
-      translate('auto.components.settings.accounts.search.bdbd1e668e', 'windows'),
-      translate('auto.components.settings.accounts.search.0b4d948eb5', 'wsl'),
-      translate('auto.components.settings.accounts.search.488a7e9206', 'linux'),
-      translate('auto.components.settings.accounts.search.9f70aa706c', 'provider'),
-      translate('auto.components.settings.accounts.search.e02c136ad0', 'auth')
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.593720c17f', 'location'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.bdbd1e668e', 'windows'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.0b4d948eb5', 'wsl'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.488a7e9206', 'linux'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.9f70aa706c', 'provider'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e02c136ad0', 'auth')
     ]
   }
 ])
@@ -29,13 +30,16 @@ export const getAccountsClaudeSearchEntries = createLocalizedCatalog(() => [
       'Optional account switching for Claude while preserving shared chat context.'
     ),
     keywords: [
-      translate('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
-      translate('auto.components.settings.accounts.search.06662af91e', 'account'),
-      translate('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
-      translate('auto.components.settings.accounts.search.8b06729e0f', 'active'),
-      translate('auto.components.settings.accounts.search.86edc96bc9', 'status bar'),
-      translate('auto.components.settings.accounts.search.c759741d77', 'quota'),
-      translate('auto.components.settings.accounts.search.f2d666a886', 'optional')
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e14049e1a8', 'claude'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.8b06729e0f', 'active'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.86edc96bc9',
+        'status bar'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional')
     ]
   }
 ])
@@ -48,15 +52,27 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
       'Optional account switching for Codex and live rate limit fetching.'
     ),
     keywords: [
-      translate('auto.components.settings.accounts.search.70d1b8def5', 'codex'),
-      translate('auto.components.settings.accounts.search.06662af91e', 'account'),
-      translate('auto.components.settings.accounts.search.e949b08ffb', 'rate limit'),
-      translate('auto.components.settings.accounts.search.86edc96bc9', 'status bar'),
-      translate('auto.components.settings.accounts.search.c759741d77', 'quota'),
-      translate('auto.components.settings.accounts.search.f2d666a886', 'optional'),
-      translate('auto.components.settings.accounts.search.77e32a2ad3', 'reauthenticate'),
-      translate('auto.components.settings.accounts.search.02c438bc7b', 'expired'),
-      translate('auto.components.settings.accounts.search.042885c07c', 'out of date')
+      ...translateSearchKeyword('auto.components.settings.accounts.search.70d1b8def5', 'codex'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.86edc96bc9',
+        'status bar'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.77e32a2ad3',
+        'reauthenticate'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.02c438bc7b', 'expired'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.042885c07c',
+        'out of date'
+      )
     ]
   },
   {
@@ -66,13 +82,16 @@ export const getAccountsCodexSearchEntries = createLocalizedCatalog(() => [
       'Choose which optional saved Codex account powers live quota reads.'
     ),
     keywords: [
-      translate('auto.components.settings.accounts.search.70d1b8def5', 'codex'),
-      translate('auto.components.settings.accounts.search.06662af91e', 'account'),
-      translate('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
-      translate('auto.components.settings.accounts.search.8b06729e0f', 'active'),
-      translate('auto.components.settings.accounts.search.86edc96bc9', 'status bar'),
-      translate('auto.components.settings.accounts.search.f2d666a886', 'optional'),
-      translate('auto.components.settings.accounts.search.35b461d817', 'sign in')
+      ...translateSearchKeyword('auto.components.settings.accounts.search.70d1b8def5', 'codex'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.06662af91e', 'account'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.5b3f18ef4a', 'switch'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.8b06729e0f', 'active'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.86edc96bc9',
+        'status bar'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.f2d666a886', 'optional'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.35b461d817', 'sign in')
     ]
   }
 ])
@@ -88,13 +107,22 @@ export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
       'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.'
     ),
     keywords: [
-      translate('auto.components.settings.accounts.search.e8e1ff3887', 'gemini'),
-      translate('auto.components.settings.accounts.search.8630464352', 'cli'),
-      translate('auto.components.settings.accounts.search.933deaf732', 'oauth'),
-      translate('auto.components.settings.accounts.search.7118d2f908', 'credentials'),
-      translate('auto.components.settings.accounts.search.b7c2cee442', 'experimental'),
-      translate('auto.components.settings.accounts.search.e949b08ffb', 'rate limit'),
-      translate('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e8e1ff3887', 'gemini'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.8630464352', 'cli'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.933deaf732', 'oauth'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.7118d2f908',
+        'credentials'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.b7c2cee442',
+        'experimental'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
     ]
   }
 ])
@@ -110,11 +138,14 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
       'Paste your opencode.ai session cookie for rate limit fetching.'
     ),
     keywords: [
-      translate('auto.components.settings.accounts.search.8dcbef1856', 'opencode'),
-      translate('auto.components.settings.accounts.search.61f7d1fcbe', 'cookie'),
-      translate('auto.components.settings.accounts.search.9c4e40cf6b', 'session'),
-      translate('auto.components.settings.accounts.search.e949b08ffb', 'rate limit'),
-      translate('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+      ...translateSearchKeyword('auto.components.settings.accounts.search.8dcbef1856', 'opencode'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.61f7d1fcbe', 'cookie'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.9c4e40cf6b', 'session'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
     ]
   },
   {
@@ -127,12 +158,15 @@ export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
       'Optional workspace ID override if the automatic lookup fails.'
     ),
     keywords: [
-      translate('auto.components.settings.accounts.search.8dcbef1856', 'opencode'),
-      translate('auto.components.settings.accounts.search.be8b621bdc', 'workspace'),
-      translate('auto.components.settings.accounts.search.421c6be25e', 'id'),
-      translate('auto.components.settings.accounts.search.7e67d7d1b6', 'wrk'),
-      translate('auto.components.settings.accounts.search.e949b08ffb', 'rate limit'),
-      translate('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+      ...translateSearchKeyword('auto.components.settings.accounts.search.8dcbef1856', 'opencode'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.be8b621bdc', 'workspace'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.421c6be25e', 'id'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.7e67d7d1b6', 'wrk'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
     ]
   }
 ])

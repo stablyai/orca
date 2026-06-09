@@ -63,4 +63,23 @@ describe('locale-translation-policy', () => {
     expect(shouldPreserveEnglishValue('Codex', 'auto.stats.StatsPane.7d26110cea')).toBe(true)
     expect(shouldPreserveEnglishValue('Show Codex usage')).toBe(false)
   })
+
+  it('applies search keyword overrides for settings search synonyms', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.appearance.search.262fe1d24f',
+        enValue: 'dark',
+        localeValue: '어두운',
+        locale: 'ko'
+      })
+    ).toBe('다크')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.appearance.search.24094af355',
+        enValue: 'font',
+        localeValue: '세례반',
+        locale: 'ko'
+      })
+    ).toBe('폰트')
+  })
 })

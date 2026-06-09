@@ -5707,7 +5707,45 @@
             "cbdd7f3b9e": "Choose whether installed agents are detected on this device or in WSL.",
             "ef804b7337": "Agent Location",
             "01926b9d8c": "Configure AI coding agents, default agent, and command overrides.",
-            "bb9ad95777": "Agents"
+            "bb9ad95777": "Agents",
+            "d8f3a8b8a0": "default",
+            "167daeb5e9": "command",
+            "be59907510": "override",
+            "a6d594c17d": "install",
+            "f2932bf22b": "detected",
+            "2afd3b5858": "enable",
+            "60393e1b17": "disable",
+            "2e188c771c": "hide",
+            "87fffe6c20": "show",
+            "e2b7c0dcd7": "github",
+            "66b6b82eb4": "awake",
+            "dbc8aca6b0": "sleep",
+            "845ad9128a": "power",
+            "48f84d10f1": "running",
+            "affbf130f6": "working",
+            "0d1c334987": "lid",
+            "ff8de8a2ad": "display",
+            "0d752916f8": "hooks",
+            "6984d4291a": "status",
+            "13b20636a6": "waiting",
+            "8599603496": "done",
+            "ea71995548": "remove",
+            "c1317fe641": "restore",
+            "5963143e00": "settings",
+            "042c551bc5": "config",
+            "f412abbba5": "claude",
+            "5ded38b843": "codex",
+            "be7ea3553b": "tab",
+            "6956646a1e": "title",
+            "32836788b0": "generated title",
+            "966890236d": "name",
+            "848dcae8d3": "generated",
+            "52115d0d7c": "auto",
+            "c64059f50d": "prompt",
+            "5784ae8c43": "rename",
+            "8a17fd6026": "stable",
+            "a79d266f71": "session",
+            "afbf35be68": "stable session"
           }
         },
         "appearance": {
@@ -7056,6 +7094,19 @@
               }
             }
           }
+        },
+        "agent-awake-copy": {
+          "e5995ce268": "Keep computer awake while agents are working",
+          "95d3031db2": "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings.",
+          "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy."
+        },
+        "agent-status-hooks-copy": {
+          "7707c15abb": "Agent status hooks",
+          "a68a642835": "Shows working, waiting, and done states in Orca. Turn off to remove Orca-managed hooks and stop reinstalling them."
+        },
+        "agent-generated-tab-title-copy": {
+          "19ad21615a": "Auto-generate tab titles",
+          "b036c7a409": "Derive short stable tab names from the first known agent prompt. Manual renames always win."
         }
       },
       "right": {

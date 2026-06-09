@@ -3,6 +3,7 @@
 // terminal-search.ts, etc.) and keep Settings.tsx imports uniform.
 
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
@@ -13,15 +14,15 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
       'Anonymous product usage data, diagnostics, and telemetry controls.'
     ),
     keywords: [
-      translate('auto.components.settings.privacy.search.10124159f1', 'privacy'),
-      translate('auto.components.settings.privacy.search.77d3180def', 'telemetry'),
-      translate('auto.components.settings.privacy.search.4104f6f0f3', 'analytics'),
-      translate('auto.components.settings.privacy.search.79c319948b', 'usage'),
-      translate('auto.components.settings.privacy.search.b021b9cb81', 'anonymous'),
-      translate('auto.components.settings.privacy.search.3922051573', 'data'),
-      translate('auto.components.settings.privacy.search.2b5a5c312f', 'posthog'),
-      translate('auto.components.settings.privacy.search.27a27b2f63', 'opt out'),
-      translate('auto.components.settings.privacy.search.4d4bb76bf4', 'opt in')
+      ...translateSearchKeyword('auto.components.settings.privacy.search.10124159f1', 'privacy'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.77d3180def', 'telemetry'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.4104f6f0f3', 'analytics'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.79c319948b', 'usage'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.b021b9cb81', 'anonymous'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.3922051573', 'data'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.2b5a5c312f', 'posthog'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.27a27b2f63', 'opt out'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.4d4bb76bf4', 'opt in')
     ]
   },
   {
@@ -34,12 +35,12 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
       'Help improve Orca by sending anonymous feature-usage events.'
     ),
     keywords: [
-      translate('auto.components.settings.privacy.search.77d3180def', 'telemetry'),
-      translate('auto.components.settings.privacy.search.79c319948b', 'usage'),
-      translate('auto.components.settings.privacy.search.b021b9cb81', 'anonymous'),
-      translate('auto.components.settings.privacy.search.4d4bb76bf4', 'opt in'),
-      translate('auto.components.settings.privacy.search.27a27b2f63', 'opt out'),
-      translate('auto.components.settings.privacy.search.ead1deded2', 'share')
+      ...translateSearchKeyword('auto.components.settings.privacy.search.77d3180def', 'telemetry'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.79c319948b', 'usage'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.b021b9cb81', 'anonymous'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.4d4bb76bf4', 'opt in'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.27a27b2f63', 'opt out'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.ead1deded2', 'share')
     ]
   },
   {
@@ -49,12 +50,18 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
       'Trace files and OTLP export controls.'
     ),
     keywords: [
-      translate('auto.components.settings.privacy.search.c0494ff48a', 'diagnostics'),
-      translate('auto.components.settings.privacy.search.40de3c2f19', 'trace'),
-      translate('auto.components.settings.privacy.search.685c68a81f', 'logs'),
-      translate('auto.components.settings.privacy.search.9ea93ce3d6', 'otlp'),
-      translate('auto.components.settings.privacy.search.4a583f3a2f', 'opentelemetry'),
-      translate('auto.components.settings.privacy.search.1686c07fee', 'support')
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.c0494ff48a',
+        'diagnostics'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.40de3c2f19', 'trace'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.685c68a81f', 'logs'),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.9ea93ce3d6', 'otlp'),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.4a583f3a2f',
+        'opentelemetry'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.1686c07fee', 'support')
     ]
   },
   {
@@ -67,14 +74,29 @@ export const getPrivacyPaneSearchEntries = createLocalizedCatalog(() => [
       'Environment variables that disable telemetry transmission.'
     ),
     keywords: [
-      translate('auto.components.settings.privacy.search.83a6cd79b3', 'do not track'),
-      translate('auto.components.settings.privacy.search.058550f6bc', 'do_not_track'),
-      translate('auto.components.settings.privacy.search.69637f4dc4', 'orca_telemetry_disabled'),
-      translate('auto.components.settings.privacy.search.5854a5c752', 'ci'),
-      translate('auto.components.settings.privacy.search.664f1a8984', 'continuous integration'),
-      translate('auto.components.settings.privacy.search.94e04427f6', 'env'),
-      translate('auto.components.settings.privacy.search.d8191ae5ca', 'environment variable'),
-      translate('auto.components.settings.privacy.search.e8bc614a18', 'disable')
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.83a6cd79b3',
+        'do not track'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.058550f6bc',
+        'do_not_track'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.69637f4dc4',
+        'orca_telemetry_disabled'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.5854a5c752', 'ci'),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.664f1a8984',
+        'continuous integration'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.94e04427f6', 'env'),
+      ...translateSearchKeyword(
+        'auto.components.settings.privacy.search.d8191ae5ca',
+        'environment variable'
+      ),
+      ...translateSearchKeyword('auto.components.settings.privacy.search.e8bc614a18', 'disable')
     ]
   }
 ])

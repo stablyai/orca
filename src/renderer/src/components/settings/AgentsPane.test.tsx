@@ -7,9 +7,9 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
-import { AGENT_GENERATED_TAB_TITLES_TITLE } from './agent-generated-tab-title-copy'
-import { AGENT_STATUS_HOOKS_TITLE } from './agent-status-hooks-copy'
-import { getAgentAwakeDescription } from './agent-awake-copy'
+import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
+import { getAgentStatusHooksTitle } from './agent-status-hooks-copy'
+import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy'
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import {
   AgentAvailabilityControl,
@@ -182,8 +182,9 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const keepAwakeSwitch = findSwitch(element, 'Keep computer awake while agents are working')
-    expect(keepAwakeSwitch.props['aria-label']).toBe('Keep computer awake while agents are working')
+    const keepAwakeTitle = getAgentAwakeTitle()
+    const keepAwakeSwitch = findSwitch(element, keepAwakeTitle)
+    expect(keepAwakeSwitch.props['aria-label']).toBe(keepAwakeTitle)
     expect(keepAwakeSwitch.props['aria-checked']).toBe(false)
 
     const onClick = keepAwakeSwitch.props.onClick as () => void
@@ -204,7 +205,7 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const statusSwitch = findSwitchRow(element, AGENT_STATUS_HOOKS_TITLE)
+    const statusSwitch = findSwitchRow(element, getAgentStatusHooksTitle())
     expect(statusSwitch.props.checked).toBe(true)
 
     const onChange = statusSwitch.props.onChange as () => void
@@ -225,7 +226,7 @@ describe('AgentsPane', () => {
       updateSettings
     })
 
-    const generatedTitleSwitch = findSwitchRow(element, AGENT_GENERATED_TAB_TITLES_TITLE)
+    const generatedTitleSwitch = findSwitchRow(element, getAgentGeneratedTabTitlesTitle())
     expect(generatedTitleSwitch.props.checked).toBe(false)
 
     const onChange = generatedTitleSwitch.props.onChange as () => void

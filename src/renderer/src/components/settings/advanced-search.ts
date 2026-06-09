@@ -1,6 +1,7 @@
 import type { SettingsSearchEntry } from './settings-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 
 export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
@@ -13,21 +14,30 @@ export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsS
       'Use HTTP/1.1 for Electron networking when HTTP/2 fails behind a proxy.'
     ),
     keywords: [
-      translate('auto.components.settings.advanced.search.e04e9db503', 'advanced'),
-      translate('auto.components.settings.advanced.search.2b4d26d11e', 'networking'),
-      translate('auto.components.settings.advanced.search.4d44352eea', 'network'),
-      translate('auto.components.settings.advanced.search.48a1c8f534', 'http'),
-      translate('auto.components.settings.advanced.search.4b4ae4345a', 'http2'),
-      translate('auto.components.settings.advanced.search.a0f71bd909', 'http/2'),
-      translate('auto.components.settings.advanced.search.f8ff125ebe', 'http1'),
-      translate('auto.components.settings.advanced.search.621233008b', 'http/1.1'),
-      translate('auto.components.settings.advanced.search.65bf6af262', 'compatibility'),
-      translate('auto.components.settings.advanced.search.f98a60af11', 'proxy'),
-      translate('auto.components.settings.advanced.search.4383251647', 'vpn'),
-      translate('auto.components.settings.advanced.search.79e0947e95', 'support'),
-      translate('auto.components.settings.advanced.search.6576fce4d2', 'troubleshooting'),
-      translate('auto.components.settings.advanced.search.e61ed8ab33', 'updates'),
-      translate('auto.components.settings.advanced.search.a7002e1ac4', 'updater')
+      ...translateSearchKeyword('auto.components.settings.advanced.search.e04e9db503', 'advanced'),
+      ...translateSearchKeyword(
+        'auto.components.settings.advanced.search.2b4d26d11e',
+        'networking'
+      ),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.4d44352eea', 'network'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.48a1c8f534', 'http'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.4b4ae4345a', 'http2'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.a0f71bd909', 'http/2'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.f8ff125ebe', 'http1'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.621233008b', 'http/1.1'),
+      ...translateSearchKeyword(
+        'auto.components.settings.advanced.search.65bf6af262',
+        'compatibility'
+      ),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.f98a60af11', 'proxy'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.4383251647', 'vpn'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.79e0947e95', 'support'),
+      ...translateSearchKeyword(
+        'auto.components.settings.advanced.search.6576fce4d2',
+        'troubleshooting'
+      ),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.e61ed8ab33', 'updates'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.a7002e1ac4', 'updater')
     ]
   }
 ])

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
@@ -9,8 +10,8 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       'Save editor and editable diff changes automatically after a short pause.'
     ),
     keywords: [
-      translate('auto.components.settings.general.search.86f54575c7', 'autosave'),
-      translate('auto.components.settings.general.search.4469b6fa4e', 'save')
+      ...translateSearchKeyword('auto.components.settings.general.search.86f54575c7', 'autosave'),
+      ...translateSearchKeyword('auto.components.settings.general.search.4469b6fa4e', 'save')
     ]
   },
   {
@@ -20,9 +21,12 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       'How long Orca waits after your last edit before saving automatically.'
     ),
     keywords: [
-      translate('auto.components.settings.general.search.86f54575c7', 'autosave'),
-      translate('auto.components.settings.general.search.146728ac2c', 'delay'),
-      translate('auto.components.settings.general.search.b2799ba622', 'milliseconds')
+      ...translateSearchKeyword('auto.components.settings.general.search.86f54575c7', 'autosave'),
+      ...translateSearchKeyword('auto.components.settings.general.search.146728ac2c', 'delay'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.b2799ba622',
+        'milliseconds'
+      )
     ]
   },
   {
@@ -32,11 +36,14 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       'Preferred presentation format for showing git diffs by default.'
     ),
     keywords: [
-      translate('auto.components.settings.general.search.3b5733573e', 'diff'),
-      translate('auto.components.settings.general.search.2b463f0bf9', 'view'),
-      translate('auto.components.settings.general.search.0a5fa65926', 'inline'),
-      translate('auto.components.settings.general.search.233f7e2f37', 'side-by-side'),
-      translate('auto.components.settings.general.search.be24c7cd67', 'split')
+      ...translateSearchKeyword('auto.components.settings.general.search.3b5733573e', 'diff'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2b463f0bf9', 'view'),
+      ...translateSearchKeyword('auto.components.settings.general.search.0a5fa65926', 'inline'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.233f7e2f37',
+        'side-by-side'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.be24c7cd67', 'split')
     ]
   },
   {
@@ -49,11 +56,14 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       'Show or hide the file tree when opening combined diff views.'
     ),
     keywords: [
-      translate('auto.components.settings.general.search.3b5733573e', 'diff'),
-      translate('auto.components.settings.general.search.2f42852568', 'tree'),
-      translate('auto.components.settings.general.search.0a02059549', 'file tree'),
-      translate('auto.components.settings.general.search.973ed6bfbf', 'combined diff'),
-      translate('auto.components.settings.general.search.19baae651b', 'sidebar')
+      ...translateSearchKeyword('auto.components.settings.general.search.3b5733573e', 'diff'),
+      ...translateSearchKeyword('auto.components.settings.general.search.2f42852568', 'tree'),
+      ...translateSearchKeyword('auto.components.settings.general.search.0a02059549', 'file tree'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.973ed6bfbf',
+        'combined diff'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.19baae651b', 'sidebar')
     ]
   },
   {
@@ -63,10 +73,10 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       'Show the minimap overview when editing a file.'
     ),
     keywords: [
-      translate('auto.components.settings.general.search.9c72990db8', 'minimap'),
-      translate('auto.components.settings.general.search.e3919429c0', 'overview'),
-      translate('auto.components.settings.general.search.3ca5ab78a5', 'code'),
-      translate('auto.components.settings.general.search.a0014961ae', 'scroll')
+      ...translateSearchKeyword('auto.components.settings.general.search.9c72990db8', 'minimap'),
+      ...translateSearchKeyword('auto.components.settings.general.search.e3919429c0', 'overview'),
+      ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code'),
+      ...translateSearchKeyword('auto.components.settings.general.search.a0014961ae', 'scroll')
     ]
   },
   {
@@ -76,11 +86,14 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
       'Show local markdown review note controls in rich editor mode.'
     ),
     keywords: [
-      translate('auto.components.settings.general.search.d05f629d2c', 'markdown'),
-      translate('auto.components.settings.general.search.4dd5684836', 'review'),
-      translate('auto.components.settings.general.search.1ff67ba40c', 'notes'),
-      translate('auto.components.settings.general.search.22572e99c1', 'annotations'),
-      translate('auto.components.settings.general.search.baa263d6d8', 'agents')
+      ...translateSearchKeyword('auto.components.settings.general.search.d05f629d2c', 'markdown'),
+      ...translateSearchKeyword('auto.components.settings.general.search.4dd5684836', 'review'),
+      ...translateSearchKeyword('auto.components.settings.general.search.1ff67ba40c', 'notes'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.22572e99c1',
+        'annotations'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.baa263d6d8', 'agents')
     ]
   }
 ])

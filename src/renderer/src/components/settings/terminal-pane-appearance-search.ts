@@ -1,5 +1,6 @@
 import { getTerminalClipboardSearchEntries } from './terminal-clipboard-search'
 import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() => [
@@ -13,9 +14,9 @@ export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() 
       'Opacity applied to panes that are not currently active.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.846a7a1204', 'pane'),
-      translate('auto.components.settings.terminal.search.46d99ef4bb', 'opacity'),
-      translate('auto.components.settings.terminal.search.6c4c85ba43', 'dimming')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.46d99ef4bb', 'opacity'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.6c4c85ba43', 'dimming')
     ]
   },
   {
@@ -25,9 +26,9 @@ export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() 
       'Thickness of the pane divider line.'
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.846a7a1204', 'pane'),
-      translate('auto.components.settings.terminal.search.781f49d942', 'divider'),
-      translate('auto.components.settings.terminal.search.f637a7dee9', 'thickness')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.781f49d942', 'divider'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f637a7dee9', 'thickness')
     ]
   }
 ])
@@ -40,13 +41,13 @@ export const getTerminalPaneInteractionSearchEntries = createLocalizedCatalog(()
       "Hovering a terminal pane activates it without needing to click. Mirrors Ghostty's focus-follows-mouse setting. Selections and window switching stay safe."
     ),
     keywords: [
-      translate('auto.components.settings.terminal.search.f5d1e3d472', 'focus'),
-      translate('auto.components.settings.terminal.search.b5116e7b12', 'follows'),
-      translate('auto.components.settings.terminal.search.ea364ce6e4', 'mouse'),
-      translate('auto.components.settings.terminal.search.d1fa00a9cb', 'hover'),
-      translate('auto.components.settings.terminal.search.846a7a1204', 'pane'),
-      translate('auto.components.settings.terminal.search.82b63d07fe', 'ghostty'),
-      translate('auto.components.settings.terminal.search.f036794286', 'active')
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f5d1e3d472', 'focus'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.b5116e7b12', 'follows'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.ea364ce6e4', 'mouse'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.d1fa00a9cb', 'hover'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.82b63d07fe', 'ghostty'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f036794286', 'active')
     ]
   },
   ...getTerminalClipboardSearchEntries()
