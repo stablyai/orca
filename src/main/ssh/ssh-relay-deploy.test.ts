@@ -67,7 +67,7 @@ vi.mock('./ssh-connection-utils', () => ({
 }))
 
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
-import { execCommand } from './ssh-relay-deploy-helpers'
+import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import type { SshConnection } from './ssh-connection'
 import {
@@ -78,6 +78,14 @@ import {
 function decodePowerShellCommand(command: string): string | null {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : null
+}
+
+function extractWindowsSockPath(script: string): string {
+  return /--sock-path\s+'([^']+)'/.exec(script)?.[1] ?? ''
+}
+
+function extractWindowsMarkerPath(script: string): string {
+  return /-LiteralPath\s+'([^']*\.windows-active-pipe[^']*)'/.exec(script)?.[1] ?? ''
 }
 
 function makeMockConnection(): SshConnection {
@@ -287,9 +295,11 @@ describe('deployAndLaunchRelay', () => {
       .mockResolvedValueOnce('Windows X64') // PowerShell platform probe
       .mockResolvedValueOnce('C:\\Users\\me user') // remote home
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
+      .mockResolvedValueOnce('') // no persisted active pipe
       .mockResolvedValueOnce('WAITING') // named pipe probe
       .mockResolvedValueOnce('') // Start-Process launch
       .mockResolvedValueOnce('READY') // named pipe poll
+      .mockResolvedValueOnce('') // persist active pipe marker
 
     const result = await deployAndLaunchRelay(conn, undefined, 300, 'target-a')
 
@@ -311,5 +321,124 @@ describe('deployAndLaunchRelay', () => {
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/agent-hooks/orca-relay-'
     )
     expect(launchScript).not.toContain('\\\\.\\pipe\\agent-hooks')
+  })
+
+  it('relaunches Windows remotes on a fallback pipe when reconnecting the occupied pipe fails', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    vi.mocked(waitForSentinel)
+      .mockRejectedValueOnce(new Error('stale daemon handshake failed'))
+      .mockResolvedValueOnce({
+        write: vi.fn(),
+        onData: vi.fn(),
+        onClose: vi.fn()
+      })
+    mockExecCommand
+      .mockRejectedValueOnce(new Error('uname not found')) // uname -sm
+      .mockResolvedValueOnce('Windows X64') // PowerShell platform probe
+      .mockResolvedValueOnce('C:\\Users\\me user') // remote home
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
+      .mockResolvedValueOnce('') // no persisted active pipe yet
+      .mockResolvedValueOnce('READY') // existing named pipe probe
+      .mockResolvedValueOnce('') // Start-Process launch on fallback pipe
+      .mockResolvedValueOnce('READY') // fallback pipe poll
+      .mockResolvedValueOnce('') // persist fallback active pipe marker
+
+    const result = await deployAndLaunchRelay(conn, undefined, 300, 'target-a')
+
+    const execCommands = vi.mocked(conn.exec).mock.calls.map(([cmd]) => cmd as string)
+    expect(execCommands).toHaveLength(2)
+    const firstConnectScript = decodePowerShellCommand(execCommands[0]) ?? ''
+    const secondConnectScript = decodePowerShellCommand(execCommands[1]) ?? ''
+    const primaryPipe = extractWindowsSockPath(firstConnectScript)
+    const fallbackPipe = extractWindowsSockPath(secondConnectScript)
+    expect(primaryPipe).toMatch(/^\\\\\.\\pipe\\orca-relay-[0-9a-f]{20}$/)
+    expect(fallbackPipe).toMatch(/^\\\\\.\\pipe\\orca-relay-[0-9a-f]{20}$/)
+    expect(fallbackPipe).not.toBe(primaryPipe)
+    expect(result.sockPath).toBe(fallbackPipe)
+
+    const launchScript =
+      mockExecCommand.mock.calls
+        .map(([, command]) => decodePowerShellCommand(command))
+        .find((script) => script?.includes('Start-Process')) ?? ''
+    expect(launchScript).toContain(fallbackPipe)
+    expect(launchScript).not.toContain(primaryPipe)
+
+    const markerWriteScript =
+      mockExecCommand.mock.calls
+        .map(([, command]) => decodePowerShellCommand(command))
+        .find(
+          (script) => script?.includes('Set-Content') && script.includes('.windows-active-pipe')
+        ) ?? ''
+    expect(markerWriteScript).toContain(fallbackPipe)
+    expect(markerWriteScript).not.toContain(primaryPipe)
+  })
+
+  it('prefers a persisted Windows fallback pipe on later reconnects', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    const persistedPipe = '\\\\.\\pipe\\orca-relay-1234567890abcdef1234'
+    vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    mockExecCommand
+      .mockRejectedValueOnce(new Error('uname not found')) // uname -sm
+      .mockResolvedValueOnce('Windows X64') // PowerShell platform probe
+      .mockResolvedValueOnce('C:\\Users\\me user') // remote home
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
+      .mockResolvedValueOnce(`${persistedPipe}\n`) // persisted active pipe marker
+      .mockResolvedValueOnce('READY') // persisted named pipe probe
+      .mockResolvedValueOnce('') // refresh active pipe marker
+
+    const result = await deployAndLaunchRelay(conn, undefined, 300, 'target-a')
+
+    const execCommands = vi.mocked(conn.exec).mock.calls.map(([cmd]) => cmd as string)
+    expect(execCommands).toHaveLength(1)
+    const connectScript = decodePowerShellCommand(execCommands[0]) ?? ''
+    expect(extractWindowsSockPath(connectScript)).toBe(persistedPipe)
+    expect(result.sockPath).toBe(persistedPipe)
+
+    const decodedExecScripts = mockExecCommand.mock.calls
+      .map(([, command]) => decodePowerShellCommand(command))
+      .filter((script): script is string => script !== null)
+    expect(decodedExecScripts.some((script) => script.includes('Start-Process'))).toBe(false)
+  })
+
+  it('scopes persisted Windows active pipe markers by relay target', async () => {
+    const connA = makeMockConnection()
+    const connB = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    vi.mocked(resolveRemoteNodePath).mockResolvedValue('C:/Program Files/nodejs/node.exe')
+    mockExecCommand
+      .mockRejectedValueOnce(new Error('uname not found')) // uname A
+      .mockResolvedValueOnce('Windows X64')
+      .mockResolvedValueOnce('C:\\Users\\me user')
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+      .mockResolvedValueOnce('') // no persisted active pipe A
+      .mockResolvedValueOnce('WAITING')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('READY')
+      .mockResolvedValueOnce('') // persist active pipe A
+      .mockRejectedValueOnce(new Error('uname not found')) // uname B
+      .mockResolvedValueOnce('Windows X64')
+      .mockResolvedValueOnce('C:\\Users\\me user')
+      .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+      .mockResolvedValueOnce('') // no persisted active pipe B
+      .mockResolvedValueOnce('WAITING')
+      .mockResolvedValueOnce('')
+      .mockResolvedValueOnce('READY')
+      .mockResolvedValueOnce('') // persist active pipe B
+
+    await deployAndLaunchRelay(connA, undefined, 300, 'target-a')
+    await deployAndLaunchRelay(connB, undefined, 300, 'target-b')
+
+    const markerPaths = mockExecCommand.mock.calls
+      .map(([, command]) => decodePowerShellCommand(command))
+      .filter((script): script is string => Boolean(script?.includes('Get-Content')))
+      .map(extractWindowsMarkerPath)
+
+    expect(markerPaths).toHaveLength(2)
+    expect(markerPaths[0]).toContain('.windows-active-pipe-relay-')
+    expect(markerPaths[1]).toContain('.windows-active-pipe-relay-')
+    expect(markerPaths[0]).not.toBe(markerPaths[1])
   })
 })

@@ -60,6 +60,8 @@ export type RelayDeployResult = {
 // launch) has no overall bound. A hanging `npm install` or slow SFTP
 // upload could block the connection indefinitely.
 const RELAY_DEPLOY_TIMEOUT_MS = 120_000
+const WINDOWS_ACTIVE_PIPE_MARKER_PREFIX = '.windows-active-pipe-'
+let windowsRelayFallbackSequence = 0
 
 function execHostCommand(
   conn: SshConnection,
@@ -544,12 +546,25 @@ async function launchRelay(
   const endpointDir = relayHookEndpointDirForHost(hostPlatform, remoteDir, sockFile)
 
   if (isWindowsRemoteHost(hostPlatform)) {
+    const activePipeMarkerPath = windowsActivePipeMarkerPath(hostPlatform, remoteDir, sockName)
+    const activeEndpoint = (await readWindowsActiveRelayEndpoint(
+      conn,
+      hostPlatform,
+      remoteDir,
+      activePipeMarkerPath
+    )) ?? {
+      sockPath: sockFile,
+      endpointDir
+    }
+    const fallbackEndpoint = buildWindowsRelayFallbackEndpoint(hostPlatform, remoteDir, sockName)
     return launchWindowsRelay(conn, hostPlatform, {
       remoteDir,
       nodePath,
-      sockPath: sockFile,
-      endpointDir,
-      graceTime
+      sockPath: activeEndpoint.sockPath,
+      endpointDir: activeEndpoint.endpointDir,
+      graceTime,
+      activePipeMarkerPath,
+      reconnectFallback: fallbackEndpoint
     })
   }
 
@@ -691,25 +706,112 @@ function relayHookEndpointDirForHost(
   )
 }
 
+function buildWindowsRelayFallbackEndpoint(
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  sockName: string
+): WindowsRelayEndpoint {
+  const fallbackSockName = `${sockName}-fallback-${Date.now().toString(36)}-${++windowsRelayFallbackSequence}`
+  const sockPath = relayEndpointForHost(hostPlatform, remoteDir, fallbackSockName)
+  return {
+    sockPath,
+    endpointDir: relayHookEndpointDirForHost(hostPlatform, remoteDir, sockPath)
+  }
+}
+
+function windowsActivePipeMarkerPath(
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  sockName: string
+): string {
+  return joinRemotePath(
+    hostPlatform,
+    remoteDir,
+    `${WINDOWS_ACTIVE_PIPE_MARKER_PREFIX}${sockName.replace(/[^a-zA-Z0-9.-]/g, '_')}`
+  )
+}
+
+function isWindowsRelayPipePath(value: string): boolean {
+  return /^\\\\[.?]\\pipe\\orca-relay-[0-9a-f]{20}$/i.test(value)
+}
+
+async function readWindowsActiveRelayEndpoint(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  markerPath: string
+): Promise<WindowsRelayEndpoint | null> {
+  const output = await execHostCommand(
+    conn,
+    hostPlatform,
+    powerShellCommand(
+      `if (Test-Path -LiteralPath ${powerShellLiteral(markerPath)} -PathType Leaf) { Get-Content -LiteralPath ${powerShellLiteral(markerPath)} -Raw -ErrorAction SilentlyContinue }`
+    )
+  ).catch(() => '')
+  const sockPath = output.trim()
+  if (!isWindowsRelayPipePath(sockPath)) {
+    return null
+  }
+  return {
+    sockPath,
+    endpointDir: relayHookEndpointDirForHost(hostPlatform, remoteDir, sockPath)
+  }
+}
+
+async function rememberWindowsActiveRelayEndpoint(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  markerPath: string,
+  sockPath: string
+): Promise<void> {
+  await execHostCommand(
+    conn,
+    hostPlatform,
+    powerShellCommand(
+      `Set-Content -LiteralPath ${powerShellLiteral(markerPath)} -Value ${powerShellLiteral(sockPath)} -NoNewline`
+    )
+  ).catch((err) => {
+    console.warn(
+      `[ssh-relay] Failed to persist Windows active relay pipe at ${markerPath}: ${err instanceof Error ? err.message : String(err)}`
+    )
+  })
+}
+
+type WindowsRelayEndpoint = {
+  sockPath: string
+  endpointDir: string
+}
+
+type WindowsRelayLaunchOptions = {
+  remoteDir: string
+  nodePath: string
+  graceTime: number
+  activePipeMarkerPath: string
+} & WindowsRelayEndpoint & {
+    reconnectFallback?: WindowsRelayEndpoint
+  }
+
 async function launchWindowsRelay(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
-  opts: {
-    remoteDir: string
-    nodePath: string
-    sockPath: string
-    endpointDir: string
-    graceTime: number
-  }
+  opts: WindowsRelayLaunchOptions
 ): Promise<{ transport: MultiplexerTransport; nodePath: string; sockPath: string }> {
+  let launchOpts = opts
   if ((await probeWindowsRelayPipe(conn, hostPlatform, opts)) === 'READY') {
     try {
       const channel = await conn.exec(
         windowsRelayConnectCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath),
         { wrapCommand: false }
       )
+      const transport = await waitForSentinel(channel)
+      await rememberWindowsActiveRelayEndpoint(
+        conn,
+        hostPlatform,
+        opts.activePipeMarkerPath,
+        opts.sockPath
+      )
       return {
-        transport: await waitForSentinel(channel),
+        transport,
         nodePath: opts.nodePath,
         sockPath: opts.sockPath
       }
@@ -718,21 +820,26 @@ async function launchWindowsRelay(
         '[ssh-relay] Windows named pipe reconnect failed, launching fresh relay:',
         err instanceof Error ? err.message : String(err)
       )
+      if (opts.reconnectFallback) {
+        // Why: an existing Windows named pipe cannot be unlinked like a Unix
+        // socket; use a fresh pipe so a corrupt daemon cannot block relaunch.
+        launchOpts = { ...opts, ...opts.reconnectFallback }
+      }
     }
   }
 
-  const logFile = joinRemotePath(hostPlatform, opts.remoteDir, 'relay.log')
-  const errFile = joinRemotePath(hostPlatform, opts.remoteDir, 'relay.err.log')
+  const logFile = joinRemotePath(hostPlatform, launchOpts.remoteDir, 'relay.log')
+  const errFile = joinRemotePath(hostPlatform, launchOpts.remoteDir, 'relay.err.log')
   await execHostCommand(
     conn,
     hostPlatform,
     windowsRelayLaunchCommand(
       hostPlatform,
-      opts.nodePath,
-      opts.remoteDir,
-      opts.sockPath,
-      opts.endpointDir,
-      opts.graceTime,
+      launchOpts.nodePath,
+      launchOpts.remoteDir,
+      launchOpts.sockPath,
+      launchOpts.endpointDir,
+      launchOpts.graceTime,
       logFile,
       errFile
     )
@@ -743,15 +850,27 @@ async function launchWindowsRelay(
   const pollStart = Date.now()
   while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
     try {
-      if ((await probeWindowsRelayPipe(conn, hostPlatform, opts)) === 'READY') {
+      if ((await probeWindowsRelayPipe(conn, hostPlatform, launchOpts)) === 'READY') {
         const channel = await conn.exec(
-          windowsRelayConnectCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath),
+          windowsRelayConnectCommand(
+            hostPlatform,
+            launchOpts.nodePath,
+            launchOpts.remoteDir,
+            launchOpts.sockPath
+          ),
           { wrapCommand: false }
         )
+        const transport = await waitForSentinel(channel)
+        await rememberWindowsActiveRelayEndpoint(
+          conn,
+          hostPlatform,
+          launchOpts.activePipeMarkerPath,
+          launchOpts.sockPath
+        )
         return {
-          transport: await waitForSentinel(channel),
-          nodePath: opts.nodePath,
-          sockPath: opts.sockPath
+          transport,
+          nodePath: launchOpts.nodePath,
+          sockPath: launchOpts.sockPath
         }
       }
     } catch {
