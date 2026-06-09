@@ -199,9 +199,10 @@ export async function listTasks(
   const results = await fanOut(entries, workspaceId, 'listTasks', (entry) =>
     fetchTasksForClient(entry, filter, safeLimit)
   )
-  return entries.length === 1
-    ? results.flat().slice(0, safeLimit)
-    : sortAndLimitTasks(results.flat(), safeLimit)
+  // Why: Asana's /tasks list has no server-side sort param, so order by
+  // modified_at desc to match GitHub/Jira's "recently updated first" default —
+  // single- and multi-workspace results stay consistent.
+  return sortAndLimitTasks(results.flat(), safeLimit)
 }
 
 export async function searchTasks(
@@ -217,10 +218,14 @@ export async function searchTasks(
   const safeLimit = clampLimit(limit)
   const results = await fanOut(entries, workspaceId, 'searchTasks', async (entry) => {
     try {
+      // Why: the search endpoint's sort_by defaults to modified_at desc, but set
+      // it explicitly so search order matches listTasks' "recently updated first".
       const params = new URLSearchParams({
         text,
         opt_fields: TASK_FIELDS,
-        limit: String(safeLimit)
+        limit: String(safeLimit),
+        sort_by: 'modified_at',
+        sort_ascending: 'false'
       })
       const response = await asanaRequest<AsanaListResponse>(
         entry,
@@ -241,9 +246,10 @@ export async function searchTasks(
       throw error
     }
   })
-  return entries.length === 1
-    ? results.flat().slice(0, safeLimit)
-    : sortAndLimitTasks(results.flat(), safeLimit)
+  // Why: server already returns modified_at desc, but the 402 local-filter
+  // fallback and multi-workspace merge are unsorted — normalize to keep order
+  // consistent regardless of which path produced the results.
+  return sortAndLimitTasks(results.flat(), safeLimit)
 }
 
 export async function getTask(

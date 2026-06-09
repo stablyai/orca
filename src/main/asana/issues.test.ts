@@ -269,6 +269,23 @@ describe('Asana task operations', () => {
     expect(tasks.map((task) => task.gid)).toEqual(['newer', 'older'])
   })
 
+  it('sorts a single workspace by updatedAt descending', async () => {
+    getClientsMock.mockReturnValue([makeEntry('ws-1', 'First')])
+    // Why: Asana's /tasks list has no server-side sort, so a single workspace
+    // must still be ordered "recently updated first" to match GitHub/Jira.
+    asanaRequestMock.mockResolvedValueOnce({
+      data: [
+        { gid: 'older', name: 'Older', completed: false, modified_at: '2026-06-01T00:00:00.000Z' },
+        { gid: 'newer', name: 'Newer', completed: false, modified_at: '2026-06-05T00:00:00.000Z' }
+      ]
+    })
+
+    const { listTasks } = await import('./issues')
+
+    const tasks = await listTasks('assigned', 30, 'ws-1')
+    expect(tasks.map((task) => task.gid)).toEqual(['newer', 'older'])
+  })
+
   it('respects the limit when merging tasks across workspaces', async () => {
     getClientsMock.mockReturnValue([makeEntry('ws-1', 'First'), makeEntry('ws-2', 'Second')])
     asanaRequestMock.mockImplementation((entry: AsanaClientForWorkspace) => {
