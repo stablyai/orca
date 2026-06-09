@@ -405,7 +405,6 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     promptDelivery: 'stdin',
     buildArgs: ({ model, thinkingLevel }) => [
       '--execute',
-      '--archive',
       '--no-notifications',
       '--no-ide',
       '--no-jetbrains',
