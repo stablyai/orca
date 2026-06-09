@@ -1,5 +1,5 @@
 import { readFile, readdir, readlink } from 'fs/promises'
-import type { RelayDispatcher } from './dispatcher'
+import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { scanWindowsListeningPorts } from './windows-port-scan'
 
 // Keep in sync with src/shared/ssh-types.ts — DetectedPort
@@ -16,7 +16,7 @@ const MAX_DETECTED_PORTS = 50
 
 export class PortScanHandler {
   constructor(dispatcher: RelayDispatcher) {
-    dispatcher.onRequest('ports.detect', async () => {
+    dispatcher.onRequest('ports.detect', async (_params, context: RequestContext) => {
       if (process.platform === 'linux') {
         return {
           ports: await this.scanLinuxListeningPorts(),
@@ -25,7 +25,7 @@ export class PortScanHandler {
       }
       if (process.platform === 'win32') {
         return {
-          ports: await scanWindowsListeningPorts(),
+          ports: await scanWindowsListeningPorts(context.signal),
           platform: process.platform
         }
       }

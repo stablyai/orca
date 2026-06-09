@@ -10,6 +10,11 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
 
 const conn = {} as SshConnection
 
+function decodePowerShellCommand(command: string): string {
+  const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+  return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
@@ -50,5 +55,9 @@ describe('detectRemoteHostPlatform', () => {
     })
 
     expect(vi.mocked(execCommand).mock.calls[1]?.[1]).toContain('powershell.exe')
+    const script = decodePowerShellCommand(vi.mocked(execCommand).mock.calls[1]?.[1] ?? '')
+    expect(script).toContain('$arch = $env:PROCESSOR_ARCHITECTURE')
+    expect(script).toContain('try { $runtimeArch =')
+    expect(script).toContain('catch {}')
   })
 })

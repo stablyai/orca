@@ -31,7 +31,8 @@ async function detectUnamePlatform(conn: SshConnection): Promise<RelayPlatform |
 async function detectWindowsPlatform(conn: SshConnection): Promise<RelayPlatform | null> {
   try {
     const script = [
-      '$arch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()',
+      '$arch = $env:PROCESSOR_ARCHITECTURE',
+      'try { $runtimeArch = [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString(); if ($runtimeArch) { $arch = $runtimeArch } } catch {}',
       'if (-not $arch) { $arch = $env:PROCESSOR_ARCHITECTURE }',
       'Write-Output ("Windows " + $arch)'
     ].join('; ')

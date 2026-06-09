@@ -6,17 +6,23 @@ import { buildRelayCommandEnv } from './relay-command-env'
 
 const SYSTEM_PORTS_TO_EXCLUDE = new Set([22])
 const MAX_DETECTED_PORTS = 50
+const WINDOWS_PORT_SCAN_TIMEOUT_MS = 5_000
 const execFileAsync = promisify(execFile)
 
-export async function scanWindowsListeningPorts(): Promise<DetectedPort[]> {
+export async function scanWindowsListeningPorts(signal?: AbortSignal): Promise<DetectedPort[]> {
   try {
-    const json = await runWindowsPortScanPowerShell()
+    const json = await runWindowsPortScanPowerShell(signal)
     return normalizeWindowsDetectedPorts(parseWindowsPowerShellPortRows(json))
   } catch {
+    if (signal?.aborted) {
+      return []
+    }
     try {
       const { stdout } = await execFileAsync('netstat.exe', ['-ano', '-p', 'tcp'], {
         env: buildRelayCommandEnv(),
         encoding: 'utf-8',
+        signal,
+        timeout: WINDOWS_PORT_SCAN_TIMEOUT_MS,
         windowsHide: true
       })
       return normalizeWindowsDetectedPorts(parseWindowsNetstatOutput(stdout))
@@ -26,7 +32,7 @@ export async function scanWindowsListeningPorts(): Promise<DetectedPort[]> {
   }
 }
 
-async function runWindowsPortScanPowerShell(): Promise<string> {
+async function runWindowsPortScanPowerShell(signal?: AbortSignal): Promise<string> {
   const script = [
     "$ErrorActionPreference = 'Stop'",
     '$connections = Get-NetTCPConnection -State Listen -ErrorAction Stop',
@@ -57,11 +63,16 @@ async function runWindowsPortScanPowerShell(): Promise<string> {
           env: buildRelayCommandEnv(),
           encoding: 'utf-8',
           maxBuffer: 1024 * 1024,
+          signal,
+          timeout: WINDOWS_PORT_SCAN_TIMEOUT_MS,
           windowsHide: true
         }
       )
       return stdout
     } catch (error) {
+      if (signal?.aborted) {
+        throw error
+      }
       lastError.push(error)
     }
   }
