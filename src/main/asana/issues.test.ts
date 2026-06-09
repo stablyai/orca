@@ -90,25 +90,47 @@ describe('Asana task operations', () => {
       }
     ])
 
+    // Premium default list uses workspace search for server-side modified_at
+    // sort and a real incomplete-only filter (completed=false).
     const requestedPath = String(asanaRequestMock.mock.calls[0][1])
-    expect(requestedPath).toContain('assignee=me')
-    expect(requestedPath).toContain('workspace=ws-1')
-    expect(requestedPath).toContain('completed_since=now')
+    expect(requestedPath).toContain('/workspaces/ws-1/tasks/search')
+    expect(requestedPath).toContain('assignee.any=me')
+    expect(requestedPath).toContain('completed=false')
+    expect(requestedPath).toContain('sort_by=modified_at')
   })
 
-  it('filters to completed tasks for the done preset', async () => {
+  it('filters to completed tasks for the done preset via the server', async () => {
+    // The search path filters completion server-side (completed=true), so the
+    // server returns only the done task — no client-side filtering needed.
     asanaRequestMock.mockResolvedValueOnce({
-      data: [
-        { gid: '1', name: 'Open task', completed: false },
-        { gid: '2', name: 'Closed task', completed: true }
-      ]
+      data: [{ gid: '2', name: 'Closed task', completed: true }]
     })
 
     const { listTasks } = await import('./issues')
 
     const tasks = await listTasks('done', 30, 'ws-1')
     expect(tasks.map((task) => task.gid)).toEqual(['2'])
-    expect(String(asanaRequestMock.mock.calls[0][1])).not.toContain('completed_since')
+    expect(String(asanaRequestMock.mock.calls[0][1])).toContain('completed=true')
+  })
+
+  it('falls back to the /tasks list for the default view on the free tier', async () => {
+    asanaRequestMock
+      .mockRejectedValueOnce(new FakeAsanaApiError('Payment Required', 402))
+      .mockResolvedValueOnce({
+        data: [
+          { gid: '1', name: 'Open task', completed: false },
+          { gid: '2', name: 'Closed task', completed: true }
+        ]
+      })
+
+    const { listTasks } = await import('./issues')
+
+    const tasks = await listTasks('done', 30, 'ws-1')
+    // Fallback uses /tasks?assignee=me and client-filters completion for done.
+    expect(tasks.map((task) => task.gid)).toEqual(['2'])
+    const fallbackPath = String(asanaRequestMock.mock.calls[1][1])
+    expect(fallbackPath).toContain('assignee=me')
+    expect(fallbackPath).toContain('workspace=ws-1')
   })
 
   it('intersects assignee and project via premium search when filtering by project', async () => {

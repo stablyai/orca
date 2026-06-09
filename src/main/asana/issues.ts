@@ -168,15 +168,16 @@ async function fetchTasksForClient(
   return tasks
 }
 
-// Why: presets mean "my tasks", so a project filter should narrow to my tasks
-// in that project. Only the premium search endpoint can intersect assignee +
-// project; on the free tier (402) we fall back to the whole project (every
-// assignee — the closest we can get), reusing the per-workspace premium cache.
-async function fetchProjectTasks(
+// Why: the premium search endpoint sorts server-side (modified_at desc) so it
+// returns the genuinely most-recent top-N when tasks exceed one page, and it can
+// intersect assignee + project. The /tasks list can do neither. Prefer search
+// for "my tasks", falling back to /tasks on the free tier (402) and remembering
+// the verdict per workspace so we probe premium only once.
+async function fetchMyTasks(
   entry: AsanaClientForWorkspace,
-  projectId: string,
   filter: AsanaTaskFilter,
-  limit: number
+  limit: number,
+  projectId?: string | null
 ): Promise<AsanaTask[]> {
   if (isSearchUnavailable(entry.workspace.id)) {
     return fetchTasksForClient(entry, filter, limit, projectId)
@@ -187,9 +188,11 @@ async function fetchProjectTasks(
       limit: String(limit),
       sort_by: 'modified_at',
       sort_ascending: 'false',
-      'projects.any': projectId,
       'assignee.any': 'me'
     })
+    if (projectId) {
+      params.set('projects.any', projectId)
+    }
     if (filter === 'assigned') {
       params.set('completed', 'false')
     } else if (filter === 'done') {
@@ -264,9 +267,7 @@ export async function listTasks(
   // ever reaches here — both the search and /tasks paths target one workspace.
   const targets = projectId ? entries.slice(0, 1) : entries
   const results = await fanOut(targets, workspaceId, 'listTasks', (entry) =>
-    projectId
-      ? fetchProjectTasks(entry, projectId, filter, safeLimit)
-      : fetchTasksForClient(entry, filter, safeLimit)
+    fetchMyTasks(entry, filter, safeLimit, projectId)
   )
   // Why: Asana's /tasks list has no server-side sort param, so order by
   // modified_at desc to match GitHub/Jira's "recently updated first" default —
