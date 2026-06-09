@@ -16,6 +16,7 @@ import {
   waitForActivePanePtyId,
   waitForActiveTerminalManager
 } from './helpers/terminal'
+import { scrollActiveTerminalToText } from './artificial-opencode-active-terminal-scroll'
 
 type TerminalRenderDiagnostics = {
   cols: number
@@ -338,47 +339,6 @@ async function scrollActiveTerminalLikeUser(page: Page): Promise<void> {
   await page.mouse.move(target.x, target.y)
   await page.mouse.wheel(0, -1800)
   await page.waitForTimeout(250)
-}
-
-async function scrollActiveTerminalToText(page: Page, text: string): Promise<void> {
-  const target = await page.evaluate(() => {
-    const store = window.__store
-    const state = store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!pane) {
-      throw new Error('Active terminal pane unavailable')
-    }
-    pane.terminal.focus()
-    pane.terminal.scrollToBottom()
-    const viewport =
-      pane.container.querySelector<HTMLElement>('.xterm-viewport') ??
-      pane.container.querySelector<HTMLElement>('.xterm')
-    if (!viewport) {
-      throw new Error('Active terminal viewport unavailable')
-    }
-    const rect = viewport.getBoundingClientRect()
-    return {
-      x: rect.left + rect.width / 2,
-      y: rect.top + rect.height / 2
-    }
-  })
-  await page.mouse.move(target.x, target.y)
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    if ((await readActiveTerminalVisibleText(page)).includes(text)) {
-      return
-    }
-    await page.mouse.wheel(0, -600)
-    await page.waitForTimeout(50)
-  }
-  throw new Error(`Text not visible after scrolling terminal: ${text}`)
 }
 
 async function readActiveTerminalVisibleText(page: Page): Promise<string> {
@@ -757,6 +717,7 @@ test.describe('Terminal long table scroll restore repro', () => {
     testRepoPath
   }, testInfo: TestInfo) => {
     await waitForSessionReady(orcaPage)
+    await closeFeatureTips(orcaPage)
     await orcaPage.evaluate(() => {
       window.__store
         ?.getState()

@@ -126,6 +126,47 @@ export async function dispatchActiveTerminalWheelEvent(page: Page): Promise<void
   })
 }
 
+// Why: Linux/Xvfb can drop CDP wheel delivery, and tall wrapped tables need
+// more scroll steps than a mouse-wheel loop can reliably deliver under CI load.
+export async function scrollActiveTerminalToText(page: Page, text: string): Promise<void> {
+  await page.evaluate((searchText) => {
+    const pane = (() => {
+      const store = window.__store
+      const state = store?.getState()
+      const worktreeId = state?.activeWorktreeId
+      const tabId =
+        state?.activeTabType === 'terminal'
+          ? state.activeTabId
+          : worktreeId
+            ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
+            : null
+      const manager = tabId ? window.__paneManagers?.get(tabId) : null
+      const candidate = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+      if (!candidate) {
+        throw new Error('Active terminal pane is unavailable')
+      }
+      return candidate
+    })()
+    const buffer = pane.terminal.buffer.active
+    let targetLine: number | null = null
+    for (let lineIndex = buffer.length - 1; lineIndex >= 0; lineIndex -= 1) {
+      const line = buffer.getLine(lineIndex)
+      if (line?.translateToString(true).includes(searchText)) {
+        targetLine = lineIndex
+        break
+      }
+    }
+    if (targetLine === null) {
+      throw new Error(`Text not found in terminal buffer: ${searchText}`)
+    }
+    const scrollDelta = targetLine - buffer.viewportY
+    if (scrollDelta !== 0) {
+      pane.terminal.scrollLines(scrollDelta)
+    }
+    pane.terminal.focus()
+  }, text)
+}
+
 export async function readActiveTerminalScrollState(
   page: Page
 ): Promise<ActiveTerminalScrollState> {
