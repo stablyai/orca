@@ -168,6 +168,47 @@ async function fetchTasksForClient(
   return tasks
 }
 
+// Why: presets mean "my tasks", so a project filter should narrow to my tasks
+// in that project. Only the premium search endpoint can intersect assignee +
+// project; on the free tier (402) we fall back to the whole project (every
+// assignee — the closest we can get), reusing the per-workspace premium cache.
+async function fetchProjectTasks(
+  entry: AsanaClientForWorkspace,
+  projectId: string,
+  filter: AsanaTaskFilter,
+  limit: number
+): Promise<AsanaTask[]> {
+  if (isSearchUnavailable(entry.workspace.id)) {
+    return fetchTasksForClient(entry, filter, limit, projectId)
+  }
+  try {
+    const params = new URLSearchParams({
+      opt_fields: TASK_FIELDS,
+      limit: String(limit),
+      sort_by: 'modified_at',
+      sort_ascending: 'false',
+      'projects.any': projectId,
+      'assignee.any': 'me'
+    })
+    if (filter === 'assigned') {
+      params.set('completed', 'false')
+    } else if (filter === 'done') {
+      params.set('completed', 'true')
+    }
+    const response = await asanaRequest<AsanaListResponse>(
+      entry,
+      `/workspaces/${encodeURIComponent(entry.workspace.id)}/tasks/search?${params.toString()}`
+    )
+    return (response.data ?? []).map((task) => mapAsanaTask(entry.workspace, task))
+  } catch (error) {
+    if (error instanceof AsanaApiError && error.status === 402) {
+      markSearchUnavailable(entry.workspace.id)
+      return fetchTasksForClient(entry, filter, limit, projectId)
+    }
+    throw error
+  }
+}
+
 // Why: free-tier fallback for the premium-only search endpoint — fetch the
 // assigned task set and match titles client-side.
 async function filterTasksLocally(
@@ -218,12 +259,14 @@ export async function listTasks(
     return []
   }
   const safeLimit = clampLimit(limit)
-  // Why: a project gid is globally unique and the shared PAT reads it from any
-  // workspace client, so query a single client to avoid duplicate fan-out rows
-  // (every client would return the same project's tasks otherwise).
+  // Why: the project filter is gated to a single concrete workspace in the UI,
+  // so a project query resolves to one client. Slice defensively in case 'all'
+  // ever reaches here — both the search and /tasks paths target one workspace.
   const targets = projectId ? entries.slice(0, 1) : entries
   const results = await fanOut(targets, workspaceId, 'listTasks', (entry) =>
-    fetchTasksForClient(entry, filter, safeLimit, projectId)
+    projectId
+      ? fetchProjectTasks(entry, projectId, filter, safeLimit)
+      : fetchTasksForClient(entry, filter, safeLimit)
   )
   // Why: Asana's /tasks list has no server-side sort param, so order by
   // modified_at desc to match GitHub/Jira's "recently updated first" default —

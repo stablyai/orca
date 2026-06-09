@@ -111,9 +111,9 @@ describe('Asana task operations', () => {
     expect(String(asanaRequestMock.mock.calls[0][1])).not.toContain('completed_since')
   })
 
-  it('scopes the list to a project gid instead of the assignee when filtering by project', async () => {
+  it('intersects assignee and project via premium search when filtering by project', async () => {
     asanaRequestMock.mockResolvedValueOnce({
-      data: [{ gid: '1', name: 'Project task', completed: false }]
+      data: [{ gid: '1', name: 'My project task', completed: false }]
     })
 
     const { listTasks } = await import('./issues')
@@ -122,25 +122,46 @@ describe('Asana task operations', () => {
     expect(tasks.map((task) => task.gid)).toEqual(['1'])
 
     const requestedPath = String(asanaRequestMock.mock.calls[0][1])
-    expect(requestedPath).toContain('project=proj-1')
-    expect(requestedPath).not.toContain('assignee=me')
-    // Incomplete-only still applies via the preset.
-    expect(requestedPath).toContain('completed_since=now')
+    // Premium search filters "my tasks in this project": assignee.any=me +
+    // projects.any + completed=false for the incomplete (assigned) preset.
+    expect(requestedPath).toContain('/workspaces/ws-1/tasks/search')
+    expect(requestedPath).toContain('projects.any=proj-1')
+    expect(requestedPath).toContain('assignee.any=me')
+    expect(requestedPath).toContain('completed=false')
   })
 
-  it('queries a project only once across all workspaces to avoid duplicate rows', async () => {
-    getClientsMock.mockReturnValue([makeEntry('ws-1', 'First'), makeEntry('ws-2', 'Second')])
-    asanaRequestMock.mockResolvedValue({
-      data: [{ gid: '1', name: 'Project task', completed: false }]
-    })
+  it('falls back to the whole project after a 402 when filtering by project', async () => {
+    asanaRequestMock
+      .mockRejectedValueOnce(new FakeAsanaApiError('Payment Required', 402))
+      .mockResolvedValueOnce({ data: [{ gid: '1', name: 'Project task', completed: false }] })
 
     const { listTasks } = await import('./issues')
 
-    // A project gid is global and the shared PAT can read it from any client, so
-    // 'all' must not fan the same project query across every workspace.
-    const tasks = await listTasks('all', 30, 'all', 'proj-1')
+    const tasks = await listTasks('assigned', 30, 'ws-1', 'proj-1')
     expect(tasks.map((task) => task.gid)).toEqual(['1'])
-    expect(asanaRequestMock).toHaveBeenCalledTimes(1)
+
+    // Free tier can't intersect assignee+project, so it lists the whole project.
+    const fallbackPath = String(asanaRequestMock.mock.calls[1][1])
+    expect(fallbackPath).toContain('project=proj-1')
+    expect(fallbackPath).not.toContain('assignee=me')
+    expect(fallbackPath).toContain('completed_since=now')
+  })
+
+  it('skips the premium project search on repeat queries after a 402', async () => {
+    asanaRequestMock
+      .mockRejectedValueOnce(new FakeAsanaApiError('Payment Required', 402))
+      .mockResolvedValueOnce({ data: [{ gid: '1', name: 'Project task', completed: false }] })
+      .mockResolvedValueOnce({ data: [{ gid: '1', name: 'Project task', completed: false }] })
+
+    const { listTasks } = await import('./issues')
+
+    await listTasks('assigned', 30, 'ws-1', 'proj-1')
+    await listTasks('assigned', 30, 'ws-1', 'proj-1')
+
+    // 1st: failed search + fallback (2 calls); 2nd: fallback only (1 call).
+    expect(asanaRequestMock).toHaveBeenCalledTimes(3)
+    const paths = asanaRequestMock.mock.calls.map((call) => String(call[1]))
+    expect(paths.filter((path) => path.includes('/tasks/search'))).toHaveLength(1)
   })
 
   it('creates a task scoped to a project when a project id is given', async () => {

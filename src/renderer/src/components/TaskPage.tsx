@@ -6462,10 +6462,14 @@ export default function TaskPage(): React.JSX.Element {
     setAsanaError(null)
 
     const trimmed = appliedAsanaSearch.trim()
+    // Why: a project belongs to one workspace and the search path is
+    // workspace-scoped, so the project filter only applies to a concrete
+    // workspace — ignore it under "All workspaces".
+    const projectFilterId = selectedAsanaWorkspaceId === 'all' ? null : selectedAsanaProjectId
     const request =
       trimmed.length > 0
         ? searchAsanaTasks(trimmed, ASANA_ITEM_LIMIT)
-        : listAsanaTasks(activeAsanaPreset, ASANA_ITEM_LIMIT, selectedAsanaProjectId)
+        : listAsanaTasks(activeAsanaPreset, ASANA_ITEM_LIMIT, projectFilterId)
 
     void request
       .then((tasks) => {
@@ -7700,7 +7704,7 @@ export default function TaskPage(): React.JSX.Element {
                           </button>
                         ) : null}
                       </div>
-                      {availableAsanaProjects.length > 0 ? (
+                      {availableAsanaProjects.length > 0 && selectedAsanaWorkspaceId !== 'all' ? (
                         <Select
                           value={selectedAsanaProjectId ?? ASANA_ALL_PROJECTS}
                           onValueChange={(value) => {
