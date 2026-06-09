@@ -11526,7 +11526,7 @@ export default function TaskPage(): React.JSX.Element {
         }}
       >
         <DialogContent
-          className="sm:max-w-lg"
+          className="sm:max-w-2xl"
           onKeyDown={(event) => {
             if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
@@ -11575,9 +11575,9 @@ export default function TaskPage(): React.JSX.Element {
                 className="min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-3 sm:flex-row">
               {availableAsanaProjects.length > 0 ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 sm:w-56">
                   <label className="text-[11px] font-medium text-muted-foreground">Project</label>
                   <Select
                     value={newAsanaTaskProjectId ?? 'none'}
@@ -11601,7 +11601,7 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
               ) : null}
               {availableAsanaUsers.length > 0 ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 sm:w-56">
                   <label className="text-[11px] font-medium text-muted-foreground">Assignee</label>
                   <Select
                     value={newAsanaTaskAssigneeGid ?? 'none'}
