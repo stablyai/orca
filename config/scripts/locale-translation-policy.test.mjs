@@ -64,6 +64,33 @@ describe('locale-translation-policy', () => {
     expect(shouldPreserveEnglishValue('Show Codex usage')).toBe(false)
   })
 
+  it('fixes high-visibility homograph mistranslations', () => {
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.AgentsPane.c9b33eb5c0',
+        enValue: 'Refreshing…',
+        localeValue: '爽やか…',
+        locale: 'ja'
+      })
+    ).toBe('更新中…')
+    expect(
+      repairTranslatedValue({
+        key: 'auto.components.settings.AgentsPane.92033495ff',
+        enValue: 'Auto',
+        localeValue: '汽车',
+        locale: 'zh'
+      })
+    ).toBe('自动')
+    expect(
+      repairTranslatedValue({
+        key: 'menu.reportCrash',
+        enValue: 'Report Crash...',
+        localeValue: '충돌 신고...',
+        locale: 'ko'
+      })
+    ).toBe('크래시 신고...')
+  })
+
   it('applies search keyword overrides for settings search synonyms', () => {
     expect(
       repairTranslatedValue({
