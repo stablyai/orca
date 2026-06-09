@@ -342,6 +342,7 @@ export const LOCALE_VALUE_OVERRIDES = {
       '直接从这里浏览并开始处理分配给您的 Linear 议题。',
     issue: '议题',
     issues: '议题',
+    Issues: '议题',
     'No matching GitHub work': '没有匹配的 GitHub 工作项',
     'Open on Linear': '在 Linear 中打开',
     'Open in Linear': '在 Linear 中打开',
@@ -357,7 +358,9 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Refresh Linear': '刷新 Linear',
     'Failed to update Linear state': '无法更新 Linear 状态',
     'Add Linear access to browse and link issues.': '添加 Linear 访问以浏览和链接议题。',
-    'No issues match this Linear context.': '没有议题与此 Linear 上下文匹配。'
+    'No issues match this Linear context.': '没有议题与此 Linear 上下文匹配。',
+    'Fix checks prompt is empty. Update Source Control AI settings.':
+      '检查提示为空。请更新源代码管理 AI 设置。'
   },
   ja: {
     Save: '保存',
@@ -550,6 +553,10 @@ export const LOCALE_VALUE_OVERRIDES = {
     'New Jira issue': '新規 Jira イシュー',
     'No Linear issues found': 'Linear イシューが見つかりません',
     'Unable to load Linear issues': 'Linear イシューを読み込めません',
-    'No Jira issues found': 'Jira イシューが見つかりません'
+    'No Jira issues found': 'Jira イシューが見つかりません',
+    issue: 'イシュー',
+    issues: 'イシュー',
+    Issues: 'イシュー',
+    'Common emulator commands': 'よく使うエミュレータコマンド'
   }
 }
