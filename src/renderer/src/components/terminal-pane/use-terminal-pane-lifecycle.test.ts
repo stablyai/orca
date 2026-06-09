@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  resolveTerminalGpuAccelerationForRuntime,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
@@ -123,24 +122,6 @@ describe('shouldDetachPaneTransportOnUnmount', () => {
         worktreeTabs: []
       })
     ).toBe(false)
-  })
-})
-
-describe('resolveTerminalGpuAccelerationForRuntime', () => {
-  it('forces DOM rendering while a remote runtime is active', () => {
-    expect(resolveTerminalGpuAccelerationForRuntime('env-1', 'on')).toBe('off')
-  })
-
-  it('honors the user GPU setting for local terminals', () => {
-    expect(resolveTerminalGpuAccelerationForRuntime(null, 'on')).toBe('on')
-  })
-
-  it('defaults local terminals to auto when the setting is missing', () => {
-    expect(resolveTerminalGpuAccelerationForRuntime(null, undefined)).toBe('auto')
-  })
-
-  it('treats blank runtime ids as local', () => {
-    expect(resolveTerminalGpuAccelerationForRuntime('   ', 'auto')).toBe('auto')
   })
 })
 
