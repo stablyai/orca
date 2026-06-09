@@ -455,9 +455,11 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       '', // npm install native deps
       'MISSING\n', // native process exit normalized by PowerShell command
       '', // remove probe stderr file
+      '', // no persisted active pipe marker
       'WAITING',
       '', // Start-Process launch
-      'READY'
+      'READY',
+      '' // persist active pipe marker
     ])
 
     await deployAndLaunchRelay(conn)
