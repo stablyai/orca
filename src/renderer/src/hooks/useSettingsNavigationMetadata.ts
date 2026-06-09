@@ -327,7 +327,7 @@ export function buildSettingsNavigationMetadata({
         'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
       ),
       icon: Palette,
-      searchEntries: getAppearancePaneSearchEntries({ showWarpImport: !isWebClient }),
+      searchEntries: getAppearancePaneSearchEntries(),
       group: 'interface'
     },
     {
