@@ -98,6 +98,17 @@ export function attachMainWindowServices(
   // function re-runs as the main window is recreated — does not redo the
   // git I/O or daemon RPC.
   void hydrateLocalPtyRegistryAtBoot(store)
+  const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
+  if (localPtyStartupReady) {
+    void localPtyStartupReady
+      .then(() => hydrateLocalPtyRegistryAtBoot(store))
+      .catch((error) => {
+        console.warn(
+          '[memory] Deferred pty-registry hydration skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+  }
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)

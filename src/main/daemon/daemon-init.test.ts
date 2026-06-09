@@ -291,6 +291,17 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     vi.clearAllMocks()
   })
 
+  it('re-binds listeners after the first daemon provider is installed', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(1)
+    expect(rebindLocalProviderListenersMock).toHaveBeenCalledTimes(1)
+    expect(rebindLocalProviderListenersMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      setLocalPtyProviderMock.mock.invocationCallOrder[0]
+    )
+  })
+
   it('fans pty:exit for every active session *before* unbinding listeners, and killedCount is captured pre-fanout', async () => {
     const mod = await importFresh()
     await mod.initDaemonPtyProvider()

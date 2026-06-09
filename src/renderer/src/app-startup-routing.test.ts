@@ -46,6 +46,10 @@ describe('renderer startup runtime routing', () => {
     expect(source).not.toContain("from './components/UpdateCard'")
     expect(source).not.toContain("from './components/contextual-tours/ContextualTourOverlay'")
     expect(source).not.toContain("from './components/setup-guide/SetupGuideTelemetryObserver'")
+    expect(source).toContain('const shouldMountSetupGuideTelemetryObserver = persistedUIReady')
+    expect(source).not.toContain(
+      "const shouldMountSetupGuideTelemetryObserver = persistedUIReady && activeModal === 'setup-guide'"
+    )
   })
 
   it('keeps crash-report listeners eager while lazy-loading the dialog surface', () => {
@@ -63,6 +67,24 @@ describe('renderer startup runtime routing', () => {
     expect(hostSource).toContain('window.api.crashReports.getLatestPending()')
     expect(hostSource).toContain('window.api.ui.onOpenCrashReport')
     expect(hostSource).toContain('REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT')
+  })
+
+  it('clears stale crash-report state before opening the lazy manual report surface', () => {
+    const hostSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/crash-report/CrashReportDialog.tsx'),
+      'utf8'
+    )
+    const manualOpenStart = hostSource.indexOf('return window.api.ui.onOpenCrashReport(() => {')
+    const manualOpenEnd = hostSource.indexOf('  }, [loadCrashReport])', manualOpenStart)
+    const manualOpenBlock = hostSource.slice(manualOpenStart, manualOpenEnd)
+
+    expect(manualOpenBlock.indexOf('setReport(null)')).toBeGreaterThanOrEqual(0)
+    expect(manualOpenBlock.indexOf('setReport(null)')).toBeLessThan(
+      manualOpenBlock.indexOf('setOpen(true)')
+    )
+    expect(manualOpenBlock.indexOf('setReport(null)')).toBeLessThan(
+      manualOpenBlock.indexOf('loadCrashReport(false)')
+    )
   })
 
   it('loads dictation only when voice is enabled or a session is active', () => {

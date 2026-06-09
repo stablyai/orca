@@ -155,6 +155,7 @@ import {
   hasPendingRendererSerializerForPaneKey,
   setPtyOwnership,
   setLocalPtyProvider,
+  rebindLocalProviderListeners,
   unregisterSshPtyProvider
 } from './pty'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
@@ -412,6 +413,48 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     return spawn
+  }
+
+  function installObservableDaemonTestProvider() {
+    const spawn = vi.fn(async (options: { sessionId?: string }) => ({
+      id: options.sessionId ?? 'daemon-pty'
+    }))
+    let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
+    let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
+    setLocalPtyProvider({
+      spawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
+        dataHandler = handler
+        return () => {}
+      }),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn((handler: (payload: { id: string; code: number }) => void) => {
+        exitHandler = handler
+        return () => {}
+      }),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    return {
+      spawn,
+      emitData: (id: string, data: string) => dataHandler?.({ id, data }),
+      emitExit: (id: string, code = 0) => exitHandler?.({ id, code })
+    }
   }
 
   /** Helper: trigger pty:spawn and return the env passed to node-pty. */
@@ -2101,6 +2144,66 @@ describe('registerPtyHandlers', () => {
     expect(daemonSpawn).toHaveBeenCalledTimes(1)
     expect(result.id).toBe(daemonSpawn.mock.calls[0]?.[0].sessionId)
     expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  it('rebinds local data and exit listeners after a late daemon provider install', async () => {
+    vi.useFakeTimers()
+    const barrier = makeDeferred()
+    const runtime = {
+      setPtyController: vi.fn(),
+      registerPty: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn(() => 13),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
+      registerPreAllocatedHandleForPty: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          awaitLocalPtyStartup: () => barrier.promise
+        }
+      )
+
+      const pendingSpawn = handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        sessionId: 'daemon-session'
+      }) as Promise<{ id: string }>
+      await Promise.resolve()
+
+      const daemon = installObservableDaemonTestProvider()
+      rebindLocalProviderListeners()
+      barrier.resolve()
+      const result = await pendingSpawn
+
+      daemon.emitData(result.id, 'daemon output')
+      vi.advanceTimersByTime(8)
+      daemon.emitExit(result.id, 0)
+
+      expect(daemon.spawn).toHaveBeenCalledTimes(1)
+      expect(runtime.onPtyData).toHaveBeenCalledWith(result.id, 'daemon output', expect.any(Number))
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
+        id: result.id,
+        data: 'daemon output',
+        seq: 13,
+        rawLength: 'daemon output'.length
+      })
+      expect(runtime.onPtyExit).toHaveBeenCalledWith(result.id, 0)
+      expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
+        id: result.id,
+        code: 0
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('waits for the desktop startup barrier before runtime local spawns resolve the provider', async () => {

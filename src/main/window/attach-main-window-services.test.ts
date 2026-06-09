@@ -16,6 +16,7 @@ const {
   registerRepoHandlersMock,
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
+  hydrateLocalPtyRegistryAtBootMock,
   setupAutoUpdaterMock,
   sessionFromPartitionMock,
   browserManagerUnregisterAllMock,
@@ -36,6 +37,7 @@ const {
   registerRepoHandlersMock: vi.fn(),
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
+  hydrateLocalPtyRegistryAtBootMock: vi.fn(),
   setupAutoUpdaterMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   browserManagerUnregisterAllMock: vi.fn(),
@@ -77,6 +79,10 @@ vi.mock('../ipc/worktrees', () => ({
 vi.mock('../ipc/pty', () => ({
   getLocalPtyProvider: vi.fn(),
   registerPtyHandlers: registerPtyHandlersMock
+}))
+
+vi.mock('../memory/hydrate-local-pty-registry', () => ({
+  hydrateLocalPtyRegistryAtBoot: hydrateLocalPtyRegistryAtBootMock
 }))
 
 vi.mock('../browser/browser-manager', () => ({
@@ -155,6 +161,14 @@ function createRuntime(): RuntimeStub {
   }
 }
 
+function deferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void
+  const promise = new Promise<void>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
+
 function getClosedHandlers(mainWindowOnMock: MockFn): (() => void)[] {
   return mainWindowOnMock.mock.calls
     .filter(([event]) => event === 'closed')
@@ -177,6 +191,7 @@ describe('attachMainWindowServices', () => {
     registerRepoHandlersMock.mockReset()
     registerWorktreeHandlersMock.mockReset()
     registerPtyHandlersMock.mockReset()
+    hydrateLocalPtyRegistryAtBootMock.mockReset()
     setupAutoUpdaterMock.mockReset()
     sessionFromPartitionMock.mockReset()
     browserManagerUnregisterAllMock.mockReset()
@@ -218,6 +233,30 @@ describe('attachMainWindowServices', () => {
       ignoreCache: false
     })
     expect(mainWindow.webContents.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries local PTY registry hydration after local startup services are ready', async () => {
+    const localStartup = deferred()
+    const store = createStore()
+
+    attachMainWindowServices(
+      createMainWindow() as never,
+      store,
+      createRuntime() as never,
+      undefined,
+      undefined,
+      { awaitLocalPtyStartup: () => localStartup.promise }
+    )
+
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(1)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledWith(store)
+
+    localStartup.resolve()
+    await localStartup.promise
+    await Promise.resolve()
+
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenCalledTimes(2)
+    expect(hydrateLocalPtyRegistryAtBootMock).toHaveBeenLastCalledWith(store)
   })
 
   it('ignores app reload requests from non-main webContents', async () => {

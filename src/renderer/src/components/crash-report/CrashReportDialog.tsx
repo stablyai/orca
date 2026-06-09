@@ -71,6 +71,7 @@ export function CrashReportDialog(): React.JSX.Element | null {
 
   useEffect(() => {
     return window.api.ui.onOpenCrashReport(() => {
+      setReport(null)
       setOpen(true)
       void loadCrashReport(false)
     })

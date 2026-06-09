@@ -372,6 +372,10 @@ export async function initDaemonPtyProvider(): Promise<void> {
   spawner = newSpawner
   adapter = routedAdapter
   setLocalPtyProvider(routedAdapter)
+  // Why: desktop startup now lets the first window register PTY listeners
+  // before daemon init finishes. Rebind here so daemon PTYs still fan out
+  // data/exit events through the renderer and runtime listeners.
+  rebindLocalProviderListeners()
 }
 
 // Why: the Manage Sessions IPC handlers need read access to the current
