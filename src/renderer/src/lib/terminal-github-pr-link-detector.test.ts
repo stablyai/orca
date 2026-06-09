@@ -58,10 +58,17 @@ describe('createTerminalGitHubPRLinkDetector', () => {
   it('ignores non-PR and non-GitHub links', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    expect(
-      observe(
-        'https://github.com/acme/orca/issues/42 https://github.example.com/acme/orca/pull/42\n'
-      )
-    ).toEqual([])
+    expect(observe('https://github.com/acme/orca/issues/42\n')).toEqual([])
   })
+})
+
+it('extracts GitHub Enterprise pull request URLs from terminal output', () => {
+  const observe = createTerminalGitHubPRLinkDetector()
+  expect(observe('Created https://github.my-company.net/MyOrg/my_repo/pull/395\r\n')).toEqual([
+    {
+      url: 'https://github.my-company.net/MyOrg/my_repo/pull/395',
+      slug: { owner: 'MyOrg', repo: 'my_repo' },
+      number: 395
+    }
+  ])
 })

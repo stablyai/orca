@@ -2,8 +2,7 @@ import type { RepoSlug } from './github-links'
 import { parseGitHubIssueOrPRLink } from './github-links'
 
 const GITHUB_PR_URL_RE =
-  /\bhttps:\/\/(?:www\.)?github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+(?:[/?#][^\s"'<>]*)?/gi
-const GITHUB_HOST_MARKER = 'github.com/'
+  /\bhttps:\/\/[A-Za-z0-9][A-Za-z0-9_.-]*(?::\d+)?\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/\d+(?:[/?#][^\s"'<>]*)?/gi
 const GITHUB_PR_PATH_MARKER = '/pull/'
 const HTTPS_SCHEME_PREFIX = 'https://'
 const HTTPS_SCHEME_FRAGMENT_LAST_CHARS = new Set('https:/'.split(''))
@@ -38,19 +37,8 @@ function endsWithHttpsSchemePrefixFragment(value: string): string {
   return ''
 }
 
-function getPotentialGitHubPRCarry(value: string, hasGitHubHost: boolean): string {
-  if (hasGitHubHost) {
-    const hostIndex = value.lastIndexOf(GITHUB_HOST_MARKER)
-    const schemeIndex = value.lastIndexOf('https://', hostIndex)
-    if (schemeIndex === -1) {
-      return ''
-    }
-
-    const tail = value.slice(schemeIndex)
-    return /\s/.test(tail) ? '' : tail.slice(-MAX_CARRY_LENGTH)
-  }
-
-  const schemeIndex = value.lastIndexOf('https://')
+function getPotentialGitHubPRCarry(value: string): string {
+  const schemeIndex = value.lastIndexOf(HTTPS_SCHEME_PREFIX)
   if (schemeIndex !== -1) {
     const tail = value.slice(schemeIndex)
     return /\s/.test(tail) ? '' : tail.slice(-MAX_CARRY_LENGTH)
@@ -70,10 +58,9 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
 
   return (data: string): TerminalGitHubPRLink[] => {
     const combined = carry ? carry + data : data
-    const hasGitHubHost = combined.includes(GITHUB_HOST_MARKER)
 
-    if (!hasGitHubHost || !combined.includes(GITHUB_PR_PATH_MARKER)) {
-      carry = getPotentialGitHubPRCarry(combined, hasGitHubHost)
+    if (!combined.includes(GITHUB_PR_PATH_MARKER)) {
+      carry = getPotentialGitHubPRCarry(combined)
       return []
     }
 
@@ -95,7 +82,7 @@ export function createTerminalGitHubPRLinkDetector(): (data: string) => Terminal
       links.push(parsed)
     }
 
-    carry = getPotentialGitHubPRCarry(combined, true)
+    carry = getPotentialGitHubPRCarry(combined)
     return links
   }
 }

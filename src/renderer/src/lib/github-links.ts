@@ -43,7 +43,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
     return null
   }
 
-  if (!/^(?:www\.)?github\.com$/i.test(url.hostname)) {
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     return null
   }
 
@@ -76,7 +76,7 @@ export function parseGitHubIssueOrPRLink(input: string): {
     return null
   }
 
-  if (!/^(?:www\.)?github\.com$/i.test(url.hostname)) {
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
     return null
   }
 
