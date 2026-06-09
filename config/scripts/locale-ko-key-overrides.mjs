@@ -117,7 +117,7 @@ export const KO_KEY_OVERRIDES = {
   },
   'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569': {
     ko: '리뷰 필요',
-    zh: '待审阅',
+    zh: '待评审',
     ja: 'レビュー待ち'
   },
   'auto.components.onboarding.OnboardingFlow.a5e5da02f7': {
@@ -129,5 +129,30 @@ export const KO_KEY_OVERRIDES = {
     ko: '해결',
     zh: '解决',
     ja: '解決'
+  },
+  'auto.components.sidebar.workspace.status.6c1efa2cf8': {
+    ko: '리뷰 중',
+    zh: '评审中',
+    ja: 'レビュー中'
+  },
+  'auto.components.sidebar.workspace.status.409528031f': {
+    ko: '리뷰',
+    zh: '评审',
+    ja: 'レビュー'
+  },
+  'auto.components.sidebar.workspace.status.caebe3c10f': {
+    ko: 'Conductor 리뷰',
+    zh: 'Conductor 评审',
+    ja: 'Conductor レビュー'
+  },
+  'auto.components.sidebar.workspace.list.groups.6798dc7c94': {
+    ko: '리뷰 중',
+    zh: '评审中',
+    ja: 'レビュー中'
+  },
+  'auto.components.TaskPage.524f095d55': {
+    ko: '리뷰 필요',
+    zh: '待评审',
+    ja: 'レビュー待ち'
   }
 }

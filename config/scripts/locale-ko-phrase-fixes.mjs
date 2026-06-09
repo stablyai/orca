@@ -1,3 +1,5 @@
+import { KO_PHRASE_FIXES_ROUND5 } from './locale-ko-phrase-fixes-round5.mjs'
+
 // Korean phrase fixes from high-visibility UI audit round 4.
 export const KO_PHRASE_FIXES_ROUND4 = [
   { pattern: /일반적인/g, replacement: '일반', whenEnIncludes: 'common' },
@@ -64,5 +66,6 @@ export const KO_PHRASE_FIXES_ROUND4 = [
     pattern: /다음과 같은 기술/g,
     replacement: '다음과 같은 스킬',
     whenEnIncludes: 'Supports skills'
-  }
+  },
+  ...KO_PHRASE_FIXES_ROUND5
 ]

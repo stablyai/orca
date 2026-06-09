@@ -180,5 +180,52 @@ export const KO_VALUE_OVERRIDES = {
     '작업에서 도메인 명사를 선호하고, 티켓 ID를 피하고, 리뷰어 친화적인 이름을 유지하세요.',
   'Enable AI author': 'AI author 활성화',
   'AI author': 'AI author',
-  'This pull request has no reported checks yet.': '이 PR에는 아직 보고된 체크가 없습니다.'
+  'This pull request has no reported checks yet.': '이 PR에는 아직 보고된 체크가 없습니다.',
+  'Needs review': '리뷰 필요',
+  'In review': '리뷰 중',
+  'Conductor Review': 'Conductor 리뷰',
+  'Markdown Review Notes': '마크다운 리뷰 노트',
+  'Review conflicts': '충돌 리뷰',
+  'Review notes': '리뷰 노트',
+  'Daily change review': '일일 변경 리뷰',
+  'Release readiness review': '출시 준비 리뷰',
+  'Recurring review': '반복 리뷰',
+  'review src/auth': 'src/auth 리뷰',
+  'review auth edge cases': '인증 예외 사례 리뷰',
+  Launch: '실행',
+  'Launch:': '실행:',
+  launch: '실행',
+  trace: '추적',
+  display: '표시',
+  compose: '작성',
+  verify: '검증',
+  Keep: '유지',
+  'check #': '체크 #',
+  'to submit.': '제출.',
+  'Install the Orca skill so agents know to use the Orca CLI.':
+    '에이전트가 Orca CLI를 사용하도록 Orca 스킬을 설치하세요.',
+  'Linear, GitLab, Bitbucket, Azure DevOps, Gitea, and Jira live in Settings > Integrations.':
+    'Linear, GitLab, Bitbucket, Azure DevOps, Gitea 및 Jira는 설정 > 연동에 있습니다.',
+  'changed since you last approved. Re-review before it runs':
+    '마지막으로 승인한 이후 변경되었습니다. 실행하기 전에 재리뷰하세요.',
+  'Review and edit the full command input before starting an agent.':
+    '에이전트를 시작하기 전에 전체 명령 입력을 리뷰하고 편집하세요.',
+  'Create a {{value0}} to start checks and review.':
+    '체크와 리뷰를 시작하려면 {{value0}}을(를) 만드세요.',
+  "Control Orca from your phone. Check on agents, review changes, and kick off tasks while you're away from your desk.":
+    '휴대폰에서 Orca를 제어하세요. 자리를 비운 동안 에이전트를 확인하고, 변경 사항을 리뷰하고, 작업을 시작하세요.',
+  'Skill command copied and inserted below for review.':
+    '리뷰를 위해 스킬 명령을 아래에 복사하여 삽입했습니다.',
+  'X finishes, send it the review task.”': 'X가 끝나면 리뷰 작업을 보냅니다.”',
+  'Conflicted files are reviewed separately': '충돌하는 파일은 별도로 리뷰됩니다.',
+  'This review snapshot no longer has any live unresolved conflicts.':
+    '이 리뷰 스냅샷에는 더 이상 실시간으로 해결되지 않은 충돌이 없습니다.',
+  'Review before attaching. Captured page context may include visible site content.':
+    '첨부하기 전에 리뷰하세요. 캡처된 페이지 컨텍스트에는 눈에 보이는 사이트 콘텐츠가 포함될 수 있습니다.',
+  'Review the repository health. Check dependency updates, failing tests, lint/typecheck status, and risky open changes. Summarize findings and suggest the next action.':
+    '저장소 상태를 리뷰합니다. 종속성 업데이트, 실패한 테스트, lint/typecheck 상태, 위험한 공개 변경 사항을 확인하세요. 조사 결과를 요약하고 다음 조치를 제안합니다.',
+  'Review recent changes in this workspace. Focus on correctness risks, UX regressions, missing tests, and follow-up tasks. Keep the report short and actionable.':
+    '이 워크스페이스의 최근 변경사항을 리뷰하세요. 정확성 위험, UX 회귀, 누락된 테스트 및 후속 작업에 중점을 둡니다. 보고서를 짧고 실행 가능하게 유지하세요.',
+  'Check for stuck work, stale generated files, failing validation, and anything that needs human attention. Report only actionable issues.':
+    '작업 중단, 오래 생성된 파일, 유효성 검사 실패 및 사람의 주의가 필요한 모든 사항을 확인하세요. 실행 가능한 이슈만 보고하세요.'
 }
