@@ -11526,7 +11526,7 @@ export default function TaskPage(): React.JSX.Element {
         }}
       >
         <DialogContent
-          className="sm:max-w-2xl"
+          className="sm:max-w-lg"
           onKeyDown={(event) => {
             if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
