@@ -11525,68 +11525,107 @@ export default function TaskPage(): React.JSX.Element {
           }
         }}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">New Asana task</DialogTitle>
+        <DialogContent
+          className="sm:max-w-md"
+          onKeyDown={(event) => {
+            if (isScreenSubmitShortcut(event)) {
+              event.preventDefault()
+              void handleCreateAsanaTask()
+            }
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>New Asana task</DialogTitle>
             <DialogDescription>
-              Create a task in the selected workspace or a specific project.
+              {selectedAsanaWorkspaceId && selectedAsanaWorkspaceId !== 'all'
+                ? `Filing in ${
+                    asanaWorkspaces.find((w) => w.id === selectedAsanaWorkspaceId)?.name ??
+                    'this workspace'
+                  }`
+                : 'Create a task in the selected workspace or a specific project.'}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
-            <Input
-              autoFocus
-              placeholder="Task name"
-              value={newAsanaTaskTitle}
-              onChange={(e) => setNewAsanaTaskTitle(e.target.value)}
-              disabled={newAsanaTaskSubmitting}
-            />
-            <textarea
-              placeholder="Description (optional)"
-              value={newAsanaTaskNotes}
-              onChange={(e) => setNewAsanaTaskNotes(e.target.value)}
-              disabled={newAsanaTaskSubmitting}
-              rows={4}
-              className="min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            />
-            {availableAsanaProjects.length > 0 ? (
-              <Select
-                value={newAsanaTaskProjectId ?? 'none'}
-                onValueChange={(value) => setNewAsanaTaskProjectId(value === 'none' ? null : value)}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Project (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No project (workspace task)</SelectItem>
-                  {availableAsanaProjects.map((project) => (
-                    <SelectItem key={project.gid} value={project.gid}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            {availableAsanaUsers.length > 0 ? (
-              <Select
-                value={newAsanaTaskAssigneeGid ?? 'none'}
-                onValueChange={(value) =>
-                  setNewAsanaTaskAssigneeGid(value === 'none' ? null : value)
-                }
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">Title</label>
+              <Input
+                autoFocus
+                placeholder="Short summary"
+                value={newAsanaTaskTitle}
+                onChange={(e) => setNewAsanaTaskTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                    e.preventDefault()
+                    void handleCreateAsanaTask()
+                  }
+                }}
                 disabled={newAsanaTaskSubmitting}
-              >
-                <SelectTrigger className="h-9">
-                  <SelectValue placeholder="Assignee (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Unassigned</SelectItem>
-                  {availableAsanaUsers.map((user) => (
-                    <SelectItem key={user.gid} value={user.gid}>
-                      {user.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Description (optional)
+              </label>
+              <textarea
+                placeholder="What's going on?"
+                value={newAsanaTaskNotes}
+                onChange={(e) => setNewAsanaTaskNotes(e.target.value)}
+                disabled={newAsanaTaskSubmitting}
+                rows={4}
+                className="min-h-20 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {availableAsanaProjects.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-medium text-muted-foreground">Project</label>
+                  <Select
+                    value={newAsanaTaskProjectId ?? 'none'}
+                    onValueChange={(value) =>
+                      setNewAsanaTaskProjectId(value === 'none' ? null : value)
+                    }
+                    disabled={newAsanaTaskSubmitting}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="No project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No project (workspace task)</SelectItem>
+                      {availableAsanaProjects.map((project) => (
+                        <SelectItem key={project.gid} value={project.gid}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {availableAsanaUsers.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  <label className="text-[11px] font-medium text-muted-foreground">Assignee</label>
+                  <Select
+                    value={newAsanaTaskAssigneeGid ?? 'none'}
+                    onValueChange={(value) =>
+                      setNewAsanaTaskAssigneeGid(value === 'none' ? null : value)
+                    }
+                    disabled={newAsanaTaskSubmitting}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {availableAsanaUsers.map((user) => (
+                        <SelectItem key={user.gid} value={user.gid}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+            </div>
+            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
           </div>
           <DialogFooter>
             <Button
