@@ -43,17 +43,13 @@ function SavedInProjectSettingsToast({
 }: SavedInProjectSettingsToastProps): React.JSX.Element {
   return (
     <span>
-      {translate('auto.components.sidebar.SetupScriptPromptCard.a5bb8c5135', 'Saved in this')}{' '}
+      {translate("auto.components.sidebar.SetupScriptPromptCard.a5bb8c5135", "Saved in this")}{' '}
       <button
         type="button"
         className="rounded-sm font-medium underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         onClick={onOpenSettings}
       >
-        {translate(
-          'auto.components.sidebar.SetupScriptPromptCard.d9f2db2738',
-          "project's settings"
-        )}
-      </button>
+        {translate("auto.components.sidebar.SetupScriptPromptCard.d9f2db2738", "project's settings")}</button>
     </span>
   )
 }
@@ -254,12 +250,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             })
           )
           if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.sidebar.SetupScriptPromptCard.888b83bf78',
-                'Failed to save setup script'
-              )
-            )
+            toast.error(translate("auto.components.sidebar.SetupScriptPromptCard.888b83bf78", "Failed to save setup script"))
           }
           return
         }
@@ -287,10 +278,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
             )
             showSavedInProjectSettingsToast({
               onOpenSettings: () => openLocalCommandSettings(importedRepoId),
-              description: translate(
-                'auto.components.sidebar.SetupScriptPromptCard.a49196d538',
-                'Runs when Orca creates a new worktree.'
-              )
+              description: translate("auto.components.sidebar.SetupScriptPromptCard.a49196d538", "Runs when Orca creates a new worktree.")
             })
           }
           return
@@ -325,12 +313,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         )
         console.warn('[setup-script-prompt] Failed to save setup script:', error)
         if (mountedRef.current) {
-          toast.error(
-            translate(
-              'auto.components.sidebar.SetupScriptPromptCard.888b83bf78',
-              'Failed to save setup script'
-            )
-          )
+          toast.error(translate("auto.components.sidebar.SetupScriptPromptCard.888b83bf78", "Failed to save setup script"))
         }
       } finally {
         if (mountedRef.current) {
@@ -356,12 +339,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
         }
       : promptState.candidate
     if (!candidate.setup) {
-      toast.error(
-        translate(
-          'auto.components.sidebar.SetupScriptPromptCard.70715947fb',
-          'Setup script cannot be empty'
-        )
-      )
+      toast.error(translate("auto.components.sidebar.SetupScriptPromptCard.70715947fb", "Setup script cannot be empty"))
       return
     }
     if (actionPrefix === 'save_detected_setup') {
@@ -408,12 +386,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     <div className="shrink-0 px-3 pb-2">
       <div className="setup-script-prompt-card rounded-lg border border-worktree-sidebar-border p-3 text-worktree-sidebar-accent-foreground shadow-xs">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold leading-snug">
-            {translate(
-              'auto.components.sidebar.SetupScriptPromptCard.ff1e819a11',
-              'Add a setup script'
-            )}
-          </p>
+          <p className="text-sm font-semibold leading-snug">{translate("auto.components.sidebar.SetupScriptPromptCard.ff1e819a11", "Add a setup script")}</p>
           <DismissButton onDismiss={handleDismiss} />
         </div>
 
@@ -453,7 +426,7 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
           />
         ) : candidate ? (
           <SaveLocalSetupAction isSaving={isImporting} onSave={() => void handleImport()} />
-        ) : promptState.status === 'ok' ? (
+        ) : promptState.status === "ok" ? (
           <ConfigureOnlyAction onConfigure={handleConfigure} />
         ) : null}
       </div>

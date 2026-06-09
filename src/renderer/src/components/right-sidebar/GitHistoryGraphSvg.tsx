@@ -169,7 +169,7 @@ export function GitHistoryGraphSvg({
       viewBox={`0 0 ${width} ${SWIMLANE_HEIGHT}`}
     >
       {paths}
-      {viewModel.kind === 'HEAD' && (
+      {viewModel.kind === "HEAD" && (
         <>
           <circle
             cx={cx}
@@ -211,13 +211,13 @@ export function GitHistoryGraphSvg({
           />
         </>
       )}
-      {!isBoundaryNode && viewModel.kind !== 'HEAD' && isMergeNode && (
+      {!isBoundaryNode && viewModel.kind !== "HEAD" && isMergeNode && (
         <>
           <circle cx={cx} cy={cy} r={CIRCLE_RADIUS + 1} fill={graphColor(circleColor)} />
           <circle cx={cx} cy={cy} r={CIRCLE_RADIUS - 1.5} fill="var(--background)" />
         </>
       )}
-      {!isBoundaryNode && viewModel.kind !== 'HEAD' && !isMergeNode && (
+      {!isBoundaryNode && viewModel.kind !== "HEAD" && !isMergeNode && (
         <circle cx={cx} cy={cy} r={CIRCLE_RADIUS} fill={graphColor(circleColor)} />
       )}
     </svg>

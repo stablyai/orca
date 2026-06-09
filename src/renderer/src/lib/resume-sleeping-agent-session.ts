@@ -45,12 +45,7 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     platform: getResumeLaunchPlatform(record.worktreeId)
   })
   if (!startupPlan) {
-    toast.error(
-      translate(
-        'auto.lib.resume.sleeping.agent.session.f235f604fd',
-        'This agent session cannot be resumed.'
-      )
-    )
+    toast.error(translate("auto.lib.resume.sleeping.agent.session.f235f604fd", "This agent session cannot be resumed."))
     return false
   }
 

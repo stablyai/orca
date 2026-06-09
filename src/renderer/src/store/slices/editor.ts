@@ -3679,19 +3679,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         try {
           stats = await statRuntimePath(fileContext, target.absolutePath)
         } catch {
-          toast.error(
-            translate('auto.store.slices.editor.f2e00db373', 'File not found: {{value0}}', {
-              value0: target.relativePath
-            })
-          )
+          toast.error(translate("auto.store.slices.editor.f2e00db373", "File not found: {{value0}}", { value0: target.relativePath }))
           return
         }
         if (stats.isDirectory) {
-          toast.error(
-            translate('auto.store.slices.editor.51f15c37d3', 'Cannot open directory: {{value0}}', {
-              value0: target.relativePath
-            })
-          )
+          toast.error(translate("auto.store.slices.editor.51f15c37d3", "Cannot open directory: {{value0}}", { value0: target.relativePath }))
           return
         }
       }
@@ -3724,19 +3716,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     try {
       stats = await statRuntimePath(fileContext, absolutePath)
     } catch {
-      toast.error(
-        translate('auto.store.slices.editor.f2e00db373', 'File not found: {{value0}}', {
-          value0: relativePath
-        })
-      )
+      toast.error(translate("auto.store.slices.editor.f2e00db373", "File not found: {{value0}}", { value0: relativePath }))
       return
     }
     if (stats.isDirectory) {
-      toast.error(
-        translate('auto.store.slices.editor.51f15c37d3', 'Cannot open directory: {{value0}}', {
-          value0: relativePath
-        })
-      )
+      toast.error(translate("auto.store.slices.editor.51f15c37d3", "Cannot open directory: {{value0}}", { value0: relativePath }))
       return
     }
 
@@ -4004,10 +3988,7 @@ function toOpenConflictMetadata(entry: GitStatusEntry): OpenConflictMetadata | u
         conflictKind: entry.conflictKind,
         conflictStatus: entry.conflictStatus,
         conflictStatusSource: entry.conflictStatusSource,
-        message: translate(
-          'auto.store.slices.editor.dcb521ed29',
-          'This file is in a conflict state, but no working-tree file is available to edit.'
-        ),
+        message: translate("auto.store.slices.editor.dcb521ed29", "This file is in a conflict state, but no working-tree file is available to edit."),
         guidance: 'Resolve the conflict in Git or restore one side before reopening it.'
       }
 }

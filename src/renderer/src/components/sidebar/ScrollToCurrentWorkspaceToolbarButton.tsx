@@ -13,10 +13,7 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
           variant="ghost"
           size="icon-xs"
           type="button"
-          aria-label={translate(
-            'auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663',
-            'Reveal active workspace'
-          )}
+          aria-label={translate("auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663", "Reveal active workspace")}
           onClick={requestScrollToCurrentWorkspaceReveal}
           className="text-muted-foreground"
         >
@@ -24,11 +21,7 @@ export function ScrollToCurrentWorkspaceToolbarButton(): React.JSX.Element {
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate(
-          'auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663',
-          'Reveal active workspace'
-        )}
-      </TooltipContent>
+        {translate("auto.components.sidebar.ScrollToCurrentWorkspaceToolbarButton.23989bb663", "Reveal active workspace")}</TooltipContent>
     </Tooltip>
   )
 }

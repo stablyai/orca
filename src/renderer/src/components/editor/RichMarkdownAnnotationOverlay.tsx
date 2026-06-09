@@ -30,14 +30,8 @@ export function RichMarkdownAnnotationOverlay({
             top: target.buttonTop ?? 56,
             left: target.buttonLeft ?? 16
           }}
-          title={translate(
-            'auto.components.editor.RichMarkdownAnnotationOverlay.6f2f3a6001',
-            'Add review note'
-          )}
-          aria-label={translate(
-            'auto.components.editor.RichMarkdownAnnotationOverlay.6f2f3a6001',
-            'Add review note'
-          )}
+          title={translate("auto.components.editor.RichMarkdownAnnotationOverlay.6f2f3a6001", "Add review note")}
+          aria-label={translate("auto.components.editor.RichMarkdownAnnotationOverlay.6f2f3a6001", "Add review note")}
           onMouseDown={(event) => {
             event.preventDefault()
             event.stopPropagation()
@@ -62,10 +56,7 @@ export function RichMarkdownAnnotationOverlay({
           }
           top={popover.top}
           left={popover.left}
-          title={translate(
-            'auto.components.editor.RichMarkdownAnnotationOverlay.069b5677b8',
-            'Selected text'
-          )}
+          title={translate("auto.components.editor.RichMarkdownAnnotationOverlay.069b5677b8", "Selected text")}
           onCancel={onCancelPopover}
           onSubmit={onSubmit}
         />

@@ -1948,14 +1948,8 @@ export default function TerminalPane({
               <input
                 ref={renameInputRef}
                 className="pane-title-input"
-                aria-label={translate(
-                  'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
-                  'Pane title'
-                )}
-                placeholder={translate(
-                  'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
-                  'Pane title'
-                )}
+                aria-label={translate("auto.components.terminal.pane.TerminalPane.7dbbfcbecc", "Pane title")}
+                placeholder={translate("auto.components.terminal.pane.TerminalPane.7dbbfcbecc", "Pane title")}
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
@@ -1973,11 +1967,7 @@ export default function TerminalPane({
                   type="button"
                   className="pane-title-text"
                   onClick={() => handleStartRename(pane.id)}
-                  aria-label={translate(
-                    'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
-                    'Edit pane title: {{value0}}',
-                    { value0: title }
-                  )}
+                  aria-label={translate("auto.components.terminal.pane.TerminalPane.cc5a2dc706", "Edit pane title: {{value0}}", { value0: title })}
                 >
                   {title}
                 </button>
@@ -1992,21 +1982,13 @@ export default function TerminalPane({
                         e.stopPropagation()
                         handleRemoveTitle(pane.id)
                       }}
-                      aria-label={translate(
-                        'auto.components.terminal.pane.TerminalPane.f984ab2a30',
-                        'Remove pane title: {{value0}}',
-                        { value0: title }
-                      )}
+                      aria-label={translate("auto.components.terminal.pane.TerminalPane.f984ab2a30", "Remove pane title: {{value0}}", { value0: title })}
                     >
                       <X className="size-3" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={4}>
-                    {translate(
-                      'auto.components.terminal.pane.TerminalPane.ac112e9036',
-                      'Remove title'
-                    )}
-                  </TooltipContent>
+                    {translate("auto.components.terminal.pane.TerminalPane.ac112e9036", "Remove title")}</TooltipContent>
                 </Tooltip>
               </>
             )}

@@ -121,11 +121,7 @@ function RepoIdentityChip({
       <TooltipTrigger asChild>
         <span
           className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-worktree-sidebar-border bg-worktree-sidebar-accent/55"
-          aria-label={translate(
-            'auto.components.sidebar.WorktreeCard.35ccfe2475',
-            'Project {{value0}}',
-            { value0: repo.displayName }
-          )}
+          aria-label={translate("auto.components.sidebar.WorktreeCard.35ccfe2475", "Project {{value0}}", { value0: repo.displayName })}
         >
           {children}
         </span>
@@ -841,8 +837,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
           <div className="inline-flex items-center gap-1.5 rounded-full bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm border border-border/50">
             <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
-            {translate('auto.components.sidebar.WorktreeCard.691ccfd622', 'Deleting…')}
-          </div>
+            {translate("auto.components.sidebar.WorktreeCard.691ccfd622", "Deleting…")}</div>
         </div>
       )}
 
@@ -895,15 +890,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {isSshDisconnected
-                    ? translate(
-                        'auto.components.sidebar.WorktreeCard.021538e1d1',
-                        'SSH disconnected'
-                      )
-                    : translate(
-                        'auto.components.sidebar.WorktreeCard.ca74db7550',
-                        'Remote project via SSH'
-                      )}
+                  {isSshDisconnected ? translate("auto.components.sidebar.WorktreeCard.021538e1d1", "SSH disconnected") : translate("auto.components.sidebar.WorktreeCard.ca74db7550", "Remote project via SSH")}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -946,21 +933,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     onClick={handleOpenRenameErrorDialog}
                     onDoubleClick={handleOpenRenameErrorDialog}
                     className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-destructive border border-destructive/40 bg-destructive/10 hover:bg-destructive/15 hover:text-destructive has-[>svg]:!px-0.5"
-                    aria-label={translate(
-                      'auto.components.sidebar.WorktreeCard.02e19349f4',
-                      'Auto-rename failed: view error'
-                    )}
+                    aria-label={translate("auto.components.sidebar.WorktreeCard.02e19349f4", "Auto-rename failed: view error")}
                   >
                     <AlertCircle className="size-2.5" />
-                    {translate('auto.components.sidebar.WorktreeCard.74522ee457', 'rename failed')}
-                  </Button>
+                    {translate("auto.components.sidebar.WorktreeCard.74522ee457", "rename failed")}</Button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {translate(
-                    'auto.components.sidebar.WorktreeCard.4eba2ea99e',
-                    'Auto-name failed. Click to see details.'
-                  )}
-                </TooltipContent>
+                  {translate("auto.components.sidebar.WorktreeCard.4eba2ea99e", "Auto-name failed. Click to see details.")}</TooltipContent>
               </Tooltip>
             ) : worktree.pendingFirstAgentMessageRename === true && !titleRenaming ? (
               <Tooltip>
@@ -972,21 +951,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     onClick={handlePendingFirstAgentMessageRenameInfo}
                     onDoubleClick={handlePendingFirstAgentMessageRenameInfo}
                     className="h-4 shrink-0 gap-0.5 rounded !px-0.5 text-[10px] font-medium leading-none text-muted-foreground border border-worktree-sidebar-border/60 bg-worktree-sidebar-accent/45 hover:bg-worktree-sidebar-accent hover:text-foreground has-[>svg]:!px-0.5"
-                    aria-label={translate(
-                      'auto.components.sidebar.WorktreeCard.c6833b5187',
-                      'Will be renamed from first agent message'
-                    )}
+                    aria-label={translate("auto.components.sidebar.WorktreeCard.c6833b5187", "Will be renamed from first agent message")}
                   >
                     <Sparkles className="size-2.5" />
-                    {translate('auto.components.sidebar.WorktreeCard.f62a3dadbc', 'rename pending')}
-                  </Button>
+                    {translate("auto.components.sidebar.WorktreeCard.f62a3dadbc", "rename pending")}</Button>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {translate(
-                    'auto.components.sidebar.WorktreeCard.c6833b5187',
-                    'Will be renamed from first agent message'
-                  )}
-                </TooltipContent>
+                  {translate("auto.components.sidebar.WorktreeCard.c6833b5187", "Will be renamed from first agent message")}</TooltipContent>
               </Tooltip>
             ) : null}
 
@@ -997,15 +968,10 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     variant="outline"
                     className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
                   >
-                    {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
-                  </Badge>
+                    {translate("auto.components.sidebar.WorktreeCard.7d517f82e2", "primary")}</Badge>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8}>
-                  {translate(
-                    'auto.components.sidebar.WorktreeCard.0777de5970',
-                    'Primary worktree (original clone directory)'
-                  )}
-                </TooltipContent>
+                  {translate("auto.components.sidebar.WorktreeCard.0777de5970", "Primary worktree (original clone directory)")}</TooltipContent>
               </Tooltip>
             )}
 
@@ -1016,17 +982,11 @@ const WorktreeCard = React.memo(function WorktreeCard({
                     variant="outline"
                     className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/5"
                   >
-                    {translate('auto.components.sidebar.WorktreeCard.4f964d5e8c', 'sparse')}
-                  </Badge>
+                    {translate("auto.components.sidebar.WorktreeCard.4f964d5e8c", "sparse")}</Badge>
                 </TooltipTrigger>
                 <TooltipContent side="right" sideOffset={8} className="max-w-72">
                   <div className="space-y-1">
-                    <div>
-                      {translate(
-                        'auto.components.sidebar.WorktreeCard.0f33af979b',
-                        'Partial checkout. Files outside these paths are not on disk.'
-                      )}
-                    </div>
+                    <div>{translate("auto.components.sidebar.WorktreeCard.0f33af979b", "Partial checkout. Files outside these paths are not on disk.")}</div>
                     {worktree.sparseDirectories && worktree.sparseDirectories.length > 0 ? (
                       <div className="font-mono text-[11px] opacity-80">
                         {formatSparseDirectoryPreview(worktree.sparseDirectories)}
@@ -1057,20 +1017,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   <TooltipTrigger asChild>
                     <span
                       className="shrink-0 inline-flex items-center"
-                      aria-label={translate(
-                        'auto.components.sidebar.WorktreeCard.0d224eff10',
-                        'Primary worktree'
-                      )}
+                      aria-label={translate("auto.components.sidebar.WorktreeCard.0d224eff10", "Primary worktree")}
                     >
                       <Star className="size-3 fill-amber-400 text-amber-400" />
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={8}>
-                    {translate(
-                      'auto.components.sidebar.WorktreeCard.0777de5970',
-                      'Primary worktree (original clone directory)'
-                    )}
-                  </TooltipContent>
+                    {translate("auto.components.sidebar.WorktreeCard.0777de5970", "Primary worktree (original clone directory)")}</TooltipContent>
                 </Tooltip>
               )}
 
@@ -1087,20 +1040,13 @@ const WorktreeCard = React.memo(function WorktreeCard({
                         'group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100',
                         'text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
                       )}
-                      aria-label={translate(
-                        'auto.components.sidebar.WorktreeCard.6f09f58541',
-                        'Delete workspace'
-                      )}
+                      aria-label={translate("auto.components.sidebar.WorktreeCard.6f09f58541", "Delete workspace")}
                     >
                       <Trash2 className="size-3.5" />
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="right" sideOffset={8}>
-                    {translate(
-                      'auto.components.sidebar.WorktreeCard.6f09f58541',
-                      'Delete workspace'
-                    )}
-                  </TooltipContent>
+                    {translate("auto.components.sidebar.WorktreeCard.6f09f58541", "Delete workspace")}</TooltipContent>
                 </Tooltip>
               )}
             </div>
@@ -1124,9 +1070,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   variant="secondary"
                   className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 text-muted-foreground bg-accent border border-border dark:bg-accent/80 dark:border-border/50 leading-none"
                 >
-                  {repo
-                    ? getRepoKindLabel(repo)
-                    : translate('auto.components.sidebar.WorktreeCard.93aebe4529', 'Folder')}
+                  {repo ? getRepoKindLabel(repo) : translate("auto.components.sidebar.WorktreeCard.93aebe4529", "Folder")}
                 </Badge>
               ) : showBranch ? (
                 <span className="min-w-0 text-[11px] text-muted-foreground truncate leading-none">
@@ -1168,9 +1112,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <div className="mt-0.5 flex items-start gap-1.5 rounded border border-amber-500/25 bg-amber-500/5 px-1.5 py-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-300">
             <AlertTriangle className="mt-[1px] size-3 shrink-0" />
             <span className="min-w-0 flex-1">
-              {remoteBranchConflict.remote}/{remoteBranchConflict.branchName}{' '}
-              {translate('auto.components.sidebar.WorktreeCard.a88c92d0e3', 'already exists.')}
-            </span>
+              {remoteBranchConflict.remote}/{remoteBranchConflict.branchName} {translate("auto.components.sidebar.WorktreeCard.a88c92d0e3", "already exists.")}</span>
           </div>
         )}
 
@@ -1217,15 +1159,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={8}>
-                {lineageCollapsed
-                  ? translate(
-                      'auto.components.sidebar.WorktreeCard.8cb634cda6',
-                      'Show child workspaces'
-                    )
-                  : translate(
-                      'auto.components.sidebar.WorktreeCard.57eaa61b55',
-                      'Hide child workspaces'
-                    )}
+                {lineageCollapsed ? translate("auto.components.sidebar.WorktreeCard.8cb634cda6", "Show child workspaces") : translate("auto.components.sidebar.WorktreeCard.57eaa61b55", "Hide child workspaces")}
               </TooltipContent>
             </Tooltip>
           </div>

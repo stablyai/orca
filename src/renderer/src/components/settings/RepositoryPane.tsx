@@ -228,37 +228,20 @@ export function RepositoryPane({
       <section key="identity" className="relative space-y-8">
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1 pr-12">
-            <h3 className="text-sm font-semibold">
-              {translate('auto.components.settings.RepositoryPane.499a437335', 'Identity')}
-            </h3>
+            <h3 className="text-sm font-semibold">{translate("auto.components.settings.RepositoryPane.499a437335", "Identity")}</h3>
             <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.RepositoryPane.b0a0c14a1c',
-                'Project-specific display details for the sidebar and tabs.'
-              )}
-            </p>
+              {translate("auto.components.settings.RepositoryPane.b0a0c14a1c", "Project-specific display details for the sidebar and tabs.")}</p>
             <p className="text-xs text-muted-foreground">
-              {translate('auto.components.settings.RepositoryPane.323debba71', 'Type:')}
-              <span className="text-foreground">{getRepoKindLabel(repo)}</span>
+              {translate("auto.components.settings.RepositoryPane.323debba71", "Type:")}<span className="text-foreground">{getRepoKindLabel(repo)}</span>
             </p>
             {isFolder ? (
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.RepositoryPane.ee5a290616',
-                  'Opened as folder. Git features are unavailable for this workspace.'
-                )}
-              </p>
+                {translate("auto.components.settings.RepositoryPane.ee5a290616", "Opened as folder. Git features are unavailable for this workspace.")}</p>
             ) : null}
           </div>
           <SearchableSetting
-            title={translate(
-              'auto.components.settings.RepositoryPane.0909e5d650',
-              'Remove Project'
-            )}
-            description={translate(
-              'auto.components.settings.RepositoryPane.170624bdfb',
-              'Remove this project from Orca.'
-            )}
+            title={translate("auto.components.settings.RepositoryPane.0909e5d650", "Remove Project")}
+            description={translate("auto.components.settings.RepositoryPane.170624bdfb", "Remove this project from Orca.")}
             keywords={[repo.displayName, 'delete', 'project', 'repository']}
             className="absolute top-0 right-0 z-10 w-auto max-w-none"
             forceVisible={forceFullPaneForRepoMatch}
@@ -284,18 +267,14 @@ export function RepositoryPane({
         </div>
 
         <SearchableSetting
-          title={translate('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
-          description={translate(
-            'auto.components.settings.RepositoryPane.b0a0c14a1c',
-            'Project-specific display details for the sidebar and tabs.'
-          )}
+          title={translate("auto.components.settings.RepositoryPane.c7ef4415de", "Display Name")}
+          description={translate("auto.components.settings.RepositoryPane.b0a0c14a1c", "Project-specific display details for the sidebar and tabs.")}
           keywords={[repo.displayName, repo.path, 'project name', 'repository name']}
           className="space-y-2"
           forceVisible={forceFullPaneForRepoMatch}
         >
           <Label htmlFor={`repo-display-name-${repo.id}`} className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
-          </Label>
+            {translate("auto.components.settings.RepositoryPane.c7ef4415de", "Display Name")}</Label>
           <RepoSettingsDraftInput
             id={`repo-display-name-${repo.id}`}
             repoId={repo.id}
@@ -306,11 +285,8 @@ export function RepositoryPane({
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate('auto.components.settings.RepositoryPane.26fef02bf3', 'Project Icon')}
-          description={translate(
-            'auto.components.settings.RepositoryPane.e641c359de',
-            'Project icon and color used in the sidebar and tabs.'
-          )}
+          title={translate("auto.components.settings.RepositoryPane.26fef02bf3", "Project Icon")}
+          description={translate("auto.components.settings.RepositoryPane.e641c359de", "Project icon and color used in the sidebar and tabs.")}
           keywords={[
             repo.displayName,
             repo.path,
@@ -331,24 +307,13 @@ export function RepositoryPane({
         {!isFolder ? (
           <>
             <SearchableSetting
-              title={translate(
-                'auto.components.settings.RepositoryPane.f88db4fece',
-                'Default Worktree Base'
-              )}
-              description={translate(
-                'auto.components.settings.RepositoryPane.8984d06520',
-                'Default base branch or ref when creating worktrees.'
-              )}
+              title={translate("auto.components.settings.RepositoryPane.f88db4fece", "Default Worktree Base")}
+              description={translate("auto.components.settings.RepositoryPane.8984d06520", "Default base branch or ref when creating worktrees.")}
               keywords={[repo.displayName, 'base ref', 'branch']}
               className="space-y-3"
               forceVisible={forceFullPaneForRepoMatch}
             >
-              <Label className="text-sm font-semibold">
-                {translate(
-                  'auto.components.settings.RepositoryPane.f88db4fece',
-                  'Default Worktree Base'
-                )}
-              </Label>
+              <Label className="text-sm font-semibold">{translate("auto.components.settings.RepositoryPane.f88db4fece", "Default Worktree Base")}</Label>
               <BaseRefPicker
                 repoId={repo.id}
                 currentBaseRef={repo.worktreeBaseRef}
@@ -358,14 +323,8 @@ export function RepositoryPane({
             </SearchableSetting>
 
             <SearchableSetting
-              title={translate(
-                'auto.components.settings.RepositoryPane.e9bd57a336',
-                'Worktree Location'
-              )}
-              description={translate(
-                'auto.components.settings.RepositoryPane.e63bb96a9b',
-                'Project-specific directory for new worktrees.'
-              )}
+              title={translate("auto.components.settings.RepositoryPane.e9bd57a336", "Worktree Location")}
+              description={translate("auto.components.settings.RepositoryPane.e63bb96a9b", "Project-specific directory for new worktrees.")}
               keywords={[
                 repo.displayName,
                 'worktree path',
@@ -378,12 +337,7 @@ export function RepositoryPane({
               forceVisible={forceFullPaneForRepoMatch}
             >
               <div className="flex items-center justify-between gap-3">
-                <Label className="text-sm font-semibold">
-                  {translate(
-                    'auto.components.settings.RepositoryPane.e9bd57a336',
-                    'Worktree Location'
-                  )}
-                </Label>
+                <Label className="text-sm font-semibold">{translate("auto.components.settings.RepositoryPane.e9bd57a336", "Worktree Location")}</Label>
                 {repo.worktreeBasePath ? (
                   <Button
                     type="button"
@@ -391,8 +345,7 @@ export function RepositoryPane({
                     size="sm"
                     onClick={() => updateRepo(repo.id, { worktreeBasePath: undefined })}
                   >
-                    {translate('auto.components.settings.RepositoryPane.8ccacbeb5a', 'Use Global')}
-                  </Button>
+                    {translate("auto.components.settings.RepositoryPane.8ccacbeb5a", "Use Global")}</Button>
                 ) : null}
               </div>
               <RepoSettingsDraftInput
@@ -405,11 +358,7 @@ export function RepositoryPane({
                 className="h-9 text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.RepositoryPane.15a99d9b9f',
-                  'Relative paths resolve from this project root.'
-                )}
-              </p>
+                {translate("auto.components.settings.RepositoryPane.15a99d9b9f", "Relative paths resolve from this project root.")}</p>
             </SearchableSetting>
           </>
         ) : null}
