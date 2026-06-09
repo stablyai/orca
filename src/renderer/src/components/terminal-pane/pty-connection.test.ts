@@ -90,6 +90,7 @@ type StoreState = {
 
 type ConnectCallbacks = {
   onData?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
+  onReplayData?: (data: string) => void
   onError?: (msg: string) => void
 }
 
@@ -299,6 +300,7 @@ function createManager(paneCount = 1) {
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
+    rebuildPaneWebgl: vi.fn(),
     getPanes: vi.fn(() =>
       Array.from({ length: paneCount }, (_, index) => ({
         id: index + 1,
@@ -4024,6 +4026,42 @@ describe('connectPanePty', () => {
     // after xterm parses the snapshot so stale WebGL cells cannot survive.
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
     expect(deps.replayingPanesRef.current.size).toBe(0)
+    disposable.dispose()
+  })
+
+  it('rebuilds WebGL after remote buffered replay arrives on an already-open pane', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    enableActiveRuntimeEnvironment()
+    const transport = createMockTransport('remote:env-1@@terminal-1')
+    const capturedReplayCallback: {
+      current: ((data: string) => void) | null
+    } = { current: null }
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      capturedReplayCallback.current = callbacks.onReplayData ?? null
+      return { id: 'remote:env-1@@terminal-1', replay: '' }
+    })
+    transportFactoryQueue.push(transport)
+
+    const pane = createPane(1)
+    const refresh = vi.fn()
+    const terminal = pane.terminal as typeof pane.terminal & {
+      _core?: { refresh: typeof refresh }
+    }
+    terminal._core = { refresh }
+    terminal.write = vi.fn((_data: string, callback?: () => void) => {
+      callback?.()
+    })
+    const manager = createManager(1)
+    const deps = createDeps()
+    const disposable = connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(6)
+
+    capturedReplayCallback.current?.('remote prompt\r\n$ ')
+    await flushAsyncTicks(6)
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('remote prompt\r\n$ ', expect.any(Function))
+    expect(refresh).toHaveBeenCalledWith(0, 39, true)
+    expect(manager.rebuildPaneWebgl).toHaveBeenCalledWith(1)
     disposable.dispose()
   })
 
