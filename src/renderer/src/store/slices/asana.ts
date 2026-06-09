@@ -81,7 +81,11 @@ export type AsanaSlice = {
   disconnectAsana: (workspaceId?: string | null) => Promise<void>
   fetchAsanaTask: (gid: string, workspaceId?: string | null) => Promise<AsanaTask | null>
   searchAsanaTasks: (query: string, limit?: number) => Promise<AsanaTask[]>
-  listAsanaTasks: (filter?: AsanaTaskFilter, limit?: number) => Promise<AsanaTask[]>
+  listAsanaTasks: (
+    filter?: AsanaTaskFilter,
+    limit?: number,
+    projectId?: string | null
+  ) => Promise<AsanaTask[]>
   patchAsanaTask: (gid: string, patch: Partial<AsanaTask>) => void
 }
 
@@ -232,9 +236,9 @@ export const createAsanaSlice: StateCreator<AppState, [], [], AsanaSlice> = (set
     return promise
   },
 
-  listAsanaTasks: async (filter = 'assigned', limit = 30) => {
+  listAsanaTasks: async (filter = 'assigned', limit = 30, projectId = null) => {
     const workspaceId = getSelectedWorkspaceId(get().asanaStatus)
-    const cacheKey = `${workspaceId ?? 'default'}::list::${filter}::${limit}`
+    const cacheKey = `${workspaceId ?? 'default'}::list::${filter}::${limit}::${projectId ?? 'all'}`
     const cached = get().asanaSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []
@@ -243,7 +247,7 @@ export const createAsanaSlice: StateCreator<AppState, [], [], AsanaSlice> = (set
     if (inflight) {
       return inflight
     }
-    const promise = asanaListTasks(get().settings, filter, limit, workspaceId)
+    const promise = asanaListTasks(get().settings, filter, limit, workspaceId, projectId)
       .then((tasks) => {
         set((s) => ({
           asanaSearchCache: evictStaleEntries({

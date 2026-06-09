@@ -1461,6 +1461,7 @@ const api = {
       filter?: 'assigned' | 'all' | 'done'
       limit?: number
       workspaceId?: string
+      projectId?: string
     }): Promise<unknown[]> => ipcRenderer.invoke('asana:listTasks', args),
 
     getTask: (args: { gid: string; workspaceId?: string }): Promise<unknown> =>

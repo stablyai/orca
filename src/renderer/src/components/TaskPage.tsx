@@ -340,6 +340,10 @@ const ASANA_PRESETS: AsanaPreset[] = [
   { id: 'done', label: 'Done' }
 ]
 
+// Why: Radix Select forbids an empty-string item value, so use a sentinel for
+// the "no project filter" option instead of '' .
+const ASANA_ALL_PROJECTS = '__all_asana_projects__'
+
 const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
 const JIRA_ITEM_LIMIT = 50
@@ -3428,6 +3432,7 @@ export default function TaskPage(): React.JSX.Element {
   const [asanaSearchInput, setAsanaSearchInput] = useState('')
   const [appliedAsanaSearch, setAppliedAsanaSearch] = useState('')
   const [activeAsanaPreset, setActiveAsanaPreset] = useState<AsanaPresetId>('assigned')
+  const [selectedAsanaProjectId, setSelectedAsanaProjectId] = useState<string | null>(null)
   const [asanaRefreshNonce, setAsanaRefreshNonce] = useState(0)
 
   useEffect(() => {
@@ -3476,6 +3481,7 @@ export default function TaskPage(): React.JSX.Element {
     setActiveAsanaPreset(asanaPreset)
     setAsanaSearchInput(asanaQuery)
     setAppliedAsanaSearch(asanaQuery)
+    setSelectedAsanaProjectId(taskResumeState?.asanaProjectId ?? null)
 
     // Why: settings and persisted UI hydrate asynchronously. Apply the restored
     // Tasks context exactly once so later source/filter clicks remain local.
@@ -3696,6 +3702,25 @@ export default function TaskPage(): React.JSX.Element {
       cancelled = true
     }
   }, [settings, taskSource, asanaStatus.connected, selectedAsanaWorkspaceId, taskResumeApplied])
+
+  // Why: a project filter only points at a project in the active workspace.
+  // Once the project list settles, drop a selection that's no longer available
+  // (workspace switch, project deleted) so the list doesn't query a dead gid.
+  useEffect(() => {
+    if (taskSource !== 'asana' || asanaProjectsLoading || !selectedAsanaProjectId) {
+      return
+    }
+    if (!availableAsanaProjects.some((project) => project.gid === selectedAsanaProjectId)) {
+      setSelectedAsanaProjectId(null)
+      setTaskResumeState({ asanaProjectId: '' })
+    }
+  }, [
+    taskSource,
+    asanaProjectsLoading,
+    availableAsanaProjects,
+    selectedAsanaProjectId,
+    setTaskResumeState
+  ])
 
   // Why: stable key for `selectedRepos` so the GitLab fetch effect below
   // doesn't re-run on every parent re-render just because the array
@@ -6440,7 +6465,7 @@ export default function TaskPage(): React.JSX.Element {
     const request =
       trimmed.length > 0
         ? searchAsanaTasks(trimmed, ASANA_ITEM_LIMIT)
-        : listAsanaTasks(activeAsanaPreset, ASANA_ITEM_LIMIT)
+        : listAsanaTasks(activeAsanaPreset, ASANA_ITEM_LIMIT, selectedAsanaProjectId)
 
     void request
       .then((tasks) => {
@@ -6468,6 +6493,7 @@ export default function TaskPage(): React.JSX.Element {
     selectedAsanaWorkspaceId,
     appliedAsanaSearch,
     activeAsanaPreset,
+    selectedAsanaProjectId,
     asanaRefreshNonce,
     taskResumeApplied
   ])
@@ -7674,6 +7700,33 @@ export default function TaskPage(): React.JSX.Element {
                           </button>
                         ) : null}
                       </div>
+                      {availableAsanaProjects.length > 0 ? (
+                        <Select
+                          value={selectedAsanaProjectId ?? ASANA_ALL_PROJECTS}
+                          onValueChange={(value) => {
+                            const nextProjectId = value === ASANA_ALL_PROJECTS ? null : value
+                            setSelectedAsanaProjectId(nextProjectId)
+                            setTaskResumeState({ asanaProjectId: nextProjectId ?? '' })
+                            setAsanaRefreshNonce((n) => n + 1)
+                          }}
+                          disabled={asanaProjectsLoading || appliedAsanaSearch.trim().length > 0}
+                        >
+                          <SelectTrigger
+                            aria-label="Filter Asana tasks by project"
+                            className="h-8 w-[200px] shrink-0 rounded-md border-border/50 bg-background text-xs"
+                          >
+                            <SelectValue placeholder="All projects" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={ASANA_ALL_PROJECTS}>All projects</SelectItem>
+                            {availableAsanaProjects.map((project) => (
+                              <SelectItem key={project.gid} value={project.gid}>
+                                {project.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
                     </div>
                   </div>
                 ) : taskSource === 'gitlab' ? (

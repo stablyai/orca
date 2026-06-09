@@ -1589,6 +1589,7 @@ export type PreloadApi = {
       filter?: AsanaTaskFilter
       limit?: number
       workspaceId?: AsanaWorkspaceSelection
+      projectId?: string
     }) => Promise<AsanaTask[]>
     getTask: (args: { gid: string; workspaceId?: string }) => Promise<AsanaTask | null>
     createTask: (

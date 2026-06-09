@@ -121,7 +121,12 @@ export function registerAsanaHandlers(): void {
     'asana:listTasks',
     async (
       _event,
-      args?: { filter?: AsanaTaskFilter; limit?: number; workspaceId?: AsanaWorkspaceSelection }
+      args?: {
+        filter?: AsanaTaskFilter
+        limit?: number
+        workspaceId?: AsanaWorkspaceSelection
+        projectId?: string
+      }
     ) => {
       const filter = VALID_FILTERS.has(args?.filter as AsanaTaskFilter)
         ? (args!.filter as AsanaTaskFilter)
@@ -129,7 +134,8 @@ export function registerAsanaHandlers(): void {
       return listTasks(
         filter,
         clampLimit(args?.limit),
-        normalizeWorkspaceSelection(args?.workspaceId)
+        normalizeWorkspaceSelection(args?.workspaceId),
+        normalizeWorkspaceId(args?.projectId)
       )
     }
   )

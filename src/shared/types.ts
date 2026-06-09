@@ -2571,6 +2571,7 @@ export type TaskResumeState = {
   jiraQuery?: string
   asanaPreset?: 'assigned' | 'all' | 'done'
   asanaQuery?: string
+  asanaProjectId?: string
 }
 
 export type RightSidebarTab = 'explorer' | 'search' | 'source-control' | 'checks' | 'ports'

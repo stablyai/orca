@@ -73,4 +73,20 @@ describe('asana slice', () => {
     const cached = Object.values(store.getState().asanaSearchCache)[0]?.data
     expect(cached?.[0].completed).toBe(true)
   })
+
+  it('forwards the project id and caches project-scoped lists separately', async () => {
+    asanaListTasksMock.mockResolvedValue([makeTask({ gid: '1' })])
+
+    const store = createTestStore()
+    seedStore(store, {
+      asanaStatus: { connected: true, viewer: null, selectedWorkspaceId: 'ws-1' }
+    })
+
+    await store.getState().listAsanaTasks('assigned', 30)
+    await store.getState().listAsanaTasks('assigned', 30, 'proj-1')
+
+    // The project id reaches the runtime client and keys a distinct cache entry.
+    expect(asanaListTasksMock).toHaveBeenLastCalledWith(null, 'assigned', 30, 'ws-1', 'proj-1')
+    expect(Object.keys(store.getState().asanaSearchCache)).toHaveLength(2)
+  })
 })

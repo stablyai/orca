@@ -14155,9 +14155,10 @@ export class OrcaRuntimeService {
   asanaListTasks(
     filter?: AsanaTaskFilter,
     limit = 30,
-    workspaceId?: AsanaWorkspaceSelection
+    workspaceId?: AsanaWorkspaceSelection,
+    projectId?: string
   ): ReturnType<typeof listAsanaTasks> {
-    return listAsanaTasks(filter, Math.min(Math.max(1, limit), 100), workspaceId)
+    return listAsanaTasks(filter, Math.min(Math.max(1, limit), 100), workspaceId, projectId)
   }
 
   asanaGetTask(gid: string, workspaceId?: string): ReturnType<typeof getAsanaTask> {

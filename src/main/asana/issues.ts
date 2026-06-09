@@ -138,17 +138,25 @@ function sortAndLimitTasks(tasks: AsanaTask[], limit: number): AsanaTask[] {
 async function fetchTasksForClient(
   entry: AsanaClientForWorkspace,
   filter: AsanaTaskFilter,
-  limit: number
+  limit: number,
+  projectId?: string | null
 ): Promise<AsanaTask[]> {
   const params = new URLSearchParams({
-    assignee: 'me',
-    workspace: entry.workspace.id,
     opt_fields: TASK_FIELDS,
     limit: String(Math.min(100, Math.max(limit, 20)))
   })
+  // Why: /tasks scopes by `project` OR `assignee`+`workspace`, not both, and the
+  // free tier can't intersect them. A project filter therefore lists the whole
+  // project (all assignees); the default view stays the caller's assigned tasks.
+  if (projectId) {
+    params.set('project', projectId)
+  } else {
+    params.set('assignee', 'me')
+    params.set('workspace', entry.workspace.id)
+  }
   // Why: Asana has no "completed only" REST filter outside the premium search
   // API. `completed_since=now` returns only incomplete tasks; for `done`/`all`
-  // we fetch the full assigned set and filter client-side.
+  // we fetch the full set and filter client-side.
   if (filter === 'assigned') {
     params.set('completed_since', 'now')
   }
@@ -202,15 +210,20 @@ async function fanOut<T>(
 export async function listTasks(
   filter: AsanaTaskFilter = 'assigned',
   limit = 30,
-  workspaceId?: AsanaWorkspaceSelection | null
+  workspaceId?: AsanaWorkspaceSelection | null,
+  projectId?: string | null
 ): Promise<AsanaTask[]> {
   const entries = getClients(workspaceId)
   if (entries.length === 0) {
     return []
   }
   const safeLimit = clampLimit(limit)
-  const results = await fanOut(entries, workspaceId, 'listTasks', (entry) =>
-    fetchTasksForClient(entry, filter, safeLimit)
+  // Why: a project gid is globally unique and the shared PAT reads it from any
+  // workspace client, so query a single client to avoid duplicate fan-out rows
+  // (every client would return the same project's tasks otherwise).
+  const targets = projectId ? entries.slice(0, 1) : entries
+  const results = await fanOut(targets, workspaceId, 'listTasks', (entry) =>
+    fetchTasksForClient(entry, filter, safeLimit, projectId)
   )
   // Why: Asana's /tasks list has no server-side sort param, so order by
   // modified_at desc to match GitHub/Jira's "recently updated first" default —

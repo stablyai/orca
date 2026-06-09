@@ -50,7 +50,12 @@ describe('asana RPC methods', () => {
       makeRequest('asana.searchTasks', { query: 'login', limit: 30, workspaceId: 'all' })
     )
     await dispatcher.dispatch(
-      makeRequest('asana.listTasks', { filter: 'assigned', limit: 20, workspaceId: 'ws-1' })
+      makeRequest('asana.listTasks', {
+        filter: 'assigned',
+        limit: 20,
+        workspaceId: 'ws-1',
+        projectId: 'proj-1'
+      })
     )
     await dispatcher.dispatch(makeRequest('asana.getTask', { gid: '3', workspaceId: 'ws-1' }))
     await dispatcher.dispatch(
@@ -74,7 +79,7 @@ describe('asana RPC methods', () => {
     await dispatcher.dispatch(makeRequest('asana.taskComments', { gid: '3', workspaceId: 'ws-1' }))
 
     expect(runtime.asanaSearchTasks).toHaveBeenCalledWith('login', 30, 'all')
-    expect(runtime.asanaListTasks).toHaveBeenCalledWith('assigned', 20, 'ws-1')
+    expect(runtime.asanaListTasks).toHaveBeenCalledWith('assigned', 20, 'ws-1', 'proj-1')
     expect(runtime.asanaGetTask).toHaveBeenCalledWith('3', 'ws-1')
     expect(runtime.asanaCreateTask).toHaveBeenCalledWith({
       workspaceId: 'ws-1',

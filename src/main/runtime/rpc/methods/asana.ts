@@ -33,7 +33,8 @@ const ListTasks = z
   .object({
     filter: z.enum(VALID_FILTERS).optional(),
     limit: OptionalFiniteNumber,
-    workspaceId: OptionalString
+    workspaceId: OptionalString,
+    projectId: OptionalString
   })
   .optional()
 
@@ -117,7 +118,7 @@ export const ASANA_METHODS: RpcMethod[] = [
     name: 'asana.listTasks',
     params: ListTasks,
     handler: async (params, { runtime }) =>
-      runtime.asanaListTasks(params?.filter, params?.limit, params?.workspaceId)
+      runtime.asanaListTasks(params?.filter, params?.limit, params?.workspaceId, params?.projectId)
   }),
   defineMethod({
     name: 'asana.getTask',

@@ -107,10 +107,16 @@ export async function asanaListTasks(
   settings: RuntimeAsanaSettings,
   filter?: AsanaTaskFilter,
   limit?: number,
-  workspaceId?: AsanaWorkspaceSelection | null
+  workspaceId?: AsanaWorkspaceSelection | null,
+  projectId?: string | null
 ): Promise<AsanaTask[]> {
   const target = getActiveRuntimeTarget(settings)
-  const args = { filter, limit, workspaceId: workspaceId ?? undefined }
+  const args = {
+    filter,
+    limit,
+    workspaceId: workspaceId ?? undefined,
+    projectId: projectId ?? undefined
+  }
   return target.kind === 'environment'
     ? callRuntimeRpc<AsanaTask[]>(target, 'asana.listTasks', args, { timeoutMs: 30_000 })
     : window.api.asana.listTasks(args)
