@@ -48,6 +48,9 @@ import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/s
 import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceSession } from '../../shared/constants'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { makePaneKey } from '../../shared/stable-pane-id'
+import { RpcDispatcher } from './rpc/dispatcher'
+import type { RpcRequest } from './rpc/core'
+import { TERMINAL_METHODS } from './rpc/methods/terminal'
 
 const electronMocks = vi.hoisted(() => {
   type Listener = (...args: unknown[]) => void
@@ -618,6 +621,10 @@ function expectStablePaneKeyEnv(env: Record<string, string>): string {
 
 function createRuntime(): OrcaRuntimeService {
   return new OrcaRuntimeService(store)
+}
+
+function makeRpcRequest(method: string, params?: unknown): RpcRequest {
+  return { id: 'req-1', authToken: 'tok', method, params }
 }
 
 function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
@@ -5387,6 +5394,127 @@ describe('OrcaRuntimeService', () => {
     expect(preview.tail.at(-1)).toBe(lines.at(-1))
     expect(preview.tail.reduce((sum, line) => sum + line.length, 0)).toBeLessThanOrEqual(32 * 1024)
     expect(shiftCallCount).toBe(0)
+  })
+
+  it('falls back to renderer visible screen when uncursored TUI tail is blank', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049hClaude Code\r\nWorking on fix\r\nTool: Read\r\n',
+      cols: 80,
+      rows: 24
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => true,
+      serializeBuffer
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', `${Array.from({ length: 3000 }, () => '   ').join('\n')}\n`, 100)
+
+    const read = await runtime.readTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['Claude Code', 'Working on fix', 'Tool: Read'])
+    expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 0,
+      altScreenForcesZeroRows: false
+    })
+  })
+
+  it('returns renderer visible screen lines through terminal.read RPC JSON result', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: '\x1b[?1049hClaude Code\r\nChecking files\r\nWaiting for input\r\n',
+      cols: 80,
+      rows: 24
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => true,
+      serializeBuffer
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', `${Array.from({ length: 3000 }, () => '').join('\n')}\n`, 100)
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRpcRequest('terminal.read', { terminal: terminal.handle })
+    )
+
+    expect(response.ok).toBe(true)
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    expect(response.result).toMatchObject({
+      terminal: {
+        handle: terminal.handle,
+        status: 'running',
+        tail: ['Claude Code', 'Checking files', 'Waiting for input']
+      }
+    })
+  })
+
+  it('does not use renderer visible-screen fallback for cursor transcript reads', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'Visible TUI\n',
+      cols: 80,
+      rows: 24
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => true,
+      serializeBuffer
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', '   \n', 100)
+
+    const read = await runtime.readTerminal(terminal.handle, { cursor: 0 })
+
+    expect(read.tail).toEqual([''])
+    expect(serializeBuffer).not.toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 0,
+      altScreenForcesZeroRows: false
+    })
+  })
+
+  it('does not use renderer visible-screen fallback for a short blank shell tail', async () => {
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'shell prompt\n',
+      cols: 80,
+      rows: 24
+    })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => true,
+      serializeBuffer
+    })
+    syncSinglePty(runtime)
+
+    const [terminal] = (await runtime.listTerminals()).terminals
+    runtime.onPtyData('pty-1', '\n\n', 100)
+
+    const read = await runtime.readTerminal(terminal.handle)
+
+    expect(read.tail).toEqual(['', ''])
+    expect(serializeBuffer).not.toHaveBeenCalledWith('pty-1', {
+      scrollbackRows: 0,
+      altScreenForcesZeroRows: false
+    })
   })
 
   it('trims oversized terminal output bursts without per-line array shifts', async () => {
