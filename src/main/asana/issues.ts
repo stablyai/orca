@@ -2,6 +2,7 @@
    mapping, multi-workspace fan-out, and auth-clearing behavior; keeping the API
    boundary together avoids subtle drift between operations. */
 import type {
+  AsanaApprovalStatus,
   AsanaComment,
   AsanaCreateTaskArgs,
   AsanaCreateTaskResult,
@@ -35,6 +36,8 @@ const TASK_FIELDS = [
   'notes',
   'permalink_url',
   'completed',
+  'resource_subtype',
+  'approval_status',
   'due_on',
   'assignee.name',
   'assignee.email',
@@ -117,6 +120,19 @@ function mapSection(value: unknown): string | undefined {
   return undefined
 }
 
+const APPROVAL_STATUSES = new Set<AsanaApprovalStatus>([
+  'pending',
+  'approved',
+  'rejected',
+  'changes_requested'
+])
+
+function mapApprovalStatus(value: unknown): AsanaApprovalStatus | null {
+  return typeof value === 'string' && APPROVAL_STATUSES.has(value as AsanaApprovalStatus)
+    ? (value as AsanaApprovalStatus)
+    : null
+}
+
 export function mapAsanaTask(workspace: AsanaWorkspace, raw: AsanaRecord): AsanaTask {
   const gid = asString(raw.gid)
   return {
@@ -127,6 +143,8 @@ export function mapAsanaTask(workspace: AsanaWorkspace, raw: AsanaRecord): Asana
     description: asString(raw.notes) || undefined,
     url: asString(raw.permalink_url),
     completed: raw.completed === true,
+    resourceSubtype: asString(raw.resource_subtype) || undefined,
+    approvalStatus: mapApprovalStatus(raw.approval_status),
     dueOn: asString(raw.due_on) || null,
     assignee: mapUser(raw.assignee),
     projects: asArray(raw.projects).map((project) => mapProject(project, workspace)),
@@ -430,6 +448,11 @@ export async function updateTask(
     }
     if (updates.completed !== undefined) {
       data.completed = updates.completed
+    }
+    // Why: approval tasks resolve via approval_status, not completed — Asana
+    // keeps the two in sync (approved/rejected/changes_requested ⇒ completed).
+    if (updates.approvalStatus !== undefined) {
+      data.approval_status = updates.approvalStatus
     }
     if (updates.assigneeGid !== undefined) {
       data.assignee = updates.assigneeGid

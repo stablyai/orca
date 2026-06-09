@@ -270,6 +270,15 @@ export default function AsanaIssueWorkspace({
     void mutateTask('completed', { completed }, { completed })
   }, [displayed, mutateTask])
 
+  const handleSetApproval = useCallback(
+    (approvalStatus: 'approved' | 'rejected' | 'changes_requested') => {
+      // Why: Asana keeps approval_status and completed in sync — any decision
+      // other than pending completes the task.
+      void mutateTask('approval', { approvalStatus }, { approvalStatus, completed: true })
+    },
+    [mutateTask]
+  )
+
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     if (!displayed || commentSubmitting) {
       return
@@ -388,26 +397,63 @@ export default function AsanaIssueWorkspace({
             </div>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
-              <button
-                type="button"
-                disabled={pendingField === 'completed'}
-                onClick={handleToggleCompleted}
-                className={cn(
-                  'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:opacity-80 disabled:opacity-50',
-                  displayed.completed
-                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
-                    : 'border-border/50 bg-muted/40 text-muted-foreground'
-                )}
-              >
-                {pendingField === 'completed' ? (
-                  <LoaderCircle className="size-3 animate-spin" />
-                ) : displayed.completed ? (
-                  <CheckCircle2 className="size-3" />
-                ) : (
-                  <Circle className="size-3" />
-                )}
-                {displayed.completed ? 'Completed' : 'Mark complete'}
-              </button>
+              {displayed.resourceSubtype === 'approval' ? (
+                <div className="flex items-center gap-1.5">
+                  {pendingField === 'approval' ? (
+                    <LoaderCircle className="size-3 animate-spin text-muted-foreground" />
+                  ) : null}
+                  {(
+                    [
+                      { status: 'approved', label: 'Approve' },
+                      { status: 'changes_requested', label: 'Request changes' },
+                      { status: 'rejected', label: 'Reject' }
+                    ] as const
+                  ).map(({ status, label }) => {
+                    const active = displayed.approvalStatus === status
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        disabled={pendingField === 'approval'}
+                        onClick={() => handleSetApproval(status)}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:opacity-80 disabled:opacity-50',
+                          active
+                            ? status === 'approved'
+                              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+                              : status === 'rejected'
+                                ? 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
+                                : 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+                            : 'border-border/50 bg-muted/40 text-muted-foreground'
+                        )}
+                      >
+                        {label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={pendingField === 'completed'}
+                  onClick={handleToggleCompleted}
+                  className={cn(
+                    'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:opacity-80 disabled:opacity-50',
+                    displayed.completed
+                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+                      : 'border-border/50 bg-muted/40 text-muted-foreground'
+                  )}
+                >
+                  {pendingField === 'completed' ? (
+                    <LoaderCircle className="size-3 animate-spin" />
+                  ) : displayed.completed ? (
+                    <CheckCircle2 className="size-3" />
+                  ) : (
+                    <Circle className="size-3" />
+                  )}
+                  {displayed.completed ? 'Completed' : 'Mark complete'}
+                </button>
+              )}
 
               {displayed.dueOn ? (
                 <span className="text-[11px] text-muted-foreground">Due {displayed.dueOn}</span>

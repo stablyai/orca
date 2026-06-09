@@ -1436,6 +1436,7 @@ export type {
 } from './jira-types'
 
 export type {
+  AsanaApprovalStatus,
   AsanaComment,
   AsanaConnectArgs,
   AsanaConnectionStatus,

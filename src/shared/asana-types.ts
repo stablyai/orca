@@ -48,6 +48,8 @@ export type AsanaSection = {
 // Why: Asana has no native status workflow — task state is the `completed`
 // boolean, optionally refined by the section the task sits in. We surface both
 // so the UI can render a meaningful status label.
+export type AsanaApprovalStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested'
+
 export type AsanaTask = {
   gid: string
   workspaceId?: string
@@ -56,6 +58,11 @@ export type AsanaTask = {
   description?: string
   url: string
   completed: boolean
+  // Why: approval tasks aren't "completed", they're approved/rejected/changes
+  // requested. Surface the subtype + status so the UI can offer those actions
+  // instead of a plain complete toggle.
+  resourceSubtype?: string
+  approvalStatus?: AsanaApprovalStatus | null
   dueOn?: string | null
   assignee?: AsanaUser
   projects: AsanaProject[]
@@ -75,6 +82,7 @@ export type AsanaTaskUpdate = {
   title?: string
   notes?: string
   completed?: boolean
+  approvalStatus?: AsanaApprovalStatus
   assigneeGid?: string | null
   dueOn?: string | null
 }

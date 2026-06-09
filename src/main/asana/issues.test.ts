@@ -79,6 +79,7 @@ describe('Asana task operations', () => {
         description: 'Wire the empty state',
         url: 'https://app.asana.com/0/1/111',
         completed: false,
+        approvalStatus: null,
         dueOn: '2026-06-30',
         assignee: { gid: 'user-1', name: 'Ada', email: 'ada@example.com' },
         projects: [
@@ -263,6 +264,40 @@ describe('Asana task operations', () => {
     const requestInit = asanaRequestMock.mock.calls[0][2] as { body: string; method: string }
     expect(requestInit.method).toBe('PUT')
     expect(JSON.parse(requestInit.body).data).toEqual({ completed: true })
+  })
+
+  it('maps the approval subtype and status from a task', async () => {
+    asanaRequestMock.mockResolvedValueOnce({
+      data: {
+        gid: '111',
+        name: 'Approve the design',
+        completed: false,
+        resource_subtype: 'approval',
+        approval_status: 'pending'
+      }
+    })
+
+    const { getTask } = await import('./issues')
+
+    const task = await getTask('111', 'ws-1')
+    expect(task).toMatchObject({
+      gid: '111',
+      resourceSubtype: 'approval',
+      approvalStatus: 'pending'
+    })
+  })
+
+  it('resolves an approval task through approval_status', async () => {
+    asanaRequestMock.mockResolvedValueOnce(null)
+
+    const { updateTask } = await import('./issues')
+
+    await expect(
+      updateTask('111', { approvalStatus: 'changes_requested' }, 'ws-1')
+    ).resolves.toEqual({ ok: true })
+
+    const requestInit = asanaRequestMock.mock.calls[0][2] as { body: string }
+    expect(JSON.parse(requestInit.body).data).toEqual({ approval_status: 'changes_requested' })
   })
 
   it('returns only comment stories from the task feed', async () => {

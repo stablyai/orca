@@ -52,6 +52,12 @@ function normalizeTaskUpdate(value: unknown): AsanaTaskUpdate | null {
     return null
   }
   if (
+    input.approvalStatus !== undefined &&
+    !['pending', 'approved', 'rejected', 'changes_requested'].includes(input.approvalStatus)
+  ) {
+    return null
+  }
+  if (
     input.assigneeGid !== undefined &&
     input.assigneeGid !== null &&
     typeof input.assigneeGid !== 'string'

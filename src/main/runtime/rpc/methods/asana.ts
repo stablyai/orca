@@ -58,6 +58,7 @@ const TaskUpdate = z.object({
     title: OptionalString,
     notes: OptionalPlainString,
     completed: z.boolean().optional(),
+    approvalStatus: z.enum(['pending', 'approved', 'rejected', 'changes_requested']).optional(),
     assigneeGid: z.union([z.string(), z.null()]).optional(),
     dueOn: z.union([z.string(), z.null()]).optional()
   })
