@@ -119,6 +119,7 @@ import {
   applyBrowserPageZoom,
   browserPageZoomLevelToPercent,
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  getBrowserPageZoomIndicatorState,
   normalizeBrowserPageZoomLevel,
   setBrowserPageZoomLevel,
   type BrowserPageZoomDirection
@@ -4242,8 +4243,10 @@ function BrowserPagePane({
     }
     return received
   })()
-  const showBrowserZoomIndicator =
-    browserZoomFeedbackVisible || browserZoomPercent !== browserDefaultZoomPercent
+  const browserZoomIndicatorState = getBrowserPageZoomIndicatorState({
+    feedbackVisible: browserZoomFeedbackVisible,
+    isDefaultZoom: browserZoomPercent === browserDefaultZoomPercent
+  })
 
   useEffect(() => {
     const webview = webviewRef.current
@@ -4758,14 +4761,10 @@ function BrowserPagePane({
         <div
           role="status"
           aria-live="polite"
-          aria-hidden={!showBrowserZoomIndicator}
+          aria-hidden={browserZoomIndicatorState.ariaHidden}
           className={cn(
             'pointer-events-none absolute top-3 right-3 z-30 rounded-md border border-border bg-popover/95 px-2.5 py-1 text-xs font-medium text-popover-foreground shadow-xs transition-opacity duration-300 ease-out',
-            browserZoomFeedbackVisible
-              ? 'opacity-100'
-              : browserZoomPercent === 100
-                ? 'opacity-0'
-                : 'opacity-80'
+            browserZoomIndicatorState.opacityClassName
           )}
         >
           {browserZoomPercent}%
