@@ -61,7 +61,12 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Gemini Usage': 'Gemini 사용량',
     'Force Delete Branch': '브랜치 강제 삭제',
     'Time agents worked': '에이전트 작업 시간',
-    PR: 'PR'
+    PR: 'PR',
+    Installed: '설치됨',
+    'Not installed': '설치되지 않음',
+    Checking: '확인 중',
+    'Checking...': '확인 중...',
+    Connected: '연결됨'
   },
   zh: {
     Dismiss: '关闭',
@@ -79,7 +84,12 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Terminal 1': '终端 1',
     Starter: '入门版',
     Turns: '轮次',
-    'Recent sessions': '最近的会话'
+    'Recent sessions': '最近的会话',
+    Installed: '已安装',
+    'Not installed': '未安装',
+    Checking: '检查中',
+    'Checking...': '检查中...',
+    Connected: '已连接'
   },
   ja: {
     Dismiss: '閉じる',
@@ -97,7 +107,12 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Terminal 1': 'ターミナル 1',
     Starter: 'スターター',
     Turns: 'ターン',
-    'Recent sessions': '最近のセッション'
+    'Recent sessions': '最近のセッション',
+    Installed: 'インストール済み',
+    'Not installed': '未インストール',
+    Checking: '確認中',
+    'Checking...': '確認中...',
+    Connected: '接続済み'
   }
 }
 
@@ -167,7 +182,9 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /분기/g, replacement: '브랜치', whenEnIncludes: 'ranch' },
     { pattern: /나뭇가지/g, replacement: '브랜치', whenEnIncludes: 'ranch' },
     { pattern: /홍보/g, replacement: 'PR', whenEnIncludes: 'PR' },
-    { pattern: /선형/g, replacement: 'Linear', whenEnIncludes: 'Linear' }
+    { pattern: /선형/g, replacement: 'Linear', whenEnIncludes: 'Linear' },
+    { pattern: /관현악법/g, replacement: '오케스트레이션', whenEnIncludes: 'Orchestration' },
+    { pattern: /자치령 대표/g, replacement: '에이전트', whenEnIncludes: 'Agents' }
   ],
   zh: [
     { pattern: /客服人员/g, replacement: '代理', whenEnIncludes: 'agent' },

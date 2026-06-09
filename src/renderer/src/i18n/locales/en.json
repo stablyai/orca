@@ -4543,7 +4543,11 @@
           "f9af91ea26": "Shows the New Mobile Emulator action and allows agents to attach to the active emulator.",
           "700ddbf9b1": "Enable Mobile Emulator",
           "bc39d0f115": "Configure mobile emulator support for Orca and coding agents.",
-          "6593c9ddd3": "Mobile Emulator"
+          "6593c9ddd3": "Mobile Emulator",
+          "a4f1c82d90": "Disabled",
+          "b5e2d93e01": "Checking...",
+          "c6f3ea4f12": "Ready",
+          "d704fb5023": "Needs setup"
         },
         "MobileNetworkInterfaceSection": {
           "63d5e4ae1e": "Regenerate the QR code and scan it from the Orca mobile app.",
@@ -8447,7 +8451,9 @@
                   "5c9293e51a": "checking app access",
                   "aae94eeb52": "Click Install CLI & Skills",
                   "aa8e143a2f": "Could not check install",
-                  "9b33e7fb13": "Checking install"
+                  "9b33e7fb13": "Checking install",
+                  "4c8e1f92a7": "open Orca Desktop on this Mac",
+                  "6d2b0a84e1": "Unavailable in this build"
                 }
               }
             }

@@ -128,15 +128,40 @@ function getSkillInstallStatus(skill: {
   error: string | null
 }): AgentCapabilityInstallStatus {
   if (skill.loading) {
-    return { label: translate("auto.components.feature.wall.agent.capability.setup.status.9b33e7fb13", "Checking install"), tone: 'checking' }
+    return {
+      label: translate(
+        'auto.components.feature.wall.agent.capability.setup.status.9b33e7fb13',
+        'Checking install'
+      ),
+      tone: 'checking'
+    }
   }
   if (skill.error) {
-    return { label: translate("auto.components.feature.wall.agent.capability.setup.status.aa8e143a2f", "Could not check install"), tone: 'error' }
+    return {
+      label: translate(
+        'auto.components.feature.wall.agent.capability.setup.status.aa8e143a2f',
+        'Could not check install'
+      ),
+      tone: 'error'
+    }
   }
   if (skill.installed) {
-    return { label: translate("auto.components.feature.wall.agent.capability.setup.status.8eccfcb314", "Installed"), tone: 'ready', installed: true }
+    return {
+      label: translate(
+        'auto.components.feature.wall.agent.capability.setup.status.8eccfcb314',
+        'Installed'
+      ),
+      tone: 'ready',
+      installed: true
+    }
   }
-  return { label: translate("auto.components.feature.wall.agent.capability.setup.status.aae94eeb52", "Click Install CLI & Skills"), tone: 'pending' }
+  return {
+    label: translate(
+      'auto.components.feature.wall.agent.capability.setup.status.aae94eeb52',
+      'Click Install CLI & Skills'
+    ),
+    tone: 'pending'
+  }
 }
 
 function getComputerUseInstallStatus(
@@ -156,26 +181,49 @@ function getComputerUseInstallStatus(
     return skillStatus
   }
   if (permissions.checking) {
-    return { label: translate("auto.components.feature.wall.agent.capability.setup.status.5c9293e51a", "checking app access"), tone: 'checking', installed: true }
+    return {
+      label: translate(
+        'auto.components.feature.wall.agent.capability.setup.status.5c9293e51a',
+        'checking app access'
+      ),
+      tone: 'checking',
+      installed: true
+    }
   }
   if (permissions.unavailableReason) {
     return {
       label:
         permissions.unavailableReason === 'web_client'
-          ? 'open Orca Desktop on this Mac'
-          : 'Unavailable in this build',
+          ? translate(
+              'auto.components.feature.wall.agent.capability.setup.status.4c8e1f92a7',
+              'open Orca Desktop on this Mac'
+            )
+          : translate(
+              'auto.components.feature.wall.agent.capability.setup.status.6d2b0a84e1',
+              'Unavailable in this build'
+            ),
       tone: 'pending',
       installed: true
     }
   }
   if (!permissions.ready) {
     return {
-      label: translate("auto.components.feature.wall.agent.capability.setup.status.21d4f79c93", "click Install CLI & Skills to open macOS access settings"),
+      label: translate(
+        'auto.components.feature.wall.agent.capability.setup.status.21d4f79c93',
+        'click Install CLI & Skills to open macOS access settings'
+      ),
       tone: 'pending',
       installed: true
     }
   }
-  return { label: translate("auto.components.feature.wall.agent.capability.setup.status.8eccfcb314", "Installed"), tone: 'ready', installed: true }
+  return {
+    label: translate(
+      'auto.components.feature.wall.agent.capability.setup.status.8eccfcb314',
+      'Installed'
+    ),
+    tone: 'ready',
+    installed: true
+  }
 }
 
 function useComputerUsePermissionStatus(enabled: boolean): {
