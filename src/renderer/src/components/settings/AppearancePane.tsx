@@ -5,6 +5,7 @@ import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/types'
 
 import { Separator } from '../ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
@@ -38,8 +39,13 @@ import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { AppIconSelector } from './AppIconSelector'
-import { SHOW_UI_LANGUAGE_SETTING, UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
+import {
+  getUiLanguageChoiceLabel,
+  SHOW_UI_LANGUAGE_SETTING,
+  UI_LANGUAGE_CHOICES
+} from '@/i18n/supported-languages'
 import { translate } from '@/i18n/i18n'
+import type { UiLanguage } from '../../../../shared/ui-language'
 export { getAppearancePaneSearchEntries }
 
 type AppearancePaneProps = {
@@ -165,22 +171,25 @@ export function AppearancePane({
                 'Choose the language used by the Orca interface.'
               )}
               control={
-                <SettingsSegmentedControl
-                  ariaLabel={translate('settings.appearance.language.title', 'Language')}
+                <Select
                   value={settings.uiLanguage}
-                  onChange={(value) => updateSettings({ uiLanguage: value })}
-                  options={UI_LANGUAGE_CHOICES.map((choice) => ({
-                    value: choice.value,
-                    label: translate(
-                      choice.labelKey,
-                      choice.value === 'en'
-                        ? 'English'
-                        : choice.value === 'zh'
-                          ? '中文（简体）'
-                          : 'System'
-                    )
-                  }))}
-                />
+                  onValueChange={(value) => updateSettings({ uiLanguage: value as UiLanguage })}
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="min-w-[220px]"
+                    aria-label={translate('settings.appearance.language.title', 'Language')}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {UI_LANGUAGE_CHOICES.map((choice) => (
+                      <SelectItem key={choice.value} value={choice.value}>
+                        {getUiLanguageChoiceLabel(choice, translate)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               }
             />
           </SearchableSetting>

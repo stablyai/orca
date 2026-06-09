@@ -33,6 +33,57 @@ vi.mock('./TerminalAppearanceSection', () => ({
   TerminalAppearanceSection: () => null
 }))
 
+vi.mock('../ui/select', async () => {
+  const React = await import('react')
+
+  const SelectContext = React.createContext<{
+    onValueChange?: (value: string) => void
+  }>({})
+
+  return {
+    Select: ({
+      value,
+      onValueChange,
+      children
+    }: {
+      value: string
+      onValueChange: (value: string) => void
+      children: React.ReactNode
+    }) => {
+      const contextValue = React.useMemo(() => ({ onValueChange }), [onValueChange])
+      return (
+        <SelectContext.Provider value={contextValue}>
+          <div data-slot="language-select" data-value={value}>
+            {children}
+          </div>
+        </SelectContext.Provider>
+      )
+    },
+    SelectTrigger: ({ children, ...props }: React.ComponentProps<'button'> & { size?: string }) => (
+      <button type="button" data-slot="select-trigger" {...props}>
+        {children}
+      </button>
+    ),
+    SelectValue: () => null,
+    SelectContent: ({ children }: { children: React.ReactNode }) => (
+      <div data-slot="select-content">{children}</div>
+    ),
+    SelectItem: ({ value, children }: { value: string; children: React.ReactNode }) => {
+      const { onValueChange } = React.useContext(SelectContext)
+      return (
+        <button
+          type="button"
+          data-slot="select-item"
+          data-value={value}
+          onClick={() => onValueChange?.(value)}
+        >
+          {children}
+        </button>
+      )
+    }
+  }
+})
+
 import { AppearancePane } from './AppearancePane'
 
 const mountedRoots: Root[] = []
@@ -92,7 +143,7 @@ describe('AppearancePane', () => {
     mocks.state.settingsSearchQuery = 'automations'
   })
 
-  it('renders the language selector with system, english, and chinese options', async () => {
+  it('renders the language dropdown with system, english, and chinese options', async () => {
     mocks.state.settingsSearchQuery = 'language'
     const updateSettings = vi.fn()
     const settings = {
@@ -101,20 +152,18 @@ describe('AppearancePane', () => {
     }
 
     const container = await renderAppearancePane(settings, updateSettings)
-    const languageControl = container.querySelector<HTMLDivElement>(
-      '[role="radiogroup"][aria-label="Language"]'
+    const languageTrigger = container.querySelector<HTMLButtonElement>(
+      '[data-slot="select-trigger"][aria-label="Language"]'
+    )
+    const chineseOption = container.querySelector<HTMLButtonElement>(
+      '[data-slot="select-item"][data-value="zh"]'
     )
 
-    expect(languageControl).not.toBeNull()
+    expect(languageTrigger).not.toBeNull()
+    expect(chineseOption).not.toBeNull()
     expect(container.textContent).toContain('System')
     expect(container.textContent).toContain('English')
     expect(container.textContent).toContain('中文（简体）')
-
-    const chineseOption = Array.from(
-      languageControl?.querySelectorAll<HTMLButtonElement>('button') ?? []
-    ).find((button) => button.textContent?.includes('中文（简体）'))
-
-    expect(chineseOption).toBeDefined()
 
     await act(async () => {
       chineseOption?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

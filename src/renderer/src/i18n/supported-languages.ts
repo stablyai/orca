@@ -6,6 +6,7 @@ import {
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_ENGLISH,
+  UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SYSTEM,
   type UiLanguage
 } from '../../../shared/ui-language'
@@ -22,8 +23,23 @@ export type UiLanguageChoice = {
 export const UI_LANGUAGE_CHOICES: UiLanguageChoice[] = [
   { value: UI_LANGUAGE_SYSTEM, labelKey: 'settings.appearance.language.system' },
   { value: UI_LANGUAGE_ENGLISH, labelKey: 'settings.appearance.language.english' },
-  { value: UI_LANGUAGE_CHINESE, labelKey: 'settings.appearance.language.chinese' }
+  { value: UI_LANGUAGE_CHINESE, labelKey: 'settings.appearance.language.chinese' },
+  { value: UI_LANGUAGE_KOREAN, labelKey: 'settings.appearance.language.korean' }
 ]
+
+const UI_LANGUAGE_CHOICE_FALLBACKS: Record<UiLanguage, string> = {
+  [UI_LANGUAGE_SYSTEM]: 'System',
+  [UI_LANGUAGE_ENGLISH]: 'English',
+  [UI_LANGUAGE_CHINESE]: '中文（简体）',
+  [UI_LANGUAGE_KOREAN]: '한국어'
+}
+
+export function getUiLanguageChoiceLabel(
+  choice: UiLanguageChoice,
+  translateFn: (key: string, fallback: string) => string
+): string {
+  return translateFn(choice.labelKey, UI_LANGUAGE_CHOICE_FALLBACKS[choice.value])
+}
 
 export function resolveUiLocale(language: UiLanguage): SupportedUiLocale {
   return resolveRendererUiLocale(language)
