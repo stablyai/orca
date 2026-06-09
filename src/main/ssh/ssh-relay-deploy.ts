@@ -4,7 +4,6 @@ import { join } from 'path'
    relay launch, and GC — and splitting risks drift between the install
    sequence and the GC's live-socket invariant. */
 import { existsSync } from 'fs'
-import { createHash } from 'crypto'
 import { app } from 'electron'
 import type { SshConnection } from './ssh-connection'
 import type { RelayPlatform } from './relay-protocol'
@@ -32,13 +31,19 @@ import {
   isWindowsRemoteHost,
   joinRemotePath,
   normalizeRemoteHome,
-  remoteBasename,
   validateRemoteHome,
   type RemoteHostPlatform
 } from './ssh-remote-platform'
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import {
+  isWindowsRelayPipePath,
+  relayEndpointForHost,
+  relayHookEndpointDirForHost,
+  windowsActivePipeMarkerPath,
+  windowsRelayFallbackSocketName
+} from './ssh-relay-endpoints'
 import {
   DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
@@ -60,8 +65,6 @@ export type RelayDeployResult = {
 // launch) has no overall bound. A hanging `npm install` or slow SFTP
 // upload could block the connection indefinitely.
 const RELAY_DEPLOY_TIMEOUT_MS = 120_000
-const WINDOWS_ACTIVE_PIPE_MARKER_PREFIX = '.windows-active-pipe-'
-let windowsRelayFallbackSequence = 0
 
 function execHostCommand(
   conn: SshConnection,
@@ -153,9 +156,10 @@ async function deployAndLaunchRelayInner(
   onProgress?.('Checking existing relay...')
   const alreadyInstalled = await isRelayAlreadyInstalled(conn, remoteRelayDir, hostPlatform)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
+  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
 
   if (alreadyInstalled) {
-    await repairInstalledNativeDeps(conn, remoteRelayDir, platform, hostPlatform)
+    await repairInstalledNativeDeps(conn, remoteRelayDir, platform, hostPlatform, nodePath)
   } else {
     // Why: serialize concurrent first-installs of the same version against
     // each other via an atomic mkdir lock. The losing caller polls and either
@@ -172,7 +176,7 @@ async function deployAndLaunchRelayInner(
 
         onProgress?.('Installing native dependencies...')
         console.log('[ssh-relay] Installing native dependencies...')
-        await installNativeDeps(conn, remoteRelayDir, platform, hostPlatform)
+        await installNativeDeps(conn, remoteRelayDir, platform, hostPlatform, nodePath)
         console.log('[ssh-relay] Native deps installed')
 
         // Why: write `.install-complete` BEFORE releasing the lock so a
@@ -197,6 +201,7 @@ async function deployAndLaunchRelayInner(
     conn,
     remoteRelayDir,
     hostPlatform,
+    nodePath,
     graceTimeSeconds,
     relayInstanceId
   )
@@ -205,7 +210,10 @@ async function deployAndLaunchRelayInner(
   // Why: best-effort cleanup of unreferenced sibling version dirs. Errors
   // are logged inside gcOldRelayVersions and never propagate, so a GC failure
   // can never block the user from connecting.
-  void gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform).catch(() => {})
+  void gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
+    windowsNodePath: launched.nodePath,
+    windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)]
+  }).catch(() => {})
 
   return {
     transport: launched.transport,
@@ -239,11 +247,13 @@ async function uploadRelay(
   await uploadDirectoryForConnection(conn, localRelayDir, remoteDir, hostPlatform)
 
   // Make the node binary executable
-  await execHostCommand(
-    conn,
-    hostPlatform,
-    makeRemoteExecutableCommand(hostPlatform, joinRemotePath(hostPlatform, remoteDir, 'node'))
-  )
+  if (!isWindowsRemoteHost(hostPlatform)) {
+    await execHostCommand(
+      conn,
+      hostPlatform,
+      makeRemoteExecutableCommand(hostPlatform, joinRemotePath(hostPlatform, remoteDir, 'node'))
+    )
+  }
 
   // Why: write `.version` via SFTP rather than shell to avoid quoting issues
   // with content-hashed version strings. The remote daemon reads this same
@@ -310,9 +320,9 @@ const RELAY_NATIVE_DEPS = {
 async function hasRequiredNativeDeps(
   conn: SshConnection,
   remoteDir: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string
 ): Promise<boolean> {
-  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
   const escapedNode = shellEscape(nodePath)
   try {
     const command = isWindowsRemoteHost(hostPlatform)
@@ -339,9 +349,10 @@ async function repairInstalledNativeDeps(
   conn: SshConnection,
   remoteDir: string,
   platform: RelayPlatform,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string
 ): Promise<void> {
-  if (await hasRequiredNativeDeps(conn, remoteDir, hostPlatform)) {
+  if (await hasRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath)) {
     return
   }
 
@@ -350,8 +361,8 @@ async function repairInstalledNativeDeps(
   try {
     // Why: older complete relay dirs were created before @parcel/watcher was
     // installed. Re-probe under the lock so only one reconnect mutates the dir.
-    if (!(await hasRequiredNativeDeps(conn, remoteDir, hostPlatform))) {
-      await installNativeDeps(conn, remoteDir, platform, hostPlatform)
+    if (!(await hasRequiredNativeDeps(conn, remoteDir, hostPlatform, nodePath))) {
+      await installNativeDeps(conn, remoteDir, platform, hostPlatform, nodePath)
       await finalizeInstall(conn, remoteDir, hostPlatform)
     } else {
       await abandonInstall(conn, remoteDir, hostPlatform)
@@ -374,9 +385,9 @@ async function installNativeDeps(
   conn: SshConnection,
   remoteDir: string,
   platform: RelayPlatform,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string
 ): Promise<void> {
-  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
   // Why: node's bin directory must be in PATH for npm's child processes.
   // npm install runs node-pty's prebuild script (`node scripts/prebuild.js`)
   // which spawns `node` as a child — if node isn't in PATH, that child
@@ -517,6 +528,7 @@ async function launchRelay(
   conn: SshConnection,
   remoteDir: string,
   hostPlatform: RemoteHostPlatform,
+  nodePath: string,
   graceTimeSeconds?: number,
   relayInstanceId?: string
 ): Promise<{ transport: MultiplexerTransport; nodePath: string; sockPath: string }> {
@@ -525,7 +537,6 @@ async function launchRelay(
   // package small (~100KB JS vs ~60MB with embedded node).
   // Non-login SSH shells may not have node in PATH, so we source the
   // user's profile to pick up nvm/fnm/brew PATH entries.
-  const nodePath = await resolveRemoteNodePath(conn, hostPlatform)
   // Why: graceTimeSeconds originates from user-editable SshTarget config.
   // Clamping to integer prevents shell injection if the type ever loosened.
   const requestedGraceTime = Math.floor(graceTimeSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS)
@@ -678,61 +689,17 @@ async function launchRelay(
   return { transport: await waitForSentinel(channel), nodePath, sockPath: sockFile }
 }
 
-function relayEndpointForHost(
-  hostPlatform: RemoteHostPlatform,
-  remoteDir: string,
-  sockName: string
-): string {
-  if (!isWindowsRemoteHost(hostPlatform)) {
-    return joinRemotePath(hostPlatform, remoteDir, sockName)
-  }
-  const endpointHash = createHash('sha256')
-    .update(`${remoteDir}\0${sockName}`)
-    .digest('hex')
-    .slice(0, 20)
-  return `\\\\.\\pipe\\orca-relay-${endpointHash}`
-}
-
-function relayHookEndpointDirForHost(
-  hostPlatform: RemoteHostPlatform,
-  remoteDir: string,
-  sockPath: string
-): string {
-  return joinRemotePath(
-    hostPlatform,
-    remoteDir,
-    'agent-hooks',
-    remoteBasename(sockPath, hostPlatform)
-  )
-}
-
 function buildWindowsRelayFallbackEndpoint(
   hostPlatform: RemoteHostPlatform,
   remoteDir: string,
   sockName: string
 ): WindowsRelayEndpoint {
-  const fallbackSockName = `${sockName}-fallback-${Date.now().toString(36)}-${++windowsRelayFallbackSequence}`
+  const fallbackSockName = windowsRelayFallbackSocketName(sockName)
   const sockPath = relayEndpointForHost(hostPlatform, remoteDir, fallbackSockName)
   return {
     sockPath,
     endpointDir: relayHookEndpointDirForHost(hostPlatform, remoteDir, sockPath)
   }
-}
-
-function windowsActivePipeMarkerPath(
-  hostPlatform: RemoteHostPlatform,
-  remoteDir: string,
-  sockName: string
-): string {
-  return joinRemotePath(
-    hostPlatform,
-    remoteDir,
-    `${WINDOWS_ACTIVE_PIPE_MARKER_PREFIX}${sockName.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-  )
-}
-
-function isWindowsRelayPipePath(value: string): boolean {
-  return /^\\\\[.?]\\pipe\\orca-relay-[0-9a-f]{20}$/i.test(value)
 }
 
 async function readWindowsActiveRelayEndpoint(
@@ -771,6 +738,8 @@ async function rememberWindowsActiveRelayEndpoint(
       `Set-Content -LiteralPath ${powerShellLiteral(markerPath)} -Value ${powerShellLiteral(sockPath)} -NoNewline`
     )
   ).catch((err) => {
+    // Why: fallback pipe names are deterministic, so losing this marker does
+    // not force the next deploy to orphan an undiscoverable relay.
     console.warn(
       `[ssh-relay] Failed to persist Windows active relay pipe at ${markerPath}: ${err instanceof Error ? err.message : String(err)}`
     )
@@ -799,11 +768,7 @@ async function launchWindowsRelay(
   let launchOpts = opts
   if ((await probeWindowsRelayPipe(conn, hostPlatform, opts)) === 'READY') {
     try {
-      const channel = await conn.exec(
-        windowsRelayConnectCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath),
-        { wrapCommand: false }
-      )
-      const transport = await waitForSentinel(channel)
+      const transport = await connectWindowsRelay(conn, hostPlatform, opts)
       await rememberWindowsActiveRelayEndpoint(
         conn,
         hostPlatform,
@@ -822,9 +787,37 @@ async function launchWindowsRelay(
       )
       if (opts.reconnectFallback) {
         // Why: an existing Windows named pipe cannot be unlinked like a Unix
-        // socket; use a fresh pipe so a corrupt daemon cannot block relaunch.
+        // socket; use a deterministic fallback pipe so marker write failures
+        // remain recoverable on the next deploy.
+        // Keep activePipeMarkerPath keyed by the original target sock name;
+        // the marker records the active pipe for that target, fallback or not.
         launchOpts = { ...opts, ...opts.reconnectFallback }
       }
+    }
+  }
+
+  if (
+    launchOpts !== opts &&
+    (await probeWindowsRelayPipe(conn, hostPlatform, launchOpts)) === 'READY'
+  ) {
+    try {
+      const transport = await connectWindowsRelay(conn, hostPlatform, launchOpts)
+      await rememberWindowsActiveRelayEndpoint(
+        conn,
+        hostPlatform,
+        launchOpts.activePipeMarkerPath,
+        launchOpts.sockPath
+      )
+      return {
+        transport,
+        nodePath: launchOpts.nodePath,
+        sockPath: launchOpts.sockPath
+      }
+    } catch (err) {
+      console.warn(
+        '[ssh-relay] Windows fallback pipe reconnect failed, relaunching relay:',
+        err instanceof Error ? err.message : String(err)
+      )
     }
   }
 
@@ -847,36 +840,21 @@ async function launchWindowsRelay(
 
   const POLL_INTERVAL_MS = 200
   const POLL_TIMEOUT_MS = 10_000
-  const pollStart = Date.now()
-  while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
-    try {
-      if ((await probeWindowsRelayPipe(conn, hostPlatform, launchOpts)) === 'READY') {
-        const channel = await conn.exec(
-          windowsRelayConnectCommand(
-            hostPlatform,
-            launchOpts.nodePath,
-            launchOpts.remoteDir,
-            launchOpts.sockPath
-          ),
-          { wrapCommand: false }
-        )
-        const transport = await waitForSentinel(channel)
-        await rememberWindowsActiveRelayEndpoint(
-          conn,
-          hostPlatform,
-          launchOpts.activePipeMarkerPath,
-          launchOpts.sockPath
-        )
-        return {
-          transport,
-          nodePath: launchOpts.nodePath,
-          sockPath: launchOpts.sockPath
-        }
-      }
-    } catch {
-      /* exec failed, retry */
+  if (
+    await waitForWindowsRelayPipe(conn, hostPlatform, launchOpts, POLL_TIMEOUT_MS, POLL_INTERVAL_MS)
+  ) {
+    const transport = await connectWindowsRelay(conn, hostPlatform, launchOpts)
+    await rememberWindowsActiveRelayEndpoint(
+      conn,
+      hostPlatform,
+      launchOpts.activePipeMarkerPath,
+      launchOpts.sockPath
+    )
+    return {
+      transport,
+      nodePath: launchOpts.nodePath,
+      sockPath: launchOpts.sockPath
     }
-    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS))
   }
 
   const logOutput = await execHostCommand(
@@ -885,6 +863,22 @@ async function launchWindowsRelay(
     windowsRelayTailLogCommand(logFile, errFile)
   ).catch(() => '(could not read log)')
   throw new Error(`Relay failed to start within ${POLL_TIMEOUT_MS / 1000}s. Log:\n${logOutput}`)
+}
+
+async function connectWindowsRelay(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  opts: {
+    remoteDir: string
+    nodePath: string
+    sockPath: string
+  }
+): Promise<MultiplexerTransport> {
+  const channel = await conn.exec(
+    windowsRelayConnectCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath),
+    { wrapCommand: false }
+  )
+  return waitForSentinel(channel)
 }
 
 function windowsRelayConnectCommand(
@@ -944,6 +938,32 @@ async function probeWindowsRelayPipe(
   return result.trim() === 'READY' ? 'READY' : 'WAITING'
 }
 
+async function waitForWindowsRelayPipe(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  opts: {
+    remoteDir: string
+    nodePath: string
+    sockPath: string
+  },
+  timeoutMs: number,
+  intervalMs: number
+): Promise<boolean> {
+  try {
+    const result = await execHostCommand(
+      conn,
+      hostPlatform,
+      windowsRelayWaitCommand(hostPlatform, opts.nodePath, opts.remoteDir, opts.sockPath, {
+        timeoutMs,
+        intervalMs
+      })
+    )
+    return result.trim() === 'READY'
+  } catch {
+    return false
+  }
+}
+
 function windowsRelayProbeCommand(
   hostPlatform: RemoteHostPlatform,
   nodePath: string,
@@ -961,6 +981,47 @@ function windowsRelayProbeCommand(
     nodePath,
     remoteDir,
     `& ${powerShellLiteral(nodePath)} -e ${powerShellLiteral(js)} ${powerShellLiteral(sockPath)}`
+  )
+}
+
+function windowsRelayWaitCommand(
+  hostPlatform: RemoteHostPlatform,
+  nodePath: string,
+  remoteDir: string,
+  sockPath: string,
+  opts: { timeoutMs: number; intervalMs: number }
+): string {
+  const js = [
+    'const net=require("net");',
+    'const pipe=process.argv[1];',
+    'const timeoutMs=Number(process.argv[2]);',
+    'const intervalMs=Number(process.argv[3]);',
+    'const deadline=Date.now()+timeoutMs;',
+    'function finish(value){process.stdout.write(value);process.exit(0)}',
+    'function attempt(){',
+    'const s=net.connect(pipe);',
+    'let settled=false;',
+    'function retry(){if(settled)return;settled=true;s.destroy();',
+    'if(Date.now()>=deadline)finish("WAITING");else setTimeout(attempt,intervalMs)}',
+    's.setTimeout(Math.min(intervalMs,500));',
+    's.on("connect",()=>{if(settled)return;settled=true;s.destroy();finish("READY")});',
+    's.on("timeout",retry);',
+    's.on("error",retry);',
+    '}',
+    'attempt();'
+  ].join('')
+  return commandWithNodePath(
+    hostPlatform,
+    nodePath,
+    remoteDir,
+    [
+      `& ${powerShellLiteral(nodePath)}`,
+      '-e',
+      powerShellLiteral(js),
+      powerShellLiteral(sockPath),
+      powerShellLiteral(String(opts.timeoutMs)),
+      powerShellLiteral(String(opts.intervalMs))
+    ].join(' ')
   )
 }
 

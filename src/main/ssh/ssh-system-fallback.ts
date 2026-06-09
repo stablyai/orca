@@ -191,14 +191,40 @@ async function uploadDirectoryViaSystemSshWindows(
   remoteDir: string,
   options: SystemSshOperationOptions
 ): Promise<void> {
-  await runWindowsSystemSshCommand(target, makeWindowsDirectoryCommand(remoteDir), options)
   const hostPlatform = options.hostPlatform
   if (!hostPlatform) {
     throw new Error('Windows system SSH upload requires a remote host platform')
   }
-  const entries = await readdir(localDir, { withFileTypes: true })
-  for (const entry of entries) {
-    throwIfAborted(options.signal)
+  const entries = await collectWindowsUploadEntries(
+    localDir,
+    remoteDir,
+    hostPlatform,
+    options.signal
+  )
+  await writeWindowsUploadPackageViaSystemSsh(target, entries, options)
+}
+
+type WindowsUploadEntry =
+  | {
+      kind: 'directory'
+      path: string
+    }
+  | {
+      kind: 'file'
+      path: string
+      contentsBase64: string
+    }
+
+async function collectWindowsUploadEntries(
+  localDir: string,
+  remoteDir: string,
+  hostPlatform: RemoteHostPlatform,
+  signal: AbortSignal | undefined
+): Promise<WindowsUploadEntry[]> {
+  const entries: WindowsUploadEntry[] = [{ kind: 'directory', path: remoteDir }]
+  const dirEntries = await readdir(localDir, { withFileTypes: true })
+  for (const entry of dirEntries) {
+    throwIfAborted(signal)
     const localPath = pathJoin(localDir, entry.name)
     const remotePath = joinRemotePath(hostPlatform, remoteDir, entry.name)
     const statResult = await lstat(localPath)
@@ -206,12 +232,35 @@ async function uploadDirectoryViaSystemSshWindows(
       continue
     }
     if (statResult.isDirectory()) {
-      await uploadDirectoryViaSystemSshWindows(target, localPath, remotePath, options)
+      entries.push(
+        ...(await collectWindowsUploadEntries(localPath, remotePath, hostPlatform, signal))
+      )
       continue
     }
     const buffer = await readLocalUploadFile(localPath, statResult)
-    await writeBufferViaSystemSshWindows(target, remotePath, buffer, options)
+    entries.push({ kind: 'file', path: remotePath, contentsBase64: buffer.toString('base64') })
   }
+  return entries
+}
+
+async function writeWindowsUploadPackageViaSystemSsh(
+  target: SshTarget,
+  entries: WindowsUploadEntry[],
+  options: SystemSshOperationOptions
+): Promise<void> {
+  throwIfAborted(options.signal)
+  const channel = spawnSystemSshCommand(target, makeWindowsUploadPackageCommand(), {
+    wrapCommand: false
+  })
+  const closePromise = awaitWithSystemSshAbort(
+    options.signal,
+    () => channel.close(),
+    waitForChannelClose(channel, 'windows relay upload')
+  )
+  if (!options.signal?.aborted) {
+    channel.stdin.end(JSON.stringify(entries))
+  }
+  await closePromise
 }
 
 async function readLocalUploadFile(
@@ -256,25 +305,6 @@ async function writeBufferViaSystemSshWindows(
   await closePromise
 }
 
-async function runWindowsSystemSshCommand(
-  target: SshTarget,
-  command: string,
-  options: SystemSshOperationOptions
-): Promise<void> {
-  const channel = spawnSystemSshCommand(target, command, { wrapCommand: false })
-  await awaitWithSystemSshAbort(
-    options.signal,
-    () => channel.close(),
-    waitForChannelClose(channel, 'windows system ssh command')
-  )
-}
-
-function makeWindowsDirectoryCommand(remotePath: string): string {
-  return powerShellCommand(
-    `$null = New-Item -ItemType Directory -Force -LiteralPath ${powerShellLiteral(remotePath)}`
-  )
-}
-
 function makeWindowsWriteFileCommand(remotePath: string): string {
   return powerShellCommand(
     [
@@ -285,6 +315,27 @@ function makeWindowsWriteFileCommand(remotePath: string): string {
       '$inputStream = [Console]::OpenStandardInput()',
       '$outputStream = [System.IO.File]::Open($path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)',
       'try { $inputStream.CopyTo($outputStream) } finally { $outputStream.Dispose() }'
+    ].join('; ')
+  )
+}
+
+function makeWindowsUploadPackageCommand(): string {
+  return powerShellCommand(
+    [
+      '$ErrorActionPreference = "Stop"',
+      '$json = [Console]::In.ReadToEnd()',
+      'if ([string]::IsNullOrWhiteSpace($json)) { return }',
+      '$items = $json | ConvertFrom-Json',
+      'foreach ($item in @($items)) {',
+      '  $path = [string]$item.path',
+      '  if ($item.kind -eq "directory") {',
+      '    $null = [System.IO.Directory]::CreateDirectory($path)',
+      '    continue',
+      '  }',
+      '  $parent = [System.IO.Path]::GetDirectoryName($path)',
+      '  if ($parent) { $null = [System.IO.Directory]::CreateDirectory($parent) }',
+      '  [System.IO.File]::WriteAllBytes($path, [Convert]::FromBase64String([string]$item.contentsBase64))',
+      '}'
     ].join('; ')
   )
 }

@@ -443,15 +443,12 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
   it('keeps Windows node-pty probe failures non-fatal by checking LASTEXITCODE', async () => {
     vi.mocked(parseUnameToRelayPlatform).mockReturnValueOnce('win32-x64')
-    vi.mocked(resolveRemoteNodePath)
-      .mockResolvedValueOnce('C:/Program Files/nodejs/node.exe')
-      .mockResolvedValueOnce('C:/Program Files/nodejs/node.exe')
+    vi.mocked(resolveRemoteNodePath).mockResolvedValueOnce('C:/Program Files/nodejs/node.exe')
     const conn = makeMockConnection(sftpCapture)
     feed([
       'Windows AMD64',
       'C:\\Users\\u',
       '', // mkdir remoteDir
-      '', // Windows executable no-op
       '', // npm install native deps
       'MISSING\n', // native process exit normalized by PowerShell command
       '', // remove probe stderr file

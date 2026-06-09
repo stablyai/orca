@@ -29,11 +29,13 @@ import {
 } from './ssh-remote-commands'
 import {
   getRemoteHostPlatform,
+  isWindowsRemoteHost,
   joinRemotePath,
   remoteBasename,
   type RemoteHostPlatform,
   type RemotePathFlavor
 } from './ssh-remote-platform'
+import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
 
 // Why: the GC pass and the version-dir parser must agree on what counts as a
 // relay install dir. Single source of truth for both. The pattern matches the
@@ -265,7 +267,11 @@ export async function gcOldRelayVersions(
   conn: SshConnection,
   remoteHome: string,
   currentDirAbsPath: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: {
+    windowsNodePath?: string
+    windowsSockNames?: string[]
+  }
 ): Promise<void> {
   const baseDir = joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR)
   const currentDirName = remoteBasename(currentDirAbsPath, host)
@@ -291,7 +297,7 @@ export async function gcOldRelayVersions(
   for (const name of candidates) {
     const dir = joinRemotePath(host, baseDir, name)
     try {
-      const safe = await isCandidateSafeToRemove(conn, dir, name, host)
+      const safe = await isCandidateSafeToRemove(conn, dir, name, host, options)
       if (!safe) {
         kept.push(name)
         continue
@@ -318,7 +324,11 @@ async function isCandidateSafeToRemove(
   conn: SshConnection,
   dir: string,
   name: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: {
+    windowsNodePath?: string
+    windowsSockNames?: string[]
+  }
 ): Promise<boolean> {
   const isLegacy = LEGACY_RELAY_DIR_REGEX.test(name)
 
@@ -360,7 +370,7 @@ async function isCandidateSafeToRemove(
     }
   }
 
-  const sockAlive = await hasLiveRelaySocket(conn, dir, host)
+  const sockAlive = await hasLiveRelaySocket(conn, dir, host, options)
   if (sockAlive) {
     return false
   }
@@ -370,14 +380,31 @@ async function isCandidateSafeToRemove(
 async function hasLiveRelaySocket(
   conn: SshConnection,
   dir: string,
-  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST
+  host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
+  options?: {
+    windowsNodePath?: string
+    windowsSockNames?: string[]
+  }
 ): Promise<boolean> {
   try {
     // Why: `ls -1 dir/relay-*.sock 2>/dev/null` lists socket files. For each,
     // we test -S to confirm it's a socket inode. We do NOT attempt to open
     // the socket here — `test -S` is sufficient for the GC decision and a
     // connect-and-close probe would race with a daemon that's about to idle.
-    const out = await execHostCommand(conn, host, relayLivenessProbeCommand(host, dir))
+    const windowsOptions =
+      isWindowsRemoteHost(host) && options?.windowsNodePath
+        ? {
+            nodePath: options.windowsNodePath,
+            pipePaths: (options.windowsSockNames ?? []).flatMap((sockName) =>
+              windowsRelayPipePathsForSocketName(host, dir, sockName)
+            )
+          }
+        : undefined
+    const out = await execHostCommand(
+      conn,
+      host,
+      relayLivenessProbeCommand(host, dir, windowsOptions)
+    )
     return out.includes('ALIVE')
   } catch {
     return false

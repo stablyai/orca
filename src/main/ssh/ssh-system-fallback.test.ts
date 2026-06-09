@@ -317,7 +317,7 @@ describe('spawnSystemSsh', () => {
     expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('0.1.0', 'utf-8'))
   })
 
-  it('uploads directories to Windows system SSH targets without remote tar', async () => {
+  it('uploads directories to Windows system SSH targets in one PowerShell batch', async () => {
     const localDir = mkdtempSync(join(tmpdir(), 'orca-system-ssh-upload-'))
     writeFileSync(join(localDir, 'relay.js'), 'console.log("relay")')
     const spawned: EventedProcess[] = []
@@ -340,11 +340,25 @@ describe('spawnSystemSsh', () => {
     }
 
     const commands = spawnMock.mock.calls.map((call) => (call[1] as string[]).at(-1) ?? '')
-    expect(commands).toHaveLength(2)
+    expect(commands).toHaveLength(1)
     expect(commands.every((command) => command.includes('powershell.exe'))).toBe(true)
     expect(commands.every((command) => !command.includes('/bin/sh'))).toBe(true)
     expect(commands.join('\n')).not.toContain('tar -xzf')
-    expect(spawned[1].stdin.end).toHaveBeenCalledWith(Buffer.from('console.log("relay")'))
+    const payload = JSON.parse(spawned[0].stdin.end.mock.calls[0]?.[0] as string) as {
+      kind: string
+      path: string
+      contentsBase64?: string
+    }[]
+    expect(payload).toEqual(
+      expect.arrayContaining([
+        { kind: 'directory', path: 'C:/Users/me/.orca-remote/relay' },
+        {
+          kind: 'file',
+          path: 'C:/Users/me/.orca-remote/relay/relay.js',
+          contentsBase64: Buffer.from('console.log("relay")').toString('base64')
+        }
+      ])
+    )
   })
 
   it('throws when no system ssh is found', () => {

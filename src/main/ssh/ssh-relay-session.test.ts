@@ -335,6 +335,8 @@ describe('SshRelaySession', () => {
     const shim = vi.mocked(mockConn.writeFile).mock.calls[0]?.[1] as string
     expect(shim).toContain('C:/Users/me/.orca-remote/relay-v1')
     expect(shim).toContain('\\\\.\\pipe\\orca-relay-123')
+    expect(shim).not.toContain('if not exist "%ORCA_RELAY_SOCKET_PATH%"')
+    expect(shim).not.toContain('Orca SSH CLI bridge cannot find the relay socket')
     expect(shim).not.toContain('#!/usr/bin/env sh')
     expect(vi.mocked(execCommand).mock.calls.some(([, command]) => command.includes('chmod'))).toBe(
       false

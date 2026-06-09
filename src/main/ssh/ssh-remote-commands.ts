@@ -138,7 +138,16 @@ export function probeFileExistsCommand(host: RemoteHostPlatform, remotePath: str
   )
 }
 
-export function relayLivenessProbeCommand(host: RemoteHostPlatform, dir: string): string {
+type WindowsRelayLivenessOptions = {
+  nodePath: string
+  pipePaths: string[]
+}
+
+export function relayLivenessProbeCommand(
+  host: RemoteHostPlatform,
+  dir: string,
+  windowsOptions?: WindowsRelayLivenessOptions
+): string {
   if (!isWindowsRemoteHost(host)) {
     return (
       `for f in ${shellEscape(dir)}/relay-*.sock ${shellEscape(dir)}/relay.sock; do ` +
@@ -146,12 +155,49 @@ export function relayLivenessProbeCommand(host: RemoteHostPlatform, dir: string)
       'done; true'
     )
   }
-  return powerShellCommand(
+  if (!windowsOptions) {
+    return powerShellCommand("'ALIVE'")
+  }
+  const js = [
+    'const fs=require("fs"),path=require("path"),net=require("net");',
+    'const [dir,...seed]=process.argv.slice(1);',
+    'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
+    'const pipes=[];',
+    'let markerCount=0;',
+    'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',
+    'try{for(const name of fs.readdirSync(dir)){',
+    'if(!name.startsWith(".windows-active-pipe-"))continue;',
+    'markerCount++;',
+    'const p=fs.readFileSync(path.join(dir,name),"utf8").trim();',
+    'if(valid.test(p)&&!pipes.includes(p))pipes.push(p)',
+    '}}catch{}',
+    'if(markerCount===0&&pipes.length===0){process.stdout.write("ALIVE");process.exit(0)}',
+    'let i=0;',
+    'function done(ok){process.stdout.write(ok?"ALIVE":"WAITING")}',
+    'function next(){',
+    'const pipe=pipes[i++];',
+    'if(!pipe)return done(false);',
+    'const s=net.connect(pipe);',
+    'let settled=false;',
+    'function finish(ok){if(settled)return;settled=true;s.destroy();if(ok)done(true);else next()}',
+    's.setTimeout(200);',
+    's.on("connect",()=>finish(true));',
+    's.on("timeout",()=>finish(false));',
+    's.on("error",()=>finish(false));',
+    '}',
+    'next();'
+  ].join('')
+  return commandWithNodePath(
+    host,
+    windowsOptions.nodePath,
+    dir,
     [
-      `$needle = ${powerShellLiteral(dir)}`,
-      "$process = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($needle) -and $_.CommandLine.Contains('relay.js') } | Select-Object -First 1",
-      "if ($process) { 'ALIVE' }"
-    ].join('; ')
+      `& ${powerShellLiteral(windowsOptions.nodePath)}`,
+      '-e',
+      powerShellLiteral(js),
+      powerShellLiteral(dir),
+      ...windowsOptions.pipePaths.map((pipePath) => powerShellLiteral(pipePath))
+    ].join(' ')
   )
 }
 
@@ -178,9 +224,10 @@ export function commandWithNodePath(
   if (!isWindowsRemoteHost(host)) {
     return `export PATH=${shellEscape(nodeBinDir)}:$PATH && cd ${shellEscape(remoteDir)} && ${command}`
   }
+  const windowsNodeBinDir = nodeBinDir.replace(/\//g, '\\')
   return powerShellCommand(
     [
-      `$env:PATH = ${powerShellLiteral(nodeBinDir)} + ';' + $env:PATH`,
+      `$env:PATH = ${powerShellLiteral(windowsNodeBinDir)} + ';' + $env:PATH`,
       `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(remoteDir)}`,
       command
     ].join('; ')

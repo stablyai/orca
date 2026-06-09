@@ -1,5 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 import type { DetectedPort } from './port-scan-handler'
 import { buildRelayCommandEnv } from './relay-command-env'
 
@@ -44,7 +45,7 @@ async function runWindowsPortScanPowerShell(): Promise<string> {
     '}',
     '$items | ConvertTo-Json -Compress -Depth 3'
   ].join('\n')
-  const encoded = Buffer.from(script, 'utf16le').toString('base64')
+  const encoded = encodePowerShellCommand(script)
   const lastError: unknown[] = []
 
   for (const binary of ['powershell.exe', 'pwsh.exe']) {

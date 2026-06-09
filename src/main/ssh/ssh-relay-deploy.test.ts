@@ -147,6 +147,20 @@ describe('deployAndLaunchRelay', () => {
     expect(progress).toContain('Starting relay...')
   })
 
+  it('resolves the remote node path once per deploy', async () => {
+    const conn = makeMockConnection()
+    const mockExecCommand = vi.mocked(execCommand)
+    mockExecCommand.mockResolvedValueOnce('Linux x86_64')
+    mockExecCommand.mockResolvedValueOnce('/home/user')
+    mockExecCommand.mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK')
+    mockExecCommand.mockResolvedValueOnce('DEAD')
+    mockExecCommand.mockResolvedValueOnce('READY')
+
+    await deployAndLaunchRelay(conn)
+
+    expect(resolveRemoteNodePath).toHaveBeenCalledTimes(1)
+  })
+
   it('defaults fresh relays to the three-hour SSH disconnect grace window', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
@@ -321,6 +335,8 @@ describe('deployAndLaunchRelay', () => {
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/agent-hooks/orca-relay-'
     )
     expect(launchScript).not.toContain('\\\\.\\pipe\\agent-hooks')
+    const waitScript = decodedScripts.find((script) => script.includes('deadline=Date.now()')) ?? ''
+    expect(waitScript).toContain('setTimeout(attempt,intervalMs)')
   })
 
   it('relaunches Windows remotes on a fallback pipe when reconnecting the occupied pipe fails', async () => {
@@ -341,6 +357,7 @@ describe('deployAndLaunchRelay', () => {
       .mockResolvedValueOnce('ORCA-NATIVE-DEPS-OK') // native deps probe
       .mockResolvedValueOnce('') // no persisted active pipe yet
       .mockResolvedValueOnce('READY') // existing named pipe probe
+      .mockResolvedValueOnce('WAITING') // deterministic fallback pipe is not already running
       .mockResolvedValueOnce('') // Start-Process launch on fallback pipe
       .mockResolvedValueOnce('READY') // fallback pipe poll
       .mockResolvedValueOnce('') // persist fallback active pipe marker
