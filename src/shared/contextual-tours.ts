@@ -102,14 +102,26 @@ export const CONTEXTUAL_TOURS = [
     steps: [
       {
         title: 'Grab page context for agents',
-        body: 'Grab controls can copy elements or hand page context to an agent.',
+        body: "Use the grab tool to copy a page element's context for agents.",
         targetSelector: '[data-contextual-tour-target="browser-grab-control"]',
-        requiredForStart: true
+        requiredForStart: true,
+        preferredPlacement: 'bottom'
       },
       {
         title: 'Mark design feedback in place',
         body: 'Annotate elements and send those notes to an agent.',
-        targetSelector: '[data-contextual-tour-target="browser-annotation-control"]'
+        targetSelector: '[data-contextual-tour-target="browser-annotation-control"]',
+        preferredPlacement: 'bottom'
+      },
+      {
+        title: 'Stay logged in',
+        body: 'Bring your existing logins into Orca to stay signed in immediately.',
+        // Prefer the always-visible Import button; fall back to the overflow-menu
+        // item only once the user has dismissed the import hint.
+        targetSelector:
+          '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]',
+        // Sit below the Import button with the arrow pointing up at it.
+        preferredPlacement: 'bottom'
       }
     ]
   },
@@ -163,7 +175,7 @@ export const CONTEXTUAL_TOURS = [
       },
       {
         title: 'Name it, or start from existing work',
-        body: 'Start a workspace from a task source to inherit the title. Or leave it blank to auto-name it from your first agent message.',
+        body: 'Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message.',
         targetSelector: '[data-contextual-tour-target="workspace-creation-name"]',
         control: { kind: 'auto-rename-branch-from-work' }
       },

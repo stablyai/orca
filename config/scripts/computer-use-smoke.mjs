@@ -6,15 +6,18 @@ import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const repoRoot = resolve(import.meta.dirname, '..', '..')
-const cliPath = resolve(repoRoot, 'out', 'cli', 'index.js')
+const cliPath =
+  process.env.ORCA_COMPUTER_SMOKE_CLI_PATH ?? resolve(repoRoot, 'out', 'cli', 'index.js')
 const args = new Set(process.argv.slice(2))
 const requestedApps = valueFlag('--apps')
 const includeScreenshot = args.has('--screenshot')
+const launchRuntime = args.has('--launch')
+const requireTarget = args.has('--require-target')
 const session = valueFlag('--session') ?? `computer-smoke-${process.pid}`
 const preferredApps = (
   requestedApps ??
   process.env.ORCA_COMPUTER_SMOKE_APPS ??
-  'Finder,TextEdit,Spotify,Slack,Microsoft Edge'
+  'Finder,TextEdit,Text Editor,gedit,Notepad,Calculator,Microsoft Edge,Google Chrome,Safari,Slack,Spotify'
 )
   .split(',')
   .map((app) => app.trim())
@@ -22,6 +25,13 @@ const preferredApps = (
 
 if (!existsSync(cliPath)) {
   fail(`Missing built CLI at ${cliPath}. Run pnpm build:cli first.`)
+}
+
+if (launchRuntime) {
+  const opened = unwrapResult(runCli(['open', '--json']))
+  console.log(
+    `computer-use smoke: runtime ${opened.runtime?.state ?? 'unknown'} (${opened.runtime?.runtimeId ?? 'unknown'})`
+  )
 }
 
 const list = unwrapResult(runCli(['computer', 'list-apps', '--json']))
@@ -36,31 +46,29 @@ const targets = preferredApps.filter(
 
 console.log(`computer-use smoke: ${apps.length} apps listed`)
 if (targets.length === 0) {
-  console.log(`computer-use smoke: no preferred apps are running (${preferredApps.join(', ')})`)
+  const message = `no preferred apps are running (${preferredApps.join(', ')})`
+  if (requireTarget) {
+    fail(message)
+  }
+  console.log(`computer-use smoke: ${message}`)
   process.exit(0)
 }
 
 let failures = 0
+let successes = 0
 for (const app of targets) {
-  const result = runCli(
-    [
-      'computer',
-      'get-app-state',
-      '--session',
-      session,
-      '--app',
-      app,
-      ...(includeScreenshot ? [] : ['--no-screenshot']),
-      '--json'
-    ],
-    { allowFailure: true }
-  )
+  const result = runSnapshotSmoke(app)
 
   if (!result.ok) {
+    if (result.skipped) {
+      console.log(`computer-use smoke: ${app}: skipped (${result.reason})`)
+      continue
+    }
     failures += 1
     console.log(`computer-use smoke: ${app}: failed: ${result.error}`)
     continue
   }
+  successes += 1
 
   const state = unwrapResult(result.value)
   const snapshot = state.snapshot
@@ -85,6 +93,44 @@ for (const app of targets) {
 
 if (failures > 0) {
   fail(`${failures} app snapshot smoke check(s) failed`)
+}
+if (requireTarget && successes === 0) {
+  fail('no preferred app snapshots succeeded')
+}
+
+function runSnapshotSmoke(app) {
+  const baseArgs = [
+    'computer',
+    'get-app-state',
+    '--session',
+    session,
+    '--app',
+    app,
+    '--restore-window',
+    ...(includeScreenshot ? [] : ['--no-screenshot']),
+    '--json'
+  ]
+  const initial = runCli(baseArgs, { allowFailure: true })
+  if (initial.ok) {
+    return initial
+  }
+  const error = parseCliFailure(initial.error)
+  if (error?.code === 'window_not_found') {
+    return { ok: false, skipped: true, reason: error.message }
+  }
+  return initial
+}
+
+function parseCliFailure(raw) {
+  if (!raw) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(raw)
+    return parsed.error ?? null
+  } catch {
+    return { code: 'runtime_error', message: String(raw) }
+  }
 }
 
 function valueFlag(name) {

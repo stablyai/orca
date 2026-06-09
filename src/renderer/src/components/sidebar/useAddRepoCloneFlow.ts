@@ -17,10 +17,7 @@ export function useAddRepoCloneFlow({
   step: AddRepoDialogStep
   activeRuntimeEnvironmentId: string | null | undefined
   workspaceDir: string | null | undefined
-  fetchWorktrees: (
-    repoId: string,
-    options?: { requireAuthoritative?: boolean }
-  ) => Promise<unknown>
+  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   onGitRepoReady: (repoId: string, source: AddRepoExistingWorkspaceSource) => Promise<void>
 }): {
   cloneUrl: string

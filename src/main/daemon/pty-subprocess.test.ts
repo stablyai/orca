@@ -613,6 +613,36 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
+  it('uses shell wrapper when Agent Teams shim path must survive shell startup', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/zsh',
+          PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          ORCA_AGENT_TEAMS_SHIM_DIR: '/tmp/orca-agent-teams-bin'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual(['-l'])
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
   it('deletes requested env keys after merging daemon process env', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -637,6 +667,31 @@ describe('createPtySubprocess', () => {
 
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[2].env.CODEX_HOME).toBeUndefined()
+  })
+
+  it('honors explicit terminal env overrides after deleting requested defaults', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    createPtySubprocess({
+      sessionId: 'test',
+      cols: 80,
+      rows: 24,
+      env: {
+        SHELL: '/bin/bash',
+        TERM: 'screen-256color',
+        PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
+        ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+      },
+      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+    })
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[2].name).toBe('screen-256color')
+    expect(lastCall[2].env.TERM).toBe('screen-256color')
+    expect(lastCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+    expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
+    expect(lastCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
   })
 
   it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', () => {

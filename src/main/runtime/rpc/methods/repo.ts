@@ -34,7 +34,11 @@ const RepoSourceControlAiOverrides = z
   .unknown()
   .optional()
   .transform((value) =>
-    value === undefined ? undefined : normalizeRepoSourceControlAiOverrides(value)
+    value === undefined
+      ? undefined
+      : value === null
+        ? null
+        : normalizeRepoSourceControlAiOverrides(value)
   )
 
 const RepoBadgeColor = z
@@ -122,14 +126,14 @@ const ProjectGroupScanNested = z.object({
 const ProjectGroupImportNested = z.discriminatedUnion('mode', [
   z.object({
     parentPath: requiredString('Missing parent path'),
-    groupName: requiredString('Missing group name'),
+    groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     mode: z.literal('group')
   }),
   z.object({
     parentPath: requiredString('Missing parent path'),
-    // Why: "Import separately" does not create a group, so SSH must accept the
-    // same empty group-name state that the local dialog allows.
+    // Why: blank group names fall back to the scanned folder basename; separate
+    // imports do not create a group but share the same renderer payload shape.
     groupName: z.string().optional().default(''),
     projectPaths: z.array(z.string()),
     mode: z.literal('separate')

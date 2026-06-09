@@ -68,7 +68,7 @@ describe('terminal-stream-protocol', () => {
     expect(resize && decodeTerminalStreamJson(resize.payload)).toEqual({ cols: 120, rows: 40 })
   })
 
-  it('round-trips multiplex subscribe and unsubscribe frames', () => {
+  it('round-trips multiplex subscribe, snapshot request, and unsubscribe frames', () => {
     const subscribe = decodeTerminalStreamFrame(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Subscribe,
@@ -89,12 +89,22 @@ describe('terminal-stream-protocol', () => {
         payload: new Uint8Array()
       })
     )
+    const snapshotRequest = decodeTerminalStreamFrame(
+      encodeTerminalStreamFrame({
+        opcode: TerminalStreamOpcode.SnapshotRequest,
+        streamId: 12,
+        seq: 3,
+        payload: new Uint8Array()
+      })
+    )
 
     expect(subscribe?.opcode).toBe(TerminalStreamOpcode.Subscribe)
     expect(subscribe && decodeTerminalStreamJson(subscribe.payload)).toMatchObject({
       streamId: 12,
       terminal: 'terminal-1'
     })
+    expect(snapshotRequest?.opcode).toBe(TerminalStreamOpcode.SnapshotRequest)
+    expect(snapshotRequest?.streamId).toBe(12)
     expect(unsubscribe?.opcode).toBe(TerminalStreamOpcode.Unsubscribe)
     expect(unsubscribe?.streamId).toBe(12)
   })

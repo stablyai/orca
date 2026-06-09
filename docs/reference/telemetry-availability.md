@@ -277,8 +277,31 @@ Dashboard caveats:
 
 - Treat `onboarding_step_* { value_kind: 'agent_setup' }`, `onboarding_step_* { value_kind: 'tour' }`, and `onboarding_tour_outcome` as historical first-run onboarding signals after this rollout.
 - Do not use absence of new `agent_setup` or `tour` onboarding rows as a drop-off signal; those steps no longer exist in active onboarding.
-- Segment numeric onboarding step analysis across this boundary. The active final step changed from seven-step onboarding to `ONBOARDING_FINAL_STEP = 5`.
+- Segment numeric onboarding step analysis across this boundary. The active final step changed from seven-step onboarding to the five-step active flow.
 - Continue using `contextual_tour_shown` and `contextual_tour_outcome` from PR #2734 for current feature-education exposure and outcome analysis.
+
+### 2026-06-03 - Final Code Onboarding Step Removal
+
+Scope: active first-run onboarding no longer emits the final code/project picker step. The notifications step is now the final step, and completing it opens the Add Project modal.
+
+This is a product-flow and telemetry-interpretation boundary, not a new event rollout. Historical onboarding schemas still accept five-step rows so old data remains queryable, but dashboard authors should not expect new active-onboarding rows for the removed final code/project picker step after this rollout.
+
+| Field                    | Value                                                                           |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| PR                       | `#4524`                                                                         |
+| Merge commit             | `TBD`                                                                           |
+| `code_merged_at_utc`     | `TBD`                                                                           |
+| First release            | `TBD`                                                                           |
+| First release commit     | `TBD`                                                                           |
+| `first_released_at_utc`  | `TBD`                                                                           |
+| `first_seen_at_utc`      | N/A                                                                             |
+| `dashboard_ready_at_utc` | Event-dependent; use this as a cutoff only after the PR is merged and released. |
+
+Dashboard caveats:
+
+- Treat `onboarding_step_*` rows for the removed final code/project picker step as historical first-run onboarding signals after this rollout.
+- Segment numeric onboarding step analysis across this boundary. The active final step changed from the five-step active flow to `ONBOARDING_FINAL_STEP = 4`.
+- Do not use absence of new final code/project picker rows as a drop-off signal; that step no longer exists in active onboarding.
 
 ### 2026-06-03 - Add Project Default Checkout Handoff
 

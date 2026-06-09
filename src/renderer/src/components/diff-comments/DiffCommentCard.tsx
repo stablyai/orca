@@ -1,4 +1,4 @@
-import { CornerDownLeft, Pencil, Trash, FileText } from 'lucide-react'
+import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
@@ -213,7 +213,6 @@ export function DiffCommentCard({
         {/* Quote Block */}
         {quote ? (
           <div className="orca-diff-comment-quote">
-            <FileText className="size-3.5 flex-shrink-0 text-amber-500 mt-0.5" />
             <div className="orca-diff-comment-quote-text">{quote}</div>
           </div>
         ) : null}

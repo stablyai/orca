@@ -2,7 +2,7 @@
  * precedence in one ordered handler so shell input, pane commands, search, and
  * split actions do not race across separate window listeners. */
 import { useEffect } from 'react'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from './pty-transport'
 import { resolveTerminalShortcutAction } from './terminal-shortcut-policy'
 import type { MacOptionAsAlt } from './terminal-shortcut-policy'
@@ -120,6 +120,7 @@ type KeyboardHandlersDeps = {
   setSearchOpen: React.Dispatch<React.SetStateAction<boolean>>
   onSearchSelectedText: (text: string) => void
   onRequestClosePane: (paneId: number) => void
+  onClearPaneScrollback: (pane: ManagedPane) => void
   searchOpenRef: React.RefObject<boolean>
   searchStateRef: React.RefObject<SearchState>
   macOptionAsAltRef: React.RefObject<MacOptionAsAlt>
@@ -143,6 +144,7 @@ export function useTerminalKeyboardShortcuts({
   setSearchOpen,
   onSearchSelectedText,
   onRequestClosePane,
+  onClearPaneScrollback,
   searchOpenRef,
   searchStateRef,
   macOptionAsAltRef,
@@ -289,7 +291,7 @@ export function useTerminalKeyboardShortcuts({
         e.stopImmediatePropagation()
         const pane = manager.getActivePane() ?? manager.getPanes()[0]
         if (pane) {
-          pane.terminal.clear()
+          onClearPaneScrollback(pane)
         }
         return
       }
@@ -446,6 +448,7 @@ export function useTerminalKeyboardShortcuts({
     setSearchOpen,
     onSearchSelectedText,
     onRequestClosePane,
+    onClearPaneScrollback,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,

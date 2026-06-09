@@ -7,16 +7,19 @@ import type {
 import { getFeatureWallSetupStepsForSection } from '../../../../shared/feature-wall-setup-steps'
 import { cn } from '@/lib/utils'
 import type { FeatureWallSetupProgress } from './feature-wall-setup-progress'
-import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
-import { TasksAnimatedVisual } from './TasksAnimatedVisual'
 import { AgentCapabilitiesSetupAction } from './AgentCapabilitiesSetupAction'
 import {
   AddReposAction,
   SetupScriptAction,
+  SplitTerminalShortcutHint,
   TwoAgentsAction,
   WorkspacesAction
 } from './FeatureWallSetupWorkflowActions'
-import { SetupStepPreview } from './SetupStepPreview'
+import {
+  SetupMultipleReposVisual,
+  SetupTwoAgentsVisual,
+  SetupWorkspacesVisual
+} from './FeatureWallSetupStepVisuals'
 import { Button } from '@/components/ui/button'
 import { GitHubRow, LinearRow } from '../onboarding/IntegrationsStep'
 import { AgentStep } from '../onboarding/AgentStep'
@@ -24,33 +27,52 @@ import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/types'
 
+type FeatureWallSetupChecklistLayout = 'modal' | 'embedded'
+
 type FeatureWallSetupChecklistProps = {
   activeStep: FeatureWallSetupStep | null
   progress: FeatureWallSetupProgress
   onSelectStep: (id: FeatureWallSetupStepId) => void
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
   onBrowserUseSkillInstalledChange: (installed: boolean) => void
+  /** Modal keeps a compact rail; embedded (settings pane) gets more column breathing room. */
+  layout?: FeatureWallSetupChecklistLayout
 }
 
 function SetupStepRow(props: {
   step: FeatureWallSetupStep
   done: boolean
   active: boolean
+  ordinal: number
   onSelect: () => void
+  layout: FeatureWallSetupChecklistLayout
 }): React.JSX.Element {
-  const { step, done, active, onSelect } = props
+  const { step, done, active, ordinal, onSelect, layout } = props
+  const isEmbedded = layout === 'embedded'
   return (
     <button
       type="button"
       onClick={onSelect}
       aria-current={active ? 'step' : undefined}
       className={cn(
-        'flex w-full items-center gap-3 rounded-md border px-3 py-2.5 text-left transition-colors',
-        active
-          ? 'border-border bg-accent text-accent-foreground'
-          : 'border-border bg-card hover:bg-accent'
+        'relative flex w-full items-center gap-3 text-left transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        isEmbedded
+          ? cn(
+              'rounded-lg px-3 py-2',
+              active ? 'bg-accent text-accent-foreground' : 'hover:bg-accent'
+            )
+          : cn(
+              'rounded-md border px-3 py-2.5',
+              active
+                ? 'border-border bg-accent text-accent-foreground'
+                : 'border-border bg-background hover:bg-accent'
+            )
       )}
     >
+      {active ? (
+        <span className="absolute bottom-2 left-0 top-2 w-0.5 rounded-full bg-foreground" />
+      ) : null}
       <span
         className={cn(
           'flex size-5 shrink-0 items-center justify-center rounded-full border',
@@ -59,10 +81,10 @@ function SetupStepRow(props: {
             : 'border-border text-muted-foreground'
         )}
       >
-        {done ? <Check className="size-3" /> : null}
+        {done ? <Check className="size-3" /> : <span className="text-xs">{ordinal}</span>}
       </span>
-      <span className="min-w-0">
-        <span className="block text-[15px] font-medium leading-tight text-foreground">
+      <span className="min-w-0 flex-1">
+        <span className="block text-[15px] font-medium leading-snug text-foreground">
           {step.name}
         </span>
       </span>
@@ -73,9 +95,11 @@ function SetupStepRow(props: {
 function SetupSection(props: {
   title: string
   steps: readonly FeatureWallSetupStep[]
+  startOrdinal: number
   activeStepId: FeatureWallSetupStepId | null
   progress: FeatureWallSetupProgress
   onSelectStep: (id: FeatureWallSetupStepId) => void
+  layout: FeatureWallSetupChecklistLayout
 }): React.JSX.Element {
   const doneCount = props.steps.filter((step) => props.progress.stepDone[step.id]).length
   return (
@@ -89,12 +113,14 @@ function SetupSection(props: {
         </span>
       </div>
       <div className="space-y-1.5">
-        {props.steps.map((step) => (
+        {props.steps.map((step, index) => (
           <SetupStepRow
             key={step.id}
             step={step}
             done={props.progress.stepDone[step.id]}
             active={props.activeStepId === step.id}
+            ordinal={props.startOrdinal + index}
+            layout={props.layout}
             onSelect={() => props.onSelectStep(step.id)}
           />
         ))}
@@ -105,7 +131,6 @@ function SetupSection(props: {
 
 function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.Element | null {
   const { activeStep } = props
-  const reducedMotion = usePrefersReducedMotion()
   if (!activeStep) {
     return null
   }
@@ -114,31 +139,43 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
     return <DefaultAgentAction />
   }
   if (activeStep.id === 'add-two-repos') {
-    return <AddReposAction reducedMotion={reducedMotion} />
+    return <AddReposAction />
   }
   if (activeStep.id === 'notifications') {
     return <NotificationAction />
   }
   if (activeStep.id === 'split-terminal') {
-    return <TwoAgentsAction reducedMotion={reducedMotion} done={activeDone} />
+    return <TwoAgentsAction done={activeDone} />
   }
   if (activeStep.id === 'two-worktrees') {
-    return <WorkspacesAction reducedMotion={reducedMotion} done={activeDone} />
+    return <WorkspacesAction done={activeDone} />
   }
   if (activeStep.id === 'task-sources') {
-    return <TaskSourcesAction reducedMotion={reducedMotion} />
+    return <TaskSourcesAction />
   }
   if (activeStep.id === 'agent-capabilities') {
     return (
       <AgentCapabilitiesSetupAction
-        reducedMotion={reducedMotion}
         onOrchestrationSkillInstalledChange={props.onOrchestrationSkillInstalledChange}
         onBrowserUseSkillInstalledChange={props.onBrowserUseSkillInstalledChange}
       />
     )
   }
   if (activeStep.id === 'setup-script') {
-    return <SetupScriptAction reducedMotion={reducedMotion} />
+    return <SetupScriptAction />
+  }
+  return null
+}
+
+function SelectedStepVisual(props: { stepId: FeatureWallSetupStepId }): React.JSX.Element | null {
+  if (props.stepId === 'split-terminal') {
+    return <SetupTwoAgentsVisual />
+  }
+  if (props.stepId === 'two-worktrees') {
+    return <SetupWorkspacesVisual />
+  }
+  if (props.stepId === 'add-two-repos') {
+    return <SetupMultipleReposVisual />
   }
   return null
 }
@@ -166,7 +203,7 @@ function DefaultAgentAction(): React.JSX.Element {
   }, [refreshDetectedAgents])
 
   return (
-    <div className="rounded-xl border border-border bg-muted/20 p-4">
+    <div className="max-w-3xl">
       <AgentStep
         selectedAgent={selectedAgent}
         onSelect={handleSelectAgent}
@@ -181,13 +218,13 @@ function NotificationAction(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   return (
-    <div className="rounded-xl border border-border bg-muted/20 p-4">
+    <div className="max-w-3xl">
       <NotificationStep settings={settings} updateSettings={updateSettings} />
     </div>
   )
 }
 
-function TaskSourcesAction(props: { reducedMotion: boolean }): React.JSX.Element {
+function TaskSourcesAction(): React.JSX.Element {
   const closeModal = useAppStore((s) => s.closeModal)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   return (
@@ -196,21 +233,20 @@ function TaskSourcesAction(props: { reducedMotion: boolean }): React.JSX.Element
         <GitHubRow compact />
         <LinearRow compact />
       </div>
-      <Button
-        type="button"
-        size="sm"
-        className="w-fit gap-2"
-        onClick={() => {
-          closeModal()
-          openTaskPage()
-        }}
-      >
-        <ArrowUpRight className="size-3.5" />
-        See tasks
-      </Button>
-      <SetupStepPreview className="mx-auto h-[220px] w-full max-w-[480px]">
-        <TasksAnimatedVisual reducedMotion={props.reducedMotion} />
-      </SetupStepPreview>
+      <div className="flex items-center pt-2">
+        <Button
+          type="button"
+          size="sm"
+          className="w-fit gap-2"
+          onClick={() => {
+            closeModal()
+            openTaskPage()
+          }}
+        >
+          <ArrowUpRight className="size-3.5" />
+          See tasks
+        </Button>
+      </div>
     </div>
   )
 }
@@ -218,41 +254,73 @@ function TaskSourcesAction(props: { reducedMotion: boolean }): React.JSX.Element
 export function FeatureWallSetupChecklist(
   props: FeatureWallSetupChecklistProps
 ): React.JSX.Element {
-  const { activeStep, progress, onSelectStep } = props
+  const { activeStep, progress, onSelectStep, layout = 'modal' } = props
+  const isEmbedded = layout === 'embedded'
   const activeDone = activeStep ? progress.stepDone[activeStep.id] : false
+  // Only steps with a visual constrain the caption to a narrow column so the
+  // illustration can sit beside it; captionless steps let the copy run full width.
+  const hasStepVisual =
+    activeStep?.id === 'split-terminal' ||
+    activeStep?.id === 'two-worktrees' ||
+    activeStep?.id === 'add-two-repos'
   const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
   const setupSteps = getFeatureWallSetupStepsForSection('setup')
+  const visualBreakpoint = isEmbedded ? 'xl' : 'sm'
+  const visualGridClass =
+    visualBreakpoint === 'xl'
+      ? 'gap-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:gap-12'
+      : 'gap-8 sm:grid-cols-[minmax(0,48ch)_auto] sm:gap-10'
 
   return (
-    <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(200px,300px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-      <div className="scrollbar-sleek min-h-0 space-y-5 overflow-y-auto pr-1">
-        <SetupSection
-          title="Setup"
-          steps={setupSteps}
-          activeStepId={activeStep?.id ?? null}
-          progress={progress}
-          onSelectStep={onSelectStep}
-        />
+    <div
+      className={cn(
+        'grid h-full min-h-0',
+        isEmbedded
+          ? 'grid-rows-[auto_minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(15rem,17rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-16'
+          : 'grid-rows-[auto_minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(200px,300px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]'
+      )}
+    >
+      <div
+        className={cn(
+          'scrollbar-sleek min-h-0 space-y-5 overflow-y-auto',
+          isEmbedded ? 'pr-4' : 'pr-1'
+        )}
+      >
         <SetupSection
           title="Milestones"
           steps={parallelWorkSteps}
+          startOrdinal={1}
           activeStepId={activeStep?.id ?? null}
           progress={progress}
           onSelectStep={onSelectStep}
+          layout={layout}
+        />
+        <SetupSection
+          title="Setup"
+          steps={setupSteps}
+          startOrdinal={parallelWorkSteps.length + 1}
+          activeStepId={activeStep?.id ?? null}
+          progress={progress}
+          onSelectStep={onSelectStep}
+          layout={layout}
         />
       </div>
 
-      <section className="scrollbar-sleek min-h-0 overflow-y-auto rounded-xl border border-border bg-card p-5">
+      <section
+        className={cn(
+          'scrollbar-sleek min-h-0 overflow-y-auto',
+          isEmbedded
+            ? 'pt-10 lg:border-l lg:border-border/50 lg:pl-14 lg:pt-0'
+            : 'border-t border-border pt-5 lg:border-l lg:border-t-0 lg:pl-7 lg:pt-0'
+        )}
+      >
         {activeStep ? (
-          <div className="flex h-full flex-col gap-4">
+          <div className={cn('flex h-full flex-col', isEmbedded ? 'gap-7' : 'gap-5')}>
             <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 space-y-1">
-                <div className="text-2xl font-semibold leading-tight tracking-tight text-foreground">
+              <div className="min-w-0">
+                <div className="text-2xl font-semibold leading-tight text-foreground">
                   {activeStep.name}
                 </div>
-                <p className="max-w-[58ch] text-base leading-normal text-muted-foreground">
-                  {activeStep.description}
-                </p>
               </div>
               <span
                 className={cn(
@@ -265,7 +333,35 @@ export function FeatureWallSetupChecklist(
                 {activeDone ? 'Done' : 'Not done yet'}
               </span>
             </div>
-            <SelectedStepAction {...props} />
+            <div
+              className={cn(
+                'grid items-start',
+                hasStepVisual ? visualGridClass : 'max-w-3xl gap-5',
+                !hasStepVisual && isEmbedded ? 'max-w-none' : null
+              )}
+            >
+              <div className="min-w-0">
+                <p
+                  className={cn(
+                    'text-base leading-relaxed text-muted-foreground',
+                    hasStepVisual && !isEmbedded ? 'pr-4 sm:pr-6' : null
+                  )}
+                >
+                  {activeStep.description}
+                </p>
+                {activeStep.id === 'split-terminal' ? (
+                  <div className="mt-3">
+                    <SplitTerminalShortcutHint />
+                  </div>
+                ) : null}
+                {/* Action lives under the caption, not after the grid, so it sits just
+                    below the copy instead of being pushed down by the taller visual. */}
+                <div className={cn('min-w-0', isEmbedded ? 'mt-8' : 'mt-7')}>
+                  <SelectedStepAction {...props} />
+                </div>
+              </div>
+              <SelectedStepVisual stepId={activeStep.id} />
+            </div>
           </div>
         ) : null}
       </section>

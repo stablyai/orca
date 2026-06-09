@@ -1,22 +1,24 @@
-import { type Dispatch, type SetStateAction } from 'react'
-import { ArrowLeft, CircleStop, FolderTree, Loader2 } from 'lucide-react'
+import { useId, type Dispatch, type SetStateAction } from 'react'
+import { CircleHelp, CircleStop, Loader2 } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { NestedRepoTreePreview } from '@/components/repo/NestedRepoTreePreview'
+import { NestedRepoChecklist } from '@/components/repo/NestedRepoChecklist'
 import type { NestedRepoScanResult } from '../../../../shared/types'
 import { NestedRepoScanLimitNotice } from '../repo/NestedRepoScanLimitNotice'
+import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 
 type AddRepoNestedImportStepProps = {
   scan: NestedRepoScanResult
   groupName: string
   selectedPaths: Set<string>
+  isFirstRepoImport: boolean
   isAdding: boolean
   scanInProgress: boolean
   onGroupNameChange: (value: string) => void
   onSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
-  onBack: () => void
   onImport: (mode: 'group' | 'separate') => void
   onStopScan: () => void
 }
@@ -25,52 +27,39 @@ export function AddRepoNestedImportStep({
   scan,
   groupName,
   selectedPaths,
+  isFirstRepoImport,
   isAdding,
   scanInProgress,
   onGroupNameChange,
   onSelectedPathsChange,
-  onBack,
   onImport,
   onStopScan
 }: AddRepoNestedImportStepProps): React.JSX.Element {
+  const folderName = getRuntimePathBasename(scan.selectedPath) || scan.selectedPath
+  const groupNameInputId = useId()
+  const repoCountLabel = `${scan.repos.length} ${
+    scan.repos.length === 1 ? 'repository' : 'repositories'
+  }`
+
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Import as project group</DialogTitle>
+        <DialogTitle>Import repositories from folder</DialogTitle>
         <div className="flex min-w-0 items-center gap-1.5">
           {scanInProgress ? <AddRepoNestedImportStopButton onStopScan={onStopScan} /> : null}
           <DialogDescription className="min-w-0 truncate">
-            {`${scanInProgress ? 'Scanning... ' : ''}Found ${scan.repos.length} git ${
-              scan.repos.length === 1 ? 'repository' : 'repositories'
-            } in this folder.`}
+            {scanInProgress ? 'Scanning... ' : null}
+            Found {repoCountLabel} in{' '}
+            <span className="font-mono text-[11px] text-foreground" title={scan.selectedPath}>
+              {scan.selectedPath}
+            </span>
+            .
           </DialogDescription>
         </div>
       </DialogHeader>
 
       <div className="flex min-h-0 min-w-0 max-w-full flex-col gap-3 overflow-hidden pt-1">
-        <div className="flex min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-md border border-border bg-muted/30 p-3">
-          <div className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground">
-            <FolderTree className="size-4" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium text-foreground">
-              Group under {groupName}
-            </div>
-            <div className="truncate text-[11px] text-muted-foreground">{scan.selectedPath}</div>
-          </div>
-        </div>
-
-        <div className="min-w-0 space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground">Group name</label>
-          <Input
-            value={groupName}
-            onChange={(event) => onGroupNameChange(event.target.value)}
-            disabled={scanInProgress}
-            className="h-9"
-          />
-        </div>
-
-        <NestedRepoTreePreview
+        <NestedRepoChecklist
           scan={scan}
           selectedPaths={selectedPaths}
           onSelectedPathsChange={onSelectedPathsChange}
@@ -80,26 +69,58 @@ export function AddRepoNestedImportStep({
         {scanInProgress || scan.truncated || scan.timedOut || scan.stopped ? (
           <NestedRepoScanLimitNotice scan={scan} />
         ) : null}
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button onClick={onBack} disabled={isAdding && !scanInProgress} variant="ghost">
-            <ArrowLeft className="size-3.5" />
-            Back
+        {/* Why: first-time import uses one flat action because it is easier for new users to understand. */}
+        {!isFirstRepoImport ? (
+          <div className="min-w-0 shrink-0 space-y-1">
+            <div className="flex shrink-0 items-center gap-1">
+              <Label htmlFor={groupNameInputId} className="text-[11px] text-muted-foreground">
+                Group name
+              </Label>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label="What is a group name?"
+                    className="size-5 text-muted-foreground hover:text-foreground"
+                  >
+                    <CircleHelp className="size-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4} className="max-w-64">
+                  Keeps these repos together in one group. Best for related repos like
+                  microservices.
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <Input
+              id={groupNameInputId}
+              aria-label="Group name"
+              value={groupName}
+              onChange={(event) => onGroupNameChange(event.target.value)}
+              disabled={isAdding || scanInProgress}
+              className="h-9 min-w-0"
+              placeholder={folderName}
+            />
+          </div>
+        ) : null}
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button
+            onClick={() => onImport('separate')}
+            disabled={isAdding || scanInProgress || selectedPaths.size === 0}
+            variant={isFirstRepoImport ? 'default' : 'outline'}
+          >
+            {isFirstRepoImport ? 'Import' : 'Import separately'}
           </Button>
-          <div className="ml-auto flex min-w-0 flex-wrap justify-end gap-2">
-            <Button
-              onClick={() => onImport('separate')}
-              disabled={isAdding || scanInProgress || selectedPaths.size === 0}
-              variant="outline"
-            >
-              Import separately
-            </Button>
+          {!isFirstRepoImport ? (
             <Button
               onClick={() => onImport('group')}
-              disabled={isAdding || scanInProgress || selectedPaths.size === 0 || !groupName.trim()}
+              disabled={isAdding || scanInProgress || selectedPaths.size === 0}
             >
-              Import as project group
+              Import as group
             </Button>
-          </div>
+          ) : null}
         </div>
       </div>
     </>

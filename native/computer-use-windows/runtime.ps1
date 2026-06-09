@@ -172,6 +172,23 @@ function Assert-OrcaProcessAllowed($Process) {
     }
 }
 
+function Test-OrcaBrowserProcess($Process) {
+    $name = ([string]$Process.ProcessName).ToLowerInvariant()
+    $browserProcesses = @(
+        "arc",
+        "brave",
+        "chrome",
+        "chromium",
+        "firefox",
+        "librewolf",
+        "msedge",
+        "opera",
+        "vivaldi",
+        "zen"
+    )
+    $browserProcesses -contains $name
+}
+
 function Get-OrcaRootElement($Process) {
     if ($Process.MainWindowHandle -eq 0) {
         throw "No top-level UI Automation window is available for $($Process.ProcessName)."
@@ -229,9 +246,25 @@ function Restore-OrcaWindow($Process) {
     [void][OrcaDesktopWin32]::SetForegroundWindow([IntPtr]$Process.MainWindowHandle)
 }
 
+function Test-OrcaWindowFocused([IntPtr]$WindowHandle) {
+    [OrcaDesktopWin32]::GetForegroundWindow() -eq $WindowHandle
+}
+
+function Wait-OrcaWindowFocused([IntPtr]$WindowHandle, [int]$TimeoutMilliseconds) {
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($stopwatch.ElapsedMilliseconds -lt $TimeoutMilliseconds) {
+        if (Test-OrcaWindowFocused $WindowHandle) { return $true }
+        Start-Sleep -Milliseconds 50
+    }
+    Test-OrcaWindowFocused $WindowHandle
+}
+
 function Assert-OrcaKeyboardFocus([IntPtr]$WindowHandle, $Operation) {
-    if ([bool]$Operation.restoreWindow) { return }
-    if ([OrcaDesktopWin32]::GetForegroundWindow() -eq $WindowHandle) { return }
+    if (Test-OrcaWindowFocused $WindowHandle) { return }
+    if ([bool]$Operation.restoreWindow) {
+        if (Wait-OrcaWindowFocused $WindowHandle 500) { return }
+        throw "window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused; bring it forward manually or check desktop permissions"
+    }
     throw "window_not_focused: keyboard input requires the target window to be focused; retry with --restore-window"
 }
 
@@ -256,9 +289,28 @@ function Get-OrcaRuntimeId($Element) {
     try { @($Element.GetRuntimeId()) } catch { @() }
 }
 
+function Test-OrcaSensitiveElement($Element) {
+    try {
+        if ($Element.Current.IsPassword) { return $true }
+    } catch {}
+    $controlType = try { [string]$Element.Current.ControlType.ProgrammaticName } catch { "" }
+    $parts = @(
+        (Get-OrcaProperty $Element "LocalizedControlType"),
+        $controlType,
+        (Get-OrcaProperty $Element "Name"),
+        (Get-OrcaProperty $Element "AutomationId"),
+        (Get-OrcaProperty $Element "ClassName")
+    )
+    $haystack = (($parts -join " ") -replace "\s+", " ").ToLowerInvariant()
+    foreach ($term in @("password", "passcode", "secret", "one-time code", "verification code")) {
+        if ($haystack.Contains($term)) { return $true }
+    }
+    $haystack -match "(^|[^a-z0-9])pin([^a-z0-9]|$)"
+}
+
 function Get-OrcaValueText($Element) {
     try {
-        if ($Element.Current.IsPassword) { return "[redacted]" }
+        if (Test-OrcaSensitiveElement $Element) { return "[redacted]" }
         $pattern = $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern)
         $rawValue = $pattern.Current.Value
         $text = if ($null -eq $rawValue) { "" } else { [string]$rawValue }
@@ -382,13 +434,23 @@ function New-OrcaElementRecord($Element, [int]$Index, $WindowFrame) {
         localizedControlType = Get-OrcaProperty $Element "LocalizedControlType"
         className = Get-OrcaProperty $Element "ClassName"
         value = Get-OrcaValueText $Element
+        isSelected = Test-OrcaElementSelected $Element
         nativeWindowHandle = $nativeWindowHandle
         frame = Get-OrcaElementFrame $Element $WindowFrame
         actions = @(Get-OrcaActions $Element)
     }
 }
 
-function Render-OrcaTree($RootElement, $WindowFrame) {
+function Test-OrcaElementSelected($Element) {
+    try {
+        $pattern = $Element.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern)
+        return [bool]$pattern.Current.IsSelected
+    } catch {
+        return $false
+    }
+}
+
+function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs = $false) {
     $records = New-Object System.Collections.Generic.List[object]
     $lines = New-Object System.Collections.Generic.List[string]
     $seen = New-Object System.Collections.Generic.HashSet[string]
@@ -447,13 +509,82 @@ function Render-OrcaTree($RootElement, $WindowFrame) {
         $lines.Add(("`t" * $Depth) + $line)
 
         if (-not [string]::IsNullOrWhiteSpace($genericSummary) -or (Test-OrcaSuppressChildren $roleKey $title $record.value $genericSummary)) { return }
+        $childLineStart = $lines.Count
         for ($i = 0; $i -lt $children.Count; $i++) {
             Visit-OrcaNode $children.Item($i) ($Depth + 1)
+        }
+        if ($CompactBrowserTabs) {
+            Compress-OrcaRenderedBrowserTabs $records $lines $childLineStart ($Depth + 1)
         }
     }
 
     Visit-OrcaNode $RootElement 0
     [pscustomobject]@{ elements = @($records.ToArray()); lines = @($lines.ToArray()); truncation = $truncation }
+}
+
+function Compress-OrcaRenderedBrowserTabs($Records, $Lines, [int]$StartLine, [int]$Depth) {
+    $tabLineIndexes = New-Object System.Collections.Generic.List[int]
+    for ($lineIndex = $StartLine; $lineIndex -lt $Lines.Count; $lineIndex++) {
+        if (Test-OrcaDirectRenderedBrowserTabLine ([string]$Lines[$lineIndex]) $Depth) {
+            $tabLineIndexes.Add($lineIndex)
+        }
+    }
+    if ($tabLineIndexes.Count -lt 10) { return }
+
+    $recordsByIndex = @{}
+    foreach ($record in @($Records.ToArray())) {
+        $recordsByIndex[[int]$record.index] = $record
+    }
+    $activeLineIndexes = New-Object System.Collections.Generic.HashSet[int]
+    foreach ($lineIndex in $tabLineIndexes) {
+        if (Test-OrcaActiveRenderedBrowserTabLine ([string]$Lines[$lineIndex]) $Depth $recordsByIndex) {
+            [void]$activeLineIndexes.Add($lineIndex)
+        }
+    }
+    if ($activeLineIndexes.Count -eq 0) { return }
+
+    $omittedRecordIndexes = New-Object System.Collections.Generic.HashSet[int]
+    $omittedCount = 0
+    $insertionIndex = $tabLineIndexes[0]
+    for ($i = $tabLineIndexes.Count - 1; $i -ge 0; $i--) {
+        $lineIndex = $tabLineIndexes[$i]
+        if ($activeLineIndexes.Contains($lineIndex)) { continue }
+        $recordIndex = Get-OrcaRenderedElementIndex ([string]$Lines[$lineIndex]) $Depth
+        if ($null -ne $recordIndex) {
+            [void]$omittedRecordIndexes.Add([int]$recordIndex)
+        }
+        $Lines.RemoveAt($lineIndex)
+        $omittedCount++
+    }
+    if ($omittedCount -le 0) { return }
+    for ($recordIndex = $Records.Count - 1; $recordIndex -ge 0; $recordIndex--) {
+        if ($omittedRecordIndexes.Contains([int]$Records[$recordIndex].index)) {
+            $Records.RemoveAt($recordIndex)
+        }
+    }
+    $Lines.Insert($insertionIndex, (("`t" * $Depth) + "... $omittedCount inactive browser tabs omitted"))
+}
+
+function Test-OrcaDirectRenderedBrowserTabLine([string]$Line, [int]$Depth) {
+    $indent = "`t" * $Depth
+    if (-not $Line.StartsWith($indent)) { return $false }
+    $text = $Line.Substring($indent.Length)
+    if ($text.StartsWith("`t")) { return $false }
+    $text -match "^\d+ (page tab|tab item|tab)($|[ \(,])"
+}
+
+function Test-OrcaActiveRenderedBrowserTabLine([string]$Line, [int]$Depth, $RecordsByIndex) {
+    if ($Line.Contains("(selected")) { return $true }
+    $recordIndex = Get-OrcaRenderedElementIndex $Line $Depth
+    if ($null -eq $recordIndex -or -not $RecordsByIndex.ContainsKey([int]$recordIndex)) { return $false }
+    $record = $RecordsByIndex[[int]$recordIndex]
+    [bool]$record.isSelected -or (Format-OrcaSnapshotText $record.value) -eq "1"
+}
+
+function Get-OrcaRenderedElementIndex([string]$Line, [int]$Depth) {
+    $text = $Line.Substring(("`t" * $Depth).Length)
+    if ($text -match "^(\d+)") { return [int]$Matches[1] }
+    $null
 }
 
 function ConvertTo-OrcaPngBytes([System.Drawing.Image]$Image) {
@@ -503,14 +634,11 @@ function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap) {
 
     # Why: screenshots cross process boundaries as PNG base64 in JSON; cap noisy
     # large-window payloads to match the macOS provider's memory bounds.
-    $bestBytes = $pngBytes
-    $bestWidth = $originalWidth
-    $bestHeight = $originalHeight
     $scale = [Math]::Min(1.0, $MaxScreenshotEdge / [double][Math]::Max($originalWidth, $originalHeight))
     while ($scale -ge $MinScreenshotScale) {
         $width = [int][Math]::Max(1, [Math]::Round($originalWidth * $scale))
         $height = [int][Math]::Max(1, [Math]::Round($originalHeight * $scale))
-        if ($width -eq $bestWidth -and $height -eq $bestHeight) {
+        if ($width -eq $originalWidth -and $height -eq $originalHeight) {
             $scale *= $ScreenshotScaleStep
             continue
         }
@@ -522,11 +650,6 @@ function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap) {
             if ($candidateBytes.Length -le $MaxScreenshotPngBytes) {
                 return New-OrcaScreenshotPayload $candidateBytes $width $height ($width / [double]$originalWidth)
             }
-            if ($candidateBytes.Length -lt $bestBytes.Length) {
-                $bestBytes = $candidateBytes
-                $bestWidth = $width
-                $bestHeight = $height
-            }
         } finally {
             if ($null -ne $resized) { $resized.Dispose() }
         }
@@ -534,7 +657,12 @@ function Get-OrcaBoundedScreenshotPayload([System.Drawing.Bitmap]$Bitmap) {
         $scale *= $ScreenshotScaleStep
     }
 
-    New-OrcaScreenshotPayload $bestBytes $bestWidth $bestHeight ($bestWidth / [double]$originalWidth)
+    [pscustomobject]@{
+        error = [pscustomobject]@{
+            code = "screenshot_failed"
+            message = "screenshot exceeded the computer-use payload cap after downscaling; retry with --no-screenshot or target a smaller window"
+        }
+    }
 }
 
 function Get-OrcaScreenshot([bool]$IncludeScreenshot, $WindowFrame) {
@@ -562,7 +690,7 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
     Assert-OrcaWindowTarget $process $WindowId $WindowIndex
     $root = Get-OrcaRootElement $process
     $windowFrame = Get-OrcaWindowFrame $process $root
-    $tree = Render-OrcaTree $root $windowFrame
+    $tree = Render-OrcaTree $root $windowFrame (Test-OrcaBrowserProcess $process)
     $screenshot = Get-OrcaScreenshot $IncludeScreenshot $windowFrame
 
     [pscustomobject]@{
@@ -575,6 +703,7 @@ function New-OrcaSnapshot([string]$Query, [bool]$IncludeScreenshot, $WindowId = 
         screenshotWidth = if ($null -ne $screenshot) { $screenshot.width } else { $null }
         screenshotHeight = if ($null -ne $screenshot) { $screenshot.height } else { $null }
         screenshotScale = if ($null -ne $screenshot) { $screenshot.scale } else { $null }
+        screenshotError = if ($null -ne $screenshot) { $screenshot.error } else { $null }
         coordinateSpace = "window"
         truncation = $tree.truncation
         treeLines = @($tree.lines)
@@ -727,13 +856,45 @@ function Set-OrcaElementValue($Element, [string]$Value) {
     $false
 }
 
+function Get-OrcaRequiredNumber($Value, [string]$Name) {
+    if ($null -eq $Value) { throw "$Name is required" }
+    $number = [double]$Value
+    if ([double]::IsNaN($number) -or [double]::IsInfinity($number)) {
+        throw "$Name must be a finite number"
+    }
+    $number
+}
+
+function Get-OrcaPositiveInteger($Value, [string]$Name) {
+    if ($null -eq $Value) { $Value = 1 }
+    $number = [int]$Value
+    if ($number -le 0) { throw "$Name must be a positive integer" }
+    $number
+}
+
+function Get-OrcaPositiveNumber($Value, [string]$Name) {
+    if ($null -eq $Value) { $Value = 1 }
+    $number = Get-OrcaRequiredNumber $Value $Name
+    if ($number -le 0) { throw "$Name must be a positive number" }
+    $number
+}
+
+function Get-OrcaRequiredString($Value, [string]$Name) {
+    if ($null -eq $Value) { throw "$Name is required" }
+    $text = [string]$Value
+    if ($text.Length -eq 0) { throw "$Name is required" }
+    $text
+}
+
 function Get-OrcaScreenPoint($Operation, $WindowFrame) {
     if ($null -ne $Operation.element) {
         throw "stale element frame; run get-app-state again and use a fresh element index"
     }
+    $x = Get-OrcaRequiredNumber $Operation.x "x"
+    $y = Get-OrcaRequiredNumber $Operation.y "y"
     @{
-        x = [int][Math]::Round($WindowFrame.x + [double]$Operation.x)
-        y = [int][Math]::Round($WindowFrame.y + [double]$Operation.y)
+        x = [int][Math]::Round($WindowFrame.x + $x)
+        y = [int][Math]::Round($WindowFrame.y + $y)
     }
 }
 
@@ -754,17 +915,15 @@ function Get-OrcaElementScreenPoint($Element) {
 function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY, [string]$Button, [int]$Count) {
     [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
     [void][OrcaDesktopWin32]::SetCursorPos($ScreenX, $ScreenY)
-    $down = $MouseEvents.LeftDown
-    $up = $MouseEvents.LeftUp
-    if ($Button -eq "right") {
-        $down = $MouseEvents.RightDown
-        $up = $MouseEvents.RightUp
-    } elseif ($Button -eq "middle") {
-        $down = $MouseEvents.MiddleDown
-        $up = $MouseEvents.MiddleUp
+    $buttonName = if ([string]::IsNullOrWhiteSpace($Button)) { "left" } else { $Button.ToLowerInvariant() }
+    switch ($buttonName) {
+        "left" { $down = $MouseEvents.LeftDown; $up = $MouseEvents.LeftUp }
+        "right" { $down = $MouseEvents.RightDown; $up = $MouseEvents.RightUp }
+        "middle" { $down = $MouseEvents.MiddleDown; $up = $MouseEvents.MiddleUp }
+        default { throw "unsupported mouse button: $Button" }
     }
 
-    for ($i = 0; $i -lt [Math]::Max(1, $Count); $i++) {
+    for ($i = 0; $i -lt (Get-OrcaPositiveInteger $Count "click_count"); $i++) {
         [OrcaDesktopWin32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero)
         Start-Sleep -Milliseconds 35
         [OrcaDesktopWin32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero)
@@ -874,6 +1033,9 @@ function ConvertTo-OrcaSendKeysKey([string]$Key) {
         "down" { return "{DOWN}" }
         "home" { return "{HOME}" }
         "end" { return "{END}" }
+        { $_ -in @("pageup", "page_up") } { return "{PGUP}" }
+        { $_ -in @("pagedown", "page_down") } { return "{PGDN}" }
+        "insert" { return "{INSERT}" }
         default {
             if ($Key.Length -eq 1) { return (ConvertTo-OrcaSendKeysText $Key) }
             throw "Unsupported key: $Key"
@@ -939,14 +1101,18 @@ function Invoke-OrcaOperation($Operation) {
 
     switch ($Operation.tool) {
         "click" {
+            # Why: agents expect a click into a target app to make the next
+            # keyboard action safe, even when UI Automation handles the click.
+            Restore-OrcaWindow $process
             $handledByPattern = $false
-            if ($null -ne $element -and $Operation.mouse_button -ne "right" -and $Operation.mouse_button -ne "middle" -and [int]$Operation.click_count -le 1) {
+            $clickCount = Get-OrcaPositiveInteger $Operation.click_count "click_count"
+            if ($null -ne $element -and $Operation.mouse_button -ne "right" -and $Operation.mouse_button -ne "middle" -and $clickCount -le 1) {
                 $handledByPattern = Invoke-OrcaPrimaryAction $element
             }
             if (-not $handledByPattern) {
                 $point = Get-OrcaElementScreenPoint $element
                 if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
-                Send-OrcaMouseClick $handle $point.x $point.y $Operation.mouse_button ([int]$Operation.click_count)
+                Send-OrcaMouseClick $handle $point.x $point.y $Operation.mouse_button $clickCount
                 $action = [pscustomobject]@{ path = "synthetic"; actionName = $null; fallbackReason = "actionUnsupported" }
             } else {
                 $action = [pscustomobject]@{ path = "accessibility"; actionName = "primaryAction"; fallbackReason = $null }
@@ -960,8 +1126,12 @@ function Invoke-OrcaOperation($Operation) {
             $action = [pscustomobject]@{ path = "accessibility"; actionName = $Operation.action; fallbackReason = $null }
         }
         "scroll" {
-            $delta = 120 * [int][Math]::Max(1, [Math]::Ceiling([double]$Operation.pages))
-            if ($Operation.direction -eq "down" -or $Operation.direction -eq "right") { $delta = -1 * $delta }
+            $delta = 120 * [int][Math]::Ceiling((Get-OrcaPositiveNumber $Operation.pages "pages"))
+            if ($Operation.direction -eq "down" -or $Operation.direction -eq "right") {
+                $delta = -1 * $delta
+            } elseif ($Operation.direction -ne "up" -and $Operation.direction -ne "left") {
+                throw "unsupported scroll direction: $($Operation.direction)"
+            }
             $point = Get-OrcaElementScreenPoint $element
             if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
             [void][OrcaDesktopWin32]::SetForegroundWindow($handle)
@@ -972,27 +1142,37 @@ function Invoke-OrcaOperation($Operation) {
         "drag" {
             $from = Get-OrcaElementScreenPoint $fromElement
             if ($null -eq $from -and $null -ne $Operation.fromElement) { throw "stale element frame; run get-app-state again and use a fresh element index" }
-            if ($null -eq $from) { $from = @{ x = $windowFrame.x + [double]$Operation.from_x; y = $windowFrame.y + [double]$Operation.from_y } }
+            if ($null -eq $from) {
+                $from = @{
+                    x = $windowFrame.x + (Get-OrcaRequiredNumber $Operation.from_x "from_x")
+                    y = $windowFrame.y + (Get-OrcaRequiredNumber $Operation.from_y "from_y")
+                }
+            }
             $to = Get-OrcaElementScreenPoint $toElement
             if ($null -eq $to -and $null -ne $Operation.toElement) { throw "stale element frame; run get-app-state again and use a fresh element index" }
-            if ($null -eq $to) { $to = @{ x = $windowFrame.x + [double]$Operation.to_x; y = $windowFrame.y + [double]$Operation.to_y } }
+            if ($null -eq $to) {
+                $to = @{
+                    x = $windowFrame.x + (Get-OrcaRequiredNumber $Operation.to_x "to_x")
+                    y = $windowFrame.y + (Get-OrcaRequiredNumber $Operation.to_y "to_y")
+                }
+            }
             Send-OrcaDrag $handle $from $to
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "drag"; fallbackReason = $null }
         }
         "type_text" {
-            Send-OrcaText $handle ([string]$Operation.text)
-            $action = [pscustomobject]@{ path = "synthetic"; actionName = "typeText"; fallbackReason = $null }
+            Send-OrcaText $handle (Get-OrcaRequiredString $Operation.text "text")
+            $action = [pscustomobject]@{ path = "synthetic"; actionName = "typeText"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "synthetic_input" } }
         }
         "press_key" {
-            Send-OrcaKey $handle ([string]$Operation.key)
-            $action = [pscustomobject]@{ path = "synthetic"; actionName = "pressKey"; fallbackReason = $null }
+            Send-OrcaKey $handle (Get-OrcaRequiredString $Operation.key "key")
+            $action = [pscustomobject]@{ path = "synthetic"; actionName = "pressKey"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "synthetic_input" } }
         }
         "hotkey" {
-            Send-OrcaHotkey $handle ([string]$Operation.key)
+            Send-OrcaHotkey $handle (Get-OrcaRequiredString $Operation.key "key")
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "hotkey"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "synthetic_input" } }
         }
         "paste_text" {
-            Send-OrcaPasteText $handle ([string]$Operation.text)
+            Send-OrcaPasteText $handle (Get-OrcaRequiredString $Operation.text "text")
             $action = [pscustomobject]@{ path = "clipboard"; actionName = "paste"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "clipboard_paste" } }
         }
         "set_value" {

@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../../src/shared/types'
 // mirrored with src/shared/tui-agent-selection.ts and assert parity in tests.
 export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'claude',
+  'claude-agent-teams',
   'openclaude',
   'codex',
   'grok',
@@ -38,6 +39,7 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
 
 export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   claude: 'Claude',
+  'claude-agent-teams': 'Claude Agent Teams',
   openclaude: 'OpenClaude',
   codex: 'Codex',
   grok: 'Grok',
@@ -70,6 +72,7 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
 }
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {
+  'claude-agent-teams': 'anthropic.com',
   openclaude: 'openclaude.gitlawb.com',
   grok: 'x.ai',
   copilot: 'github.com',
@@ -100,6 +103,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
 
 export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
   claude: 'claude',
+  'claude-agent-teams': 'orca claude-teams',
   openclaude: 'openclaude',
   codex: 'codex',
   grok: 'grok',

@@ -17,6 +17,7 @@ import {
   useInstalledAgentSkill
 } from '@/hooks/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import {
@@ -184,6 +185,8 @@ export function BrowserUseSetup({
   const showStep2 = matchesSettingsSearch(searchQuery, [BROWSER_USE_PANE_SEARCH_ENTRIES[1]])
   const showStep3 = matchesSettingsSearch(searchQuery, [BROWSER_USE_PANE_SEARCH_ENTRIES[2]])
   const completedCount = [cliEnabled, skillDetected, cookiesImported].filter(Boolean).length
+  const step2Blocked = !cliEnabled && !skillDetected
+  const step3Blocked = !cookiesImported && (!cliEnabled || !skillDetected)
 
   const sourceLabel = defaultProfile?.source
     ? `${BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ?? defaultProfile.source.browserFamily}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
@@ -300,16 +303,17 @@ export function BrowserUseSetup({
           title="Install Browser Use Skill"
           description="Install the Browser Use skill so agents can operate Orca's browser."
           keywords={BROWSER_USE_PANE_SEARCH_ENTRIES[1].keywords}
-          className={`rounded-xl border border-border/60 bg-card/50 p-4 ${
-            cliEnabled ? '' : 'opacity-60'
-          }`}
+          className={cn(
+            'rounded-xl border border-border/60 bg-card/50 p-4',
+            step2Blocked && 'opacity-60'
+          )}
         >
           <BrowserUseSkillStep
             command={ORCA_CLI_SKILL_INSTALL_COMMAND}
             skillDetected={skillDetected}
             skillLoading={skillLoading}
             skillError={skillError}
-            disabled={!cliEnabled}
+            disabled={step2Blocked}
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
             onBeforeOpenTerminal={async () => {
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
@@ -327,9 +331,10 @@ export function BrowserUseSetup({
           title="Import Browser Cookies"
           description="Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins."
           keywords={BROWSER_USE_PANE_SEARCH_ENTRIES[2].keywords}
-          className={`rounded-xl border border-border/60 bg-card/50 p-4 ${
-            cliEnabled && skillDetected ? '' : 'opacity-60'
-          }`}
+          className={cn(
+            'rounded-xl border border-border/60 bg-card/50 p-4',
+            step3Blocked && 'opacity-60'
+          )}
         >
           <div className="flex items-start gap-3">
             <StepBadge

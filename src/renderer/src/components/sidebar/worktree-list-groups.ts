@@ -5,6 +5,7 @@ import type {
   DetectedWorktree,
   Repo,
   ProjectGroup,
+  ProjectOrderBy,
   Worktree,
   WorktreeLineage,
   WorkspaceStatusDefinition
@@ -22,24 +23,14 @@ import {
   ConductorReviewIcon
 } from './workspace-status-icons'
 import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
-import type { SortBy } from './smart-sort'
 import type { AppState } from '@/store/types'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { UNGROUPED_PROJECT_GROUP_KEY } from '../../../../shared/project-groups'
+import { getRepoDisplayLabelsByPath } from '@/lib/repo-display-labels'
 
 export { branchName }
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
-export type ProjectGroupOrdering = 'manual' | 'visible-worktree-order'
-
-export function getProjectGroupOrdering(
-  groupBy: WorktreeGroupBy,
-  sortBy: SortBy
-): ProjectGroupOrdering {
-  return groupBy === 'repo' && (sortBy === 'recent' || sortBy === 'smart')
-    ? 'visible-worktree-order'
-    : 'manual'
-}
 
 export type GroupHeaderRow = {
   type: 'header'
@@ -79,7 +70,34 @@ export type ImportedWorktreesCardRow = {
   placement: 'repo-group' | 'pinned-fallback'
 }
 
-export type Row = GroupHeaderRow | WorktreeRow | ImportedWorktreesCardRow
+export type PendingCreationRow = {
+  type: 'pending-creation'
+  key: string
+  creationId: string
+  repo: Repo | undefined
+}
+
+/** Minimal shape buildRows needs for an in-flight create. Deliberately not the
+ *  full PendingWorktreeCreation: row identity depends only on which creates
+ *  exist and their repo, so callers can subscribe on this stable shape and keep
+ *  progress-field churn (phase/loaderVisible) from rebuilding the whole list. */
+export type PendingCreationRef = { creationId: string; repoId: string }
+
+export type Row = GroupHeaderRow | WorktreeRow | ImportedWorktreesCardRow | PendingCreationRow
+
+function buildPendingCreationRow(
+  creation: PendingCreationRef,
+  repoMap: Map<string, Repo>
+): PendingCreationRow {
+  return {
+    type: 'pending-creation',
+    key: `pending:${creation.creationId}`,
+    creationId: creation.creationId,
+    repo: repoMap.get(creation.repoId)
+  }
+}
+
+type OrderedGroupEntry = [string, { label: string; items: Worktree[]; repo?: Repo }]
 
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
@@ -396,6 +414,102 @@ function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
 
+function withRepoSectionDisplayLabels(entries: readonly OrderedGroupEntry[]): OrderedGroupEntry[] {
+  const repos = entries
+    .map((entry) => entry[1].repo)
+    .filter((repo): repo is Repo => repo !== undefined)
+  if (repos.length < 2) {
+    return [...entries]
+  }
+  const labelsByPath = getRepoDisplayLabelsByPath(repos)
+  return entries.map(([key, group]) => [
+    key,
+    group.repo ? { ...group, label: labelsByPath.get(group.repo.path) ?? group.label } : group
+  ])
+}
+
+/**
+ * Recent rank for a project header. `hasActivity` projects (at least one
+ * visible worktree) always sort before fallback projects, regardless of the
+ * numeric values — a placeholder's `addedAt` must never outrank real activity.
+ * Within each tier, higher timestamps come first.
+ */
+type RecentRank = { hasActivity: boolean; ts: number }
+
+function recentRankForEntry(entry: OrderedGroupEntry): RecentRank {
+  let max = Number.NEGATIVE_INFINITY
+  for (const worktree of entry[1].items) {
+    if (worktree.lastActivityAt > max) {
+      max = worktree.lastActivityAt
+    }
+  }
+  if (max !== Number.NEGATIVE_INFINITY) {
+    // Why: Recent must be timestamp-based, not encounter order — the incoming
+    // array is no longer pre-sorted by recency once decoupled from sortBy.
+    return { hasActivity: true, ts: max }
+  }
+  const addedAt = entry[1].repo?.addedAt
+  return {
+    hasActivity: false,
+    ts: typeof addedAt === 'number' ? addedAt : Number.NEGATIVE_INFINITY
+  }
+}
+
+function compareRecentRank(a: RecentRank, b: RecentRank): number {
+  if (a.hasActivity !== b.hasActivity) {
+    return a.hasActivity ? -1 : 1
+  }
+  return b.ts - a.ts
+}
+
+function manualRankForEntry(
+  entry: OrderedGroupEntry,
+  repoOrder: Map<string, number> | undefined
+): number {
+  const key = entry[0]
+  const repoId = key.startsWith('repo:') ? key.slice('repo:'.length) : key
+  const rank = repoOrder?.get(repoId)
+  return rank === undefined ? Number.POSITIVE_INFINITY : rank
+}
+
+/**
+ * Order project header entries by the user's project-order preference. Manual
+ * follows the canonical repoOrder; Recent follows each project's most recent
+ * visible workspace activity (descending), with empty/imported-only projects
+ * sorting after active ones, then by manual rank, then label.
+ */
+function sortProjectEntries(
+  entries: OrderedGroupEntry[],
+  projectOrderBy: ProjectOrderBy,
+  repoOrder: Map<string, number> | undefined
+): OrderedGroupEntry[] {
+  if (projectOrderBy === 'recent') {
+    return [...entries].sort((a, b) => {
+      const byRecent = compareRecentRank(recentRankForEntry(a), recentRankForEntry(b))
+      if (byRecent !== 0) {
+        return byRecent
+      }
+      const ma = manualRankForEntry(a, repoOrder)
+      const mb = manualRankForEntry(b, repoOrder)
+      if (ma !== mb) {
+        return ma - mb
+      }
+      return a[1].label.localeCompare(b[1].label)
+    })
+  }
+  if (!repoOrder) {
+    return entries
+  }
+  return [...entries].sort((a, b) => {
+    const ra = manualRankForEntry(a, repoOrder)
+    const rb = manualRankForEntry(b, repoOrder)
+    if (ra !== rb) {
+      return ra - rb
+    }
+    return a[1].label.localeCompare(b[1].label)
+  })
+}
+
 /**
  * Build the flat row list consumed by the virtualizer.
  * Extracted here to keep WorktreeList.tsx under the line-count lint limit.
@@ -408,7 +522,7 @@ export function buildRows(
   collapsedGroups: Set<string>,
   repoOrder?: Map<string, number>,
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
-  projectGroupOrdering: ProjectGroupOrdering = 'manual',
+  projectOrderBy: ProjectOrderBy = 'manual',
   lineageById: Record<string, WorktreeLineage> = {},
   worktreeMap: Map<string, Worktree> = new Map(
     worktrees.map((worktree) => [worktree.id, worktree])
@@ -417,9 +531,26 @@ export function buildRows(
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],
   placeholderRepoIds: ReadonlySet<string> = new Set(),
-  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
+  importedWorktreesByRepo: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map(),
+  pendingCreations: readonly PendingCreationRef[] = []
 ): Row[] {
   const result: Row[] = []
+
+  const pendingByRepo = new Map<string, PendingCreationRef[]>()
+  for (const creation of pendingCreations) {
+    const list = pendingByRepo.get(creation.repoId) ?? []
+    list.push(creation)
+    pendingByRepo.set(creation.repoId, list)
+  }
+
+  // Why: non-repo groupings have no repo section to nest an in-progress create
+  // under, so surface them at the very top (where the old global strip sat)
+  // rather than dropping them. Repo grouping nests them under their repo below.
+  if (groupBy !== 'repo' && pendingCreations.length > 0) {
+    for (const creation of pendingCreations) {
+      result.push(buildPendingCreationRow(creation, repoMap))
+    }
+  }
 
   const visibleUnpinnedRepoIds = new Set(
     worktrees.filter((worktree) => !worktree.isPinned).map((worktree) => worktree.repoId)
@@ -482,14 +613,17 @@ export function buildRows(
     }
     grouped.get(key)!.items.push(w)
   }
-  if (groupBy === 'repo' && projectGroups.length > 0) {
+  if (groupBy === 'repo') {
     for (const repoId of placeholderRepoIds) {
       const repo = repoMap.get(repoId)
+      if (!repo) {
+        continue
+      }
       const key = `repo:${repoId}`
       if (!grouped.has(key)) {
-        // Why: nested repo imports can persist repos before their worktree rows
-        // are available, but filters must not resurrect hidden repo headers.
-        grouped.set(key, { label: repo?.displayName ?? 'Unknown', items: [], repo })
+        // Why: repos can arrive before worktree scans, but stale IDs passed by
+        // older snapshots must not render an "Unknown" project header.
+        grouped.set(key, { label: repo.displayName, items: [], repo })
       }
     }
   }
@@ -505,8 +639,20 @@ export function buildRows(
       }
     }
   }
+  if (groupBy === 'repo') {
+    for (const repoId of pendingByRepo.keys()) {
+      const key = `repo:${repoId}`
+      if (!grouped.has(key)) {
+        // Why: creating the first worktree in a repo leaves it with no group yet;
+        // ensure one so the in-progress row nests under its repo instead of being
+        // dropped.
+        const repo = repoMap.get(repoId)
+        grouped.set(key, { label: repo?.displayName ?? 'Unknown', items: [], repo })
+      }
+    }
+  }
 
-  const orderedGroups: [string, { label: string; items: Worktree[]; repo?: Repo }][] = []
+  const orderedGroups: OrderedGroupEntry[] = []
   if (groupBy === 'pr-status') {
     for (const prGroup of PR_GROUP_ORDER) {
       const key = `pr:${prGroup}`
@@ -526,25 +672,10 @@ export function buildRows(
       }
     }
   } else {
-    // Why: dynamic sorts need repo headers to follow their highest-ranked
-    // visible child. Manual ordering still uses the canonical state.repos
-    // order so repo-header drag has a stable source of truth.
-    const entries = Array.from(grouped.entries())
-    if (projectGroupOrdering === 'manual' && repoOrder) {
-      const rankFor = (key: string): number => {
-        const repoId = key.startsWith('repo:') ? key.slice('repo:'.length) : key
-        const rank = repoOrder.get(repoId)
-        return rank === undefined ? Number.POSITIVE_INFINITY : rank
-      }
-      entries.sort((a, b) => {
-        const ra = rankFor(a[0])
-        const rb = rankFor(b[0])
-        if (ra !== rb) {
-          return ra - rb
-        }
-        return a[1].label.localeCompare(b[1].label)
-      })
-    }
+    // Why: project header order is its own user choice (projectOrderBy),
+    // decoupled from workspace sortBy. Manual uses the canonical repoOrder so
+    // header drag has a stable source of truth; Recent follows activity.
+    const entries = sortProjectEntries(Array.from(grouped.entries()), projectOrderBy, repoOrder)
     // Why: large imported repo sets can have one group per repo; spreading
     // those entries into push can exceed V8's argument limit.
     for (const entry of entries) {
@@ -553,7 +684,7 @@ export function buildRows(
   }
 
   const appendOrderedGroups = (
-    groupsToAppend: [string, { label: string; items: Worktree[]; repo?: Repo }][],
+    groupsToAppend: OrderedGroupEntry[],
     projectGroupDepth = 0
   ): void => {
     for (const [key, group] of groupsToAppend) {
@@ -603,10 +734,17 @@ export function buildRows(
 
       result.push(header)
       if (!isCollapsed) {
-        if (groupBy === 'repo' && repo) {
-          const candidate = importedWorktreesByRepo.get(repo.id)
+        if (groupBy === 'repo') {
+          const repoId = repo?.id ?? key.slice('repo:'.length)
+          const candidate = importedWorktreesByRepo.get(repoId)
           if (candidate) {
             result.push(buildImportedWorktreesCardRow(candidate, 'repo-group'))
+          }
+          // Why: surface in-progress creates at the top of their own repo so the
+          // new workspace appears where it will land, not flashed to the very top
+          // of the sidebar.
+          for (const creation of pendingByRepo.get(repoId) ?? []) {
+            result.push(buildPendingCreationRow(creation, repoMap))
           }
         }
         const items = groupBy === 'repo' ? orderMainWorktreeFirst(group.items) : group.items
@@ -620,14 +758,13 @@ export function buildRows(
   }
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {
-    appendOrderedGroups(orderedGroups)
+    appendOrderedGroups(
+      groupBy === 'repo' ? withRepoSectionDisplayLabels(orderedGroups) : orderedGroups
+    )
     return result
   }
 
-  const groupByProjectGroupId = new Map<
-    string | null,
-    [string, { label: string; items: Worktree[]; repo?: Repo }][]
-  >()
+  const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
   for (const entry of orderedGroups) {
     const repo = entry[1].repo
     const projectGroupId = repo?.projectGroupId ?? null
@@ -636,12 +773,14 @@ export function buildRows(
     groupByProjectGroupId.set(projectGroupId, list)
   }
 
-  const sortRepoEntriesWithinGroup = (
-    entries: [string, { label: string; items: Worktree[]; repo?: Repo }][]
-  ): [string, { label: string; items: Worktree[]; repo?: Repo }][] => {
-    if (projectGroupOrdering !== 'manual') {
-      return entries
+  const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
+    if (projectOrderBy === 'recent') {
+      return [...entries].sort((left, right) =>
+        compareRecentRank(recentRankForEntry(left), recentRankForEntry(right))
+      )
     }
+    // Manual: within a Project Group, projects order by their per-group rank
+    // (projectGroupOrder), not the global repoOrder.
     return [...entries].sort((left, right) => {
       const leftOrder = left[1].repo?.projectGroupOrder
       const rightOrder = right[1].repo?.projectGroupOrder
@@ -696,7 +835,7 @@ export function buildRows(
       projectGroupDepth: depth
     })
     if (!collapsedGroups.has(key)) {
-      appendOrderedGroups(repoEntries, depth + 1)
+      appendOrderedGroups(withRepoSectionDisplayLabels(repoEntries), depth + 1)
       for (const childGroup of childGroups) {
         appendProjectGroup(childGroup, depth + 1)
       }
@@ -708,7 +847,10 @@ export function buildRows(
     appendProjectGroup(projectGroup, 0)
   }
 
-  appendOrderedGroups(sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? []), 0)
+  appendOrderedGroups(
+    withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(groupByProjectGroupId.get(null) ?? [])),
+    0
+  )
 
   return result
 }

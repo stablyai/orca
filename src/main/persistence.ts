@@ -88,6 +88,7 @@ import { getRepoIdFromWorktreeId, getWorktreePathBasenameFromId } from '../share
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
+import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeAppIconId } from '../shared/app-icon'
@@ -123,6 +124,14 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
+import {
+  collectTerminalScrollbackSnapshotRefs,
+  deleteTerminalScrollbackSnapshotSync,
+  migrateWorkspaceSessionTerminalScrollbackSnapshots,
+  readTerminalScrollbackSnapshotSync
+} from './terminal-scrollback-snapshots'
 
 function encrypt(plaintext: string): string {
   if (!plaintext || !safeStorage.isEncryptionAvailable()) {
@@ -326,6 +335,13 @@ function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
   return getDefaultUIState().sortBy
 }
 
+function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui']['projectOrderBy'] {
+  if (projectOrderBy === 'manual' || projectOrderBy === 'recent') {
+    return projectOrderBy
+  }
+  return getDefaultUIState().projectOrderBy
+}
+
 function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
@@ -496,14 +512,25 @@ function remapLegacyOnboardingLastCompletedStep(
   if (raw.outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
     return ONBOARDING_FINAL_STEP
   }
+  // Why: v2 was the five-step flow; missing/older versions were seven-step
+  // data where step 4 was removed agent setup, not completed integrations.
+  if (raw.flowVersion === 2) {
+    if (lastCompletedStep === 3) {
+      return 2
+    }
+    if (lastCompletedStep >= 4) {
+      return 3
+    }
+    return lastCompletedStep
+  }
+  if (lastCompletedStep === 3) {
+    return 2
+  }
   if (lastCompletedStep === 4) {
+    return 2
+  }
+  if (lastCompletedStep >= 5) {
     return 3
-  }
-  if (lastCompletedStep === 5 || lastCompletedStep === 6) {
-    return 4
-  }
-  if (lastCompletedStep > 6) {
-    return 4
   }
   return lastCompletedStep
 }
@@ -1156,6 +1183,11 @@ function normalizeTerminalLayoutSnapshotForPersistence(
     leafIdByInputLeafId,
     duplicatedInputLeafIds
   )
+  const scrollbackRefsByLeafId = remapLeafRecordForPersistence(
+    inputSnapshot.scrollbackRefsByLeafId,
+    leafIdByInputLeafId,
+    duplicatedInputLeafIds
+  )
   const titlesByLeafId = remapLeafRecordForPersistence(
     inputSnapshot.titlesByLeafId,
     leafIdByInputLeafId,
@@ -1164,6 +1196,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
   const recordsChanged =
     !leafRecordEquivalent(inputSnapshot.ptyIdsByLeafId, ptyIdsByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.buffersByLeafId, buffersByLeafId) ||
+    !leafRecordEquivalent(inputSnapshot.scrollbackRefsByLeafId, scrollbackRefsByLeafId) ||
     !leafRecordEquivalent(inputSnapshot.titlesByLeafId, titlesByLeafId)
   const metadataChanged =
     activeLeafId !== inputSnapshot.activeLeafId || expandedLeafId !== inputSnapshot.expandedLeafId
@@ -1173,6 +1206,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
   const {
     ptyIdsByLeafId: _oldPtyIdsByLeafId,
     buffersByLeafId: _oldBuffersByLeafId,
+    scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
     ...snapshotWithoutLeafRecords
   } = inputSnapshot
@@ -1184,6 +1218,7 @@ function normalizeTerminalLayoutSnapshotForPersistence(
       expandedLeafId,
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
+      ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
       ...(titlesByLeafId ? { titlesByLeafId } : {})
     },
     changed: true,
@@ -1515,6 +1550,21 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
+function deleteRemovedTerminalScrollbackSnapshots(
+  prior: WorkspaceSessionState | undefined,
+  next: WorkspaceSessionState
+): void {
+  if (!prior) {
+    return
+  }
+  const nextRefs = collectTerminalScrollbackSnapshotRefs(next)
+  for (const ref of collectTerminalScrollbackSnapshotRefs(prior)) {
+    if (!nextRefs.has(ref)) {
+      deleteTerminalScrollbackSnapshotSync(ref)
+    }
+  }
+}
+
 export class Store {
   private state: PersistedState
   private writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -1682,8 +1732,11 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
-        const rawSourceControlAiMissing = parsed.settings?.sourceControlAi === undefined
-        if (rawSourceControlAiMissing) {
+        const rawSourceControlAi = parsed.settings?.sourceControlAi
+        const rawSourceControlAiMissing = rawSourceControlAi === undefined
+        const rawSourceControlAiActionsMissing =
+          rawSourceControlAi !== undefined && rawSourceControlAi.actions === undefined
+        if (rawSourceControlAiMissing || rawSourceControlAiActionsMissing) {
           this.loadNeedsSave = true
         }
         const legacyCommitMessageAi = parsed.settings?.commitMessageAi
@@ -1776,6 +1829,14 @@ export class Store {
         const migratedExperimentalActivity = experimentalActivityDefaultedOffForAllUsers
           ? (parsed.settings?.experimentalActivity ?? false)
           : false
+        const autoRenameBranchFromWorkDefaultedOn =
+          parsed.settings?.autoRenameBranchFromWorkDefaultedOn === true
+        // Why: default-on rollout should activate old profiles once, but a
+        // later Settings opt-out must survive reloads.
+        const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
+          parsed.settings
+        )
+        const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
         const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
@@ -1810,6 +1871,23 @@ export class Store {
         if (!visibleTaskProvidersDefaultedForJira) {
           this.loadNeedsSave = true
         }
+        const claudeAgentTeamsDefaultDisabledMigrated =
+          parsed.settings?.claudeAgentTeamsDefaultDisabledMigrated === true
+        if (!claudeAgentTeamsDefaultDisabledMigrated) {
+          this.loadNeedsSave = true
+        }
+        const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(
+          parsed.settings?.disabledTuiAgents
+        )
+        if (
+          !claudeAgentTeamsDefaultDisabledMigrated &&
+          !migratedDisabledTuiAgents.includes('claude-agent-teams')
+        ) {
+          migratedDisabledTuiAgents.push('claude-agent-teams')
+        }
+        if (!autoRenameBranchFromWorkDefaultedOn) {
+          this.loadNeedsSave = true
+        }
         const normalizedOnboarding = normalizeLoadedOnboardingState(
           parsed.onboarding,
           defaults.onboarding
@@ -1841,8 +1919,17 @@ export class Store {
               (process.platform === 'linux' && migratePrimarySelectionPlatformDefault),
             primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
+            ...migratedAutoRenameBranchFromWork,
+            ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: compact worktree cards graduated from Experimental; preserve
+            // the old opt-in for profiles written during the rollout.
+            compactWorktreeCards:
+              parsed.settings?.compactWorktreeCards ??
+              parsed.settings?.experimentalCompactWorktreeCards ??
+              defaults.settings.compactWorktreeCards,
+            experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
@@ -1860,8 +1947,11 @@ export class Store {
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
-            disabledTuiAgents: normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents),
-            openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications),
+            disabledTuiAgents: migratedDisabledTuiAgents,
+            claudeAgentTeamsDefaultDisabledMigrated: true,
+            openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
+              seedDefaults: true
+            }),
             notifications: normalizeNotificationSettings(parsed.settings?.notifications),
             sourceControlAi: migratedSourceControlAi,
             // Why: new builds read sourceControlAi, but rollback builds still
@@ -2101,12 +2191,18 @@ export class Store {
       result = getDefaultPersistedState(homedir())
     }
 
+    const workspaceSession = pruneWorkspaceSessionBrowserHistory(
+      pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+    )
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(workspaceSession)
+    if (migratedScrollback.changed) {
+      this.loadNeedsSave = true
+    }
+
     result = {
       ...result,
       repos: clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? []),
-      workspaceSession: pruneWorkspaceSessionBrowserHistory(
-        pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
-      )
+      workspaceSession: migratedScrollback.session
     }
 
     return this.migrateTelemetry(result, fileExistedOnLoad)
@@ -2502,9 +2598,8 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
         | 'projectGroupOrder'
-        | 'sourceControlAi'
       >
-    >
+    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
@@ -2554,7 +2649,10 @@ export class Store {
       // time visibility changes so later hide/show choices keep legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
-    if ('sourceControlAi' in sanitizedUpdates && sanitizedUpdates.sourceControlAi === undefined) {
+    if (
+      'sourceControlAi' in sanitizedUpdates &&
+      (sanitizedUpdates.sourceControlAi === undefined || sanitizedUpdates.sourceControlAi === null)
+    ) {
       delete repo.sourceControlAi
       delete sanitizedUpdates.sourceControlAi
     } else if ('sourceControlAi' in sanitizedUpdates) {
@@ -2573,9 +2671,15 @@ export class Store {
   }
 
   private hydrateRepo(repo: Repo): Repo {
-    const { repoIcon: rawRepoIcon, upstream: rawUpstream, ...repoWithoutIcon } = repo
+    const {
+      repoIcon: rawRepoIcon,
+      upstream: rawUpstream,
+      sourceControlAi: rawSourceControlAi,
+      ...repoWithoutIcon
+    } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
+    const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -2589,6 +2693,7 @@ export class Store {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
+      ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -2977,6 +3082,9 @@ export class Store {
         sanitizedUpdates.visibleTaskProvidersDefaultedForJira = true
       }
     }
+    if ('autoRenameBranchFromWork' in updates || 'autoRenameBranchFromWorkDefaultedOn' in updates) {
+      sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
+    }
     if ('openInApplications' in updates) {
       sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications)
     }
@@ -3052,6 +3160,7 @@ export class Store {
       ...this.state.ui,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      projectOrderBy: normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
@@ -3063,6 +3172,9 @@ export class Store {
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
+      ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        this.state.ui?.browserDefaultZoomLevel
       ),
       showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
         this.state.ui?.showDotfilesByWorktree
@@ -3083,6 +3195,9 @@ export class Store {
       sortBy: updates.sortBy
         ? normalizeSortBy(updates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
+      projectOrderBy: updates.projectOrderBy
+        ? normalizeProjectOrderBy(updates.projectOrderBy)
+        : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab:
         updates.rightSidebarTab !== undefined
           ? normalizeRightSidebarTab(updates.rightSidebarTab)
@@ -3104,6 +3219,9 @@ export class Store {
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         updates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+      ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
       showDotfilesByWorktree:
         updates.showDotfilesByWorktree !== undefined
@@ -3198,6 +3316,10 @@ export class Store {
 
   getWorkspaceSession(): PersistedState['workspaceSession'] {
     return this.state.workspaceSession ?? getDefaultWorkspaceSession()
+  }
+
+  readTerminalScrollbackSnapshot(ref: string): string | null {
+    return readTerminalScrollbackSnapshotSync(ref)
   }
 
   /** Resolve the worktree a terminal tab belongs to, from the session's
@@ -3325,6 +3447,11 @@ export class Store {
             layout.buffersByLeafId,
             liveLeafIds
           )
+          const scrollbackRefsByLeafId = preserveMissingLeafRecordEntries(
+            priorLayout.scrollbackRefsByLeafId,
+            layout.scrollbackRefsByLeafId,
+            liveLeafIds
+          )
           const titlesByLeafId = preserveMissingLeafRecordEntries(
             priorLayout.titlesByLeafId,
             layout.titlesByLeafId,
@@ -3333,12 +3460,19 @@ export class Store {
           if (buffersByLeafId) {
             layout.buffersByLeafId = buffersByLeafId
           }
+          if (scrollbackRefsByLeafId) {
+            layout.scrollbackRefsByLeafId = scrollbackRefsByLeafId
+          }
           if (titlesByLeafId) {
             layout.titlesByLeafId = titlesByLeafId
           }
         }
       }
     }
+    session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
+    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(session)
+    session = migratedScrollback.session
+    deleteRemovedTerminalScrollbackSnapshots(prior, session)
     this.state.workspaceSession = session
     this.scheduleSave()
   }
@@ -3670,24 +3804,34 @@ export class Store {
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
     const now = Date.now()
     let changed = false
+    const shouldClearBindings = state === 'terminated' || state === 'expired'
+    const leasesToClear: SshRemotePtyLease[] = []
     this.state.sshRemotePtyLeases ??= []
     for (const lease of this.state.sshRemotePtyLeases) {
-      if (lease.targetId !== targetId || lease.state === state) {
+      if (lease.targetId !== targetId) {
         continue
       }
       if (state === 'detached' && lease.state !== 'attached') {
         continue
       }
-      lease.state = state
-      lease.updatedAt = now
-      if (state === 'attached') {
-        lease.lastAttachedAt = now
-      } else if (state === 'detached') {
-        lease.lastDetachedAt = now
+      if (lease.state !== state) {
+        lease.state = state
+        lease.updatedAt = now
+        if (state === 'attached') {
+          lease.lastAttachedAt = now
+        } else if (state === 'detached') {
+          lease.lastDetachedAt = now
+        }
+        changed = true
       }
-      changed = true
+      if (shouldClearBindings) {
+        leasesToClear.push(lease)
+      }
     }
-    if (changed) {
+    const bindingsChanged = shouldClearBindings
+      ? this.clearSshRemotePtyBindingsForLeases(targetId, leasesToClear)
+      : false
+    if (changed || bindingsChanged) {
       this.flush()
     }
   }
@@ -3697,7 +3841,14 @@ export class Store {
     const lease = this.state.sshRemotePtyLeases?.find(
       (entry) => entry.targetId === targetId && entry.ptyId === relayPtyId
     )
-    if (!lease || lease.state === state) {
+    if (!lease) {
+      return
+    }
+    const shouldClearBindings = state === 'terminated' || state === 'expired'
+    if (lease.state === state) {
+      if (shouldClearBindings && this.clearSshRemotePtyBindingsForLeases(targetId, [lease])) {
+        this.flush()
+      }
       return
     }
     const now = Date.now()
@@ -3707,6 +3858,9 @@ export class Store {
       lease.lastAttachedAt = now
     } else if (state === 'detached') {
       lease.lastDetachedAt = now
+    }
+    if (shouldClearBindings) {
+      this.clearSshRemotePtyBindingsForLeases(targetId, [lease])
     }
     this.flush()
   }
@@ -3743,10 +3897,13 @@ export class Store {
     this.clearSshRemotePtyBindingsForLeases(targetId, leases ?? [])
   }
 
-  private clearSshRemotePtyBindingsForLeases(targetId: string, leases: SshRemotePtyLease[]): void {
+  private clearSshRemotePtyBindingsForLeases(
+    targetId: string,
+    leases: SshRemotePtyLease[]
+  ): boolean {
     const session = this.state.workspaceSession
     if (!leases?.length || !session) {
-      return
+      return false
     }
     let changed = false
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
@@ -3797,6 +3954,7 @@ export class Store {
     if (changed) {
       this.scheduleSave()
     }
+    return changed
   }
 
   // ── Flush (for shutdown) ───────────────────────────────────────────

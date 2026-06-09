@@ -1384,9 +1384,70 @@ describe('getPRForBranch', () => {
       cwd: '/repo-root'
     })
     expect(target).toEqual({
-      remoteName: 'pr-prateek-orca',
-      branchName: 'prateek/fix-sidebar-agents-toggle',
-      remoteUrl: 'git@github.com:prateek/orca.git'
+      pushTarget: {
+        remoteName: 'pr-prateek-orca',
+        branchName: 'prateek/fix-sidebar-agents-toggle',
+        remoteUrl: 'git@github.com:prateek/orca.git'
+      }
+    })
+  })
+
+  it('surfaces maintainer_can_modify=false alongside a fork PR push target', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        maintainer_can_modify: false,
+        head: {
+          ref: 'prateek/fix-sidebar-agents-toggle',
+          repo: {
+            full_name: 'prateek/orca',
+            name: 'orca',
+            clone_url: 'https://github.com/prateek/orca.git',
+            ssh_url: 'git@github.com:prateek/orca.git',
+            owner: { login: 'prateek' }
+          }
+        }
+      })
+    })
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: 'git@github.com:stablyai/orca.git\n',
+      stderr: ''
+    })
+
+    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
+      pushTarget: {
+        remoteName: 'pr-prateek-orca',
+        branchName: 'prateek/fix-sidebar-agents-toggle',
+        remoteUrl: 'git@github.com:prateek/orca.git'
+      },
+      maintainerCanModify: false
+    })
+  })
+
+  it('omits maintainerCanModify when the API does not report the flag', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoForRemoteMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        head: {
+          ref: 'fix-sidebar',
+          repo: {
+            full_name: 'stablyai/orca',
+            name: 'orca',
+            clone_url: 'https://github.com/stablyai/orca.git',
+            ssh_url: 'git@github.com:stablyai/orca.git',
+            owner: { login: 'stablyai' }
+          }
+        }
+      })
+    })
+
+    await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'fix-sidebar'
+      }
     })
   })
 
@@ -1409,8 +1470,10 @@ describe('getPRForBranch', () => {
     })
 
     await expect(getPullRequestPushTarget('/repo-root', 1738)).resolves.toEqual({
-      remoteName: 'origin',
-      branchName: 'fix-sidebar'
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'fix-sidebar'
+      }
     })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
@@ -1494,8 +1557,10 @@ describe('getPRForBranch', () => {
       })
 
     await expect(getPullRequestPushTarget('/repo-root', 1849)).resolves.toEqual({
-      remoteName: 'origin',
-      branchName: 'feature/test'
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'feature/test'
+      }
     })
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['api', 'repos/fork/orca/pulls/1849'], {
       cwd: '/repo-root'

@@ -22,9 +22,20 @@ export const GENERAL_WORKSPACE_SEARCH_ENTRIES: SettingsSearchEntry[] = [
     keywords: ['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']
   },
   {
-    title: 'Open In Menu',
-    description: 'Add custom launchers to the workspace Open in menu.',
-    keywords: ['open in', 'editor', 'launcher', 'cursor', 'zed', 'command', 'vscode']
+    title: 'Open In Apps',
+    description: "Choose apps available from a workspace's Open in menu.",
+    keywords: [
+      'open in',
+      'open menu',
+      'editor',
+      'launcher',
+      'cursor',
+      'zed',
+      'command',
+      'vscode',
+      'finder',
+      'file explorer'
+    ]
   }
 ]
 

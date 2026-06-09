@@ -82,7 +82,8 @@ Orchestration:
   orchestration reset       Reset orchestration state
 
 Computer Use:
-  computer permissions      Open the macOS permission setup for computer-use
+  computer capabilities     Show computer-use provider capabilities
+  computer permissions      Show or open computer-use permission setup
   computer list-apps        List running apps available to computer-use
   computer list-windows     List visible windows for a target app
   computer get-app-state    Capture a compact accessibility snapshot of an app
@@ -91,10 +92,21 @@ Computer Use:
   computer scroll           Scroll an app element
   computer drag             Drag between app elements or window coordinates
   computer type-text        Type literal text at the current app focus
-  computer press-key        Press a key using xdotool-style syntax
+  computer press-key        Press a single key such as Return or Escape
   computer hotkey           Press a shortcut combination such as CmdOrCtrl+A
   computer paste-text       Paste text through the native clipboard path
   computer set-value        Set the value of a settable app element
+
+Mobile Emulator (iOS Simulator):
+  emulator list             List available/running emulators (Orca-managed + raw serve-sim)
+  emulator attach <device>  Attach/start helper and make active for the worktree
+  emulator tap <x> <y>      Tap at normalized 0..1 coords (preferred for single taps)
+  emulator type <text>      Type text (US ASCII only)
+  emulator gesture <json>   Send begin/move/end touch points
+  emulator button <name>    Hardware button (home, side_button, etc.)
+  emulator rotate <o>       Rotate device (portrait|landscape_left|...)
+  emulator exec --command   Raw serve-sim subcommand passthrough (no "serve-sim" prefix)
+  emulator kill             Stop helper for device
 
 Browser Automation:
   tab create                Create a new browser tab (navigates to --url)
@@ -311,7 +323,7 @@ export function formatCommandHelp(spec: CommandSpec): string {
   if (displayedFlags.length > 0) {
     lines.push('', 'Options:')
     for (const flag of displayedFlags) {
-      lines.push(`  ${formatFlagHelp(flag)}`)
+      lines.push(`  ${formatCommandFlagHelp(flag, spec.path)}`)
     }
   }
 
@@ -342,6 +354,17 @@ export function formatGroupHelp(specs: CommandSpec[], group: string): string {
   return lines.join('\n')
 }
 
+function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
+  const command = commandPath.join(' ')
+  if (flag === 'key' && command === 'computer hotkey') {
+    return '--key <key-combo>      Modifier chord with one key, e.g. CmdOrCtrl+A'
+  }
+  if (flag === 'key' && command === 'computer press-key') {
+    return '--key <key>            Single key, e.g. Return, Escape, Tab, Left, or PageUp'
+  }
+  return formatFlagHelp(flag)
+}
+
 export function formatFlagHelp(flag: string): string {
   const helpByFlag: Record<string, string> = {
     agent: '--agent <id>          Launch a known TUI agent in the first terminal',
@@ -366,9 +389,10 @@ export function formatFlagHelp(flag: string): string {
     'from-y': '--from-y <y>           Source window-local y coordinate',
     help: '--help                 Show this help message',
     interrupt: '--interrupt            Send as an interrupt-style input when supported',
+    id: '--id <id>             Identifier for a target item or permission',
     issue: '--issue <number|null>  Linked GitHub issue number',
     json: '--json                 Emit machine-readable JSON',
-    key: '--key <key>            Key or combo to press, e.g. Escape or CmdOrCtrl+L',
+    key: '--key <key>            Key argument for this command',
     limit: '--limit <n>            Maximum number of rows to return',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',

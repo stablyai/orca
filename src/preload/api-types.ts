@@ -131,6 +131,7 @@ import type {
   SearchResult,
   StatsSummary,
   MemorySnapshot,
+  TuiAgent,
   UpdateStatus,
   Worktree,
   WorktreeBaseStatusEvent,
@@ -220,6 +221,8 @@ import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../shared/commit-message-agent-spec'
+import type { ResolvedSourceControlAiGenerationParams } from '../shared/source-control-ai'
+import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
 import type { ShellOpenLocalPathResult } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -416,6 +419,26 @@ export type BrowserApi = {
   }) => Promise<BrowserCookieImportResult>
   sessionClearDefaultCookies: () => Promise<boolean>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
+}
+
+export type EmulatorApi = {
+  onPaneFocus: (callback: (data: { worktreeId: string }) => void) => () => void
+  onAutoAttach: (
+    callback: (data: {
+      worktreeId: string
+      info: { deviceUdid: string; streamUrl: string; wsUrl: string; axUrl?: string }
+    }) => void
+  ) => () => void
+  startFrameStream: (args: { streamUrl: string; streamKey?: string }) => Promise<{
+    streamId: string
+  }>
+  stopFrameStream: (args: { streamId: string }) => Promise<void>
+  onFrameStreamFrame: (
+    callback: (data: { streamId: string; bytes: ArrayBuffer }) => void
+  ) => () => void
+  onFrameStreamError: (
+    callback: (data: { streamId: string; message: string }) => void
+  ) => () => void
 }
 
 export type DetectedBrowserProfileInfo = {
@@ -681,6 +704,12 @@ export type AppApi = {
 
 export type PreloadApi = {
   app: AppApi
+  platform: {
+    get: () => {
+      platform: NodeJS.Platform
+      osRelease: string
+    }
+  }
   e2e: {
     getConfig: () => E2EConfig
   }
@@ -711,9 +740,8 @@ export type PreloadApi = {
           | 'externalWorktreeVisibilityPromptDismissedAt'
           | 'projectGroupId'
           | 'projectGroupOrder'
-          | 'sourceControlAi'
         >
-      >
+      > & { sourceControlAi?: Repo['sourceControlAi'] | null }
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>
     pickDirectory: () => Promise<string | null>
@@ -796,6 +824,13 @@ export type PreloadApi = {
     listDetected: (args: { repoId: string }) => Promise<DetectedWorktreeListResult>
     listAll: () => Promise<Worktree[]>
     create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
+    /** Two-phase progress for a background `create`, correlated by
+     *  `creationId`. Renderer routes each event to its pending creation's
+     *  status surface; the remote/runtime create path emits nothing, so the
+     *  surface falls back to an indeterminate spinner. */
+    onCreateProgress: (
+      callback: (data: { creationId?: string; phase: 'fetching' | 'creating' }) => void
+    ) => () => void
     prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
     resolvePrBase: (args: {
       repoId: string
@@ -898,6 +933,8 @@ export type PreloadApi = {
     signal: (id: string, signal: string) => void
     kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
     ackColdRestore: (id: string) => void
+    ackData: (id: string, charCount: number) => void
+    setActiveRendererPty: (id: string, active: boolean) => void
     hasChildProcesses: (id: string) => Promise<boolean>
     getForegroundProcess: (id: string) => Promise<string | null>
     getCwd: (id: string) => Promise<string>
@@ -905,7 +942,30 @@ export type PreloadApi = {
     getMainBufferSnapshot: (
       id: string,
       opts?: { scrollbackRows?: number }
-    ) => Promise<{ data: string; cols: number; rows: number; seq?: number } | null>
+    ) => Promise<{
+      data: string
+      cols: number
+      rows: number
+      cwd?: string | null
+      seq?: number
+      source?: 'headless' | 'renderer'
+    } | null>
+    getRendererDeliveryDebugSnapshot: () => Promise<{
+      pendingPtyCount: number
+      pendingChars: number
+      maxPendingCharsByPty: number
+      rendererInFlightPtyCount: number
+      rendererInFlightChars: number
+      maxRendererInFlightCharsByPty: number
+      activeRendererPtyCount: number
+      flushScheduled: boolean
+      peakPendingChars: number
+      peakMaxPendingCharsByPty: number
+      peakRendererInFlightChars: number
+      peakMaxRendererInFlightCharsByPty: number
+      ackGatedFlushSkipCount: number
+    }>
+    resetRendererDeliveryDebug: () => Promise<void>
     onData: (
       callback: (data: { id: string; data: string; seq?: number; rawLength?: number }) => void
     ) => () => void
@@ -1405,6 +1465,19 @@ export type PreloadApi = {
       workspaceId?: LinearWorkspaceSelection
       force?: boolean
     }) => Promise<LinearCollectionResult<LinearProjectSummary>>
+    createProject: (args: {
+      name: string
+      description?: string
+      content?: string
+      teamIds: string[]
+      workspaceId?: string
+      leadId?: string | null
+      memberIds?: string[]
+      labelIds?: string[]
+      priority?: number
+      startDate?: string
+      targetDate?: string
+    }) => Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }>
     getProject: (args: {
       id: string
       workspaceId: string
@@ -1674,6 +1747,7 @@ export type PreloadApi = {
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle') => Promise<void>
   }
   browser: BrowserApi
+  emulator: EmulatorApi
   hooks: {
     check: (args: { repoId: string }) => Promise<{
       status?: 'ok' | 'error'
@@ -1713,6 +1787,7 @@ export type PreloadApi = {
     get: () => Promise<WorkspaceSessionState>
     set: (args: WorkspaceSessionState) => Promise<void>
     patch: (args: WorkspaceSessionPatch) => Promise<void>
+    readTerminalScrollback: (args: { ref: string }) => string | null
     setSync: (args: WorkspaceSessionState) => void
   }
   remoteWorkspace: {
@@ -1951,6 +2026,9 @@ export type PreloadApi = {
       worktreePath: string
       repoId?: string
       connectionId?: string
+      sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+      sourceControlAi?: SourceControlAiSettings
+      agentCmdOverrides?: Partial<Record<TuiAgent, string>>
     }) => Promise<
       | { success: true; message: string; agentLabel?: string }
       | { success: false; error: string; canceled?: boolean }
@@ -1980,13 +2058,17 @@ export type PreloadApi = {
       body: string
       draft: boolean
       connectionId?: string
+      sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
+      sourceControlAi?: SourceControlAiSettings
+      agentCmdOverrides?: Partial<Record<TuiAgent, string>>
     }) => Promise<
       | {
           success: true
           fields: { base: string; title: string; body: string; draft: boolean }
           agentLabel?: string
+          branchChangedByPreparation?: boolean
         }
-      | { success: false; error: string; canceled?: boolean }
+      | { success: false; error: string; canceled?: boolean; branchChangedByPreparation?: boolean }
     >
     cancelGeneratePullRequestFields: (args: {
       worktreePath: string
@@ -2053,6 +2135,7 @@ export type PreloadApi = {
     onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
     onNewBrowserTab: (callback: () => void) => () => void
     onNewMarkdownTab: (callback: () => void) => () => void
+    onNewSimulatorTab: (callback: () => void) => () => void
     onRequestTabCreate: (
       callback: (data: {
         requestId: string
@@ -2074,6 +2157,7 @@ export type PreloadApi = {
     onFocusBrowserAddressBar: (callback: () => void) => () => void
     onFindInBrowserPage: (callback: () => void) => () => void
     onReloadBrowserPage: (callback: () => void) => () => void
+    onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
     onHardReloadBrowserPage: (callback: () => void) => () => void
     onCloseActiveTab: (callback: () => void) => () => void
     onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
@@ -2158,7 +2242,12 @@ export type PreloadApi = {
       callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
     ) => () => void
     onOpenFileFromMobile: (
-      callback: (data: { worktreeId: string; filePath: string; relativePath: string }) => void
+      callback: (data: {
+        worktreeId: string
+        filePath: string
+        relativePath: string
+        runtimeEnvironmentId?: string
+      }) => void
     ) => () => void
     onOpenDiffFromMobile: (
       callback: (data: {
@@ -2166,6 +2255,7 @@ export type PreloadApi = {
         filePath: string
         relativePath: string
         staged: boolean
+        runtimeEnvironmentId?: string
       }) => void
     ) => () => void
     onMobileMarkdownRequest: (
@@ -2428,6 +2518,9 @@ export type PreloadApi = {
   speech: {
     getCatalog: () => Promise<SpeechModelManifest[]>
     getModelStates: () => Promise<SpeechModelState[]>
+    getOpenAiApiKeyStatus: () => Promise<{ configured: boolean }>
+    saveOpenAiApiKey: (apiKey: string) => Promise<{ configured: boolean }>
+    clearOpenAiApiKey: () => Promise<{ configured: boolean }>
     downloadModel: (modelId: string) => Promise<void>
     cancelDownload: (modelId: string) => Promise<void>
     deleteModel: (modelId: string) => Promise<void>

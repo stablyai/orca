@@ -41,6 +41,7 @@ import { QuickCommandsPane } from './QuickCommandsPane'
 import { DeveloperPermissionsPane } from './DeveloperPermissionsPane'
 import { ComputerUsePane } from './ComputerUsePane'
 import { MobileSettingsPane } from './MobileSettingsPane'
+import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { AdvancedPane } from './AdvancedPane'
@@ -307,8 +308,8 @@ function Settings(): React.JSX.Element {
       return true
     }
     const shouldDiscard = await confirm({
-      title: 'Discard unsaved Source Control AI prompt changes?',
-      description: 'You have unsaved Source Control AI prompt changes. Leaving will discard them.',
+      title: 'Discard unsaved Git AI Author changes?',
+      description: 'You have unsaved Git AI Author changes. Leaving will discard them.',
       confirmLabel: 'Discard',
       confirmVariant: 'destructive'
     })
@@ -377,7 +378,7 @@ function Settings(): React.JSX.Element {
         return
       }
       // Why: nested dialogs and menus own Escape before Settings page-level
-      // navigation, including the unsaved Source Control AI prompt confirmation dialog.
+      // navigation, including the unsaved Source Control AI confirmation dialog.
       if (hasVisibleOverlay()) {
         return
       }
@@ -584,10 +585,7 @@ function Settings(): React.JSX.Element {
   const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
-  const runtimeTarget = useMemo(
-    () => getActiveRuntimeTarget(settings),
-    [settings?.activeRuntimeEnvironmentId]
-  )
+  const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const shouldLoadWindowsTerminalCapabilities =
     hasActiveRuntimeEnvironment ||
@@ -884,6 +882,8 @@ function Settings(): React.JSX.Element {
   const isSectionMounted = (sectionId: string): boolean => neededSectionIds.has(sectionId)
   const isFocusedShortcutsPane =
     activeSectionId === 'shortcuts' && settingsSearchQuery.trim() === ''
+  const isFocusedSetupGuidePane =
+    activeSectionId === 'setup-guide' && settingsSearchQuery.trim() === ''
 
   return (
     <div
@@ -912,8 +912,9 @@ function Settings(): React.JSX.Element {
         >
           <div
             className={cn(
-              'mx-auto flex w-full max-w-4xl flex-col gap-10 px-8 pt-10',
-              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24'
+              'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
+              isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
+              isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
             )}
           >
             {visibleNavSections.length === 0 ? (
@@ -997,7 +998,7 @@ function Settings(): React.JSX.Element {
                   title="Onboarding checklist"
                   description="Finish the core workflows that make Orca useful for parallel agent work."
                   searchEntries={getSectionSearchEntries('setup-guide')}
-                  bodyClassName="overflow-hidden p-0"
+                  bodyClassName="overflow-hidden rounded-none border-0 bg-transparent p-0 shadow-none"
                 >
                   {isSectionMounted('setup-guide') ? <SettingsSetupGuidePane /> : null}
                 </SettingsSection>
@@ -1031,7 +1032,7 @@ function Settings(): React.JSX.Element {
                 <SettingsSection
                   id="git"
                   title="Git & Source Control"
-                  description="Branch naming, base refs, attribution, and Source Control AI."
+                  description="Branch naming, base refs, attribution, and Git AI Author."
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedSourceControlAiPromptChanges}
                 >
@@ -1045,6 +1046,7 @@ function Settings(): React.JSX.Element {
                         hasUnsavedBranchPromptChanges={hasUnsavedBranchPromptChanges}
                         onBranchPromptDirtyChange={setHasUnsavedBranchPromptChanges}
                         branchPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
+                        settingsSearchQuery={settingsSearchQuery}
                       />
                       <CommitMessageAiPane
                         settings={settings}
@@ -1052,6 +1054,7 @@ function Settings(): React.JSX.Element {
                         writeSourceControlAiSettings={writeSourceControlAiSettings}
                         onCustomPromptDirtyChange={setHasUnsavedCommitPromptChanges}
                         customPromptDiscardSignal={sourceControlAiPromptDiscardSignal}
+                        settingsSearchQuery={settingsSearchQuery}
                       />
                     </>
                   ) : null}
@@ -1117,6 +1120,22 @@ function Settings(): React.JSX.Element {
                         settings={settings}
                         updateSettings={updateSettings}
                         onOpenComputerUse={openComputerUseFromBrowser}
+                      />
+                    ) : null}
+                  </SettingsSection>
+                ) : null}
+
+                {showDesktopOnlySettings && isMac ? (
+                  <SettingsSection
+                    id="mobile-emulator"
+                    title="Mobile Emulator"
+                    description="Configure mobile emulator support for Orca and coding agents."
+                    searchEntries={getSectionSearchEntries('mobile-emulator')}
+                  >
+                    {isSectionMounted('mobile-emulator') ? (
+                      <MobileEmulatorSettingsPane
+                        settings={settings}
+                        updateSettings={updateSettings}
                       />
                     ) : null}
                   </SettingsSection>

@@ -20,6 +20,7 @@ export type DropdownActionKind =
   | 'create_pr'
   | 'push_create_pr'
   | 'push'
+  | 'force_push'
   | 'pull'
   | 'fast_forward'
   | 'sync'
@@ -73,6 +74,14 @@ function formatForcePushTitle(branchCommitsAhead: number | undefined, upstreamNa
       ? `${branchCommitsAhead} branch commit${branchCommitsAhead === 1 ? '' : 's'}`
       : 'this branch'
   return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
+}
+
+function formatManualForcePushTitle(ahead: number, behind: number, upstreamName?: string): string {
+  const commitText = ahead === 1 ? '1 local commit' : `${ahead} local commits`
+  if (behind > 0) {
+    return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'} and replace remote-only commits.`
+  }
+  return `Force push ${commitText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }
 
 function formatRebaseBaseRef(baseRef: string): string {
@@ -253,7 +262,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const pushItem: DropdownItem = {
     kind: 'push',
-    label: formatCountLabel(shouldForcePushWithLease ? 'Force Push' : 'Push', pushLabelCount),
+    label: formatCountLabel('Push', ahead),
     title: upstreamLoading
       ? 'Checking branch status…'
       : publishBlockedByPRLoading
@@ -263,7 +272,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
           : !hasUpstream
             ? 'Publish the branch first to push commits'
             : shouldForcePushWithLease
-              ? forcePushTitle
+              ? 'Use Force Push — remote only has older copies of local commits'
               : behind > 0 && ahead > 0
                 ? 'Sync first to pull remote changes before pushing'
                 : ahead === 0
@@ -274,7 +283,27 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       upstreamLoading ||
       !hasUpstream ||
       ahead === 0 ||
+      shouldForcePushWithLease ||
       (behind > 0 && !shouldForcePushWithLease)
+  }
+
+  const forcePushItem: DropdownItem = {
+    kind: 'force_push',
+    label: formatCountLabel('Force Push', pushLabelCount),
+    title: upstreamLoading
+      ? 'Checking branch status…'
+      : publishBlockedByPRLoading
+        ? 'Checking PR status…'
+        : publishBlockedByMergedPR
+          ? 'PR is already merged'
+          : !hasUpstream
+            ? 'Publish the branch first to force push commits'
+            : ahead === 0
+              ? `Nothing to force push${upstreamStatus?.upstreamName ? ` to ${upstreamStatus.upstreamName}` : ''}`
+              : shouldForcePushWithLease
+                ? forcePushTitle
+                : formatManualForcePushTitle(ahead, behind, upstreamStatus?.upstreamName),
+    disabled: globalBusy || upstreamLoading || !hasUpstream || ahead === 0
   }
 
   const pullItem: DropdownItem = {
@@ -476,6 +505,7 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
     commitSyncItem,
     { kind: 'separator' },
     pushItem,
+    forcePushItem,
     createPRItem,
     pushCreatePRItem,
     pullItem,

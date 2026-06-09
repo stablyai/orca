@@ -1,0 +1,78 @@
+import type { TuiAgent } from '../../../../shared/types'
+import {
+  SOURCE_CONTROL_TEXT_ACTION_IDS,
+  type SourceControlActionId
+} from '../../../../shared/source-control-ai-actions'
+import {
+  CUSTOM_AGENT_ID,
+  type CustomAgentId,
+  getCommitMessageAgentCapability,
+  listCommitMessageAgentCapabilities
+} from '../../../../shared/commit-message-agent-spec'
+import { AGENT_CATALOG } from '@/lib/agent-catalog'
+
+export const SOURCE_CONTROL_TEXT_ACTION_ID_SET = new Set<string>(SOURCE_CONTROL_TEXT_ACTION_IDS)
+const TEXT_GENERATION_AGENT_ID_SET = new Set(
+  listCommitMessageAgentCapabilities().map((capability) => capability.id)
+)
+
+export const ACTION_DESCRIPTIONS: Record<SourceControlActionId, string> = {
+  commitMessage: 'Generate the commit message from staged changes.',
+  pullRequest: 'Generate the hosted review title and description.',
+  branchName: 'Rename Orca-created branches from the initial agent task.',
+  fixCommitFailure: 'Start an agent when a commit hook or git commit fails.',
+  fixChecks: 'Start an agent from failed hosted-review checks.',
+  resolveConflicts: 'Start an agent for local or hosted-review merge conflicts.'
+}
+
+const FALLBACK_AGENT_ARGS_PLACEHOLDER = '--model sonnet'
+
+const AGENT_ARGS_PLACEHOLDER_OVERRIDES: Partial<Record<TuiAgent, string>> = {
+  // Why: Source Control AI action prompts are short, reviewable tasks; the
+  // mini Codex model is a better default hint than the frontier model.
+  codex: '--model gpt-5.4-mini',
+  copilot: '--model gpt-5.4-mini'
+}
+
+const MODEL_FLAG_BY_AGENT: Partial<Record<TuiAgent, string>> = {
+  amp: '--mode'
+}
+
+export function getSourceControlAgentArgsPlaceholder(
+  agentId: TuiAgent | CustomAgentId | null | undefined
+): string {
+  if (!agentId) {
+    return FALLBACK_AGENT_ARGS_PLACEHOLDER
+  }
+
+  if (agentId === CUSTOM_AGENT_ID) {
+    return '--flag value'
+  }
+
+  const override = AGENT_ARGS_PLACEHOLDER_OVERRIDES[agentId]
+  if (override) {
+    return override
+  }
+
+  const capability = getCommitMessageAgentCapability(agentId)
+  if (!capability) {
+    return '--model <model>'
+  }
+
+  return `${MODEL_FLAG_BY_AGENT[agentId] ?? '--model'} ${capability.defaultModelId}`
+}
+
+// Why: text-generation actions can only run agents that produce a single
+// response, so restrict the picker while still surfacing an already-selected
+// agent even if it is no longer a supported text generator.
+export function getAgentCatalogForAction(
+  actionId: SourceControlActionId,
+  selectedAgent: TuiAgent | CustomAgentId | null | undefined
+): typeof AGENT_CATALOG {
+  if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId)) {
+    return AGENT_CATALOG
+  }
+  return AGENT_CATALOG.filter(
+    (agent) => TEXT_GENERATION_AGENT_ID_SET.has(agent.id) || agent.id === selectedAgent
+  )
+}

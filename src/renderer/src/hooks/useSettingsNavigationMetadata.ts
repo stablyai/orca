@@ -1,5 +1,5 @@
 /* oxlint-disable max-lines */
-import { createElement, useMemo } from 'react'
+import { useMemo } from 'react'
 // Why: this registry mirrors the Settings sidebar in one neutral module so
 // Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
 // imports; the boundary is enforced by a focused architecture test.
@@ -25,13 +25,13 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Smartphone,
+  TabletSmartphone,
   SquareTerminal,
   TextCursorInput,
   UserCog,
   Wrench
 } from 'lucide-react'
-import type { LucideProps } from 'lucide-react'
-import logo from '../../../../resources/logo.svg'
+import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
 import type { Repo } from '../../../shared/types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import { useAppStore } from '@/store'
@@ -58,6 +58,7 @@ import {
 } from '@/components/settings/runtime-environments-search'
 import { SSH_PANE_SEARCH_ENTRIES } from '@/components/settings/ssh-search'
 import { MOBILE_SETTINGS_PANE_SEARCH_ENTRIES } from '@/components/settings/mobile-settings-search'
+import { MOBILE_EMULATOR_SEARCH_ENTRIES } from '@/components/settings/mobile-emulator-search'
 import { COMPUTER_USE_PANE_SEARCH_ENTRIES } from '@/components/settings/computer-use-search'
 import { VOICE_PANE_SEARCH_ENTRIES } from '@/components/settings/voice-pane-search'
 import { DEVELOPER_PERMISSIONS_PANE_SEARCH_ENTRIES } from '@/components/settings/developer-permissions-search'
@@ -67,20 +68,10 @@ import { SHORTCUTS_PANE_SEARCH_ENTRIES } from '@/components/settings/shortcuts-s
 import { STATS_PANE_SEARCH_ENTRIES } from '@/components/stats/stats-search'
 import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from '@/components/settings/experimental-search'
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
-import { cn } from '@/lib/utils'
 import {
   getCachedWindowsTerminalCapabilities,
   getWindowsTerminalCapabilityOwnerKey
 } from '@/lib/windows-terminal-capabilities'
-
-function OrcaLogoSettingsIcon({ className }: LucideProps) {
-  return createElement('img', {
-    src: logo,
-    alt: '',
-    'aria-hidden': true,
-    className: cn('object-contain invert dark:invert-0', className)
-  })
-}
 
 export function isWebClientLocation(): boolean {
   return (
@@ -193,9 +184,9 @@ export function buildSettingsNavigationMetadata({
     {
       id: 'git',
       title: 'Git & Source Control',
-      description: 'Branch naming, base refs, attribution, and AI commit messages.',
+      description: 'Branch naming, base refs, attribution, and Git AI Author.',
       icon: GitBranch,
-      // Why: the AI commit messages pane is rendered inside Git, so shared
+      // Why: Git AI Author is rendered inside Git, so shared
       // metadata must search both surfaces wherever Git appears.
       searchEntries: [...GIT_PANE_SEARCH_ENTRIES, ...COMMIT_MESSAGE_AI_PANE_SEARCH_ENTRIES],
       group: 'workflows'
@@ -232,6 +223,18 @@ export function buildSettingsNavigationMetadata({
             description: 'Home page, link routing, and session cookies.',
             icon: Globe,
             searchEntries: BROWSER_PANE_SEARCH_ENTRIES,
+            group: 'workflows'
+          }
+        ]
+      : []),
+    ...(showDesktopOnlySettings && isMac
+      ? [
+          {
+            id: 'mobile-emulator',
+            title: 'Mobile Emulator',
+            description: 'Configure mobile emulator support for Orca and coding agents.',
+            icon: TabletSmartphone,
+            searchEntries: MOBILE_EMULATOR_SEARCH_ENTRIES,
             group: 'workflows'
           }
         ]

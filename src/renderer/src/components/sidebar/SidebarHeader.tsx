@@ -6,13 +6,13 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
   const [workspaceBoardOpen, setWorkspaceBoardOpen] = useState(false)
   const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
   const workspaceBoardOpenRef = useRef(workspaceBoardOpen)
-  const openModal = useAppStore((s) => s.openModal)
   const repos = useAppStore((s) => s.repos)
   const groupBy = useAppStore((s) => s.groupBy)
   const canCreateWorkspace = repos.length > 0
@@ -132,10 +132,13 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                   if (!canCreateWorkspace) {
                     return
                   }
-                  openModal('new-workspace-composer', { telemetrySource: 'sidebar' })
+                  // Why: the parallel-work tour must click the real sidebar
+                  // control so it can hand off to the workspace-creation tour.
+                  openWorkspaceCreationComposerWithTourHandoff()
                 }}
                 aria-label="New workspace"
                 disabled={!canCreateWorkspace}
+                data-contextual-tour-target="workspace-create-control"
               >
                 <Plus className="size-3.5" strokeWidth={2.25} />
               </Button>

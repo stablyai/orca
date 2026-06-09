@@ -2,18 +2,12 @@ import React from 'react'
 import { Info, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import AgentCombobox from '@/components/agent/AgentCombobox'
 import RepoCombobox from '@/components/repo/RepoCombobox'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
+import { cn } from '@/lib/utils'
 import { filterEnabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import type {
   AutomationSchedulePreset,
@@ -26,6 +20,8 @@ import {
 } from '../../../../shared/automation-schedules'
 import { Field } from './automation-page-parts'
 import { AutomationEditorDialogHeader } from './AutomationEditorDialogHeader'
+import { AutomationMissedRunGraceField } from './AutomationMissedRunGraceField'
+import { AutomationPrecheckFields } from './AutomationPrecheckFields'
 import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { AutomationSessionField } from './AutomationSessionField'
 import { AUTOMATION_TEMPLATES, type AutomationTemplate } from './automation-templates'
@@ -110,6 +106,18 @@ export function AutomationEditorDialog({
     )
     return AGENT_CATALOG.filter((agent) => enabledIds.has(agent.id) || agent.id === draft.agentId)
   }, [draft.agentId, settings?.disabledTuiAgents])
+  const scheduleField = (
+    <Field label="Schedule">
+      <AutomationSchedulePicker
+        draft={draft}
+        triggerClassName={PICKER_TRIGGER_CLASS}
+        validateAdvancedSchedule={
+          isHermesTarget ? isValidAutomationCronSchedule : isValidAutomationSchedule
+        }
+        onDraftChange={onDraftChange}
+      />
+    </Field>
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -159,52 +167,38 @@ export function AutomationEditorDialog({
               <code className="rounded bg-muted px-1 font-mono text-[11px]">/goal</code>.
             </p>
           </Field>
-          {isHermesCreate ? null : (
-            <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
-              <Field label="Precheck">
-                <textarea
-                  value={draft.precheckCommand}
-                  placeholder="gh pr list --json number -q '.[0].number'"
-                  onChange={(event) =>
-                    onDraftChange((current) => ({
-                      ...current,
-                      precheckCommand: event.target.value
-                    }))
-                  }
-                  className="min-h-[68px] w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
+          {/* Why: the Orca/Hermes target toggle changes form height; collapsing the
+              Orca-only precheck row keeps the dialog from snapping vertically. */}
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              isHermesCreate ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
+            )}
+            aria-hidden={isHermesCreate}
+            inert={isHermesCreate}
+          >
+            <div className="min-h-0">
+              <div
+                className={cn(
+                  'mt-3 grid gap-3 transition-[opacity,transform] duration-150 ease-out sm:grid-cols-[minmax(0,1fr)_9rem]',
+                  isHermesCreate
+                    ? '-translate-y-1 opacity-0 delay-0'
+                    : 'translate-y-0 opacity-100 delay-200'
+                )}
+              >
+                <AutomationPrecheckFields
+                  draft={draft}
+                  disabled={isHermesCreate}
+                  pickerTriggerClassName={PICKER_TRIGGER_CLASS}
+                  onDraftChange={onDraftChange}
                 />
-              </Field>
-              <Field label="Timeout">
-                <Select
-                  value={draft.precheckTimeoutSeconds}
-                  onValueChange={(precheckTimeoutSeconds) =>
-                    onDraftChange((current) => ({ ...current, precheckTimeoutSeconds }))
-                  }
-                >
-                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                    <SelectItem value="30">30 sec</SelectItem>
-                    <SelectItem value="60">1 min</SelectItem>
-                    <SelectItem value="120">2 min</SelectItem>
-                    <SelectItem value="300">5 min</SelectItem>
-                    <SelectItem value="600">10 min</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
+              </div>
             </div>
-          )}
+          </div>
         </div>
 
         <div className="border-t border-border/50 px-5 py-4">
-          <div
-            className={
-              isHermesTarget
-                ? 'grid gap-3 md:grid-cols-3'
-                : 'grid gap-3 sm:grid-cols-2 lg:grid-cols-4'
-            }
-          >
+          <div className="grid gap-3 md:grid-cols-3 lg:grid-cols-4">
             <Field label="Project">
               <RepoCombobox
                 repos={repos}
@@ -298,82 +292,55 @@ export function AutomationEditorDialog({
                 </div>
               )}
             </Field>
-            {isHermesTarget ? null : (
-              <Field label="Agent">
-                <AgentCombobox
-                  agents={visibleAgents}
-                  value={draft.agentId}
-                  onValueChange={(agentId) =>
-                    agentId && onDraftChange((current) => ({ ...current, agentId }))
-                  }
-                  defaultAgent={settings?.defaultTuiAgent ?? null}
-                  triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
-                  allowNarrowTrigger
-                />
-              </Field>
+            {isHermesTarget ? scheduleField : null}
+          </div>
+
+          {/* Why: Hermes uses one compact footer row, while Orca adds agent,
+              session, schedule, and missed-run controls. Animate that row so
+              switching the target changes the dialog height smoothly. */}
+          <div
+            className={cn(
+              'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+              isHermesTarget ? 'grid-rows-[0fr]' : 'grid-rows-[1fr]'
             )}
-            {isHermesTarget ? null : (
-              <AutomationSessionField
-                draft={draft}
-                toggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
-                onDraftChange={onDraftChange}
-              />
-            )}
-            <Field label="Schedule">
-              <AutomationSchedulePicker
-                draft={draft}
-                triggerClassName={PICKER_TRIGGER_CLASS}
-                validateAdvancedSchedule={
-                  isHermesTarget ? isValidAutomationCronSchedule : isValidAutomationSchedule
-                }
-                onDraftChange={onDraftChange}
-              />
-            </Field>
-            {isHermesTarget ? null : (
-              <Field
-                label={
-                  <span className="inline-flex items-center gap-1">
-                    Grace
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label="Missed-run grace help"
-                          className="rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                        >
-                          <Info className="size-3.5" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top" sideOffset={6} className="max-w-72">
-                        If Orca or the execution host was unavailable at the scheduled time, Orca
-                        runs one missed occurrence when it becomes available within this window.
-                        Older missed runs are skipped.
-                      </TooltipContent>
-                    </Tooltip>
-                  </span>
-                }
+            aria-hidden={isHermesTarget}
+            inert={isHermesTarget}
+          >
+            <div className="min-h-0">
+              <div
+                className={cn(
+                  'grid gap-3 pt-3 transition-[opacity,transform] duration-150 ease-out sm:grid-cols-2 lg:grid-cols-4',
+                  isHermesTarget
+                    ? '-translate-y-1 opacity-0 delay-0'
+                    : 'translate-y-0 opacity-100 delay-200'
+                )}
               >
-                <Select
-                  value={draft.missedRunGraceMinutes}
-                  onValueChange={(missedRunGraceMinutes) =>
-                    onDraftChange((current) => ({ ...current, missedRunGraceMinutes }))
-                  }
-                >
-                  <SelectTrigger className={`w-full ${PICKER_TRIGGER_CLASS}`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                    <SelectItem value="0">No grace</SelectItem>
-                    <SelectItem value="30">30 minutes</SelectItem>
-                    <SelectItem value="60">1 hour</SelectItem>
-                    <SelectItem value="180">3 hours</SelectItem>
-                    <SelectItem value="720">12 hours</SelectItem>
-                    <SelectItem value="1440">24 hours</SelectItem>
-                    <SelectItem value="2880">48 hours</SelectItem>
-                  </SelectContent>
-                </Select>
-              </Field>
-            )}
+                <Field label="Agent">
+                  <AgentCombobox
+                    agents={visibleAgents}
+                    value={draft.agentId}
+                    onValueChange={(agentId) =>
+                      agentId && onDraftChange((current) => ({ ...current, agentId }))
+                    }
+                    defaultAgent={settings?.defaultTuiAgent ?? null}
+                    triggerClassName={`h-9 w-full min-w-0 ${PICKER_TRIGGER_CLASS}`}
+                    allowNarrowTrigger
+                  />
+                </Field>
+                <AutomationSessionField
+                  draft={draft}
+                  toggleItemClassName={MODE_TOGGLE_ITEM_CLASS}
+                  onDraftChange={onDraftChange}
+                />
+                {isHermesTarget ? null : scheduleField}
+                <AutomationMissedRunGraceField
+                  draft={draft}
+                  disabled={isHermesTarget}
+                  pickerTriggerClassName={PICKER_TRIGGER_CLASS}
+                  onDraftChange={onDraftChange}
+                />
+              </div>
+            </div>
           </div>
           <div className="mt-4 flex justify-end gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>

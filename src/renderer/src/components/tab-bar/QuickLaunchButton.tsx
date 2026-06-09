@@ -138,16 +138,22 @@ function QuickLaunchAgentMenuItemsInner({
         toast.error(`Could not build launch command for ${label}.`)
         return
       }
+      if (!result.tabId) {
+        // Why: paired web clients create the tab on the host; focus follows the
+        // next session-tabs snapshot instead of a local tab id.
+        return
+      }
       onFocusTerminal(result.tabId)
 
       // Why: launch success means the terminal session exists. Agent readiness
       // can lag behind on slow machines, and prompt paste flows already own
       // their own readiness timeout once a PTY exists.
-      void waitForTerminalPty(result.tabId, 5000).then((hasPty) => {
+      const launchedTabId = result.tabId
+      void waitForTerminalPty(launchedTabId, 5000).then((hasPty) => {
         if (hasPty) {
           return
         }
-        const launchState = getTerminalLaunchState(result.tabId)
+        const launchState = getTerminalLaunchState(launchedTabId)
         if (!launchState.stillOpen) {
           return
         }

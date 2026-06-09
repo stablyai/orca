@@ -4,8 +4,9 @@ import type { PtyTransport } from './pty-transport'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { serializeTerminalLayout } from './layout-serialization'
 import { mergeCapturedLeafState } from './merge-captured-leaf-state'
+import { TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 
-const MAX_BUFFER_BYTES = 512 * 1024
+const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_CHAR_LIMIT
 
 type ShutdownPane = Pick<ManagedPane, 'id' | 'leafId' | 'terminal' | 'serializeAddon'>
 
@@ -22,6 +23,20 @@ type CaptureTerminalShutdownLayoutArgs = {
   paneTitlesByPaneId: Record<number, string>
   existingLayout: TerminalLayoutSnapshot | undefined
   captureBuffers?: boolean
+  clearedScrollbackLeafIds?: ReadonlySet<string>
+}
+
+function omitClearedLeafState(
+  record: Record<string, string> | undefined,
+  clearedLeafIds: ReadonlySet<string> | undefined
+): Record<string, string> | undefined {
+  if (!record || !clearedLeafIds || clearedLeafIds.size === 0) {
+    return record
+  }
+  const next = Object.fromEntries(
+    Object.entries(record).filter(([leafId]) => !clearedLeafIds.has(leafId))
+  )
+  return Object.keys(next).length > 0 ? next : undefined
 }
 
 export function captureTerminalShutdownLayout({
@@ -31,7 +46,8 @@ export function captureTerminalShutdownLayout({
   paneTransports,
   paneTitlesByPaneId,
   existingLayout,
-  captureBuffers = true
+  captureBuffers = true,
+  clearedScrollbackLeafIds
 }: CaptureTerminalShutdownLayoutArgs): TerminalLayoutSnapshot {
   const panes = manager.getPanes()
   const buffers: Record<string, string> = {}
@@ -85,11 +101,16 @@ export function captureTerminalShutdownLayout({
 
   const mergedBuffers = captureBuffers
     ? mergeCapturedLeafState({
-        prior: existingLayout?.buffersByLeafId,
+        prior: omitClearedLeafState(existingLayout?.buffersByLeafId, clearedScrollbackLeafIds),
         fresh: buffers,
         currentLeafIds
       })
     : {}
+  const mergedScrollbackRefs = mergeCapturedLeafState({
+    prior: omitClearedLeafState(existingLayout?.scrollbackRefsByLeafId, clearedScrollbackLeafIds),
+    fresh: {},
+    currentLeafIds
+  })
   const mergedPtyIds = mergeCapturedLeafState({
     prior: existingLayout?.ptyIdsByLeafId,
     fresh: Object.fromEntries(ptyEntries),
@@ -97,6 +118,9 @@ export function captureTerminalShutdownLayout({
   })
   if (Object.keys(mergedBuffers).length > 0) {
     layout.buffersByLeafId = mergedBuffers
+  }
+  if (Object.keys(mergedScrollbackRefs).length > 0) {
+    layout.scrollbackRefsByLeafId = mergedScrollbackRefs
   }
   if (Object.keys(mergedPtyIds).length > 0) {
     layout.ptyIdsByLeafId = mergedPtyIds

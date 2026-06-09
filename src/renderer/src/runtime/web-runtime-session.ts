@@ -10,6 +10,7 @@ import type {
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { useAppStore } from '../store'
 import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
@@ -28,10 +29,9 @@ export {
 export function isWebRuntimeSessionActive(
   activeRuntimeEnvironmentId: string | null | undefined
 ): boolean {
-  return (
-    Boolean((globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) &&
-    Boolean(activeRuntimeEnvironmentId?.trim())
-  )
+  // Why: headless serve sessions are owned by the remote runtime, regardless
+  // of whether the attaching client is web or desktop Electron.
+  return Boolean(activeRuntimeEnvironmentId?.trim())
 }
 
 const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
@@ -44,6 +44,7 @@ export async function createWebRuntimeSessionTerminal(args: {
   afterTabId?: string
   targetGroupId?: string
   command?: string
+  agent?: TuiAgent
   activate?: boolean
   selectWorktree?: boolean
 }): Promise<boolean> {
@@ -67,6 +68,7 @@ export async function createWebRuntimeSessionTerminal(args: {
         afterTabId: args.afterTabId ? toHostSessionTabId(args.afterTabId) : undefined,
         targetGroupId: args.targetGroupId,
         command: args.command,
+        agent: args.agent,
         activate: args.activate !== false
       },
       timeoutMs: 15_000
@@ -193,9 +195,7 @@ function stageWebRuntimeBrowserTab(args: {
 }
 
 function selectWebRuntimeSessionWorktree(worktreeId: string): void {
-  useAppStore.setState((state) =>
-    state.activeWorktreeId === worktreeId ? state : { activeWorktreeId: worktreeId }
-  )
+  useAppStore.getState().setActiveWorktree(worktreeId)
 }
 
 function findLocalBrowserPageForRemotePage(
@@ -423,6 +423,9 @@ async function callWebRuntimeSessionTabMethod(
       timeoutMs: 15_000
     })
     unwrapRuntimeRpcResult(response as RuntimeRpcResponse<unknown>)
+    if (method === 'session.tabs.close') {
+      await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId)
+    }
     return true
   } catch (error) {
     console.warn(

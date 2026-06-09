@@ -175,7 +175,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           payload: params.payload
         })
         runtime.deliverPendingMessagesForHandle(params.to)
-        runtime.notifyMessageArrived(params.to)
+        runtime.notifyMessageArrived(params.to, msg.type)
         return { message: msg }
       }
 
@@ -204,9 +204,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           payload: params.payload
         })
       )
-      for (const handle of handles) {
-        runtime.deliverPendingMessagesForHandle(handle)
-        runtime.notifyMessageArrived(handle)
+      for (const message of messages) {
+        runtime.deliverPendingMessagesForHandle(message.to_handle)
+        runtime.notifyMessageArrived(message.to_handle, message.type)
       }
 
       return { messages, recipients: handles.length }
@@ -300,7 +300,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         threadId: original.thread_id ?? original.id
       })
 
-      runtime.notifyMessageArrived(original.from_handle)
+      runtime.notifyMessageArrived(original.from_handle, reply.type)
       return { message: reply }
     }
   }),
@@ -431,7 +431,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (!hasAgent) {
           throw new Error(
             `Cannot dispatch --inject to terminal ${to}: no recognized agent detected. ` +
-              'Start an agent CLI (e.g. claude, codex, gemini) in the terminal first, ' +
+              'Start an agent CLI (e.g. claude, codex, gemini, droid) in the terminal first, ' +
               'or dispatch without --inject and send the prompt manually.'
           )
         }
@@ -543,7 +543,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         payload
       })
       runtime.deliverPendingMessagesForHandle(params.to)
-      runtime.notifyMessageArrived(params.to)
+      runtime.notifyMessageArrived(params.to, outbound.type)
 
       const threadId = outbound.id
       const deadline = Date.now() + timeoutMs

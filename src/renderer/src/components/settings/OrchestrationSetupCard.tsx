@@ -33,7 +33,6 @@ export function OrchestrationSetupCard(props: {
         useAppStore.getState().recordFeatureInteraction('agent-orchestration-setup')
         await ensureOrcaCliAvailableForAgentSkillTerminal()
       }}
-      showRecheckWhenInstalled={false}
       onRecheck={skill.refresh}
     />
   )

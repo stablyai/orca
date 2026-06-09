@@ -14,8 +14,7 @@ import {
   Platform,
   ActivityIndicator,
   type KeyboardEvent,
-  type ListRenderItem,
-  type TextStyle
+  type ListRenderItem
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
@@ -64,6 +63,7 @@ import {
   type TerminalModes,
   type TerminalWebViewHandle
 } from '../../../../src/terminal/TerminalWebView'
+import { useTerminalViewportRefit } from '../../../../src/terminal/terminal-viewport-refit'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
   getVisibleTerminalAccessoryKeys,
@@ -80,9 +80,11 @@ import { MobileBrowserPane, type MobileBrowserTab } from '../../../../src/browse
 import { isBlankBrowserUrl, normalizeBrowserUrl } from '../../../../src/browser/browser-url'
 import { StatusDot } from '../../../../src/components/StatusDot'
 import { ActionSheetModal } from '../../../../src/components/ActionSheetModal'
+import { MobileAgentIcon } from '../../../../src/components/MobileAgentIcon'
 import { TextInputModal } from '../../../../src/components/TextInputModal'
 import { ConfirmModal } from '../../../../src/components/ConfirmModal'
 import { MobileRichMarkdownEditor } from '../../../../src/components/MobileRichMarkdownEditor'
+import { MobileSyntaxSegments } from '../../../../src/components/MobileSyntaxSegments'
 import {
   CustomKeyModal,
   loadCustomKeys,
@@ -106,13 +108,13 @@ import {
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage,
   type MobileHighlightedDiffLine,
-  type MobileSyntaxSegment,
-  type MobileSyntaxTokenKind
+  type MobileSyntaxSegment
 } from '../../../../src/session/mobile-file-syntax'
 import {
   getTerminalRecordsFromSessionTabs,
   mergeTerminalListWithKnownRecords,
   mergeTerminalRecordsByCurrentOrder,
+  mobileSessionTabsEqual,
   terminalRecordsEqual,
   type TerminalRecord
 } from '../../../../src/session/mobile-terminal-records'
@@ -121,6 +123,7 @@ import {
   type MobileNewTabAgentOption,
   type MobileNewTabAgentSettings
 } from '../../../../src/session/mobile-new-tab-agent-options'
+import { resolveMarkdownFloatingActionsBottom } from '../../../../src/session/markdown-floating-actions-layout'
 import {
   createMobileSessionCreateWarningState,
   dismissMobileSessionCreateWarningState,
@@ -128,6 +131,7 @@ import {
 } from '../../../../src/session/mobile-session-create-warning-state'
 import { colors, spacing, radii, typography } from '../../../../src/theme/mobile-theme'
 import type { DiffComment } from '../../../../../src/shared/types'
+import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 
 type Terminal = TerminalRecord
 
@@ -142,6 +146,7 @@ type MobileSessionTab =
       leafId?: string
       status?: 'pending-handle' | 'ready'
       terminal: string | null
+      agentStatus?: AgentStatusEntry | null
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }
@@ -238,59 +243,6 @@ type DirtyMarkdownDraft = {
   tabId: string
   title: string
   content: string
-}
-
-function mobileSessionTabsEqual(a: MobileSessionTab[], b: MobileSessionTab[]): boolean {
-  return a.length === b.length && a.every((tab, index) => mobileSessionTabEqual(tab, b[index]))
-}
-
-function mobileSessionTabEqual(a: MobileSessionTab, b: MobileSessionTab | undefined): boolean {
-  if (
-    !b ||
-    a.type !== b.type ||
-    a.id !== b.id ||
-    a.title !== b.title ||
-    a.isActive !== b.isActive
-  ) {
-    return false
-  }
-  switch (a.type) {
-    case 'terminal':
-      return (
-        b.type === 'terminal' &&
-        a.parentTabId === b.parentTabId &&
-        a.leafId === b.leafId &&
-        a.status === b.status &&
-        a.terminal === b.terminal &&
-        JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
-      )
-    case 'markdown':
-      return (
-        b.type === 'markdown' &&
-        a.filePath === b.filePath &&
-        a.relativePath === b.relativePath &&
-        a.isDirty === b.isDirty &&
-        a.documentVersion === b.documentVersion
-      )
-    case 'file':
-      return (
-        b.type === 'file' &&
-        a.filePath === b.filePath &&
-        a.relativePath === b.relativePath &&
-        a.language === b.language &&
-        a.isDirty === b.isDirty
-      )
-    case 'browser':
-      return (
-        b.type === 'browser' &&
-        a.browserWorkspaceId === b.browserWorkspaceId &&
-        a.browserPageId === b.browserPageId &&
-        a.url === b.url &&
-        a.loading === b.loading &&
-        a.canGoBack === b.canGoBack &&
-        a.canGoForward === b.canGoForward
-      )
-  }
 }
 
 function getActiveTabIdForHandle(
@@ -460,7 +412,8 @@ function MarkdownReader({
   onChange,
   onSave,
   onCopy,
-  onDiscard
+  onDiscard,
+  keyboardLift
 }: {
   documentId: string
   doc: MarkdownDocState | undefined
@@ -469,6 +422,7 @@ function MarkdownReader({
   onSave: () => void
   onCopy: () => void
   onDiscard: () => void
+  keyboardLift: number
 }) {
   if (!doc || doc.status === 'loading') {
     return (
@@ -510,7 +464,21 @@ function MarkdownReader({
         onChange={onChange}
       />
       {showFloatingActions ? (
-        <View pointerEvents="box-none" style={styles.markdownFloatingBar}>
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.markdownFloatingBar,
+            // Why: the editor focus lives inside a WebView, so keep native
+            // Save/Discard controls lifted instead of resizing that surface.
+            {
+              bottom: resolveMarkdownFloatingActionsBottom({
+                keyboardLift,
+                restingBottom: spacing.lg,
+                liftedClearance: spacing.md
+              })
+            }
+          ]}
+        >
           {statusText ? (
             <Text
               style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
@@ -557,18 +525,6 @@ function MarkdownReader({
         </View>
       ) : null}
     </View>
-  )
-}
-
-function SyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
-  return (
-    <>
-      {segments.map((segment, index) => (
-        <Text key={`${index}:${segment.kind}`} style={syntaxTokenStyles[segment.kind]}>
-          {segment.text}
-        </Text>
-      ))}
-    </>
   )
 }
 
@@ -629,7 +585,7 @@ function DiffLineRow({
           >
             {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
           </Text>
-          <SyntaxSegments segments={line.segments} />
+          <MobileSyntaxSegments segments={line.segments} />
         </Text>
         {canComment ? (
           <Pressable
@@ -936,7 +892,7 @@ function FileReader({
         contentContainerStyle={styles.filePreviewContent}
       >
         <Text selectable style={styles.filePreviewText} accessibilityLabel={`${title} preview`}>
-          <SyntaxSegments
+          <MobileSyntaxSegments
             segments={
               fileSyntax?.doc === doc && fileSyntax.language === syntaxLanguage
                 ? fileSyntax.segments
@@ -2295,63 +2251,22 @@ export default function SessionScreen() {
     }
   }, [])
 
-  // Why: re-measure when non-keyboard layout-affecting state changes
-  // (e.g. tab strip toggling visibility when the terminal count crosses
-  // 0↔1 — without this, a freshly-created 2nd tab subscribes with a
-  // stale viewport that doesn't account for the now-visible tab strip,
-  // and the server phone-fits to dims a few rows too tall).
-  const refitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const scheduleViewportRefit = useCallback(() => {
-    if (refitTimerRef.current) {
-      clearTimeout(refitTimerRef.current)
-    }
-    refitTimerRef.current = setTimeout(() => {
-      const handle = activeHandleRef.current
-      if (!handle) {
-        return
-      }
-      const ref = terminalRefs.current.get(handle)
-      if (!ref) {
-        return
-      }
-      void (async () => {
-        const dims = await ref.measureFitDimensions(terminalFrameHeightRef.current || undefined)
-        if (!dims) {
-          return
-        }
-        const prev = viewportRef.current
-        if (prev && prev.cols === dims.cols && prev.rows === dims.rows) {
-          return
-        }
-        viewportRef.current = dims
-        viewportMeasuredRef.current = true
-        // Why: prefer the in-place viewport update RPC over the legacy
-        // unsubscribe → subscribe cycle. This keeps the server-side
-        // mobile subscriber record alive (no driver=idle blip on the
-        // desktop banner; no false phone-fit baseline capture on the
-        // re-subscribe). See docs/mobile-presence-lock.md.
-        const rpc = clientRef.current
-        const deviceToken = deviceTokenRef.current
-        if (rpc && deviceToken) {
-          try {
-            const response = await rpc.sendRequest('terminal.updateViewport', {
-              terminal: handle,
-              client: { id: deviceToken, type: 'mobile' as const },
-              viewport: dims
-            })
-            if (response.ok) {
-              return
-            }
-          } catch {
-            // Fall through to legacy resubscribe.
-          }
-        }
-        unsubscribeTerminal(handle)
-        initializedHandlesRef.current.delete(handle)
-        subscribeToTerminal(handle)
-      })()
-    }, 150)
-  }, [subscribeToTerminal, unsubscribeTerminal])
+  // Why: viewport refits for layout changes outside the subscribe path
+  // (tab strip toggling, fold/unfold, rotation) live in a dedicated hook —
+  // see terminal-viewport-refit.ts for the full rationale.
+  useTerminalViewportRefit({
+    activeHandleRef,
+    terminalRefs,
+    terminalFrameHeightRef,
+    viewportRef,
+    viewportMeasuredRef,
+    clientRef,
+    deviceTokenRef,
+    initializedHandlesRef,
+    tabStripVisible: terminals.length > 1,
+    unsubscribeTerminal,
+    subscribeToTerminal
+  })
 
   useEffect(() => {
     const onShow = (e: KeyboardEvent) => {
@@ -2365,32 +2280,10 @@ export default function SessionScreen() {
     const showSub = Keyboard.addListener(showEvent, onShow)
     const hideSub = Keyboard.addListener(hideEvent, onHide)
     return () => {
-      if (refitTimerRef.current) {
-        clearTimeout(refitTimerRef.current)
-      }
       showSub.remove()
       hideSub.remove()
     }
   }, [])
-
-  // Why: the tab strip is hidden when only one terminal exists and shown
-  // once a second is created. Crossing the 1↔2 boundary changes the
-  // visible terminal area by ~40px, so the cached viewport dims in
-  // viewportRef become stale. Mark the viewport as un-measured so the
-  // next subscribe path's self-correcting loop (init → measure →
-  // resubscribe-with-fresh-viewport, see the !viewportMeasuredRef branch
-  // above) re-runs against the new layout. Also schedule an explicit
-  // refit to cover the case where no new subscribe is happening.
-  const tabStripVisible = terminals.length > 1
-  const prevTabStripVisibleRef = useRef(tabStripVisible)
-  useEffect(() => {
-    if (prevTabStripVisibleRef.current === tabStripVisible) {
-      return
-    }
-    prevTabStripVisibleRef.current = tabStripVisible
-    viewportMeasuredRef.current = false
-    scheduleViewportRefit()
-  }, [tabStripVisible, scheduleViewportRefit])
 
   useEffect(() => {
     if (hostId && worktreeId) {
@@ -3802,8 +3695,7 @@ export default function SessionScreen() {
       : createTabAgentOptions.length > 0
         ? createTabAgentOptions.map((option) => ({
             label: option.label,
-            hint: 'Agent preset',
-            icon: Bot,
+            renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
             onPress: () => {
               setShowCreateTabDrawer(false)
               void handleCreateTerminal(option.agent)
@@ -4060,7 +3952,7 @@ export default function SessionScreen() {
             </View>
           </View>
         ) : activeMarkdownTab ? (
-          <View style={[styles.markdownFrame, { paddingBottom: keyboardLift }]}>
+          <View style={styles.markdownFrame}>
             <MarkdownReader
               documentId={activeMarkdownTab.id}
               doc={markdownDocs.get(activeMarkdownTab.id)}
@@ -4069,6 +3961,7 @@ export default function SessionScreen() {
               onSave={() => void saveMarkdownTab(activeMarkdownTab)}
               onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
               onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
+              keyboardLift={keyboardLift}
             />
             {toastMessage && (
               <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
@@ -5400,35 +5293,5 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.35
-  }
-})
-
-const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
-  plain: {
-    color: colors.textPrimary
-  },
-  comment: {
-    color: colors.syntaxComment
-  },
-  keyword: {
-    color: colors.syntaxKeyword
-  },
-  string: {
-    color: colors.syntaxString
-  },
-  number: {
-    color: colors.syntaxNumber
-  },
-  type: {
-    color: colors.syntaxType
-  },
-  function: {
-    color: colors.syntaxFunction
-  },
-  variable: {
-    color: colors.syntaxVariable
-  },
-  meta: {
-    color: colors.syntaxMeta
   }
 })

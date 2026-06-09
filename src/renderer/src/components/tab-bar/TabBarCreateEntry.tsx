@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { FilePlus, FileText, Globe, Loader2, Search } from 'lucide-react'
+import { FilePlus, FileText, Globe, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -100,7 +100,7 @@ export default function TabBarCreateEntry({
   const statusMessage =
     statusOption?.classification.kind === 'empty' || statusOption?.classification.kind === 'blocked'
       ? statusOption.classification.message
-      : 'URL, file, or new file'
+      : 'Open any file, URL, agent, ...'
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
@@ -143,7 +143,7 @@ export default function TabBarCreateEntry({
 
   return (
     <form
-      className="px-1 pb-1"
+      className="pb-1"
       onSubmit={(event) => {
         event.preventDefault()
         submitOption()
@@ -164,11 +164,7 @@ export default function TabBarCreateEntry({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground"
-          aria-hidden="true"
-        />
+      <div className="-mx-1 flex items-center border-b border-black/14 px-3 dark:border-white/14">
         <Input
           ref={inputRef}
           value={query}
@@ -177,14 +173,14 @@ export default function TabBarCreateEntry({
             setError(null)
           }}
           disabled={disabled}
-          aria-label="Open URL, file, or new file"
+          aria-label="Open any file, URL, agent, ..."
           aria-invalid={error ? true : undefined}
-          placeholder="URL, file, or new file"
-          className="h-8 rounded-[7px] pl-7 pr-2 text-[12px]"
+          placeholder="Open any file, URL, agent, ..."
+          className="h-9 rounded-none border-0 bg-transparent px-0 text-[12px] shadow-none focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 dark:bg-transparent"
         />
       </div>
       {error || activeOptions.length > 0 || hasQuery ? (
-        <div className="mt-1 space-y-0.5">
+        <div className="mt-1 space-y-0.5 px-1">
           {error ? (
             <EntryStatusRow message={error} />
           ) : activeOptions.length > 0 ? (

@@ -672,6 +672,23 @@ describe('SshConnection', () => {
     )
   })
 
+  it('uses system SSH transport for ProxyCommand targets before ssh2 auth', async () => {
+    const conn = new SshConnection(
+      createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+    expect(clientInstances).toHaveLength(0)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
+      'printf ORCA-SYSTEM-SSH-OK'
+    )
+  })
+
   it('removes system SSH probe listeners after timeout', async () => {
     vi.useFakeTimers()
     const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
@@ -709,9 +726,25 @@ describe('SshConnection', () => {
 })
 
 describe('shouldUseSystemSshTransport', () => {
-  it('uses system transport for target or resolved ProxyUseFdpass', () => {
+  it('uses system transport for target or resolved OpenSSH proxy directives', () => {
     expect(shouldUseSystemSshTransport(createTarget(), { proxyUseFdpass: true })).toBe(true)
     expect(shouldUseSystemSshTransport(createTarget(), { proxyUseFdpass: false })).toBe(false)
+    expect(
+      shouldUseSystemSshTransport(createTarget({ proxyCommand: 'ssh -W %h:%p bastion' }), null)
+    ).toBe(true)
+    expect(shouldUseSystemSshTransport(createTarget({ jumpHost: 'bastion' }), null)).toBe(true)
+    expect(
+      shouldUseSystemSshTransport(createTarget(), {
+        proxyUseFdpass: false,
+        proxyCommand: 'ssh -W %h:%p bastion'
+      })
+    ).toBe(true)
+    expect(
+      shouldUseSystemSshTransport(createTarget(), {
+        proxyUseFdpass: false,
+        proxyJump: 'bastion'
+      })
+    ).toBe(true)
   })
 
   it('allows an environment override for e2e coverage', () => {

@@ -962,6 +962,44 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('uses one-shot resolved params for local commit message generation', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex' as const,
+      model: 'gpt-5.5',
+      thinkingLevel: 'high',
+      customPrompt: 'Use Conventional Commits.'
+    }
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({
+      success: true,
+      message: 'feat: update readme'
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:generateCommitMessage')!(null, {
+        worktreePath: WORKTREE_FEATURE_PATH,
+        sourceControlAiResolvedParams
+      })
+    ).resolves.toEqual({ success: true, message: 'feat: update readme' })
+
+    expect(resolveCommitMessageSettingsMock).not.toHaveBeenCalled()
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      context,
+      sourceControlAiResolvedParams,
+      {
+        kind: 'local',
+        cwd: WORKTREE_FEATURE_PATH
+      }
+    )
+  })
+
   it('prepares the selected Codex account home before local generation', async () => {
     const context = {
       branch: 'feature/ai',

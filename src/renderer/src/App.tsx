@@ -113,7 +113,10 @@ import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted
 } from './components/feature-tips/feature-tip-startup-gate'
-import { trackOrcaCliFeatureTipShown } from './components/feature-tips/feature-tip-telemetry'
+import {
+  trackCmdJPaletteFeatureTipShown,
+  trackOrcaCliFeatureTipShown
+} from './components/feature-tips/feature-tip-telemetry'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -200,6 +203,9 @@ function WindowControls(): React.JSX.Element {
 }
 
 const Landing = lazy(() => import('./components/Landing'))
+const WorktreeCreationPanel = lazy(
+  () => import('./components/worktree-creation/WorktreeCreationPanel')
+)
 const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
@@ -354,6 +360,16 @@ function App(): React.JSX.Element {
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
+  // Why: the creation loader is debounced — a fast create resolves before its
+  // entry's loaderVisible flips, so the content area keeps showing the prior
+  // workspace (or Landing) and never flashes a loader. Only a create still
+  // pending past the debounce gates the loader and hides the terminal.
+  const activeCreationLoaderVisible = useAppStore(
+    (s) =>
+      s.activePendingCreationId != null &&
+      s.pendingWorktreeCreations[s.activePendingCreationId]?.loaderVisible === true
+  )
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
   // that remount so the left workspace list doesn't restart at scrollTop 0.
@@ -485,6 +501,7 @@ function App(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
@@ -636,6 +653,8 @@ function App(): React.JSX.Element {
     featureTipsPromptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
+    } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
+      trackCmdJPaletteFeatureTipShown('app_open')
     }
     // Why: once a tip is visible, app quit/crash should not make it reappear
     // on the next launch just because the user never clicked a dismiss button.
@@ -1086,6 +1105,7 @@ function App(): React.JSX.Element {
         rightSidebarWidth,
         groupBy,
         sortBy,
+        projectOrderBy,
         showActiveOnly: false,
         hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
@@ -1110,6 +1130,7 @@ function App(): React.JSX.Element {
     rightSidebarWidth,
     groupBy,
     sortBy,
+    projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     showDotfilesByWorktree,
@@ -1709,7 +1730,7 @@ function App(): React.JSX.Element {
                 {!workspaceActive ? (
                   <div className="titlebar">
                     <div
-                      className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
+                      className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0 bg-worktree-sidebar' : ' shrink-0 mr-2'}`}
                       style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
                     >
                       {titlebarLeftControls}
@@ -1774,7 +1795,7 @@ function App(): React.JSX.Element {
                           className={`titlebar-left${
                             sidebarOpen
                               ? ''
-                              : ' absolute top-0 left-0 z-10 w-max border-r border-border'
+                              : ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
                           }`}
                           style={{
                             // Why: the Sidebar resize hook updates the sidebar DOM width
@@ -1853,7 +1874,9 @@ function App(): React.JSX.Element {
                       {shouldMountTerminalWorkbench ? (
                         <div
                           className={
-                            activeView !== 'terminal' || !activeWorktreeId
+                            activeView !== 'terminal' ||
+                            !activeWorktreeId ||
+                            activeCreationLoaderVisible
                               ? 'hidden flex-1 min-w-0 min-h-0'
                               : 'flex flex-1 min-w-0 min-h-0'
                           }
@@ -1886,7 +1909,16 @@ function App(): React.JSX.Element {
                           {activeView === 'activity' ? <ActivityPrototypePage /> : null}
                           {activeView === 'space' ? <WorkspaceSpacePage /> : null}
                           {activeView === 'mobile' ? <MobilePage /> : null}
-                          {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
+                          {activeView === 'terminal' &&
+                          activeCreationLoaderVisible &&
+                          activePendingCreationId ? (
+                            <WorktreeCreationPanel creationId={activePendingCreationId} />
+                          ) : null}
+                          {activeView === 'terminal' &&
+                          !activeWorktreeId &&
+                          !activeCreationLoaderVisible ? (
+                            <Landing />
+                          ) : null}
                         </RecoverableRenderErrorBoundary>
                       </Suspense>
                     </div>

@@ -305,6 +305,54 @@ describe('hydrateWorkspaceSession', () => {
     expect(s.workspaceSessionReady).toBe(false)
   })
 
+  it('hydrates quick command labels from unified tabs back to terminal tabs', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repo1', displayName: 'Repo 1', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      }
+    })
+
+    store.getState().hydrateWorkspaceSession({
+      activeRepoId: 'repo1',
+      activeWorktreeId: wt,
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'pnpm test' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': makeLayout()
+      },
+      unifiedTabs: {
+        [wt]: [
+          {
+            id: 'tab-1',
+            entityId: 'tab-1',
+            groupId: 'group-1',
+            worktreeId: wt,
+            contentType: 'terminal',
+            label: 'pnpm test',
+            quickCommandLabel: 'Run tests',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      tabGroups: {
+        [wt]: [{ id: 'group-1', worktreeId: wt, activeTabId: 'tab-1', tabOrder: ['tab-1'] }]
+      }
+    })
+
+    expect(store.getState().tabsByWorktree[wt][0].quickCommandLabel).toBe('Run tests')
+  })
+
   it('preserves tabs for a known repo whose worktrees have not loaded yet', () => {
     // Why (#1158): empty per-repo worktrees can mean a degraded local fetch or
     // SSH reconnect race, not that every persisted tab for the repo is stale.
@@ -1796,7 +1844,8 @@ describe('hydrateEditorSession', () => {
         ]
       },
       activeFileIdByWorktree: { [wt]: '/path/wt1/src/index.ts' },
-      activeTabTypeByWorktree: { [wt]: 'editor' }
+      activeTabTypeByWorktree: { [wt]: 'editor' },
+      markdownFrontmatterVisible: { '/path/wt1/README.md': true }
     })
 
     const s = store.getState()
@@ -1805,6 +1854,7 @@ describe('hydrateEditorSession', () => {
     expect(s.openFiles[0].mode).toBe('edit')
     expect(s.openFiles[0].isDirty).toBe(false)
     expect(s.openFiles[1].isPreview).toBe(true)
+    expect(s.markdownFrontmatterVisible).toEqual({ '/path/wt1/README.md': true })
     expect(s.activeFileId).toBe('/path/wt1/src/index.ts')
     expect(s.activeTabType).toBe('editor')
   })
@@ -1851,7 +1901,42 @@ describe('hydrateEditorSession', () => {
       })
     ])
     expect(s.editorDrafts).toEqual({ [fileId]: '' })
+    expect(s.markdownFrontmatterVisible).toEqual({})
     expect(s.activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(fileId)
+  })
+
+  it('migrates hydrated front-matter visibility to owner-qualified editor file ids', () => {
+    const store = createTestStore()
+    const filePath = '/orca/userData/floating-workspace/note.md'
+    const fileId = ownedEditorFileId(filePath, FLOATING_TERMINAL_WORKTREE_ID, null)
+
+    store.setState({ activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID })
+
+    store.getState().hydrateEditorSession({
+      activeRepoId: null,
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            filePath,
+            relativePath: 'note.md',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            language: 'markdown',
+            runtimeEnvironmentId: null
+          }
+        ]
+      },
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: filePath
+      },
+      activeTabTypeByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'editor' },
+      markdownFrontmatterVisible: { [filePath]: true }
+    })
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ [fileId]: true })
   })
 
   it('falls back to the floating workspace file id when duplicate paths are owner-qualified', () => {

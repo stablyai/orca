@@ -13,7 +13,8 @@ import type {
   SpeechModelState,
   SpeechModelStatus
 } from '../../shared/speech-types'
-import { SPEECH_MODEL_CATALOG, getCatalogModel } from './model-catalog'
+import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
+import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
 import { resolveTarExecutable } from './tar-executable'
 
 type DownloadHandle = {
@@ -68,6 +69,13 @@ export class ModelManager {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
+    if (manifest.provider === 'openai') {
+      return {
+        id: modelId,
+        status: hasOpenAiSpeechApiKey() ? 'ready' : 'not-downloaded'
+      }
+    }
+
     const modelDir = this.getModelDir(modelId)
     if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
       const state: SpeechModelState = { id: modelId, status: 'ready' }
@@ -97,6 +105,9 @@ export class ModelManager {
   }
 
   private validateModelFiles(manifest: SpeechModelManifest, modelDir: string): boolean {
+    if (!manifest.files) {
+      return false
+    }
     return manifest.files.every((f) => existsSync(join(modelDir, f)))
   }
 
@@ -108,6 +119,12 @@ export class ModelManager {
     const manifest = getCatalogModel(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
+    }
+    if (!isLocalSpeechModel(manifest)) {
+      throw new Error(`Model does not support downloads: ${modelId}`)
+    }
+    if (!manifest.downloadUrl || !manifest.archiveSha256 || !manifest.sizeBytes) {
+      throw new Error(`Model download metadata missing: ${modelId}`)
     }
 
     const modelDir = this.getModelDir(modelId)
@@ -212,6 +229,10 @@ export class ModelManager {
   async deleteModel(modelId: string): Promise<void> {
     if (!getCatalogModel(modelId)) {
       throw new Error(`Unknown model: ${modelId}`)
+    }
+    const manifest = getCatalogModel(modelId)
+    if (!manifest || !isLocalSpeechModel(manifest)) {
+      throw new Error(`Model does not support deletion: ${modelId}`)
     }
     this.cancelDownload(modelId)
     const modelDir = this.getModelDir(modelId)
@@ -542,6 +563,9 @@ export class ModelManager {
   }
 
   private async flattenNestedDir(modelDir: string, manifest: SpeechModelManifest): Promise<void> {
+    if (!manifest.files) {
+      return
+    }
     const entries = await readdir(modelDir, { withFileTypes: true })
     for (const entry of entries) {
       if (entry.isDirectory()) {

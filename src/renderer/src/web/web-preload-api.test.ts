@@ -201,6 +201,111 @@ describe('web keybindings preload API', () => {
   })
 })
 
+describe('web settings preload API', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('migrates first-work branch auto-rename on for stored legacy web settings once', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ autoRenameBranchFromWork: false })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      autoRenameBranchFromWork?: boolean
+      autoRenameBranchFromWorkDefaultedOn?: boolean
+    }
+
+    expect(settings.autoRenameBranchFromWork).toBe(true)
+    expect(settings.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+    expect(stored.autoRenameBranchFromWork).toBe(true)
+    expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+  })
+
+  it('migrates inherited terminal bar cursor defaults for stored web settings once', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem('orca.web.settings.v1', JSON.stringify({ terminalCursorStyle: 'bar' }))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      terminalCursorStyle?: string
+      terminalCursorStyleDefaultedToBlock?: boolean
+    }
+
+    expect(settings.terminalCursorStyle).toBe('block')
+    expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
+    expect(stored.terminalCursorStyle).toBe('block')
+    expect(stored.terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('preserves terminal cursor choices after the web block-default migration', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({
+        terminalCursorStyle: 'bar',
+        terminalCursorStyleDefaultedToBlock: true
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    expect(settings.terminalCursorStyle).toBe('bar')
+    expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('preserves first-work branch auto-rename web opt-outs after migration', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({
+        autoRenameBranchFromWork: false,
+        autoRenameBranchFromWorkDefaultedOn: true
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      autoRenameBranchFromWork?: boolean
+      autoRenameBranchFromWorkDefaultedOn?: boolean
+    }
+
+    expect(settings.autoRenameBranchFromWork).toBe(false)
+    expect(settings.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+    expect(stored.autoRenameBranchFromWork).toBe(false)
+    expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+  })
+
+  it('stamps the first-work branch auto-rename guard for web setting updates', async () => {
+    const { api, storage } = await installApi('Linux')
+
+    const settings = await api.settings.set({ autoRenameBranchFromWork: false })
+    const stored = JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      autoRenameBranchFromWork?: boolean
+      autoRenameBranchFromWorkDefaultedOn?: boolean
+    }
+
+    expect(settings.autoRenameBranchFromWork).toBe(false)
+    expect(settings.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+    expect(stored.autoRenameBranchFromWork).toBe(false)
+    expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
+  })
+})
+
 describe('web UI preload API', () => {
   beforeEach(() => {
     vi.resetModules()

@@ -5,6 +5,8 @@
 // agent misses its own cancellation hook. We still do not infer status from
 // terminal titles anywhere in the data flow.
 
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
+
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
 // Why: agent types are not restricted to a fixed set — new agents appear
@@ -113,6 +115,9 @@ export type AgentStatusEntry = {
    *  Why: parent/child agent hierarchy is pane-level state, not worktree
    *  lineage; workers often run in the same worktree as their coordinator. */
   orchestration?: AgentStatusOrchestrationContext
+  /** Provider-owned conversation/session id captured from hook payloads.
+   *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
+  providerSession?: AgentProviderSessionMetadata
 }
 
 export type MigrationUnsupportedPtyEntry = {
@@ -172,6 +177,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   /** Timestamp (ms) when the current state first appeared for this pane. */
   stateStartedAt: number
   orchestration?: AgentStatusOrchestrationContext
+  providerSession?: AgentProviderSessionMetadata
 }
 
 /** Maximum character length for the prompt field. Truncated on parse. */

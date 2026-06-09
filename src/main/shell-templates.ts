@@ -71,3 +71,44 @@ export ZDOTDIR=${quotePosixSingle(zshDir)}
 unset _orca_spawn_orig_zdotdir _orca_user_zdotdir _orca_zshenv_source_dir _orca_zshenv_path _orca_discovered_zdotdir
 `
 }
+
+export function getZshStartupFileSourceBlock(options: {
+  fileName: '.zprofile' | '.zshrc' | '.zlogin'
+  homeExpression?: string
+  interactiveOnly?: boolean
+  skipWhenHomeIsCurrentZdotdir?: boolean
+}): string {
+  const homeExpression = options.homeExpression ?? '"${ORCA_ORIG_ZDOTDIR:-$HOME}"'
+  const checks = [
+    options.skipWhenHomeIsCurrentZdotdir ? '"$_orca_home" != "$ZDOTDIR"' : null,
+    options.interactiveOnly ? '-o interactive' : null,
+    `-f "$_orca_home/${options.fileName}"`
+  ].filter(Boolean)
+
+  return `_orca_home=${homeExpression}
+case "\${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
+if [[ ${checks.join(' && ')} ]]; then
+  _orca_wrapper_zdotdir="$ZDOTDIR"
+  # Why: user startup files resolve plugin/config paths from their own ZDOTDIR;
+  # Orca restores its wrapper dir afterward so zsh still loads wrapper files.
+  export ZDOTDIR="$_orca_home"
+  source "$_orca_home/${options.fileName}"
+  export ZDOTDIR="$_orca_wrapper_zdotdir"
+  unset _orca_wrapper_zdotdir
+fi
+`
+}
+
+export function getZshFinalZdotdirRestoreBlock(homeExpression = '"${ORCA_ORIG_ZDOTDIR:-$HOME}"') {
+  return `_orca_home=${homeExpression}
+case "\${_orca_home%/}" in
+  */shell-ready/zsh) _orca_home="$HOME" ;;
+esac
+# Why: after Orca's last wrapper file has loaded, the interactive shell should
+# expose the same ZDOTDIR a normal zsh startup would expose.
+export ZDOTDIR="$_orca_home"
+unset _orca_home
+`
+}

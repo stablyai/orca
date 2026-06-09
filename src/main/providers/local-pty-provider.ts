@@ -2,7 +2,7 @@
 ~70 lines of scanner/promise wiring to spawn(). Splitting the method would scatter
 tightly coupled PTY lifecycle logic (scan → ready → write → exit cleanup) across
 files without a cleaner ownership seam. */
-import { basename } from 'path'
+import { basename, delimiter } from 'path'
 import { win32 as pathWin32 } from 'path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import { resolveEffectiveWindowsPowerShell } from './windows-powershell'
@@ -88,6 +88,21 @@ function removeUnspecifiedPaneIdentityEnv(
   }
 }
 
+function promoteAgentTeamsShimPath(
+  env: Record<string, string>,
+  requestedPath: string | undefined
+): void {
+  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
+    return
+  }
+  const shimDir = requestedPath.split(delimiter)[0]
+  if (!shimDir) {
+    return
+  }
+  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
+  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+}
+
 function disposePtyListeners(id: string): void {
   const disposables = ptyDisposables.get(id)
   if (disposables) {
@@ -118,6 +133,26 @@ function clearPtyState(id: string): void {
   ptyProcesses.delete(id)
   ptyShellName.delete(id)
   ptyLoadGeneration.delete(id)
+}
+
+function allocatePtyId(sessionId: string | undefined): string {
+  const requested = normalizeLocalCallerSessionId(sessionId)
+  if (requested) {
+    return requested
+  }
+  let id: string
+  do {
+    id = String(++ptyCounter)
+  } while (ptyProcesses.has(id))
+  return id
+}
+
+function normalizeLocalCallerSessionId(sessionId: string | undefined): string | null {
+  const requested = sessionId?.trim()
+  if (!requested || /^\d+$/.test(requested)) {
+    return null
+  }
+  return requested
 }
 
 function destroyPtyProcess(proc: pty.IPty, options: { alreadyKilled?: boolean } = {}): void {
@@ -192,7 +227,19 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
-    const id = String(++ptyCounter)
+    const reattachId = normalizeLocalCallerSessionId(args.sessionId)
+    if (reattachId) {
+      const existing = ptyProcesses.get(reattachId)
+      if (existing) {
+        try {
+          existing.resize(args.cols, args.rows)
+        } catch {
+          /* Existing PTY may reject resize during teardown; still return the live handle. */
+        }
+        return { id: reattachId, pid: existing.pid, isReattach: true }
+      }
+    }
+    const id = allocatePtyId(reattachId ?? undefined)
 
     const defaultCwd = getDefaultCwd()
     const cwd = args.cwd || defaultCwd
@@ -309,6 +356,9 @@ export class LocalPtyProvider implements IPtyProvider {
     for (const key of args.envToDelete ?? []) {
       delete spawnEnv[key]
     }
+    if (args.env?.TERM) {
+      spawnEnv.TERM = args.env.TERM
+    }
 
     spawnEnv.LANG ??= 'en_US.UTF-8'
 
@@ -337,6 +387,15 @@ export class LocalPtyProvider implements IPtyProvider {
           wslDistro: launchWslDistro
         })
       : spawnEnv
+    // Why: app-level env hooks can reintroduce vars that special launch modes
+    // explicitly scrubbed. Apply deletions last so shims like Claude Agent
+    // Teams keep their PATH and terminal-detection contract.
+    for (const key of args.envToDelete ?? []) {
+      delete finalEnv[key]
+    }
+    if (args.env?.TERM) {
+      finalEnv.TERM = args.env.TERM
+    }
     if (process.platform === 'win32') {
       const codexHomeWslInfo = finalEnv.CODEX_HOME ? parseWslPath(finalEnv.CODEX_HOME) : null
       if (pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe') {
@@ -387,7 +446,8 @@ export class LocalPtyProvider implements IPtyProvider {
         finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
         finalEnv.ORCA_PI_CODING_AGENT_DIR ||
         finalEnv.ORCA_OMP_CODING_AGENT_DIR ||
-        finalEnv.ORCA_CODEX_HOME
+        finalEnv.ORCA_CODEX_HOME ||
+        finalEnv.ORCA_AGENT_TEAMS_SHIM_DIR
       getFallbackShellReadyConfig = args.command
         ? (shell) => getShellReadyLaunchConfig(shell)
         : needsNoMarkerWrapper
@@ -404,6 +464,7 @@ export class LocalPtyProvider implements IPtyProvider {
         shellReadyLaunch = args.command ? shellLaunch : null
       }
     }
+    promoteAgentTeamsShimPath(finalEnv, args.env?.PATH)
 
     // ── Worktree-scoped shell history (§7–§10 of terminal-history-scope-design) ──
     // Why: without this, all worktree terminals share a single global HISTFILE
@@ -426,6 +487,7 @@ export class LocalPtyProvider implements IPtyProvider {
       rows: args.rows,
       cwd: effectiveCwd,
       env: finalEnv,
+      termName: finalEnv.TERM,
       ptySpawn: pty.spawn,
       getShellReadyConfig: getFallbackShellReadyConfig,
       // Why: if zsh failed and bash took over, HISTFILE still points to

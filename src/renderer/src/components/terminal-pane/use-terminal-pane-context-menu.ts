@@ -47,6 +47,7 @@ type UseTerminalPaneContextMenuDeps = {
   fallbackCwd: string
   toggleExpandPane: (paneId: number) => void
   onRequestClosePane: (paneId: number) => void
+  onClearPaneScrollback: (pane: ManagedPane) => void
   onSetTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
@@ -85,6 +86,7 @@ export function useTerminalPaneContextMenu({
   fallbackCwd,
   toggleExpandPane,
   onRequestClosePane,
+  onClearPaneScrollback,
   onSetTitle,
   onPasteError,
   onAgentSessionForkReady,
@@ -248,7 +250,7 @@ export function useTerminalPaneContextMenu({
   const onClearScreen = (): void => {
     const pane = resolveMenuPane()
     if (pane) {
-      pane.terminal.clear()
+      onClearPaneScrollback(pane)
     }
   }
 

@@ -10,22 +10,27 @@ export const AUTO_RENAME_BRANCH_PARENT_SEARCH_ENTRY: SettingsSearchEntry = {
     'creature name',
     'agent',
     'prompt',
+    'command',
+    'template',
     'worktree',
-    'model',
-    'slug'
+    'slug',
+    'generate'
   ]
 }
 
 export const AUTO_RENAME_BRANCH_ADVANCED_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
-    title: 'Branch name prompt',
-    description: 'Additional prompt text appended only when generating branch names.',
-    keywords: ['prompt', 'instructions', 'built-in prompt', 'slug', 'kebab-case']
-  },
-  {
-    title: 'Branch name model',
-    description: 'Use a different model for branch name generation.',
-    keywords: ['model', 'override', 'thinking']
+    title: 'Branch name command template',
+    description: 'Agent command template used when generating branch names.',
+    keywords: [
+      'prompt',
+      'instructions',
+      'built-in prompt',
+      'command',
+      'template',
+      'slug',
+      'kebab-case'
+    ]
   }
 ]
 

@@ -789,12 +789,13 @@ export class CodexAccountService {
       const spawnConfig = wslInfo
         ? {
             command: 'wsl.exe',
+            // Why: nvm and similar WSL installs often initialize PATH from interactive shell config.
             args: [
               '-d',
               wslInfo.distro,
-              '--',
+              '--exec',
               'bash',
-              '-lc',
+              '-ic',
               `export CODEX_HOME=${shellQuote(wslInfo.linuxPath)}; exec codex login`
             ],
             env: process.env,
@@ -911,9 +912,9 @@ export class CodexAccountService {
         [
           '-d',
           wslInfo.distro,
-          '--',
+          '--exec',
           'bash',
-          '-lc',
+          '-ic',
           buildEncodedWslBashCommand('command -v codex >/dev/null 2>&1')
         ],
         { encoding: 'utf-8', timeout: 5000 }

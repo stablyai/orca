@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
+import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/nested-repo-selected-paths'
 import {
   buildNestedRepoImportActionTelemetry,
   buildNestedRepoImportResultTelemetry,
@@ -34,10 +35,7 @@ export function useAddRepoNestedImportFlow({
   nestedGroupName: string
   nestedImportScanId: string | null
   activeRuntimeEnvironmentId: string | null | undefined
-  fetchWorktrees: (
-    repoId: string,
-    options?: { requireAuthoritative?: boolean }
-  ) => Promise<unknown>
+  fetchWorktrees: (repoId: string, options?: { requireAuthoritative?: boolean }) => Promise<unknown>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
@@ -99,6 +97,10 @@ export function useAddRepoNestedImportFlow({
       }
       const foundCount = nestedScan.repos.length
       const selectedCount = nestedSelectedPaths.size
+      const selectedProjectPaths = getSelectedNestedRepoPathsInScanOrder(
+        nestedScan,
+        nestedSelectedPaths
+      )
       const runtimeKind = nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId)
       const gen = ++nestedImportGenRef.current
       setIsAdding(true)
@@ -118,7 +120,9 @@ export function useAddRepoNestedImportFlow({
         const result = await importNestedRepos({
           parentPath: nestedScan.selectedPath,
           groupName: nestedGroupName,
-          projectPaths: [...nestedSelectedPaths],
+          // Why: Set insertion order can drift after deselect/reselect; import
+          // ordering should match the visible scan order users reviewed.
+          projectPaths: selectedProjectPaths,
           ...(nestedConnectionId ? { connectionId: nestedConnectionId } : {}),
           ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
           mode

@@ -115,12 +115,12 @@ export default function ImportedWorktreesVisibilityLine({
   return (
     <section
       aria-busy={pending}
-      className={cn('mx-1 my-0.5 ml-3 text-sidebar-foreground', className)}
+      className={cn('mx-1 my-0.5 ml-3 text-worktree-sidebar-foreground', className)}
     >
       <div
         className={cn(
           'flex min-h-7 min-w-0 items-center gap-1.5 rounded-md px-1.5 text-[11px] leading-none text-muted-foreground transition-colors',
-          'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
+          'hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground'
         )}
       >
         <Button
@@ -131,7 +131,7 @@ export default function ImportedWorktreesVisibilityLine({
           aria-expanded={isExpanded}
           aria-label={`${isExpanded ? 'Collapse' : 'Expand'} hidden worktrees for ${repoDisplayName}`}
           onClick={() => setIsExpanded((value) => !value)}
-          className="shrink-0 rounded-[4px] text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="shrink-0 rounded-[4px] text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground"
         >
           <ChevronRight
             className={cn('size-3 transition-transform', isExpanded && 'rotate-90')}
@@ -150,7 +150,7 @@ export default function ImportedWorktreesVisibilityLine({
                 disabled={pending}
                 aria-label={keepHiddenAriaLabel}
                 onClick={onKeepHidden}
-                className="shrink-0 rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                className="shrink-0 rounded-md text-muted-foreground hover:bg-worktree-sidebar-accent hover:text-worktree-sidebar-accent-foreground"
               >
                 <X className="size-3" aria-hidden="true" />
               </Button>
@@ -164,7 +164,7 @@ export default function ImportedWorktreesVisibilityLine({
 
       {isExpanded ? (
         <div
-          className="ml-4 mt-0.5 grid gap-1 border-l border-sidebar-border pb-1 pl-2"
+          className="ml-4 mt-0.5 grid gap-1 border-l border-worktree-sidebar-border pb-1 pl-2"
           aria-label="Hidden worktree groups"
         >
           {visibleWorktreeGroups.map((group) => (
@@ -174,7 +174,7 @@ export default function ImportedWorktreesVisibilityLine({
                   <TooltipTrigger asChild>
                     <span
                       tabIndex={0}
-                      className="block min-w-0 flex-1 truncate font-mono text-[10px] leading-4 text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+                      className="block min-w-0 flex-1 truncate font-mono text-[10px] leading-4 text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
                     >
                       {group.path}
                     </span>
@@ -183,7 +183,7 @@ export default function ImportedWorktreesVisibilityLine({
                     {group.path}
                   </TooltipContent>
                 </Tooltip>
-                <span className="shrink-0 rounded-full border border-sidebar-border px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
+                <span className="shrink-0 rounded-full border border-worktree-sidebar-border px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
                   {group.worktrees.length}
                 </span>
               </div>
@@ -216,7 +216,7 @@ export default function ImportedWorktreesVisibilityLine({
                       size="xs"
                       disabled={pending}
                       onClick={() => toggleGroupExpanded(group.path)}
-                      className="h-6 justify-start px-0 text-[11px] font-normal text-muted-foreground hover:text-sidebar-accent-foreground"
+                      className="h-6 justify-start px-0 text-[11px] font-normal text-muted-foreground hover:text-worktree-sidebar-accent-foreground"
                     >
                       {expandedGroupPathKeys.has(normalizeRuntimePathForComparison(group.path))
                         ? 'Show fewer'
@@ -233,7 +233,7 @@ export default function ImportedWorktreesVisibilityLine({
             </div>
           ) : null}
           <div className="grid gap-1 px-1.5 pb-1 pt-1">
-            <p className="rounded-md bg-sidebar-accent px-2 py-1 text-[10px] font-medium leading-4 text-sidebar-accent-foreground">
+            <p className="rounded-md bg-worktree-sidebar-accent px-2 py-1 text-[10px] font-medium leading-4 text-worktree-sidebar-accent-foreground">
               Change this later from the project menu.
             </p>
             <div className="flex min-w-0 items-center gap-1.5">

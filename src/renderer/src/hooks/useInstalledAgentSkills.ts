@@ -28,6 +28,7 @@ export type InstalledAgentSkillState = {
   installed: boolean
   loading: boolean
   error: string | null
+  skills: readonly DiscoveredSkill[]
   refresh: () => Promise<void>
 }
 
@@ -227,10 +228,11 @@ export function useInstalledAgentSkill(
     }
   }, [enabled, refresh])
 
+  const skills = useMemo(() => (enabled && result ? result.skills : []), [enabled, result])
+
   const installed = useMemo(
-    () =>
-      enabled && result ? hasInstalledAgentSkill(result.skills, skillName, { sourceKinds }) : false,
-    [enabled, result, skillName, sourceKinds]
+    () => (enabled ? hasInstalledAgentSkill(skills, skillName, { sourceKinds }) : false),
+    [enabled, skills, skillName, sourceKinds]
   )
 
   useEffect(() => {
@@ -247,6 +249,7 @@ export function useInstalledAgentSkill(
     installed,
     loading,
     error,
+    skills,
     refresh: forceRefresh
   }
 }

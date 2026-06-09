@@ -39,7 +39,7 @@ export function WorktreeCardPortsTrigger({
   return (
     <button
       type="button"
-      className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring"
+      className="inline-flex size-3.5 shrink-0 items-center justify-center rounded text-muted-foreground/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
       aria-label={`${ports.length} live ${ports.length === 1 ? 'port' : 'ports'}`}
       onClick={(event) => {
         event.stopPropagation()

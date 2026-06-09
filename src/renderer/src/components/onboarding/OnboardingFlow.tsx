@@ -8,7 +8,6 @@ import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'
 import { IntegrationsStep } from './IntegrationsStep'
-import { RepoStep } from './RepoStep'
 import { useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
@@ -32,10 +31,6 @@ const stepCopy = {
   integrations: {
     title: 'Set up GitHub tasks',
     subtitle: 'Install the GitHub CLI to:'
-  },
-  repo: {
-    title: 'Point Orca at some code',
-    subtitle: 'Open a folder or clone a repo to finish setup.'
   }
 } as const
 
@@ -43,8 +38,7 @@ const stepTooltipLabels = {
   agent: 'Default Agent',
   theme: 'Appearance',
   notifications: 'Notifications',
-  integrations: 'Integrations',
-  repo: 'Create project'
+  integrations: 'Integrations'
 } as const
 
 type OnboardingFlowProps = {
@@ -62,27 +56,26 @@ export default function OnboardingFlow({
   const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
   const { currentStep, stepIndex, busyLabel } = flow
   const copy = stepCopy[currentStep.id]
-  const shouldShowSkipToProjectSetup = currentStep.id !== 'repo'
+  const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
   const shouldShowFooterBusy = Boolean(busyLabel)
-  const footerPrimaryLabel = busyLabel ?? 'Continue'
+  const footerPrimaryLabel =
+    busyLabel ?? (currentStep.id === 'notifications' ? 'Add your first project' : 'Continue')
+  const canDismissCurrentStep = currentStep.id !== 'notifications'
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
-  const {
-    next: flowNext,
-    openFolder: flowOpenFolder,
-    continueWithExistingProject: flowContinueWithExistingProject,
-    dismissOnboarding: flowDismissOnboarding
-  } = flow
+  const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      if (busyLabel || skipConfirmOpen) {
+      // Why: the final notifications step hands off to Add Project, so all
+      // dismiss paths are disabled there, not just the visible Skip button.
+      if (!canDismissCurrentStep || busyLabel || skipConfirmOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen]
+    [busyLabel, canDismissCurrentStep, skipConfirmOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -106,25 +99,11 @@ export default function OnboardingFlow({
         return
       }
       event.preventDefault()
-      if (currentStep.id === 'repo') {
-        if (flow.hasExistingProject) {
-          void flowContinueWithExistingProject('keyboard')
-        } else {
-          void flowOpenFolder()
-        }
-      } else {
-        void flowNext('keyboard')
-      }
+      void flowNext('keyboard')
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [
-    currentStep.id,
-    flow.hasExistingProject,
-    flowContinueWithExistingProject,
-    flowNext,
-    flowOpenFolder
-  ])
+  }, [flowNext])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -234,14 +213,7 @@ export default function OnboardingFlow({
               'min-h-0 flex-1 transition-[margin-top] duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none',
               // Why: long setup output should scroll inside the step so the footer
               // actions stay anchored across every onboarding page.
-              cn(
-                'scrollbar-sleek overflow-y-auto pr-1',
-                currentStep.id === 'repo'
-                  ? flow.nestedScan
-                    ? 'mt-6 overflow-hidden'
-                    : 'mt-6'
-                  : 'mt-10'
-              )
+              cn('scrollbar-sleek overflow-y-auto pr-1', 'mt-10')
             )}
           >
             {currentStep.id === 'agent' && (
@@ -264,33 +236,6 @@ export default function OnboardingFlow({
               <NotificationStep settings={flow.settings} updateSettings={flow.updateSettings} />
             )}
             {currentStep.id === 'integrations' && <IntegrationsStep />}
-            {currentStep.id === 'repo' && (
-              <RepoStep
-                cloneUrl={flow.cloneUrl}
-                onCloneUrlChange={flow.setCloneUrl}
-                nestedScan={flow.nestedScan}
-                nestedScanInProgress={flow.nestedScanInProgress}
-                nestedSelectedPaths={flow.nestedSelectedPaths}
-                onNestedSelectedPathsChange={flow.setNestedSelectedPaths}
-                nestedGroupName={flow.nestedGroupName}
-                onNestedGroupNameChange={flow.setNestedGroupName}
-                onImportNested={(mode) => void flow.importNested(mode)}
-                onCancelNested={flow.cancelNested}
-                onStopNestedScan={flow.stopNestedScan}
-                onOpenFolder={() => void flow.openFolder()}
-                onOpenServerFolder={(kind) => void flow.openFolder(kind)}
-                onClone={() => void flow.clone()}
-                onOpenSshSettings={() => void flow.openSshSettings()}
-                serverPath={flow.serverPath}
-                onServerPathChange={flow.setServerPath}
-                cloneDestination={flow.cloneDestination}
-                onCloneDestinationChange={flow.setCloneDestination}
-                workspaceDir={flow.settings?.workspaceDir ?? ''}
-                runtimeActive={Boolean(flow.settings?.activeRuntimeEnvironmentId?.trim())}
-                busyLabel={flow.busyLabel}
-                error={flow.error}
-              />
-            )}
           </div>
 
           <OnboardingFooter
@@ -299,17 +244,11 @@ export default function OnboardingFlow({
             onSkipToRepo={() => void flow.skipToRepo()}
             stepIndex={stepIndex}
             onBack={flow.nestedScan ? flow.cancelNested : flow.back}
-            showPrimary={currentStep.id !== 'repo' || flow.hasExistingProject}
+            showPrimary
             primaryBusy={shouldShowFooterBusy}
             primaryLabel={footerPrimaryLabel}
             shortcutModifierLabel={continueShortcutModifierLabel}
-            onPrimary={() => {
-              if (currentStep.id === 'repo') {
-                void flow.continueWithExistingProject()
-                return
-              }
-              void flow.next()
-            }}
+            onPrimary={() => void flow.next()}
           />
         </div>
       </section>

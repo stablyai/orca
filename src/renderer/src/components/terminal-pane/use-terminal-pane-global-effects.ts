@@ -136,6 +136,21 @@ export function useTerminalPaneGlobalEffects({
   }, [isActive, isVisible])
 
   useEffect(() => {
+    const manager = managerRef.current
+    const activePane = isActive && isVisible ? manager?.getActivePane() : null
+    const ptyId = activePane
+      ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+      : null
+    if (!ptyId || ptyId.startsWith('remote:')) {
+      return
+    }
+    // Why: main uses this as a scheduler hint only, so the foreground pane's
+    // renderer output gets first chance at the bounded ACK reserve.
+    window.api.pty.setActiveRendererPty?.(ptyId, true)
+    return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
+  }, [isActive, isVisible, managerRef, paneTransportsRef])
+
+  useEffect(() => {
     const onToggleExpand = (event: Event): void => {
       const detail = (event as CustomEvent<{ tabId?: string }>).detail
       if (!detail?.tabId || detail.tabId !== tabId) {

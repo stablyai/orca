@@ -42,7 +42,6 @@ Tokens come in pairs: a **surface** and a **foreground** that meets contrast on 
 | `ring`                                   | Focus-visible outlines, active selection halos              | Persistent decoration                               |
 | `sidebar` (+ variants)                   | The worktree sidebar and its children                       | Other panels                                        |
 | `editor-surface`                         | Background of Monaco / markdown editor panes                | App chrome                                          |
-| `status-success` (+ background/border)    | Positive persistent state, such as installed/ready chips     | Primary actions; git status; decorative accents     |
 
 The `sidebar` family expands into `--sidebar`, `--sidebar-foreground`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--sidebar-border`, and `--sidebar-ring` — use them inside the worktree sidebar so its hover/selected/focus states stay consistent and don't bleed into other panels. `editor-surface` is its own token (not just `background`) because Monaco and the markdown editor have a slightly darker surface in dark mode to match VS Code conventions; reach for it whenever you're rendering an editor pane.
 
@@ -106,17 +105,6 @@ Orca uses shadows sparingly. Three levels in practice:
 3. **Floating** — `0 10px 24px rgba(0, 0, 0, 0.18)`. Popovers, popups that escape the editor surface. Reserved.
 
 Don't add a fourth level. If something needs more emphasis than "floating," you're probably reaching for the focus `ring` instead.
-
-## Floating surfaces (overlay, dialog, sheet, popover, hover-card, select, command)
-
-Anything that escapes its container — modal scrims, dropdowns, popovers, hover cards, select menus, command palettes — must follow the same recipe, otherwise it disappears into the canvas in dark mode (`--background: #0a0a0a` swallows `bg-popover: #171717` and `border-border/50` is ~3.5% white over that canvas). The recipe has four parts:
-
-1. **Scrim** — `bg-black/55 backdrop-blur-[2px]` for full-screen modals. A flat `bg-black/50` is invisible in dark mode; the blur is what separates the dimmed canvas from the surface.
-2. **Surface** — translucent, not opaque. Large modals use `bg-background/96 dark:bg-[rgba(23,23,23,0.96)]`; small floating surfaces (popover, hover-card, select, dropdown) use the dropdown-menu pattern (`bg-[rgba(255,255,255,0.82)] dark:bg-[rgba(0,0,0,0.72)]`).
-3. **Border** — `border-black/14 dark:border-white/14`. The `--border` token alone is too faint in dark mode; a 14% white/dark line reads as a clear edge in both modes without introducing a new token.
-4. **Shadow + blur** — two-layer drop shadow with an inset highlight (`shadow-[0_20px_60px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.08)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.06)]`) plus `backdrop-blur-2xl` on the content. The blur makes the translucent surface feel frosted, the drop shadow lifts it off the canvas, and the inset highlight gives it dimension.
-
-All six floating-surface primitives in `src/renderer/src/components/ui/` (`dialog`, `sheet`, `popover`, `hover-card`, `select`, `command`) already ship with this recipe. If you build a hand-rolled floating surface (a one-off command palette, a side panel, an inline picker), copy the recipe from the matching primitive — don't reinvent it.
 
 ## Components
 
@@ -246,6 +234,38 @@ Apply one of these to overflow containers; don't write a fourth style.
 These are the rules a contributor will most often get wrong if they're working in isolation. They apply to every UI change.
 
 **UI copy must not overclaim.** Never imply the app has taken an action, made a decision, or observed a fact unless the code has real state or result data to support it. Use neutral process language while work is pending, and reserve result verbs like "skipped", "protected", "found", "verified", or "deleted" for actual results.
+
+### Screen UX review rubric
+
+Use this rubric when reviewing any Orca IDE screen, screenshot, or prototype. A good review should name the highest-impact friction first, then give concrete changes the implementer can make.
+
+#### Review output format
+
+1. **Top fixes:** the 3 changes that would most improve the screen.
+2. **Friction notes:** specific clutter, alignment, copy, focus, or flow issues, with the affected UI element named.
+3. **Suggested changes:** exact changes to layout, hierarchy, controls, copy, empty/error states, and disclosure.
+4. **Keyboard and speed check:** whether the primary workflow can be completed in 1-2 actions where appropriate, with good default focus and Enter/Esc behavior.
+5. **Follow-up links or states:** missing external links, acquisition actions, or persistent errors the user needs to recover.
+
+#### What to judge
+
+- **Progressive disclosure:** keep high-frequency actions visible and prominent. Move low-frequency actions out of the common pointer path into menus, overflow controls, detail drawers, or advanced sections. Do not make menus so long that the user has to scan unrelated actions; group or split them when they grow.
+- **Action hierarchy:** the primary action must be obvious through placement, size, and `default` button styling. Put high-frequency actions at the top of menus and in the most reachable toolbar positions. Secondary and rare actions should not compete with the primary action.
+- **Click count:** remove unnecessary intermediate steps. Common workflows should complete in 1-2 actions when the app already has enough information to proceed.
+- **Default focus:** dialogs, popovers, and command surfaces should focus the field or primary action the user is most likely to use. If Enter submits, focus must land where Enter triggers the intended primary action. Esc should back out without adding visual noise to Cancel/Dismiss.
+- **Keyboard navigation:** prefer searchable command surfaces for long option lists. Add search fields when users need to find repositories, branches, worktrees, agents, commands, settings, files, or providers from a list.
+- **Shortcut labels:** show shortcut chips only for shortcuts that are actually implemented and useful at that location. Labels must match the platform binding. If a shortcut strategy is undecided, do not expose a placeholder label in product UI.
+- **Alignment:** rows and columns must line up to a visible grid. Left-align text and labels for scanability; right-align numbers, counts, shortcuts, and trailing metadata when comparison matters; center-align only compact icon controls, empty states, and table cells where symmetry is the clearest read.
+- **Copy quality:** displayed text must be typo-free, concise, and specific. Prefer direct verbs and concrete nouns. Remove filler like "please", "simply", "just", "you can", and generic success language that is not backed by state.
+- **Dialogs and overlays:** choose a dialog size that matches the amount of input. Short confirmations stay compact; forms with multi-line text, path pickers, provider setup, or review content need a larger dialog or sheet. Floating surfaces must use the documented shadow/elevation and background treatment so they read as above the page.
+- **Empty and error states:** when data is missing, show a direct action to acquire or configure that data. Use toasts for transient failures or confirmations; persist errors inline when the user needs to read, retry, copy, or act on the message.
+- **External links:** add direct links when the user may need provider docs, token settings, billing/setup pages, Git provider resources, or troubleshooting context. Put links near the relevant empty state, error, helper text, or setup step instead of burying them in a generic menu.
+- **Affordance:** users should be able to discover available features without intrusive education. Use familiar icons, visible hover/focus states, clear labels where needed, and tooltips for icon-only controls. Prefer simple lucide icons already used nearby over obscure alternatives.
+- **Layout density:** avoid jamming controls together. Preserve breathing room around the primary workflow, reduce competing buttons, and keep toolbar groups visually distinct. Dense screens are acceptable only when grouping, alignment, and hierarchy make scanning faster.
+- **Cards and containers:** cards must be visually distinct from their parent surface through the existing `card`/`border` treatment. Avoid nesting cards inside cards. If a section is not a repeated item, modal, or framed tool, consider an unframed layout or full-width band instead.
+- **Side-by-side layouts:** default to row-by-row layouts for complex workflows because they are easier to align and scan. Use side-by-side layouts only when space is constrained or comparison is the point, then polish column widths, baselines, and wrapping states carefully.
+- **Animation:** use subtle animation to soften expanding/collapsing content and prevent jumpy layout changes. Animation should clarify continuity, not decorate. Respect reduced-motion settings.
+- **SSH and latency:** assume actions may run remotely. Disable submit controls immediately, delay visible loading feedback when appropriate, and keep focus stable while remote data arrives.
 
 ### 1. Match in-flight feedback to perceived duration
 

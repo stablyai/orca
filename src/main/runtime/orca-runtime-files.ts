@@ -120,8 +120,19 @@ export type RuntimeFileCommandHost = {
   resolveRuntimeGitTarget(
     selector: string
   ): Promise<{ worktree: ResolvedRuntimeFileWorktree; connectionId?: string }>
-  openFile(worktreeId: string, filePath: string, relativePath: string): void
-  openDiff(worktreeId: string, filePath: string, relativePath: string, staged: boolean): void
+  openFile(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    runtimeEnvironmentId?: string | null
+  ): void
+  openDiff(
+    worktreeId: string,
+    filePath: string,
+    relativePath: string,
+    staged: boolean,
+    runtimeEnvironmentId?: string | null
+  ): void
 }
 
 export class RuntimeFileCommands {
@@ -173,7 +184,13 @@ export class RuntimeFileCommands {
       return { worktree: worktree.id, relativePath, kind, opened: false }
     }
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openFile(worktree.id, filePath, relativePath)
+    // Why: the service's internal runtimeId is not a registered runtime env selector
+    // (those live in orca-environments.json). Passing it caused Unknown environment
+    // errors on content load for CLI-initiated opens (via files.open from orca cli
+    // used by agents). Instead pass undefined so the renderer openFile falls back to
+    // the current activeRuntimeEnvironmentId (or null), matching sidebar opens and
+    // allowing correct routing for local vs remote envs.
+    this.host.openFile(worktree.id, filePath, relativePath, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 
@@ -192,7 +209,8 @@ export class RuntimeFileCommands {
         ? 'markdown'
         : 'text'
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    this.host.openDiff(worktree.id, filePath, relativePath, staged)
+    // Why: see openMobileFile; avoid stamping internal runtimeId as runtimeEnvironmentId.
+    this.host.openDiff(worktree.id, filePath, relativePath, staged, undefined)
     return { worktree: worktree.id, relativePath, kind, opened: true }
   }
 

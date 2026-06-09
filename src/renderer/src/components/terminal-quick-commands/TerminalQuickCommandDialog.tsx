@@ -90,6 +90,7 @@ export function TerminalQuickCommandDialog({
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const selectedAction = getTerminalQuickCommandAction(draft)
   const selectedScope = getTerminalQuickCommandScope(draft)
+  const isAgentAction = isTerminalAgentQuickCommand(draft)
   // Why: repo-scoped commands can outlive the current repo list; only an
   // explicit selection should replace the saved repo id.
   const selectedRepo =
@@ -114,9 +115,7 @@ export function TerminalQuickCommandDialog({
   }
 
   const selectedAgent =
-    isTerminalAgentQuickCommand(draft) && supportsTerminalAgentQuickCommand(draft.agent)
-      ? draft.agent
-      : fallbackAgent
+    isAgentAction && supportsTerminalAgentQuickCommand(draft.agent) ? draft.agent : fallbackAgent
 
   const setAction = (action: 'terminal-command' | 'agent-prompt'): void => {
     setDraft((current) => {
@@ -173,7 +172,7 @@ export function TerminalQuickCommandDialog({
 
   const canSave =
     draft.label.trim().length > 0 &&
-    (isTerminalAgentQuickCommand(draft)
+    (isAgentAction
       ? draft.prompt.trimEnd().length > 0 && supportsTerminalAgentQuickCommand(draft.agent)
       : draft.command.trimEnd().length > 0)
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
@@ -209,102 +208,130 @@ export function TerminalQuickCommandDialog({
             />
           </div>
 
-          {isTerminalAgentQuickCommand(draft) ? (
-            <>
-              <div className="space-y-2">
-                <Label>Agent</Label>
-                <Select
-                  value={selectedAgent}
-                  onValueChange={(agent) => {
-                    const nextAgent = agent as TuiAgent
-                    draftMemoryRef.current = {
-                      ...draftMemoryRef.current,
-                      agent: nextAgent
-                    }
-                    setDraft((current) =>
-                      isTerminalAgentQuickCommand(current)
-                        ? { ...current, agent: nextAgent }
-                        : current
-                    )
-                  }}
+          <div>
+            {/* Why: action changes add/remove agent-only fields; animating rows here
+                keeps the fixed dialog from snapping between content heights. */}
+            <div
+              className={cn(
+                'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+                isAgentAction ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+              )}
+              aria-hidden={!isAgentAction}
+            >
+              <div className="min-h-0">
+                <div
+                  className={cn(
+                    'space-y-2 px-1 pt-1 pb-4 transition-[opacity,transform] duration-150 ease-out',
+                    isAgentAction
+                      ? 'translate-y-0 opacity-100 delay-200'
+                      : '-translate-y-1 opacity-0 delay-0'
+                  )}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose agent" />
-                  </SelectTrigger>
-                  <SelectContent
-                    position="popper"
-                    side="bottom"
-                    align="start"
-                    sideOffset={4}
-                    className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-[--radix-select-trigger-width]"
-                  >
-                    {QUICK_COMMAND_AGENT_OPTIONS.map((entry) => {
-                      const supported = supportsTerminalAgentQuickCommand(entry.id)
-                      return (
-                        <SelectItem key={entry.id} value={entry.id} disabled={!supported}>
-                          <span className="flex min-w-0 items-center gap-2">
-                            <AgentIcon agent={entry.id} size={16} />
-                            <span className="flex min-w-0 flex-col">
-                              <span className="truncate">{entry.label}</span>
-                              {!supported ? (
-                                <span className="truncate text-xs text-muted-foreground">
-                                  Does not support prompt commands
-                                </span>
-                              ) : null}
-                            </span>
-                          </span>
-                        </SelectItem>
+                  <Label>Agent</Label>
+                  <Select
+                    value={selectedAgent}
+                    disabled={!isAgentAction}
+                    onValueChange={(agent) => {
+                      const nextAgent = agent as TuiAgent
+                      draftMemoryRef.current = {
+                        ...draftMemoryRef.current,
+                        agent: nextAgent
+                      }
+                      setDraft((current) =>
+                        isTerminalAgentQuickCommand(current)
+                          ? { ...current, agent: nextAgent }
+                          : current
                       )
-                    })}
-                  </SelectContent>
-                </Select>
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose agent" />
+                    </SelectTrigger>
+                    <SelectContent
+                      position="popper"
+                      side="bottom"
+                      align="start"
+                      sideOffset={4}
+                      className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-[--radix-select-trigger-width]"
+                    >
+                      {QUICK_COMMAND_AGENT_OPTIONS.map((entry) => {
+                        const supported = supportsTerminalAgentQuickCommand(entry.id)
+                        return (
+                          <SelectItem key={entry.id} value={entry.id} disabled={!supported}>
+                            <span className="flex min-w-0 items-center gap-2">
+                              <AgentIcon agent={entry.id} size={16} />
+                              <span className="flex min-w-0 flex-col">
+                                <span className="truncate">{entry.label}</span>
+                                {!supported ? (
+                                  <span className="truncate text-xs text-muted-foreground">
+                                    Does not support prompt commands
+                                  </span>
+                                ) : null}
+                              </span>
+                            </span>
+                          </SelectItem>
+                        )
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <Label>Prompt</Label>
-                <textarea
-                  value={draft.prompt}
-                  onChange={(event) => {
-                    const prompt = event.target.value
-                    draftMemoryRef.current = {
-                      ...draftMemoryRef.current,
-                      agentPrompt: prompt
-                    }
-                    setDraft((current) =>
-                      isTerminalAgentQuickCommand(current) ? { ...current, prompt } : current
-                    )
-                  }}
-                  placeholder="Ask the agent to investigate this workspace"
-                  rows={4}
-                  className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                />
-                <p className="text-xs text-muted-foreground">
+            <div className="space-y-2">
+              <Label>{isAgentAction ? 'Prompt' : 'Command Text'}</Label>
+              <textarea
+                value={isAgentAction ? draft.prompt : draft.command}
+                onChange={(event) => {
+                  const text = event.target.value
+                  draftMemoryRef.current = isAgentAction
+                    ? {
+                        ...draftMemoryRef.current,
+                        agentPrompt: text
+                      }
+                    : {
+                        ...draftMemoryRef.current,
+                        terminalCommand: text
+                      }
+                  setDraft((current) =>
+                    isTerminalAgentQuickCommand(current)
+                      ? { ...current, prompt: text }
+                      : { ...current, command: text }
+                  )
+                }}
+                placeholder={
+                  isAgentAction ? 'Ask the agent to investigate this workspace' : 'npm run dev'
+                }
+                rows={4}
+                className={cn(
+                  'min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                  !isAgentAction && 'font-mono'
+                )}
+              />
+            </div>
+
+            <div
+              className={cn(
+                'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+                isAgentAction ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+              )}
+              aria-hidden={!isAgentAction}
+            >
+              <div className="min-h-0">
+                <p
+                  className={cn(
+                    'px-1 pt-2 text-xs text-muted-foreground transition-[opacity,transform] duration-150 ease-out',
+                    isAgentAction
+                      ? 'translate-y-0 opacity-100 delay-200'
+                      : '-translate-y-1 opacity-0 delay-0'
+                  )}
+                >
                   Supports skills, file paths, and built-in commands like{' '}
                   <code className="rounded bg-muted px-1 font-mono text-[11px]">/goal</code>.
                 </p>
               </div>
-            </>
-          ) : (
-            <div className="space-y-2">
-              <Label>Command Text</Label>
-              <textarea
-                value={draft.command}
-                onChange={(event) => {
-                  const command = event.target.value
-                  draftMemoryRef.current = {
-                    ...draftMemoryRef.current,
-                    terminalCommand: command
-                  }
-                  setDraft((current) =>
-                    isTerminalAgentQuickCommand(current) ? current : { ...current, command }
-                  )
-                }}
-                placeholder="npm run dev"
-                rows={4}
-                className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              />
             </div>
-          )}
+          </div>
 
           <div>
             <Button

@@ -14,10 +14,3 @@ export function isDotfileRelativePath(relativePath: string): boolean {
     .filter(Boolean)
     .some(isDotfileSegment)
 }
-
-export function getDotfileVisibleFileExplorerRows<T extends { relativePath: string }>(
-  rows: T[],
-  showDotfiles: boolean
-): T[] {
-  return showDotfiles ? rows : rows.filter((row) => !isDotfileRelativePath(row.relativePath))
-}

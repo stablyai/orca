@@ -38,6 +38,8 @@ import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
+import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../shared/auto-rename-branch-from-work-settings'
+import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import {
@@ -421,6 +423,12 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       pickFloatingMarkdownDocument: () => Promise.resolve(null),
       pickFloatingWorkspaceDirectory: () => Promise.resolve(null)
     },
+    platform: {
+      get: () => ({
+        platform: getBrowserPlatform(),
+        osRelease: ''
+      })
+    },
     e2e: {
       getConfig: () => createE2EConfig({})
     },
@@ -430,7 +438,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         if (updates.activeRuntimeEnvironmentId === null) {
           disconnectActiveRuntimeEnvironment()
         }
-        const next = mergeSettings(getStoredSettings(), updates)
+        const sanitizedUpdates = { ...updates }
+        if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
+          sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
+        }
+        const next = mergeSettings(getStoredSettings(), sanitizedUpdates, {
+          preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
+        })
         writeJson(SETTINGS_STORAGE_KEY, next)
         return next
       },
@@ -486,6 +500,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           })
         )
       },
+      readTerminalScrollback: () => null,
       setSync: (session) => {
         writeJson(SESSION_STORAGE_KEY, sanitizeWebRuntimeWorkspaceSession(session))
       }
@@ -526,6 +541,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     fs: createFileApi(),
     git: createGitApi(),
     browser: createBrowserApi(),
+    emulator: createEmulatorApi(),
     gh: createGitHubApi(),
     gl: createGitLabApi(),
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
@@ -1020,6 +1036,9 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         manualOrder: args.manualOrder
       })
     },
+    // Why: the runtime create path emits no two-phase progress, so the web
+    // client's creation panel simply falls back to an indeterminate spinner.
+    onCreateProgress: () => noopUnsubscribe,
     prefetchCreateBase: async ({ repoId, baseBranch }) => {
       await callRuntimeResult('worktree.prefetchCreateBase', {
         repo: repoId,
@@ -1443,6 +1462,17 @@ function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   } as unknown as NonNullable<Partial<PreloadApi>['browser']>
 }
 
+function createEmulatorApi(): NonNullable<Partial<PreloadApi>['emulator']> {
+  return {
+    onPaneFocus: () => noopUnsubscribe,
+    onAutoAttach: () => noopUnsubscribe,
+    startFrameStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
+    stopFrameStream: () => Promise.resolve(),
+    onFrameStreamFrame: () => noopUnsubscribe,
+    onFrameStreamError: () => noopUnsubscribe
+  } as unknown as NonNullable<Partial<PreloadApi>['emulator']>
+}
+
 function createGitHubApi(): WebGitHubApi {
   const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>
     callRuntimeResult<Result>(method, mapRepoPathArg(args))
@@ -1810,6 +1840,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onNewBrowserTab: () => noopUnsubscribe,
     onNewMarkdownTab: () => noopUnsubscribe,
+    onNewSimulatorTab: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,
@@ -1820,6 +1851,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFocusBrowserAddressBar: () => noopUnsubscribe,
     onFindInBrowserPage: () => noopUnsubscribe,
     onReloadBrowserPage: () => noopUnsubscribe,
+    onZoomBrowserPage: () => noopUnsubscribe,
     onHardReloadBrowserPage: () => noopUnsubscribe,
     onCloseActiveTab: () => noopUnsubscribe,
     onSwitchTab: () => noopUnsubscribe,
@@ -2056,6 +2088,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     codex: null,
     gemini: null,
     opencodeGo: null,
+    kimi: null,
     claudeTarget: { runtime: 'host', wslDistro: null },
     codexTarget: { runtime: 'host', wslDistro: null },
     inactiveClaudeAccounts: [],
@@ -2139,11 +2172,30 @@ function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     signal: () => {},
     kill: () => Promise.resolve(),
     ackColdRestore: () => {},
+    ackData: () => {},
+    setActiveRendererPty: () => {},
     hasChildProcesses: () => Promise.resolve(false),
     getForegroundProcess: () => Promise.resolve(null),
     getCwd: () => Promise.resolve('~'),
     listSessions: () => Promise.resolve([]),
     getMainBufferSnapshot: () => Promise.resolve(null),
+    getRendererDeliveryDebugSnapshot: () =>
+      Promise.resolve({
+        pendingPtyCount: 0,
+        pendingChars: 0,
+        maxPendingCharsByPty: 0,
+        rendererInFlightPtyCount: 0,
+        rendererInFlightChars: 0,
+        maxRendererInFlightCharsByPty: 0,
+        activeRendererPtyCount: 0,
+        flushScheduled: false,
+        peakPendingChars: 0,
+        peakMaxPendingCharsByPty: 0,
+        peakRendererInFlightChars: 0,
+        peakMaxRendererInFlightCharsByPty: 0,
+        ackGatedFlushSkipCount: 0
+      }),
+    resetRendererDeliveryDebug: () => Promise.resolve(),
     onData: () => noopUnsubscribe,
     onReplay: () => noopUnsubscribe,
     onExit: () => noopUnsubscribe,
@@ -2362,7 +2414,31 @@ function updateEnvironmentFromResponse(
 function getStoredSettings(): GlobalSettings {
   const environment = (activeEnvironment = activeEnvironment ?? readStoredWebRuntimeEnvironment())
   const defaults = getDefaultSettings('~')
+  const rawStoredSettings = window.localStorage.getItem(SETTINGS_STORAGE_KEY)
   const stored = readJson<Partial<GlobalSettings>>(SETTINGS_STORAGE_KEY, {})
+  const migratedStored = {
+    ...stored,
+    ...normalizeAutoRenameBranchFromWorkDefaultOn(stored),
+    ...normalizeTerminalCursorStyleDefault(stored)
+  }
+  if (
+    rawStoredSettings &&
+    (stored.autoRenameBranchFromWork !== migratedStored.autoRenameBranchFromWork ||
+      stored.autoRenameBranchFromWorkDefaultedOn !==
+        migratedStored.autoRenameBranchFromWorkDefaultedOn ||
+      stored.terminalCursorStyle !== migratedStored.terminalCursorStyle ||
+      stored.terminalCursorStyleDefaultedToBlock !==
+        migratedStored.terminalCursorStyleDefaultedToBlock)
+  ) {
+    try {
+      const parsed = JSON.parse(rawStoredSettings) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        writeJson(SETTINGS_STORAGE_KEY, migratedStored)
+      }
+    } catch {
+      // Keep readJson's invalid-JSON fallback non-destructive.
+    }
+  }
   return mergeSettings(
     {
       ...defaults,
@@ -2370,7 +2446,7 @@ function getStoredSettings(): GlobalSettings {
       rightSidebarOpenByDefault: false,
       activeRuntimeEnvironmentId: environment?.id ?? null
     },
-    stored
+    migratedStored
   )
 }
 
@@ -2488,9 +2564,13 @@ function mergeContextualTourSeenIds(
   return [...merged]
 }
 
-function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): GlobalSettings {
+function mergeSettings(
+  base: GlobalSettings,
+  updates: Partial<GlobalSettings>,
+  options: { preserveAutoRenameBranchFromWorkUpdate?: boolean } = {}
+): GlobalSettings {
   const defaults = getDefaultSettings('~')
-  return {
+  const merged = {
     ...base,
     ...updates,
     notifications: {
@@ -2509,6 +2589,12 @@ function mergeSettings(base: GlobalSettings, updates: Partial<GlobalSettings>): 
       ...updates.voice
     } as NonNullable<GlobalSettings['voice']>,
     activeRuntimeEnvironmentId: activeEnvironment?.id ?? updates.activeRuntimeEnvironmentId ?? null
+  }
+  return {
+    ...merged,
+    ...normalizeAutoRenameBranchFromWorkDefaultOn(merged, {
+      preserveExplicitValue: options.preserveAutoRenameBranchFromWorkUpdate
+    })
   }
 }
 

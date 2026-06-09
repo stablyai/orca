@@ -9,6 +9,7 @@ import {
   ConflictTriageStrip,
   getFailedChecksForDetails,
   MergeConflictNotice,
+  isMutablePRConversationComment,
   PRCommentsList,
   PRTriageStrip
 } from './checks-panel-content'
@@ -159,6 +160,43 @@ describe('ChecksList', () => {
   })
 })
 
+describe('isMutablePRConversationComment', () => {
+  it('allows top-level conversation comments but not review threads or summaries', () => {
+    expect(
+      isMutablePRConversationComment({
+        id: 12,
+        author: 'alice',
+        authorAvatarUrl: '',
+        body: 'Looks good',
+        createdAt: '2026-05-14T00:00:00Z',
+        url: 'https://github.com/acme/widgets/pull/42#issuecomment-12'
+      })
+    ).toBe(true)
+    expect(
+      isMutablePRConversationComment({
+        id: 34,
+        author: 'alice',
+        authorAvatarUrl: '',
+        body: 'Inline note',
+        createdAt: '2026-05-14T00:00:00Z',
+        url: 'https://github.com/acme/widgets/pull/42#discussion_r34',
+        threadId: 'thread-1',
+        path: 'src/a.ts'
+      })
+    ).toBe(false)
+    expect(
+      isMutablePRConversationComment({
+        id: 99,
+        author: 'alice',
+        authorAvatarUrl: '',
+        body: 'LGTM',
+        createdAt: '2026-05-14T00:00:00Z',
+        url: 'https://github.com/acme/widgets/pull/42#pullrequestreview-99'
+      })
+    ).toBe(false)
+  })
+})
+
 describe('PRCommentsList', () => {
   it('places the collapsed add-comment action in the comments header', () => {
     const comments: PRComment[] = [
@@ -186,6 +224,31 @@ describe('PRCommentsList', () => {
     expect(markup).toContain('lucide-plus')
     expect(markup).not.toContain('Add a comment...')
     expect(markup).not.toContain('Add a PR comment')
+  })
+
+  it('renders a more-actions menu on conversation comments', () => {
+    const comments: PRComment[] = [
+      {
+        id: 1,
+        author: 'AmethystLiang',
+        authorAvatarUrl: '',
+        body: 'Existing review context',
+        createdAt: '2026-05-14T00:00:00Z',
+        url: 'https://github.com/acme/widgets/pull/42#issuecomment-1'
+      }
+    ]
+
+    const markup = renderWithTooltips(
+      React.createElement(PRCommentsList, {
+        comments,
+        commentsLoading: false,
+        onEditComment: () => Promise.resolve(true),
+        onDeleteComment: () => {}
+      })
+    )
+
+    expect(markup).toContain('aria-label="More comment actions"')
+    expect(markup).toContain('data-slot="dropdown-menu-trigger"')
   })
 
   it('uses the header plus action as the empty comments state', () => {

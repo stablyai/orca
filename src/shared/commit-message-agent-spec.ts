@@ -205,6 +205,19 @@ export function parseCursorModels(stdout: string): CommitMessageModel[] {
   )
 }
 
+export function parseAntigravityModels(stdout: string): CommitMessageModel[] {
+  return uniqueModels(
+    stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((id) => ({
+        id,
+        label: id
+      }))
+  )
+}
+
 export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageAgentSpec>> = {
   claude: {
     id: 'claude',
@@ -323,8 +336,10 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     id: 'opencode',
     label: 'OpenCode',
     binary: 'opencode',
-    promptDelivery: 'argv',
-    buildArgs: ({ prompt, model, thinkingLevel }) => [
+    // Why: Source Control AI prompts can include large staged diffs; OpenCode
+    // accepts the prompt on stdin, which avoids cross-platform argv limits.
+    promptDelivery: 'stdin',
+    buildArgs: ({ model, thinkingLevel }) => [
       'run',
       '--model',
       model,
@@ -332,8 +347,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       'build',
       '--format',
       'default',
-      ...(thinkingLevel ? ['--variant', thinkingLevel] : []),
-      prompt
+      ...(thinkingLevel ? ['--variant', thinkingLevel] : [])
     ],
     modelSource: 'dynamic',
     modelDiscovery: { binary: 'opencode', args: ['models'], parse: parseLineModels },
@@ -568,6 +582,21 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       }
     ],
     defaultModelId: 'gpt-5.4'
+  },
+  antigravity: {
+    id: 'antigravity',
+    label: 'Antigravity',
+    binary: 'agy',
+    promptDelivery: 'stdin',
+    buildArgs: ({ model }) => ['--print', '--sandbox', '--model', model],
+    modelSource: 'dynamic',
+    modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
+    models: [
+      { id: 'Gemini 3.5 Flash (Medium)', label: 'Gemini 3.5 Flash (Medium)' },
+      { id: 'Gemini 3.5 Flash (High)', label: 'Gemini 3.5 Flash (High)' },
+      { id: 'Gemini 3.5 Flash (Low)', label: 'Gemini 3.5 Flash (Low)' }
+    ],
+    defaultModelId: 'Gemini 3.5 Flash (Medium)'
   }
 }
 

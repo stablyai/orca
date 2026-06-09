@@ -20,7 +20,10 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 
 vi.mock('sonner', () => ({
   toast: {
-    warning: vi.fn()
+    warning: vi.fn(),
+    success: vi.fn(),
+    error: vi.fn(),
+    dismiss: vi.fn()
   }
 }))
 
@@ -77,6 +80,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import { createWorktreeSlice } from './worktrees'
+import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 import { getHostedReviewCacheKey } from './hosted-review'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import {
@@ -102,6 +106,7 @@ function createTestStore() {
         ...createWorktreeSlice(...a),
         trustedOrcaHooks: {},
         repos: [],
+        updateSettings: vi.fn().mockResolvedValue(undefined),
         openModal: vi.fn(),
         shutdownWorktreeTerminals: vi.fn().mockResolvedValue(undefined),
         shutdownWorktreeBrowsers: vi.fn().mockResolvedValue(undefined),
@@ -1316,6 +1321,182 @@ describe('createWorktree base status merge', () => {
     expect(toast.warning).not.toHaveBeenCalled()
   })
 
+  it('suggests turning on local main freshness when the create result reports a stale local base', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefUpdateSuggestion: {
+        baseRef: 'origin/main',
+        localBranch: 'main',
+        behind: 2
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(toast.warning).toHaveBeenCalledWith(
+      'Local main is behind origin/main',
+      expect.objectContaining({
+        id: 'local-base-ref-update-suggestion:origin/main:main',
+        description: expect.stringContaining(
+          'Your new worktree is current, but local main is 2 commits behind. AI diffs may miss recent commits.'
+        ),
+        duration: Infinity,
+        dismissible: true,
+        action: expect.objectContaining({ label: 'Keep main up to date' }),
+        cancel: expect.objectContaining({ label: 'Dismiss' })
+      })
+    )
+  })
+
+  it('persists the dismissal flag when the suggestion toast is dismissed', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
+      updateSettings: vi.fn().mockResolvedValue(undefined)
+    } as Partial<AppState>)
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefUpdateSuggestion: { baseRef: 'origin/main', localBranch: 'main', behind: 2 }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const options = vi.mocked(toast.warning).mock.calls.at(-1)?.[1] as unknown as {
+      onDismiss: () => void
+      cancel: { onClick: () => void }
+    }
+    // Both the close (X)/swipe path and the Dismiss button must persist the flag.
+    options.onDismiss()
+    options.cancel.onClick()
+    await Promise.resolve()
+
+    expect(store.getState().updateSettings).toHaveBeenCalledWith({
+      localBaseRefSuggestionDismissed: true
+    })
+  })
+
+  it('does not record a dismissal when Turn On has enabled the feature', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
+      updateSettings: vi.fn().mockImplementation(async (updates) => {
+        store.setState({
+          settings: { ...store.getState().settings!, ...updates } as AppState['settings']
+        })
+      })
+    } as Partial<AppState>)
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefUpdateSuggestion: { baseRef: 'origin/main', localBranch: 'main', behind: 1 }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const options = vi.mocked(toast.warning).mock.calls.at(-1)?.[1] as unknown as {
+      onDismiss: () => void
+      action: { onClick: () => void }
+    }
+    options.action.onClick()
+    await Promise.resolve()
+    await Promise.resolve()
+    // The Turn On success path dismisses the toast, which fires onDismiss; that
+    // must not be recorded as a decline now that the feature is enabled.
+    options.onDismiss()
+    await Promise.resolve()
+
+    expect(store.getState().updateSettings).not.toHaveBeenCalledWith({
+      localBaseRefSuggestionDismissed: true
+    })
+  })
+
+  it('turns on local main freshness from the suggestion toast action', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
+      updateSettings: vi.fn().mockImplementation(async (updates) => {
+        store.setState({
+          settings: {
+            ...store.getState().settings!,
+            ...updates
+          } as AppState['settings']
+        })
+      })
+    } as Partial<AppState>)
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefUpdateSuggestion: {
+        baseRef: 'origin/master',
+        localBranch: 'master',
+        behind: 1
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as unknown as {
+      onClick: () => void
+    }
+    action.onClick()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(store.getState().updateSettings).toHaveBeenCalledWith({
+      refreshLocalBaseRefOnWorktreeCreate: true
+    })
+    expect(toast.dismiss).toHaveBeenCalledWith(
+      'local-base-ref-update-suggestion:origin/master:master'
+    )
+    expect(toast.success).toHaveBeenCalledWith('Keeping local master up to date')
+  })
+
+  it('reports failure when the suggestion toast action cannot persist the setting', async () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
+      updateSettings: vi.fn().mockResolvedValue(undefined)
+    } as Partial<AppState>)
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    mockApi.worktrees.create.mockResolvedValue({
+      worktree: wt,
+      localBaseRefUpdateSuggestion: {
+        baseRef: 'origin/main',
+        localBranch: 'main',
+        behind: 1
+      }
+    })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as unknown as {
+      onClick: () => void
+    }
+    action.onClick()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(toast.dismiss).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith('Could not keep local main up to date', {
+      description: 'Open Settings > Git and try again.'
+    })
+  })
+
   it('stamps manualOrder on create while Manual sort is active', async () => {
     const store = createTestStore()
     store.setState({ sortBy: 'manual' } as Partial<AppState>)
@@ -1571,6 +1752,64 @@ describe('removeWorktree state cleanup', () => {
     await store.getState().removeWorktree('repo1::/path/wt1')
 
     expect(store.getState().editorViewMode).toEqual({ 'file-2': 'changes' })
+  })
+
+  it('cleans up markdownFrontmatterVisible for files in the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      openFiles: [
+        {
+          id: 'file-1',
+          worktreeId: 'repo1::/path/wt1',
+          filePath: '/path/wt1/readme.md',
+          relativePath: 'readme.md',
+          language: 'markdown',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      markdownFrontmatterVisible: {
+        'file-1': true,
+        'file-2': true
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ 'file-2': true })
+  })
+
+  it('cleans up markdownFrontmatterVisible for preview-only source files in the removed worktree', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      openFiles: [
+        {
+          id: 'markdown-preview::file-1',
+          worktreeId: 'repo1::/path/wt1',
+          filePath: '/path/wt1/readme.md',
+          relativePath: 'readme.md',
+          language: 'markdown',
+          isDirty: false,
+          markdownPreviewSourceFileId: 'file-1',
+          mode: 'markdown-preview' as const
+        }
+      ],
+      markdownFrontmatterVisible: {
+        'file-1': true,
+        'file-2': true
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().removeWorktree('repo1::/path/wt1')
+
+    expect(store.getState().markdownFrontmatterVisible).toEqual({ 'file-2': true })
   })
 
   it('records the sidebar scroll anchor in the same tick it removes the worktree', async () => {
@@ -2131,11 +2370,16 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
-      updates: { displayName: 'Fix auth', pendingFirstAgentMessageRename: false }
+      updates: {
+        displayName: 'Fix auth',
+        pendingFirstAgentMessageRename: false,
+        firstAgentMessageRenameError: null
+      }
     })
     expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
       displayName: 'Fix auth',
-      pendingFirstAgentMessageRename: false
+      pendingFirstAgentMessageRename: false,
+      firstAgentMessageRenameError: null
     })
   })
 
@@ -2985,11 +3229,13 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
           relativePath: 'a.ts',
           language: 'typescript',
           isDirty: false,
+          markdownPreviewSourceFileId: 'source-1',
           isPreview: false,
           mode: 'edit' as const
         }
       ],
       editorDrafts: { 'file-1': 'draft', 'file-99': 'other' },
+      markdownFrontmatterVisible: { 'source-1': true, 'file-99': true },
       gitIgnoredPathsByWorktree: {
         'repoA::/a/wt1': ['dist/'],
         'repoA::/a/wt2': ['coverage/']
@@ -3022,6 +3268,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
     expect(s.openFiles).toEqual([])
     expect(s.editorDrafts).toEqual({ 'file-99': 'other' })
+    expect(s.markdownFrontmatterVisible).toEqual({ 'file-99': true })
     expect(s.gitIgnoredPathsByWorktree).toEqual({ 'repoA::/a/wt2': ['coverage/'] })
     expect(s.rightSidebarTabByWorktree).toEqual({ 'repoA::/a/wt2': 'checks' })
     expect(s.activeWorktreeId).toBeNull()
@@ -3235,5 +3482,114 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[2].isPinned).toBe(true)
+  })
+})
+
+function makePendingCreation(
+  creationId: string,
+  overrides: Partial<PendingWorktreeCreation> = {}
+): PendingWorktreeCreation {
+  return {
+    creationId,
+    phase: 'fetching',
+    status: 'creating',
+    indeterminate: false,
+    loaderVisible: false,
+    request: {
+      repoId: 'repo1',
+      name: 'feature',
+      setupDecision: 'inherit',
+      agent: null,
+      pendingFirstAgentMessageRename: false,
+      note: '',
+      startupPlan: null,
+      quickPrompt: '',
+      quickTelemetry: null
+    },
+    ...overrides
+  }
+}
+
+describe('pending worktree creation state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    resetRemoteRuntimeMocks()
+  })
+
+  it('beginPendingWorktreeCreation registers the entry and makes it the active surface', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    expect(store.getState().pendingWorktreeCreations.c1).toBeDefined()
+    expect(store.getState().activePendingCreationId).toBe('c1')
+  })
+
+  it('updatePendingWorktreeCreation skips the write when the patch changes nothing', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+    const before = store.getState().pendingWorktreeCreations
+
+    store.getState().updatePendingWorktreeCreation('c1', { phase: 'fetching' })
+
+    // Same map reference => no subscriber notification on a no-op progress event.
+    expect(store.getState().pendingWorktreeCreations).toBe(before)
+  })
+
+  it('updatePendingWorktreeCreation applies a real phase change', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    store.getState().updatePendingWorktreeCreation('c1', { phase: 'creating' })
+
+    expect(store.getState().pendingWorktreeCreations.c1.phase).toBe('creating')
+  })
+
+  it('updatePendingWorktreeCreation is a no-op for an unknown id', () => {
+    const store = createTestStore()
+    const before = store.getState().pendingWorktreeCreations
+
+    store.getState().updatePendingWorktreeCreation('missing', { status: 'error', error: 'x' })
+
+    expect(store.getState().pendingWorktreeCreations).toBe(before)
+  })
+
+  it('removePendingWorktreeCreation clears the active surface only when it points at the removed entry', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c2'))
+    // c2 is active now; removing the background c1 must not steal the surface.
+    store.getState().removePendingWorktreeCreation('c1')
+
+    expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
+    expect(store.getState().activePendingCreationId).toBe('c2')
+
+    store.getState().removePendingWorktreeCreation('c2')
+    expect(store.getState().activePendingCreationId).toBeNull()
+  })
+
+  it('setActivePendingWorktreeCreation ignores unknown ids but always accepts null', () => {
+    const store = createTestStore()
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1'))
+
+    store.getState().setActivePendingWorktreeCreation('missing')
+    expect(store.getState().activePendingCreationId).toBe('c1')
+
+    store.getState().setActivePendingWorktreeCreation(null)
+    expect(store.getState().activePendingCreationId).toBeNull()
+  })
+
+  it('setActiveWorktree dismisses the creation panel even when re-selecting the already-active worktree', () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/a', repoId: 'repo1' })
+    store.setState({
+      worktreesByRepo: { repo1: [wt] },
+      activeWorktreeId: wt.id,
+      activePendingCreationId: 'c1',
+      pendingWorktreeCreations: { c1: makePendingCreation('c1') }
+    } as unknown as Partial<AppState>)
+
+    store.getState().setActiveWorktree(wt.id)
+
+    expect(store.getState().activePendingCreationId).toBeNull()
   })
 })

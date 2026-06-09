@@ -45,8 +45,9 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   }
 
   return (
-    <div className="h-[min(740px,calc(100vh-14rem))] min-h-[540px] p-5">
+    <div className="h-[min(740px,calc(100vh-14rem))] min-h-[540px] px-7 py-6">
       <FeatureWallSetupChecklist
+        layout="embedded"
         activeStep={activeStep}
         progress={progress}
         onSelectStep={handleSelectStep}

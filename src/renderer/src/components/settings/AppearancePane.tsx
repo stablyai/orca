@@ -277,8 +277,35 @@ export function AppearancePane({
             <SettingsSwitchRow
               label="Show Tasks Button"
               description="Show the Tasks button at the top of the left sidebar."
-              checked={settings.showTasksButton}
-              onChange={() => updateSettings({ showTasksButton: !settings.showTasksButton })}
+              checked={settings.showTasksButton !== false}
+              onChange={() =>
+                updateSettings({ showTasksButton: !(settings.showTasksButton !== false) })
+              }
+            />
+          </SearchableSetting>
+
+          <SearchableSetting
+            title="Show Automations Button"
+            description="Show the Automations button at the top of the left sidebar."
+            keywords={[
+              'automations',
+              'automation',
+              'schedule',
+              'sidebar',
+              'button',
+              'hide',
+              'show'
+            ]}
+          >
+            <SettingsSwitchRow
+              label="Show Automations Button"
+              description="Show the Automations button at the top of the left sidebar."
+              checked={settings.showAutomationsButton !== false}
+              onChange={() =>
+                updateSettings({
+                  showAutomationsButton: !(settings.showAutomationsButton !== false)
+                })
+              }
             />
           </SearchableSetting>
 

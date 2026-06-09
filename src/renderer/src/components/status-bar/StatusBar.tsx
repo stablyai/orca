@@ -37,11 +37,13 @@ import type {
 } from '../../../../shared/rate-limit-types'
 import { ProviderIcon, ProviderPanel, barColor } from './tooltip'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { formatWindowLabel } from '@/lib/window-label-formatter'
 import { markLiveCodexSessionsForRestart } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { isProviderConfigured } from './status-bar-provider-visibility'
+import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
 import { shouldOpenStatusBarContextMenu } from './status-bar-context-menu-policy'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -1399,7 +1401,7 @@ function CodexSwitcherMenu({
   )
 }
 
-function ProviderDetailsMenu({
+export function ProviderDetailsMenu({
   provider,
   compact,
   iconOnly,
@@ -1419,16 +1421,18 @@ function ProviderDetailsMenu({
   children?: React.ReactNode
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const skipCloseAutoFocusRef = useRef(false)
 
   const handleOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
+      skipCloseAutoFocusRef.current = false
       recordFeatureInteraction('usage-tracking')
     }
     onOpenChange?.(nextOpen)
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           type="button"
@@ -1447,7 +1451,9 @@ function ProviderDetailsMenu({
                     ? 'G'
                     : provider.provider === 'opencode-go'
                       ? 'O'
-                      : 'X'}
+                      : provider.provider === 'kimi'
+                        ? 'K'
+                        : 'X'}
               </span>
             </span>
           ) : (
@@ -1455,7 +1461,24 @@ function ProviderDetailsMenu({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-[260px]">
+      <DropdownMenuContent
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-[260px]"
+        onPointerDownOutside={() => {
+          skipCloseAutoFocusRef.current = true
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!skipCloseAutoFocusRef.current) {
+            return
+          }
+          skipCloseAutoFocusRef.current = false
+          // Why: click-away should focus the clicked surface, especially xterm;
+          // Radix's default trigger restore steals that first click.
+          event.preventDefault()
+        }}
+      >
         {topContent}
         <div className="p-2">
           <ProviderPanel p={provider} />
@@ -1501,6 +1524,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // purely by the experimentalPet settings flag.
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const toggleStatusBarItem = useAppStore((s) => s.toggleStatusBarItem)
+  const usageEmptyStateDismissed = useAppStore((s) => s.usageEmptyStateDismissed)
   const containerRef = useRef<HTMLDivElement>(null)
   const mountedRef = useRef(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -1570,7 +1594,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo } = rateLimits
+  const { claude, codex, gemini, opencodeGo, kimi } = rateLimits
 
   // Why: a provider only earns a bar once it's configured (isProviderConfigured
   // drops the `unavailable` state — Gemini OAuth off, OpenCode Go cookie unset,
@@ -1590,6 +1614,10 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     isProviderConfigured(gemini) &&
     statusBarItems.includes('gemini') &&
     isStatusBarItemAvailable('gemini', detectedAgentIds)
+  const showKimi =
+    isProviderConfigured(kimi) &&
+    statusBarItems.includes('kimi') &&
+    isStatusBarItemAvailable('kimi', detectedAgentIds)
   // Why: OpenCode Go is a web/cookie-auth provider, not a CLI on PATH, so
   // detection-gating doesn't apply.
   const showOpencodeGo = isProviderConfigured(opencodeGo) && statusBarItems.includes('opencode-go')
@@ -1598,12 +1626,28 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const showPorts = statusBarItems.includes('ports')
   const showFloatingTerminalToggle =
     floatingTerminalEnabled && floatingTerminalTriggerLocation === 'status-bar'
-  const anyVisible = showClaude || showCodex || showGemini || showOpencodeGo || showResourceUsage
+  const anyVisible =
+    showClaude || showCodex || showGemini || showOpencodeGo || showKimi || showResourceUsage
+  // Why: a brand-new user with no provider configured would otherwise see an
+  // empty left side of the status bar and wonder what's missing. The CTA
+  // names the surface and points to the setup path. Detection is on
+  // configuration (not user toggles) so users who intentionally hid a
+  // provider's bar don't get the teaching prompt back.
+  const isEmptyUsageState =
+    !isProviderConfigured(claude) &&
+    !isProviderConfigured(codex) &&
+    !isProviderConfigured(gemini) &&
+    !isProviderConfigured(opencodeGo) &&
+    !isProviderConfigured(kimi)
+  // Why: the teaching CTA is a one-time nudge — once the user hides it, keep it
+  // hidden even after providers are disconnected again.
+  const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
     claude?.status === 'fetching' ||
     codex?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
-    opencodeGo?.status === 'fetching'
+    opencodeGo?.status === 'fetching' ||
+    kimi?.status === 'fetching'
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -1633,25 +1677,43 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       }}
     >
       <div className="flex items-center gap-3">
-        {showClaude && <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />}
-        {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
-        {showGemini && (
-          <ProviderDetailsMenu
-            provider={gemini}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open Gemini usage details"
-          />
+        {isEmptyUsageState ? (
+          showEmptyUsageCta ? (
+            <StatusBarUsageEmptyCta />
+          ) : null
+        ) : (
+          <>
+            {showClaude && (
+              <ClaudeSwitcherMenu claude={claude} compact={compact} iconOnly={iconOnly} />
+            )}
+            {showCodex && <CodexSwitcherMenu codex={codex} compact={compact} iconOnly={iconOnly} />}
+            {showGemini && (
+              <ProviderDetailsMenu
+                provider={gemini}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open Gemini usage details"
+              />
+            )}
+            {showOpencodeGo && (
+              <ProviderDetailsMenu
+                provider={opencodeGo}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open OpenCode Go usage details"
+              />
+            )}
+            {showKimi && (
+              <ProviderDetailsMenu
+                provider={kimi}
+                compact={compact}
+                iconOnly={iconOnly}
+                ariaLabel="Open Kimi usage details"
+              />
+            )}
+          </>
         )}
-        {showOpencodeGo && (
-          <ProviderDetailsMenu
-            provider={opencodeGo}
-            compact={compact}
-            iconOnly={iconOnly}
-            ariaLabel="Open OpenCode Go usage details"
-          />
-        )}
-        {anyVisible && (
+        {anyVisible && !isEmptyUsageState && (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -1764,6 +1826,18 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             <OpenCodeGoIcon size={14} />
             OpenCode Go Usage
           </DropdownMenuCheckboxItem>
+          {isStatusBarItemAvailable('kimi', detectedAgentIds) && (
+            <DropdownMenuCheckboxItem
+              checked={statusBarItems.includes('kimi')}
+              onCheckedChange={() => {
+                recordFeatureInteraction('usage-tracking')
+                toggleStatusBarItem('kimi')
+              }}
+            >
+              <AgentIcon agent="kimi" size={14} />
+              Kimi Usage
+            </DropdownMenuCheckboxItem>
+          )}
           <DropdownMenuCheckboxItem
             checked={statusBarItems.includes('ssh')}
             onCheckedChange={() => {

@@ -57,6 +57,7 @@ type FloatingPanelStoreState = {
   setTabCustomTitle: (tabId: string, title: string | null) => void
   setTabColor: (tabId: string, color: string | null) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
+  makePreviewFilePermanent: (fileId: string, tabId?: string) => void
   pinFile: (fileId: string, tabId?: string) => void
   openFile: (file: unknown, options?: unknown) => void
   browserDefaultUrl: string
@@ -92,6 +93,7 @@ const mocks = vi.hoisted(() => ({
   getInstallStatus: vi.fn(),
   isWebRuntimeSessionActive: vi.fn(),
   markFileDirty: vi.fn(),
+  makePreviewFilePermanent: vi.fn(),
   openFile: vi.fn(),
   pickFloatingMarkdownDocument: vi.fn(),
   pinFile: vi.fn(),
@@ -415,6 +417,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     createBrowserTab: mocks.createBrowserTab,
     closeTab: mocks.closeTab,
     markFileDirty: mocks.markFileDirty,
+    makePreviewFilePermanent: mocks.makePreviewFilePermanent,
     openFile: mocks.openFile,
     pinFile: mocks.pinFile,
     setActiveTab: mocks.setActiveTab,

@@ -22,15 +22,20 @@ export async function resolveGitHubPrStartPoint(
   let headRefName = args.headRefName?.trim() ?? ''
   let isCrossRepository = args.isCrossRepository === true
   let pushTarget: GitPushTarget | undefined
+  let maintainerCanModify: boolean | undefined
 
   const resolvePushTarget = async (): Promise<void> => {
     if (pushTarget) {
       return
     }
     try {
-      pushTarget =
-        (await getPullRequestPushTarget(args.repoPath, args.prNumber, args.connectionId ?? null)) ??
-        undefined
+      const resolved = await getPullRequestPushTarget(
+        args.repoPath,
+        args.prNumber,
+        args.connectionId ?? null
+      )
+      pushTarget = resolved?.pushTarget
+      maintainerCanModify = resolved?.maintainerCanModify
     } catch {
       // Why: deleted/inaccessible fork metadata can prevent push-target
       // discovery, but GitHub still exposes the PR head ref for checkout.
@@ -94,7 +99,16 @@ export async function resolveGitHubPrStartPoint(
     if ('error' in result) {
       return result
     }
-    return { ...result, ...(pushTarget ? { pushTarget } : {}) }
+    // Why: adopt the contributor's branch name locally (mirroring the same-repo
+    // return below) so fork-PR worktrees aren't renamed with the maintainer's
+    // branch prefix (e.g. `me/866`). The push refspec still targets the fork.
+    return {
+      ...result,
+      headSha: result.baseBranch,
+      branchNameOverride: headRefName,
+      ...(pushTarget ? { pushTarget } : {}),
+      ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
+    }
   }
 
   try {
@@ -111,7 +125,13 @@ export async function resolveGitHubPrStartPoint(
       const result = await fetchPullRequestHeadSha()
       if (!('error' in result)) {
         await resolvePushTarget()
-        return { ...result, ...(pushTarget ? { pushTarget } : {}) }
+        return {
+          ...result,
+          headSha: result.baseBranch,
+          branchNameOverride: headRefName,
+          ...(pushTarget ? { pushTarget } : {}),
+          ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
+        }
       }
     }
     return {

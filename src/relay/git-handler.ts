@@ -25,6 +25,7 @@ import {
   removeWorktreeOp,
   worktreeIsCleanOp
 } from './git-handler-worktree-ops'
+import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { checkIgnoredPathsOp, detectConflictOperation, getStatusOp } from './git-handler-status-ops'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import { normalizeGitErrorMessage, isNoUpstreamError } from '../shared/git-remote-error'
@@ -88,6 +89,9 @@ export class GitHandler {
     this.dispatcher.onRequest('git.addWorktree', (p) => this.addWorktree(p))
     this.dispatcher.onRequest('git.removeWorktree', (p) => this.removeWorktree(p))
     this.dispatcher.onRequest('git.worktreeIsClean', (p) => this.worktreeIsClean(p))
+    this.dispatcher.onRequest('git.refreshLocalBaseRefForWorktreeCreate', (p) =>
+      this.refreshLocalBaseRefForWorktreeCreate(p)
+    )
     this.dispatcher.onRequest('git.renameCurrentBranch', (p) => this.renameCurrentBranch(p))
     this.dispatcher.onRequest('git.exec', (p) => this.exec(p))
     this.dispatcher.onRequest('git.isGitRepo', (p) => this.isGitRepo(p))
@@ -650,5 +654,9 @@ export class GitHandler {
 
   private async worktreeIsClean(params: Record<string, unknown>) {
     return worktreeIsCleanOp(this.git.bind(this), params)
+  }
+
+  private async refreshLocalBaseRefForWorktreeCreate(params: Record<string, unknown>) {
+    return refreshLocalBaseRefForWorktreeCreateOp(this.git.bind(this), params)
   }
 }

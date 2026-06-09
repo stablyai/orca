@@ -798,7 +798,7 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().worktreeCardProperties).toEqual(['status', 'unread', 'inline-agents'])
   })
 
-  it('adds the default-on Ports status item once for older persisted UI', () => {
+  it('adds default-on status items once for older persisted UI', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -810,14 +810,15 @@ describe('createUISlice hydratePersistedUI', () => {
       })
     )
 
-    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports'])
+    expect(store.getState().statusBarItems).toEqual(['claude', 'resource-usage', 'ports', 'kimi'])
     expect(setUI).toHaveBeenCalledWith({
-      statusBarItems: ['claude', 'resource-usage', 'ports'],
-      _portsStatusBarDefaultAdded: true
+      statusBarItems: ['claude', 'resource-usage', 'ports', 'kimi'],
+      _portsStatusBarDefaultAdded: true,
+      _kimiStatusBarDefaultAdded: true
     })
   })
 
-  it('preserves a user-hidden Ports status item after the one-shot migration ran', () => {
+  it('preserves user-hidden default-on status items after one-shot migrations ran', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })
     const store = createUIStore()
@@ -825,7 +826,8 @@ describe('createUISlice hydratePersistedUI', () => {
     store.getState().hydratePersistedUI(
       makePersistedUI({
         statusBarItems: ['claude', 'resource-usage'],
-        _portsStatusBarDefaultAdded: true
+        _portsStatusBarDefaultAdded: true,
+        _kimiStatusBarDefaultAdded: true
       })
     )
 
@@ -855,6 +857,29 @@ describe('createUISlice hydratePersistedUI', () => {
     )
 
     expect(store.getState().browserKagiSessionLink).toBe('https://kagi.com/search?token=secret')
+  })
+
+  it('hydrates and normalizes the default browser zoom level', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        browserDefaultZoomLevel: 1.26
+      })
+    )
+
+    expect(store.getState().browserDefaultZoomLevel).toBe(1.5)
+  })
+
+  it('persists normalized default browser zoom changes', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().setBrowserDefaultZoomLevel(10)
+
+    expect(store.getState().browserDefaultZoomLevel).toBe(5)
+    expect(setUI).toHaveBeenCalledWith({ browserDefaultZoomLevel: 5 })
   })
 
   it('drops an invalid Kagi session link during hydration', () => {
@@ -1482,6 +1507,37 @@ describe('createUISlice setup guide sidebar dismissal', () => {
   })
 })
 
+describe('createUISlice browser import hint dismissal', () => {
+  it('persists browser import hint dismissal changes once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().setBrowserImportHintHidden(true)
+    store.getState().setBrowserImportHintHidden(true)
+
+    expect(store.getState().browserImportHintHidden).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({ browserImportHintHidden: true })
+  })
+
+  it('hydrates only explicit browser import hint dismissals as hidden', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(makePersistedUI({ browserImportHintHidden: true }))
+    expect(store.getState().browserImportHintHidden).toBe(true)
+
+    store.getState().hydratePersistedUI(makePersistedUI({ browserImportHintHidden: undefined }))
+    expect(store.getState().browserImportHintHidden).toBe(false)
+  })
+})
+
 describe('createUISlice feature interactions', () => {
   it('normalizes persisted feature interaction records during hydration', () => {
     const store = createUIStore()
@@ -1904,7 +1960,8 @@ describe('createUISlice contextual tours', () => {
     const store = createUIStore()
     const visibleSelectors = [
       '[data-contextual-tour-target="browser-grab-control"]',
-      '[data-contextual-tour-target="browser-annotation-control"]'
+      '[data-contextual-tour-target="browser-annotation-control"]',
+      '[data-contextual-tour-target="browser-import-cookies-control"]'
     ]
     stubContextualTourTargets(visibleSelectors)
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
@@ -1915,7 +1972,24 @@ describe('createUISlice contextual tours', () => {
 
     store.getState().advanceContextualTour()
     expect(store.getState().activeContextualTourId).toBe('browser')
+    expect(store.getState().activeContextualTourStepIndex).toBe(2)
+  })
+
+  it('advances the browser tour to the cookie step before Import Cookies is measurable', () => {
+    const store = createUIStore()
+    const visibleSelectors = [
+      '[data-contextual-tour-target="browser-grab-control"]',
+      '[data-contextual-tour-target="browser-annotation-control"]'
+    ]
+    stubContextualTourTargets(visibleSelectors)
+    store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
+    store.getState().requestContextualTour('browser', 'browser_visible')
+
+    store.getState().advanceContextualTour()
     expect(store.getState().activeContextualTourStepIndex).toBe(1)
+
+    store.getState().advanceContextualTour()
+    expect(store.getState().activeContextualTourStepIndex).toBe(2)
   })
 
   it('advances the active split step when the split command interaction is recorded', () => {

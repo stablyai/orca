@@ -160,6 +160,26 @@ type CustomViewConnectionResponse = {
     | null
 }
 
+type ProjectMutationResponse = {
+  projectCreate?: {
+    success?: boolean | null
+    project?: LinearProjectNode | null
+  } | null
+}
+
+export type LinearProjectCreateInput = {
+  name: string
+  description?: string
+  content?: string
+  teamIds: string[]
+  leadId?: string
+  memberIds?: string[]
+  labelIds?: string[]
+  priority?: number
+  startDate?: string
+  targetDate?: string
+}
+
 const ORCA_PROJECT_FIELDS = `
   id
   name
@@ -312,6 +332,17 @@ const PROJECT_QUERY = `
   query OrcaLinearProject($id: String!) {
     project(id: $id) {
       ${ORCA_PROJECT_DETAIL_FIELDS}
+    }
+  }
+`
+
+const CREATE_PROJECT_MUTATION = `
+  mutation OrcaLinearProjectCreate($input: ProjectCreateInput!) {
+    projectCreate(input: $input) {
+      success
+      project {
+        ${ORCA_PROJECT_DETAIL_FIELDS}
+      }
     }
   }
 `
@@ -863,6 +894,39 @@ export async function getProject(
     },
     force
   )
+}
+
+export async function createProject(
+  input: LinearProjectCreateInput,
+  workspaceId?: string | null
+): Promise<{ ok: true; project: LinearProjectDetail } | { ok: false; error: string }> {
+  const entry = getClients(workspaceId)[0]
+  if (!entry) {
+    return { ok: false, error: 'Not connected to Linear' }
+  }
+
+  await acquire()
+  try {
+    const result = await entry.client.client.rawRequest<
+      ProjectMutationResponse,
+      LinearRawVariables
+    >(CREATE_PROJECT_MUTATION, { input })
+    const payload = result.data?.projectCreate
+    const project = payload?.project
+    if (!payload?.success || !project) {
+      return { ok: false, error: 'Linear project create failed' }
+    }
+    return { ok: true, project: mapProjectDetailForWorkspace(entry, project) }
+  } catch (error) {
+    if (isAuthError(error)) {
+      clearToken(entry.workspace.id)
+      throw error
+    }
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, error: message }
+  } finally {
+    release()
+  }
 }
 
 export async function listProjectIssues(

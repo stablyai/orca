@@ -26,9 +26,11 @@ export function AutoRenameBranchPromptEditor({
   onSave
 }: AutoRenameBranchPromptEditorProps): React.JSX.Element {
   return (
-    <div className="space-y-2">
+    // Why: py-2 matches the sibling rows so the editor doesn't hug the group's
+    // divide-y divider the way the model/prompt rows are spaced.
+    <div className="space-y-2 py-2">
       <div className="space-y-0.5">
-        <Label htmlFor="git-auto-rename-branch-name-prompt">Branch name prompt</Label>
+        <Label htmlFor="git-auto-rename-branch-name-prompt">Prompt</Label>
         <p className="text-xs text-muted-foreground">
           Appended to Orca&apos;s{' '}
           <Popover>

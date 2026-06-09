@@ -121,15 +121,15 @@ export function createFilePathLinkProvider(
 
       const buffer = pane.terminal.buffer.active
       const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
-      if (!softWrappedLogicalLine?.text) {
+      const logicalLines = dedupeLogicalLines([
+        ...buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber),
+        ...(softWrappedLogicalLine ? [softWrappedLogicalLine] : [])
+      ])
+      if (logicalLines.every((logicalLine) => !logicalLine.text)) {
         callback(undefined)
         return
       }
 
-      const logicalLines = dedupeLogicalLines([
-        ...buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber),
-        softWrappedLogicalLine
-      ])
       if (
         logicalLines.every((logicalLine) => extractTerminalFileLinks(logicalLine.text).length === 0)
       ) {

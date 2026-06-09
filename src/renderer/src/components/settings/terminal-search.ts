@@ -46,7 +46,7 @@ export const TERMINAL_RENDERING_SEARCH_ENTRIES: SettingsSearchEntry[] = [
   {
     title: 'GPU Acceleration',
     description:
-      'Controls whether the terminal uses xterm.js WebGL rendering. Auto uses DOM on Linux to avoid driver glyph corruption, and otherwise tries WebGL with DOM fallback.',
+      'Controls whether the terminal uses xterm.js WebGL rendering. Auto tries WebGL when the renderer is supported, with conservative fallback for software or unknown GPU renderers.',
     keywords: [
       'terminal',
       'gpu',
@@ -55,8 +55,7 @@ export const TERMINAL_RENDERING_SEARCH_ENTRIES: SettingsSearchEntry[] = [
       'renderer',
       'rendering',
       'graphics',
-      'linux',
-      'vscode'
+      'linux'
     ]
   }
 ]

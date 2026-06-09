@@ -112,8 +112,6 @@ const MODES: {
 }[] = [
   { id: 'smart', label: 'Smart', Icon: Sparkles },
   { id: 'github', label: 'GitHub', Icon: Github },
-  { id: 'gitlab', label: 'GitLab', Icon: Gitlab },
-  { id: 'branches', label: 'Branch', Icon: GitBranch },
   {
     id: 'linear',
     label: 'Linear',
@@ -123,6 +121,8 @@ const MODES: {
       </svg>
     )
   },
+  { id: 'gitlab', label: 'GitLab', Icon: Gitlab },
+  { id: 'branches', label: 'Branch', Icon: GitBranch },
   { id: 'text', label: 'Name', Icon: CaseSensitive }
 ]
 

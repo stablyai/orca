@@ -13,7 +13,9 @@ const mocks = vi.hoisted(() => ({
   },
   createRepo: vi.fn(),
   fetchWorktrees: vi.fn(),
-  onGitRepoReady: vi.fn()
+  onGitRepoReady: vi.fn(),
+  activateAndRevealWorktree: vi.fn(),
+  markOnboardingProjectAdded: vi.fn()
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -39,6 +41,14 @@ vi.mock('react', async (importOriginal) => {
 
 vi.mock('@/hooks/useMountedRef', () => ({
   useMountedRef: () => ({ current: true })
+}))
+
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.activateAndRevealWorktree
+}))
+
+vi.mock('@/lib/onboarding-project-checklist', () => ({
+  markOnboardingProjectAdded: mocks.markOnboardingProjectAdded
 }))
 
 vi.mock('@/store', () => {
@@ -128,5 +138,34 @@ describe('useCreateRepo default-checkout handoff', () => {
     expect(mocks.stateSetters[3]).not.toHaveBeenCalledWith(
       'Could not refresh project worktrees. Try again.'
     )
+  })
+
+  it('marks onboarding folder progress when a created folder project opens', async () => {
+    const repo = makeRepo({ kind: 'folder' })
+    const worktree = { id: `${repo.id}::/projects/created` }
+    const closeModal = vi.fn()
+    mocks.stateValues = ['created', '/projects', 'folder', null, false]
+    mocks.createRepo.mockResolvedValue({ repo })
+    mocks.fetchWorktrees.mockImplementation(async (repoId: string) => {
+      mocks.storeState.worktreesByRepo = { [repoId]: [worktree] }
+      return true
+    })
+    const { useCreateRepo } = await import('./AddRepoCreateStep')
+
+    const result = useCreateRepo(mocks.fetchWorktrees, closeModal, mocks.onGitRepoReady)
+    await result.handleCreate()
+
+    expect(mocks.createRepo).toHaveBeenCalledWith({
+      parentPath: '/projects',
+      name: 'created',
+      kind: 'folder'
+    })
+    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(worktree.id, {
+      sidebarRevealBehavior: 'auto'
+    })
+    expect(mocks.markOnboardingProjectAdded).toHaveBeenCalledWith('addedFolder')
+    expect(closeModal).toHaveBeenCalled()
+    expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
   })
 })

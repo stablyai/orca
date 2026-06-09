@@ -520,7 +520,7 @@ test.describe('Terminal Shortcuts', () => {
     await orcaPage.keyboard.press('Backspace')
   })
 
-  test('@headful Codex-like background output falls back to DOM rendering in auto mode', async ({
+  test('@headful Codex-like background output stays visible without disabling WebGL in auto mode', async ({
     orcaPage
   }) => {
     const hasPane = await orcaPage.evaluate(() => {
@@ -592,13 +592,13 @@ test.describe('Terminal Shortcuts', () => {
           }, marker),
         {
           timeout: 5_000,
-          message: 'Background SGR output did not switch auto mode to DOM rendering'
+          message: 'Background SGR output did not stay visible on the auto renderer'
         }
       )
       .toEqual({
         markerVisible: true,
-        hasComplexScriptOutput: true,
-        hasWebgl: false
+        hasComplexScriptOutput: false,
+        hasWebgl: true
       })
   })
 

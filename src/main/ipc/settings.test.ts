@@ -5,13 +5,15 @@ const {
   applyElectronProxySettingsMock,
   browserWindowGetAllWindowsMock,
   handleMock,
-  previewGhosttyImportMock
+  previewGhosttyImportMock,
+  rebuildAppMenuMock
 } = vi.hoisted(() => ({
   applyAppIconMock: vi.fn(),
   applyElectronProxySettingsMock: vi.fn(),
   browserWindowGetAllWindowsMock: vi.fn(),
   handleMock: vi.fn(),
-  previewGhosttyImportMock: vi.fn()
+  previewGhosttyImportMock: vi.fn(),
+  rebuildAppMenuMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -30,6 +32,10 @@ vi.mock('../network/proxy-settings', () => ({
 
 vi.mock('../app-icon', () => ({
   applyAppIcon: applyAppIconMock
+}))
+
+vi.mock('../menu/register-app-menu', () => ({
+  rebuildAppMenu: rebuildAppMenuMock
 }))
 
 import { registerSettingsHandlers } from './settings'
@@ -56,6 +62,7 @@ describe('registerSettingsHandlers', () => {
     applyElectronProxySettingsMock.mockClear()
     applyElectronProxySettingsMock.mockResolvedValue({ source: 'settings' })
     previewGhosttyImportMock.mockClear()
+    rebuildAppMenuMock.mockClear()
     browserWindowGetAllWindowsMock.mockReset()
     store.getSettings.mockReset()
     store.updateSettings.mockReset()
@@ -260,5 +267,20 @@ describe('registerSettingsHandlers', () => {
       { notifyListeners: true, originWebContentsId: 1 }
     )
     expect(applyAppIconMock).toHaveBeenCalledWith('classic')
+  })
+
+  it('rebuilds the app menu after Automations sidebar visibility changes', async () => {
+    store.getSettings.mockReturnValue({ showAutomationsButton: true })
+    store.updateSettings.mockReturnValue({ showAutomationsButton: false })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { showAutomationsButton: false })
+
+    expect(rebuildAppMenuMock).toHaveBeenCalledTimes(1)
   })
 })

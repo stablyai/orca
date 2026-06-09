@@ -157,6 +157,37 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
   })
 
+  it('changes when quick command terminal label metadata changes', () => {
+    const shared = makeSharedOverrides()
+    const base = makeState({
+      ...shared,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'pnpm test', customTitle: null, ptyId: 'pty-1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const before = getRuntimeMobileSessionSyncKey(base)
+    const after = getRuntimeMobileSessionSyncKey(
+      makeState({
+        ...base,
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              id: 'term-1',
+              title: 'pnpm test',
+              quickCommandLabel: 'Run tests',
+              customTitle: null,
+              ptyId: 'pty-1'
+            }
+          ]
+        } as unknown as AppState['tabsByWorktree']
+      }),
+      base,
+      before
+    )
+
+    expect(runtimeMobileSessionSyncKeysEqual(before, after)).toBe(false)
+  })
+
   it('changes when generated terminal titles are toggled', () => {
     const shared = makeSharedOverrides()
     const tabsByWorktree = {
@@ -711,6 +742,40 @@ describe('buildMobileSessionTabSnapshots', () => {
     ).toMatchObject({
       type: 'terminal',
       title: 'Fix remote tabs'
+    })
+  })
+
+  it('publishes quick command labels to mobile snapshots before generated titles', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
+      tabBarOrderByWorktree: { 'wt-1': ['term-1'] },
+      tabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'term-1',
+            title: 'pnpm test',
+            quickCommandLabel: 'Run tests',
+            generatedTitle: 'Generated title',
+            customTitle: null,
+            ptyId: 'pty-1'
+          }
+        ]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as AppState['terminalLayoutsByTabId']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs[0]).toMatchObject({
+      type: 'terminal',
+      title: 'Run tests',
+      quickCommandLabel: 'Run tests'
     })
   })
 

@@ -72,6 +72,11 @@ const SORT_OPTIONS = [
   }
 ] as const
 
+const PROJECT_ORDER_OPTIONS = [
+  { id: 'manual', label: 'Manual', description: 'Drag projects to arrange them' },
+  { id: 'recent', label: 'Recent', description: 'Most recent workspace activity' }
+] as const
+
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange
@@ -90,6 +95,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const setSortBy = useAppStore((s) => s.setSortBy)
   const groupBy = useAppStore((s) => s.groupBy)
   const setGroupBy = useAppStore((s) => s.setGroupBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
+  const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
 
   const [open, setOpen] = useState(false)
 
@@ -119,7 +126,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     (hasSleepingFilter ? 1 : 0) + (hideDefaultBranchWorkspace ? 1 : 0) + selectedCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
-  const cardLayout = settings?.experimentalCompactWorktreeCards ? 'compact' : 'detailed'
+  const projectOrderLabel =
+    PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+  const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
   const cardLayoutLabel =
     CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
   const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
@@ -238,6 +247,47 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
+        {/* Why: project order only has a visible effect when grouping by
+            project; hide it in none/status/PR modes to avoid a dead control. */}
+        {groupBy === 'repo' && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <span className="flex flex-1 items-center justify-between">
+                <span>Project order</span>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {projectOrderLabel}
+                </span>
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent
+              className="w-44"
+              data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+            >
+              <DropdownMenuRadioGroup
+                value={projectOrderBy}
+                onValueChange={(v) => setProjectOrderBy(v as typeof projectOrderBy)}
+              >
+                {PROJECT_ORDER_OPTIONS.map((opt) => (
+                  <Tooltip key={opt.id}>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuRadioItem
+                        value={opt.id}
+                        // Keep the menu open so people can compare order modes.
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        {opt.label}
+                      </DropdownMenuRadioItem>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" sideOffset={6}>
+                      {opt.description}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
+
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span className="flex flex-1 items-center justify-between">
@@ -255,7 +305,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               value={cardLayout}
               onValueChange={(value) => {
                 void updateSettings({
-                  experimentalCompactWorktreeCards: value === 'compact'
+                  compactWorktreeCards: value === 'compact'
                 })
               }}
             >

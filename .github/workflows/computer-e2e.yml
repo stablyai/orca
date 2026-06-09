@@ -6,18 +6,30 @@ on:
       - '.github/workflows/computer-e2e.yml'
       - 'config/electron-builder.config.cjs'
       - 'config/scripts/build-computer-macos.mjs'
+      - 'config/scripts/computer-e2e-workflow.test.mjs'
+      - 'config/scripts/computer-use-skill-guidance.test.mjs'
+      - 'config/scripts/computer-use-smoke.mjs'
+      - 'config/scripts/computer-use-smoke.test.mjs'
       - 'config/scripts/verify-computer-native.mjs'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
+      - 'skills/computer-use/SKILL.md'
       - 'src/cli/**'
       - 'src/main/computer/**'
-      - 'src/main/runtime/rpc/methods/computer.ts'
+      - 'src/main/runtime/rpc/dispatcher.ts'
+      - 'src/main/runtime/rpc/errors.ts'
+      - 'src/main/runtime/rpc/methods/computer*.ts'
+      - 'src/shared/computer-use-*.ts'
       - 'src/shared/runtime-types.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
       - 'tests/e2e/computer-mac.e2e.ts'
+      - 'tests/e2e/computer-mac-safari.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
+      - 'tests/e2e/computer-windows-store.e2e.ts'
+      - 'tests/e2e/helpers/computer-cli-driver.ts'
       - 'tests/e2e/helpers/computer-driver.ts'
+      - 'tests/e2e/vitest.config.ts'
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * *'
@@ -25,6 +37,8 @@ on:
 jobs:
   native-smoke:
     if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +53,7 @@ jobs:
         with:
           run_install: false
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y python3 python3-gi gir1.2-atspi-2.0 at-spi2-core xclip xdotool
+        run: sudo apt-get update && sudo apt-get install -y python3 python3-gi gir1.2-atspi-2.0 at-spi2-core gedit xvfb xclip xdotool
       # Why: pnpm's bundled node-gyp can ship gyp_main.py without execute
       # permission on Linux runners; node-pty's install fallback then fails
       # before this smoke job can exercise the native package.
@@ -49,8 +63,51 @@ jobs:
           npm install -g node-gyp@11.5.0
           echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
+      - run: >-
+          pnpm vitest run
+          config/scripts/computer-e2e-workflow.test.mjs
+          config/scripts/computer-use-skill-guidance.test.mjs
+          config/scripts/computer-use-smoke.test.mjs
+          src/main/computer/computer-provider-lifecycle.test.ts
+          src/main/computer/computer-provider-unavailable-message.test.ts
+          src/main/computer/sidecar-client.test.ts
+          src/main/computer/macos-native-provider-client.test.ts
+          src/main/computer/macos-native-provider-socket.test.ts
+          src/main/computer/macos-computer-use-permissions.test.ts
+          src/main/computer/macos-computer-use-permission-status.test.ts
+          src/main/computer/desktop-script-provider-client.test.ts
+          src/main/computer/desktop-script-provider-cache.test.ts
+          src/main/computer/desktop-script-provider-actions.test.ts
+          src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
+          src/main/computer/desktop-script-provider-errors.test.ts
+          src/main/computer/desktop-script-provider-action-errors.test.ts
+          src/shared/computer-use-error-recovery.test.ts
+          src/shared/computer-use-key-spec.test.ts
+          src/cli/format.test.ts
+          src/cli/handlers/computer.test.ts
+          src/cli/handlers/computer-action-routing.test.ts
+          src/cli/handlers/computer-action-validation.test.ts
+          src/cli/handlers/computer-state-formatting.test.ts
+          src/cli/specs/computer.test.ts
+          src/cli/index.test.ts
+          src/main/runtime/rpc/dispatcher-computer-errors.test.ts
+          src/main/runtime/rpc/errors.test.ts
+          src/main/runtime/rpc/methods/computer.test.ts
+          src/main/runtime/rpc/methods/computer-actions.test.ts
+          src/cli/runtime/envelope-schema.test.ts
+          src/shared/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
+      - run: pnpm build:electron-vite
+      - if: runner.os == 'Linux'
+        env:
+          ORCA_COMPUTER_E2E: '1'
+          ACCESSIBILITY_ENABLED: '1'
+        run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
+      - if: runner.os == 'Windows'
+        env:
+          ORCA_COMPUTER_E2E: '1'
+        run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts
 
   mac:
     # macOS Accessibility and Screen Recording require user-granted TCC entries.
@@ -71,7 +128,8 @@ jobs:
       - run: pnpm build:computer-macos
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
-      - run: pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-mac.e2e.ts
+      - run: pnpm build:electron-vite
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-mac.e2e.ts tests/e2e/computer-mac-safari.e2e.ts
 
   linux:
     if: github.event_name != 'pull_request'
@@ -97,7 +155,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
-      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-linux.e2e.ts
+      - run: pnpm build:electron-vite
+      - run: xvfb-run --auto-servernum dbus-run-session -- pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-linux.e2e.ts
 
   windows:
     if: github.event_name != 'pull_request'
@@ -115,4 +174,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
-      - run: pnpm test:e2e:computer -- --reporter=verbose tests/e2e/computer-windows.e2e.ts
+      - run: pnpm build:electron-vite
+      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts

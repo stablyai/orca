@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { FileExplorerRow } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import type { TreeNode } from './file-explorer-types'
+import { createFileExplorerRowProjection } from './file-explorer-row-projection'
 
 type ReactElementLike = {
   type: unknown
@@ -54,7 +55,7 @@ describe('FileExplorerVirtualRows add-as-project action', () => {
         measureElement: vi.fn()
       } as never,
       inlineInputIndex: -1,
-      flatRows: [directoryNode],
+      rowProjection: createFileExplorerRowProjection([directoryNode]),
       inlineInput: null,
       handleInlineSubmit: vi.fn(),
       dismissInlineInput: vi.fn(),

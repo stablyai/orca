@@ -201,7 +201,7 @@ export function TerminalPane({
         <div className="divide-y divide-border/40">
           <SearchableSetting
             title="GPU Acceleration"
-            description="Controls whether the terminal uses xterm.js WebGL rendering. Auto uses DOM on Linux to avoid driver glyph corruption, and otherwise tries WebGL with DOM fallback."
+            description="Controls whether the terminal uses xterm.js WebGL rendering. Auto tries WebGL when the renderer is supported, with a conservative Linux fallback for software or unknown GPU renderers."
             keywords={[
               'terminal',
               'gpu',
@@ -210,8 +210,7 @@ export function TerminalPane({
               'renderer',
               'rendering',
               'graphics',
-              'linux',
-              'vscode'
+              'linux'
             ]}
           >
             <SettingsRow
@@ -221,7 +220,7 @@ export function TerminalPane({
                   ? 'WebGL disabled; DOM renderer for max compatibility.'
                   : settings.terminalGpuAcceleration === 'on'
                     ? 'WebGL is always attempted for terminal panes.'
-                    : 'Auto uses DOM on Linux; tries WebGL with DOM fallback elsewhere.'
+                    : 'Auto tries WebGL, with DOM fallback for unsupported or risky renderers.'
               }
               control={
                 <SettingsSegmentedControl

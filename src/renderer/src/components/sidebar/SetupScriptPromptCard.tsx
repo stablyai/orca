@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { track } from '@/lib/telemetry'
 import { getRepositoryLocalCommandsSectionId } from '@/components/settings/repository-settings-targets'
+import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   buildImportedHookSettings,
@@ -380,16 +381,24 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const candidateProvenance = candidate ? formatCandidateProvenance(candidate) : null
 
   return (
-    <div className="px-3 pb-2">
-      <div className="setup-script-prompt-card rounded-lg border border-sidebar-border p-3 text-sidebar-accent-foreground shadow-xs">
+    // Why: shrink-0 keeps the card from being squeezed by a long worktree list
+    // in the overflow-hidden sidebar column, which clipped its top edge.
+    <div className="shrink-0 px-3 pb-2">
+      <div className="setup-script-prompt-card rounded-lg border border-worktree-sidebar-border p-3 text-worktree-sidebar-accent-foreground shadow-xs">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-semibold leading-snug">Add a setup script</p>
           <DismissButton onDismiss={handleDismiss} />
         </div>
 
+        {/* Why: name the repo on its own line so the prompt's project is clear in
+            every body variant, not just the default one. */}
+        <p className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <RepoBadgeMark color={activeRepo.badgeColor} />
+          <span className="truncate font-medium text-foreground">{activeRepo.displayName}</span>
+        </p>
+
         <p className="mt-1 text-xs leading-snug text-muted-foreground">
           <SetupScriptPromptBody
-            repo={activeRepo}
             isInspectionError={isInspectionError}
             sharedSetupIgnored={sharedSetupIgnored}
             isPackageManagerSuggestion={Boolean(isPackageManagerSuggestion && candidate)}

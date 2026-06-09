@@ -3,6 +3,7 @@ import { promisify } from 'util'
 import { gitExecFileAsync, glabExecFileAsync } from '../git/runner'
 import type { ClassifiedError, GitLabProjectRef, IssueSourcePreference } from '../../shared/types'
 import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 
 // Why: legacy generic execFile wrapper — only used by callers that don't need
 // WSL-aware routing. Repo-scoped callers should use glabExecFileAsync from
@@ -109,6 +110,7 @@ const projectRefCache = new Map<string, ProjectRef | null>()
 /** @internal — exposed for tests only */
 export function _resetProjectRefCache(): void {
   projectRefCache.clear()
+  clearProjectRefInFlight()
 }
 
 /** @internal — exposed for tests only */
@@ -192,6 +194,21 @@ export async function getProjectRefForRemote(
   if (projectRefCache.has(cacheKey)) {
     return projectRefCache.get(cacheKey)!
   }
+
+  // Why: issue/PR refresh and repo metadata can ask for the same missing
+  // upstream concurrently. Coalesce the subprocess before caching the result.
+  return runProjectRefProbeOnce(cacheKey, () =>
+    resolveProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, cacheKey)
+  )
+}
+
+async function resolveProjectRefForRemote(
+  repoPath: string,
+  remoteName: string,
+  knownHosts: readonly string[],
+  connectionId: string | null | undefined,
+  cacheKey: string
+): Promise<ProjectRef | null> {
   try {
     const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
     if (connectionId && !sshGitProvider) {

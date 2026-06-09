@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
+import { getSelectedNestedRepoPathsInScanOrder } from '@/lib/nested-repo-selected-paths'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
@@ -69,16 +70,6 @@ function resolveStepIndex(
   return nextIndex
 }
 
-function defaultProjectGroupNameForPath(path: string): string {
-  return (
-    path
-      .replace(/[\\/]+$/g, '')
-      .split(/[\\/]/)
-      .filter(Boolean)
-      .at(-1) ?? path
-  )
-}
-
 function createNestedRepoScanId(): string {
   return `nested-repo-scan-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
@@ -124,14 +115,25 @@ export function remapOpenOnboardingLastCompletedStep({
   if (outcome === 'completed' && lastCompletedStep >= ONBOARDING_FINAL_STEP) {
     return ONBOARDING_FINAL_STEP
   }
+  // Why: v2 was the five-step flow; missing/older versions were seven-step
+  // data where step 4 was removed agent setup, not completed integrations.
+  if (flowVersion === 2) {
+    if (lastCompletedStep === 3) {
+      return 2
+    }
+    if (lastCompletedStep >= 4) {
+      return 3
+    }
+    return lastCompletedStep
+  }
+  if (lastCompletedStep === 3) {
+    return 2
+  }
   if (lastCompletedStep === 4) {
+    return 2
+  }
+  if (lastCompletedStep >= 5) {
     return 3
-  }
-  if (lastCompletedStep === 5 || lastCompletedStep === 6) {
-    return 4
-  }
-  if (lastCompletedStep > 6) {
-    return 4
   }
   return lastCompletedStep
 }
@@ -202,6 +204,7 @@ export function useOnboardingFlow(
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
+  const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
@@ -238,7 +241,6 @@ export function useOnboardingFlow(
   const [cloneDestination, setCloneDestination] = useState('')
   const [nestedScan, setNestedScan] = useState<NestedRepoScanResult | null>(null)
   const [nestedSelectedPaths, setNestedSelectedPaths] = useState<Set<string>>(new Set())
-  const [nestedGroupName, setNestedGroupName] = useState('')
   const [nestedAttemptId, setNestedAttemptId] = useState<string | null>(null)
   const [nestedRuntimeKind, setNestedRuntimeKind] = useState<NestedRepoTelemetryRuntimeKind | null>(
     null
@@ -595,7 +597,7 @@ export function useOnboardingFlow(
   )
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
-      if (nextInFlightRef.current || busyLabel || currentStep.id === 'repo') {
+      if (nextInFlightRef.current || busyLabel) {
         return
       }
       nextInFlightRef.current = true
@@ -603,27 +605,49 @@ export function useOnboardingFlow(
         const result = await persistCurrentStep()
         if (result.ok) {
           trackCurrentStepCompleted(advancedVia)
+          if (currentStep.id === 'notifications') {
+            setBusyLabel('Opening Add Project...')
+            const closed = await closeWith(
+              'completed',
+              {},
+              ONBOARDING_FINAL_STEP,
+              'add_project_modal'
+            )
+            if (closed) {
+              openModal('add-repo')
+            }
+            return
+          }
           const nextIndex = getNextStepIndex(stepIndex)
           if (
-            currentStep.id === 'notifications' &&
+            currentStep.id === 'theme' &&
             skipIntegrations &&
-            STEPS[nextIndex]?.id === 'repo'
+            STEPS[nextIndex]?.id === 'notifications'
           ) {
-            // Why: users with gh already installed never see integrations, but
-            // repo resume state still needs that skipped setup step recorded.
-            onOnboardingChange(await persistStep(STEPS[nextIndex].stepNumber - 1))
+            // Why: resolveStepIndex skips integrations before it can render, but
+            // progress must still resume at notifications after a reload.
+            try {
+              onOnboardingChange(await persistStep(STEPS[nextIndex].stepNumber - 1))
+            } catch (err) {
+              toast.error('Could not save progress', {
+                description: err instanceof Error ? err.message : String(err)
+              })
+            }
           }
           setStepIndex(nextIndex)
         }
       } finally {
+        setBusyLabel(null)
         nextInFlightRef.current = false
       }
     },
     [
       busyLabel,
+      closeWith,
       currentStep.id,
       getNextStepIndex,
       onOnboardingChange,
+      openModal,
       persistCurrentStep,
       skipIntegrations,
       stepIndex,
@@ -634,7 +658,6 @@ export function useOnboardingFlow(
   const showNestedRepoReview = useCallback(
     (
       scan: NestedRepoScanResult,
-      selectedPath: string,
       attemptId: string,
       runtimeKind: NestedRepoTelemetryRuntimeKind,
       inProgress = false,
@@ -642,7 +665,6 @@ export function useOnboardingFlow(
     ) => {
       setNestedScan(scan)
       setNestedSelectedPaths(new Set(scan.repos.map((repo) => repo.path)))
-      setNestedGroupName(defaultProjectGroupNameForPath(selectedPath))
       setNestedAttemptId(attemptId)
       setNestedRuntimeKind(runtimeKind)
       setNestedScanInProgress(inProgress)
@@ -684,7 +706,7 @@ export function useOnboardingFlow(
               })
             )
             if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-              showNestedRepoReview(scan, path, attemptId, 'runtime')
+              showNestedRepoReview(scan, attemptId, 'runtime')
               return
             }
           }
@@ -730,7 +752,7 @@ export function useOnboardingFlow(
               ) {
                 return
               }
-              showNestedRepoReview(progressScan, path, attemptId, 'local', true, scanId)
+              showNestedRepoReview(progressScan, attemptId, 'local', true, scanId)
             }
           })
           if (nestedScanIdRef.current !== scanId) {
@@ -748,7 +770,7 @@ export function useOnboardingFlow(
             })
           )
           if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
-            showNestedRepoReview(scan, path, attemptId, 'local', false, scanId)
+            showNestedRepoReview(scan, attemptId, 'local', false, scanId)
             return
           }
           result = await window.api.repos.add({ path, kind: 'folder' })
@@ -777,45 +799,83 @@ export function useOnboardingFlow(
     ]
   )
 
-  const importNested = useCallback(
-    async (mode: 'group' | 'separate') => {
-      const attemptId = nestedAttemptId
-      if (
-        !nestedScan ||
-        !attemptId ||
-        !shouldEmitNestedRepoImportSubmitTelemetry({
-          attemptId,
-          selectedCount: nestedSelectedPaths.size,
-          isBusy: busyLabel !== null
-        })
-      ) {
-        return
-      }
-      const foundCount = nestedScan.repos.length
-      const selectedCount = nestedSelectedPaths.size
-      const runtimeKind = nestedRuntimeKind ?? onboardingNestedRepoRuntimeKind
-      setError(null)
-      setBusyLabel('Importing repositories…')
+  const importNested = useCallback(async () => {
+    const mode = 'separate'
+    const attemptId = nestedAttemptId
+    if (
+      !nestedScan ||
+      !attemptId ||
+      !shouldEmitNestedRepoImportSubmitTelemetry({
+        attemptId,
+        selectedCount: nestedSelectedPaths.size,
+        isBusy: busyLabel !== null
+      })
+    ) {
+      return
+    }
+    const foundCount = nestedScan.repos.length
+    const selectedCount = nestedSelectedPaths.size
+    const runtimeKind = nestedRuntimeKind ?? onboardingNestedRepoRuntimeKind
+    setError(null)
+    setBusyLabel('Importing repositories…')
+    track(
+      'add_repo_nested_import_action',
+      buildNestedRepoImportActionTelemetry({
+        attemptId,
+        surface: 'onboarding',
+        runtimeKind,
+        action: 'import_separate',
+        foundCount,
+        selectedCount
+      })
+    )
+    let resultTracked = false
+    try {
+      const selectedProjectPaths = getSelectedNestedRepoPathsInScanOrder(
+        nestedScan,
+        nestedSelectedPaths
+      )
+      const result = await importNestedRepos({
+        parentPath: nestedScan.selectedPath,
+        groupName: '',
+        // Why: Set insertion order can drift after deselect/reselect; import
+        // ordering should match the visible scan order users reviewed.
+        projectPaths: selectedProjectPaths,
+        ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
+        mode
+      })
       track(
-        'add_repo_nested_import_action',
-        buildNestedRepoImportActionTelemetry({
+        'add_repo_nested_import_result',
+        buildNestedRepoImportResultTelemetry({
           attemptId,
           surface: 'onboarding',
           runtimeKind,
-          action: mode === 'group' ? 'import_group' : 'import_separate',
+          mode,
           foundCount,
-          selectedCount
+          selectedCount,
+          result
         })
       )
-      let resultTracked = false
-      try {
-        const result = await importNestedRepos({
-          parentPath: nestedScan.selectedPath,
-          groupName: nestedGroupName,
-          projectPaths: [...nestedSelectedPaths],
-          ...(nestedImportScanId ? { scanId: nestedImportScanId } : {}),
-          mode
-        })
+      resultTracked = true
+      const importedRepoIds =
+        result?.projects
+          .map((entry) => entry.projectId)
+          .filter((projectId): projectId is string => typeof projectId === 'string') ?? []
+      const projectId = importedRepoIds[0]
+      if (!projectId) {
+        const firstFailure = result?.projects.find((entry) => entry.status === 'failed')?.error
+        throw new Error(
+          firstFailure ? `No repositories imported: ${firstFailure}` : 'No repositories imported'
+        )
+      }
+      for (const importedRepoId of importedRepoIds) {
+        // Why: imported repos are already persisted; non-authoritative SSH
+        // refreshes should not block onboarding from revealing the first project.
+        await fetchWorktrees(importedRepoId, { requireAuthoritative: true })
+      }
+      await completeRepo(projectId, true, 'open_folder')
+    } catch (err) {
+      if (!resultTracked) {
         track(
           'add_repo_nested_import_result',
           buildNestedRepoImportResultTelemetry({
@@ -825,62 +885,27 @@ export function useOnboardingFlow(
             mode,
             foundCount,
             selectedCount,
-            result
+            result: null
           })
         )
-        resultTracked = true
-        const importedRepoIds =
-          result?.projects
-            .map((entry) => entry.projectId)
-            .filter((projectId): projectId is string => typeof projectId === 'string') ?? []
-        const projectId = importedRepoIds[0]
-        if (!projectId) {
-          const firstFailure = result?.projects.find((entry) => entry.status === 'failed')?.error
-          throw new Error(
-            firstFailure ? `No repositories imported: ${firstFailure}` : 'No repositories imported'
-          )
-        }
-        for (const importedRepoId of importedRepoIds) {
-          // Why: imported repos are already persisted; non-authoritative SSH
-          // refreshes should not block onboarding from revealing the first project.
-          await fetchWorktrees(importedRepoId, { requireAuthoritative: true })
-        }
-        await completeRepo(projectId, true, 'open_folder')
-      } catch (err) {
-        if (!resultTracked) {
-          track(
-            'add_repo_nested_import_result',
-            buildNestedRepoImportResultTelemetry({
-              attemptId,
-              surface: 'onboarding',
-              runtimeKind,
-              mode,
-              foundCount,
-              selectedCount,
-              result: null
-            })
-          )
-        }
-        setError(err instanceof Error ? err.message : String(err))
-        track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
-      } finally {
-        setBusyLabel(null)
       }
-    },
-    [
-      busyLabel,
-      completeRepo,
-      fetchWorktrees,
-      importNestedRepos,
-      nestedGroupName,
-      nestedAttemptId,
-      nestedScan,
-      nestedSelectedPaths,
-      nestedImportScanId,
-      nestedRuntimeKind,
-      onboardingNestedRepoRuntimeKind
-    ]
-  )
+      setError(err instanceof Error ? err.message : String(err))
+      track('onboarding_step4_path_failed', { path: 'open_folder', reason: 'invalid_path' })
+    } finally {
+      setBusyLabel(null)
+    }
+  }, [
+    busyLabel,
+    completeRepo,
+    fetchWorktrees,
+    importNestedRepos,
+    nestedAttemptId,
+    nestedScan,
+    nestedSelectedPaths,
+    nestedImportScanId,
+    nestedRuntimeKind,
+    onboardingNestedRepoRuntimeKind
+  ])
 
   const trackNestedBackAndClear = useCallback(() => {
     if (nestedScan && nestedAttemptId) {
@@ -898,7 +923,6 @@ export function useOnboardingFlow(
     }
     setNestedScan(null)
     setNestedSelectedPaths(new Set())
-    setNestedGroupName('')
     setNestedAttemptId(null)
     setNestedRuntimeKind(null)
     setNestedScanInProgress(false)
@@ -987,7 +1011,7 @@ export function useOnboardingFlow(
 
   const continueWithExistingProject = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
-      if (busyLabel !== null || currentStep.id !== 'repo' || repos.length === 0) {
+      if (busyLabel !== null || repos.length === 0) {
         return
       }
       setError(null)
@@ -1010,7 +1034,7 @@ export function useOnboardingFlow(
         setBusyLabel(null)
       }
     },
-    [busyLabel, closeWith, consumeStepDurationMs, currentStep.id, repos]
+    [busyLabel, closeWith, consumeStepDurationMs, repos]
   )
 
   const skipToRepo = useCallback(async () => {
@@ -1018,9 +1042,7 @@ export function useOnboardingFlow(
       return
     }
     setError(null)
-    const repoStepIndex = STEPS.findIndex((step) => step.id === 'repo')
-    const repoStep = STEPS[repoStepIndex]
-    if (currentStep.id === 'repo' || !repoStep) {
+    if (currentStep.id === 'notifications') {
       return
     }
     const durationMs = consumeStepDurationMs()
@@ -1040,38 +1062,35 @@ export function useOnboardingFlow(
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
     const valueKind = currentStep.valueKind
-    setStepIndex(repoStepIndex)
-    // Why: progress persist is bookkeeping — advance the UI immediately and
-    // run the IPC + telemetry in the background.
-    void persistStep(repoStep.stepNumber - 1).then(
-      (nextState) => {
-        onOnboardingChange(nextState)
-        // Why: users can skip optional preferences, but onboarding remains
-        // open because Orca needs a project before the app has a useful
-        // first state.
-        track('onboarding_step_skipped', {
-          step: stepNumber,
-          value_kind: valueKind,
-          duration_ms: durationMs,
-          advanced_via: 'button'
-        })
-        if (stepId === 'integrations') {
-          trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
-        }
-      },
-      (err) => {
-        toast.error('Could not save progress', {
-          description: err instanceof Error ? err.message : String(err)
-        })
+    setBusyLabel('Opening Add Project...')
+    try {
+      const closed = await closeWith('completed', {}, ONBOARDING_FINAL_STEP, 'add_project_modal')
+      if (!closed) {
+        return
       }
-    )
+      // Why: the repo picker moved to the Add Project dialog, so skipping
+      // optional setup now closes onboarding and hands off to that modal.
+      track('onboarding_step_skipped', {
+        step: stepNumber,
+        value_kind: valueKind,
+        duration_ms: durationMs,
+        advanced_via: 'button'
+      })
+      if (stepId === 'integrations') {
+        trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
+      }
+      openModal('add-repo')
+    } finally {
+      setBusyLabel(null)
+    }
   }, [
     busyLabel,
+    closeWith,
     consumeStepDurationMs,
     currentStep.id,
     currentStep.stepNumber,
     currentStep.valueKind,
-    onOnboardingChange,
+    openModal,
     selectedAgent,
     settings,
     trackTaskSourcesSnapshot,
@@ -1106,7 +1125,7 @@ export function useOnboardingFlow(
   )
 
   const openSshSettings = useCallback(async () => {
-    if (busyLabel || currentStep.id !== 'repo') {
+    if (busyLabel) {
       return
     }
     setError(null)
@@ -1128,7 +1147,6 @@ export function useOnboardingFlow(
     openSettingsPage()
   }, [
     busyLabel,
-    currentStep.id,
     currentStep.stepNumber,
     onOnboardingChange,
     onSettingsDetourStart,
@@ -1173,8 +1191,6 @@ export function useOnboardingFlow(
     nestedScanInProgress,
     nestedSelectedPaths,
     setNestedSelectedPaths,
-    nestedGroupName,
-    setNestedGroupName,
     importNested,
     cancelNested,
     stopNestedScan,

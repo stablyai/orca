@@ -38,6 +38,13 @@ export const STATUS_BAR_TOGGLES: readonly {
     toggleDescription: 'Show OpenCode Go token and cost usage for the active workspace.'
   },
   {
+    id: 'kimi',
+    title: 'Kimi Usage',
+    description: 'Show Kimi subscription usage in the status bar.',
+    keywords: ['status bar', 'kimi', 'usage', 'subscription', 'moonshot'],
+    toggleDescription: 'Show Kimi subscription usage for the active workspace.'
+  },
+  {
     id: 'ssh',
     title: 'SSH Status',
     description: 'Show the active SSH connection status in the status bar.',
@@ -112,6 +119,11 @@ export const SIDEBAR_ENTRIES: SettingsSearchEntry[] = [
     title: 'Show Tasks Button',
     description: 'Show the Tasks button at the top of the left sidebar.',
     keywords: ['tasks', 'sidebar', 'button', 'hide', 'show', 'github', 'linear']
+  },
+  {
+    title: 'Show Automations Button',
+    description: 'Show the Automations button at the top of the left sidebar.',
+    keywords: ['automations', 'automation', 'schedule', 'sidebar', 'button', 'hide', 'show']
   },
   {
     title: 'Show Orca Mobile Button',

@@ -12,6 +12,7 @@ import {
 } from './FileExplorerRow'
 import { FileExplorerVirtualRows } from './FileExplorerVirtualRows'
 import type { TreeNode } from './file-explorer-types'
+import { createFileExplorerRowProjection } from './file-explorer-row-projection'
 
 type ReactElementLike = {
   type: unknown
@@ -376,7 +377,7 @@ describe('FileExplorerRow collapse folder action', () => {
         measureElement: vi.fn()
       } as never,
       inlineInputIndex: -1,
-      flatRows: [directoryNode],
+      rowProjection: createFileExplorerRowProjection([directoryNode]),
       inlineInput: null,
       handleInlineSubmit: vi.fn(),
       dismissInlineInput: vi.fn(),
@@ -427,7 +428,7 @@ describe('FileExplorerRow collapse folder action', () => {
         measureElement: vi.fn()
       } as never,
       inlineInputIndex: -1,
-      flatRows: [directoryNode],
+      rowProjection: createFileExplorerRowProjection([directoryNode]),
       inlineInput: null,
       handleInlineSubmit: vi.fn(),
       dismissInlineInput: vi.fn(),

@@ -126,6 +126,7 @@ module.exports = {
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     verifyPackagedMainRuntimeDeps(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
+    chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
@@ -206,6 +207,12 @@ module.exports = {
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
         to: 'agent-browser-darwin-${arch}'
+      },
+      // Why: serve-sim resolves its helper binary and camera assets relative
+      // to dist/serve-sim.js, so the whole package must be a real resource dir.
+      {
+        from: 'node_modules/serve-sim',
+        to: 'serve-sim'
       },
       {
         from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
@@ -299,6 +306,23 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
     // Why: packaged Unix installs expose these extraResources as public shell
     // commands, and source/packager mode drift must not ship a non-executable CLI.
     chmodSync(launcherPath, 0o755)
+  }
+}
+
+function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
+  if (electronPlatformName !== 'darwin') {
+    return
+  }
+  const helperPaths = [
+    join(resourcesDir, 'serve-sim', 'bin', 'serve-sim-bin'),
+    join(resourcesDir, 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'bin', 'serve-sim-bin'),
+    join(resourcesDir, 'node_modules', 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper')
+  ]
+  for (const helperPath of helperPaths) {
+    if (existsSync(helperPath)) {
+      chmodSync(helperPath, 0o755)
+    }
   }
 }
 

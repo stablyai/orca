@@ -17,7 +17,7 @@ export type BrowserCliTarget = {
 export type ComputerCliTarget = {
   session?: string
   worktree?: string
-  app?: ComputerAppQuery
+  app: ComputerAppQuery
 }
 
 export function buildCurrentWorktreeSelector(cwd: string): string {
@@ -198,8 +198,15 @@ export async function getComputerCommandTarget(
   cwd: string,
   client: RuntimeClient
 ): Promise<ComputerCliTarget> {
-  const app = getOptionalStringFlag(flags, 'app')
+  const app = getRequiredStringFlag(flags, 'app')
   const session = getOptionalStringFlag(flags, 'session')
+  const worktree = getOptionalStringFlag(flags, 'worktree')
+  if (session && worktree) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Computer-use targeting accepts either --session or --worktree, not both'
+    )
+  }
   if (session) {
     return { session, app }
   }
@@ -207,4 +214,51 @@ export async function getComputerCommandTarget(
     app,
     worktree: await getBrowserWorktreeSelector(flags, cwd, client)
   }
+}
+
+// Mirror getBrowserCommandTarget / getBrowserWorktreeSelector for emulator (workspace scoped by default + explicit --device/--emulator/--worktree; active from bridge for unqualified).
+export type EmulatorCliTarget = {
+  worktree?: string
+  device?: string
+  emulator?: string // Orca id from list
+}
+
+export async function getEmulatorWorktreeSelector(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  const explicit = getOptionalStringFlag(flags, 'worktree')
+  if (explicit === 'all') {
+    return undefined
+  }
+  if (explicit) {
+    if (explicit === 'active' || explicit === 'current') {
+      assertLocalCwdWorktreeSelector(explicit, client)
+      return resolveCurrentWorktreeSelector(cwd, client)
+    }
+    return explicit
+  }
+  if (client.isRemote) {
+    return undefined
+  }
+  try {
+    return await resolveCurrentWorktreeSelector(cwd, client)
+  } catch {
+    return undefined
+  }
+}
+
+export async function getEmulatorCommandTarget(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<EmulatorCliTarget> {
+  const device = getOptionalStringFlag(flags, 'device')
+  const emulator = getOptionalStringFlag(flags, 'emulator')
+  const worktree = await getEmulatorWorktreeSelector(flags, cwd, client)
+  if (device || emulator) {
+    return { device: device || undefined, emulator: emulator || undefined, worktree }
+  }
+  return { worktree }
 }

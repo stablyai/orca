@@ -83,6 +83,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'file',
       'orchestration',
       'computer',
+      'emulator',
       'note',
       'diagnostics'
     ].includes(commandPath[0])
@@ -119,6 +120,7 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'storage',
         'orchestration',
         'computer',
+        'emulator',
         'agent',
         'environment',
         'diagnostics'

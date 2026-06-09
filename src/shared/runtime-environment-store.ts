@@ -96,6 +96,11 @@ export function resolveEnvironmentPairingOffer(
   return getPreferredPairingOffer(resolveEnvironment(userDataPath, selector))
 }
 
+// Why: markEnvironmentUsed runs on every runtime round-trip; persisting lastUsedAt each
+// time forces a secure-file rewrite (ACL hardening), which blocks the main thread on
+// Windows. lastUsedAt only needs coarse freshness, so skip writes within this window.
+const LAST_USED_PERSIST_INTERVAL_MS = 60_000
+
 export function markEnvironmentUsed(
   userDataPath: string,
   selector: string,
@@ -104,6 +109,14 @@ export function markEnvironmentUsed(
   const store = readEnvironmentStore(userDataPath)
   const environment = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
+  const runtimeIdChanged = args.runtimeId != null && args.runtimeId !== environment.runtimeId
+  const lastUsedIsFresh =
+    environment.lastUsedAt != null &&
+    now >= environment.lastUsedAt &&
+    now - environment.lastUsedAt < LAST_USED_PERSIST_INTERVAL_MS
+  if (!runtimeIdChanged && lastUsedIsFresh) {
+    return
+  }
   const next = store.environments.map((entry) =>
     entry.id === environment.id
       ? {
