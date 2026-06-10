@@ -20,6 +20,7 @@ import {
 import { getTopActivityBarLayout } from './activity-bar-overflow'
 import {
   ActivityBarButton,
+  ClaudeActivityIcon,
   TopActivityOverflowMenu,
   type ActivityBarItem
 } from './activity-bar-buttons'
@@ -108,6 +109,12 @@ function RightSidebarInner(): React.JSX.Element {
         title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
         shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
         sshOnly: true
+      },
+      {
+        id: 'claude',
+        icon: ClaudeActivityIcon,
+        title: 'Claude',
+        shortcut: ''
       }
     ],
     [checksShortcut, explorerShortcut, portsShortcut, sourceControlShortcut]
@@ -406,10 +413,9 @@ function useWindowWidth(): number | null {
 }
 
 function getWindowWidth(): number | null {
-  if (typeof window === 'undefined' || !Number.isFinite(window.innerWidth)) {
-    return null
-  }
-  return window.innerWidth
+  return typeof window === 'undefined' || !Number.isFinite(window.innerWidth)
+    ? null
+    : window.innerWidth
 }
 
 // ─── Context Menu for Activity Bar Position ───────────

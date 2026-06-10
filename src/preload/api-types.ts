@@ -1718,6 +1718,62 @@ export type PreloadApi = {
       wslDistro?: string | null
     }) => Promise<ClaudeRateLimitAccountsState>
   }
+  claudeIde: {
+    onOpenDiff: (
+      callback: (data: {
+        worktreeId: string
+        requestId: string
+        oldPath: string
+        newPath: string
+        newContents: string
+      }) => void
+    ) => () => void
+    reply: (payload: {
+      kind: 'verdict' | 'data'
+      worktreeId: string
+      requestId: string
+      value: unknown
+    }) => void
+    onRequest: (
+      channel: string,
+      callback: (data: { worktreeId: string; requestId: string; [k: string]: unknown }) => void
+    ) => () => void
+    notifySelectionChanged: (payload: {
+      worktreeId: string
+      selection: { text: string; filePath: string } | null
+    }) => void
+  }
+  claudeChat: {
+    send: (payload: {
+      worktreeId: string
+      cwd: string
+      text: string
+      model?: string
+      effort?: string
+      attachments?: string[]
+    }) => Promise<void>
+    stop: (payload: { worktreeId: string }) => void
+    onEvent: (cb: (payload: { worktreeId: string; event: unknown }) => void) => () => void
+    listModels: () => Promise<{ id: string; isDefault: boolean }[]>
+    listMcp: (payload: { cwd: string }) => Promise<string[]>
+    listCommands: (payload: {
+      cwd: string
+    }) => Promise<{ name: string; description: string; source: string }[]>
+    listSessions: (payload: {
+      cwd: string
+    }) => Promise<{ id: string; date: string; summary: string }[]>
+    loadSession: (payload: { cwd: string; sessionId: string }) => Promise<unknown[]>
+    resume: (payload: { worktreeId: string; cwd: string; sessionId: string }) => void
+    status: (payload: {
+      worktreeId: string
+    }) => Promise<{ sessionId: string | null; running: boolean }>
+    reset: (payload: { worktreeId: string }) => void
+    revert: (payload: { cwd: string; sha: string }) => Promise<boolean>
+    changedFiles: (payload: {
+      cwd: string
+      sha: string
+    }) => Promise<{ status: string; path: string }[]>
+  }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>
     install: () => Promise<CliInstallStatus>

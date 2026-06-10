@@ -1,6 +1,7 @@
 import React from 'react'
 import { MoreHorizontal } from 'lucide-react'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import { ClaudeIcon } from '../status-bar/icons'
 import type { CheckStatus } from '../../../../shared/types'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -13,6 +14,17 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+
+// Why: ActivityBarItem.icon must accept className; ClaudeIcon only takes size,
+// so this wrapper satisfies the ComponentType<{size?,className?}> contract.
+export function ClaudeActivityIcon({
+  size
+}: {
+  size?: number
+  className?: string
+}): React.JSX.Element {
+  return <ClaudeIcon size={size} />
+}
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab

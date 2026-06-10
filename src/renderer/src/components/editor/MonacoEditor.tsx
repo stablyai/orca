@@ -50,6 +50,7 @@ import {
   type MonacoMarkdownSelectionAnnotationTarget
 } from './monaco-markdown-selection-annotation'
 import { translate } from '@/i18n/i18n'
+import { setActiveIdeSelection } from './active-ide-selection'
 
 type MonacoEditorProps = {
   fileId: string
@@ -415,6 +416,27 @@ export default function MonacoEditor({
         })
       })
 
+      // Why: keep the module-level IDE selection holder current so
+      // useClaudeIdeContext can answer getCurrentSelection without needing a
+      // store slice. Also push a selection_changed notification when worktreeId
+      // is available (it is a prop on this component).
+      const updateIdeSelection = (): void => {
+        const model = editorInstance.getModel()
+        const sel = editorInstance.getSelection()
+        if (!model || !sel) {
+          setActiveIdeSelection(null)
+          return
+        }
+        const text = sel.isEmpty() ? '' : model.getValueInRange(sel)
+        // filePath is the absolute path prop passed to this editor instance
+        const newSel = { text, filePath }
+        setActiveIdeSelection(newSel)
+        if (worktreeId) {
+          window.api.claudeIde.notifySelectionChanged({ worktreeId, selection: newSel })
+        }
+      }
+      const ideSelectionSub = editorInstance.onDidChangeCursorSelection(updateIdeSelection)
+
       // Why: Writing to the Map at 60fps (every scroll frame) is unnecessary since
       // we only need the final position when the user stops scrolling or switches
       // tabs. A trailing throttle of ~150ms captures the resting position while
@@ -450,11 +472,15 @@ export default function MonacoEditor({
         // Why: keep editor-owned UI subscriptions symmetrical with the
         // shortcut/decorator cleanup when Monaco tears this instance down.
         cursorPositionSub.dispose()
+        ideSelectionSub.dispose()
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()
         cleanupSaveShortcut()
         searchInFilesAction.dispose()
         autoHeightSub?.dispose()
+        // Why: clear the module-level holder so a stale selection from a closed
+        // editor is not returned after the editor unmounts.
+        setActiveIdeSelection(null)
         if (autoHeightFrame !== null) {
           window.cancelAnimationFrame(autoHeightFrame)
           autoHeightFrame = null
