@@ -12,7 +12,10 @@ All changes must be proven with before/after benchmark numbers.
 - [x] OpenCode freeze ROOT CAUSE found + fixed: MessagePart hook flood (see F5/D2).
       Benchmark: 22.9 MB / 540 ms / 400 main-process fanouts per turn → 469 KB / 79 ms / 120
       (legacy vs throttled plugin behavior through the real hook HTTP pipeline)
-- [x] General Windows sync-work audit (results below)
+- [x] General Windows sync-work audit (results below); audit item #2 (readHooksJson per
+      status IPC) investigated and found NOT hot — renderer barely calls those handlers.
+      Fixed pre-existing Windows-only test failures (hydrate-shell-path delimiter).
+- [x] Windows ConPTY e2e perf validation (F7 below)
 
 ## Key facts / environment
 
@@ -120,6 +123,22 @@ The actual mechanism (src/main/opencode/hook-service.ts plugin source):
 - Downstream payloads were already bounded (prompt 200 chars, lastAssistantMessage 8000
   chars via agent-status-types normalization) — the renderer wasn't the bottleneck; the
   main-process ingest was.
+
+### F7 — Windows ConPTY e2e perf validation (2026-06-10)
+
+Ran the terminal-perf budget specs on this Windows machine (real ConPTY + daemon PTY
+provider — a path CI never exercises):
+- `terminal-output-scheduler.spec.ts`: PASS (all tests)
+- `terminal-foreground-redraw-freeze.spec.ts`: PASS
+- `terminal-typing-latency.spec.ts`: PASSES in isolation, repeatedly — median 13.6-23.1ms,
+  worst 34-42ms (budgets: 250ms median / 1000ms worst). Two earlier runs that exceeded the
+  worst-key budget (1054.9ms, 2016.1ms outlier on a single key) occurred while other heavy
+  tooling (vitest/tsgo/builds) ran concurrently on the machine → load-sensitivity, not a
+  deterministic product defect. Note the product implication: under heavy host load
+  (exactly what coding agents generate), a keystroke can stall >1s on Windows. Plausible
+  contributors for follow-up: daemon checkpoint ticks (5s interval; snapshot serialize in
+  daemon + sync writeFileSync of checkpoint JSON on main — daemon-pty-adapter.ts:592,
+  history-manager.ts:109), Defender scanning fresh build artifacts.
 
 ### F6 — Windows e2e perf coverage gap
 
