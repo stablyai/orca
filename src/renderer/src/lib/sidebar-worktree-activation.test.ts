@@ -56,6 +56,7 @@ import {
 
 describe('sidebar worktree activation', () => {
   beforeEach(() => {
+    delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
     cancelPendingSidebarWorktreeActivation()
     mocks.activateAndRevealWorktree.mockClear()
     mocks.markInputQuietSchedulerInput.mockClear()
@@ -88,5 +89,16 @@ describe('sidebar worktree activation', () => {
 
     expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-live')
+  })
+
+  it('does not defer slept workspace activation in the web client', () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    mocks.state.tabsByWorktree = { 'wt-web-slept': [{ id: 'tab-1' }] }
+    mocks.state.ptyIdsByTabId = { 'tab-1': [] }
+
+    activateWorktreeFromSidebar('wt-web-slept')
+
+    expect(mocks.scheduleAfterInputQuiet).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-web-slept')
   })
 })

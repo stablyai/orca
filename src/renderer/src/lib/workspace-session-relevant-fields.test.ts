@@ -30,7 +30,8 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     worktreesByRepo: true,
     lastKnownRelayPtyIdByTabId: true,
     lastVisitedAtByWorktreeId: true,
-    defaultTerminalTabsAppliedByWorktreeId: true
+    defaultTerminalTabsAppliedByWorktreeId: true,
+    sleepingAgentSessionsByPaneKey: true
   }
 
   it('contains every key of WorkspaceSessionSnapshot', () => {

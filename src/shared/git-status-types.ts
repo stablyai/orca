@@ -12,6 +12,11 @@ export type GitConflictKind =
 export type GitConflictResolutionStatus = 'unresolved' | 'resolved_locally'
 export type GitConflictStatusSource = 'git' | 'session'
 export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'unknown'
+export type GitSubmoduleStatus = {
+  commitChanged: boolean
+  trackedChanges: boolean
+  untrackedChanges: boolean
+}
 
 // Compatibility note for non-upgraded consumers:
 // Any consumer that has not been upgraded to read `conflictStatus` may still
@@ -32,6 +37,7 @@ export type GitUncommittedEntry = {
   conflictKind?: GitConflictKind
   conflictStatus?: GitConflictResolutionStatus
   conflictStatusSource?: GitConflictStatusSource
+  submodule?: GitSubmoduleStatus
   // Working-tree line counts for this entry's staging area (staged vs unstaged
   // diffs are reported separately). Untracked files count their full contents
   // as additions. Undefined for binary files and when the diff is unavailable.

@@ -257,11 +257,22 @@ function sanitizeRemoteName(owner: string, repo: string): string {
   return slug ? `pr-${slug}` : 'pr-head'
 }
 
+/**
+ * A fork push target plus the PR's `maintainer_can_modify` flag. The flag rides
+ * alongside the target (rather than inside {@link GitPushTarget}) so it never
+ * leaks into the persisted, validated push-target shape.
+ */
+export type PullRequestPushTarget = {
+  pushTarget: GitPushTarget
+  /** false when the PR has "Allow edits from maintainers" off; a push may be rejected. */
+  maintainerCanModify?: boolean
+}
+
 export async function getPullRequestPushTarget(
   repoPath: string,
   prNumber: number,
   connectionId?: string | null
-): Promise<GitPushTarget | null> {
+): Promise<PullRequestPushTarget | null> {
   const context = githubRepoContext(repoPath, connectionId)
   const ghOptions = ghRepoExecOptions(context)
   const { candidates } = await resolvePRRepositoryCandidates(repoPath, connectionId)
@@ -297,6 +308,7 @@ export async function getPullRequestPushTarget(
     }
     const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId)
     const pr = JSON.parse(prStdout) as {
+      maintainer_can_modify?: boolean
       head?: {
         ref?: string
         repo?: {
@@ -314,6 +326,8 @@ export async function getPullRequestPushTarget(
     const repo = headRepo?.name?.trim() ?? headRepo?.full_name?.split('/')[1]?.trim()
     const cloneUrl = headRepo?.clone_url?.trim()
     const sshUrl = headRepo?.ssh_url?.trim()
+    const maintainerCanModify =
+      typeof pr.maintainer_can_modify === 'boolean' ? pr.maintainer_can_modify : undefined
     if (!owner || !repo || !branchName || !cloneUrl || !sshUrl) {
       return null
     }
@@ -322,7 +336,10 @@ export async function getPullRequestPushTarget(
       origin.owner.toLowerCase() === owner.toLowerCase() &&
       origin.repo.toLowerCase() === repo.toLowerCase()
     ) {
-      return { remoteName: 'origin', branchName }
+      return {
+        pushTarget: { remoteName: 'origin', branchName },
+        ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
+      }
     }
 
     let originUrl: string | null = null
@@ -335,9 +352,12 @@ export async function getPullRequestPushTarget(
       originUrl = null
     }
     return {
-      remoteName: sanitizeRemoteName(owner, repo),
-      branchName,
-      remoteUrl: pickPushRemoteUrl({ originUrl, cloneUrl, sshUrl })
+      pushTarget: {
+        remoteName: sanitizeRemoteName(owner, repo),
+        branchName,
+        remoteUrl: pickPushRemoteUrl({ originUrl, cloneUrl, sshUrl })
+      },
+      ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
     }
   } finally {
     release()

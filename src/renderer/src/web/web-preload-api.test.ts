@@ -231,6 +231,41 @@ describe('web settings preload API', () => {
     expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
   })
 
+  it('migrates inherited terminal bar cursor defaults for stored web settings once', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem('orca.web.settings.v1', JSON.stringify({ terminalCursorStyle: 'bar' }))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      terminalCursorStyle?: string
+      terminalCursorStyleDefaultedToBlock?: boolean
+    }
+
+    expect(settings.terminalCursorStyle).toBe('block')
+    expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
+    expect(stored.terminalCursorStyle).toBe('block')
+    expect(stored.terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('preserves terminal cursor choices after the web block-default migration', async () => {
+    const globals = installBrowserGlobals('Linux')
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({
+        terminalCursorStyle: 'bar',
+        terminalCursorStyleDefaultedToBlock: true
+      })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const settings = await globals.window.api.settings.get()
+    expect(settings.terminalCursorStyle).toBe('bar')
+    expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
   it('preserves first-work branch auto-rename web opt-outs after migration', async () => {
     const globals = installBrowserGlobals('Linux')
     globals.storage.setItem(
@@ -1051,6 +1086,14 @@ describe('web file preload API', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.doUnmock('./web-runtime-client')
+  })
+
+  it('rejects native save-dialog downloads in paired web clients', async () => {
+    const { api } = await installApi('Linux')
+
+    await expect(
+      api.fs.downloadFile({ filePath: '/workspace/repo/file.txt', connectionId: 'ssh-1' })
+    ).rejects.toThrow('Remote file download is unavailable in paired web clients.')
   })
 
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {

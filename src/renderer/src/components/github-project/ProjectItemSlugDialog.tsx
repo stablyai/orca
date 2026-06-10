@@ -12,6 +12,7 @@ import { VisuallyHidden } from 'radix-ui'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { SlugDialogBody } from './slug-dialog/SlugDialogBody'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   projectOrigin: GitHubItemDialogProjectOrigin | null
@@ -33,10 +34,20 @@ export default function ProjectItemSlugDialog({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <VisuallyHidden.Root asChild>
-          <SheetTitle>GitHub item</SheetTitle>
+          <SheetTitle>
+            {translate(
+              'auto.components.github.project.ProjectItemSlugDialog.4450efea9c',
+              'GitHub item'
+            )}
+          </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
-          <SheetDescription>Project row preview.</SheetDescription>
+          <SheetDescription>
+            {translate(
+              'auto.components.github.project.ProjectItemSlugDialog.e55a5c4e68',
+              'Project row preview.'
+            )}
+          </SheetDescription>
         </VisuallyHidden.Root>
         {projectOrigin ? <SlugDialogBody projectOrigin={projectOrigin} onClose={onClose} /> : null}
       </SheetContent>

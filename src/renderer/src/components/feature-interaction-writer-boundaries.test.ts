@@ -16,6 +16,10 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   return source.slice(start, end)
 }
 
+function componentBodyBeforeRender(source: string, componentName: string): string {
+  return sourceBetween(source, `function ${componentName}`, '\n  return (\n    <')
+}
+
 describe('feature interaction writer boundaries', () => {
   it('keeps Cmd+J feature writers in open/selection handlers, not query or navigation rendering', () => {
     const source = componentSource('WorktreeJumpPalette.tsx')
@@ -60,7 +64,7 @@ describe('feature interaction writer boundaries', () => {
     const mutationSections = [
       sourceBetween(source, 'function GHAssigneesCell', 'const triggerContent ='),
       sourceBetween(source, 'function PRReviewCell', 'const requestReviewer ='),
-      sourceBetween(source, 'function PRMergeCell', 'return ('),
+      componentBodyBeforeRender(source, 'PRMergeCell'),
       sourceBetween(
         source,
         'const handleOpenOrUseGitHubWorkItem',

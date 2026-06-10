@@ -22,8 +22,17 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').autoRenameBranchFromWorkDefaultedOn).toBe(true)
   })
 
+  it('uses a block terminal cursor by default for new settings', () => {
+    expect(getDefaultSettings('/tmp').terminalCursorStyle).toBe('block')
+    expect(getDefaultSettings('/tmp').terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
   it('enables separate light terminal theme by default', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
+  })
+
+  it('uses system language by default', () => {
+    expect(getDefaultSettings('/tmp').uiLanguage).toBe('system')
   })
 
   it('enables Source Control AI by default without pinning a separate agent', () => {
@@ -44,8 +53,8 @@ describe('getDefaultSettings', () => {
     })
   })
 
-  it('keeps compact worktree cards experimental and disabled by default', () => {
-    expect(getDefaultSettings('/tmp').experimentalCompactWorktreeCards).toBe(false)
+  it('keeps compact worktree cards disabled by default', () => {
+    expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 })
 

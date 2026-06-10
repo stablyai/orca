@@ -15,10 +15,12 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
+  getTabStripBorderClasses,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
+import { translate } from '@/i18n/i18n'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -38,6 +40,7 @@ type SortableTabProps = {
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
+  includeTopTabBorder?: boolean
 }
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -59,7 +62,8 @@ export default function SortableTab({
   onToggleExpand,
   onSplitGroup,
   dragData,
-  dropIndicator
+  dropIndicator,
+  includeTopTabBorder = true
 }: SortableTabProps): React.JSX.Element {
   // Why: subscribe to the per-tab boolean directly so only the tab whose unread
   // status actually flipped re-renders. Reading the whole `unreadTerminalTabs`
@@ -213,7 +217,7 @@ export default function SortableTab({
       // tab still reads as "selected + has activity". The wash is
       // rendered as an absolutely-positioned child below so the ::after
       // pseudo-element stays free for the drop indicator.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -305,7 +309,11 @@ export default function SortableTab({
           ref={setRenameInputElement}
           data-tab-rename-input="true"
           value={renameValue}
-          aria-label={`Rename tab ${tabTitle}`}
+          aria-label={translate(
+            'auto.components.tab.bar.SortableTab.ab19f603eb',
+            'Rename tab {{value0}}',
+            { value0: tabTitle }
+          )}
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={(event) => {
@@ -341,8 +349,21 @@ export default function SortableTab({
           className="h-5 w-[72px] min-w-[72px] max-w-[72px] mr-1 px-1 py-0 text-xs"
           spellCheck={false}
         />
-      ) : (
+      ) : isEditing || menuOpen ? (
         <span className="truncate max-w-[72px] mr-1">{displayTitle}</span>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="truncate max-w-[72px] mr-1">{displayTitle}</span>
+          </TooltipTrigger>
+          <TooltipContent
+            side="bottom"
+            sideOffset={6}
+            className="max-w-80 whitespace-normal break-words text-left"
+          >
+            {displayTitle}
+          </TooltipContent>
+        </Tooltip>
       )}
       {tab.color && !isEditing && (
         <span
@@ -362,15 +383,15 @@ export default function SortableTab({
             e.stopPropagation()
             onToggleExpand(tab.id)
           }}
-          title="Collapse pane"
-          aria-label="Collapse pane"
+          title={translate('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
+          aria-label={translate('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
         >
           <Minimize2 className="w-3 h-3" />
         </button>
       )}
       {!isEditing && !isPinned && (
         <button
-          className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+          className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
             isActive
               ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
@@ -380,9 +401,25 @@ export default function SortableTab({
           // instead of bypassing the render layer by calling closeTab() on
           // the store — a store-only assertion would pass even if this
           // button had been accidentally unmounted.
-          aria-label={`Close tab ${tabTitle}`}
-          onPointerDown={(e) => e.stopPropagation()}
+          aria-label={translate(
+            'auto.components.tab.bar.SortableTab.6df69d9388',
+            'Close tab {{value0}}',
+            { value0: tabTitle }
+          )}
+          type="button"
+          data-tab-close-button="true"
+          onPointerDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
+          onMouseDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
           onClick={(e) => {
+            e.preventDefault()
             e.stopPropagation()
             onClose(tab.id)
           }}
@@ -403,20 +440,7 @@ export default function SortableTab({
           setMenuOpen(true)
         }}
       >
-        {isEditing || menuOpen ? (
-          tabRoot
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              sideOffset={6}
-              className="max-w-80 whitespace-normal break-words text-left"
-            >
-              {displayTitle}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        {tabRoot}
       </div>
 
       <SortableTabContextMenu

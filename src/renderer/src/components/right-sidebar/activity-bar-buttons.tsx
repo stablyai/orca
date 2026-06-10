@@ -12,6 +12,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { translate } from '@/i18n/i18n'
 
 export type ActivityBarItem = {
   id: RightSidebarTab
@@ -56,7 +57,10 @@ export function TopActivityOverflowMenu({
             'relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
           )}
-          aria-label="More sidebar tabs"
+          aria-label={translate(
+            'auto.components.right.sidebar.activity.bar.buttons.1fd284e931',
+            'More sidebar tabs'
+          )}
         >
           <MoreHorizontal size={16} />
           {hiddenChecksStatus && (

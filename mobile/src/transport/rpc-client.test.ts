@@ -477,6 +477,42 @@ describe('mobile rpc-client connection timeout', () => {
     client.close()
   })
 
+  it('replays terminal subscribe with the latest viewport after reconnect', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const firstSocket = mockSockets[0]!
+
+    firstSocket.open()
+    firstSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    firstSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    client.subscribe(
+      'terminal.subscribe',
+      {
+        terminal: 'term-1',
+        client: { id: 'phone-1', type: 'mobile' },
+        viewport: { cols: 45, rows: 20 }
+      },
+      () => {}
+    )
+    expect(sentRequest(firstSocket, 'terminal.subscribe').params).toMatchObject({
+      viewport: { cols: 45, rows: 20 }
+    })
+
+    client.updateTerminalSubscriptionViewport('term-1', { cols: 60, rows: 24 })
+    firstSocket.close()
+    vi.advanceTimersByTime(500)
+    const secondSocket = mockSockets[1]!
+    secondSocket.open()
+    secondSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    secondSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    expect(sentRequest(secondSocket, 'terminal.subscribe').params).toMatchObject({
+      viewport: { cols: 60, rows: 24 }
+    })
+
+    client.close()
+  })
+
   it('honors per-request timeout overrides', async () => {
     const client = connect('ws://desktop.invalid', 'token', 'server-key')
     const socket = mockSockets[0]!
@@ -543,6 +579,120 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
       await request.catch(() => undefined)
     }
+  })
+
+  // Repro for issue #5049: Android sessions that appear connected (or stuck
+  // "Reconnecting…") after the app returns to the foreground, recoverable
+  // only by restarting the app. notifyForeground is the recovery hook the
+  // provider invokes on AppState 'active'.
+  describe('foreground recovery', () => {
+    function openAndAuthenticate(socket: MockWebSocket) {
+      socket.open()
+      socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+      socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    }
+
+    it('repro: a parked reconnect loop never retries on its own', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      openAndAuthenticate(mockSockets[0]!)
+      mockSockets[0]!.close()
+
+      await vi.runAllTimersAsync()
+      expect(client.getState()).toBe('reconnecting')
+      expect(client.getReconnectAttempt()).toBe(12)
+
+      // Stuck: arbitrary additional time produces no further attempts.
+      const socketsBefore = mockSockets.length
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(mockSockets.length).toBe(socketsBefore)
+
+      client.close()
+    })
+
+    it('restarts a parked reconnect loop on foreground', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      openAndAuthenticate(mockSockets[0]!)
+      mockSockets[0]!.close()
+      await vi.runAllTimersAsync()
+      expect(client.getReconnectAttempt()).toBe(12)
+
+      const socketsBefore = mockSockets.length
+      client.notifyForeground()
+
+      expect(mockSockets.length).toBe(socketsBefore + 1)
+      expect(client.getReconnectAttempt()).toBe(0)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('fast-forwards a pending backoff timer on foreground', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      openAndAuthenticate(mockSockets[0]!)
+      mockSockets[0]!.close()
+      expect(client.getState()).toBe('reconnecting')
+
+      const socketsBefore = mockSockets.length
+      client.notifyForeground()
+
+      expect(mockSockets.length).toBe(socketsBefore + 1)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      // The cleared backoff timer must not fire a duplicate attempt.
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(mockSockets.length).toBe(socketsBefore + 1)
+
+      client.close()
+    })
+
+    it('reaps a half-open socket within 8s of foreground', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = mockSockets[0]!
+      openAndAuthenticate(socket)
+
+      // Half-open: readyState stays OPEN but the server never answers.
+      client.notifyForeground()
+      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).toHaveBeenCalled()
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('keeps a healthy connection when the foreground probe is answered', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = mockSockets[0]!
+      openAndAuthenticate(socket)
+
+      client.notifyForeground()
+      const probe = sentRequest(socket, 'status.get')
+      socket.receive(`encrypted:${JSON.stringify({ id: probe.id, ok: true, result: {} })}`)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(socket.close).not.toHaveBeenCalled()
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('is a no-op after the client is closed', () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      openAndAuthenticate(mockSockets[0]!)
+      client.close()
+
+      const socketsBefore = mockSockets.length
+      client.notifyForeground()
+      expect(mockSockets.length).toBe(socketsBefore)
+      expect(client.getState()).toBe('disconnected')
+    })
   })
 
   it('rejects requests waiting for reconnect after the retry cap', async () => {

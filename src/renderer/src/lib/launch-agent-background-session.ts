@@ -13,7 +13,6 @@ import {
   subscribeToPtyData,
   subscribeToPtyExit
 } from '@/components/terminal-pane/pty-dispatcher'
-import { createAgentStatusOscProcessor } from '@/components/terminal-pane/agent-status-osc'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
@@ -22,8 +21,10 @@ import {
   subscribeToRuntimeTerminalData,
   toRemoteRuntimePtyId
 } from '@/runtime/runtime-terminal-stream'
+import { createAgentStatusOscProcessor } from '../../../shared/agent-status-osc'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
+import { translate } from '@/i18n/i18n'
 
 export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
@@ -256,7 +257,12 @@ export async function launchAgentBackgroundSession(
       agent,
       submit: true,
       onTimeout: () => {
-        toast.message("Your automation prompt wasn't sent — open the workspace and paste it.")
+        toast.message(
+          translate(
+            'auto.lib.launch.agent.background.session.4ca0651d56',
+            "Your automation prompt wasn't sent — open the workspace and paste it."
+          )
+        )
         track('agent_error', {
           error_class: 'paste_readiness_timeout',
           agent_kind: tuiAgentToAgentKind(agent)

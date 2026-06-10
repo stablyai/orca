@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 export type DirEntry = {
   name: string
   isDirectory: boolean
@@ -178,7 +179,14 @@ export function resolveSegmentStep(
     }
     // Stop resolution: prefix-matching to a similarly-named folder here would
     // silently bypass a real file the user pointed at.
-    return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+        "{{value0}} isn't a directory in {{value1}}",
+        { value0: segment, value1: basePath }
+      )
+    }
   }
   // Fall back to case-insensitive matching so segment resolution agrees with
   // the case-insensitive filter input. Without this, typing `documents/`
@@ -191,7 +199,14 @@ export function resolveSegmentStep(
     if (ciExact.isDirectory) {
       return { type: 'descend', name: ciExact.name }
     }
-    return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+        "{{value0}} isn't a directory in {{value1}}",
+        { value0: segment, value1: basePath }
+      )
+    }
   }
   const dirMatches = baseEntries.filter(
     (e) => e.isDirectory && e.name.toLowerCase().startsWith(segLower)
@@ -200,7 +215,21 @@ export function resolveSegmentStep(
     return { type: 'descend', name: dirMatches[0].name }
   }
   if (dirMatches.length > 1) {
-    return { type: 'error', message: `${segment} matches multiple directories in ${basePath}` }
+    return {
+      type: 'error',
+      message: translate(
+        'auto.components.sidebar.remote.file.browser.helpers.be266af66c',
+        '{{value0}} matches multiple directories in {{value1}}',
+        { value0: segment, value1: basePath }
+      )
+    }
   }
-  return { type: 'error', message: `${segment} isn't a directory in ${basePath}` }
+  return {
+    type: 'error',
+    message: translate(
+      'auto.components.sidebar.remote.file.browser.helpers.4dbd72a7d7',
+      "{{value0}} isn't a directory in {{value1}}",
+      { value0: segment, value1: basePath }
+    )
+  }
 }

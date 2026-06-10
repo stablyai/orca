@@ -94,6 +94,7 @@ import {
   type FloatingTerminalPanelCommittedBounds,
   type FloatingTerminalPanelBoundsSource
 } from './floating-terminal-panel-bounds'
+import { translate } from '@/i18n/i18n'
 const EMPTY_TERMINAL_TABS: TerminalTab[] = []
 const EMPTY_BROWSER_TABS: BrowserTabState[] = []
 const EMPTY_GROUPS: TabGroup[] = []
@@ -276,12 +277,14 @@ export function FloatingTerminalPanel({
               title: resolveUnifiedTabLabel(
                 {
                   ...tab,
+                  quickCommandLabel: tab.quickCommandLabel ?? terminalTab.quickCommandLabel,
                   generatedLabel: tab.generatedLabel ?? terminalTab.generatedTitle
                 },
                 generatedTabTitlesEnabled,
                 tab.label
               ),
               generatedTitle: terminalTab.generatedTitle ?? tab.generatedLabel ?? null,
+              quickCommandLabel: terminalTab.quickCommandLabel ?? tab.quickCommandLabel ?? null,
               customTitle: tab.customLabel ?? terminalTab.customTitle,
               color: tab.color ?? terminalTab.color
             }
@@ -650,7 +653,10 @@ export function FloatingTerminalPanel({
         return
       }
       createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
-        title: 'New Browser Tab',
+        title: translate(
+          'auto.components.floating.terminal.FloatingTerminalPanel.8b14ba6c17',
+          'New Browser Tab'
+        ),
         focusAddressBar: true,
         targetGroupId: activeGroup?.id
       })
@@ -1238,12 +1244,15 @@ export function FloatingTerminalPanel({
   return (
     // Why: root notification cards use z-40; keep the floating workspace below
     // them so alerts are never hidden behind an open terminal panel.
+    // Drop shadow on the outer shell, border on an inner shell — mixing both on
+    // one rounded node made corners look stubby. Floating tabs skip their top
+    // border so the titlebar curve stays clean.
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
       aria-hidden={!open}
       tabIndex={-1}
-      className={`fixed z-30 flex min-h-[280px] min-w-[420px] overflow-hidden rounded-lg border border-border bg-card text-card-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-30 flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
       style={{
         visibility: open ? 'visible' : 'hidden',
         left: bounds.left,
@@ -1262,7 +1271,7 @@ export function FloatingTerminalPanel({
       onBlurCapture={(event) => setFloatingTerminalInputFocused(event.relatedTarget)}
       onKeyDownCapture={handleShortcutSurfaceKeyDown}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="relative flex h-full w-full min-h-0 flex-col overflow-hidden rounded-lg border border-black/14 bg-card dark:border-white/14">
         <div
           className="flex h-9 shrink-0 cursor-grab items-center border-b border-border bg-[var(--bg-titlebar,var(--card))] active:cursor-grabbing"
           data-floating-terminal-shortcut-surface
@@ -1330,6 +1339,7 @@ export function FloatingTerminalPanel({
               onMakePreviewFilePermanent={makePreviewFilePermanent}
               onPinFile={pinFile}
               tabBarOrder={tabBarOrder}
+              tabStripChrome="floating-panel"
             />
           </div>
           <FloatingTerminalWindowControls
@@ -1354,7 +1364,13 @@ export function FloatingTerminalPanel({
                       worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
                       cwd={cwd}
                       isActive={isActive}
-                      isVisible={isActive}
+                      // Why: the closed panel is only CSS-hidden, so gate
+                      // visibility on `open` too. This routes the floating
+                      // terminal through the standard hidden-terminal
+                      // suspend/resume path: no live WebGL context (or glyph
+                      // atlas to corrupt) while hidden, and the resume on
+                      // reopen rebuilds the renderer from scratch.
+                      isVisible={isActive && open}
                       onPtyExit={() => closeTab(tab.id)}
                       onCloseTab={() => closeFloatingItem(tab.id)}
                     />
@@ -1379,7 +1395,10 @@ export function FloatingTerminalPanel({
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    Loading editor...
+                    {translate(
+                      'auto.components.floating.terminal.FloatingTerminalPanel.d6b563ae24',
+                      'Loading editor...'
+                    )}
                   </div>
                 }
               >
@@ -1417,9 +1436,17 @@ export function FloatingTerminalPanel({
         >
           <div className="space-y-2">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium">Enable orchestration</p>
+              <p className="text-sm font-medium">
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalPanel.2a3c5ddf5e',
+                  'Enable orchestration'
+                )}
+              </p>
               <p className="text-xs leading-5 text-muted-foreground">
-                Set up the Orca CLI and agent skill so agents can coordinate through Orca.
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalPanel.8cf80db43b',
+                  'Set up the Orca CLI and agent skill so agents can coordinate through Orca.'
+                )}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1430,7 +1457,10 @@ export function FloatingTerminalPanel({
                 className="flex-1"
                 onClick={dismissOrchestrationSetup}
               >
-                Dismiss
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalPanel.adc281394d',
+                  'Dismiss'
+                )}
               </Button>
               <Button
                 type="button"
@@ -1439,7 +1469,10 @@ export function FloatingTerminalPanel({
                 className="flex-1"
                 onClick={() => setOrchestrationDialogOpen(true)}
               >
-                Enable
+                {translate(
+                  'auto.components.floating.terminal.FloatingTerminalPanel.bbc177f98f',
+                  'Enable'
+                )}
               </Button>
             </div>
           </div>
@@ -1454,7 +1487,6 @@ export function FloatingTerminalPanel({
       )}
       <FloatingTerminalOrchestrationDialog
         open={orchestrationDialogOpen}
-        activeTabId={activeTerminalId}
         onOpenChange={setOrchestrationDialogOpen}
         onSetupStateChange={() => void refreshOrchestrationSetupVisibility()}
       />
@@ -1468,11 +1500,23 @@ export function FloatingTerminalPanel({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">Unsaved Changes</DialogTitle>
+            <DialogTitle className="text-sm">
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.690b6fb98a',
+                'Unsaved Changes'
+              )}
+            </DialogTitle>
             <DialogDescription className="text-xs">
               {saveDialogFile
-                ? `"${saveDialogFile.relativePath.split('/').pop()}" has unsaved changes. Do you want to save before closing?`
-                : 'This file has unsaved changes.'}
+                ? translate(
+                    'auto.components.floating.terminal.FloatingTerminalPanel.5ddc688c52',
+                    '"{{value0}}" has unsaved changes. Do you want to save before closing?',
+                    { value0: saveDialogFile.relativePath.split('/').pop() }
+                  )
+                : translate(
+                    'auto.components.floating.terminal.FloatingTerminalPanel.b085fb58b5',
+                    'This file has unsaved changes.'
+                  )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -1482,7 +1526,10 @@ export function FloatingTerminalPanel({
               size="sm"
               onClick={handleFloatingSaveDialogCancel}
             >
-              Cancel
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.e7bf09d4d4',
+                'Cancel'
+              )}
             </Button>
             <Button
               type="button"
@@ -1490,10 +1537,16 @@ export function FloatingTerminalPanel({
               size="sm"
               onClick={handleFloatingSaveDialogDiscard}
             >
-              Don&apos;t Save
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.918c2139f3',
+                "Don't Save"
+              )}
             </Button>
             <Button type="button" size="sm" onClick={handleFloatingSaveDialogSave}>
-              Save
+              {translate(
+                'auto.components.floating.terminal.FloatingTerminalPanel.da508bd7f5',
+                'Save'
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1542,7 +1595,12 @@ function FloatingTerminalEmptyState({
           onClick={onNewTerminal}
         >
           <TerminalSquare className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">New Terminal</span>
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.3215fc73e9',
+              'New Terminal'
+            )}
+          </span>
           <FloatingEmptyStateShortcut keys={newTerminalShortcutKeys} />
         </Button>
         <Button
@@ -1552,7 +1610,12 @@ function FloatingTerminalEmptyState({
           onClick={onNewMarkdown}
         >
           <FileText className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">New Markdown Note</span>
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.629528690b',
+              'New Markdown Note'
+            )}
+          </span>
           <FloatingEmptyStateShortcut keys={newMarkdownShortcutKeys} />
         </Button>
         <Button
@@ -1562,7 +1625,12 @@ function FloatingTerminalEmptyState({
           onClick={onOpenMarkdown}
         >
           <FileText className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">Open Markdown Note</span>
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.88ffb502e5',
+              'Open Markdown Note'
+            )}
+          </span>
           <FloatingEmptyStateShortcut keys={openMarkdownShortcutKeys} />
         </Button>
         <Button
@@ -1572,7 +1640,12 @@ function FloatingTerminalEmptyState({
           onClick={onNewBrowser}
         >
           <Globe className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">New Browser</span>
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.8b07759314',
+              'New Browser'
+            )}
+          </span>
           <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
         </Button>
         <Button
@@ -1582,7 +1655,12 @@ function FloatingTerminalEmptyState({
           onClick={onClose}
         >
           <Minus className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">Minimize</span>
+          <span className="truncate text-left leading-none">
+            {translate(
+              'auto.components.floating.terminal.FloatingTerminalPanel.fc1042e92b',
+              'Minimize'
+            )}
+          </span>
           <FloatingEmptyStateShortcut keys={closeShortcutKeys} />
         </Button>
       </div>

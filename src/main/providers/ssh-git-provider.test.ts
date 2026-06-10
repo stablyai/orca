@@ -216,6 +216,40 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledTimes(2)
   })
 
+  it('getStagedCommitContext falls back when the remote staged patch overflows', async () => {
+    mux.request.mockImplementation(async (_method, payload) => {
+      if (payload.args[1] === '--show-current') {
+        return { stdout: 'feature/ai-commit\n' }
+      }
+      if (payload.args[2] === '--name-status') {
+        return { stdout: 'A\thuge.jsonl\n' }
+      }
+      throw Object.assign(new Error('git stdout exceeded maxBuffer.'), { code: 'ENOBUFS' })
+    })
+
+    await expect(provider.getStagedCommitContext('/home/user/repo')).resolves.toEqual({
+      branch: 'feature/ai-commit',
+      stagedSummary: 'A\thuge.jsonl',
+      stagedPatch: ''
+    })
+  })
+
+  it('getStagedCommitContext rethrows remote patch failures that are not buffer overflows', async () => {
+    mux.request.mockImplementation(async (_method, payload) => {
+      if (payload.args[1] === '--show-current') {
+        return { stdout: 'feature/ai-commit\n' }
+      }
+      if (payload.args[2] === '--name-status') {
+        return { stdout: 'M\tREADME.md\n' }
+      }
+      throw new Error('fatal: bad revision')
+    })
+
+    await expect(provider.getStagedCommitContext('/home/user/repo')).rejects.toThrow(
+      'fatal: bad revision'
+    )
+  })
+
   it('executeCommitMessagePlan delegates the prepared plan to the relay', async () => {
     const execResult = {
       stdout: 'Update docs',
@@ -721,6 +755,51 @@ describe('SshGitProvider', () => {
     expect(result).toEqual(cleanResult)
   })
 
+  it('worktreeIsClean can ignore untracked files', async () => {
+    const cleanResult = { clean: true }
+    mux.request.mockResolvedValue(cleanResult)
+
+    const result = await provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
+
+    expect(mux.request).toHaveBeenCalledWith('git.worktreeIsClean', {
+      worktreePath: '/home/user/feat',
+      includeUntracked: false
+    })
+    expect(result).toEqual(cleanResult)
+  })
+
+  it('worktreeIsClean filters untracked stdout when old relays ignore the option', async () => {
+    mux.request.mockResolvedValue({ clean: false, stdout: '?? scratch.txt\n' })
+
+    const result = await provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
+
+    expect(result).toEqual({ clean: true })
+  })
+
+  it('worktreeIsClean keeps dirty results without stdout dirty for tracked-only checks', async () => {
+    mux.request.mockResolvedValue({ clean: false })
+
+    const result = await provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
+
+    expect(result).toEqual({ clean: false })
+  })
+
+  it('refreshLocalBaseRefForWorktreeCreate sends the narrow refresh request', async () => {
+    await provider.refreshLocalBaseRefForWorktreeCreate({
+      repoPath: '/home/user/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main',
+      ownerWorktreePath: '/home/user/repo'
+    })
+
+    expect(mux.request).toHaveBeenCalledWith('git.refreshLocalBaseRefForWorktreeCreate', {
+      repoPath: '/home/user/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main',
+      ownerWorktreePath: '/home/user/repo'
+    })
+  })
+
   it('worktreeIsClean falls back to git.status for old relays', async () => {
     const methodNotFound = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
       code: -32601
@@ -741,6 +820,28 @@ describe('SshGitProvider', () => {
         worktreePath: '/home/user/feat'
       })
       expect(result).toEqual({ clean: false, stdout: 'untracked untracked: scratch.txt' })
+    } finally {
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('worktreeIsClean filters untracked entries in old-relay fallback', async () => {
+    const methodNotFound = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
+      code: -32601
+    })
+    mux.request.mockRejectedValueOnce(methodNotFound).mockResolvedValueOnce({
+      entries: [{ path: 'scratch.txt', status: 'untracked', area: 'untracked' }],
+      conflictOperation: 'unknown'
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await expect(
+        provider.worktreeIsClean('/home/user/feat', { includeUntracked: false })
+      ).resolves.toEqual({ clean: true })
+      expect(mux.request).toHaveBeenNthCalledWith(2, 'git.status', {
+        worktreePath: '/home/user/feat'
+      })
     } finally {
       warnSpy.mockRestore()
     }

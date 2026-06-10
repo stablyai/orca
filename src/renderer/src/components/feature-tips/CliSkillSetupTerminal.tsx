@@ -4,14 +4,27 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { OnboardingInlineCommandTerminal } from '@/components/onboarding/OnboardingInlineCommandTerminal'
 import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
+import { translate } from '@/i18n/i18n'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {
   const handleCopySkillCommand = async (): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND)
-      toast.success('Copied the skill install command.')
+      toast.success(
+        translate(
+          'auto.components.feature.tips.CliSkillSetupTerminal.b8ad063571',
+          'Copied the skill install command.'
+        )
+      )
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to copy skill command.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.feature.tips.CliSkillSetupTerminal.6ff813fc1d',
+              'Failed to copy skill command.'
+            )
+      )
     }
   }
 
@@ -28,21 +41,36 @@ export function CliSkillSetupTerminal(): React.JSX.Element {
               size="icon-sm"
               className="shrink-0"
               onClick={() => void handleCopySkillCommand()}
-              aria-label="Copy skill install command"
+              aria-label={translate(
+                'auto.components.feature.tips.CliSkillSetupTerminal.5eca672aac',
+                'Copy skill install command'
+              )}
             >
               <Copy className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            Copy command
+            {translate(
+              'auto.components.feature.tips.CliSkillSetupTerminal.5c3aee22c0',
+              'Copy command'
+            )}
           </TooltipContent>
         </Tooltip>
       </div>
       <OnboardingInlineCommandTerminal
         command={ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND}
-        title="Skill setup"
-        ariaLabel="Orca CLI and orchestration skill install terminal"
-        description="Press Enter to install the Orca CLI orchestration skill for your agents."
+        title={translate(
+          'auto.components.feature.tips.CliSkillSetupTerminal.84e9576dac',
+          'Skill setup'
+        )}
+        ariaLabel={translate(
+          'auto.components.feature.tips.CliSkillSetupTerminal.43b60ec5c3',
+          'Orca CLI and orchestration skill install terminal'
+        )}
+        description={translate(
+          'auto.components.feature.tips.CliSkillSetupTerminal.1953e90447',
+          'Press Enter to install the Orca CLI orchestration skill for your agents.'
+        )}
         terminalHeightPx={280}
         terminalTopMarginPx={8}
         descriptionPaddingClassName="px-4 py-2"

@@ -24,6 +24,11 @@ import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
 } from './browser-screencast-protocol'
+import {
+  buildTerminalUnsubscribeParams,
+  updateTerminalSubscriptionViewport as updateCachedTerminalSubscriptionViewport
+} from './rpc-client-terminal-subscription'
+import { describeSocketEvent } from './socket-event-debug'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -74,6 +79,10 @@ export type RpcClient = {
     onData: StreamingListener,
     options?: SubscribeOptions
   ) => () => void
+  updateTerminalSubscriptionViewport: (
+    terminal: string,
+    viewport: { cols: number; rows: number }
+  ) => void
   getState: () => ConnectionState
   // Why: UI escalates "Reconnecting…" to "Can't connect" once attempts cross
   // a threshold. 0 means never failed; counter is reset on successful open.
@@ -83,6 +92,10 @@ export type RpcClient = {
   // to distinguish "host moved/never reachable" from "transient blip".
   getLastConnectedAt: () => number | null
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
+  // Why: app-resume hook. Android/iOS can kill the TCP path or park the
+  // reconnect loop while the app is backgrounded; callers invoke this on
+  // AppState 'active' so the session recovers without an app restart.
+  notifyForeground: () => void
   close: () => void
 }
 
@@ -637,38 +650,9 @@ export function connect(
       const aliveMs =
         currentWsOpenedAt != null && state === 'connected' ? closeAt - currentWsOpenedAt : null
       const inboundIdleMs = lastInboundAt != null ? closeAt - lastInboundAt : null
-      // Why: inline the diagnostic dump. Earlier hot-reload tripped
-      // `Property 'enumKeys' doesn't exist` because a stale closure
-      // captured a half-loaded module. Inlining keeps the handler's
-      // behavior fully decided at construction time.
-      let closeEventKeys: string[] = []
-      let closeEventStr = ''
-      try {
-        closeEventKeys = event && typeof event === 'object' ? Object.keys(event as object) : []
-      } catch {
-        closeEventKeys = []
-      }
-      try {
-        const seen = new WeakSet<object>()
-        closeEventStr = JSON.stringify(
-          event,
-          (_k, v) => {
-            if (typeof v === 'object' && v !== null) {
-              if (seen.has(v as object)) {
-                return '[circular]'
-              }
-              seen.add(v as object)
-            }
-            if (typeof v === 'function') {
-              return '[fn]'
-            }
-            return v
-          },
-          0
-        ).slice(0, 500)
-      } catch {
-        closeEventStr = '[unstringifiable]'
-      }
+      // Why: statically imported (not closure-built) — an earlier hot-reload
+      // bug came from a stale closure capturing a half-loaded module.
+      const closeEvent = describeSocketEvent(event)
       console.log('[net] ws.onclose', {
         code: e?.code,
         reason: e?.reason,
@@ -680,8 +664,8 @@ export function connect(
         constructToCloseMs,
         aliveMs,
         inboundIdleMs,
-        eventKeys: closeEventKeys,
-        eventStr: closeEventStr
+        eventKeys: closeEvent.keys,
+        eventStr: closeEvent.json
       })
       lastWsClosedAt = closeAt
       currentWsOpenedAt = null
@@ -696,41 +680,13 @@ export function connect(
       // onclose fires right after, but logging the error message gives us
       // the original cause that the close code alone can hide.
       const e = event as { message?: string } | undefined
-      // Why: inlined defensively — see ws.onclose comment.
-      let errEventKeys: string[] = []
-      let errEventStr = ''
-      try {
-        errEventKeys = event && typeof event === 'object' ? Object.keys(event as object) : []
-      } catch {
-        errEventKeys = []
-      }
-      try {
-        const seen = new WeakSet<object>()
-        errEventStr = JSON.stringify(
-          event,
-          (_k, v) => {
-            if (typeof v === 'object' && v !== null) {
-              if (seen.has(v as object)) {
-                return '[circular]'
-              }
-              seen.add(v as object)
-            }
-            if (typeof v === 'function') {
-              return '[fn]'
-            }
-            return v
-          },
-          0
-        ).slice(0, 500)
-      } catch {
-        errEventStr = '[unstringifiable]'
-      }
+      const errEvent = describeSocketEvent(event)
       console.log('[net] ws.onerror', {
         message: e?.message,
         state,
         attempt: reconnectAttempt,
-        eventKeys: errEventKeys,
-        eventStr: errEventStr
+        eventKeys: errEvent.keys,
+        eventStr: errEvent.json
       })
     }
   }
@@ -810,56 +766,58 @@ export function connect(
   // at the top of the file. Fires while the channel is in 'connected'
   // state, sends a tiny status.get, and force-closes the WS if the probe
   // fails (which the existing onclose path then turns into a reconnect).
+  function runActivityProbe() {
+    // Why: only probe while the channel is actually in 'connected'. The
+    // sendRequest path itself waits for connected, but a probe scheduled
+    // during a reconnect would just stack up timeouts and confuse logs.
+    if (state !== 'connected' || !ws) {
+      return
+    }
+    const probeWs = ws
+    // Why: short timeout (8s) — server's heartbeat is 15s, so if we
+    // don't see *anything* back within 8s the link is almost certainly
+    // half-open. Using REQUEST_TIMEOUT_MS (30s) here would make the
+    // user wait nearly a minute before reconnect kicks in.
+    const id = nextId()
+    const probeStart = Date.now()
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      pending.delete(id)
+      console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
+        waitedMs: Date.now() - probeStart,
+        state
+      })
+      // Why: only force-close if this is still the same socket the
+      // probe was sent on; a normal close that already swapped `ws`
+      // shouldn't trigger a redundant terminate.
+      if (probeWs === ws && probeWs.readyState === WebSocket.OPEN) {
+        probeWs.close()
+      }
+    }, 8_000)
+    pending.set(id, {
+      resolve: () => {
+        if (timedOut) {
+          return
+        }
+        clearTimeout(timeout)
+      },
+      reject: () => {
+        if (timedOut) {
+          return
+        }
+        clearTimeout(timeout)
+      }
+    })
+    if (!sendEncrypted({ id, deviceToken, method: 'status.get' })) {
+      clearTimeout(timeout)
+      pending.delete(id)
+    }
+  }
+
   function startActivityProbe() {
     stopActivityProbe()
-    activityProbeTimer = setInterval(() => {
-      // Why: only probe while the channel is actually in 'connected'. The
-      // sendRequest path itself waits for connected, but a probe scheduled
-      // during a reconnect would just stack up timeouts and confuse logs.
-      if (state !== 'connected' || !ws) {
-        return
-      }
-      const probeWs = ws
-      // Why: short timeout (8s) — server's heartbeat is 15s, so if we
-      // don't see *anything* back within 8s the link is almost certainly
-      // half-open. Using REQUEST_TIMEOUT_MS (30s) here would make the
-      // user wait nearly a minute before reconnect kicks in.
-      const id = nextId()
-      const probeStart = Date.now()
-      let timedOut = false
-      const timeout = setTimeout(() => {
-        timedOut = true
-        pending.delete(id)
-        console.log('[net] activity-probe TIMEOUT — forcing reconnect', {
-          waitedMs: Date.now() - probeStart,
-          state
-        })
-        // Why: only force-close if this is still the same socket the
-        // probe was sent on; a normal close that already swapped `ws`
-        // shouldn't trigger a redundant terminate.
-        if (probeWs === ws && probeWs.readyState === WebSocket.OPEN) {
-          probeWs.close()
-        }
-      }, 8_000)
-      pending.set(id, {
-        resolve: () => {
-          if (timedOut) {
-            return
-          }
-          clearTimeout(timeout)
-        },
-        reject: () => {
-          if (timedOut) {
-            return
-          }
-          clearTimeout(timeout)
-        }
-      })
-      if (!sendEncrypted({ id, deviceToken, method: 'status.get' })) {
-        clearTimeout(timeout)
-        pending.delete(id)
-      }
-    }, ACTIVITY_PROBE_INTERVAL_MS)
+    activityProbeTimer = setInterval(runActivityProbe, ACTIVITY_PROBE_INTERVAL_MS)
   }
 
   function stopActivityProbe() {
@@ -1151,36 +1109,22 @@ export function connect(
           disposeBrowserScreencastStream(id)
           return
         }
-        if (
-          stream?.method === 'terminal.subscribe' &&
-          stream.params &&
-          typeof stream.params === 'object' &&
-          typeof (stream.params as { terminal?: unknown }).terminal === 'string'
-        ) {
+        if (stream?.method === 'terminal.subscribe') {
           // Why: the runtime registers cleanup under the composite key
           // `${terminal}:${clientId}` so two phones subscribing to the same
           // terminal handle don't evict each other. Echo that composite key
           // back on unsubscribe; also include `client.id` so the server can
           // reconstruct it if a stale build emits a bare-handle id. See
           // docs/mobile-presence-lock.md.
-          const subscribeParams = stream.params as {
-            terminal: string
-            client?: { id?: string }
+          const unsubscribeParams = buildTerminalUnsubscribeParams(stream.params)
+          if (unsubscribeParams) {
+            sendEncrypted({
+              id: nextId(),
+              deviceToken,
+              method: 'terminal.unsubscribe',
+              params: unsubscribeParams
+            })
           }
-          const clientId =
-            typeof subscribeParams.client?.id === 'string' ? subscribeParams.client.id : undefined
-          const subscriptionId = clientId
-            ? `${subscribeParams.terminal}:${clientId}`
-            : subscribeParams.terminal
-          sendEncrypted({
-            id: nextId(),
-            deviceToken,
-            method: 'terminal.unsubscribe',
-            params: {
-              subscriptionId,
-              ...(clientId ? { client: { id: clientId } } : {})
-            }
-          })
         } else if (
           stream?.method === 'session.tabs.subscribe' &&
           stream.params &&
@@ -1198,6 +1142,13 @@ export function connect(
       }
     },
 
+    updateTerminalSubscriptionViewport(
+      terminal: string,
+      viewport: { cols: number; rows: number }
+    ): void {
+      updateCachedTerminalSubscriptionViewport(streamListeners.values(), terminal, viewport)
+    },
+
     getState(): ConnectionState {
       return state
     },
@@ -1213,6 +1164,38 @@ export function connect(
     onStateChange(listener: (state: ConnectionState) => void): () => void {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
+    },
+
+    notifyForeground(): void {
+      if (intentionallyClosed) {
+        return
+      }
+      if (state === 'connected') {
+        // Why: the OS can kill the TCP path while the app is backgrounded
+        // without delivering onclose, leaving a half-open socket that
+        // blackholes input. Probe now so death is detected in ≤8s instead
+        // of waiting out the 20s interval (issue #5049).
+        console.log('[net] foreground — probing live connection')
+        startActivityProbe()
+        runActivityProbe()
+        return
+      }
+      if (state === 'reconnecting') {
+        // Why: while backgrounded the retry loop may have parked at the
+        // give-up cap or be sitting on a 60s backoff timer. Returning to
+        // the foreground is a strong user signal — restart with a fresh
+        // attempt budget immediately instead of requiring an app restart.
+        console.log('[net] foreground — restarting reconnect loop', {
+          attempt: reconnectAttempt,
+          hadTimer: !!reconnectTimer
+        })
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer)
+          reconnectTimer = null
+        }
+        reconnectAttempt = 0
+        openConnection()
+      }
     },
 
     close() {

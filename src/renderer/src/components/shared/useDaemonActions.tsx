@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../ui/dialog'
+import { translate } from '@/i18n/i18n'
 
 export type DaemonActionKind = 'restart' | 'killAll'
 
@@ -55,14 +56,24 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
     try {
       const { success } = await window.api.pty.management.restart()
       if (success) {
-        toast.success('Daemon restarted.')
+        toast.success(
+          translate('auto.components.shared.useDaemonActions.0e9da1b98e', 'Daemon restarted.')
+        )
       } else {
-        toast.error('Restart failed — check logs.')
+        toast.error(
+          translate(
+            'auto.components.shared.useDaemonActions.b5954e12d3',
+            'Restart failed — check logs.'
+          )
+        )
       }
     } catch (err) {
-      toast.error('Restart failed.', {
-        description: err instanceof Error ? err.message : undefined
-      })
+      toast.error(
+        translate('auto.components.shared.useDaemonActions.d762b41f41', 'Restart failed.'),
+        {
+          description: err instanceof Error ? err.message : undefined
+        }
+      )
     } finally {
       clearPendingAction()
       if (mountedRef.current) {
@@ -78,22 +89,59 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
       const { killedCount, remainingCount } = await window.api.pty.management.killAll()
       if (remainingCount > 0 && killedCount > 0) {
         toast.warning(
-          `Killed ${killedCount} of ${killedCount + remainingCount} sessions. ${remainingCount} refused to exit.`
+          translate(
+            'auto.components.shared.useDaemonActions.fe2ab66d45',
+            'Killed {{value0}} of {{value1}} sessions. {{value2}} refused to exit.',
+            { value0: killedCount, value1: killedCount + remainingCount, value2: remainingCount }
+          )
+        )
+      } else if (killedCount === 1) {
+        toast.success(
+          translate(
+            'auto.components.shared.useDaemonActions.87412c2a68',
+            'Killed {{value0}} session.',
+            { value0: killedCount }
+          )
         )
       } else if (killedCount > 0) {
-        toast.success(`Killed ${killedCount} session${killedCount === 1 ? '' : 's'}.`)
+        toast.success(
+          translate(
+            'auto.components.shared.useDaemonActions.a2f040ac1c',
+            'Killed {{value0}} sessions.',
+            { value0: killedCount }
+          )
+        )
       } else if (remainingCount === 0) {
-        toast.info('No sessions running.')
+        toast.info(
+          translate('auto.components.shared.useDaemonActions.baad8cd651', 'No sessions running.')
+        )
+      } else if (remainingCount === 1) {
+        toast.error(
+          translate(
+            'auto.components.shared.useDaemonActions.63520148e2',
+            '{{value0}} session refused to exit.',
+            { value0: remainingCount }
+          )
+        )
       } else {
-        toast.error(`${remainingCount} session${remainingCount === 1 ? '' : 's'} refused to exit.`)
+        toast.error(
+          translate(
+            'auto.components.shared.useDaemonActions.cc0a26cb14',
+            '{{value0}} sessions refused to exit.',
+            { value0: remainingCount }
+          )
+        )
       }
     } catch (err) {
       if (mountedRef.current) {
         callbacks?.onKillAllError?.()
       }
-      toast.error('Couldn’t kill sessions.', {
-        description: err instanceof Error ? err.message : undefined
-      })
+      toast.error(
+        translate('auto.components.shared.useDaemonActions.2b4efdc162', 'Couldn’t kill sessions.'),
+        {
+          description: err instanceof Error ? err.message : undefined
+        }
+      )
     } finally {
       clearPendingAction()
       if (mountedRef.current) {
@@ -131,12 +179,16 @@ type CopyShape = {
 function getCopy(kind: DaemonActionKind): CopyShape {
   if (kind === 'restart') {
     return {
-      title: 'Restart the terminal daemon?',
+      title: translate(
+        'auto.components.shared.useDaemonActions.922548bc66',
+        'Restart the terminal daemon?'
+      ),
       description: (
         <>
-          Kills every running terminal pane and restarts the daemon process. Panes show
-          &ldquo;Process exited&rdquo; and can be reopened immediately. Legacy-protocol sessions
-          from a previous app version are preserved. This can&apos;t be undone.
+          {translate(
+            'auto.components.shared.useDaemonActions.01d6b7c64e',
+            'Kills every running terminal pane and restarts the daemon process. Panes show "Process exited" and can be reopened immediately. Legacy-protocol sessions from a previous app version are preserved. This can\'t be undone.'
+          )}
         </>
       ),
       confirmLabel: 'Restart daemon',
@@ -144,12 +196,16 @@ function getCopy(kind: DaemonActionKind): CopyShape {
     }
   }
   return {
-    title: 'Kill all terminal sessions?',
+    title: translate(
+      'auto.components.shared.useDaemonActions.1bbea41a77',
+      'Kill all terminal sessions?'
+    ),
     description: (
       <>
-        This force-quits every running terminal pane across all workspaces. Any unsaved work in
-        those sessions is lost. The daemon itself keeps running, and new terminals can be opened
-        immediately. This can&apos;t be undone.
+        {translate(
+          'auto.components.shared.useDaemonActions.28c8e53176',
+          "This force-quits every running terminal pane across all workspaces. Any unsaved work in those sessions is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
+        )}
       </>
     ),
     confirmLabel: 'Kill all sessions',
@@ -206,7 +262,7 @@ export function DaemonActionDialog({
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => setPending(null)} disabled={isBusy}>
-                Cancel
+                {translate('auto.components.shared.useDaemonActions.01af244097', 'Cancel')}
               </Button>
               <Button variant="destructive" onClick={runConfirmed} disabled={isBusy}>
                 {isBusy ? <LoaderCircle className="size-4 animate-spin" /> : null}

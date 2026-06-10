@@ -92,6 +92,7 @@ import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-renam
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeAppIconId } from '../shared/app-icon'
+import { normalizeTerminalCustomThemes } from '../shared/terminal-custom-themes'
 import {
   compareFeatureInteractionUsageBuckets,
   getFeatureInteractionCategory,
@@ -128,6 +129,9 @@ import {
   sourceControlAiSettingsFromLegacy
 } from '../shared/source-control-ai'
 import { normalizeDisabledTuiAgents } from '../shared/tui-agent-selection'
+import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import { normalizeUiLanguage } from '../shared/ui-language'
+import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
 import {
   collectTerminalScrollbackSnapshotRefs,
   deleteTerminalScrollbackSnapshotSync,
@@ -352,6 +356,13 @@ function normalizeSortBy(sortBy: unknown): PersistedState['ui']['sortBy'] {
     return sortBy
   }
   return getDefaultUIState().sortBy
+}
+
+function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui']['projectOrderBy'] {
+  if (projectOrderBy === 'manual' || projectOrderBy === 'recent') {
+    return projectOrderBy
+  }
+  return getDefaultUIState().projectOrderBy
 }
 
 function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
@@ -1744,8 +1755,11 @@ export class Store {
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
         const defaults = getDefaultPersistedState(homeDir)
-        const rawSourceControlAiMissing = parsed.settings?.sourceControlAi === undefined
-        if (rawSourceControlAiMissing) {
+        const rawSourceControlAi = parsed.settings?.sourceControlAi
+        const rawSourceControlAiMissing = rawSourceControlAi === undefined
+        const rawSourceControlAiActionsMissing =
+          rawSourceControlAi !== undefined && rawSourceControlAi.actions === undefined
+        if (rawSourceControlAiMissing || rawSourceControlAiActionsMissing) {
           this.loadNeedsSave = true
         }
         const legacyCommitMessageAi = parsed.settings?.commitMessageAi
@@ -1845,6 +1859,7 @@ export class Store {
         const migratedAutoRenameBranchFromWork = normalizeAutoRenameBranchFromWorkDefaultOn(
           parsed.settings
         )
+        const migratedTerminalCursorStyle = normalizeTerminalCursorStyleDefault(parsed.settings)
         const rawTaskProviderSettings = normalizeTaskProviderSettings({
           visibleTaskProviders: parsed.settings?.visibleTaskProviders,
           defaultTaskSource: parsed.settings?.defaultTaskSource
@@ -1878,6 +1893,20 @@ export class Store {
         }
         if (!visibleTaskProvidersDefaultedForJira) {
           this.loadNeedsSave = true
+        }
+        const claudeAgentTeamsDefaultDisabledMigrated =
+          parsed.settings?.claudeAgentTeamsDefaultDisabledMigrated === true
+        if (!claudeAgentTeamsDefaultDisabledMigrated) {
+          this.loadNeedsSave = true
+        }
+        const migratedDisabledTuiAgents = normalizeDisabledTuiAgents(
+          parsed.settings?.disabledTuiAgents
+        )
+        if (
+          !claudeAgentTeamsDefaultDisabledMigrated &&
+          !migratedDisabledTuiAgents.includes('claude-agent-teams')
+        ) {
+          migratedDisabledTuiAgents.push('claude-agent-teams')
         }
         if (!autoRenameBranchFromWorkDefaultedOn) {
           this.loadNeedsSave = true
@@ -1917,8 +1946,16 @@ export class Store {
             primarySelectionMiddleClickPasteDefaultedForTerminalDefaults:
               primarySelectionDefaultedForTerminalDefaults || stampPrimarySelectionTerminalDefaults,
             ...migratedAutoRenameBranchFromWork,
+            ...migratedTerminalCursorStyle,
             experimentalActivity: migratedExperimentalActivity,
             experimentalActivityDefaultedOffForAllUsers: true,
+            // Why: compact worktree cards graduated from Experimental; preserve
+            // the old opt-in for profiles written during the rollout.
+            compactWorktreeCards:
+              parsed.settings?.compactWorktreeCards ??
+              parsed.settings?.experimentalCompactWorktreeCards ??
+              defaults.settings.compactWorktreeCards,
+            experimentalCompactWorktreeCards: undefined,
             terminalMacOptionAsAlt: migratedOptionAsAlt,
             terminalMacOptionAsAltMigrated: true,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
@@ -1929,14 +1966,19 @@ export class Store {
             terminalQuickCommands: normalizeTerminalQuickCommands(
               parsed.settings?.terminalQuickCommands
             ),
+            terminalCustomThemes: normalizeTerminalCustomThemes(
+              parsed.settings?.terminalCustomThemes
+            ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            uiLanguage: normalizeUiLanguage(parsed.settings?.uiLanguage),
             defaultTaskSource: taskProviderSettings.defaultTaskSource,
             visibleTaskProviders: taskProviderSettings.visibleTaskProviders,
             visibleTaskProvidersDefaultedForJira: true,
             terminalShortcutPolicy: normalizeTerminalShortcutPolicy(
               parsed.settings?.terminalShortcutPolicy
             ),
-            disabledTuiAgents: normalizeDisabledTuiAgents(parsed.settings?.disabledTuiAgents),
+            disabledTuiAgents: migratedDisabledTuiAgents,
+            claudeAgentTeamsDefaultDisabledMigrated: true,
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
               seedDefaults: true
             }),
@@ -2094,6 +2136,12 @@ export class Store {
               rightSidebarOpen,
               rightSidebarTab: normalizeRightSidebarTab(parsed.ui?.rightSidebarTab),
               setupGuideSidebarDismissed,
+              setupGuideBrowserMilestoneMigrated:
+                typeof parsed.ui?.setupGuideBrowserMilestoneMigrated === 'boolean'
+                  ? parsed.ui.setupGuideBrowserMilestoneMigrated
+                  : false,
+              setupGuideBrowserMilestoneLegacyComplete:
+                parsed.ui?.setupGuideBrowserMilestoneLegacyComplete === true,
               sortBy: migrate ? ('smart' as const) : sort,
               showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
                 parsed.ui?.showDotfilesByWorktree
@@ -2586,9 +2634,8 @@ export class Store {
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'projectGroupId'
         | 'projectGroupOrder'
-        | 'sourceControlAi'
       >
-    >
+    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
   ): Repo | null {
     const repo = this.state.repos.find((r) => r.id === id)
     if (!repo) {
@@ -2638,7 +2685,10 @@ export class Store {
       // time visibility changes so later hide/show choices keep legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
-    if ('sourceControlAi' in sanitizedUpdates && sanitizedUpdates.sourceControlAi === undefined) {
+    if (
+      'sourceControlAi' in sanitizedUpdates &&
+      (sanitizedUpdates.sourceControlAi === undefined || sanitizedUpdates.sourceControlAi === null)
+    ) {
       delete repo.sourceControlAi
       delete sanitizedUpdates.sourceControlAi
     } else if ('sourceControlAi' in sanitizedUpdates) {
@@ -2657,9 +2707,15 @@ export class Store {
   }
 
   private hydrateRepo(repo: Repo): Repo {
-    const { repoIcon: rawRepoIcon, upstream: rawUpstream, ...repoWithoutIcon } = repo
+    const {
+      repoIcon: rawRepoIcon,
+      upstream: rawUpstream,
+      sourceControlAi: rawSourceControlAi,
+      ...repoWithoutIcon
+    } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
     const upstream = sanitizeRepoUpstream(rawUpstream)
+    const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
     const gitUsername = isFolderRepo(repo)
       ? ''
       : (this.gitUsernameCache.get(repo.path) ??
@@ -2673,6 +2729,7 @@ export class Store {
       ...repoWithoutIcon,
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
+      ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {
@@ -3044,6 +3101,11 @@ export class Store {
         updates.terminalQuickCommands
       )
     }
+    if ('terminalCustomThemes' in updates) {
+      sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
+        updates.terminalCustomThemes
+      )
+    }
     if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
       const taskProviderSettings = normalizeTaskProviderSettings({
         visibleTaskProviders:
@@ -3074,6 +3136,9 @@ export class Store {
     }
     if ('appIcon' in updates) {
       sanitizedUpdates.appIcon = normalizeAppIconId(updates.appIcon)
+    }
+    if ('uiLanguage' in updates) {
+      sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,
@@ -3140,6 +3205,7 @@ export class Store {
       ...uiState,
       groupBy: normalizeGroupBy(this.state.ui?.groupBy),
       sortBy: normalizeSortBy(this.state.ui?.sortBy),
+      projectOrderBy: normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab: normalizeRightSidebarTab(this.state.ui?.rightSidebarTab),
       worktreeCardProperties: normalizeWorktreeCardProperties(
         this.state.ui?.worktreeCardProperties
@@ -3151,6 +3217,9 @@ export class Store {
       workspaceBoardOpacity: clampWorkspaceBoardOpacity(this.state.ui?.workspaceBoardOpacity),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         this.state.ui?.workspaceBoardColumnWidth
+      ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        this.state.ui?.browserDefaultZoomLevel
       ),
       showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
         this.state.ui?.showDotfilesByWorktree
@@ -3176,6 +3245,9 @@ export class Store {
       sortBy: sanitizedUpdates.sortBy
         ? normalizeSortBy(sanitizedUpdates.sortBy)
         : normalizeSortBy(this.state.ui?.sortBy),
+      projectOrderBy: updates.projectOrderBy
+        ? normalizeProjectOrderBy(updates.projectOrderBy)
+        : normalizeProjectOrderBy(this.state.ui?.projectOrderBy),
       rightSidebarTab:
         sanitizedUpdates.rightSidebarTab !== undefined
           ? normalizeRightSidebarTab(sanitizedUpdates.rightSidebarTab)
@@ -3197,6 +3269,9 @@ export class Store {
       ),
       workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(
         sanitizedUpdates.workspaceBoardColumnWidth ?? this.state.ui?.workspaceBoardColumnWidth
+      ),
+      browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(
+        updates.browserDefaultZoomLevel ?? this.state.ui?.browserDefaultZoomLevel
       ),
       showDotfilesByWorktree:
         updates.showDotfilesByWorktree !== undefined

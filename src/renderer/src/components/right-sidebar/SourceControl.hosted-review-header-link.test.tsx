@@ -31,6 +31,7 @@ describe('HostedReviewHeaderLink', () => {
 
     expect(markup).toContain('<button')
     expect(markup).toContain('PR #2192')
+    expect(markup).toContain('underline decoration-border underline-offset-2')
     expect(markup).not.toContain('href=')
     expect(markup).not.toContain('target="_blank"')
 

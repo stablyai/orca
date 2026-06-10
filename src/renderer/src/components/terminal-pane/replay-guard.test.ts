@@ -10,6 +10,16 @@ type FakeTerminal = {
   write: (data: string, cb?: () => void) => void
   lastData: string[]
   pendingCallbacks: (() => void)[]
+  rows: number
+  buffer: {
+    active: {
+      baseY: number
+      viewportY: number
+    }
+  }
+  _core: {
+    refresh: (start: number, end: number, sync?: boolean) => void
+  }
   /** Flush all pending xterm write callbacks, simulating parse completion. */
   flush: () => void
 }
@@ -19,6 +29,16 @@ function makeFakePane(paneId: number): { pane: ManagedPane; terminal: FakeTermin
   const terminal: FakeTerminal = {
     lastData: [],
     pendingCallbacks,
+    rows: 24,
+    buffer: {
+      active: {
+        baseY: 0,
+        viewportY: 0
+      }
+    },
+    _core: {
+      refresh() {}
+    },
     write(data: string, cb?: () => void) {
       terminal.lastData.push(data)
       if (cb) {
@@ -114,5 +134,38 @@ describe('replay-guard', () => {
     replayIntoTerminal(pane, ref, 'x')
     terminal.flush()
     expect(ref.current.has(1)).toBe(false)
+  })
+
+  it('schedules a follow-up repaint for replayed cursor restores', () => {
+    const scheduledFrames: FrameRequestCallback[] = []
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = ((callback: FrameRequestCallback) => {
+      scheduledFrames.push(callback)
+      return scheduledFrames.length
+    }) as typeof requestAnimationFrame
+    globalThis.cancelAnimationFrame = (() => {}) as typeof cancelAnimationFrame
+
+    try {
+      const ref = makeRef()
+      const { pane, terminal } = makeFakePane(1)
+      let refreshCount = 0
+      terminal._core.refresh = () => {
+        refreshCount += 1
+      }
+
+      replayIntoTerminal(pane, ref, '\x1b[?25h')
+      terminal.flush()
+
+      expect(refreshCount).toBe(1)
+      expect(scheduledFrames).toHaveLength(1)
+
+      scheduledFrames[0]?.(16)
+
+      expect(refreshCount).toBe(2)
+    } finally {
+      globalThis.requestAnimationFrame = originalRequestAnimationFrame
+      globalThis.cancelAnimationFrame = originalCancelAnimationFrame
+    }
   })
 })

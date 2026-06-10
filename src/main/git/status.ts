@@ -30,6 +30,7 @@ import {
 } from '../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
+import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
@@ -138,6 +139,7 @@ export async function getStatus(
         // Changed entries: "1 XY sub mH mI mW hH path" or "2 XY sub mH mI mW hH X\tscore\tpath\torigPath"
         const parts = line.split(' ')
         const xy = parts[1]
+        const submodule = parseSubmoduleStatus(parts[2])
         const indexStatus = xy[0]
         const worktreeStatus = xy[1]
 
@@ -149,24 +151,41 @@ export async function getStatus(
           const path = decodeGitCQuotedPath(tabParts[0].split(' ').slice(9).join(' '))
           const oldPath = decodeGitCQuotedPath(tabParts.slice(1).join('\t'))
           if (indexStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged', oldPath })
+            entries.push({
+              path,
+              status: parseStatusChar(indexStatus),
+              area: 'staged',
+              oldPath,
+              ...(submodule ? { submodule } : {})
+            })
           }
           if (worktreeStatus !== '.') {
             entries.push({
               path,
               status: parseStatusChar(worktreeStatus),
               area: 'unstaged',
-              oldPath
+              oldPath,
+              ...(submodule ? { submodule } : {})
             })
           }
         } else {
           // Regular change entry
           const path = decodeGitCQuotedPath(parts.slice(8).join(' '))
           if (indexStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged' })
+            entries.push({
+              path,
+              status: parseStatusChar(indexStatus),
+              area: 'staged',
+              ...(submodule ? { submodule } : {})
+            })
           }
           if (worktreeStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(worktreeStatus), area: 'unstaged' })
+            entries.push({
+              path,
+              status: parseStatusChar(worktreeStatus),
+              area: 'unstaged',
+              ...(submodule ? { submodule } : {})
+            })
           }
         }
       } else if (line.startsWith('? ')) {
@@ -426,6 +445,17 @@ function parseStatusChar(char: string): GitFileStatus {
       return 'copied'
     default:
       return 'modified'
+  }
+}
+
+function parseSubmoduleStatus(submoduleField: string | undefined): GitStatusEntry['submodule'] {
+  if (!submoduleField?.startsWith('S')) {
+    return undefined
+  }
+  return {
+    commitChanged: submoduleField[1] === 'C',
+    trackedChanges: submoduleField[2] === 'M',
+    untrackedChanges: submoduleField[3] === 'U'
   }
 }
 
@@ -1183,16 +1213,28 @@ export async function getStagedCommitContext(
     return null
   }
 
-  const { stdout: stagedPatch } = await gitExecFileAsync(
-    ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-    {
-      cwd: worktreePath,
-      // Why: the prompt builder truncates large staged patches later. Give git
-      // enough buffer room to reach that truncation step instead of failing at
-      // Node's default execFile limit first.
-      maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+  let stagedPatch = ''
+  try {
+    const patchResult = await gitExecFileAsync(
+      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      {
+        cwd: worktreePath,
+        maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+      }
+    )
+    stagedPatch = patchResult.stdout
+  } catch (error) {
+    if (!isMaxBufferOverflowError(error)) {
+      throw error
     }
-  )
+    // Why: a very large staged diff overflows maxBuffer (ENOBUFS). The patch is
+    // optional context that gets truncated to STAGED_DIFF_BYTE_BUDGET anyway, so
+    // degrade to the file-name summary instead of failing commit-message generation.
+    console.warn(
+      '[git] Staged patch too large to read; using file summary only:',
+      describeMaxBufferOverflowError(error)
+    )
+  }
 
   return {
     branch: branchResult.stdout.trim() || null,

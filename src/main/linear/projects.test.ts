@@ -210,6 +210,69 @@ describe('Linear project queries', () => {
     })
   })
 
+  it('creates a project with team metadata and maps the created project', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        projectCreate: {
+          success: true,
+          project: {
+            ...rawProject('project-1'),
+            description: 'Summary',
+            content: 'Brief',
+            priority: 2,
+            targetDate: '2026-08-01',
+            teams: { nodes: [{ id: 'team-1', name: 'Team', key: 'TM' }] }
+          }
+        }
+      }
+    })
+    const { createProject } = await import('./projects')
+
+    const result = await createProject(
+      {
+        name: 'Roadmap',
+        description: 'Summary',
+        content: 'Brief',
+        teamIds: ['team-1'],
+        leadId: 'user-1',
+        memberIds: ['user-1', 'user-2'],
+        labelIds: ['label-1'],
+        priority: 2,
+        startDate: '2026-07-01',
+        targetDate: '2026-08-01'
+      },
+      'workspace-1'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      project: {
+        id: 'project-1',
+        name: 'project-1',
+        workspaceId: 'workspace-1',
+        description: 'Summary',
+        content: 'Brief',
+        priority: 2,
+        targetDate: '2026-08-01',
+        teams: [{ id: 'team-1', name: 'Team', key: 'TM' }]
+      }
+    })
+    expect(rawRequest.mock.calls[0]?.[1]).toEqual({
+      input: {
+        name: 'Roadmap',
+        description: 'Summary',
+        content: 'Brief',
+        teamIds: ['team-1'],
+        leadId: 'user-1',
+        memberIds: ['user-1', 'user-2'],
+        labelIds: ['label-1'],
+        priority: 2,
+        startDate: '2026-07-01',
+        targetDate: '2026-08-01'
+      }
+    })
+  })
+
   it('lets manual custom view list refresh bypass older in-flight reads', async () => {
     const staleRequest = deferred<ReturnType<typeof customViewsResponse>>()
     const refreshRequest = deferred<ReturnType<typeof customViewsResponse>>()

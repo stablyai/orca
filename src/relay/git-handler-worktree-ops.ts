@@ -216,7 +216,10 @@ async function listRelayWorktrees(git: GitExec, repoPath: string): Promise<Relay
   }
 }
 
-async function readRelayWorktreeList(git: GitExec, repoPath: string): Promise<RelayWorktreeInfo[]> {
+export async function readRelayWorktreeList(
+  git: GitExec,
+  repoPath: string
+): Promise<RelayWorktreeInfo[]> {
   try {
     const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
     return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
@@ -245,7 +248,7 @@ function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
 }
 
-function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
+export function areRelayWorktreePathsEqual(leftPath: string, rightPath: string): boolean {
   const left = path.normalize(path.resolve(leftPath))
   const right = path.normalize(path.resolve(rightPath))
   return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right
@@ -256,7 +259,11 @@ export async function worktreeIsCleanOp(
   params: Record<string, unknown>
 ): Promise<{ clean: boolean; stdout?: string }> {
   const worktreePath = params.worktreePath as string
-  const { stdout } = await git(['status', '--porcelain', '--untracked-files=all'], worktreePath)
+  const includeUntracked = params.includeUntracked !== false
+  const { stdout } = await git(
+    ['status', '--porcelain', includeUntracked ? '--untracked-files=all' : '--untracked-files=no'],
+    worktreePath
+  )
   const clean = !stdout.trim()
   return { clean, stdout: clean ? undefined : stdout }
 }

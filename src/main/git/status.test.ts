@@ -463,6 +463,32 @@ describe('getStatus', () => {
     ])
   })
 
+  it('preserves porcelain v2 submodule dirtiness flags on status rows', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValueOnce({
+      stdout:
+        '1 AM S..U 000000 160000 160000 0000000000000000000000000000000000000000 7844cb64e631f17a9ca5b548f3500ef7cecd2f17 nested-repo\n'
+    })
+
+    const result = await getStatus('/repo')
+
+    expect(result.entries).toEqual([
+      {
+        path: 'nested-repo',
+        status: 'added',
+        area: 'staged',
+        submodule: { commitChanged: false, trackedChanges: false, untrackedChanges: true }
+      },
+      {
+        path: 'nested-repo',
+        status: 'modified',
+        area: 'unstaged',
+        submodule: { commitChanged: false, trackedChanges: false, untrackedChanges: true }
+      }
+    ])
+  })
+
   it('omits ignored files by default and parses them when requested', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     existsSyncMock.mockReturnValue(false)
@@ -805,6 +831,34 @@ describe('getStagedCommitContext', () => {
         maxBuffer: 10 * 1024 * 1024
       }
     )
+  })
+
+  it('falls back to the file summary when the staged patch overflows the buffer', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature/ai\n' })
+      .mockResolvedValueOnce({ stdout: 'A\thuge.jsonl\n' })
+      .mockRejectedValueOnce(
+        Object.assign(new Error('stdout maxBuffer length exceeded'), {
+          code: 'ENOBUFS'
+        })
+      )
+
+    const result = await getStagedCommitContext('/repo')
+
+    expect(result).toEqual({
+      branch: 'feature/ai',
+      stagedSummary: 'A\thuge.jsonl',
+      stagedPatch: ''
+    })
+  })
+
+  it('rethrows staged patch failures that are not buffer overflows', async () => {
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: 'feature/ai\n' })
+      .mockResolvedValueOnce({ stdout: 'M\tREADME.md\n' })
+      .mockRejectedValueOnce(new Error('fatal: bad revision'))
+
+    await expect(getStagedCommitContext('/repo')).rejects.toThrow('fatal: bad revision')
   })
 })
 

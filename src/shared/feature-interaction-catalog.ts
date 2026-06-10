@@ -74,7 +74,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'cmd-j-settings-open', interaction: 'settings opened from Cmd+J' },
   { id: 'cmd-j-quick-action', interaction: 'quick action run from Cmd+J' },
   { id: 'cmd-j-create-workspace', interaction: 'workspace creation started from Cmd+J' },
-  { id: 'browser', interaction: 'non-blank browser page viewed' },
+  { id: 'browser', interaction: 'in-app browser opened' },
   { id: 'browser-tab-created', interaction: 'browser tab explicitly created' },
   { id: 'tasks', interaction: 'Tasks page opened' },
   { id: 'github-tasks', interaction: 'GitHub task item workflow used' },

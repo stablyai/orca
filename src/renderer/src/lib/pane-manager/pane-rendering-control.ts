@@ -1,6 +1,11 @@
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { safeFit } from './pane-tree-ops'
-import { attachWebgl, disposeWebgl, markComplexScriptOutput } from './pane-webgl-renderer'
+import {
+  attachWebgl,
+  disposeWebgl,
+  markComplexScriptOutput,
+  resetWebglTextureAtlas
+} from './pane-webgl-renderer'
 import { reattachWebglIfNeeded } from './pane-webgl-reattach'
 
 export function setPaneGpuRenderingState(
@@ -47,5 +52,11 @@ export function resumePaneRendering(panes: Iterable<ManagedPaneInternal>): void 
   for (const pane of panes) {
     pane.webglAttachmentDeferred = false
     reattachWebglIfNeeded(pane)
+  }
+}
+
+export function resetPaneWebglTextureAtlases(panes: Iterable<ManagedPaneInternal>): void {
+  for (const pane of panes) {
+    resetWebglTextureAtlas(pane)
   }
 }

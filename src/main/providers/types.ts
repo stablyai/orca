@@ -133,6 +133,7 @@ export type FileReadResult = {
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string): Promise<FileReadResult>
+  downloadFile?(sourcePath: string, destinationPath: string): Promise<void>
   getTempDir?(): Promise<string>
   writeFile(filePath: string, content: string): Promise<void>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
@@ -218,7 +219,10 @@ export type IGitProvider = {
   isGitRepoAsync(dirPath: string): Promise<{ isRepo: boolean; rootPath: string | null }>
   exec(args: string[], cwd: string): Promise<{ stdout: string; stderr: string }>
   getRemoteFileUrl(worktreePath: string, relativePath: string, line: number): Promise<string | null>
-  worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }>
+  worktreeIsClean(
+    worktreePath: string,
+    options?: { includeUntracked?: boolean }
+  ): Promise<{ clean: boolean; stdout?: string }>
 }
 
 // ─── Provider Registry ──────────────────────────────────────────────

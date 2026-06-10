@@ -47,12 +47,17 @@ import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { MobileMarkdown } from '../../../src/components/MobileMarkdown'
 import { MobileAgentIcon } from '../../../src/components/MobileAgentIcon'
+import { MobileSyntaxSegments } from '../../../src/components/MobileSyntaxSegments'
 import { PickerModal, type PickerOption } from '../../../src/components/PickerModal'
 import { TaskProviderLogo } from '../../../src/components/TaskProviderLogo'
 import {
   buildGitHubPrFileDiffPreview,
   type GitHubPrFileDiffLine
 } from '../../../src/tasks/github-pr-file-diff'
+import {
+  highlightMobileDiffLines,
+  resolveMobileSyntaxLanguage
+} from '../../../src/session/mobile-file-syntax'
 import { buildGitHubCheckSummary } from '../../../src/tasks/github-check-summary'
 import { buildTaskWorkspaceCreateParams } from '../../../src/tasks/workspace-create-params'
 import {
@@ -2028,7 +2033,11 @@ function GitHubPrFileDiff({
       ),
     [contents.modified, contents.original]
   )
-  const visibleDiffLines = diffPreview.lines
+  const syntaxLanguage = useMemo(() => resolveMobileSyntaxLanguage(filePath), [filePath])
+  const visibleDiffLines = useMemo(
+    () => highlightMobileDiffLines(diffPreview.lines, syntaxLanguage),
+    [diffPreview.lines, syntaxLanguage]
+  )
   const hiddenDiffLineCount = Math.max(0, diffPreview.totalLineCount - visibleDiffLines.length)
 
   if (diffPreview.totalLineCount === 0) {
@@ -2072,7 +2081,9 @@ function GitHubPrFileDiff({
                       : null
                 ]}
               >
-                {diffLinePrefix(line.kind)} {line.text || ' '}
+                <Text>{diffLinePrefix(line.kind)} </Text>
+                <MobileSyntaxSegments segments={line.segments} />
+                {line.text ? null : ' '}
               </Text>
             </View>
             {commentLine !== undefined ? (

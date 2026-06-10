@@ -184,9 +184,38 @@ export class ClaudeRuntimeAuthService {
       : null
     if (previousAccount && previousAccount.id !== activeAccount?.id) {
       if (previousManagedCredentialsJson) {
-        await this.readBackRefreshedTokens(previousManagedCredentialsJson, {
-          updateLastWrittenCredentialsJson: true
-        })
+        const outgoingReadBackResult = await this.readBackRefreshedTokens(
+          previousManagedCredentialsJson,
+          {
+            updateLastWrittenCredentialsJson: true
+          }
+        )
+        if (
+          outgoingReadBackResult.status === 'rejected' &&
+          outgoingReadBackResult.runtimeCredentialsChanged &&
+          hasLiveClaudePtys()
+        ) {
+          if (
+            outgoingReadBackResult.runtimeCredentialsJson &&
+            this.liveRuntimeCredentialsCanUpdateActiveAccount(
+              outgoingReadBackResult.runtimeCredentialsJson,
+              previousAccount,
+              previousManagedCredentialsJson,
+              previousManagedOauthAccount
+            )
+          ) {
+            // Why: switching away while Claude is live must preserve verified
+            // token refreshes before replacing the shared runtime credentials.
+            await this.writeManagedCredentials(
+              previousAccount,
+              outgoingReadBackResult.runtimeCredentialsJson
+            )
+          } else {
+            throw new Error(
+              'Claude account switch paused because a live Claude terminal has unverified refreshed auth.'
+            )
+          }
+        }
       }
     }
     if (!activeAccount) {

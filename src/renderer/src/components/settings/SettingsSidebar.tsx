@@ -1,6 +1,5 @@
 import type { RefObject } from 'react'
 import { ArrowLeft, Search, Server } from 'lucide-react'
-import logo from '../../../../../resources/logo.svg'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import type { GitHubRepositoryIdentity } from '../../../../shared/types'
@@ -13,6 +12,7 @@ import { Input } from '../ui/input'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
+import { translate } from '@/i18n/i18n'
 
 type NavSection = {
   id: string
@@ -75,7 +75,11 @@ function SettingsSetupGuideNavRow({
     <button
       type="button"
       aria-current={setupActive ? 'page' : undefined}
-      aria-label={`Onboarding checklist, ${progress.doneCount} of ${progress.total} done. Show setup guide.`}
+      aria-label={translate(
+        'auto.components.settings.SettingsSidebar.82db1b7de4',
+        'Onboarding checklist, {{value0}} of {{value1}} done. Show setup guide.',
+        { value0: progress.doneCount, value1: progress.total }
+      )}
       onClick={(event) =>
         onSelect({
           metaKey: event.metaKey,
@@ -85,30 +89,23 @@ function SettingsSetupGuideNavRow({
         })
       }
       className={cn(
-        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+        'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
         setupActive
-          ? 'bg-accent font-medium text-accent-foreground'
-          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+          ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
+          : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
       )}
     >
-      <img
-        src={logo}
-        alt=""
-        aria-hidden="true"
-        className={cn(
-          'size-4 shrink-0 object-contain invert dark:invert-0',
-          setupActive ? 'opacity-75' : 'opacity-45'
-        )}
-      />
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[13px] font-medium leading-4">Onboarding checklist</span>
-      </span>
       <SetupGuideProgressRing
         done={progress.doneCount}
         total={progress.total}
-        className="ml-auto shrink-0"
+        sizeClassName="size-4"
         tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
       />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-[13px] font-medium leading-4">
+          {translate('auto.components.settings.SettingsSidebar.6503182299', 'Onboarding checklist')}
+        </span>
+      </span>
     </button>
   )
 }
@@ -126,23 +123,29 @@ export function SettingsSidebar({
 }: SettingsSidebarProps): React.JSX.Element {
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
   const setupActive = activeSectionId === 'setup-guide'
-  const showSetupGuideTopRow = setupGuideProgress.doneCount < setupGuideProgress.total
+  // Why: "Hide from sidebar" only hides the top-left app sidebar prompt;
+  // Settings should remain a stable place to reopen the checklist.
+  const showSetupGuideTopRow =
+    setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
   const searchShortcutHint = useShortcutLabel('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
-      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+      'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
       isActive
-        ? 'bg-accent font-medium text-accent-foreground'
-        : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+        ? 'bg-worktree-sidebar-accent font-medium text-worktree-sidebar-accent-foreground'
+        : 'text-worktree-sidebar-foreground/60 hover:bg-worktree-sidebar-foreground/8 hover:text-worktree-sidebar-foreground'
     )
   const installStatusLabel = (status: SettingsNavInstallStatus): string => {
     switch (status) {
       case 'install':
-        return 'Not installed'
+        return translate(
+          'auto.components.settings.AgentSkillSetupPanel.5289300939',
+          'Not installed'
+        )
       case 'installed':
-        return 'Installed'
+        return translate('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')
       case 'checking':
-        return 'Checking'
+        return translate('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')
     }
   }
   const installStatusClassName = (status: SettingsNavInstallStatus): string =>
@@ -156,8 +159,8 @@ export function SettingsSidebar({
     )
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col border-r border-border/50 bg-card/40">
-      <div className="border-b border-border/50 px-3 py-3">
+    <aside className="flex w-[280px] shrink-0 flex-col border-r border-worktree-sidebar-border bg-worktree-sidebar">
+      <div className="border-b border-worktree-sidebar-border px-3 py-3">
         <Button
           variant="ghost"
           size="sm"
@@ -165,18 +168,21 @@ export function SettingsSidebar({
           className="w-full justify-start gap-2 text-[13px] text-muted-foreground"
         >
           <ArrowLeft className="size-4" />
-          Back to app
+          {translate('auto.components.settings.SettingsSidebar.60f8a673a7', 'Back to app')}
         </Button>
       </div>
 
-      <div className="border-b border-border/50 px-3 py-3">
+      <div className="border-b border-worktree-sidebar-border px-3 py-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={searchInputRef}
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search settings"
+            placeholder={translate(
+              'auto.components.settings.SettingsSidebar.dbceaa8840',
+              'Search settings'
+            )}
             className="pl-9 pr-14 text-[13px]"
           />
           {searchQuery === '' ? (
@@ -188,7 +194,7 @@ export function SettingsSidebar({
       </div>
 
       {showSetupGuideTopRow ? (
-        <div className="border-b border-border/50 px-3 py-3">
+        <div className="border-b border-worktree-sidebar-border px-3 py-3">
           <SettingsSetupGuideNavRow
             progress={setupGuideProgress}
             setupActive={setupActive}
@@ -246,7 +252,7 @@ export function SettingsSidebar({
 
           <div className="space-y-2">
             <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Projects
+              {translate('auto.components.settings.SettingsSidebar.5c9669ff9c', 'Projects')}
             </p>
 
             {repoSections.length > 0 ? (
@@ -280,7 +286,7 @@ export function SettingsSidebar({
                       {section.isRemote && (
                         <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
                           <Server className="size-3" />
-                          SSH
+                          {translate('auto.components.settings.SettingsSidebar.e0900f83e7', 'SSH')}
                         </span>
                       )}
                     </button>
@@ -289,7 +295,15 @@ export function SettingsSidebar({
               </div>
             ) : (
               <p className="px-3 text-xs text-muted-foreground">
-                {hasRepos ? 'No matching project settings.' : 'No projects added yet.'}
+                {hasRepos
+                  ? translate(
+                      'auto.components.settings.SettingsSidebar.3e483e256b',
+                      'No matching project settings.'
+                    )
+                  : translate(
+                      'auto.components.settings.SettingsSidebar.df38d612b7',
+                      'No projects added yet.'
+                    )}
               </p>
             )}
           </div>

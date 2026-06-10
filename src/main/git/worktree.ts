@@ -10,6 +10,7 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import type {
   GitWorktreeInfo,
   LocalBaseRefRefreshResult,
+  LocalBaseRefUpdateSuggestion,
   RemoveWorktreeResult
 } from '../../shared/types'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
@@ -18,11 +19,39 @@ import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
 
 export type AddWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
+  localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
 }
 
 type SparseWorktreeCreateError = Error & {
   cleanupFailed?: boolean
 }
+
+type AddWorktreeOptions = {
+  checkoutExistingBranch?: boolean
+  suggestLocalBaseRefUpdate?: boolean
+  remoteTrackingBase?: {
+    base: string
+    branch: string
+    ref: string
+  }
+}
+
+type LocalBaseRefRefreshability =
+  | {
+      refreshable: true
+      baseRef: string
+      localBranch: string
+      fullRef: string
+      remoteTrackingRef: string
+      localOid: string
+      remoteOid: string
+      behind: number
+      ownerWorktreePath?: string
+    }
+  | {
+      refreshable: false
+      result: LocalBaseRefRefreshResult
+    }
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
@@ -58,6 +87,177 @@ function isUnsupportedWorktreeListZError(error: unknown): boolean {
 
 function normalizeLocalBranchRef(branch: string): string {
   return branch.replace(/^refs\/heads\//, '')
+}
+
+function parseRemoteTrackingLocalBaseRef(
+  baseBranch: string,
+  remoteTrackingRef: string,
+  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase']
+): { baseRef: string; localBranch: string; fullRef: string } | undefined {
+  if (remoteTrackingBase?.ref === remoteTrackingRef) {
+    return {
+      baseRef: remoteTrackingBase.base,
+      localBranch: remoteTrackingBase.branch,
+      fullRef: `refs/heads/${remoteTrackingBase.branch}`
+    }
+  }
+
+  const remoteRefPrefix = 'refs/remotes/'
+  if (!remoteTrackingRef.startsWith(remoteRefPrefix)) {
+    return undefined
+  }
+
+  // Why: Only refs proven to be remote-tracking refs get refresh status.
+  // Local branches can contain slashes (e.g. release/2026) and must not
+  // produce a fake "Local 2026 was not refreshed" warning.
+  const shortRemoteRef = remoteTrackingRef.slice(remoteRefPrefix.length)
+  const slashIndex = shortRemoteRef.indexOf('/')
+  if (slashIndex <= 0) {
+    return undefined
+  }
+
+  const localBranch = shortRemoteRef.slice(slashIndex + 1)
+  return {
+    baseRef: baseBranch,
+    localBranch,
+    fullRef: `refs/heads/${localBranch}`
+  }
+}
+
+function parseRevListDrift(output: string): { ahead: number; behind: number } | null {
+  const [aheadStr, behindStr] = output.trim().split(/\s+/)
+  const ahead = Number(aheadStr)
+  const behind = Number(behindStr)
+  if (!Number.isFinite(ahead) || !Number.isFinite(behind) || ahead < 0 || behind < 0) {
+    return null
+  }
+  return { ahead, behind }
+}
+
+async function evaluateLocalBaseRefRefreshability(
+  repoPath: string,
+  baseBranch: string,
+  remoteTrackingRef: string,
+  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase']
+): Promise<LocalBaseRefRefreshability | undefined> {
+  const parsed = parseRemoteTrackingLocalBaseRef(baseBranch, remoteTrackingRef, remoteTrackingBase)
+  if (!parsed) {
+    return undefined
+  }
+
+  const resultBase = { baseRef: parsed.baseRef, localBranch: parsed.localBranch }
+
+  let drift: { ahead: number; behind: number }
+  let localOid = ''
+  let remoteOid = ''
+  try {
+    // Why: advisory and mutating paths must agree on "safe to fast-forward".
+    // `rev-list A...B` proves the local branch exists, has no local-only
+    // commits, and tells the toast whether it is actually behind.
+    const { stdout } = await gitExecFileAsync(
+      ['rev-list', '--left-right', '--count', `${parsed.fullRef}...${remoteTrackingRef}`],
+      { cwd: repoPath }
+    )
+    const parsedDrift = parseRevListDrift(stdout)
+    if (!parsedDrift || parsedDrift.ahead !== 0) {
+      return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
+    }
+    const { stdout: localOidOutput } = await gitExecFileAsync(
+      ['rev-parse', '--verify', `${parsed.fullRef}^{commit}`],
+      { cwd: repoPath }
+    )
+    localOid = localOidOutput.trim()
+    if (!localOid) {
+      return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
+    }
+    const { stdout: remoteOidOutput } = await gitExecFileAsync(
+      ['rev-parse', '--verify', `${remoteTrackingRef}^{commit}`],
+      { cwd: repoPath }
+    )
+    remoteOid = remoteOidOutput.trim()
+    if (!remoteOid) {
+      return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
+    }
+    await gitExecFileAsync(['merge-base', '--is-ancestor', localOid, remoteOid], { cwd: repoPath })
+    drift = parsedDrift
+  } catch {
+    return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
+  }
+
+  try {
+    // Why: if the local base branch is checked out anywhere, turning on the
+    // setting would only update it when that owner worktree is clean.
+    const { stdout: worktreeListOutput } = await gitExecFileAsync(
+      ['worktree', 'list', '--porcelain'],
+      { cwd: repoPath }
+    )
+    const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
+    const ownerWorktree = worktrees.find((wt) => wt.branch === parsed.fullRef)
+
+    if (ownerWorktree) {
+      const { stdout: status } = await gitExecFileAsync(
+        ['status', '--porcelain', '--untracked-files=no'],
+        { cwd: ownerWorktree.path }
+      )
+      if (status.trim()) {
+        return {
+          refreshable: false,
+          result: {
+            ...resultBase,
+            status: 'skipped_dirty_worktree',
+            ownerWorktreePath: ownerWorktree.path
+          }
+        }
+      }
+      return {
+        refreshable: true,
+        ...resultBase,
+        fullRef: parsed.fullRef,
+        remoteTrackingRef,
+        localOid,
+        remoteOid,
+        behind: drift.behind,
+        ownerWorktreePath: ownerWorktree.path
+      }
+    }
+
+    // Why: localBranch isn't checked out anywhere, so there is no working tree
+    // to desync — a bare ref fast-forward (update-ref) is safe. Omitting
+    // ownerWorktreePath signals the mutating path to take that branch.
+    return {
+      refreshable: true,
+      ...resultBase,
+      fullRef: parsed.fullRef,
+      remoteTrackingRef,
+      localOid,
+      remoteOid,
+      behind: drift.behind
+    }
+  } catch {
+    return { refreshable: false, result: { ...resultBase, status: 'skipped_error' } }
+  }
+}
+
+async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+  repoPath: string,
+  baseBranch: string,
+  remoteTrackingRef: string,
+  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase']
+): Promise<LocalBaseRefUpdateSuggestion | undefined> {
+  const evaluation = await evaluateLocalBaseRefRefreshability(
+    repoPath,
+    baseBranch,
+    remoteTrackingRef,
+    remoteTrackingBase
+  )
+  if (!evaluation?.refreshable || evaluation.behind <= 0) {
+    return undefined
+  }
+  return {
+    baseRef: evaluation.baseRef,
+    localBranch: evaluation.localBranch,
+    behind: evaluation.behind
+  }
 }
 
 async function persistWorktreeCreationBase(
@@ -283,73 +483,56 @@ async function annotateSparseCheckoutStatus(
 async function refreshLocalBaseRefForWorktreeCreate(
   repoPath: string,
   baseBranch: string,
-  remoteTrackingRef: string
+  remoteTrackingRef: string,
+  remoteTrackingBase?: AddWorktreeOptions['remoteTrackingBase']
 ): Promise<LocalBaseRefRefreshResult | undefined> {
-  const remoteRefPrefix = 'refs/remotes/'
-  if (!remoteTrackingRef.startsWith(remoteRefPrefix)) {
+  const evaluation = await evaluateLocalBaseRefRefreshability(
+    repoPath,
+    baseBranch,
+    remoteTrackingRef,
+    remoteTrackingBase
+  )
+  if (!evaluation) {
     return undefined
   }
-
-  // Why: Only refs proven to be remote-tracking refs get refresh status.
-  // Local branches can contain slashes (e.g. release/2026) and must not
-  // produce a fake "Local 2026 was not refreshed" warning.
-  const shortRemoteRef = remoteTrackingRef.slice(remoteRefPrefix.length)
-  const slashIndex = shortRemoteRef.indexOf('/')
-  if (slashIndex <= 0) {
-    return undefined
+  if (!evaluation.refreshable) {
+    return evaluation.result
   }
 
-  const localBranch = shortRemoteRef.slice(slashIndex + 1)
-  const fullRef = `refs/heads/${localBranch}`
-  const resultBase = { baseRef: baseBranch, localBranch }
-
+  const resultBase = { baseRef: evaluation.baseRef, localBranch: evaluation.localBranch }
   try {
-    // Why: We only fast-forward the local branch pointer. A force-move (`branch -f`)
-    // would silently destroy unpushed local commits if the branch has diverged from
-    // remote. `merge-base --is-ancestor` returns exit 0 when localBranch is an
-    // ancestor of baseBranch — i.e. the update is a safe fast-forward.
-    await gitExecFileAsync(['merge-base', '--is-ancestor', localBranch, remoteTrackingRef], {
-      cwd: repoPath
-    })
-  } catch {
-    // merge-base fails if the local branch doesn't exist or has diverged.
-    return { ...resultBase, status: 'skipped_not_fast_forward' }
-  }
-
-  try {
-    // Why: We need to find which worktree (if any) has localBranch checked
-    // out, because moving the ref without updating that worktree's files would
-    // leave it looking massively dirty. A sibling worktree we don't control is
-    // just as vulnerable as the primary one.
-    const { stdout: worktreeListOutput } = await gitExecFileAsync(
-      ['worktree', 'list', '--porcelain'],
-      { cwd: repoPath }
-    )
-    const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
-    const ownerWorktree = worktrees.find((wt) => wt.branch === fullRef)
-
-    if (ownerWorktree) {
-      // Why: localBranch is checked out in a worktree. We can only safely
-      // update if that worktree is clean, and we must use `reset --hard`
-      // (run inside that worktree) so the files move with the ref.
+    if (evaluation.ownerWorktreePath) {
+      const { stdout: worktreeListOutput } = await gitExecFileAsync(
+        ['worktree', 'list', '--porcelain'],
+        { cwd: repoPath }
+      )
+      const worktrees = parseWorktreeList(translateWslOutputPaths(worktreeListOutput, repoPath))
+      const currentOwner = worktrees.find((wt) => wt.branch === evaluation.fullRef)
+      if (!currentOwner || currentOwner.path !== evaluation.ownerWorktreePath) {
+        return { ...resultBase, status: 'skipped_error' }
+      }
       const { stdout: status } = await gitExecFileAsync(
         ['status', '--porcelain', '--untracked-files=no'],
-        { cwd: ownerWorktree.path }
+        { cwd: currentOwner.path }
       )
       if (status.trim()) {
         return {
           ...resultBase,
           status: 'skipped_dirty_worktree',
-          ownerWorktreePath: ownerWorktree.path
+          ownerWorktreePath: currentOwner.path
         }
       }
-      await gitExecFileAsync(['reset', '--hard', remoteTrackingRef], { cwd: ownerWorktree.path })
-      return { ...resultBase, status: 'updated', ownerWorktreePath: ownerWorktree.path }
+      await gitExecFileAsync(['reset', '--hard', evaluation.remoteOid], { cwd: currentOwner.path })
+      return { ...resultBase, status: 'updated', ownerWorktreePath: currentOwner.path }
     }
 
-    // Why: localBranch is not checked out anywhere, so there is no working
-    // tree to desync. `update-ref` is safe here.
-    await gitExecFileAsync(['update-ref', fullRef, remoteTrackingRef], { cwd: repoPath })
+    // Why: no owner worktree — fast-forward the bare ref. The expected-old-OID
+    // form makes this a no-op-safe compare-and-swap if the ref moved since the
+    // evaluation snapshot.
+    await gitExecFileAsync(
+      ['update-ref', evaluation.fullRef, evaluation.remoteOid, evaluation.localOid],
+      { cwd: repoPath }
+    )
     return { ...resultBase, status: 'updated' }
   } catch {
     // update-ref/reset can fail on locked refs, filesystem errors, or unusual
@@ -376,9 +559,10 @@ export async function addWorktree(
   baseBranch?: string,
   refreshLocalBaseRef = false,
   noCheckout = false,
-  options: { checkoutExistingBranch?: boolean } = {}
+  options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
+  let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
   const args = ['worktree', 'add']
   let effectiveBase: string | undefined
   if (noCheckout) {
@@ -406,7 +590,15 @@ export async function addWorktree(
         localBaseRefRefresh = await refreshLocalBaseRefForWorktreeCreate(
           repoPath,
           baseBranch,
-          effectiveBase
+          effectiveBase,
+          options.remoteTrackingBase
+        )
+      } else if (options.suggestLocalBaseRefUpdate) {
+        localBaseRefUpdateSuggestion = await getLocalBaseRefUpdateSuggestionForWorktreeCreate(
+          repoPath,
+          baseBranch,
+          effectiveBase,
+          options.remoteTrackingBase
         )
       }
       args.push(effectiveBase)
@@ -478,7 +670,10 @@ export async function addWorktree(
   } catch (error) {
     console.warn(`addWorktree: failed to set push.autoSetupRemote for ${worktreePath}`, error)
   }
-  return localBaseRefRefresh ? { localBaseRefRefresh } : {}
+  return {
+    ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
+    ...(localBaseRefUpdateSuggestion ? { localBaseRefUpdateSuggestion } : {})
+  }
 }
 
 export async function addSparseWorktree(
@@ -488,7 +683,7 @@ export async function addSparseWorktree(
   directories: string[],
   baseBranch?: string,
   refreshLocalBaseRef = false,
-  options: { checkoutExistingBranch?: boolean } = {}
+  options: AddWorktreeOptions = {}
 ): Promise<AddWorktreeResult> {
   let created = false
   let addResult: AddWorktreeResult = {}

@@ -10,6 +10,7 @@ import {
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
 import { createNestedRepoScanId } from './add-repo-dialog-types'
+import { translate } from '@/i18n/i18n'
 
 type ShowNestedRepoReview = (args: {
   scan: NestedRepoScanResult
@@ -68,7 +69,12 @@ export function useAddRepoLocalFolderFlow({
   const handleAddLocalPath = useCallback(
     async (path: string, source: AddRepoExistingWorkspaceSource): Promise<void> => {
       if (activeRuntimeEnvironmentId?.trim()) {
-        toast.error('Use a server path to add projects from a remote runtime.')
+        toast.error(
+          translate(
+            'auto.components.sidebar.useAddRepoLocalFolderFlow.7ab10e4974',
+            'Use a server path to add projects from a remote runtime.'
+          )
+        )
         closeModal()
         return
       }

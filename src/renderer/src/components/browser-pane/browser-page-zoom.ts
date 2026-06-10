@@ -1,4 +1,18 @@
-export type BrowserPageZoomDirection = 'in' | 'out' | 'reset'
+import {
+  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  nextBrowserPageZoomLevel,
+  normalizeBrowserPageZoomLevel,
+  type BrowserPageZoomDirection
+} from '../../../../shared/browser-page-zoom'
+
+export {
+  BROWSER_PAGE_ZOOM_LEVELS,
+  DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
+  browserPageZoomLevelToPercent,
+  nextBrowserPageZoomLevel,
+  normalizeBrowserPageZoomLevel,
+  type BrowserPageZoomDirection
+} from '../../../../shared/browser-page-zoom'
 
 export const ORCA_BROWSER_PAGE_ZOOM_EVENT = 'orca:browser-page-zoom'
 
@@ -7,50 +21,63 @@ export type BrowserPageZoomEventDetail = {
   direction: BrowserPageZoomDirection
 }
 
+export type BrowserPageZoomIndicatorState = {
+  ariaHidden: boolean
+  opacityClassName: 'opacity-100' | 'opacity-0'
+}
+
+export type BrowserPageZoomIndicatorInput = {
+  feedbackVisible: boolean
+  isDefaultZoom: boolean
+}
+
 type BrowserPageZoomWebview = {
   getZoomLevel: () => number
   setZoomLevel: (level: number) => void
   isDestroyed?: () => boolean
 }
 
-const BROWSER_PAGE_ZOOM_STEP = 0.5
-const BROWSER_PAGE_ZOOM_MIN = -3
-const BROWSER_PAGE_ZOOM_MAX = 5
-const BROWSER_PAGE_ZOOM_RESET = 0
-
-export function browserPageZoomLevelToPercent(level: number): number {
-  // Why: Electron zoom levels are exponential; show the same percentage users
-  // expect from Chromium browser zoom controls.
-  return Math.round(100 * Math.pow(1.2, level))
-}
-
-export function nextBrowserPageZoomLevel(
-  current: number,
-  direction: BrowserPageZoomDirection
-): number {
-  const rawNext =
-    direction === 'in'
-      ? current + BROWSER_PAGE_ZOOM_STEP
-      : direction === 'out'
-        ? current - BROWSER_PAGE_ZOOM_STEP
-        : BROWSER_PAGE_ZOOM_RESET
-
-  return Math.max(BROWSER_PAGE_ZOOM_MIN, Math.min(BROWSER_PAGE_ZOOM_MAX, rawNext))
-}
-
 export function applyBrowserPageZoom(
   webview: BrowserPageZoomWebview | null | undefined,
-  direction: BrowserPageZoomDirection
+  direction: BrowserPageZoomDirection,
+  resetLevel: number = DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
 ): number | null {
   try {
     if (!webview || webview.isDestroyed?.()) {
       return null
     }
-    const next = nextBrowserPageZoomLevel(webview.getZoomLevel(), direction)
+    const next = nextBrowserPageZoomLevel(webview.getZoomLevel(), direction, resetLevel)
     webview.setZoomLevel(next)
     return next
   } catch {
     return null
+  }
+}
+
+export function setBrowserPageZoomLevel(
+  webview: BrowserPageZoomWebview | null | undefined,
+  level: number
+): number | null {
+  try {
+    if (!webview || webview.isDestroyed?.()) {
+      return null
+    }
+    const next = normalizeBrowserPageZoomLevel(level)
+    webview.setZoomLevel(next)
+    return next
+  } catch {
+    return null
+  }
+}
+
+export function getBrowserPageZoomIndicatorState({
+  feedbackVisible
+}: BrowserPageZoomIndicatorInput): BrowserPageZoomIndicatorState {
+  // Why: browser zoom percent is transient feedback; non-default page zoom
+  // should not leave a permanent badge over the webview.
+  return {
+    ariaHidden: !feedbackVisible,
+    opacityClassName: feedbackVisible ? 'opacity-100' : 'opacity-0'
   }
 }
 

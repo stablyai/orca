@@ -8,11 +8,11 @@ export function resolveTerminalCursorInactiveStyle(
 ): TerminalCursorInactiveStyle {
   // Why: xterm's default inactive outline turns a bar/underline cursor into
   // extra strokes in blurred panes; only block cursors benefit from outline.
-  return (cursorStyle ?? 'bar') === 'block' ? 'outline' : (cursorStyle ?? 'bar')
+  return (cursorStyle ?? 'block') === 'block' ? 'outline' : (cursorStyle ?? 'block')
 }
 
 export function buildDefaultTerminalOptions(): ITerminalOptions {
-  const cursorStyle: TerminalCursorStyle = 'bar'
+  const cursorStyle: TerminalCursorStyle = 'block'
 
   return {
     allowProposedApi: true,
@@ -31,6 +31,16 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
+    scrollbar: {
+      // Why: slim VS Code-style scrollbar (VS Code uses 14). FitAddon reserves
+      // this as a gutter, costing ~1 column per pane — accepted tradeoff so the
+      // scrollbar never covers content (evidence in PR #5051). The v1.4.51
+      // table corruption #4877 fixed by zeroing this was actually the ZWJ
+      // width bug; it stays fixed by pane-terminal-unicode-provider.ts. Width
+      // also enables the overview ruler, whose border is hidden in
+      // composeActiveTerminalTheme.
+      width: 7
+    },
     // Why: advertise kitty keyboard protocol support so CLIs that probe
     // (CSI ? u) know Orca accepts enhanced key reporting. Orca still writes
     // CSI-u for Shift+Enter on non-Windows platforms; programs that respect

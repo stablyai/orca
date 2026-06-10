@@ -17,6 +17,10 @@ type PanelSize = {
   height: number
 }
 
+/**
+ * Computes the position and placement for a tour panel relative to a target element,
+ * choosing the best side and clamping the panel within the viewport.
+ */
 export function clampContextualTourPanelPosition(args: {
   targetRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>
   viewport: ViewportSize
@@ -90,6 +94,7 @@ export function clampContextualTourPanelPosition(args: {
   return { left: clampedLeft, top: clampedTop, placement, arrowOffset }
 }
 
+/** Returns the raw (unclamped) top-left position for a panel at the given placement side. */
 function getUnclampedPanelPosition(args: {
   placement: ContextualTourPanelPlacement
   targetRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>
@@ -121,16 +126,22 @@ function getUnclampedPanelPosition(args: {
   }
 }
 
-export function getContextualTourPanelCssPosition(args: {
-  position: ContextualTourPanelPosition
-  panelHostRect?: Pick<DOMRect, 'left' | 'top'> | null
-}): Pick<ContextualTourPanelPosition, 'left' | 'top' | 'arrowOffset'> {
-  const { position, panelHostRect } = args
-  const left = panelHostRect ? position.left - panelHostRect.left : position.left
-  const top = panelHostRect ? position.top - panelHostRect.top : position.top
-  return { left, top, arrowOffset: position.arrowOffset }
+/** Translates a target rect from viewport coordinates into the host element's local coordinate space. */
+export function getContextualTourTargetRectInHost(
+  targetRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>,
+  hostRect: Pick<DOMRect, 'left' | 'top'>
+): Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'> {
+  return {
+    left: targetRect.left - hostRect.left,
+    right: targetRect.right - hostRect.left,
+    top: targetRect.top - hostRect.top,
+    bottom: targetRect.bottom - hostRect.top,
+    width: targetRect.width,
+    height: targetRect.height
+  }
 }
 
+/** Clamps a number between min and max, inclusive. */
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }

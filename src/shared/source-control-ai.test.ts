@@ -1,5 +1,3 @@
-/* eslint-disable max-lines -- Why: source-control AI precedence regressions
-   are easier to audit when the resolver tests stay beside the shared contract. */
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from './constants'
 import {
@@ -8,6 +6,7 @@ import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   normalizeRepoSourceControlAiOverrides,
   projectSourceControlAiToLegacyCommitMessageAi,
+  resolveSourceControlAiEnabled,
   readSourceControlAiModelChoiceForHost,
   resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults,
@@ -113,6 +112,30 @@ describe('source-control AI resolution', () => {
     })
   })
 
+  it('lets repo enablement override the global default', () => {
+    const base = settings()
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      enabled: false
+    }
+
+    expect(resolveSourceControlAiEnabled({ settings: base, repo: null })).toBe(false)
+    expect(
+      resolveSourceControlAiEnabled({
+        settings: base,
+        repo: { sourceControlAi: { enabled: true } }
+      })
+    ).toBe(true)
+
+    base.sourceControlAi.enabled = true
+    expect(
+      resolveSourceControlAiEnabled({
+        settings: base,
+        repo: { sourceControlAi: { enabled: false } }
+      })
+    ).toBe(false)
+  })
+
   it('resolves PR defaults even when generation config is invalid', () => {
     const base = settings()
     base.sourceControlAi = {
@@ -203,6 +226,34 @@ describe('source-control AI resolution', () => {
       discoveryHostKey: 'local'
     })
     expect(result.ok && result.value.params.model).toBe('gpt-5.4-mini')
+  })
+
+  it('uses the repo custom command before the global custom command', () => {
+    const base = settings()
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        commitMessage: {
+          agentId: 'custom',
+          commandInputTemplate: '{basePrompt}'
+        }
+      },
+      customAgentCommand: 'global-agent {prompt}'
+    }
+
+    const result = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: {
+        sourceControlAi: {
+          customAgentCommand: 'repo-agent {prompt}'
+        }
+      },
+      operation: 'commitMessage',
+      discoveryHostKey: 'local'
+    })
+
+    expect(result.ok && result.value.params.customAgentCommand).toBe('repo-agent {prompt}')
   })
 
   it('resolves thinking effort with override precedence and model default fallback', () => {
@@ -326,7 +377,7 @@ describe('source-control AI resolution', () => {
       instructionsByOperation: {
         commitMessage: 'Legacy commit prompt',
         pullRequest: 'Global PR style',
-        branchName: 'Legacy commit prompt'
+        branchName: 'Global branch style'
       }
     })
     expect(merged.modelOverridesByOperation?.commitMessage).toEqual({
@@ -633,6 +684,14 @@ describe('source-control AI resolution', () => {
         pullRequest: '',
         branchName: 'branch style'
       },
+      actionOverrides: {
+        pullRequest: {
+          commandInputTemplate: '{basePrompt}'
+        },
+        branchName: {
+          commandInputTemplate: '{basePrompt}\n\nbranch style'
+        }
+      },
       prCreationDefaults: {
         draft: true,
         useTemplate: null,
@@ -641,5 +700,29 @@ describe('source-control AI resolution', () => {
     })
     expect(normalizeRepoSourceControlAiOverrides(null)).toBeUndefined()
     expect(normalizeRepoSourceControlAiOverrides([])).toBeUndefined()
+  })
+
+  it('preserves repo null command templates without requiring another override field', () => {
+    expect(
+      normalizeRepoSourceControlAiOverrides({
+        instructionsByOperation: {
+          commitMessage: 'legacy repo style'
+        },
+        actionOverrides: {
+          commitMessage: {
+            commandInputTemplate: null
+          }
+        }
+      })
+    ).toEqual({
+      instructionsByOperation: {
+        commitMessage: 'legacy repo style'
+      },
+      actionOverrides: {
+        commitMessage: {
+          commandInputTemplate: null
+        }
+      }
+    })
   })
 })

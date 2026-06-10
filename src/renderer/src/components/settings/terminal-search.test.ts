@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
-import { APPEARANCE_PANE_SEARCH_ENTRIES, SIDEBAR_ENTRIES } from './appearance-search'
+import { getAppearancePaneSearchEntries, getSidebarEntries } from './appearance-search'
 
 describe('getTerminalPaneSearchEntries', () => {
   it('includes the Windows right-click setting on Windows', () => {
@@ -76,14 +76,25 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(entriesMac.some((entry) => entry.title === 'Font Size')).toBe(false)
     expect(entriesLinux.some((entry) => entry.title === 'Dark Theme')).toBe(false)
     expect(
-      APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Import from Ghostty')
+      getAppearancePaneSearchEntries().some((entry) => entry.title === 'Import from Ghostty')
     ).toBe(true)
-    expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Font Size')).toBe(true)
-    expect(APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Dark Theme')).toBe(true)
+    expect(getAppearancePaneSearchEntries().some((entry) => entry.title === 'Font Size')).toBe(true)
+    expect(getAppearancePaneSearchEntries().some((entry) => entry.title === 'Dark Theme')).toBe(
+      true
+    )
+  })
+
+  it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
+    const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
+    const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
+
+    expect(desktopEntries.some((entry) => entry.title === 'Import themes from Warp')).toBe(true)
+    expect(webEntries.some((entry) => entry.title === 'Import themes from Warp')).toBe(false)
+    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
   })
 
   it('keeps sidebar shortcut restore settings in the Appearance search index', () => {
-    const automationsEntry = SIDEBAR_ENTRIES.find(
+    const automationsEntry = getSidebarEntries().find(
       (entry) => entry.title === 'Show Automations Button'
     )
 
@@ -92,7 +103,7 @@ describe('getTerminalPaneSearchEntries', () => {
       expect.arrayContaining(['automations', 'sidebar', 'hide', 'show'])
     )
     expect(
-      APPEARANCE_PANE_SEARCH_ENTRIES.some((entry) => entry.title === 'Show Automations Button')
+      getAppearancePaneSearchEntries().some((entry) => entry.title === 'Show Automations Button')
     ).toBe(true)
   })
 })

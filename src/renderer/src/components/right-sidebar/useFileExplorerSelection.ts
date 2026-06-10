@@ -8,7 +8,8 @@ import {
   formatFileExplorerPathsForClipboard,
   getFileExplorerSelectionMode,
   updateFileExplorerSelection,
-  updateFileExplorerSelectionPaths
+  updateFileExplorerSelectionPaths,
+  type FileExplorerSelectionMode
 } from './file-explorer-selection'
 
 type UseFileExplorerSelectionResult = {
@@ -22,6 +23,7 @@ type UseFileExplorerSelectionResult = {
     event: React.MouseEvent<HTMLButtonElement>,
     onReplaceClick: (node: TreeNode) => void
   ) => void
+  moveSelection: (targetPath: string, mode: FileExplorerSelectionMode) => void
   preserveSelectionForContextMenu: (node: TreeNode) => void
   copyPathsForNode: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
 }
@@ -61,6 +63,11 @@ export function useFileExplorerSelection(
           : null
       return { activePath: nextActive, anchorPath: nextActive, selectedPaths: paths }
     })
+  }, [])
+
+  const moveSelection = useCallback((targetPath: string, mode: FileExplorerSelectionMode) => {
+    const orderedPaths = rowProjectionRef.current.getOrderedPaths()
+    setSelectionState((prev) => updateFileExplorerSelection(prev, orderedPaths, targetPath, mode))
   }, [])
 
   const selectRowWithModifiers = useCallback(
@@ -119,6 +126,7 @@ export function useFileExplorerSelection(
     setSelectedPaths,
     resetSelection,
     selectRowWithModifiers,
+    moveSelection,
     preserveSelectionForContextMenu,
     copyPathsForNode
   }

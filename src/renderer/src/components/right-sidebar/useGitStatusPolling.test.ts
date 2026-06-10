@@ -16,10 +16,20 @@ type PollState = {
   sshConnectionStates: Map<string, { status: string }>
 }
 
-type GitStatusPollingHook = () => void
+type GitStatusPollingHook = (options?: { enabled?: boolean }) => void
 
-function GitStatusPollingHarness({ runPolling }: { runPolling: GitStatusPollingHook }): null {
-  runPolling()
+function GitStatusPollingHarness({
+  enabled,
+  runPolling
+}: {
+  enabled?: boolean
+  runPolling: GitStatusPollingHook
+}): null {
+  if (enabled === undefined) {
+    runPolling()
+  } else {
+    runPolling({ enabled })
+  }
   return null
 }
 
@@ -29,6 +39,7 @@ async function usePollingOnce(
     connectionId?: string | null
     pushTarget?: GitPushTarget
     sshStatus?: string
+    enabled?: boolean
     expectStatusCall?: boolean
   } = {}
 ): Promise<{ state: PollState; gitStatus: ReturnType<typeof vi.fn> }> {
@@ -104,7 +115,7 @@ async function usePollingOnce(
   vi.stubGlobal('clearInterval', vi.fn())
 
   const { useGitStatusPolling: runPolling } = await import('./useGitStatusPolling')
-  GitStatusPollingHarness({ runPolling })
+  GitStatusPollingHarness({ enabled: options.enabled, runPolling })
   await (options.expectStatusCall !== false
     ? vi.waitFor(() => {
         expect(state.setGitStatus).toHaveBeenCalled()
@@ -188,6 +199,22 @@ describe('useGitStatusPolling', () => {
 
     expect(gitStatus).not.toHaveBeenCalled()
     expect(state.setGitStatus).not.toHaveBeenCalled()
+  })
+
+  it('does not install the visible git status poll while disabled', async () => {
+    const { state, gitStatus } = await usePollingOnce(
+      {
+        entries: [],
+        conflictOperation: 'unknown',
+        head: 'abc123',
+        branch: 'refs/heads/main'
+      },
+      { enabled: false, expectStatusCall: false }
+    )
+
+    expect(gitStatus).not.toHaveBeenCalled()
+    expect(state.setGitStatus).not.toHaveBeenCalled()
+    expect(globalThis.setInterval).not.toHaveBeenCalled()
   })
 
   it('does not overlap slow visible git status polls and runs one trailing refresh', async () => {

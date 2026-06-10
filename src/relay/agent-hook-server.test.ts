@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
-import { tmpdir } from 'os'
+import { homedir, tmpdir } from 'os'
 import { join } from 'path'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
@@ -25,6 +25,13 @@ describe('RelayAgentHookServer', () => {
     expect(first).toBe(join(dir, 'agent-hooks', 'relay-a.sock'))
     expect(second).toBe(join(dir, 'agent-hooks', 'relay-b.sock'))
     expect(first).not.toBe(second)
+  })
+
+  it('keeps named-pipe endpoint files on a real filesystem path', () => {
+    const endpointDir = endpointDirForRelaySocket('\\\\.\\pipe\\orca-relay-abc123')
+
+    expect(endpointDir).toBe(join(homedir(), '.orca-relay', 'agent-hooks', 'orca-relay-abc123'))
+    expect(endpointDir).not.toContain('\\\\.\\pipe')
   })
 
   it('forwards a parsed Claude UserPromptSubmit POST as a normalized envelope', async () => {

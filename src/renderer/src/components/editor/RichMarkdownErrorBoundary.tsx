@@ -1,5 +1,6 @@
 import React from 'react'
 import { reportReactErrorBoundaryCrash } from '@/lib/react-error-boundary-reporting'
+import { translate } from '@/i18n/i18n'
 
 type Props = {
   fileId: string
@@ -54,17 +55,22 @@ export class RichMarkdownErrorBoundary extends React.Component<Props, State> {
       return (
         <div className="flex h-full min-h-0 flex-col items-center justify-center gap-3 px-6 text-center text-sm text-muted-foreground">
           <div>
-            The rich markdown editor hit an unexpected error and was reset to keep the rest of Orca
-            responsive.
+            {translate(
+              'auto.components.editor.RichMarkdownErrorBoundary.dfdf1cacd4',
+              'The rich markdown editor hit an unexpected error and was reset to keep the rest of Orca responsive.'
+            )}
           </div>
           <div className="text-xs opacity-70">
-            Switch to source mode, or click retry to reload the rich view.
+            {translate(
+              'auto.components.editor.RichMarkdownErrorBoundary.4a5de9f2f0',
+              'Switch to source mode, or click retry to reload the rich view.'
+            )}
           </div>
           <button
             className="rounded border border-border/60 px-3 py-1 text-xs hover:bg-accent"
             onClick={this.handleReset}
           >
-            Retry
+            {translate('auto.components.editor.RichMarkdownErrorBoundary.aad0998127', 'Retry')}
           </button>
         </div>
       )

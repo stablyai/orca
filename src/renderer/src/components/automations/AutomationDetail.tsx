@@ -3,7 +3,7 @@ import { Pencil, Pause, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
@@ -13,6 +13,7 @@ import {
   formatAutomationTokens,
   summarizeAutomationRunUsage
 } from './automation-usage-model'
+import { translate } from '@/i18n/i18n'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -94,7 +95,10 @@ export function AutomationDetail({
   if (!automation) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        Create an automation to start scheduling agent work.
+        {translate(
+          'auto.components.automations.AutomationDetail.221916d93c',
+          'Create an automation to start scheduling agent work.'
+        )}
       </div>
     )
   }
@@ -106,7 +110,7 @@ export function AutomationDetail({
         ? 'Unavailable'
         : 'No runs'
   const agentLabel =
-    AGENT_CATALOG.find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
+    getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ?? automation.agentId
   const runLocationLabel =
     automation.workspaceMode === 'new_per_run'
       ? (automation.baseBranch ?? projectDefaultBaseRef ?? 'Project default')
@@ -119,7 +123,9 @@ export function AutomationDetail({
           <div className="flex items-center gap-2">
             <h2 className="truncate text-lg font-semibold">{automation.name}</h2>
             <Badge variant={automation.enabled ? 'secondary' : 'outline'}>
-              {automation.enabled ? 'Enabled' : 'Paused'}
+              {automation.enabled
+                ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
+                : translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
             </Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">
@@ -129,19 +135,38 @@ export function AutomationDetail({
         <div className="flex shrink-0 items-center gap-1">
           <Button variant="secondary" size="sm" onClick={() => onRunNow(automation)}>
             <Play className="size-4" />
-            Run Now
+            {translate('auto.components.automations.AutomationDetail.2fb1605beb', 'Run Now')}
           </Button>
-          <ToolbarIconButton label="Edit automation" onClick={() => onEdit(automation)}>
+          <ToolbarIconButton
+            label={translate(
+              'auto.components.automations.AutomationDetail.4b1ea02d2e',
+              'Edit automation'
+            )}
+            onClick={() => onEdit(automation)}
+          >
             <Pencil className="size-4" />
           </ToolbarIconButton>
           <ToolbarIconButton
-            label={automation.enabled ? 'Pause automation' : 'Resume automation'}
+            label={
+              automation.enabled
+                ? translate(
+                    'auto.components.automations.AutomationDetail.91a4155e95',
+                    'Pause automation'
+                  )
+                : translate(
+                    'auto.components.automations.AutomationDetail.d79452fb30',
+                    'Resume automation'
+                  )
+            }
             onClick={() => onToggle(automation)}
           >
             {automation.enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
           </ToolbarIconButton>
           <ToolbarIconButton
-            label="Delete automation"
+            label={translate(
+              'auto.components.automations.AutomationDetail.1f6026358e',
+              'Delete automation'
+            )}
             onClick={() => onDelete(automation)}
             className="text-destructive hover:text-destructive"
           >
@@ -152,15 +177,20 @@ export function AutomationDetail({
 
       {automation.executionTargetType === 'ssh' ? (
         <div className="rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
-          This SSH automation runs only while Orca can reach the SSH host. If reconnect needs
-          interactive credentials or the host is unavailable, the run is recorded as skipped.
+          {translate(
+            'auto.components.automations.AutomationDetail.dbef8dc110',
+            'This SSH automation runs only while Orca can reach the SSH host. If reconnect needs interactive credentials or the host is unavailable, the run is recorded as skipped.'
+          )}
         </div>
       ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
-        <DetailMetric label="Schedule" value={formatAutomationSchedule(automation.rrule)} />
         <DetailMetric
-          label="Next run"
+          label={translate('auto.components.automations.AutomationDetail.18763ded26', 'Schedule')}
+          value={formatAutomationSchedule(automation.rrule)}
+        />
+        <DetailMetric
+          label={translate('auto.components.automations.AutomationDetail.578ff46987', 'Next run')}
           value={
             automation.enabled
               ? formatAutomationDateTimeWithRelative(automation.nextRunAt, now)
@@ -168,16 +198,23 @@ export function AutomationDetail({
           }
         />
         <DetailMetric
-          label={automation.workspaceMode === 'new_per_run' ? 'Create from' : 'Run location'}
+          label={
+            automation.workspaceMode === 'new_per_run'
+              ? translate('auto.components.automations.AutomationDetail.2f8baf5360', 'Create from')
+              : translate('auto.components.automations.AutomationDetail.5405a09b1f', 'Run location')
+          }
           value={runLocationLabel}
         />
         <DetailMetric
-          label="Session"
+          label={translate('auto.components.automations.AutomationDetail.15ea446b93', 'Session')}
           value={automation.reuseSession ? 'Reuse live session' : 'Fresh each run'}
         />
-        <DetailMetric label="Grace" value={formatGrace(automation.missedRunGraceMinutes)} />
         <DetailMetric
-          label="Precheck"
+          label={translate('auto.components.automations.AutomationDetail.620b22145e', 'Grace')}
+          value={formatGrace(automation.missedRunGraceMinutes)}
+        />
+        <DetailMetric
+          label={translate('auto.components.automations.AutomationDetail.e353ab9516', 'Precheck')}
           value={
             automation.precheck
               ? `Enabled, ${formatAutomationPrecheckTimeout(automation.precheck.timeoutSeconds)}`
@@ -185,7 +222,9 @@ export function AutomationDetail({
           }
         />
         <div className="min-w-0">
-          <div className="text-[11px] font-medium uppercase text-muted-foreground">Agent</div>
+          <div className="text-[11px] font-medium uppercase text-muted-foreground">
+            {translate('auto.components.automations.AutomationDetail.2df8970cd5', 'Agent')}
+          </div>
           <div className="mt-1 flex min-w-0 items-center gap-2 text-sm font-medium">
             <AgentIcon agent={automation.agentId} size={16} />
             <span className="truncate">{agentLabel}</span>
@@ -195,22 +234,35 @@ export function AutomationDetail({
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/20 px-4 py-3 shadow-sm">
         <DetailMetric
-          label="Last run"
+          label={translate('auto.components.automations.AutomationDetail.a7c312430d', 'Last run')}
           value={formatAutomationDateTimeWithRelative(automation.lastRunAt, now)}
         />
         <DetailMetric
-          label="Est. spend"
+          label={translate('auto.components.automations.AutomationDetail.401f40ae79', 'Est. spend')}
           value={formatAutomationCost(usageSummary.estimatedCostUsd)}
         />
-        <DetailMetric label="Tokens" value={formatAutomationTokens(usageSummary.totalTokens)} />
-        <DetailMetric label="Usage coverage" value={usageCoverage} />
+        <DetailMetric
+          label={translate('auto.components.automations.AutomationDetail.449fc83bf7', 'Tokens')}
+          value={formatAutomationTokens(usageSummary.totalTokens)}
+        />
+        <DetailMetric
+          label={translate(
+            'auto.components.automations.AutomationDetail.a1d52c2189',
+            'Usage coverage'
+          )}
+          value={usageCoverage}
+        />
       </div>
 
       <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">Prompt</div>
+        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">
+          {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
+        </div>
         <div className="px-3 py-3">
           <div className="min-w-0">
-            <div className="text-[11px] font-medium uppercase text-muted-foreground">Prompt</div>
+            <div className="text-[11px] font-medium uppercase text-muted-foreground">
+              {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
+            </div>
             <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">
               {automation.prompt}
             </p>

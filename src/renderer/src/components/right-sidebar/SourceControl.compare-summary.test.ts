@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   CompareSummary,
   CompareSummaryToolbarButton,
+  resolveSourceControlBaseRef,
   shouldShowCompareSummary
 } from './SourceControl'
 import type { GitBranchCompareSummary } from '../../../../shared/types'
@@ -75,6 +76,33 @@ const readySummary: GitBranchCompareSummary = {
 }
 
 describe('SourceControl compare summary', () => {
+  it('prefers the worktree creation base for branch compare', () => {
+    expect(
+      resolveSourceControlBaseRef({
+        worktreeBaseRef: 'refs/remotes/origin/main',
+        repoBaseRef: 'main',
+        defaultBaseRef: 'origin/main'
+      })
+    ).toBe('refs/remotes/origin/main')
+  })
+
+  it('falls back to repo and default base refs when worktree metadata is absent', () => {
+    expect(
+      resolveSourceControlBaseRef({
+        worktreeBaseRef: '  ',
+        repoBaseRef: ' origin/release ',
+        defaultBaseRef: 'origin/main'
+      })
+    ).toBe('origin/release')
+
+    expect(
+      resolveSourceControlBaseRef({
+        repoBaseRef: null,
+        defaultBaseRef: 'origin/main'
+      })
+    ).toBe('origin/main')
+  })
+
   it('wires toolbar actions without rendering the dead view-mode toggle', () => {
     const onChangeBaseRef = vi.fn()
     const onRetry = vi.fn()

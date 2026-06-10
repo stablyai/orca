@@ -34,7 +34,11 @@ const RepoSourceControlAiOverrides = z
   .unknown()
   .optional()
   .transform((value) =>
-    value === undefined ? undefined : normalizeRepoSourceControlAiOverrides(value)
+    value === undefined
+      ? undefined
+      : value === null
+        ? null
+        : normalizeRepoSourceControlAiOverrides(value)
   )
 
 const RepoBadgeColor = z

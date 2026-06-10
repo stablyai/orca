@@ -118,7 +118,7 @@ describe('openWorkspaceCreationComposerWithTourHandoff', () => {
     expect(requestContextualTourWhenReady).not.toHaveBeenCalled()
   })
 
-  it('does not open the composer when no project is available for workspace creation', () => {
+  it('opens the composer without a project so the empty form can guide setup', () => {
     const openModal = vi.fn()
     const detachContextualTourSource = vi.fn()
     vi.spyOn(useAppStore, 'getState').mockImplementation(
@@ -138,7 +138,9 @@ describe('openWorkspaceCreationComposerWithTourHandoff', () => {
     openWorkspaceCreationComposerWithTourHandoff()
 
     expect(detachContextualTourSource).not.toHaveBeenCalled()
-    expect(openModal).not.toHaveBeenCalled()
+    expect(openModal).toHaveBeenCalledWith('new-workspace-composer', {
+      telemetrySource: 'sidebar'
+    })
     expect(requestContextualTourWhenReady).not.toHaveBeenCalled()
   })
 })
