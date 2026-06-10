@@ -117,8 +117,8 @@ export function ConnectIntegrationsList(): React.JSX.Element {
         state={flow.task}
         expanded={taskExpanded}
         title={translate(
-          'auto.components.feature.wall.ConnectIntegrationsList.0ec37ecdd1',
-          'Start agents from tasks'
+          'auto.components.feature.wall.ConnectIntegrationsList.task_step_title',
+          'Start agents on your tasks without leaving Orca'
         )}
         description={translate(
           'auto.components.feature.wall.ConnectIntegrationsList.33b650af52',

@@ -8933,7 +8933,6 @@
           "ConnectIntegrationsList": {
             "3dddb2d565": "connected for tasks",
             "33b650af52": "Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.",
-            "0ec37ecdd1": "Start agents from tasks",
             "5b3577a492": "connected for review status",
             "3a1fcdddad": "Two quick steps: connect where your code is reviewed, then where your team plans work.",
             "list_end": ", and ",
@@ -8942,7 +8941,8 @@
             "code_host_tasks_summary": "issues available as tasks · add Linear or Jira if your team plans work there",
             "code_host_tasks_caption": "Your code host's issues also work as tasks.",
             "review_step_title": "See PR status while agents work",
-            "review_step_description": "Connect a review provider so Orca can show PR or MR status, checks, and reviews."
+            "review_step_description": "Connect a review provider so Orca can show PR or MR status, checks, and reviews.",
+            "task_step_title": "Start agents on your tasks without leaving Orca"
           },
           "connect": {
             "integration": {
