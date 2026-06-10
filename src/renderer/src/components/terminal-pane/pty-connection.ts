@@ -3031,16 +3031,22 @@ export function connectPanePty(
       restoredSessionId && restoredSessionId !== detachedLivePtyId
         ? restoredSessionId
         : detachedLivePtyId
+    const currentTabLivePtyIds = storeSnapshot.ptyIdsByTabId[deps.tabId] ?? []
+    const candidateHasEagerBuffer = Boolean(
+      candidateReattachSessionId &&
+      !isRemoteRuntimePtyId(candidateReattachSessionId) &&
+      getEagerPtyBufferHandle(candidateReattachSessionId)
+    )
     // Why: a still-live locally-spawned PTY (e.g. a background automation agent
     // launched before its tab mounts) keeps an eager buffer until a pane adopts
     // it. Such a PTY must be adopted via attach()+replay, not re-connected as a
     // daemon session — connect({ sessionId }) on a non-session ptyId spawns a
-    // fresh shell and orphans the live agent. Presence of an eager buffer is the
-    // discriminator; route these to the attach branch below.
+    // fresh shell and orphans the live agent. Presence of an eager buffer plus
+    // current-tab live ownership is the discriminator; route these to attach.
     const eagerLivePtyId =
       candidateReattachSessionId &&
-      !isRemoteRuntimePtyId(candidateReattachSessionId) &&
-      getEagerPtyBufferHandle(candidateReattachSessionId)
+      candidateHasEagerBuffer &&
+      currentTabLivePtyIds.includes(candidateReattachSessionId)
         ? candidateReattachSessionId
         : null
     // Why: daemon session IDs encode `${worktreeId}@@${uuid}`. After a daemon
@@ -3051,7 +3057,7 @@ export function connectPanePty(
     const deferredReattachSessionId =
       candidateReattachSessionId &&
       !isRemoteRuntimePtyId(candidateReattachSessionId) &&
-      !eagerLivePtyId &&
+      !candidateHasEagerBuffer &&
       isSessionOwnedByWorktree(candidateReattachSessionId, deps.worktreeId)
         ? candidateReattachSessionId
         : null
@@ -3177,6 +3183,9 @@ export function connectPanePty(
         deps.syncPanePtyLayoutBinding(pane.id, attachPtyId)
         deps.updateTabPtyId(deps.tabId, attachPtyId)
         agentCompletionCoordinator.startProcessTracking()
+        if (attachPtyId === eagerLivePtyId) {
+          registerPaneSerializerFor(attachPtyId)
+        }
       } catch (err) {
         reportError(err instanceof Error ? err.message : String(err))
         deps.clearTabPtyId(deps.tabId, attachPtyId)
