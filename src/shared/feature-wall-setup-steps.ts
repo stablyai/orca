@@ -4,6 +4,7 @@ export type FeatureWallSetupStepId =
   | 'notifications'
   | 'split-terminal'
   | 'two-worktrees'
+  | 'browser'
   | 'task-sources'
   | 'agent-capabilities'
   | 'setup-script'
@@ -17,7 +18,8 @@ export type FeatureWallSetupStep = {
 
 export const FEATURE_WALL_SETUP_PARALLEL_WORK_STEP_IDS = [
   'split-terminal',
-  'two-worktrees'
+  'two-worktrees',
+  'browser'
 ] as const satisfies readonly FeatureWallSetupStepId[]
 
 export type FeatureWallSetupSectionId = 'parallel-work' | 'setup'
@@ -27,14 +29,22 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
     id: 'split-terminal',
     name: 'Split a terminal',
     subtitle: 'Split a terminal',
-    description: 'Using this, you can run 2 agents side-by-side.'
+    description:
+      'Split a terminal to run two things at once: two agents, an agent next to a dev server, or logs beside a shell.'
   },
   {
     id: 'two-worktrees',
     name: 'Multi-task',
     subtitle: 'Multi-task',
     description:
-      'Have 2 worktrees at once. Each one is isolated (even in the same project). Perfect for working on 2 features at once.'
+      'Work in 2 different worktrees at once. Each one is isolated (even in the same project). Perfect for working on 2 features at once.'
+  },
+  {
+    id: 'browser',
+    name: "Use Orca's browser",
+    subtitle: "Use Orca's browser",
+    description:
+      'Browse your web app without leaving Orca. Grab any element and send its exact source and styles to an agent with one click.'
   },
   {
     id: 'notifications',
@@ -47,6 +57,13 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
     name: 'Choose your default agent',
     subtitle: 'Choose your default agent',
     description: 'Start new work faster with your preferred agent already selected.'
+  },
+  {
+    id: 'agent-capabilities',
+    name: 'Enable Orca CLI',
+    subtitle: 'Enable Orca CLI',
+    description:
+      'Register the Orca shell command and install agent skills for browser, computer, and orchestration workflows.'
   },
   {
     id: 'task-sources',
@@ -67,13 +84,6 @@ export const FEATURE_WALL_SETUP_STEPS: readonly FeatureWallSetupStep[] = [
     subtitle: 'Start work in multiple repos',
     description:
       'Bring your key repos into Orca so you can start agent work without hunting for folders.'
-  },
-  {
-    id: 'agent-capabilities',
-    name: 'Enable Orca CLI',
-    subtitle: 'Enable Orca CLI',
-    description:
-      'Let agents use the browser, computer, and orchestration tools when a task needs it.'
   }
 ] as const
 

@@ -88,6 +88,10 @@ export function wrapRemoteCommandForPosixShell(command: string): string {
   return `exec /bin/sh -c ${shellEscape(command)}`
 }
 
+export type SshExecOptions = {
+  wrapCommand?: boolean
+}
+
 function cmdEscape(s: string): string {
   return `"${s.replace(/"/g, '""')}"`
 }

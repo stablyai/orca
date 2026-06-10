@@ -21,6 +21,10 @@ import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
+import {
+  describeMaxBufferOverflowError,
+  isMaxBufferOverflowError
+} from '../git/max-buffer-overflow'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -41,6 +45,13 @@ function formatStatusEntriesForCleanCheck(entries: GitStatusResult['entries']): 
     return undefined
   }
   return entries.map((entry) => `${entry.area} ${entry.status}: ${entry.path}`).join('\n')
+}
+
+function filterUntrackedPorcelainStatus(stdout: string | undefined): string | undefined {
+  const trackedLines = (stdout ?? '')
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0 && !line.startsWith('?? '))
+  return trackedLines.length > 0 ? trackedLines.join('\n') : undefined
 }
 
 export class SshGitProvider implements IGitProvider {
@@ -108,10 +119,25 @@ export class SshGitProvider implements IGitProvider {
     if (!stagedSummary) {
       return null
     }
-    const { stdout: stagedPatch } = await this.exec(
-      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-      worktreePath
-    )
+    let stagedPatch = ''
+    try {
+      const patchResult = await this.exec(
+        ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+        worktreePath
+      )
+      stagedPatch = patchResult.stdout
+    } catch (error) {
+      if (!isMaxBufferOverflowError(error)) {
+        throw error
+      }
+      // Why: a very large staged diff can overflow the remote exec buffer. The
+      // patch is optional context (truncated later anyway), so degrade to the
+      // file-name summary instead of failing commit-message generation.
+      console.warn(
+        '[ssh-git] Staged patch too large to read; using file summary only:',
+        describeMaxBufferOverflowError(error)
+      )
+    }
     return {
       branch: branchResult.stdout.trim() || null,
       stagedSummary,
@@ -458,12 +484,26 @@ export class SshGitProvider implements IGitProvider {
     })) ?? {}) as RemoveWorktreeResult
   }
 
-  async worktreeIsClean(worktreePath: string): Promise<{ clean: boolean; stdout?: string }> {
+  async worktreeIsClean(
+    worktreePath: string,
+    options: { includeUntracked?: boolean } = {}
+  ): Promise<{ clean: boolean; stdout?: string }> {
     try {
-      return (await this.mux.request('git.worktreeIsClean', { worktreePath })) as {
+      const result = (await this.mux.request('git.worktreeIsClean', {
+        worktreePath,
+        ...(options.includeUntracked === false ? { includeUntracked: false } : {})
+      })) as {
         clean: boolean
         stdout?: string
       }
+      if (options.includeUntracked === false) {
+        if (!result.clean && result.stdout === undefined) {
+          return result
+        }
+        const trackedStdout = filterUntrackedPorcelainStatus(result.stdout)
+        return { clean: !trackedStdout, ...(trackedStdout ? { stdout: trackedStdout } : {}) }
+      }
+      return result
     } catch (error) {
       if (!isJsonRpcMethodNotFoundError(error)) {
         throw error
@@ -477,9 +517,23 @@ export class SshGitProvider implements IGitProvider {
       // Why: existing SSH relays may predate git.worktreeIsClean, but git.status
       // is a narrow relay RPC and avoids the generic git.exec allowlist.
       const status = await this.getStatus(worktreePath)
-      const clean = status.entries.length === 0
-      return { clean, stdout: formatStatusEntriesForCleanCheck(status.entries) }
+      const entries =
+        options.includeUntracked === false
+          ? status.entries.filter((entry) => entry.area !== 'untracked')
+          : status.entries
+      const clean = entries.length === 0
+      return { clean, stdout: formatStatusEntriesForCleanCheck(entries) }
     }
+  }
+
+  async refreshLocalBaseRefForWorktreeCreate(args: {
+    repoPath: string
+    fullRef: string
+    remoteTrackingRef: string
+    ownerWorktreePath?: string
+    checkOnly?: boolean
+  }): Promise<void> {
+    await this.mux.request('git.refreshLocalBaseRefForWorktreeCreate', args)
   }
 
   async renameCurrentBranch(worktreePath: string, newBranch: string): Promise<void> {

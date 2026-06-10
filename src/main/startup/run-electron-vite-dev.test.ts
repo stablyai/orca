@@ -240,6 +240,51 @@ describe('run-electron-vite-dev', () => {
     await stopWrapperAndTrackedPids(wrapper, trackedPids)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'prepares userData orca and orca-dev wrappers for dev terminals',
+    async () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
+      const userDataPath = join(tempDir, 'userData')
+      const pidFile = join(tempDir, 'grandchild.pid')
+      const envFile = join(tempDir, 'env.json')
+      const wrapperPath = resolve('config/scripts/run-electron-vite-dev.mjs')
+      const fakeCliPath = resolve('src/main/startup/__fixtures__/fake-electron-vite-dev-cli.mjs')
+
+      const wrapper = spawn(process.execPath, [wrapperPath], {
+        cwd: resolve('.'),
+        env: devWrapperTestEnv({
+          ORCA_DEV_USER_DATA_PATH: userDataPath,
+          ORCA_ELECTRON_VITE_CLI: fakeCliPath,
+          ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
+          ORCA_SKIP_DEV_WEB_PREPARE: '1',
+          ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
+          ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile
+        }),
+        stdio: 'ignore'
+      })
+
+      expect(wrapper.pid).toBeTypeOf('number')
+      processesToCleanUp.add(wrapper.pid!)
+
+      await waitFor(() => {
+        try {
+          return readFileSync(envFile, 'utf8').trim().length > 0
+        } catch {
+          return false
+        }
+      })
+
+      const trackedPids = trackPidFile(pidFile)
+      const devWrapper = readFileSync(join(userDataPath, 'cli', 'bin', 'orca-dev'), 'utf8')
+      const publicAliasWrapper = readFileSync(join(userDataPath, 'cli', 'bin', 'orca'), 'utf8')
+      expect(publicAliasWrapper).toBe(devWrapper)
+      expect(publicAliasWrapper).toContain('ORCA_USER_DATA_PATH')
+      expect(publicAliasWrapper).toContain('out/cli/index.js')
+
+      await stopWrapperAndTrackedPids(wrapper, trackedPids)
+    }
+  )
+
   it('consumes the stable-name flag before forwarding args to electron-vite', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
     const pidFile = join(tempDir, 'grandchild.pid')

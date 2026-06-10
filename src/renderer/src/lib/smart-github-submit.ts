@@ -1,5 +1,5 @@
 import type { GitHubWorkItem } from '../../../shared/types'
-import { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
+import { getLinkedWorkItemWorkspaceName } from '../../../shared/workspace-name'
 import type { LinkedWorkItemSummary } from './new-workspace'
 import { parseGitHubIssueOrPRLink } from './github-links'
 
@@ -45,6 +45,8 @@ export type SmartGitHubSubmitLookup = {
 
 const SMART_GITHUB_SUBMIT_LOOKUP_TTL_MS = 60_000
 const SMART_GITHUB_SUBMIT_LOOKUP_CACHE_MAX_ENTRIES = 128
+const GITHUB_ITEM_URL_RE = /https?:\/\/(?:www\.)?github\.com\/\S+/i
+const TRAILING_GITHUB_ITEM_URL_PUNCTUATION_RE = /[),.;\]}]+$/
 
 type SmartGitHubSubmitLookupCacheEntry = {
   expiresAt: number
@@ -74,7 +76,7 @@ export function getSmartGitHubSubmitIntent(input: string): SmartGitHubSubmitInte
     return null
   }
 
-  const link = parseGitHubIssueOrPRLink(trimmed)
+  const link = parseGitHubIssueOrPRLink(trimmed) ?? parseGitHubIssueOrPRLinkFromText(trimmed)
   if (link) {
     return {
       kind: 'link',
@@ -93,6 +95,15 @@ export function getSmartGitHubSubmitIntent(input: string): SmartGitHubSubmitInte
   }
 
   return null
+}
+
+function parseGitHubIssueOrPRLinkFromText(
+  input: string
+): ReturnType<typeof parseGitHubIssueOrPRLink> {
+  const match = GITHUB_ITEM_URL_RE.exec(input)
+  return match
+    ? parseGitHubIssueOrPRLink(match[0].replace(TRAILING_GITHUB_ITEM_URL_PUNCTUATION_RE, ''))
+    : null
 }
 
 function getSmartGitHubSubmitLookupCacheKey({
@@ -171,7 +182,8 @@ export function getSmartGitHubSubmitResolution(
   item: Pick<GitHubWorkItem, 'number' | 'title' | 'type' | 'url'>
 ): SmartGitHubSubmitResolution {
   const fallbackName = `${item.type}-${item.number}`
-  const workspaceName = getLinkedWorkItemSuggestedName(item) || fallbackName
+  const titleName = getLinkedWorkItemWorkspaceName(item)
+  const workspaceName = titleName?.seedName || fallbackName
   const linkedWorkItem: LinkedWorkItemSummary = {
     type: item.type,
     number: item.number,
@@ -181,7 +193,7 @@ export function getSmartGitHubSubmitResolution(
 
   return {
     workspaceName,
-    displayName: item.title,
+    displayName: titleName?.displayName ?? fallbackName,
     linkedWorkItem,
     linkedIssueNumber: item.type === 'issue' ? item.number : null,
     linkedPR: item.type === 'pr' ? item.number : null

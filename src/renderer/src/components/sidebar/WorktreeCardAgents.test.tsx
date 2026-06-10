@@ -97,7 +97,8 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     onSendTargetClick,
     childAgentCount,
     childAgentsExpanded,
-    onToggleChildAgents
+    onToggleChildAgents,
+    reserveDisclosureGutter
   }: {
     agent: { paneKey: string }
     isFocusedPane?: boolean
@@ -107,6 +108,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     childAgentCount?: number
     childAgentsExpanded?: boolean
     onToggleChildAgents?: () => void
+    reserveDisclosureGutter?: boolean
   }) => (
     <div
       data-testid="agent-row"
@@ -115,6 +117,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
       data-disabled-reason={sendTargetDisabledReason}
       data-has-send-handler={typeof onSendTargetClick === 'function' ? 'true' : 'false'}
       data-pane-key={agent.paneKey}
+      data-reserve-disclosure-gutter={reserveDisclosureGutter ? 'true' : 'false'}
     >
       {agent.paneKey}
       {typeof childAgentCount === 'number' && childAgentCount > 0 ? (
@@ -222,6 +225,7 @@ describe('WorktreeCardAgents', () => {
     expect(markup).toContain('role="tree"')
     expect(markup).toContain('data-pane-key="tab-parent:1"')
     expect(markup).toContain('data-pane-key="tab-child:1"')
+    expect(markup).toContain('data-pane-key="tab-child:1" data-reserve-disclosure-gutter="false"')
     expect(markup).toContain('aria-label="Hide 1 child agent"')
     expect(markup).toContain('aria-expanded="true"')
   })
@@ -362,6 +366,7 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
+    expect(markup).toContain('compact-agent-row')
     expect(markup).toContain('group/compact-agent-row')
     expect(markup).toContain('<img')
     expect(markup).toContain('alt="Image #1"')
@@ -504,6 +509,7 @@ describe('WorktreeCardAgents', () => {
 
     expect(markup).toContain('aria-expanded="true"')
     expect(markup).toContain('Collapse 5 agents')
+    expect(markup).toContain('compact-agent-summary-button-expanded')
     expect(markup).toContain('>5 agents<')
     expect(markup).not.toContain('>+2<')
     expect(markup).not.toContain('Expand All 5 agents working')
@@ -568,12 +574,14 @@ describe('WorktreeCardAgents', () => {
 
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
 
+    expect(markup).toContain('data-compact-agent-list="true"')
     expect(markup).toContain('role="tree"')
-    expect(markup).toContain('3 parents: 1 waiting, 1 working, 1 done')
+    expect(markup).toContain('3 agents: 1 waiting, 1 working, 1 done')
     expect(markup).not.toContain('title="Gemini waiting"')
     expect(markup).not.toContain('title="Codex working"')
     expect(markup).not.toContain('title="Codex done"')
     expect(markup).not.toContain('Parent A')
     expect(markup).not.toContain('Child A')
+    expect(markup).not.toContain('compact-agent-row')
   })
 })

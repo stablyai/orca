@@ -110,6 +110,16 @@ describe('OpenCode hook plugin source', () => {
     expect(source).toContain('await post("AskUserQuestion", event.properties || {});')
   })
 
+  it('forwards sessionID on status and message posts for resume metadata', () => {
+    const source = _internals.getOpenCodePluginSource()
+
+    expect(source).toContain(
+      'await post("MessagePart", { role, text: part.text, messageID: part.messageID, sessionID });'
+    )
+    expect(source).toContain('await setStatus("busy", { sessionID });')
+    expect(source.match(/await setStatus\("idle", \{ sessionID \}\);/g) ?? []).toHaveLength(2)
+  })
+
   it('guards endpoint-file parse warnings with a process-lifetime latch', () => {
     // Why: ENOENT is the normal pre-install case and must stay silent, but a
     // malformed/unreadable file (EACCES, EIO, parse error) would otherwise

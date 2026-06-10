@@ -99,6 +99,27 @@ describe('setUpdateStatus changelog caching', () => {
     expect(store.getState().updateChangelog).toBeNull()
   })
 
+  it('preserves manual check intent through available for lazy-mounted update card', () => {
+    const store = createTestStore()
+    setState(store, { state: 'checking', userInitiated: true })
+    expect(store.getState().updateUserInitiatedCycle).toBe(true)
+
+    setState(store, { state: 'available', version: '1.2.0', changelog: null })
+    expect(store.getState().updateUserInitiatedCycle).toBe(true)
+
+    store.getState().dismissUpdate()
+    expect(store.getState().updateUserInitiatedCycle).toBe(false)
+  })
+
+  it('clears manual check intent when a background check starts', () => {
+    const store = createTestStore()
+    setState(store, { state: 'checking', userInitiated: true })
+    expect(store.getState().updateUserInitiatedCycle).toBe(true)
+
+    setState(store, { state: 'checking' })
+    expect(store.getState().updateUserInitiatedCycle).toBe(false)
+  })
+
   it('overwrites previous rich changelog with null when new available has no changelog', () => {
     const store = createTestStore()
     setState(store, { state: 'available', version: '1.2.0', changelog: RICH_CHANGELOG })
@@ -294,6 +315,7 @@ type VisibilityInput = {
   dismissedVersion: string | null
   cachedVersion: string | null
   hasStartedDownload: boolean
+  updateUserInitiatedCycle?: boolean
 }
 
 type VisibilityResult = 'hidden' | 'visible'
@@ -302,6 +324,7 @@ type VisibilityResult = 'hidden' | 'visible'
 function computeVisibility(input: VisibilityInput): VisibilityResult {
   const { status, dismissedVersion, cachedVersion, hasStartedDownload } = input
   const isUserInitiated = 'userInitiated' in status && status.userInitiated
+  const updateUserInitiatedCycle = input.updateUserInitiatedCycle ?? false
   const shouldShowDetailedErrorCard =
     status.state === 'error' && (hasStartedDownload || cachedVersion !== null)
 
@@ -319,7 +342,7 @@ function computeVisibility(input: VisibilityInput): VisibilityResult {
   }
 
   const effectiveVersion = 'version' in status ? status.version : cachedVersion
-  if (effectiveVersion && dismissedVersion === effectiveVersion) {
+  if (effectiveVersion && dismissedVersion === effectiveVersion && !updateUserInitiatedCycle) {
     if (status.state !== 'downloading' && status.state !== 'error') {
       return 'hidden'
     }
@@ -415,6 +438,18 @@ describe('UpdateCard visibility gates', () => {
         hasStartedDownload: false
       })
     ).toBe('hidden')
+  })
+
+  it('shows dismissed available update when a lazy-mounted manual check cycle reaches available', () => {
+    expect(
+      computeVisibility({
+        status: { state: 'available', version: '1.2.0', changelog: null },
+        dismissedVersion: '1.2.0',
+        cachedVersion: '1.2.0',
+        hasStartedDownload: false,
+        updateUserInitiatedCycle: true
+      })
+    ).toBe('visible')
   })
 
   it('shows downloading even when version is dismissed (user clicked Update after dismiss)', () => {

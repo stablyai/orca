@@ -41,7 +41,7 @@ describe('AgentSkillSetupPanel', () => {
     const html = renderPanel({ installed: true })
 
     expect(html).toContain('Installed')
-    expect(buttonLabels(html)).toContain('Install')
+    expect(buttonLabels(html)).toContain('Update')
     expect(buttonLabels(html)).toContain('Re-check')
   })
 
@@ -49,7 +49,7 @@ describe('AgentSkillSetupPanel', () => {
     const html = renderPanel({ installed: true, showRecheckWhenInstalled: false })
 
     expect(html).toContain('Installed')
-    expect(buttonLabels(html)).toContain('Install')
+    expect(buttonLabels(html)).toContain('Update')
     expect(buttonLabels(html)).not.toContain('Re-check')
   })
 

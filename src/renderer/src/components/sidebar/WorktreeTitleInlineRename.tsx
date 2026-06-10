@@ -1,9 +1,10 @@
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 export type WorktreeTitleRenameCommit = { kind: 'cancel' } | { kind: 'save'; displayName: string }
 
@@ -34,6 +35,11 @@ type WorktreeTitleInlineRenameProps = {
   titleWrapper?: (title: React.ReactElement) => React.ReactElement
   onEditingChange?: (editing: boolean) => void
   onRename: (displayName: string) => Promise<void> | void
+  // Why: lets a parent (e.g. the workspace.rename shortcut via WorktreeCard)
+  // open the editor imperatively. The parent clears its trigger in
+  // onBeginEditingConsumed so the request fires exactly once.
+  beginEditing?: boolean
+  onBeginEditingConsumed?: () => void
 }
 
 export function WorktreeTitleInlineRename({
@@ -45,7 +51,9 @@ export function WorktreeTitleInlineRename({
   inputClassName,
   titleWrapper,
   onEditingChange,
-  onRename
+  onRename,
+  beginEditing = false,
+  onBeginEditingConsumed
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
   const editingRef = useRef(false)
   const savingRef = useRef(false)
@@ -124,6 +132,21 @@ export function WorktreeTitleInlineRename({
     input.select()
   }, [])
 
+  // Why: open the editor when a parent requests it (the workspace.rename
+  // shortcut). Always consume the request so the parent's trigger can't linger;
+  // skip the actual open when disabled or already editing.
+  useEffect(() => {
+    if (!beginEditing) {
+      return
+    }
+    onBeginEditingConsumed?.()
+    if (disabled || editing) {
+      return
+    }
+    setValue(displayName)
+    setEditing(true)
+  }, [beginEditing, disabled, editing, displayName, onBeginEditingConsumed])
+
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
   }, [])
@@ -166,7 +189,14 @@ export function WorktreeTitleInlineRename({
       }
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : 'Failed to rename workspace.')
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d',
+                'Failed to rename workspace.'
+              )
+        )
       }
     } finally {
       savingRef.current = false
@@ -214,7 +244,10 @@ export function WorktreeTitleInlineRename({
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
-          aria-label="Rename workspace"
+          aria-label={translate(
+            'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
+            'Rename workspace'
+          )}
           data-worktree-title-rename-input="true"
           onChange={(event) => setValue(event.target.value)}
           onBlur={() => void commitRename()}
@@ -241,7 +274,7 @@ export function WorktreeTitleInlineRename({
       key={`title:${titleElementKey}`}
       ref={handleRootRef}
       className={cn(
-        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sidebar-ring',
+        'block min-w-0 truncate leading-tight text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         showUnreadEmphasis ? 'font-semibold' : 'font-normal',
         className
       )}
@@ -250,7 +283,11 @@ export function WorktreeTitleInlineRename({
       tabIndex={disabled ? undefined : 0}
     >
       {/* Why: visible text alone misses the unread state for assistive tech. */}
-      {showUnreadEmphasis && <span className="sr-only">Unread: </span>}
+      {showUnreadEmphasis && (
+        <span className="sr-only">
+          {translate('auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f', 'Unread:')}
+        </span>
+      )}
       {displayName}
     </span>
   )

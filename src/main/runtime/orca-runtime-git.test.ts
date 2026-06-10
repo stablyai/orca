@@ -5,13 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../shared/types'
 import type * as GitStatusModule from '../git/status'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
+import type * as PullRequestContextModule from '../text-generation/pull-request-context'
 import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from './orca-runtime-git'
 
 const mocks = vi.hoisted(() => ({
   abortMerge: vi.fn(),
   abortRebase: vi.fn(),
   getStagedCommitContext: vi.fn(),
+  getPullRequestDraftContext: vi.fn(),
   generateCommitMessageFromContext: vi.fn(),
+  generatePullRequestFieldsFromContext: vi.fn(),
   resolveCommitMessageSettings: vi.fn(),
   getSshGitProvider: vi.fn()
 }))
@@ -28,7 +31,15 @@ vi.mock('../text-generation/commit-message-text-generation', async () => ({
     '../text-generation/commit-message-text-generation'
   )),
   generateCommitMessageFromContext: mocks.generateCommitMessageFromContext,
+  generatePullRequestFieldsFromContext: mocks.generatePullRequestFieldsFromContext,
   resolveCommitMessageSettings: mocks.resolveCommitMessageSettings
+}))
+
+vi.mock('../text-generation/pull-request-context', async () => ({
+  ...(await vi.importActual<typeof PullRequestContextModule>(
+    '../text-generation/pull-request-context'
+  )),
+  getPullRequestDraftContext: mocks.getPullRequestDraftContext
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
@@ -64,7 +75,9 @@ describe('RuntimeGitCommands', () => {
     mocks.abortMerge.mockReset()
     mocks.abortRebase.mockReset()
     mocks.getStagedCommitContext.mockReset()
+    mocks.getPullRequestDraftContext.mockReset()
     mocks.generateCommitMessageFromContext.mockReset()
+    mocks.generatePullRequestFieldsFromContext.mockReset()
     mocks.resolveCommitMessageSettings.mockReset()
     mocks.getSshGitProvider.mockReset()
   })
@@ -192,6 +205,127 @@ describe('RuntimeGitCommands', () => {
         kind: 'local',
         cwd: worktreePath,
         env: expect.objectContaining({ CODEX_HOME: '/managed/codex-home' })
+      })
+    )
+  })
+
+  it('uses one-shot resolved params before runtime commit-message defaults', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const context = {
+      branch: 'main',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex' as const,
+      model: 'gpt-5.5',
+      thinkingLevel: 'high',
+      customPrompt: 'Use Conventional Commits.'
+    }
+    mocks.getStagedCommitContext.mockResolvedValue(context)
+    mocks.generateCommitMessageFromContext.mockResolvedValue({
+      success: true,
+      message: 'feat: update readme'
+    })
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),
+      getRuntimeSettings: () =>
+        ({
+          sourceControlAi: {
+            commitMessage: {
+              enabled: true,
+              agentId: 'cursor',
+              customPrompt: 'Saved default that should not win.'
+            }
+          }
+        }) as unknown as GlobalSettings
+    })
+
+    await expect(
+      commands.generateRuntimeCommitMessage('id:wt-1', { sourceControlAiResolvedParams })
+    ).resolves.toEqual({
+      success: true,
+      message: 'feat: update readme'
+    })
+
+    expect(mocks.resolveCommitMessageSettings).not.toHaveBeenCalled()
+    expect(mocks.generateCommitMessageFromContext).toHaveBeenCalledWith(
+      context,
+      sourceControlAiResolvedParams,
+      expect.objectContaining({
+        kind: 'local',
+        cwd: worktreePath
+      })
+    )
+  })
+
+  it('uses one-shot resolved params before runtime pull-request defaults', async () => {
+    const worktreePath = mkdtempSync(join(tmpdir(), 'orca-runtime-git-'))
+    tempDirs.push(worktreePath)
+    const context = {
+      base: 'main',
+      branch: 'feature/source-control-ai',
+      commitSummary: 'abc123 feat: test',
+      changeSummary: 'M README.md',
+      patch: '+hello',
+      currentTitle: '',
+      currentBody: '',
+      currentDraft: false
+    }
+    const sourceControlAiResolvedParams = {
+      agentId: 'codex' as const,
+      model: 'gpt-5.5',
+      thinkingLevel: 'high',
+      commandInputTemplate: '{basePrompt}\n\nUse release-note style.'
+    }
+    mocks.getPullRequestDraftContext.mockResolvedValue(context)
+    mocks.generatePullRequestFieldsFromContext.mockResolvedValue({
+      success: true,
+      fields: {
+        base: 'main',
+        title: 'Improve Source Control AI',
+        body: 'Body',
+        draft: false
+      }
+    })
+    const commands = new RuntimeGitCommands({
+      resolveRuntimeGitTarget: async () => ({ worktree: makeWorktree(worktreePath) }),
+      getRuntimeSettings: () =>
+        ({
+          sourceControlAi: {
+            pullRequest: {
+              enabled: true,
+              agentId: 'cursor',
+              customPrompt: 'Saved default that should not win.'
+            }
+          }
+        }) as unknown as GlobalSettings
+    })
+
+    await expect(
+      commands.generateRuntimePullRequestFields(
+        'id:wt-1',
+        { base: 'main', title: '', body: '', draft: false },
+        { sourceControlAiResolvedParams }
+      )
+    ).resolves.toEqual({
+      success: true,
+      fields: {
+        base: 'main',
+        title: 'Improve Source Control AI',
+        body: 'Body',
+        draft: false
+      }
+    })
+
+    expect(mocks.resolveCommitMessageSettings).not.toHaveBeenCalled()
+    expect(mocks.generatePullRequestFieldsFromContext).toHaveBeenCalledWith(
+      context,
+      sourceControlAiResolvedParams,
+      expect.objectContaining({
+        kind: 'local',
+        cwd: worktreePath
       })
     )
   })

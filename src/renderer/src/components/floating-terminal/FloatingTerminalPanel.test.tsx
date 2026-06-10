@@ -57,6 +57,7 @@ type FloatingPanelStoreState = {
   setTabCustomTitle: (tabId: string, title: string | null) => void
   setTabColor: (tabId: string, color: string | null) => void
   setTabPaneExpanded: (tabId: string, expanded: boolean) => void
+  makePreviewFilePermanent: (fileId: string, tabId?: string) => void
   pinFile: (fileId: string, tabId?: string) => void
   openFile: (file: unknown, options?: unknown) => void
   browserDefaultUrl: string
@@ -92,6 +93,7 @@ const mocks = vi.hoisted(() => ({
   getInstallStatus: vi.fn(),
   isWebRuntimeSessionActive: vi.fn(),
   markFileDirty: vi.fn(),
+  makePreviewFilePermanent: vi.fn(),
   openFile: vi.fn(),
   pickFloatingMarkdownDocument: vi.fn(),
   pinFile: vi.fn(),
@@ -415,6 +417,7 @@ function resetStore(tabs: TerminalTab[] = []): void {
     createBrowserTab: mocks.createBrowserTab,
     closeTab: mocks.closeTab,
     markFileDirty: mocks.markFileDirty,
+    makePreviewFilePermanent: mocks.makePreviewFilePermanent,
     openFile: mocks.openFile,
     pinFile: mocks.pinFile,
     setActiveTab: mocks.setActiveTab,
@@ -947,6 +950,25 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
     expect(mocks.activateTab).toHaveBeenCalledWith('created-tab')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
+  })
+
+  it('hides the active terminal pane from the renderer while the panel is closed', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+
+    // Why: the closed panel stays mounted but CSS-hidden; gating isVisible on
+    // `open` routes the terminal through the standard hidden-terminal WebGL
+    // suspend/resume path so no live glyph atlas can corrupt while hidden.
+    await renderPanel(false)
+    runEffects()
+    await Promise.resolve()
+    const closedElement = await renderPanel(false)
+    const closedPane = findByTypeName(closedElement, 'TerminalPane')
+    expect(closedPane.props.isActive).toBe(true)
+    expect(closedPane.props.isVisible).toBe(false)
+
+    const openElement = await renderPanel(true)
+    const openPane = findByTypeName(openElement, 'TerminalPane')
+    expect(openPane.props.isVisible).toBe(true)
   })
 
   it('routes titlebar Cmd+T to the floating workspace', async () => {

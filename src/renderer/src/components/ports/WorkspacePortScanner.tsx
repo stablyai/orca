@@ -21,7 +21,7 @@ function makeUnavailableScan(reason: string): WorkspacePortScanResult {
   }
 }
 
-export function WorkspacePortScanner(): null {
+export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }): null {
   const settings = useAppStore((s) => s.settings)
   const hasWorktrees = useAppStore(getHasAnyWorktreesFromState)
   const setWorkspacePortScan = useAppStore((s) => s.setWorkspacePortScan)
@@ -69,6 +69,9 @@ export function WorkspacePortScanner(): null {
   }, [hasWorktrees, runtimeTarget, scanKey, setWorkspacePortScan, setWorkspacePortScanRefreshing])
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     generationRef.current += 1
     setWorkspacePortScan(null)
 
@@ -85,9 +88,12 @@ export function WorkspacePortScanner(): null {
       inFlightRef.current = null
       stopVisibleInterval()
     }
-  }, [refresh, setWorkspacePortScan])
+  }, [enabled, refresh, setWorkspacePortScan])
 
   useEffect(() => {
+    if (!enabled) {
+      return
+    }
     if (runtimeTarget.kind !== 'local') {
       return
     }
@@ -130,7 +136,7 @@ export function WorkspacePortScanner(): null {
       clearRetryTimer()
       unsubscribe()
     }
-  }, [refresh, runtimeTarget])
+  }, [enabled, refresh, runtimeTarget])
 
   return null
 }

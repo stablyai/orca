@@ -124,6 +124,11 @@ const EXTENSIONLESS_FILENAMES = new Set([
 
 const BARE_FILENAME_PATTERN = /^[A-Za-z0-9_][A-Za-z0-9._+-]*$/
 const URI_PREFIX_CHAR_PATTERN = /^[A-Za-z0-9+./:-]$/
+const MAX_BARE_FILENAME_TOKEN_LENGTH = 120
+
+function hasPathSeparator(text: string): boolean {
+  return text.includes('/') || text.includes('\\')
+}
 
 // Bare words are validated against the filesystem by the provider, so this
 // filter's job is to reject tokens that are obviously not filenames before
@@ -290,6 +295,10 @@ function detectLocalPathLinks(
   lineText: string,
   includeLineEndingPrefixCandidates = false
 ): ParsedTerminalFileLink[] {
+  if (!hasPathSeparator(lineText)) {
+    return []
+  }
+
   const links: ParsedTerminalFileLink[] = []
   const spacedLinks = detectSpacedLocalPathLinks(lineText, includeLineEndingPrefixCandidates)
   const spacedRanges = mergeRanges(
@@ -357,6 +366,11 @@ function detectBareFilenameLinks(
   const links: ParsedTerminalFileLink[] = []
   for (const range of detectRanges(lineText, WORD_TOKEN_REGEX)) {
     if (rangesOverlap(range, claimedRanges)) {
+      continue
+    }
+    // Why: huge terminal blobs can be one unbroken token; parse only bounded
+    // bare-filename candidates so hover link detection stays interactive.
+    if (range.text.length > MAX_BARE_FILENAME_TOKEN_LENGTH) {
       continue
     }
     const link = toParsedLink(range)

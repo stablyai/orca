@@ -12,6 +12,7 @@ import {
 } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
 
@@ -70,10 +71,20 @@ export function LinearIntegrationCard(): React.JSX.Element {
       name="Linear"
       description={
         connected
-          ? `${workspaces.length} workspace${workspaces.length === 1 ? '' : 's'} connected`
+          ? translate(
+              'auto.components.settings.task.tracker.integration.cards.e1f5e6424c',
+              '{{value0}} workspace{{value1}} connected',
+              { value0: workspaces.length, value1: workspaces.length === 1 ? '' : 's' }
+            )
           : checking
-            ? 'Checking Linear access before showing setup actions.'
-            : 'Add Linear access to browse and link issues.'
+            ? translate(
+                'auto.components.settings.task.tracker.integration.cards.fe9231215b',
+                'Checking Linear access before showing setup actions.'
+              )
+            : translate(
+                'auto.components.settings.task.tracker.integration.cards.eae4a9f16b',
+                'Add Linear access to browse and link issues.'
+              )
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
@@ -85,7 +96,15 @@ export function LinearIntegrationCard(): React.JSX.Element {
             size="sm"
             onClick={() => setDialogOpen(true)}
           >
-            {connected ? 'Add workspace access' : 'Add Linear access'}
+            {connected
+              ? translate(
+                  'auto.components.settings.task.tracker.integration.cards.622c224082',
+                  'Add workspace access'
+                )
+              : translate(
+                  'auto.components.settings.task.tracker.integration.cards.1a12e33fe5',
+                  'Add Linear access'
+                )}
           </Button>
         ) : null
       }
@@ -112,7 +131,10 @@ export function LinearIntegrationCard(): React.JSX.Element {
                 {testResult?.state === 'ok' ? (
                   <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
                     <CheckCircle2 className="size-3.5" />
-                    Verified
+                    {translate(
+                      'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
+                      'Verified'
+                    )}
                   </span>
                 ) : null}
                 {testResult?.state === 'error' ? (
@@ -130,15 +152,25 @@ export function LinearIntegrationCard(): React.JSX.Element {
                   {testing ? (
                     <>
                       <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                      Testing...
+                      {translate(
+                        'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
+                        'Testing...'
+                      )}
                     </>
                   ) : (
-                    'Test'
+                    translate(
+                      'auto.components.settings.task.tracker.integration.cards.c24e56c532',
+                      'Test'
+                    )
                   )}
                 </Button>
                 <button
                   onClick={() => void handleDisconnect(workspace.id)}
-                  aria-label={`Disconnect ${workspace.organizationName}`}
+                  aria-label={translate(
+                    'auto.components.settings.task.tracker.integration.cards.dd3529015d',
+                    'Disconnect {{value0}}',
+                    { value0: workspace.organizationName }
+                  )}
                   className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
                 >
                   <Unlink className="size-3.5" />
@@ -147,19 +179,25 @@ export function LinearIntegrationCard(): React.JSX.Element {
             )
           })}
           <p className="text-[11px] text-muted-foreground/70">
-            Each connected Linear workspace has one key stored by the active runtime. Full-access
-            keys can cover all teams the key owner can access; restricted keys can be replaced any
-            time.
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.6224fe9d34',
+              'Each connected Linear workspace has one key stored by the active runtime. Full-access keys can cover all teams the key owner can access; restricted keys can be replaced any time.'
+            )}
           </p>
         </div>
       ) : !checking ? (
         <IntegrationCardDetails>
           <p className="text-xs text-muted-foreground">
-            Add access with a Personal API key from your Linear settings. Full-access keys can see
-            every team the key owner can reach.
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.cef18762a2',
+              'Add access with a Personal API key from your Linear settings. Full-access keys can see every team the key owner can reach.'
+            )}
           </p>
           <Button variant="ghost" size="sm" onClick={() => void checkLinearConnection(true)}>
-            Re-check
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
+              'Re-check'
+            )}
           </Button>
         </IntegrationCardDetails>
       ) : null}
@@ -230,10 +268,20 @@ export function JiraIntegrationCard(): React.JSX.Element {
       name="Jira"
       description={
         connected
-          ? `${siteCount} site${siteCount === 1 ? '' : 's'} connected`
+          ? translate(
+              'auto.components.settings.task.tracker.integration.cards.9fa04a032e',
+              '{{value0}} site{{value1}} connected',
+              { value0: siteCount, value1: siteCount === 1 ? '' : 's' }
+            )
           : checking
-            ? 'Checking Jira access before showing setup actions.'
-            : 'Browse, create, and start work from Jira Cloud issues.'
+            ? translate(
+                'auto.components.settings.task.tracker.integration.cards.a1093a06c7',
+                'Checking Jira access before showing setup actions.'
+              )
+            : translate(
+                'auto.components.settings.task.tracker.integration.cards.7ca5ffffdb',
+                'Browse, create, and start work from Jira Cloud issues.'
+              )
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
@@ -245,7 +293,15 @@ export function JiraIntegrationCard(): React.JSX.Element {
             size="sm"
             onClick={() => setDialogOpen(true)}
           >
-            {connected ? 'Add Jira site' : 'Connect Jira'}
+            {connected
+              ? translate(
+                  'auto.components.settings.task.tracker.integration.cards.60996beda6',
+                  'Add Jira site'
+                )
+              : translate(
+                  'auto.components.settings.task.tracker.integration.cards.e2ff968276',
+                  'Connect Jira'
+                )}
           </Button>
         ) : null
       }
@@ -270,7 +326,10 @@ export function JiraIntegrationCard(): React.JSX.Element {
                 {testResult?.state === 'ok' ? (
                   <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
                     <CheckCircle2 className="size-3.5" />
-                    Verified
+                    {translate(
+                      'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
+                      'Verified'
+                    )}
                   </span>
                 ) : null}
                 {testResult?.state === 'error' ? (
@@ -288,15 +347,25 @@ export function JiraIntegrationCard(): React.JSX.Element {
                   {testing ? (
                     <>
                       <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                      Testing...
+                      {translate(
+                        'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
+                        'Testing...'
+                      )}
                     </>
                   ) : (
-                    'Test'
+                    translate(
+                      'auto.components.settings.task.tracker.integration.cards.c24e56c532',
+                      'Test'
+                    )
                   )}
                 </Button>
                 <button
                   onClick={() => void handleDisconnect(site.id)}
-                  aria-label={`Disconnect ${site.displayName}`}
+                  aria-label={translate(
+                    'auto.components.settings.task.tracker.integration.cards.dd3529015d',
+                    'Disconnect {{value0}}',
+                    { value0: site.displayName }
+                  )}
                   className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
                 >
                   <Unlink className="size-3.5" />
@@ -305,20 +374,32 @@ export function JiraIntegrationCard(): React.JSX.Element {
             )
           })}
           <p className="text-[11px] text-muted-foreground/70">
-            Each connected Jira site has one token stored by the active runtime.
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.8c20e76308',
+              'Each connected Jira site has one token stored by the active runtime.'
+            )}
           </p>
         </div>
       ) : connected ? (
         <IntegrationCardDetails>
           <p className="text-xs text-muted-foreground">
-            Jira is connected for this runtime. Re-check if the connected site list looks stale.
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.8b2408a8e5',
+              'Jira is connected for this runtime. Re-check if the connected site list looks stale.'
+            )}
           </p>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
-              Re-check
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
+                'Re-check'
+              )}
             </Button>
             <Button variant="ghost" size="sm" onClick={() => void handleDisconnect()}>
-              Disconnect
+              {translate(
+                'auto.components.settings.task.tracker.integration.cards.disconnect_all',
+                'Disconnect'
+              )}
             </Button>
           </div>
         </IntegrationCardDetails>
@@ -326,7 +407,10 @@ export function JiraIntegrationCard(): React.JSX.Element {
         <IntegrationCardDetails>
           <p className="text-xs text-muted-foreground">{credentialCopy}</p>
           <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
-            Re-check
+            {translate(
+              'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
+              'Re-check'
+            )}
           </Button>
         </IntegrationCardDetails>
       ) : null}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Globe2, Loader2, MonitorCog, Terminal, Workflow } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -19,17 +19,13 @@ import {
   useAgentCapabilitySetupStatus,
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
-import { AgentsOrchestrationVisual } from './AgentsOrchestrationVisual'
-import { BrowserAnimatedVisual } from './BrowserAnimatedVisual'
-import { ComputerUseAnimatedVisual } from './ComputerUseAnimatedVisual'
+import { translate } from '@/i18n/i18n'
 
 export function AgentCapabilitiesSetupAction(props: {
-  reducedMotion: boolean
   onOrchestrationSkillInstalledChange: (installed: boolean) => void
   onBrowserUseSkillInstalledChange: (installed: boolean) => void
 }): React.JSX.Element {
-  const { reducedMotion, onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } =
-    props
+  const { onBrowserUseSkillInstalledChange, onOrchestrationSkillInstalledChange } = props
   const capabilitySetupStatus = useAgentCapabilitySetupStatus()
   const { readiness } = capabilitySetupStatus
   const featureSetupDefaultsAppliedRef = useRef(false)
@@ -80,17 +76,37 @@ export function AgentCapabilitiesSetupAction(props: {
       }
       const firstWarning = result.warnings[0]
       if (firstWarning) {
-        toast.warning('Some capability setup needs attention', {
-          description: firstWarning.message
-        })
+        toast.warning(
+          translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.1aa657d8f4',
+            'Some capability setup needs attention'
+          ),
+          {
+            description: firstWarning.message
+          }
+        )
       }
       if (result.skillCommandsCopied) {
-        toast.success('Capability setup ready', {
-          description: 'Skill command copied and inserted below for review.'
-        })
+        toast.success(
+          translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.c605f51f2b',
+            'Capability setup ready'
+          ),
+          {
+            description: translate(
+              'auto.components.feature.wall.AgentCapabilitiesSetupAction.3a59452a67',
+              'Skill command copied and inserted below for review.'
+            )
+          }
+        )
       }
       if (result.computerUsePermissionsOpened) {
-        toast.message('Opened Computer Use permissions')
+        toast.message(
+          translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.e9eb197e12',
+            'Opened Computer Use permissions'
+          )
+        )
       }
       if (result.skillInstallCommand) {
         setFeatureSetupCommandSelection(featureSetup)
@@ -112,7 +128,6 @@ export function AgentCapabilitiesSetupAction(props: {
         onStartFeatureSetup={() => void handleStartFeatureSetup()}
         installStatus={capabilitySetupStatus.installStatus}
       />
-      <AgentCapabilityAnimationCarousel reducedMotion={reducedMotion} />
     </div>
   )
 }
@@ -120,31 +135,45 @@ export function AgentCapabilitiesSetupAction(props: {
 type AgentCapabilitySetupRow = {
   id: OnboardingFeatureSetupId
   title: string
+  description: string
   icon: ReactNode
-}
-
-type AgentCapabilitySlide = {
-  id: string
-  title: string
-  icon: ReactNode
-  widthClassName: string
-  node: ReactNode
 }
 
 const AGENT_CAPABILITY_SETUP_ROWS: readonly AgentCapabilitySetupRow[] = [
   {
     id: 'orchestration',
-    title: 'Agent Orchestration',
+    title: translate(
+      'auto.components.feature.wall.AgentCapabilitiesSetupAction.ac07f8887f',
+      'Agent Orchestration'
+    ),
+    description: translate(
+      'auto.components.feature.wall.AgentCapabilitiesSetupAction.c61c91e642',
+      'Let agents coordinate through Orca to keep large, multi-step tasks moving to completion.'
+    ),
     icon: <Workflow className="size-4" />
   },
   {
     id: 'browserUse',
-    title: 'Agent Browser Use',
+    title: translate(
+      'auto.components.feature.wall.AgentCapabilitiesSetupAction.e638da007a',
+      'Agent Browser Use'
+    ),
+    description: translate(
+      'auto.components.feature.wall.AgentCapabilitiesSetupAction.5e8fe5a72d',
+      "Give agents direct access to Orca's browser so they can test pages, capture screenshots, and act on what they see."
+    ),
     icon: <Globe2 className="size-4" />
   },
   {
     id: 'computerUse',
-    title: 'Computer Use',
+    title: translate(
+      'auto.components.feature.wall.AgentCapabilitiesSetupAction.362a07517d',
+      'Computer Use'
+    ),
+    description: translate(
+      'auto.components.feature.wall.AgentCapabilitiesSetupAction.1b51644c2d',
+      'Let agents control the desktop, moving the cursor, clicking, and typing in any app.'
+    ),
     icon: <MonitorCog className="size-4" />
   }
 ]
@@ -169,7 +198,7 @@ function AgentCapabilitySetupControls(props: {
         installStatus={props.installStatus}
       />
       {showSetupAction ? (
-        <div className="mt-4 flex items-center">
+        <div className="mt-6 flex items-center">
           <Button
             type="button"
             variant="default"
@@ -182,7 +211,11 @@ function AgentCapabilitySetupControls(props: {
             ) : (
               <Terminal className="size-4" />
             )}
-            {props.setupBusyLabel ?? 'Install CLI & Skills'}
+            {props.setupBusyLabel ??
+              translate(
+                'auto.components.feature.wall.AgentCapabilitiesSetupAction.c89534cbe9',
+                'Install CLI & Skills'
+              )}
           </Button>
         </div>
       ) : null}
@@ -247,6 +280,9 @@ function AgentCapabilitySetupChecklist(props: {
                 </span>
               </span>
               <span className="mt-3 text-sm font-medium text-foreground">{row.title}</span>
+              <span className="mt-1 text-xs leading-snug text-muted-foreground">
+                {row.description}
+              </span>
               <AgentCapabilityStatusNote status={installStatus} />
             </button>
           )
@@ -263,9 +299,12 @@ function AgentCapabilityStatusNote(props: {
     return (
       <span className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className="rounded-full border border-green-500/45 bg-green-500/10 px-2 py-0.5 text-[11px] font-semibold leading-none text-green-700 dark:text-green-300">
-          Installed
+          {translate(
+            'auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2',
+            'Installed'
+          )}
         </span>
-        {props.status.label !== 'Installed' ? (
+        {props.status.tone !== 'ready' ? (
           <span
             className={cn(
               'text-xs font-medium',
@@ -288,101 +327,5 @@ function AgentCapabilityStatusNote(props: {
     >
       {props.status.label}
     </span>
-  )
-}
-
-const AGENT_CAPABILITY_SLIDE_COUNT = 3
-
-function AgentCapabilityAnimationCarousel(props: { reducedMotion: boolean }): React.JSX.Element {
-  const [activeIndex, setActiveIndex] = useState(() => (props.reducedMotion ? 1 : 0))
-  const advanceSlide = useCallback(() => {
-    if (props.reducedMotion) {
-      return
-    }
-    setActiveIndex((current) => (current + 1) % AGENT_CAPABILITY_SLIDE_COUNT)
-  }, [props.reducedMotion])
-
-  const slides = useMemo<readonly AgentCapabilitySlide[]>(
-    () => [
-      {
-        id: 'browser-use',
-        title: 'Browser use',
-        icon: <Globe2 className="size-3.5" />,
-        widthClassName: 'w-[460px]',
-        node: (
-          <BrowserAnimatedVisual
-            reducedMotion={props.reducedMotion}
-            onCycleComplete={advanceSlide}
-          />
-        )
-      },
-      {
-        id: 'computer-use',
-        title: 'Computer Use',
-        icon: <MonitorCog className="size-3.5" />,
-        widthClassName: 'w-[520px]',
-        node: (
-          <ComputerUseAnimatedVisual
-            reducedMotion={props.reducedMotion}
-            onCycleComplete={advanceSlide}
-          />
-        )
-      },
-      {
-        id: 'orchestration',
-        title: 'Agent orchestration',
-        icon: <Workflow className="size-3.5" />,
-        widthClassName: 'w-[520px]',
-        node: (
-          <AgentsOrchestrationVisual
-            reducedMotion={props.reducedMotion}
-            activeStepId="orchestration"
-            widthPx={400}
-            heightPx={300}
-            onCycleComplete={advanceSlide}
-          />
-        )
-      }
-    ],
-    [advanceSlide, props.reducedMotion]
-  )
-
-  useEffect(() => {
-    if (props.reducedMotion) {
-      setActiveIndex(1)
-    }
-  }, [props.reducedMotion])
-
-  const activeSlide = slides[activeIndex] ?? slides[0]
-
-  return (
-    <div className="rounded-xl border border-border bg-muted/20 p-3">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-xs font-semibold leading-none text-muted-foreground">Preview</div>
-        <div className="flex items-center gap-1">
-          {slides.map((slide, index) => (
-            <button
-              key={slide.id}
-              type="button"
-              aria-label={`Show ${slide.title}`}
-              aria-pressed={index === activeIndex}
-              className={cn(
-                'inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-[11px] font-medium transition-colors',
-                index === activeIndex
-                  ? 'border-border bg-card text-foreground shadow-xs'
-                  : 'border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-              )}
-              onClick={() => setActiveIndex(index)}
-            >
-              {slide.icon}
-              <span className="max-w-28 truncate">{slide.title}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="mx-auto flex min-h-[300px] max-w-[560px] items-start justify-center overflow-visible">
-        <div className={cn('max-w-full', activeSlide.widthClassName)}>{activeSlide.node}</div>
-      </div>
-    </div>
   )
 }

@@ -10,6 +10,8 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { getActiveMultiplexer } from './ssh'
+import { detectWslCommandsOnPath, type WslPreflightTarget } from './preflight-wsl-agent-detection'
+import { detectCommandsInInstallDirs } from './local-agent-install-dir-detection'
 const execFileAsync = promisify(execFile)
 const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
 
@@ -50,10 +52,6 @@ let cached: PreflightStatus | null = null
 /** @internal - tests need a clean preflight cache between cases. */
 export function _resetPreflightCache(): void {
   cached = null
-}
-
-type WslPreflightTarget = {
-  distro?: string
 }
 
 function shellQuote(value: string): string {
@@ -184,12 +182,31 @@ async function detectCommandRuntime(
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
   const wslTarget = getPreflightWslTarget(context)
-  const checks = await Promise.all(
+  if (wslTarget) {
+    const foundCommands = await detectWslCommandsOnPath(
+      wslTarget,
+      KNOWN_AGENT_COMMANDS.map(({ cmd }) => cmd)
+    )
+    return uniqueAgentIds(
+      KNOWN_AGENT_COMMANDS.filter(({ cmd }) => foundCommands.has(cmd)).map(({ id }) => id)
+    )
+  }
+
+  const pathChecks = await Promise.all(
     KNOWN_AGENT_COMMANDS.map(async ({ id, cmd }) => ({
       id,
-      installed: await isCommandOnPath(cmd, wslTarget ?? undefined)
+      cmd,
+      installedOnPath: await isCommandOnPath(cmd)
     }))
   )
+  const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
+  // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
+  // computes user install dirs once instead of blocking once per missed CLI.
+  const installDirCommands = detectCommandsInInstallDirs(missedCommands)
+  const checks = pathChecks.map(({ id, cmd, installedOnPath }) => ({
+    id,
+    installed: installedOnPath || installDirCommands.has(cmd)
+  }))
   return uniqueAgentIds(checks.filter((c) => c.installed).map((c) => c.id))
 }
 
@@ -350,8 +367,8 @@ export function registerPreflightHandlers(): void {
 
   // Why: remote worktrees need agent detection on the SSH host, not the local
   // machine. This handler forwards the same KNOWN_AGENT_COMMANDS list to the
-  // relay's preflight.detectAgents RPC, which runs `which` inside a login shell
-  // on the remote host to match the PATH users see in PTY sessions.
+  // relay's preflight.detectAgents RPC, whose lookup command is selected on
+  // the remote host so native Windows OpenSSH does not require a POSIX shell.
   ipcMain.handle(
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> => {

@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearClientForWorkspace } from './client'
+import { credentialDecryptionMessage } from '../../shared/integration-credential-errors'
 
 const rawRequest = vi.fn()
 const getClients = vi.fn()
 const clearToken = vi.fn()
+const isAuthError = vi.fn()
 
 vi.mock('./client', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
   release: vi.fn(),
   getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: vi.fn().mockReturnValue(false),
+  isAuthError: (...args: unknown[]) => isAuthError(...args),
   clearToken: (...args: unknown[]) => clearToken(...args)
 }))
 
@@ -144,7 +146,18 @@ describe('Linear project queries', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
+    isAuthError.mockReturnValue(false)
     getClients.mockReturnValue([makeEntry()])
+  })
+
+  it('surfaces Linear credential decrypt errors on active project metadata reads', async () => {
+    const error = new Error(credentialDecryptionMessage('Linear'))
+    getClients.mockImplementation(() => {
+      throw error
+    })
+    const { listProjects } = await import('./projects')
+
+    await expect(listProjects(undefined, 20, 'workspace-1', true)).rejects.toThrow(error.message)
   })
 
   it('lets manual project issue refresh bypass older in-flight reads', async () => {
@@ -207,6 +220,69 @@ describe('Linear project queries', () => {
       id: 'project-1',
       first: 20,
       after: 'project-cursor-100'
+    })
+  })
+
+  it('creates a project with team metadata and maps the created project', async () => {
+    rawRequest.mockResolvedValueOnce({
+      data: {
+        projectCreate: {
+          success: true,
+          project: {
+            ...rawProject('project-1'),
+            description: 'Summary',
+            content: 'Brief',
+            priority: 2,
+            targetDate: '2026-08-01',
+            teams: { nodes: [{ id: 'team-1', name: 'Team', key: 'TM' }] }
+          }
+        }
+      }
+    })
+    const { createProject } = await import('./projects')
+
+    const result = await createProject(
+      {
+        name: 'Roadmap',
+        description: 'Summary',
+        content: 'Brief',
+        teamIds: ['team-1'],
+        leadId: 'user-1',
+        memberIds: ['user-1', 'user-2'],
+        labelIds: ['label-1'],
+        priority: 2,
+        startDate: '2026-07-01',
+        targetDate: '2026-08-01'
+      },
+      'workspace-1'
+    )
+
+    expect(result).toMatchObject({
+      ok: true,
+      project: {
+        id: 'project-1',
+        name: 'project-1',
+        workspaceId: 'workspace-1',
+        description: 'Summary',
+        content: 'Brief',
+        priority: 2,
+        targetDate: '2026-08-01',
+        teams: [{ id: 'team-1', name: 'Team', key: 'TM' }]
+      }
+    })
+    expect(rawRequest.mock.calls[0]?.[1]).toEqual({
+      input: {
+        name: 'Roadmap',
+        description: 'Summary',
+        content: 'Brief',
+        teamIds: ['team-1'],
+        leadId: 'user-1',
+        memberIds: ['user-1', 'user-2'],
+        labelIds: ['label-1'],
+        priority: 2,
+        startDate: '2026-07-01',
+        targetDate: '2026-08-01'
+      }
     })
   })
 

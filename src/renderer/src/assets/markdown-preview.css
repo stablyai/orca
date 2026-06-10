@@ -99,7 +99,7 @@
   max-width: 30%;
   flex-shrink: 0;
   flex-direction: column;
-  border-left: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   background: color-mix(in srgb, var(--background) 88%, var(--editor-surface));
 }
 
@@ -121,6 +121,32 @@
   flex-shrink: 0;
 }
 
+.markdown-toc-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.markdown-toc-level-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.markdown-toc-level-button {
+  min-width: 24px;
+  padding-inline: 4px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.markdown-toc-level-button:hover {
+  color: var(--foreground);
+}
+
 .markdown-toc-header > span {
   min-width: 0;
   overflow: hidden;
@@ -140,29 +166,53 @@
   width: 100%;
   min-width: 0;
   align-items: center;
-  gap: 7px;
-  border: 0;
+  gap: 4px;
   border-radius: 6px;
-  background: transparent;
-  padding-top: 6px;
-  padding-right: 8px;
-  padding-bottom: 6px;
+  padding-top: 4px;
+  padding-right: 4px;
+  padding-bottom: 4px;
   color: var(--foreground);
   font-size: 12px;
   line-height: 1.25;
-  text-align: left;
 }
 
 .markdown-toc-row:hover {
   background: var(--accent);
 }
 
-.markdown-toc-level {
+.markdown-toc-disclosure {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
   flex-shrink: 0;
-  color: var(--muted-foreground);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  align-items: center;
+  justify-content: center;
+}
+
+.markdown-toc-disclosure {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 0;
+}
+
+.markdown-toc-disclosure:hover {
+  background: color-mix(in srgb, var(--accent) 72%, transparent);
+}
+
+.markdown-toc-title-button {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 2px 4px;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  text-align: left;
 }
 
 .markdown-toc-title {
@@ -189,13 +239,13 @@
   .markdown-toc-panel {
     position: absolute;
     top: 0;
-    right: 0;
+    left: 0;
     bottom: 0;
     z-index: 30;
     width: min(240px, 72cqw);
     min-width: 0;
     max-width: calc(100cqw - 44px);
-    box-shadow: -10px 0 24px rgb(0 0 0 / 0.14);
+    box-shadow: 10px 0 24px rgb(0 0 0 / 0.14);
   }
 }
 
@@ -289,7 +339,7 @@
 .markdown-annotation-list-block {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, min(34cqw, 360px));
+  grid-template-columns: minmax(0, 1fr) minmax(220px, min(28cqw, 300px));
   column-gap: 32px;
   align-items: start;
 }
@@ -375,8 +425,8 @@
 }
 
 .markdown-annotation-card.is-active > .orca-diff-comment-card {
-  border-color: color-mix(in srgb, var(--foreground) 32%, transparent);
-  background: color-mix(in srgb, var(--foreground) 8%, var(--editor-surface));
+  border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
+  background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
 }
 
 .markdown-annotation-card.is-attention > .orca-diff-comment-card {

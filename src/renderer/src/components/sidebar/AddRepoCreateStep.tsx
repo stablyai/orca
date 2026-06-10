@@ -1,27 +1,32 @@
 // Step for AddRepoDialog (orca#763), split out so create-project state stays scoped.
 import React, { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { Folder, GitBranch, Home, Pencil } from 'lucide-react'
+import { Folder, GitBranch } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
 import type { Repo } from '../../../../shared/types'
+import {
+  CreateProjectLocationField,
+  CreateProjectParentBrowser
+} from './CreateProjectLocationField'
+import { translate } from '@/i18n/i18n'
 
-type DialogStep = 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup'
 type RepoKind = 'git' | 'folder'
 
 export function useCreateRepo(
-  fetchWorktrees: (repoId: string) => Promise<unknown>,
-  setStep: (step: DialogStep) => void,
-  setAddedRepo: (repo: Repo | null) => void,
+  fetchWorktrees: (
+    repoId: string,
+    options?: { requireAuthoritative?: boolean }
+  ) => Promise<boolean>,
   closeModal: () => void,
-  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void
+  onGitRepoReady?: (repoId: string) => void | Promise<void>
 ) {
   const [createName, setCreateName] = useState('')
   const [createParent, setCreateParent] = useState('')
@@ -48,7 +53,12 @@ export function useCreateRepo(
     if (useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim()) {
       // Why: the native folder picker returns a client-local path. Runtime
       // project creation needs an explicit server parent path.
-      toast.error('Enter a server parent path.')
+      toast.error(
+        translate(
+          'auto.components.sidebar.AddRepoCreateStep.875dda0995',
+          'Enter a server parent path.'
+        )
+      )
       return
     }
     const gen = createGenRef.current
@@ -114,26 +124,34 @@ export function useCreateRepo(
         useAppStore.setState({ repos: updated })
       }
       if (wasDeduped) {
-        toast.info('Project already added', {
-          description: repo.displayName
-        })
+        toast.info(
+          translate(
+            'auto.components.sidebar.AddRepoCreateStep.2c12db1511',
+            'Project already added'
+          ),
+          {
+            description: repo.displayName
+          }
+        )
       } else {
-        toast.success('Project created', {
-          description: repo.displayName
-        })
+        toast.success(
+          translate('auto.components.sidebar.AddRepoCreateStep.5e97f0c4b9', 'Project created'),
+          {
+            description: repo.displayName
+          }
+        )
       }
       if (isGitRepoKind(repo)) {
-        // Why: setAddedRepo only drives the git "setup" step; the folder
-        // branch closes the dialog, which resets addedRepo to null anyway.
-        setAddedRepo(repo)
-        setExistingWorkspaceSource?.('create_project')
-        await fetchWorktrees(repo.id)
+        // Why: Git repos use the shared default-checkout completion path.
+        // Why: if refresh is temporarily non-authoritative, the shared opener
+        // still reveals the project so the user is not left in a completed add flow.
+        await fetchWorktrees(repo.id, { requireAuthoritative: true })
         if (gen !== createGenRef.current || !mountedRef.current) {
           return
         }
-        setStep('setup')
+        await onGitRepoReady?.(repo.id)
       } else {
-        // Why: folder repos skip the Git setup step, so activate the synthetic
+        // Why: folder repos skip the Git default-checkout handoff, so activate the synthetic
         // root workspace before closing. Matches addNonGitFolder's behavior.
         await fetchWorktrees(repo.id)
         if (gen !== createGenRef.current || !mountedRef.current) {
@@ -143,6 +161,7 @@ export function useCreateRepo(
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }
+        await markOnboardingProjectAdded('addedFolder')
         closeModal()
       }
     } catch (err) {
@@ -157,17 +176,7 @@ export function useCreateRepo(
         setIsCreating(false)
       }
     }
-  }, [
-    createName,
-    createParent,
-    createKind,
-    fetchWorktrees,
-    mountedRef,
-    setStep,
-    setAddedRepo,
-    closeModal,
-    setExistingWorkspaceSource
-  ])
+  }, [createName, createParent, createKind, fetchWorktrees, mountedRef, closeModal, onGitRepoReady])
 
   return {
     createName,
@@ -266,6 +275,7 @@ type CreateStepProps = {
   createError: string | null
   isCreating: boolean
   manualParentEntry?: boolean
+  runtimeEnvironmentId?: string | null
   onNameChange: (value: string) => void
   onParentChange: (value: string) => void
   onKindChange: (kind: RepoKind) => void
@@ -280,6 +290,7 @@ export function CreateStep({
   createError,
   isCreating,
   manualParentEntry = false,
+  runtimeEnvironmentId,
   onNameChange,
   onParentChange,
   onKindChange,
@@ -288,6 +299,7 @@ export function CreateStep({
 }: CreateStepProps): React.JSX.Element {
   const radioGroupRef = useRef<HTMLDivElement>(null)
   const radioFocusFrameRef = useRef<number | null>(null)
+  const [browsingParent, setBrowsingParent] = useState(false)
 
   const cancelRadioFocusFrame = useCallback((): void => {
     if (radioFocusFrameRef.current === null) {
@@ -324,12 +336,28 @@ export function CreateStep({
 
   const canSubmit = createName.trim().length > 0 && createParent.trim().length > 0 && !isCreating
 
+  if (browsingParent && runtimeEnvironmentId) {
+    return (
+      <CreateProjectParentBrowser
+        runtimeEnvironmentId={runtimeEnvironmentId}
+        createParent={createParent}
+        onParentChange={onParentChange}
+        onClose={() => setBrowsingParent(false)}
+      />
+    )
+  }
+
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Start a new project</DialogTitle>
+        <DialogTitle>
+          {translate('auto.components.sidebar.AddRepoCreateStep.db9be12229', 'Start a new project')}
+        </DialogTitle>
         <DialogDescription>
-          Create a Git repository or a plain folder and open it in Orca.
+          {translate(
+            'auto.components.sidebar.AddRepoCreateStep.d877ece0d6',
+            'Create a Git repository or a plain folder and open it in Orca.'
+          )}
         </DialogDescription>
       </DialogHeader>
 
@@ -342,7 +370,10 @@ export function CreateStep({
         <div
           ref={setRadioGroupNode}
           role="radiogroup"
-          aria-label="Project kind"
+          aria-label={translate(
+            'auto.components.sidebar.AddRepoCreateStep.180e9b5e48',
+            'Project kind'
+          )}
           className="grid grid-cols-2 gap-2"
         >
           <KindCard
@@ -352,7 +383,10 @@ export function CreateStep({
             onSelect={() => onKindChange('git')}
             onArrowNav={cycleKind}
             icon={<GitBranch className="size-4" />}
-            title="Git repository"
+            title={translate(
+              'auto.components.sidebar.AddRepoCreateStep.11fd2a7db8',
+              'Git repository'
+            )}
             caption="Initializes an empty Git repo"
           />
           <KindCard
@@ -362,7 +396,7 @@ export function CreateStep({
             onSelect={() => onKindChange('folder')}
             onArrowNav={cycleKind}
             icon={<Folder className="size-4" />}
-            title="Folder"
+            title={translate('auto.components.sidebar.AddRepoCreateStep.038729c107', 'Folder')}
             caption="Create a new folder"
           />
         </div>
@@ -373,13 +407,16 @@ export function CreateStep({
             htmlFor="create-project-name"
             className="text-[11px] font-medium text-muted-foreground block"
           >
-            Name
+            {translate('auto.components.sidebar.AddRepoCreateStep.a8149a3a5a', 'Name')}
           </label>
           <Input
             id="create-project-name"
             value={createName}
             onChange={(e) => onNameChange(e.target.value)}
-            placeholder="my-project"
+            placeholder={translate(
+              'auto.components.sidebar.AddRepoCreateStep.0ae45b8238',
+              'my-project'
+            )}
             className="h-11 text-sm font-mono"
             disabled={isCreating}
             autoFocus
@@ -388,54 +425,16 @@ export function CreateStep({
           />
         </div>
 
-        {/* Location. The local flow uses a folder picker; runtime servers need
-          manual server-path entry because the client cannot browse that filesystem yet. */}
-        <div className="space-y-1">
-          <span className="text-[11px] font-medium text-muted-foreground block">Location</span>
-
-          {manualParentEntry ? (
-            <Input
-              value={createParent}
-              onChange={(e) => onParentChange(e.target.value)}
-              placeholder="/home/user/projects"
-              className="h-11 text-sm font-mono"
-              disabled={isCreating}
-              spellCheck={false}
-            />
-          ) : createParent ? (
-            <div className="group flex items-center gap-2.5 rounded-md border border-border bg-background/40 h-11 min-w-0 px-3 text-sm">
-              <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/50 text-muted-foreground">
-                <Home className="size-3.5" />
-              </span>
-              <span className="flex-1 min-w-0 truncate font-mono text-[12px]" title={createParent}>
-                {createParent}
-              </span>
-              <button
-                type="button"
-                onClick={onPickParent}
-                disabled={isCreating}
-                className="shrink-0 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer disabled:cursor-not-allowed"
-                aria-label="Change parent folder"
-              >
-                <Pencil className="size-3" />
-                Change
-              </button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onPickParent}
-              disabled={isCreating}
-              className="w-full h-11 justify-start text-sm text-muted-foreground font-normal gap-2.5"
-            >
-              <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/40">
-                <Folder className="size-3.5" />
-              </span>
-              Choose parent folder…
-            </Button>
-          )}
-        </div>
+        {/* The local picker returns client paths; runtime servers browse host paths via RPC. */}
+        <CreateProjectLocationField
+          createParent={createParent}
+          isCreating={isCreating}
+          manualParentEntry={manualParentEntry}
+          runtimeEnvironmentId={runtimeEnvironmentId}
+          onParentChange={onParentChange}
+          onPickParent={onPickParent}
+          onBrowseServer={() => setBrowsingParent(true)}
+        />
 
         {createError && (
           <p className="text-[11px] text-destructive" role="alert">
@@ -444,7 +443,9 @@ export function CreateStep({
         )}
 
         <Button onClick={onCreate} disabled={!canSubmit} size="lg" className="w-full">
-          {isCreating ? 'Creating…' : 'Create project'}
+          {isCreating
+            ? translate('auto.components.sidebar.AddRepoCreateStep.85085d74d2', 'Creating…')
+            : translate('auto.components.sidebar.AddRepoCreateStep.45b7c26034', 'Create project')}
         </Button>
       </div>
     </>

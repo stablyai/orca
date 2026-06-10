@@ -19,6 +19,7 @@ import type {
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
 import { clampLinearIssueListLimit } from '../../../../shared/linear-issue-read-limits'
+import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
   linearConnect,
@@ -40,6 +41,7 @@ import {
   linearTestConnection
 } from '@/runtime/runtime-linear-client'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { translate } from '@/i18n/i18n'
 
 const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
 const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.
@@ -211,6 +213,7 @@ function linearWorkspaceSignature(workspace: LinearWorkspace): string {
 function linearStatusScopeSignature(status: LinearConnectionStatus): string {
   return JSON.stringify({
     connected: status.connected,
+    credentialError: status.credentialError ?? null,
     activeWorkspaceId: status.activeWorkspaceId ?? null,
     selectedWorkspaceId: getSelectedWorkspaceId(status),
     viewer: status.viewer
@@ -667,7 +670,10 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
         ) {
           return {
             ok: false as const,
-            error: 'Linear connection was superseded by a newer request.'
+            error: translate(
+              'auto.store.slices.linear.37d36984d0',
+              'Linear connection was superseded by a newer request.'
+            )
           }
         }
         set({
@@ -676,7 +682,13 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
           linearStatusContextKey: contextKey
         })
       } else if (result.ok) {
-        return { ok: false as const, error: 'Linear connection was superseded by a newer request.' }
+        return {
+          ok: false as const,
+          error: translate(
+            'auto.store.slices.linear.37d36984d0',
+            'Linear connection was superseded by a newer request.'
+          )
+        }
       }
       return result as { ok: true; viewer: LinearViewer } | { ok: false; error: string }
     } catch (error) {
@@ -823,7 +835,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] fetchLinearIssue failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -944,7 +956,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] searchLinearIssues failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1039,7 +1051,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearIssues failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1133,7 +1145,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearTeams failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1230,7 +1242,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearProjects failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1318,7 +1330,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] fetchLinearProject failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1411,7 +1423,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearProjectIssues failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1503,7 +1515,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearCustomViews failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1592,7 +1604,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] fetchLinearCustomView failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1685,7 +1697,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearCustomViewIssues failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,
@@ -1770,7 +1782,7 @@ export const createLinearSlice: StateCreator<AppState, [], [], LinearSlice> = (s
       .catch((error) => {
         console.warn('[linear] listLinearCustomViewProjects failed:', error)
         if (
-          looksLikeAuthError(error) &&
+          (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
           canWriteLinearReadResult(
             contextKey,
             requestCacheGeneration,

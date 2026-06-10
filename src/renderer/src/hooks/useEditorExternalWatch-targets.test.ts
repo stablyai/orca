@@ -89,7 +89,7 @@ describe('getEditorExternalWatchTargets', () => {
         worktreeId: 'wt-1',
         worktreePath: '/repo-1/worktree',
         connectionId: undefined,
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       }
     ])
   })
@@ -123,7 +123,7 @@ describe('getEditorExternalWatchTargets', () => {
         worktreeId: 'wt-active-visible',
         worktreePath: '/repo-active-visible/worktree',
         connectionId: undefined,
-        runtimeEnvironmentId: undefined
+        runtimeEnvironmentId: null
       }
     ])
   })
@@ -145,7 +145,7 @@ describe('getEditorExternalWatchTargets', () => {
     ).toEqual([])
   })
 
-  it('rebuilds targets when SSH connection or runtime environment identity changes', () => {
+  it('rebuilds ownerless targets when an SSH connection id hydrates', () => {
     const localRepo = makeRepo('repo-remote', null)
     const remoteRepo = makeRepo('repo-remote', 'ssh-1')
     const worktree = makeWorktree(localRepo.id, 'wt-remote')
@@ -167,7 +167,81 @@ describe('getEditorExternalWatchTargets', () => {
         worktreeId: 'wt-remote',
         worktreePath: '/repo-remote/worktree',
         connectionId: 'ssh-1',
-        runtimeEnvironmentId: 'runtime-1'
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('creates separate watch targets for local and runtime-owned tabs in the same worktree', () => {
+    const repo = makeRepo('repo-mixed')
+    const worktree = makeWorktree(repo.id, 'wt-mixed')
+    const localFile = makeOpenFile(worktree.id)
+    const runtimeFile = {
+      ...makeOpenFile(worktree.id),
+      id: 'runtime-file',
+      runtimeEnvironmentId: 'env-1'
+    }
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          openFiles: [localFile, runtimeFile],
+          runtimeEnvironmentId: null
+        })
+      ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-mixed',
+        worktreePath: '/repo-mixed/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      },
+      {
+        worktreeId: 'wt-mixed',
+        worktreePath: '/repo-mixed/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: 'env-1'
+      }
+    ])
+  })
+
+  it('keeps restored ownerless tabs local when an active runtime is selected', () => {
+    const repo = makeRepo('repo-restored')
+    const worktree = makeWorktree(repo.id, 'wt-restored')
+    const restoredLocalFile = {
+      ...makeOpenFile(worktree.id),
+      id: 'restored-local-file',
+      runtimeEnvironmentId: undefined
+    }
+    const runtimeFile = {
+      ...makeOpenFile(worktree.id),
+      id: 'runtime-file',
+      runtimeEnvironmentId: 'env-1'
+    }
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          openFiles: [restoredLocalFile, runtimeFile],
+          runtimeEnvironmentId: 'env-1'
+        })
+      ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-restored',
+        worktreePath: '/repo-restored/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      },
+      {
+        worktreeId: 'wt-restored',
+        worktreePath: '/repo-restored/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: 'env-1'
       }
     ])
   })

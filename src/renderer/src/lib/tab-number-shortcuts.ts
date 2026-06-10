@@ -89,6 +89,12 @@ export function activateTabNumberShortcut(index: number): boolean {
     return true
   }
 
+  if (target.contentType === 'simulator') {
+    store.setActiveTab(target.id)
+    store.setActiveTabType('simulator')
+    return true
+  }
+
   store.setActiveFile(target.entityId)
   store.setActiveTabType('editor')
   return true

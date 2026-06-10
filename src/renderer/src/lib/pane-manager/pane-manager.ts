@@ -4,6 +4,7 @@ import type {
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
+  PaneRenderingDiagnostics,
   DropZone
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
@@ -17,6 +18,7 @@ import {
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { createPaneDOM, openTerminal, setLigaturesEnabled, disposePane } from './pane-lifecycle'
 import { shouldFollowMouseFocus } from './focus-follows-mouse'
+import { getTerminalWebglAutoDecision } from './terminal-webgl-auto-policy'
 import {
   equalizePaneSplitSizes,
   safeFit,
@@ -25,8 +27,10 @@ import {
 } from './pane-tree-ops'
 import { toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
+import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
+  resetPaneWebglTextureAtlases,
   resumePaneRendering,
   setPaneGpuRenderingState,
   suspendPaneRendering
@@ -179,6 +183,19 @@ export class PaneManager {
     return pane ? toPublicPane(pane) : null
   }
 
+  getRenderingDiagnostics(): PaneRenderingDiagnostics[] {
+    return Array.from(this.panes.values()).map((pane) => ({
+      paneId: pane.id,
+      terminalGpuAcceleration: pane.terminalGpuAcceleration,
+      gpuRenderingEnabled: pane.gpuRenderingEnabled,
+      webglAttachmentDeferred: pane.webglAttachmentDeferred,
+      webglDisabledAfterContextLoss: pane.webglDisabledAfterContextLoss,
+      hasComplexScriptOutput: pane.hasComplexScriptOutput,
+      terminalWebglAutoDecision: getTerminalWebglAutoDecision(),
+      hasWebgl: Boolean(pane.webglAddon)
+    }))
+  }
+
   getLeafId(numericPaneId: number): TerminalLeafId | null {
     return this.identities.getLeafId(numericPaneId)
   }
@@ -242,6 +259,18 @@ export class PaneManager {
 
   markPaneHasComplexScriptOutput(paneId: number): void {
     markPaneComplexScriptOutput(this.panes, paneId)
+  }
+
+  rebuildPaneWebgl(paneId: number): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) {
+      return
+    }
+    rebuildAttachedWebgl(pane)
+  }
+
+  resetWebglTextureAtlases(): void {
+    resetPaneWebglTextureAtlases(this.panes.values())
   }
 
   suspendRendering(): void {

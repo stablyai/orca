@@ -38,6 +38,8 @@ type UnregisteredOrcaCleanupMeta = Pick<
 
 export const ORPHANED_WORKTREE_DIRECTORY_MESSAGE =
   'Worktree is no longer registered with Git but its directory remains.'
+export const UNREGISTERED_MISSING_WORKTREE_MESSAGE =
+  'Worktree is no longer registered with Git and its directory is already gone.'
 
 function getPathOps(...paths: string[]): PathOps {
   // Why: forward-slash UNC roots need win32 ops; POSIX joins collapse `//Server` to `/Server`.

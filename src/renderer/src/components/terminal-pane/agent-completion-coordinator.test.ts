@@ -723,6 +723,89 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledWith(agentType)
   })
 
+  it('notifies once after a Cursor tool-heavy turn, not on each shell hook', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Read',
+      toolInput: '/repo/src/app.ts'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'git status'
+    })
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    coordinator.observeHookStatus({ state: 'done', ...turn, lastAssistantMessage: 'Fixed.' })
+    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('would spam Cursor notifications if shell hooks still mapped to waiting', () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    const turn = {
+      prompt: 'fix the bug',
+      agentType: 'cursor' as const
+    }
+
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'pnpm test'
+    })
+    coordinator.observeHookStatus({
+      state: 'working',
+      ...turn,
+      toolName: 'Read',
+      toolInput: '/repo/src/app.ts'
+    })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'Shell',
+      toolInput: 'git status'
+    })
+
+    expect(dispatchCompletion).toHaveBeenCalledTimes(2)
+  })
+
   it('keeps a generic title completion pending long enough for the first remote inspection', async () => {
     const inspection = createDeferred<RuntimeTerminalProcessInspection>()
     const dispatchCompletion = vi.fn()

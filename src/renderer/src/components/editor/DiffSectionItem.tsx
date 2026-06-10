@@ -108,8 +108,8 @@ export function DiffSectionItem({
   const isEditable = section.area === 'unstaged'
   const modelPathBase = useMemo(
     () =>
-      `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}`,
-    [section.key, worktreeId]
+      `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
+    [section.contentGeneration, section.key, worktreeId]
   )
   const diffEditorFontSize = computeDiffEditorFontSize(
     settings?.terminalFontSize ?? 13,

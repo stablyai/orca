@@ -101,6 +101,30 @@ struct AppDescriptor {
             bundleId == "com.microsoft.teams2" ||
             bundleId == "notion.id"
     }
+
+    var isKnownBrowser: Bool {
+        let bundle = bundleId?.lowercased() ?? ""
+        let appName = name.lowercased()
+        return bundle == "com.apple.safari" ||
+            bundle == "org.mozilla.firefox" ||
+            bundle == "company.thebrowser.browser" ||
+            bundle == "app.zen-browser.zen" ||
+            bundle.hasPrefix("com.google.chrome") ||
+            bundle.hasPrefix("com.microsoft.edgemac") ||
+            bundle.hasPrefix("com.brave.browser") ||
+            bundle.hasPrefix("com.operasoftware.opera") ||
+            bundle.hasPrefix("com.vivaldi.vivaldi") ||
+            appName == "safari" ||
+            appName == "firefox" ||
+            appName == "arc" ||
+            appName == "zen" ||
+            appName.contains("chrome") ||
+            appName.contains("chromium") ||
+            appName.contains("edge") ||
+            appName.contains("brave") ||
+            appName.contains("opera") ||
+            appName.contains("vivaldi")
+    }
 }
 
 final class ElementRecord {
@@ -175,8 +199,15 @@ enum ScreenshotStatus {
     case failed(String)
 }
 
+private struct CachedSnapshotEntry {
+    let snapshotId: String
+    let keys: [String]
+    let createdAt: Date
+}
+
 final class Provider {
     private var snapshots: [String: Snapshot] = [:]
+    private var snapshotEntries: [CachedSnapshotEntry] = []
 
     func handle(method: String, params: [String: JSONValue]) throws -> Any {
         switch method {
@@ -241,29 +272,97 @@ final class Provider {
             windowIndex: windowIndex,
             restoreWindow: params["restoreWindow"]?.bool == true
         )
-        let keys = [query, app.name, app.bundleId ?? ""].filter { !$0.isEmpty }.map { $0.lowercased() }
-        let namespace = snapshotNamespace(params)
         // Why: cached snapshots only validate element identity for follow-up
         // actions; retaining MB-scale screenshot base64 in the long-lived agent grows memory.
-        let cachedSnapshot = snapshot.withoutScreenshotPayload()
-        for key in keys {
-            if !isExplicitSnapshotNamespace(namespace) {
-                snapshots[key] = cachedSnapshot
-                snapshots[snapshotWindowKey(key, snapshot.windowId)] = cachedSnapshot
-                if let windowIndex {
-                    snapshots[snapshotWindowIndexKey(key, windowIndex)] = cachedSnapshot
-                }
-            }
-            snapshots[namespacedSnapshotKey(namespace, key)] = cachedSnapshot
-            snapshots[namespacedSnapshotKey(namespace, snapshotWindowKey(key, snapshot.windowId))] = cachedSnapshot
-            if let windowIndex {
-                snapshots[namespacedSnapshotKey(namespace, snapshotWindowIndexKey(key, windowIndex))] = cachedSnapshot
-            }
-        }
+        rememberSnapshot(
+            query: query,
+            app: app,
+            snapshot: snapshot.withoutScreenshotPayload(),
+            params: params,
+            windowIndex: windowIndex
+        )
         return snapshot
     }
 
+    private func rememberSnapshot(
+        query: String,
+        app: AppDescriptor,
+        snapshot cachedSnapshot: Snapshot,
+        params: [String: JSONValue],
+        windowIndex: Int?
+    ) {
+        let keys = [query, app.name, app.bundleId ?? "", "pid:\(app.pid)"]
+            .filter { !$0.isEmpty }
+            .map { $0.lowercased() }
+        let namespace = snapshotNamespace(params)
+        var storedKeys: [String] = []
+        let canonicalWindowKey = snapshotCanonicalWindowIdKey(cachedSnapshot.windowId)
+        if !isExplicitSnapshotNamespace(namespace) {
+            snapshots[canonicalWindowKey.lowercased()] = cachedSnapshot
+            storedKeys.append(canonicalWindowKey.lowercased())
+        }
+        snapshots[namespacedSnapshotKey(namespace, canonicalWindowKey)] = cachedSnapshot
+        storedKeys.append(namespacedSnapshotKey(namespace, canonicalWindowKey))
+        if let windowIndex {
+            let canonicalWindowIndexKey = snapshotCanonicalWindowIndexKey(windowIndex)
+            if !isExplicitSnapshotNamespace(namespace) {
+                snapshots[canonicalWindowIndexKey.lowercased()] = cachedSnapshot
+                storedKeys.append(canonicalWindowIndexKey.lowercased())
+            }
+            snapshots[namespacedSnapshotKey(namespace, canonicalWindowIndexKey)] = cachedSnapshot
+            storedKeys.append(namespacedSnapshotKey(namespace, canonicalWindowIndexKey))
+        }
+        for key in keys {
+            if !isExplicitSnapshotNamespace(namespace) {
+                snapshots[key] = cachedSnapshot
+                storedKeys.append(key)
+                snapshots[snapshotWindowKey(key, cachedSnapshot.windowId)] = cachedSnapshot
+                storedKeys.append(snapshotWindowKey(key, cachedSnapshot.windowId))
+                if let windowIndex {
+                    snapshots[snapshotWindowIndexKey(key, windowIndex)] = cachedSnapshot
+                    storedKeys.append(snapshotWindowIndexKey(key, windowIndex))
+                }
+            }
+            snapshots[namespacedSnapshotKey(namespace, key)] = cachedSnapshot
+            storedKeys.append(namespacedSnapshotKey(namespace, key))
+            let namespacedWindowKey = namespacedSnapshotKey(
+                namespace,
+                snapshotWindowKey(key, cachedSnapshot.windowId)
+            )
+            snapshots[namespacedWindowKey] = cachedSnapshot
+            storedKeys.append(namespacedWindowKey)
+            if let windowIndex {
+                let namespacedWindowIndexKey = namespacedSnapshotKey(
+                    namespace,
+                    snapshotWindowIndexKey(key, windowIndex)
+                )
+                snapshots[namespacedWindowIndexKey] = cachedSnapshot
+                storedKeys.append(namespacedWindowIndexKey)
+            }
+        }
+        snapshotEntries.append(
+            CachedSnapshotEntry(snapshotId: cachedSnapshot.id, keys: storedKeys, createdAt: Date())
+        )
+        pruneSnapshotCache()
+    }
+
+    private func pruneSnapshotCache() {
+        let now = Date()
+        while let oldest = snapshotEntries.first,
+              ComputerSnapshotCachePolicy.shouldPrune(
+                  entryCount: snapshotEntries.count,
+                  createdAt: oldest.createdAt,
+                  now: now
+              ) {
+            let expired = snapshotEntries.removeFirst()
+            for key in expired.keys where snapshots[key]?.id == expired.snapshotId {
+                snapshots.removeValue(forKey: key)
+            }
+        }
+    }
+
     private func currentSnapshot(params: [String: JSONValue]) throws -> Snapshot {
+        pruneSnapshotCache()
         let cached = try cachedSnapshot(params: params)
         // Why: cached AX frames can be stale after a window move or resize, and
         // stale geometry can turn an intended action into a misclick.
@@ -282,14 +381,38 @@ final class Provider {
         guard let query = params["app"]?.string, !query.isEmpty else { return nil }
         let namespace = snapshotNamespace(params)
         if let targetWindowId = try requestedWindowId(params) {
+            let canonicalKey = snapshotCanonicalWindowIdKey(targetWindowId)
+            if let cached = snapshots[namespacedSnapshotKey(namespace, canonicalKey)] {
+                return cached
+            }
+            if !isExplicitSnapshotNamespace(namespace), let cached = snapshots[canonicalKey.lowercased()] {
+                return cached
+            }
             let windowKey = snapshotWindowKey(query.lowercased(), targetWindowId)
-            return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
-                (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
+            if let cached = snapshots[namespacedSnapshotKey(namespace, windowKey)] {
+                return cached
+            }
+            if !isExplicitSnapshotNamespace(namespace), let cached = snapshots[windowKey] {
+                return cached
+            }
+            return nil
         }
         if let targetWindowIndex = try requestedWindowIndex(params) {
+            let canonicalKey = snapshotCanonicalWindowIndexKey(targetWindowIndex)
+            if let cached = snapshots[namespacedSnapshotKey(namespace, canonicalKey)] {
+                return cached
+            }
+            if !isExplicitSnapshotNamespace(namespace), let cached = snapshots[canonicalKey.lowercased()] {
+                return cached
+            }
             let windowKey = snapshotWindowIndexKey(query.lowercased(), targetWindowIndex)
-            return snapshots[namespacedSnapshotKey(namespace, windowKey)] ??
-                (isExplicitSnapshotNamespace(namespace) ? nil : snapshots[windowKey])
+            if let cached = snapshots[namespacedSnapshotKey(namespace, windowKey)] {
+                return cached
+            }
+            if !isExplicitSnapshotNamespace(namespace), let cached = snapshots[windowKey] {
+                return cached
+            }
+            return nil
         }
         let key = query.lowercased()
         return snapshots[namespacedSnapshotKey(namespace, key)] ??
@@ -510,7 +633,11 @@ final class Provider {
             throw ProviderError.coded("window_not_found", "could not match accessibility window to requested window; run get-app-state again or retry without a window selector")
         }
         let title = stringAttribute(window, kAXTitleAttribute as String) ?? capture.title ?? app.name
-        let renderer = TreeRenderer(windowBounds: capture.bounds, focused: focusedElement(appElement: appElement))
+        let renderer = TreeRenderer(
+            windowBounds: capture.bounds,
+            focused: focusedElement(appElement: appElement),
+            compactBrowserTabs: app.isKnownBrowser
+        )
         renderer.render(window)
         let screenshot = includeScreenshot ? capture.screenshotPayload() : nil
         let screenshotStatus: ScreenshotStatus = if screenshot != nil {
@@ -601,7 +728,10 @@ final class Provider {
     private func click(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
         let button = params["mouseButton"]?.string ?? "left"
-        let count = try optionalInteger(params, "clickCount") ?? 1
+        let count = try positiveInteger(params["clickCount"]?.number, defaultValue: 1, name: "clickCount")
+        // Why: agents expect a click into a target app to make the next
+        // keyboard action safe, even when the click uses an AX action path.
+        recoverWindow(snapshot.app)
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
             if count <= 1, let actionName = try performClickAction(record: record, mouseButton: button) {
@@ -657,28 +787,45 @@ final class Provider {
     private func setValue(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
         let record = try element(snapshot, try requiredInteger(params, "elementIndex"))
+        let expected = try requiredStringAllowingEmpty(params, "value")
         guard isSettable(record.element, kAXValueAttribute as String) else {
             throw ProviderError.coded("value_not_settable", "element \(record.index) is not settable")
         }
-        let result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, try requiredStringAllowingEmpty(params, "value") as CFString)
+        let result = AXUIElementSetAttributeValue(record.element, kAXValueAttribute as CFString, expected as CFString)
         guard result == .success else {
             throw ProviderError.coded("accessibility_error", "AXUIElementSetAttributeValue failed with \(result.rawValue)")
         }
-        return actionMetadata(path: "accessibility", actionName: "AXSetValue")
+        let actual = rawStringAttribute(record.element, kAXValueAttribute as String)
+        let verification = actual == expected
+            ? verifiedAction(property: "value", expected: expected, actualPreview: actual)
+            : unverifiedAction(reason: actual == nil ? "provider_unavailable" : "value_mismatch", expected: expected, actualPreview: actual)
+        return actionMetadata(path: "accessibility", actionName: "AXSetValue", verification: verification)
     }
 
     private func typeText(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
+        let text = try requiredString(params, "text")
+        if let focused = focusedRecord(snapshot), let verification = TextInput.replaceSelection(focused.element, with: text) {
+            return actionMetadata(path: "accessibility", actionName: "AXReplaceSelection", verification: verification)
+        }
         try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
-        try Input.typeText(try requiredString(params, "text"), pid: snapshot.app.pid)
-        return actionMetadata(path: "synthetic")
+        try Input.typeText(text, pid: snapshot.app.pid)
+        return actionMetadata(
+            path: "synthetic",
+            actionName: "typeText",
+            verification: unverifiedAction(reason: "synthetic_input")
+        )
     }
 
     private func pressKey(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentKeyboardSnapshot(params: params)
         try requireTargetWindowFocused(snapshot, restoreWindowRequested: params["restoreWindow"]?.bool == true)
         try Input.pressKey(try requiredString(params, "key"), pid: snapshot.app.pid)
-        return actionMetadata(path: "synthetic")
+        return actionMetadata(
+            path: "synthetic",
+            actionName: "pressKey",
+            verification: unverifiedAction(reason: "synthetic_input")
+        )
     }
 
     private func hotkey(params: [String: JSONValue]) throws -> [String: Any] {
@@ -717,8 +864,8 @@ final class Provider {
 
     private func scroll(params: [String: JSONValue]) throws -> [String: Any] {
         let snapshot = try currentSnapshot(params: params)
-        let direction = try requiredString(params, "direction")
-        let pages = params["pages"]?.number ?? 1
+        let direction = try scrollDirection(try requiredString(params, "direction"))
+        let pages = try positiveNumber(params["pages"]?.number, defaultValue: 1, name: "pages")
         if let elementIndex = try optionalInteger(params, "elementIndex") {
             let record = try element(snapshot, elementIndex)
             let action = "AXScroll\(direction.capitalized)ByPage"
@@ -825,6 +972,33 @@ private func optionalInteger(_ params: [String: JSONValue], _ key: String) throw
     return value
 }
 
+private func positiveInteger(_ value: Double?, defaultValue: Int, name: String) throws -> Int {
+    switch ActionArgumentValidation.positiveInteger(value, defaultValue: defaultValue, name: name) {
+    case let .success(value):
+        return value
+    case let .failure(error):
+        throw ProviderError.coded("invalid_argument", error.message)
+    }
+}
+
+private func positiveNumber(_ value: Double?, defaultValue: Double, name: String) throws -> Double {
+    switch ActionArgumentValidation.positiveNumber(value, defaultValue: defaultValue, name: name) {
+    case let .success(value):
+        return value
+    case let .failure(error):
+        throw ProviderError.coded("invalid_argument", error.message)
+    }
+}
+
+private func scrollDirection(_ value: String) throws -> String {
+    switch ActionArgumentValidation.scrollDirection(value) {
+    case let .success(value):
+        return value
+    case let .failure(error):
+        throw ProviderError.coded("invalid_argument", error.message)
+    }
+}
+
 private func parsePid(_ query: String) -> pid_t? {
     guard query.hasPrefix("pid:") else { return nil }
     guard let pid = Int32(query.dropFirst(4)), pid > 0 else { return nil }
@@ -903,7 +1077,10 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, visibleW
     let permissionHint = visibleWindowCount > 0
         ? " The app has visible windows, so macOS Accessibility may need Orca Computer Use toggled off and on again in System Settings."
         : ""
-    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.\(permissionHint)")
+    if visibleWindowCount > 0 {
+        throw ProviderError.coded("permission_denied", "app '\(app.name)' has visible windows but no accessibility window.\(permissionHint)")
+    }
+    throw ProviderError.coded("window_not_found", "app '\(app.name)' has no accessibility window; make sure the app has a visible window, then retry with --restore-window.")
 }
 
 private func focusedSystemWindow(systemWide: AXUIElement, app: AppDescriptor) -> AXUIElement? {
@@ -1020,8 +1197,16 @@ private func snapshotWindowKey(_ query: String, _ windowId: CGWindowID) -> Strin
     "\(query.lowercased())#window:\(Int(windowId))"
 }
 
+private func snapshotCanonicalWindowIdKey(_ windowId: CGWindowID) -> String {
+    "window-id:\(Int(windowId))"
+}
+
 private func snapshotWindowIndexKey(_ query: String, _ windowIndex: Int) -> String {
     "\(query.lowercased())#windowIndex:\(windowIndex)"
+}
+
+private func snapshotCanonicalWindowIndexKey(_ windowIndex: Int) -> String {
+    "window-index:\(windowIndex)"
 }
 
 private func snapshotNamespace(_ params: [String: JSONValue]) -> String {
@@ -1197,17 +1382,15 @@ private func frame(_ element: AXUIElement, windowBounds: CGRect) -> CGRect? {
 }
 
 private func elementSignature(_ node: SnapshotRenderNode) -> String {
+    // Why: cached element validation should prove identity, not reject text
+    // controls because their value/placeholder/summary changed after focus.
     [
         node.role,
         node.roleDescription ?? "",
         node.title ?? "",
         node.label ?? "",
         node.linkText ?? "",
-        node.value ?? "",
-        node.placeholder ?? "",
         node.url ?? "",
-        node.summary ?? "",
-        node.rowSummary ?? "",
         SnapshotRenderHeuristics.meaningfulActions(node.rawActions, role: node.role).joined(separator: ","),
     ].joined(separator: "\u{1f}")
 }
@@ -1318,6 +1501,7 @@ private func renderScreenshotStatus(_ status: ScreenshotStatus, snapshot: Snapsh
 private final class TreeRenderer {
     let windowBounds: CGRect
     let focused: AXUIElement?
+    let compactBrowserTabs: Bool
     var lines: [String] = []
     var records: [Int: ElementRecord] = [:]
     var focusedSummary: String?
@@ -1328,9 +1512,10 @@ private final class TreeRenderer {
     static let maxNodes = 1200
     static let maxDepth = 64
 
-    init(windowBounds: CGRect, focused: AXUIElement?) {
+    init(windowBounds: CGRect, focused: AXUIElement?, compactBrowserTabs: Bool) {
         self.windowBounds = windowBounds
         self.focused = focused
+        self.compactBrowserTabs = compactBrowserTabs
     }
 
     func render(_ element: AXUIElement, depth: Int = 0, ancestors: [AXUIElement] = []) {
@@ -1413,9 +1598,52 @@ private final class TreeRenderer {
         if summary != nil || SnapshotRenderHeuristics.shouldSuppressChildren(node) {
             return
         }
+        if compactBrowserTabs, let tabStripCompaction = tabStripCompaction(parent: node, children: children) {
+            for (childIndex, child) in children.enumerated() where tabStripCompaction.retainedIndexes.contains(childIndex) {
+                render(child, depth: depth + 1, ancestors: ancestors + [element])
+            }
+            lines.append(
+                String(repeating: "\t", count: depth + 1) +
+                    "... \(tabStripCompaction.omittedCount) inactive browser tabs omitted"
+            )
+            return
+        }
+        let childLineStart = lines.count
         for child in children {
             render(child, depth: depth + 1, ancestors: ancestors + [element])
         }
+        if compactBrowserTabs {
+            compactRenderedBrowserTabs(parent: node, startLine: childLineStart, depth: depth + 1)
+        }
+    }
+
+    private func compactRenderedBrowserTabs(parent: SnapshotRenderNode, startLine: Int, depth: Int) {
+        guard SnapshotRenderHeuristics.roleText(parent) == "scroll area" else { return }
+        let indent = String(repeating: "\t", count: depth)
+        let tabLineIndexes = lines.indices.dropFirst(startLine).filter { lineIndex in
+            isDirectRenderedBrowserTabLine(lines[lineIndex], indent: indent)
+        }
+        guard tabLineIndexes.count >= 10 else { return }
+        let activeLineIndexes = Set(tabLineIndexes.filter { lineIndex in
+            isActiveRenderedBrowserTabLine(lines[lineIndex])
+        })
+        guard !activeLineIndexes.isEmpty else { return }
+
+        let insertionIndex = tabLineIndexes.first!
+        var omittedCount = 0
+        for lineIndex in tabLineIndexes.reversed() where !activeLineIndexes.contains(lineIndex) {
+            if let recordIndex = renderedElementIndex(lines[lineIndex], indent: indent) {
+                records.removeValue(forKey: recordIndex)
+                if focusedElementId == recordIndex {
+                    focusedElementId = nil
+                    focusedSummary = nil
+                }
+            }
+            lines.remove(at: lineIndex)
+            omittedCount += 1
+        }
+        guard omittedCount > 0 else { return }
+        lines.insert("\(indent)... \(omittedCount) inactive browser tabs omitted", at: insertionIndex)
     }
 }
 
@@ -1494,6 +1722,43 @@ private func usesRowsAsPrimaryChildren(role: String) -> Bool {
         kAXOutlineRole as String,
         kAXTableRole as String,
     ].contains(role)
+}
+
+private func tabStripCompaction(parent: SnapshotRenderNode, children: [AXUIElement]) -> SnapshotTabStripCompaction? {
+    let childNodes = children.map { child in
+        let role = stringAttribute(child, kAXRoleAttribute as String) ?? "AXUnknown"
+        return SnapshotRenderNode(
+            role: role,
+            roleDescription: stringAttribute(child, kAXRoleDescriptionAttribute as String),
+            title: stringAttribute(child, kAXTitleAttribute as String),
+            label: stringAttribute(child, kAXDescriptionAttribute as String),
+            value: valueString(child),
+            traits: traitsFor(child, role: role)
+        )
+    }
+    // Why: browsers expose every open tab through AX; retaining only the active
+    // tab keeps snapshots focused on the current page instead of stale tab titles.
+    return SnapshotRenderHeuristics.tabStripCompaction(parent: parent, children: childNodes)
+}
+
+private func isDirectRenderedBrowserTabLine(_ line: String, indent: String) -> Bool {
+    guard line.hasPrefix(indent), !line.dropFirst(indent.count).hasPrefix("\t") else {
+        return false
+    }
+    let text = String(line.dropFirst(indent.count))
+    return text.range(of: #"^\d+ tab($| \(|,)"#, options: .regularExpression) != nil
+}
+
+private func isActiveRenderedBrowserTabLine(_ line: String) -> Bool {
+    line.contains("(selected") || line.contains("Value: 1")
+}
+
+private func renderedElementIndex(_ line: String, indent: String) -> Int? {
+    let text = line.dropFirst(indent.count)
+    let digits = text.prefix { character in
+        character >= "0" && character <= "9"
+    }
+    return Int(digits)
 }
 
 private func genericTextSummary(
@@ -1628,10 +1893,12 @@ private func verifiedAction(property: String, expected: String? = nil, actualPre
     ]
 }
 
-private func unverifiedAction(reason: String) -> [String: Any] {
+private func unverifiedAction(reason: String, expected: String? = nil, actualPreview: String? = nil) -> [String: Any] {
     [
         "state": "unverified",
         "reason": reason,
+        "expected": jsonNullable(expected),
+        "actualPreview": jsonNullable(actualPreview),
     ]
 }
 
@@ -2107,7 +2374,8 @@ private enum KeyMap {
         "enter": 36, "l": 37, "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43,
         "/": 44, "n": 45, "m": 46, ".": 47, "tab": 48, "space": 49, "`": 50,
         "backspace": 51, "delete": 51, "escape": 53, "esc": 53, "left": 123, "right": 124,
-        "down": 125, "up": 126,
+        "down": 125, "up": 126, "insert": 114, "home": 115, "pageup": 116, "page_up": 116,
+        "forwarddelete": 117, "end": 119, "pagedown": 121, "page_down": 121,
     ]
 }
 

@@ -49,10 +49,13 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     workspaceDir: testState.fakeHomeDir,
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
+    localBaseRefSuggestionDismissed: false,
     autoRenameBranchFromWork: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
+    uiLanguage: 'system',
+    appIcon: overrides.appIcon ?? 'classic',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,
     editorMinimapEnabled: false,
@@ -131,9 +134,8 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     experimentalPet: false,
     experimentalActivity: true,
     experimentalTerminalAttention: false,
-    experimentalCompactWorktreeCards: false,
+    compactWorktreeCards: false,
     experimentalWorktreeSymlinks: false,
-    experimentalUnifiedNewTabLauncher: false,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
@@ -712,9 +714,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Debian',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
@@ -811,6 +813,7 @@ describe('CodexAccountService config sync', () => {
         return `${wslLinuxHomePath}\n`
       }
       if (script.includes('command -v codex')) {
+        expect(args.slice(0, 5)).toEqual(['-d', 'Debian', '--exec', 'bash', '-ic'])
         throw new Error('codex missing')
       }
       mkdirSync(wslManagedHomePath, { recursive: true })
@@ -896,9 +899,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       const child = new EventEmitter() as EventEmitter & {
@@ -1011,9 +1014,9 @@ describe('CodexAccountService config sync', () => {
       expect(args).toEqual([
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'bash',
-        '-lc',
+        '-ic',
         `export CODEX_HOME='${wslLinuxHomePath}'; exec codex login`
       ])
       expect(readFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'utf-8')).toBe(

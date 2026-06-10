@@ -1132,6 +1132,48 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
   })
 
+  it('reads back identity-less refreshed credentials when runtime oauth metadata matches', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const runtimeConfigPath = join(testState.fakeHomeDir, '.claude.json')
+    const originalCredentials = createClaudeCredentialsJson(
+      'user@example.com',
+      'original',
+      'org-a',
+      1_000
+    )
+    const refreshedCredentials = createClaudeCredentialsWithoutEmail('refreshed', null, {
+      expiresAt: 2_000,
+      refreshToken: 'rotated-refresh-token'
+    })
+    writeFileSync(runtimeConfigPath, '{}\n', 'utf-8')
+    const managedAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      originalCredentials,
+      '{"accountUuid":"account-uuid-1","emailAddress":"user@example.com","organizationUuid":"org-a"}\n'
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath, {
+          email: 'user@example.com',
+          organizationUuid: 'org-a'
+        })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    writeFileSync(runtimeCredentialsPath, refreshedCredentials, 'utf-8')
+    await service.syncForCurrentSelection()
+
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath)).toBe(refreshedCredentials)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(refreshedCredentials)
+  })
+
   it('rules out other identity-less accounts with different refresh tokens', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const account1RefreshToken = 'account-1-refresh-token'
@@ -2828,6 +2870,57 @@ describe('ClaudeRuntimeAuthService', () => {
 
     expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(account1Refreshed)
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account2Credentials)
+  })
+
+  it('does not clobber unverified live runtime credentials when switching accounts', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const account1Original = createClaudeCredentialsJson('one@example.com', 'one-original', 'org-a')
+    const unverifiedLiveCredentials = createClaudeCredentialsWithoutEmail('one-live', 'org-b')
+    const account2Credentials = createClaudeCredentialsJson('two@example.com', 'two', 'org-c')
+    const managedAuthPath1 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      account1Original
+    )
+    const managedAuthPath2 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-2',
+      account2Credentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, {
+          email: 'one@example.com',
+          organizationUuid: 'org-a'
+        }),
+        createClaudeAccount('account-2', managedAuthPath2, {
+          email: 'two@example.com',
+          organizationUuid: 'org-c'
+        })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const { markClaudePtyExited, markClaudePtySpawned } = await import('./live-pty-gate')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    markClaudePtySpawned('live-claude-pty')
+    try {
+      writeFileSync(runtimeCredentialsPath, unverifiedLiveCredentials, 'utf-8')
+      settings.activeClaudeManagedAccountId = 'account-2'
+
+      await expect(service.syncForCurrentSelection()).rejects.toThrow(
+        'live Claude terminal has unverified refreshed auth'
+      )
+    } finally {
+      markClaudePtyExited('live-claude-pty')
+    }
+
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(account1Original)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(unverifiedLiveCredentials)
   })
 
   it('routes refreshed Claude credentials to the matching managed account', async () => {

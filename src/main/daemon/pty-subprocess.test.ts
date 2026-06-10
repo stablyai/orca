@@ -1,13 +1,19 @@
 /* oxlint-disable max-lines -- Why: exercises full PTY subprocess surface (spawn setup, signal routing, data events, platform-specific shell configs, and Windows PowerShell implementations) with co-located test scenarios to prevent fixture drift. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, realpathSync, rmSync } from 'fs'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
-const { spawnMock, isPwshAvailableMock, validateWorkingDirectoryMock } = vi.hoisted(() => ({
+const {
+  spawnMock,
+  isPwshAvailableMock,
+  validateWorkingDirectoryMock,
+  getNodePtySpawnHelperCandidatesMock
+} = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
+  getNodePtySpawnHelperCandidatesMock: vi.fn(),
   validateWorkingDirectoryMock: vi.fn((cwd: string) => {
     if (cwd.includes('definitely-missing')) {
       throw new Error(
@@ -29,11 +35,12 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
+    getNodePtySpawnHelperCandidates: getNodePtySpawnHelperCandidatesMock,
     validateWorkingDirectory: validateWorkingDirectoryMock
   }
 })
 
-import { createPtySubprocess } from './pty-subprocess'
+import { checkPtySpawnHealth, createPtySubprocess } from './pty-subprocess'
 
 const ORCA_SHELL_WRAPPER_ENV = [
   'ORCA_ATTRIBUTION_SHIM_DIR',
@@ -79,6 +86,10 @@ describe('createPtySubprocess', () => {
     isPwshAvailableMock.mockReturnValue(false)
     previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-subprocess-test-'))
+    const spawnHelperPath = join(userDataPath, 'spawn-helper')
+    writeFileSync(spawnHelperPath, '')
+    getNodePtySpawnHelperCandidatesMock.mockReset()
+    getNodePtySpawnHelperCandidatesMock.mockReturnValue([spawnHelperPath])
     process.env.ORCA_USER_DATA_PATH = userDataPath
     for (const key of ORCA_SHELL_WRAPPER_ENV) {
       savedWrapperEnv[key] = process.env[key]
@@ -167,6 +178,54 @@ describe('createPtySubprocess', () => {
       expect.any(Array),
       expect.objectContaining({ cwd: originalCwd })
     )
+  })
+
+  it('checks macOS PTY spawn health with a short-lived shell', async () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+
+    try {
+      const result = checkPtySpawnHealth()
+      proc._simulateExit(0)
+      await expect(result).resolves.toBeUndefined()
+      expect(proc.kill).not.toHaveBeenCalled()
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      '/bin/sh',
+      ['-c', 'exit 0'],
+      expect.objectContaining({
+        cols: 2,
+        rows: 1,
+        cwd: userDataPath,
+        name: 'xterm-256color'
+      })
+    )
+  })
+
+  it('surfaces stale node-pty helper failures during macOS PTY spawn health', async () => {
+    spawnMock.mockImplementation(() => {
+      throw new Error(
+        "node-pty: posix_spawn failed: ENOENT (errno 2, No such file or directory) - helper='/tmp/deleted/spawn-helper'"
+      )
+    })
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+
+    try {
+      await expect(checkPtySpawnHealth()).rejects.toThrow('Daemon failed to spawn shell "/bin/sh"')
+      await expect(checkPtySpawnHealth()).rejects.toThrow('posix_spawn failed: ENOENT')
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
   })
 
   it('returns a SubprocessHandle with correct pid', () => {
@@ -613,6 +672,36 @@ describe('createPtySubprocess', () => {
     expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
   })
 
+  it('uses shell wrapper when Agent Teams shim path must survive shell startup', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { value: 'linux' })
+
+    try {
+      createPtySubprocess({
+        sessionId: 'test',
+        cols: 80,
+        rows: 24,
+        env: {
+          SHELL: '/bin/zsh',
+          PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+          ORCA_AGENT_TEAMS_SHIM_DIR: '/tmp/orca-agent-teams-bin'
+        }
+      })
+    } finally {
+      if (platform) {
+        Object.defineProperty(process, 'platform', platform)
+      }
+    }
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[1]).toEqual(['-l'])
+    expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
+    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+  })
+
   it('deletes requested env keys after merging daemon process env', () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -637,6 +726,31 @@ describe('createPtySubprocess', () => {
 
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[2].env.CODEX_HOME).toBeUndefined()
+  })
+
+  it('honors explicit terminal env overrides after deleting requested defaults', () => {
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+
+    createPtySubprocess({
+      sessionId: 'test',
+      cols: 80,
+      rows: 24,
+      env: {
+        SHELL: '/bin/bash',
+        TERM: 'screen-256color',
+        PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
+        ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+      },
+      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+    })
+
+    const lastCall = spawnMock.mock.calls.at(-1)!
+    expect(lastCall[2].name).toBe('screen-256color')
+    expect(lastCall[2].env.TERM).toBe('screen-256color')
+    expect(lastCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+    expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
+    expect(lastCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
   })
 
   it('combines HOMEDRIVE and HOMEPATH for Windows default cwd', () => {

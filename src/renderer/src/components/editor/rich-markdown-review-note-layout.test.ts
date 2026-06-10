@@ -36,6 +36,21 @@ describe('stackRichMarkdownReviewNotePositions', () => {
     expect(stacked[0].top).toBe(100)
     expect(stacked[1].top).toBeGreaterThan(stacked[0].top)
   })
+
+  it('reserves quote height for fallback source-line excerpts', () => {
+    const stacked = stackRichMarkdownReviewNotePositions([
+      {
+        comment: makeComment({ id: 'first', body: 'note' }),
+        top: 100
+      },
+      {
+        comment: makeComment({ id: 'second', body: 'note' }),
+        top: 100
+      }
+    ])
+
+    expect(stacked[1].top).toBe(210)
+  })
 })
 
 describe('shouldExpandRichMarkdownReviewRail', () => {

@@ -9,6 +9,7 @@ import type { getEditorPanelRenderModel } from './editor-panel-render-model'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
+import { translate } from '@/i18n/i18n'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
@@ -19,6 +20,8 @@ type EditorPanelShellProps = {
   model: EditorPanelRenderModel
   copiedPathVisible: boolean
   showMarkdownTableOfContents: boolean
+  canShowMarkdownFrontmatterToggle: boolean
+  markdownFrontmatterVisible: boolean
   sideBySide: boolean
   openFiles: OpenFile[]
   fileContents: Record<string, FileContent>
@@ -36,6 +39,7 @@ type EditorPanelShellProps = {
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
+  onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
   onContentChange: (content: string) => void
   onContentChangeForFile: (file: OpenFile, content: string) => void
@@ -56,6 +60,8 @@ export function EditorPanelShell({
   model,
   copiedPathVisible,
   showMarkdownTableOfContents,
+  canShowMarkdownFrontmatterToggle,
+  markdownFrontmatterVisible,
   sideBySide,
   openFiles,
   fileContents,
@@ -73,6 +79,7 @@ export function EditorPanelShell({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
+  onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
   onContentChange,
   onContentChangeForFile,
@@ -106,6 +113,8 @@ export function EditorPanelShell({
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
+          canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+          markdownFrontmatterVisible={markdownFrontmatterVisible}
           sideBySide={sideBySide}
           openFileState={model.openFileState}
           onCopyPath={onCopyPath}
@@ -116,6 +125,7 @@ export function EditorPanelShell({
           onToggleSideBySide={onToggleSideBySide}
           onEditorToggleChange={onEditorToggleChange}
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
+          onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
         />
       )}
@@ -144,6 +154,7 @@ export function EditorPanelShell({
           handleSaveForFile={onSaveForFile}
           reloadFileContent={onReloadFileContent}
           showMarkdownTableOfContents={showMarkdownTableOfContents}
+          showMarkdownFrontmatter={markdownFrontmatterVisible}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
           markdownAnnotationsEnabled={markdownAnnotationsEnabled}
         />
@@ -174,7 +185,7 @@ export function EditorPanelShell({
 function EditorLoadingFallback(): JSX.Element {
   return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      Loading editor...
+      {translate('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
     </div>
   )
 }

@@ -38,6 +38,25 @@ describe('editor self-write registry', () => {
     expect(hasRecentSelfWrite('/repo/a.md')).toBe(false)
   })
 
+  it('keeps same-path stamps isolated by runtime owner', () => {
+    recordSelfWrite('/repo/a.md', 'runtime save', 'env-1')
+
+    expect(hasRecentSelfWrite('/repo/a.md', 'env-1')).toBe(true)
+    expect(hasRecentSelfWrite('/repo/a.md', null)).toBe(false)
+
+    clearSelfWrite('/repo/a.md', null)
+    expect(hasRecentSelfWrite('/repo/a.md', 'env-1')).toBe(true)
+
+    clearSelfWrite('/repo/a.md', 'env-1')
+    expect(hasRecentSelfWrite('/repo/a.md', 'env-1')).toBe(false)
+  })
+
+  it('trims runtime owner ids when matching stamps', () => {
+    recordSelfWrite('/repo/a.md', 'runtime save', ' env-1 ')
+
+    expect(hasRecentSelfWrite('/repo/a.md', 'env-1')).toBe(true)
+  })
+
   it('prunes expired stamps when recording later writes', () => {
     recordSelfWrite('/repo/old.md')
 

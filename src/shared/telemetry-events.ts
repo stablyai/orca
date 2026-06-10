@@ -58,6 +58,7 @@ import type {
 // should map to concrete values; see `tuiAgentToAgentKind`.
 export const AGENT_KIND_VALUES = [
   'claude-code',
+  'claude-agent-teams',
   'openclaude',
   'codex',
   'autohand',
@@ -114,10 +115,9 @@ export type ErrorClass = z.infer<typeof errorClassSchema>
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
 export type RepoMethod = z.infer<typeof repoMethodSchema>
 
-// Setup-step affordances the user can pick after `repo_added` fires (see
-// AddRepoSetupStep). One enum because every value lives on the same screen and
-// the funnel question is "which one did they pick" — adding values later is
-// additive-safe per the schema-evolution doctrine below.
+// Historical setup-step affordances users could pick after `repo_added` fired.
+// Current Add Project flows skip that choice screen and auto-open the default
+// checkout, but the schema stays for pre-rollout rows and compatibility.
 export const addRepoSetupStepActionSchema = z.enum([
   'open_primary',
   'create_worktree',
@@ -136,6 +136,34 @@ export const addRepoExistingWorkspaceSourceSchema = z.enum([
   'create_project'
 ])
 export type AddRepoExistingWorkspaceSource = z.infer<typeof addRepoExistingWorkspaceSourceSchema>
+export const addRepoDefaultCheckoutHandoffSourceSchema = z.enum([
+  'local_folder_picker',
+  'runtime_server_path',
+  'ssh_remote_path',
+  'clone_url',
+  'create_project',
+  'onboarding_open_folder',
+  'onboarding_clone_url',
+  'project_added_compat'
+])
+export type AddRepoDefaultCheckoutHandoffSource = z.infer<
+  typeof addRepoDefaultCheckoutHandoffSourceSchema
+>
+export const addRepoDefaultCheckoutHandoffResultSchema = z.enum([
+  'opened_default_checkout',
+  'revealed_project'
+])
+export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
+  'loaded_default_checkout',
+  'detected_default_checkout',
+  'no_authoritative_detection',
+  'no_default_checkout',
+  'show_detected_default_failed',
+  'show_detected_linked_failed',
+  'authoritative_refresh_failed',
+  'linked_external_refresh_failed',
+  'refreshed_default_missing'
+])
 
 export const setupScriptImportProviderSchema = z.enum(SETUP_SCRIPT_IMPORT_PROVIDERS)
 export type SetupScriptImportProviderTelemetry = z.infer<typeof setupScriptImportProviderSchema>
@@ -251,7 +279,6 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalActivity',
   'experimentalTerminalAttention',
   'experimentalWorktreeSymlinks',
-  'experimentalUnifiedNewTabLauncher',
   'geminiCliOAuthEnabled'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
@@ -354,6 +381,19 @@ const orcaCliFeatureTipSetupResultSchema = z
   })
   .strict()
 
+const cmdJPaletteFeatureTipShownSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const cmdJPaletteFeatureTipAcknowledgedSchema = z
+  .object({
+    source: orcaCliFeatureTipSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
 const featureWallOpenedSchema = z
   .object({
     source: featureWallOpenSourceSchema
@@ -427,6 +467,14 @@ const addRepoExistingWorkspacesDetectedSchema = z
     detached_workspace_count: z.number().int().min(0).max(50),
     custom_named_workspace_count: z.number().int().min(0).max(50),
     sparse_workspace_count: z.number().int().min(0).max(50),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+const addRepoDefaultCheckoutHandoffSchema = z
+  .object({
+    source: addRepoDefaultCheckoutHandoffSourceSchema,
+    result: addRepoDefaultCheckoutHandoffResultSchema,
+    reason: addRepoDefaultCheckoutHandoffReasonSchema,
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
@@ -588,7 +636,7 @@ const agentHookUnattributedSchema = z
 // unless a future versioned event replaces the historical schema.
 const ONBOARDING_TELEMETRY_LEGACY_MAX_STEP = 7
 const onboardingStepSchema = z.number().int().min(1).max(ONBOARDING_TELEMETRY_LEGACY_MAX_STEP)
-const onboardingPathSchema = z.enum(['open_folder', 'clone_url'])
+const onboardingPathSchema = z.enum(['open_folder', 'clone_url', 'add_project_modal'])
 const onboardingFailureReasonSchema = z.enum([
   'invalid_path',
   'clone_failed',
@@ -1199,6 +1247,7 @@ export const eventSchemas = {
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
   add_repo_existing_workspaces_detected: addRepoExistingWorkspacesDetectedSchema,
+  add_repo_default_checkout_handoff: addRepoDefaultCheckoutHandoffSchema,
   add_repo_nested_scan_result: addRepoNestedScanResultSchema,
   add_repo_nested_import_action: addRepoNestedImportActionSchema,
   add_repo_nested_import_result: addRepoNestedImportResultSchema,
@@ -1221,6 +1270,8 @@ export const eventSchemas = {
   orca_cli_feature_tip_shown: orcaCliFeatureTipShownSchema,
   orca_cli_feature_tip_setup_clicked: orcaCliFeatureTipSetupClickedSchema,
   orca_cli_feature_tip_setup_result: orcaCliFeatureTipSetupResultSchema,
+  cmd_j_palette_feature_tip_shown: cmdJPaletteFeatureTipShownSchema,
+  cmd_j_palette_feature_tip_acknowledged: cmdJPaletteFeatureTipAcknowledgedSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,
@@ -1303,6 +1354,7 @@ type _CohortExtendedRoster =
   | 'repo_added'
   | 'add_repo_setup_step_action'
   | 'add_repo_existing_workspaces_detected'
+  | 'add_repo_default_checkout_handoff'
   | 'add_repo_nested_scan_result'
   | 'add_repo_nested_import_action'
   | 'add_repo_nested_import_result'
@@ -1316,6 +1368,8 @@ type _CohortExtendedRoster =
   | 'orca_cli_feature_tip_shown'
   | 'orca_cli_feature_tip_setup_clicked'
   | 'orca_cli_feature_tip_setup_result'
+  | 'cmd_j_palette_feature_tip_shown'
+  | 'cmd_j_palette_feature_tip_acknowledged'
 // Why: `z.object({}).strict()` infers a string index signature, which would
 // make every key appear present. Ignore index-signature-only keys here so
 // strict empty event payloads do not get pulled into keyed telemetry rosters.

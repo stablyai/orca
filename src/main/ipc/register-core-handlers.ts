@@ -39,10 +39,10 @@ import { registerAutomationHandlers } from './automations'
 import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerBrowserHandlers } from './browser'
-import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
 import { registerUIHandlers } from './ui'
+import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerSpeechHandlers } from './speech'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
@@ -140,16 +140,11 @@ export function registerCoreHandlers(
   }
   registerTelemetryHandlers(store)
   registerBrowserHandlers()
-  // Why: applyPendingCookieImport MUST run before restorePersistedUserAgent
-  // because the latter calls session.fromPartition() which initializes
-  // CookieMonster. The pending import replaces the live DB file so
-  // CookieMonster reads the imported cookies on first access.
-  browserSessionRegistry.applyPendingCookieImport()
-  browserSessionRegistry.restorePersistedUserAgent()
   registerShellHandlers()
   registerPetHandlers()
   registerSessionHandlers(store)
   registerUIHandlers(store)
+  registerEmulatorFrameStreamHandlers()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
   if (commitMessageAgentEnv) {

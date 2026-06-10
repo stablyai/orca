@@ -44,6 +44,12 @@ import {
   handleSwitchTabAcrossAllTypes,
   handleSwitchTerminalTab
 } from './ipc-tab-switch'
+import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
+import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
+import {
+  isManualSimulatorLaunchPending,
+  rememberPrelaunchedSimulatorSession
+} from '@/lib/simulator-launch-coordination'
 import {
   normalizeAgentStatusPayload,
   type AgentStatusIpcPayload,
@@ -65,11 +71,13 @@ import {
   setDriverForBrowserPage
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
+import { dispatchBrowserPageZoomEvent } from '@/components/browser-pane/browser-page-zoom'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
 } from '@/components/browser-pane/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
+import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
 import { detectLanguage } from '@/lib/language-detect'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
@@ -77,6 +85,7 @@ import { track } from '@/lib/telemetry'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import type { AppState } from '../store/types'
 import {
   closeWebRuntimeSessionTab,
@@ -99,6 +108,8 @@ import {
 } from './agent-hook-completion-notifications'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
+import { titleHasAgentName } from '../../../shared/agent-detection'
+import { translate } from '@/i18n/i18n'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
@@ -213,6 +224,23 @@ function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): S
 
 function getVisibleWorktreeIdsForRepo(state: AppState, repoId: string): Set<string> {
   return new Set((state.worktreesByRepo[repoId] ?? []).map((worktree) => worktree.id))
+}
+
+function resolveActiveBrowserPageId(state: AppState): string | null {
+  const worktreeId = state.activeWorktreeId
+  if (!worktreeId) {
+    return null
+  }
+  const activeWorkspaceId =
+    state.activeBrowserTabIdByWorktree[worktreeId] ?? state.activeBrowserTabId ?? null
+  const browserWorkspaces = state.browserTabsByWorktree[worktreeId] ?? []
+  const workspace =
+    browserWorkspaces.find((candidate) => candidate.id === activeWorkspaceId) ?? null
+  if (!workspace) {
+    return null
+  }
+  const pages = state.browserPagesByWorkspace[workspace.id] ?? []
+  return workspace.activePageId ?? workspace.pageIds?.[0] ?? pages[0]?.id ?? null
 }
 
 type TerminalSplitDirection = 'horizontal' | 'vertical'
@@ -483,7 +511,7 @@ async function applyRemoteWorkspaceSnapshot(
       revision: snapshot.revision,
       updatedAt: snapshot.updatedAt,
       lastSyncedAt: Date.now(),
-      message: 'Workspace synced'
+      message: translate('auto.hooks.useIpcEvents.4f78ba5885', 'Workspace synced')
     })
     await useAppStore.getState().reconnectPersistedTerminals()
   } finally {
@@ -502,7 +530,10 @@ async function syncRemoteWorkspaceAfterConnect(targetId: string): Promise<void> 
     store.setRemoteWorkspaceSyncStatus(targetId, {
       phase: 'error',
       direction: 'pull',
-      message: 'Workspace sync waited for local session hydration and timed out'
+      message: translate(
+        'auto.hooks.useIpcEvents.88214a785b',
+        'Workspace sync waited for local session hydration and timed out'
+      )
     })
     return
   }
@@ -516,7 +547,7 @@ async function syncRemoteWorkspaceAfterConnect(targetId: string): Promise<void> 
     useAppStore.getState().setRemoteWorkspaceSyncStatus(targetId, {
       phase: 'offline',
       direction: 'pull',
-      message: 'Remote workspace sync unavailable'
+      message: translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable')
     })
     return
   }
@@ -546,7 +577,7 @@ async function syncRemoteWorkspaceAfterConnect(targetId: string): Promise<void> 
     phase: 'idle',
     revision: snapshot.revision,
     updatedAt: snapshot.updatedAt,
-    message: 'No remote workspace yet'
+    message: translate('auto.hooks.useIpcEvents.2ec42e1c52', 'No remote workspace yet')
   })
 }
 
@@ -559,7 +590,7 @@ function applyRemoteWorkspacePatchStatus(
       phase: 'offline',
       direction: 'push',
       lastSyncedAt: Date.now(),
-      message: 'Remote workspace sync unavailable'
+      message: translate('auto.hooks.useIpcEvents.2fe88c2e06', 'Remote workspace sync unavailable')
     })
     return
   }
@@ -570,7 +601,7 @@ function applyRemoteWorkspacePatchStatus(
       revision: result.snapshot.revision,
       updatedAt: result.snapshot.updatedAt,
       lastSyncedAt: Date.now(),
-      message: 'Workspace uploaded'
+      message: translate('auto.hooks.useIpcEvents.f8aaf2bde3', 'Workspace uploaded')
     })
     return
   }
@@ -616,6 +647,15 @@ export function buildNewWorkspaceShortcutModalData(
   }
 }
 
+export function openNewWorkspaceFromShortcut(
+  state: Pick<AppState, 'activeModal' | 'activeView' | 'taskPageData' | 'openModal'>
+): void {
+  if (state.activeModal === 'new-workspace-composer') {
+    return
+  }
+  state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))
+}
+
 export function resolveBrowserSessionTabTarget(
   state: Pick<AppState, 'browserTabsByWorktree' | 'unifiedTabsByWorktree'>,
   worktreeId: string,
@@ -654,8 +694,140 @@ export function useIpcEvents(): void {
     type AgentStatusApplyResult = 'applied' | 'pending' | 'dropped'
     const pendingAgentStatusEvents: PendingAgentStatusEvent[] = []
     let pendingAgentStatusRetryTimer: ReturnType<typeof setTimeout> | null = null
+    let runtimeClientEventsUnsubscribe: (() => void) | null = null
+    let runtimeClientEventsEnvironmentId: string | null = null
+    let runtimeClientEventsGeneration = 0
 
     unsubs.push(attachMobileMarkdownBridge())
+
+    const handleWorktreesChanged = async (repoId: string): Promise<void> => {
+      // Why: diff before vs. after fetchWorktrees to detect server-side
+      // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
+      // and purge worktree-scoped state for removed ids. Without this,
+      // `ptyIdsByTabId` would retain entries for tabs whose worktree is
+      // gone, and SessionsStatusSegment's `boundPtyIds` set would keep
+      // misclassifying the zombie as bound (design §2c, §4.4).
+      const state = useAppStore.getState()
+      const before =
+        getAuthoritativeDetectedWorktreeIds(state, repoId) ??
+        getVisibleWorktreeIdsForRepo(state, repoId)
+      await state.fetchWorktrees(repoId)
+      await useAppStore.getState().fetchWorktreeLineage()
+      const afterState = useAppStore.getState()
+      const after = getAuthoritativeDetectedWorktreeIds(afterState, repoId)
+      if (!after) {
+        return
+      }
+      const removed: string[] = []
+      for (const id of before) {
+        if (!after.has(id)) {
+          removed.push(id)
+        }
+      }
+      if (removed.length > 0) {
+        console.warn(
+          `[worktree-purge] diff-based purge removing state for ${removed.length} worktree(s):`,
+          removed
+        )
+        afterState.purgeWorktreeTerminalState(removed)
+        afterState.removeWorkspaceSpaceWorktrees(removed)
+      }
+    }
+
+    const activateNotifiedWorktree = async (
+      {
+        repoId,
+        worktreeId,
+        setup,
+        startup,
+        defaultTabs
+      }: Extract<RuntimeClientEvent, { type: 'activateWorktree' }>,
+      options: { allowRuntimeEnvironment: boolean }
+    ): Promise<void> => {
+      if (!options.allowRuntimeEnvironment && isRuntimeEnvironmentActive()) {
+        // Why: local CLI-created worktree events carry local repo/worktree
+        // ids. Runtime server activation arrives through the remote event
+        // stream and is allowed through this helper separately.
+        return
+      }
+      const existedBeforeFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
+      // Why: fetch worktrees first so the activation helper can resolve
+      // the CLI-created worktree via findWorktreeById — it arrived from
+      // the main process and is not yet in the renderer state.
+      await useAppStore.getState().fetchWorktrees(repoId)
+      const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
+      // Why: route through activateAndRevealWorktree so CLI-created
+      // worktrees share the canonical activation path with UI-created
+      // ones. This records the visit in the back/forward history stack
+      // (recordWorktreeVisit), without which the nav buttons would
+      // ignore the CLI-driven workspace switch.
+      activateAndRevealWorktree(worktreeId, {
+        ...(setup ? { setup } : {}),
+        ...(startup ? { startup } : {}),
+        ...(defaultTabs ? { defaultTabs } : {}),
+        ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {}),
+        // Why: this activation already came from the host runtime event stream.
+        // Echoing it back as worktree.activate can create a selection loop.
+        notifyHostRuntime: false
+      })
+    }
+
+    const handleRuntimeClientEvent = (event: RuntimeClientEvent): void => {
+      if (event.type === 'reposChanged') {
+        const state = useAppStore.getState()
+        void state.fetchProjectGroups()
+        void state.fetchRepos()
+        return
+      }
+      if (event.type === 'worktreesChanged') {
+        void handleWorktreesChanged(event.repoId)
+        return
+      }
+      void activateNotifiedWorktree(event, { allowRuntimeEnvironment: true }).catch((error) => {
+        console.error('Failed to activate runtime-created worktree:', error)
+      })
+    }
+
+    const stopRuntimeClientEvents = (): void => {
+      runtimeClientEventsGeneration += 1
+      runtimeClientEventsEnvironmentId = null
+      runtimeClientEventsUnsubscribe?.()
+      runtimeClientEventsUnsubscribe = null
+    }
+
+    const syncRuntimeClientEventsSubscription = (): void => {
+      const environmentId = getActiveRuntimeEnvironmentId()
+      if (!environmentId) {
+        stopRuntimeClientEvents()
+        return
+      }
+      if (runtimeClientEventsEnvironmentId === environmentId) {
+        return
+      }
+      stopRuntimeClientEvents()
+      runtimeClientEventsEnvironmentId = environmentId
+      const generation = runtimeClientEventsGeneration
+      void subscribeRuntimeClientEvents(environmentId, handleRuntimeClientEvent, (error) => {
+        console.warn('[runtime-client-events] subscription error:', error)
+      })
+        .then((subscription) => {
+          if (generation !== runtimeClientEventsGeneration) {
+            subscription.unsubscribe()
+            return
+          }
+          runtimeClientEventsUnsubscribe = subscription.unsubscribe
+        })
+        .catch((error) => {
+          if (generation === runtimeClientEventsGeneration) {
+            runtimeClientEventsEnvironmentId = null
+            console.warn('[runtime-client-events] failed to subscribe:', error)
+          }
+        })
+    }
+
+    syncRuntimeClientEventsSubscription()
+    unsubs.push(useAppStore.subscribe(syncRuntimeClientEventsSubscription))
+    unsubs.push(stopRuntimeClientEvents)
 
     unsubs.push(
       window.api.repos.onChanged(() => {
@@ -678,37 +850,7 @@ export function useIpcEvents(): void {
           // active runtime with those ids can purge or overwrite server state.
           return
         }
-        // Why: diff before vs. after fetchWorktrees to detect server-side
-        // deletions (CLI `orca worktree rm`, other window, out-of-band RPC)
-        // and purge worktree-scoped state for removed ids. Without this,
-        // `ptyIdsByTabId` would retain entries for tabs whose worktree is
-        // gone, and SessionsStatusSegment's `boundPtyIds` set would keep
-        // misclassifying the zombie as bound (design §2c, §4.4).
-        const state = useAppStore.getState()
-        const before =
-          getAuthoritativeDetectedWorktreeIds(state, data.repoId) ??
-          getVisibleWorktreeIdsForRepo(state, data.repoId)
-        await state.fetchWorktrees(data.repoId)
-        await useAppStore.getState().fetchWorktreeLineage()
-        const afterState = useAppStore.getState()
-        const after = getAuthoritativeDetectedWorktreeIds(afterState, data.repoId)
-        if (!after) {
-          return
-        }
-        const removed: string[] = []
-        for (const id of before) {
-          if (!after.has(id)) {
-            removed.push(id)
-          }
-        }
-        if (removed.length > 0) {
-          console.warn(
-            `[worktree-purge] diff-based purge removing state for ${removed.length} worktree(s):`,
-            removed
-          )
-          afterState.purgeWorktreeTerminalState(removed)
-          afterState.removeWorkspaceSpaceWorktrees(removed)
-        }
+        await handleWorktreesChanged(data.repoId)
       })
     )
 
@@ -728,6 +870,18 @@ export function useIpcEvents(): void {
         }
         useAppStore.getState().updateWorktreeRemoteBranchConflict(event)
       })
+    )
+
+    // Why: drive each background creation's status panel by routing the main
+    // process's two-phase progress to its pending entry via the correlation id.
+    // Guarded with `?.` so a stale preload bundle doesn't crash the listener set.
+    unsubs.push(
+      window.api.worktrees.onCreateProgress?.((data) => {
+        if (!data.creationId) {
+          return
+        }
+        useAppStore.getState().updatePendingWorktreeCreation(data.creationId, { phase: data.phase })
+      }) ?? (() => {})
     )
 
     if (window.api.gh?.onPRRefreshEvent) {
@@ -844,16 +998,8 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onOpenNewWorkspace(() => {
-        // Why: keep the global shortcut quiet on a fresh install, but allow
-        // both Git projects and plain folder projects to create workspaces.
         const store = useAppStore.getState()
-        if (store.repos.length === 0) {
-          return
-        }
-        if (store.activeModal === 'new-workspace-composer') {
-          return
-        }
-        store.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(store))
+        openNewWorkspaceFromShortcut(store)
       })
     )
 
@@ -929,33 +1075,17 @@ export function useIpcEvents(): void {
 
     unsubs.push(
       window.api.ui.onActivateWorktree(({ repoId, worktreeId, setup, startup, defaultTabs }) => {
-        void (async () => {
-          if (isRuntimeEnvironmentActive()) {
-            // Why: local CLI-created worktree events carry local repo/worktree
-            // ids. Runtime server activation arrives through runtime state,
-            // not this local Electron event.
-            return
-          }
-          const existedBeforeFetch = Boolean(
-            useAppStore.getState().getKnownWorktreeById(worktreeId)
-          )
-          // Why: fetch worktrees first so the activation helper can resolve
-          // the CLI-created worktree via findWorktreeById — it arrived from
-          // the main process and is not yet in the renderer state.
-          await useAppStore.getState().fetchWorktrees(repoId)
-          const existsAfterFetch = Boolean(useAppStore.getState().getKnownWorktreeById(worktreeId))
-          // Why: route through activateAndRevealWorktree so CLI-created
-          // worktrees share the canonical activation path with UI-created
-          // ones. This records the visit in the back/forward history stack
-          // (recordWorktreeVisit), without which the nav buttons would
-          // ignore the CLI-driven workspace switch.
-          activateAndRevealWorktree(worktreeId, {
+        void activateNotifiedWorktree(
+          {
+            type: 'activateWorktree',
+            repoId,
+            worktreeId,
             ...(setup ? { setup } : {}),
             ...(startup ? { startup } : {}),
-            ...(defaultTabs ? { defaultTabs } : {}),
-            ...(!existedBeforeFetch && existsAfterFetch ? { sidebarRevealBehavior: 'auto' } : {})
-          })
-        })().catch((error) => {
+            ...(defaultTabs ? { defaultTabs } : {})
+          },
+          { allowRuntimeEnvironment: false }
+        ).catch((error) => {
           console.error('Failed to activate CLI-created worktree:', error)
         })
       })
@@ -981,7 +1111,10 @@ export function useIpcEvents(): void {
               if (requestId) {
                 window.api.ui.replyTerminalCreate({
                   requestId,
-                  error: 'Local terminal reveal is unavailable while a remote runtime is active'
+                  error: translate(
+                    'auto.hooks.useIpcEvents.60428567b4',
+                    'Local terminal reveal is unavailable while a remote runtime is active'
+                  )
                 })
               }
               return
@@ -1131,7 +1264,10 @@ export function useIpcEvents(): void {
           if (isRuntimeEnvironmentActive()) {
             window.api.ui.replyTerminalCreate({
               requestId: data.requestId,
-              error: 'Local terminal creation is unavailable while a remote runtime is active'
+              error: translate(
+                'auto.hooks.useIpcEvents.7a64b31991',
+                'Local terminal creation is unavailable while a remote runtime is active'
+              )
             })
             return
           }
@@ -1140,7 +1276,7 @@ export function useIpcEvents(): void {
           if (!worktreeId) {
             window.api.ui.replyTerminalCreate({
               requestId: data.requestId,
-              error: 'No active worktree'
+              error: translate('auto.hooks.useIpcEvents.f000b2ff76', 'No active worktree')
             })
             return
           }
@@ -1348,41 +1484,48 @@ export function useIpcEvents(): void {
     )
 
     unsubs.push(
-      window.api.ui.onOpenFileFromMobile(({ worktreeId, filePath, relativePath }) => {
-        const store = useAppStore.getState()
-        const basename = relativePath.split(/[\\/]/).pop() || relativePath
-        store.setActiveWorktree(worktreeId)
-        store.markWorktreeVisited(worktreeId)
-        store.setActiveView('terminal')
-        // Why: mobile only sends a desktop-backed path. The renderer owns
-        // editor tab creation so grouped tab order and markdown bridges update
-        // through the same store path as desktop File Explorer.
-        store.openFile({
-          filePath,
-          relativePath,
-          worktreeId,
-          language: detectLanguage(basename),
-          mode: 'edit'
-        })
-        store.setActiveTabType('editor')
-        store.revealWorktreeInSidebar(worktreeId)
-      })
+      window.api.ui.onOpenFileFromMobile(
+        ({ worktreeId, filePath, relativePath, runtimeEnvironmentId }) => {
+          const store = useAppStore.getState()
+          const basename = relativePath.split(/[\\/]/).pop() || relativePath
+          store.setActiveWorktree(worktreeId)
+          store.markWorktreeVisited(worktreeId)
+          store.setActiveView('terminal')
+          // Why: mobile only sends a desktop-backed path. The renderer owns
+          // editor tab creation so grouped tab order and markdown bridges update
+          // through the same store path as desktop File Explorer.
+          store.openFile({
+            filePath,
+            relativePath,
+            worktreeId,
+            language: detectLanguage(basename),
+            runtimeEnvironmentId,
+            mode: 'edit'
+          })
+          store.setActiveTabType('editor')
+          store.revealWorktreeInSidebar(worktreeId)
+        }
+      )
     )
 
     unsubs.push(
-      window.api.ui.onOpenDiffFromMobile(({ worktreeId, filePath, relativePath, staged }) => {
-        const store = useAppStore.getState()
-        const language = detectLanguage(relativePath)
-        store.setActiveWorktree(worktreeId)
-        store.markWorktreeVisited(worktreeId)
-        store.setActiveView('terminal')
-        // Why: mobile renders diff tabs from diff metadata. The desktop
-        // markdown Changes-mode shortcut is editor-local and would publish
-        // plain markdown content back to mobile.
-        store.openDiff(worktreeId, filePath, relativePath, language, staged)
-        store.setActiveTabType('editor')
-        store.revealWorktreeInSidebar(worktreeId)
-      })
+      window.api.ui.onOpenDiffFromMobile(
+        ({ worktreeId, filePath, relativePath, staged, runtimeEnvironmentId }) => {
+          const store = useAppStore.getState()
+          const language = detectLanguage(relativePath)
+          store.setActiveWorktree(worktreeId)
+          store.markWorktreeVisited(worktreeId)
+          store.setActiveView('terminal')
+          // Why: mobile renders diff tabs from diff metadata. The desktop
+          // markdown Changes-mode shortcut is editor-local and would publish
+          // plain markdown content back to mobile.
+          store.openDiff(worktreeId, filePath, relativePath, language, staged, {
+            runtimeEnvironmentId
+          })
+          store.setActiveTabType('editor')
+          store.revealWorktreeInSidebar(worktreeId)
+        }
+      )
     )
 
     unsubs.push(
@@ -1541,7 +1684,7 @@ export function useIpcEvents(): void {
             const environmentId = getActiveRuntimeEnvironmentId()
             if (!isWebRuntimeSessionActive(environmentId)) {
               store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-                title: 'New Browser Tab',
+                title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
                 focusAddressBar: true
               })
               return
@@ -1558,7 +1701,7 @@ export function useIpcEvents(): void {
             return
           }
           store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-            title: 'New Browser Tab',
+            title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
             focusAddressBar: true
           })
         }
@@ -1571,7 +1714,12 @@ export function useIpcEvents(): void {
         if (isFloatingWorkspacePanelFocused()) {
           void createFloatingWorkspaceMarkdownTab(store).catch((err) => {
             toast.error(
-              err instanceof Error ? err.message : 'Failed to create untitled markdown file.'
+              err instanceof Error
+                ? err.message
+                : translate(
+                    'auto.hooks.useIpcEvents.56d3ec4203',
+                    'Failed to create untitled markdown file.'
+                  )
             )
           })
           return
@@ -1588,6 +1736,59 @@ export function useIpcEvents(): void {
       })
     )
 
+    // Why: emulator IPC is additive. Older paired clients and partial test
+    // preload mocks should not crash the whole event hook when it is absent.
+    const unsubscribeNewSimulatorTab = window.api.ui.onNewSimulatorTab?.(() => {
+      if (isRuntimeEnvironmentActive()) {
+        return
+      }
+      const store = useAppStore.getState()
+      const worktreeId = store.activeWorktreeId
+      if (!worktreeId) {
+        return
+      }
+      void openMobileEmulatorTab(worktreeId, { placement: 'rightSplit' })
+    })
+    if (unsubscribeNewSimulatorTab) {
+      unsubs.push(unsubscribeNewSimulatorTab)
+    }
+
+    const unsubscribeEmulatorAutoAttach = window.api.emulator?.onAutoAttach(
+      ({ worktreeId, info }) => {
+        if (isRuntimeEnvironmentActive()) {
+          return
+        }
+        if (isManualSimulatorLaunchPending(worktreeId)) {
+          // Why: manual launches pre-attach first so the ready pane can be
+          // created in the right split instead of as a hidden tab in this group.
+          rememberPrelaunchedSimulatorSession(worktreeId, info)
+          return
+        }
+        ensureSimulatorTab(worktreeId, { surfacePane: false })
+        // Why: watcher may detect a helper while a simulator tab is already mounted; push stream info so the pane updates without re-attach.
+        window.setTimeout(() => {
+          window.dispatchEvent(
+            new CustomEvent('orca:emulator-auto-attach', {
+              detail: { worktreeId, info }
+            })
+          )
+        }, 0)
+      }
+    )
+    if (unsubscribeEmulatorAutoAttach) {
+      unsubs.push(unsubscribeEmulatorAutoAttach)
+    }
+
+    const unsubscribeEmulatorPaneFocus = window.api.emulator?.onPaneFocus(({ worktreeId }) => {
+      if (isRuntimeEnvironmentActive()) {
+        return
+      }
+      ensureSimulatorTab(worktreeId, { surfacePane: true })
+    })
+    if (unsubscribeEmulatorPaneFocus) {
+      unsubs.push(unsubscribeEmulatorPaneFocus)
+    }
+
     // Why: CLI-driven tab creation sends a request with a specific worktreeId and
     // url. The renderer creates the tab and replies with the page ID so the
     // main process can wait for registerGuest before returning to the CLI.
@@ -1599,14 +1800,20 @@ export function useIpcEvents(): void {
             // Runtime agents cannot see or control those surfaces.
             window.api.ui.replyTabCreate({
               requestId: data.requestId,
-              error: 'Browser tabs are unavailable while a remote runtime is active'
+              error: translate(
+                'auto.hooks.useIpcEvents.291c8ed902',
+                'Browser tabs are unavailable while a remote runtime is active'
+              )
             })
             return
           }
           const store = useAppStore.getState()
           const worktreeId = data.worktreeId ?? store.activeWorktreeId
           if (!worktreeId) {
-            window.api.ui.replyTabCreate({ requestId: data.requestId, error: 'No active worktree' })
+            window.api.ui.replyTabCreate({
+              requestId: data.requestId,
+              error: translate('auto.hooks.useIpcEvents.f000b2ff76', 'No active worktree')
+            })
             return
           }
           // Why: CLI-created tabs should land in the same group as the active
@@ -1647,7 +1854,10 @@ export function useIpcEvents(): void {
           if (isRuntimeEnvironmentActive()) {
             window.api.ui.replyTabSetProfile({
               requestId: data.requestId,
-              error: 'Browser profiles are unavailable while a remote runtime is active'
+              error: translate(
+                'auto.hooks.useIpcEvents.f45fa2b03c',
+                'Browser profiles are unavailable while a remote runtime is active'
+              )
             })
             return
           }
@@ -1664,7 +1874,11 @@ export function useIpcEvents(): void {
           if (!owningWorkspace) {
             window.api.ui.replyTabSetProfile({
               requestId: data.requestId,
-              error: `Browser tab ${data.browserPageId} not found`
+              error: translate(
+                'auto.hooks.useIpcEvents.0e3cf53060',
+                'Browser tab {{value0}} not found',
+                { value0: data.browserPageId }
+              )
             })
             return
           }
@@ -1695,7 +1909,10 @@ export function useIpcEvents(): void {
           if (isRuntimeEnvironmentActive()) {
             window.api.ui.replyTabClose({
               requestId: data.requestId,
-              error: 'Browser tabs are unavailable while a remote runtime is active'
+              error: translate(
+                'auto.hooks.useIpcEvents.291c8ed902',
+                'Browser tabs are unavailable while a remote runtime is active'
+              )
             })
             return
           }
@@ -1709,7 +1926,10 @@ export function useIpcEvents(): void {
           if (!tabToClose) {
             window.api.ui.replyTabClose({
               requestId: data.requestId,
-              error: 'No active browser tab to close'
+              error: translate(
+                'auto.hooks.useIpcEvents.a8d2bf8e9e',
+                'No active browser tab to close'
+              )
             })
             return
           }
@@ -1735,7 +1955,11 @@ export function useIpcEvents(): void {
                 if (owningWorktreeId && isPinnedSessionTab(store, owningWorktreeId, workspaceId)) {
                   window.api.ui.replyTabClose({
                     requestId: data.requestId,
-                    error: `Browser tab ${workspaceId} is pinned`
+                    error: translate(
+                      'auto.hooks.useIpcEvents.0e3cf53060',
+                      'Browser tab {{value0}} is pinned',
+                      { value0: workspaceId }
+                    )
                   })
                   return
                 }
@@ -1750,7 +1974,11 @@ export function useIpcEvents(): void {
           if (explicitTargetId) {
             window.api.ui.replyTabClose({
               requestId: data.requestId,
-              error: `Browser tab ${explicitTargetId} not found`
+              error: translate(
+                'auto.hooks.useIpcEvents.0e3cf53060',
+                'Browser tab {{value0}} not found',
+                { value0: explicitTargetId }
+              )
             })
             return
           }
@@ -1761,7 +1989,11 @@ export function useIpcEvents(): void {
           if (owningWorktreeId && isPinnedSessionTab(store, owningWorktreeId, tabToClose)) {
             window.api.ui.replyTabClose({
               requestId: data.requestId,
-              error: `Browser tab ${tabToClose} is pinned`
+              error: translate(
+                'auto.hooks.useIpcEvents.0e3cf53060',
+                'Browser tab {{value0}} is pinned',
+                { value0: tabToClose }
+              )
             })
             return
           }
@@ -2144,14 +2376,24 @@ export function useIpcEvents(): void {
     // Zoom handling for menu accelerators and keyboard fallback paths.
     unsubs.push(
       window.api.ui.onTerminalZoom((direction) => {
+        const store = useAppStore.getState()
         const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
-          useAppStore.getState()
+          store
+        const activeBrowserPageId = resolveActiveBrowserPageId(store)
         const target = resolveZoomTarget({
           activeView,
           activeTabType,
+          activeBrowserPageId,
           activeElement: document.activeElement
         })
         if (target === 'terminal') {
+          return
+        }
+        if (target === 'browser') {
+          if (!activeBrowserPageId) {
+            return
+          }
+          dispatchBrowserPageZoomEvent({ browserPageId: activeBrowserPageId, direction })
           return
         }
         if (target === 'editor') {
@@ -2364,7 +2606,8 @@ export function useIpcEvents(): void {
           tabId: data.tabId,
           worktreeId: statusWorktreeId,
           terminalHandle: data.terminalHandle
-        }
+        },
+        data.providerSession ? { providerSession: data.providerSession } : undefined
       )
       applyResolvedAgentTerminalTitleToTab(store, data.paneKey, title, terminalTitle)
       if (options?.replay !== true && statusWorktreeId) {
@@ -2795,7 +3038,11 @@ function resolveHookPayloadAgentType(
   payload: ParsedAgentStatusPayload,
   terminalTitle: string | undefined
 ): ParsedAgentStatusPayload {
-  if (payload.agentType !== 'claude' || !terminalTitle?.toLowerCase().includes('openclaude')) {
+  if (
+    payload.agentType !== 'claude' ||
+    !terminalTitle ||
+    !titleHasAgentName(terminalTitle, 'openclaude')
+  ) {
     return payload
   }
   // Why: OpenClaude emits Claude-compatible hooks, so title identity is the

@@ -64,34 +64,36 @@ describe('getFeatureWallSetupProgress', () => {
     const progress = getFeatureWallSetupProgress(makeInput({ gitRepoCount: 2 }))
 
     expect(progress.stepDone['add-two-repos']).toBe(true)
-    expect(progress.coreTotal).toBe(8)
+    expect(progress.coreTotal).toBe(9)
   })
 
   it('orders visible parallel work before setup tasks', () => {
     expect(getFeatureWallSetupSteps().map((step) => step.id)).toEqual([
       'split-terminal',
       'two-worktrees',
+      'browser',
       'notifications',
       'default-agent',
+      'agent-capabilities',
       'task-sources',
       'setup-script',
-      'add-two-repos',
-      'agent-capabilities'
+      'add-two-repos'
     ])
   })
 
   it('groups setup guide steps into Parallel work and Setup sections', () => {
     expect(getFeatureWallSetupStepsForSection('parallel-work').map((step) => step.id)).toEqual([
       'split-terminal',
-      'two-worktrees'
+      'two-worktrees',
+      'browser'
     ])
     expect(getFeatureWallSetupStepsForSection('setup').map((step) => step.id)).toEqual([
       'notifications',
       'default-agent',
+      'agent-capabilities',
       'task-sources',
       'setup-script',
-      'add-two-repos',
-      'agent-capabilities'
+      'add-two-repos'
     ])
   })
 
@@ -115,11 +117,35 @@ describe('getFeatureWallSetupProgress', () => {
     expect(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)).toBe('split-terminal')
   })
 
-  it('does not mark the step complete from split-pane interaction count alone', () => {
+  it('marks the step complete from durable terminal-pane split interaction state', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         featureInteractions: {
           'terminal-pane-split': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        }
+      })
+    )
+
+    expect(progress.stepDone['split-terminal']).toBe(true)
+  })
+
+  it('does not mark the step complete from malformed durable terminal-pane split state', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          'terminal-pane-split': { firstInteractedAt: Number.NaN, interactionCount: 1 }
+        }
+      })
+    )
+
+    expect(progress.stepDone['split-terminal']).toBe(false)
+  })
+
+  it('does not mark the step complete from generic pane interaction state', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          'terminal-panes': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
         }
       })
     )
@@ -141,7 +167,7 @@ describe('getFeatureWallSetupProgress', () => {
     expect(progress.stepDone['split-terminal']).toBe(false)
   })
 
-  it('marks the step complete once a worktree terminal is split into two panes', () => {
+  it('does not mark the step complete from a live split layout without durable state', () => {
     const progress = getFeatureWallSetupProgress(
       makeInput({
         worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
@@ -152,7 +178,37 @@ describe('getFeatureWallSetupProgress', () => {
       })
     )
 
-    expect(progress.stepDone['split-terminal']).toBe(true)
+    expect(progress.stepDone['split-terminal']).toBe(false)
+  })
+
+  it('keeps the step complete after the split tab closes from durable state', () => {
+    const withSplit = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          'terminal-pane-split': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        },
+        worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
+        tabsByWorktree: {
+          'worktree-1': [{ id: 'tab-1', title: 'Terminal' }] as never
+        },
+        terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() }
+      })
+    )
+
+    expect(withSplit.stepDone['split-terminal']).toBe(true)
+
+    const afterClosingSplitTab = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          'terminal-pane-split': { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        },
+        worktreesByRepo: { 'repo-1': [makeWorktree('worktree-1')] },
+        tabsByWorktree: { 'worktree-1': [] },
+        terminalLayoutsByTabId: {}
+      })
+    )
+
+    expect(afterClosingSplitTab.stepDone['split-terminal']).toBe(true)
   })
 
   it('ignores split layouts for tabs that do not belong to a known worktree', () => {
@@ -217,6 +273,22 @@ describe('getFeatureWallSetupProgress', () => {
     )
 
     expect(progress.stepDone['two-worktrees']).toBe(true)
+  })
+
+  it('marks the browser step complete once a non-blank page has been viewed', () => {
+    const progress = getFeatureWallSetupProgress(
+      makeInput({
+        featureInteractions: {
+          browser: { firstInteractedAt: 1_700_000_000_000, interactionCount: 1 }
+        }
+      })
+    )
+
+    expect(progress.stepDone.browser).toBe(true)
+  })
+
+  it('does not mark the browser step complete without a viewed page', () => {
+    expect(getFeatureWallSetupProgress(makeInput()).stepDone.browser).toBe(false)
   })
 
   it('marks task sources complete for any supported connected provider', () => {

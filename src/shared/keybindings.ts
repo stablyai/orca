@@ -31,6 +31,7 @@ export type KeybindingActionId =
   | 'app.forceReload'
   | 'file.exportPdf'
   | 'workspace.create'
+  | 'workspace.rename'
   | 'workspace.delete'
   | 'voice.dictation'
   | 'view.tasks'
@@ -50,9 +51,11 @@ export type KeybindingActionId =
   | 'worktree.history.forward'
   | 'tab.newTerminal'
   | 'tab.newBrowser'
+  | 'tab.newSimulator'
   | 'tab.newMarkdown'
   | 'tab.openMarkdown'
   | 'tab.close'
+  | 'tab.rename'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
@@ -231,6 +234,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+N', 'Mod+Shift+N'])
   },
   {
+    id: 'workspace.rename',
+    title: 'Rename worktree',
+    group: 'Global',
+    scope: 'global',
+    conflictGroup: 'workspace-shell',
+    searchKeywords: ['shortcut', 'global', 'worktree', 'rename', 'workspace', 'title'],
+    // Why: macOS only. On Windows/Linux Ctrl+Alt+R has no safe default, and the
+    // chord families there (Ctrl+R reverse-search, Ctrl+Shift+R reload) are
+    // taken, so users bind it explicitly in Settings.
+    defaultBindings: {
+      darwin: ['Mod+Alt+R'],
+      linux: [],
+      win32: []
+    }
+  },
+  {
     id: 'workspace.delete',
     title: 'Delete Workspace',
     group: 'Global',
@@ -402,6 +421,18 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings(['Mod+Shift+B'])
   },
   {
+    id: 'tab.newSimulator',
+    title: 'New mobile emulator tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'simulator', 'emulator', 'mobile', 'ios', 'new'],
+    defaultBindings: {
+      darwin: ['Mod+Shift+E'],
+      linux: [],
+      win32: []
+    }
+  },
+  {
     id: 'tab.newMarkdown',
     title: 'New markdown tab',
     group: 'Tabs',
@@ -424,6 +455,22 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'close', 'tab', 'pane'],
     defaultBindings: platformBindings(['Mod+W'])
+  },
+  {
+    id: 'tab.rename',
+    title: 'Rename active tab',
+    group: 'Tabs',
+    scope: 'tabs',
+    conflictGroup: 'workspace-shell',
+    searchKeywords: ['shortcut', 'tab', 'rename', 'title', 'label'],
+    // Why: macOS only. Cmd+R is free in the app/terminal focus zone (the
+    // browser pane owns its own Cmd+R reload). On Windows/Linux Ctrl+R is the
+    // shell reverse-search, so it is left unbound for explicit user binding.
+    defaultBindings: {
+      darwin: ['Mod+R'],
+      linux: [],
+      win32: []
+    }
   },
   {
     id: 'tab.reopenClosed',

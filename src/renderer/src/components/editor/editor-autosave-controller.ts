@@ -89,7 +89,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
         // round-tripping back into a setContent that jumps the cursor to the
         // end (and, under round-trip drift, can drop keystrokes typed in the
         // debounce window). See editor-self-write-registry.
-        recordSelfWrite(liveFile.filePath, contentToSave)
+        recordSelfWrite(liveFile.filePath, contentToSave, liveFile.runtimeEnvironmentId)
         try {
           await writeRuntimeFile(
             {
@@ -105,7 +105,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
           // Why: the self-write stamp is only valid if a disk write actually
           // happened. Clearing it on failure keeps the external watcher from
           // suppressing a real third-party update that lands during the TTL.
-          clearSelfWrite(liveFile.filePath)
+          clearSelfWrite(liveFile.filePath, liveFile.runtimeEnvironmentId)
           throw error
         }
 

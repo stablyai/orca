@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getDotfileVisibleFileExplorerRows,
-  isDotfileRelativePath,
-  shouldIncludeFileExplorerEntry
-} from './file-explorer-entries'
+import { isDotfileRelativePath, shouldIncludeFileExplorerEntry } from './file-explorer-entries'
 
 describe('shouldIncludeFileExplorerEntry', () => {
   it('keeps dotfiles loadable so visibility can be toggled client-side', () => {
@@ -54,24 +50,5 @@ describe('isDotfileRelativePath', () => {
   it('does not match ordinary paths', () => {
     expect(isDotfileRelativePath('src/index.ts')).toBe(false)
     expect(isDotfileRelativePath('config/settings.json')).toBe(false)
-  })
-})
-
-describe('getDotfileVisibleFileExplorerRows', () => {
-  const rows = [
-    { relativePath: 'src/index.ts' },
-    { relativePath: '.env' },
-    { relativePath: '.config/settings.json' },
-    { relativePath: 'src/.cache/result.json' }
-  ]
-
-  it('returns the original row array when dotfiles are visible', () => {
-    expect(getDotfileVisibleFileExplorerRows(rows, true)).toBe(rows)
-  })
-
-  it('filters dotfiles and descendants when dotfiles are hidden', () => {
-    expect(getDotfileVisibleFileExplorerRows(rows, false).map((row) => row.relativePath)).toEqual([
-      'src/index.ts'
-    ])
   })
 })

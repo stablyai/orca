@@ -34,6 +34,12 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(true)
   })
 
+  it('bubbles Cmd+V so web clients receive the native paste event', () => {
+    expect(
+      shouldBypassXtermKeyboardEvent(event({ key: 'v', code: 'KeyV', metaKey: true }), noSel)
+    ).toBe(true)
+  })
+
   it('matches Cmd+C by produced logical key rather than physical key', () => {
     expect(
       shouldBypassXtermKeyboardEvent(event({ key: 'c', code: 'KeyJ', metaKey: true }), opts)
@@ -44,15 +50,12 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
   })
 
   it('does NOT bubble other Cmd chords — Orca window handlers intercept them before xterm', () => {
-    // Why: this policy is narrowly scoped to Cmd+C, the one clipboard chord
-    // Orca does not intercept at the window level. Cmd+V, Cmd+F, Cmd+D, Cmd+K,
-    // Cmd+W, Cmd+Arrow, Cmd+Backspace are all handled in keyboard-handlers.ts
-    // with stopImmediatePropagation before xterm's textarea listener fires,
-    // so they never reach this handler. Cmd+A flows through xterm's legacy
-    // evaluator which correctly produces type=1 (selectAll), so we must not
-    // swallow it here.
+    // Why: this policy is narrowly scoped to clipboard chords. Cmd+F, Cmd+D,
+    // Cmd+K, Cmd+W, Cmd+Arrow, Cmd+Backspace are handled in keyboard-handlers.ts
+    // with stopImmediatePropagation before xterm's textarea listener fires.
+    // Cmd+A flows through xterm's legacy evaluator which correctly produces
+    // type=1 (selectAll), so we must not swallow it here.
     const cases = [
-      event({ key: 'v', code: 'KeyV', metaKey: true }),
       event({ key: 'a', code: 'KeyA', metaKey: true }),
       event({ key: 't', code: 'KeyT', metaKey: true })
     ]

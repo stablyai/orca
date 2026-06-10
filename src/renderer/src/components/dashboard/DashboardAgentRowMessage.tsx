@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import { translate } from '@/i18n/i18n'
 
 type DashboardAgentRowMessageProps = {
   expanded: boolean
@@ -25,9 +26,15 @@ export function DashboardAgentRowMessage({
       {isInterrupted ? (
         <span
           className="shrink-0 text-[10px] leading-snug text-muted-foreground/80"
-          aria-label="Interrupted by user"
+          aria-label={translate(
+            'auto.components.dashboard.DashboardAgentRowMessage.1ec01cef03',
+            'Interrupted by user'
+          )}
         >
-          interrupted
+          {translate(
+            'auto.components.dashboard.DashboardAgentRowMessage.0a01046763',
+            'interrupted'
+          )}
         </span>
       ) : null}
       {lastAssistantMessage ? (

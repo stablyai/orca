@@ -6,12 +6,79 @@ import {
   activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab,
   createWebRuntimeSessionTerminal,
-  isWebRuntimeSessionActive
+  isWebRuntimeSessionActive,
+  isWebTerminalSurfaceTabId
 } from '@/runtime/web-runtime-session'
+import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync'
 
 const EDITOR_TAB_CONTENT_TYPES = new Set<TabContentType>(['editor', 'diff', 'conflict-review'])
 
 type TerminalTabActionState = ReturnType<typeof useAppStore.getState>
+
+type CloseTerminalTabTarget = {
+  worktreeId: string
+  terminalTabId: string
+}
+
+function resolveCloseTerminalTabTarget(
+  state: TerminalTabActionState,
+  tabId: string
+): CloseTerminalTabTarget | null {
+  for (const [worktreeId, worktreeTabs] of Object.entries(state.tabsByWorktree)) {
+    if (worktreeTabs.some((tab) => tab.id === tabId)) {
+      return { worktreeId, terminalTabId: tabId }
+    }
+  }
+
+  for (const [worktreeId, unifiedTabs] of Object.entries(state.unifiedTabsByWorktree ?? {})) {
+    const unified = unifiedTabs.find(
+      (tab) => tab.contentType === 'terminal' && (tab.entityId === tabId || tab.id === tabId)
+    )
+    if (unified) {
+      return { worktreeId, terminalTabId: unified.entityId }
+    }
+  }
+
+  return null
+}
+
+// Why: host-backed terminals may only exist in unifiedTabsByWorktree as
+// terminal entities, so close/sibling selection must merge tabsByWorktree and
+// unified terminal entityIds into one deduped list per worktree.
+function getWorktreeTerminalTabIds(state: TerminalTabActionState, worktreeId: string): string[] {
+  const ids = new Set<string>()
+  for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
+    ids.add(tab.id)
+  }
+  for (const tab of state.unifiedTabsByWorktree?.[worktreeId] ?? []) {
+    if (tab.contentType === 'terminal') {
+      ids.add(tab.entityId)
+    }
+  }
+  return [...ids]
+}
+
+function closeLocalTerminalTabState(terminalTabId: string): void {
+  const state = useAppStore.getState()
+  if (
+    Object.values(state.tabsByWorktree).some((tabs) => tabs.some((tab) => tab.id === terminalTabId))
+  ) {
+    state.closeTab(terminalTabId)
+    return
+  }
+
+  for (const tabs of Object.values(state.unifiedTabsByWorktree ?? {})) {
+    const unified = tabs.find(
+      (tab) =>
+        tab.contentType === 'terminal' &&
+        (tab.entityId === terminalTabId || tab.id === terminalTabId)
+    )
+    if (unified) {
+      state.closeUnifiedTab(unified.id)
+      return
+    }
+  }
+}
 
 function isPinnedVisibleTab(
   state: TerminalTabActionState,
@@ -69,33 +136,42 @@ export function createNewTerminalTab(
 
 export function closeTerminalTab(tabId: string): void {
   const state = useAppStore.getState()
-  const owningWorktreeEntry = Object.entries(state.tabsByWorktree).find(([, worktreeTabs]) =>
-    worktreeTabs.some((tab) => tab.id === tabId)
-  )
-  const owningWorktreeId = owningWorktreeEntry?.[0] ?? null
-
-  if (!owningWorktreeId) {
+  const target = resolveCloseTerminalTabTarget(state, tabId)
+  if (!target) {
     return
   }
-  if (isPinnedVisibleTab(state, owningWorktreeId, tabId)) {
+  const { worktreeId: owningWorktreeId, terminalTabId } = target
+
+  if (isPinnedVisibleTab(state, owningWorktreeId, terminalTabId)) {
     return
   }
 
   const runtimeEnvironmentId = state.settings?.activeRuntimeEnvironmentId?.trim()
-  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    // Why: paired web tabs are host-owned. Closing locally leaves the host to
-    // re-publish the same stale surface on the next session-tabs snapshot.
-    void closeWebRuntimeSessionTab({
-      worktreeId: owningWorktreeId,
-      tabId,
-      environmentId: runtimeEnvironmentId
-    })
-    return
+  if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    const hostBackedTabId =
+      resolveHostSessionTabIdForWebSessionTab(state, {
+        environmentId: runtimeEnvironmentId,
+        worktreeId: owningWorktreeId,
+        tabId: terminalTabId
+      }) ?? (isWebTerminalSurfaceTabId(terminalTabId) ? terminalTabId : null)
+    if (hostBackedTabId) {
+      // Why: prune local mirrors immediately so close feels responsive while the
+      // host session snapshot catches up.
+      closeLocalTerminalTabState(terminalTabId)
+      void closeWebRuntimeSessionTab({
+        worktreeId: owningWorktreeId,
+        tabId: hostBackedTabId,
+        environmentId: runtimeEnvironmentId
+      })
+      return
+    }
+    // Why: legacy local-only tabs (e.g. agent quick launch before host routing)
+    // have no host session binding and must still close locally.
   }
 
-  const currentTabs = state.tabsByWorktree[owningWorktreeId] ?? []
-  if (currentTabs.length <= 1) {
-    state.closeTab(tabId)
+  const currentTerminalTabIds = getWorktreeTerminalTabIds(state, owningWorktreeId)
+  if (currentTerminalTabIds.length <= 1) {
+    closeLocalTerminalTabState(terminalTabId)
     if (state.activeWorktreeId === owningWorktreeId) {
       // Why: only deactivate the worktree when no tabs of any kind remain.
       // Editor files are a separate tab type; closing the last terminal tab
@@ -105,21 +181,28 @@ export function closeTerminalTab(tabId: string): void {
         state.setActiveFile(worktreeFile.id)
         state.setActiveTabType('editor')
       } else {
-        state.setActiveWorktree(null)
+        const browserTab = (state.browserTabsByWorktree?.[owningWorktreeId] ?? [])[0]
+        if (browserTab) {
+          state.setActiveBrowserTab(browserTab.id)
+          state.setActiveTabType('browser')
+        } else {
+          state.setActiveWorktree(null)
+        }
       }
     }
     return
   }
 
-  if (state.activeWorktreeId === owningWorktreeId && tabId === state.activeTabId) {
-    const currentIndex = currentTabs.findIndex((tab) => tab.id === tabId)
-    const nextTab = currentTabs[currentIndex + 1] ?? currentTabs[currentIndex - 1]
-    if (nextTab) {
-      state.setActiveTab(nextTab.id)
+  if (state.activeWorktreeId === owningWorktreeId && terminalTabId === state.activeTabId) {
+    const currentIndex = currentTerminalTabIds.indexOf(terminalTabId)
+    const nextTabId =
+      currentTerminalTabIds[currentIndex + 1] ?? currentTerminalTabIds[currentIndex - 1]
+    if (nextTabId) {
+      state.setActiveTab(nextTabId)
     }
   }
 
-  state.closeTab(tabId)
+  closeLocalTerminalTabState(terminalTabId)
 }
 
 export function closeOtherTerminalTabs(tabId: string, activeWorktreeId: string | null): void {

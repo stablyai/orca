@@ -21,10 +21,12 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
+  getTabStripBorderClasses,
   type DropIndicator
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
+import { translate } from '@/i18n/i18n'
 
 export default function EditorFileTab({
   file,
@@ -36,11 +38,12 @@ export default function EditorFileTab({
   onClose,
   onCloseToRight,
   onCloseAll,
-  onPin,
+  onMakePermanent,
   onTogglePin,
   onSplitGroup,
   dragData,
-  dropIndicator
+  dropIndicator,
+  includeTopTabBorder = true
 }: {
   file: OpenFile & { tabId?: string }
   isActive: boolean
@@ -51,11 +54,12 @@ export default function EditorFileTab({
   onClose: () => void
   onCloseToRight: () => void
   onCloseAll: () => void
-  onPin?: () => void
+  onMakePermanent?: () => void
   onTogglePin: () => void
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
+  includeTopTabBorder?: boolean
 }): React.JSX.Element {
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
@@ -200,7 +204,7 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         if (e.button !== 0) {
           return
@@ -209,8 +213,8 @@ export default function EditorFileTab({
         listeners?.onPointerDown?.(e)
       }}
       onDoubleClick={() => {
-        if (file.isPreview && onPin) {
-          onPin()
+        if (file.isPreview && onMakePermanent) {
+          onMakePermanent()
         }
       }}
       onMouseDown={(e) => {
@@ -254,7 +258,11 @@ export default function EditorFileTab({
           <Input
             ref={setRenameInputElement}
             data-tab-rename-input="true"
-            aria-label={`Rename file ${basename(file.filePath)}`}
+            aria-label={translate(
+              'auto.components.tab.bar.EditorFileTab.3da7445c84',
+              'Rename file {{value0}}',
+              { value0: basename(file.filePath) }
+            )}
             defaultValue={basename(file.filePath)}
             // Why: keep the inline field compact enough for the titlebar while
             // giving filenames a little more room than the static tab label.
@@ -283,9 +291,14 @@ export default function EditorFileTab({
             className={`truncate max-w-[80px]${file.isPreview ? ' italic' : ''}${file.externalMutation ? ' line-through' : ''}`}
             style={tabStatusColor ? { color: tabStatusColor } : undefined}
             onDoubleClick={(e) => {
-              // Why: the outer tab's onDoubleClick pins preview tabs. Scope
-              // rename to the filename text only so pin-on-dblclick still
-              // works anywhere else on the tab chrome (matching VS Code).
+              if (file.isPreview && onMakePermanent) {
+                e.stopPropagation()
+                onMakePermanent()
+                return
+              }
+              // Why: preview tabs use double-click to become permanent. Scope
+              // rename to non-preview filename text so preview promotion wins on
+              // the tab label as well as the surrounding tab chrome.
               if (!canRename) {
                 return
               }

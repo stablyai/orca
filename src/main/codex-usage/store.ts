@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: this store owns Codex analytics persistence, scan policy, and renderer query semantics. Keeping them together prevents the Codex range/scope rules from drifting away from the scanner’s event model. */
 import { app } from 'electron'
 import { dirname, join } from 'path'
-import { existsSync, mkdirSync, readFileSync, renameSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
@@ -15,7 +15,6 @@ import type {
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import { writeUtf8FileInChunksSync } from '../../shared/utf8-file-writer'
 import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
 import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
@@ -359,7 +358,7 @@ export class CodexUsageStore {
       mkdirSync(dir, { recursive: true })
     }
     const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeUtf8FileInChunksSync(tmpFile, JSON.stringify(this.state, null, 2))
+    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
     renameSync(tmpFile, usageFile)
   }
 

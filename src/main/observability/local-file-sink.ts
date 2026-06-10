@@ -11,8 +11,9 @@
 //
 //   1. Synchronous writes by default. The error-tracking lane has to be
 //      durable on crash — if the renderer or main process is about to die,
-//      a buffered async flush is exactly what we don't want. We write through
-//      an owned fd and explicitly do a final `flush()` on shutdown.
+//      a buffered async flush is exactly what we don't want. We use the
+//      `appendFileSync` path (cheap on modern fs at this volume) and
+//      explicitly do a final `flush()` on shutdown.
 //
 //   2. Buffered batches with a flush threshold. Batches of up to
 //      `FLUSH_BUFFER_THRESHOLD` lines are coalesced into one syscall to
@@ -30,10 +31,10 @@ import {
   openSync,
   renameSync,
   statSync,
-  unlinkSync
+  unlinkSync,
+  writeSync
 } from 'node:fs'
 import { dirname } from 'node:path'
-import { writeUtf8StringToFdInChunksSync } from '../../shared/utf8-file-writer'
 
 const DEFAULT_FLUSH_BUFFER_THRESHOLD = 32
 export const DEFAULT_MAX_BYTES = 10 * 1024 * 1024 // 10 MB
@@ -172,7 +173,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
       }
       const chunk = chunkLines.join('')
       try {
-        writeUtf8StringToFdInChunksSync(fd, chunk)
+        writeSync(fd, chunk)
         currentBytes += chunkBytes
       } catch {
         // Reopen and retry once. If the second write also fails, drop this
@@ -185,7 +186,7 @@ export function createLocalFileSink(opts: LocalFileSinkOptions): LocalFileSink {
             /* swallow — best effort */
           }
           fd = openAppend(filePath)
-          writeUtf8StringToFdInChunksSync(fd, chunk)
+          writeSync(fd, chunk)
           currentBytes = safeFstatSize(fd)
         } catch {
           /* swallow — telemetry must never crash main */

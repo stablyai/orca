@@ -52,6 +52,9 @@ function installWindowApi(
       },
       speech: {
         getCatalog: vi.fn(async () => []),
+        getOpenAiApiKeyStatus: vi.fn(async () => ({ configured: false })),
+        saveOpenAiApiKey: vi.fn(async () => ({ configured: true })),
+        clearOpenAiApiKey: vi.fn(async () => ({ configured: false })),
         onDownloadProgress: vi.fn(() => () => {}),
         downloadModel: vi.fn()
       }

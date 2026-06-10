@@ -53,12 +53,15 @@ describe('activateFileExplorerNode', () => {
       setSelectedPath: vi.fn()
     })
 
-    expect(openFile).toHaveBeenCalledWith({
-      filePath: '/repo/linked-docs',
-      relativePath: 'linked-docs',
-      worktreeId: 'wt-1',
-      language: expect.any(String),
-      mode: 'edit'
-    })
+    expect(openFile).toHaveBeenCalledWith(
+      {
+        filePath: '/repo/linked-docs',
+        relativePath: 'linked-docs',
+        worktreeId: 'wt-1',
+        language: expect.any(String),
+        mode: 'edit'
+      },
+      { preview: true }
+    )
   })
 })

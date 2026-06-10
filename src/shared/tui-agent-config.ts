@@ -69,6 +69,16 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // See PR https://github.com/stablyai/orca/pull/926 for context.
     draftPromptFlag: '--prefill'
   },
+  'claude-agent-teams': {
+    // Why: this is an Orca-provided launch mode, not a separate upstream
+    // binary. Detection follows the Orca CLI, while the wrapper validates the
+    // real Claude binary when it starts.
+    detectCmd: 'orca',
+    detectCmdAliases: ['orca-dev', 'orca-ide'],
+    launchCmd: 'orca claude-teams',
+    expectedProcess: 'claude',
+    promptInjectionMode: 'stdin-after-start'
+  },
   openclaude: {
     detectCmd: 'openclaude',
     launchCmd: 'openclaude',

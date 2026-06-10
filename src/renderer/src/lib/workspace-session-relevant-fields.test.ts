@@ -14,6 +14,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     activeTabIdByWorktree: true,
     openFiles: true,
     editorDrafts: true,
+    markdownFrontmatterVisible: true,
     activeFileIdByWorktree: true,
     activeTabTypeByWorktree: true,
     browserTabsByWorktree: true,
@@ -29,7 +30,8 @@ describe('SESSION_RELEVANT_FIELDS', () => {
     worktreesByRepo: true,
     lastKnownRelayPtyIdByTabId: true,
     lastVisitedAtByWorktreeId: true,
-    defaultTerminalTabsAppliedByWorktreeId: true
+    defaultTerminalTabsAppliedByWorktreeId: true,
+    sleepingAgentSessionsByPaneKey: true
   }
 
   it('contains every key of WorkspaceSessionSnapshot', () => {

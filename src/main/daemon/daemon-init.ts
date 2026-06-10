@@ -28,10 +28,10 @@ import {
   type ListSessionsResult
 } from './types'
 import {
+  checkDaemonHealth,
   getMacDaemonSystemResolverHealth,
   getDaemonLaunchIdentity,
   getProcessStartedAtMs,
-  healthCheckDaemon,
   isDaemonStaleForCurrentBundle,
   killStaleDaemon
 } from './daemon-health'
@@ -164,49 +164,65 @@ async function shouldPreserveDaemonWithLiveSessions(
 function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   return async (socketPath, tokenPath) => {
     const entryPath = getDaemonEntryPath()
-    const healthy = await healthCheckDaemon(socketPath, tokenPath)
-    if (healthy) {
-      const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
-      if (resolverHealth === 'unhealthy') {
-        const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
-        if (liveSessionCount !== 0) {
-          console.warn(
-            liveSessionCount === null
-              ? '[daemon] Preserving daemon with unavailable macOS system resolver because live session state could not be verified'
-              : `[daemon] Preserving daemon with unavailable macOS system resolver because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+    const health = await checkDaemonHealth(socketPath, tokenPath)
+    if (health !== 'unhealthy') {
+      if (health === 'pty-spawn-unhealthy') {
+        if (
+          await shouldPreserveDaemonWithLiveSessions(
+            socketPath,
+            tokenPath,
+            'that cannot spawn new PTYs'
           )
+        ) {
           return createPreservedDaemonHandle(runtimeDir)
         }
-        console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
+        console.warn('[daemon] Replacing daemon that cannot spawn new PTYs')
         await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
       } else {
-        // Why: a protocol-healthy daemon can outlive the app bundle that
-        // launched it. In dev this happens after deleting/rebuilding a
-        // worktree; in packaged apps it happens when the stable
-        // /Applications/Orca.app path is replaced during update.
-        const identity = getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
-        const stalePackagedBundle =
-          app.isPackaged &&
-          isDaemonStaleForCurrentBundle(runtimeDir, socketPath, tokenPath, app.getVersion())
-        if (identity === 'mismatch' || stalePackagedBundle) {
-          // Why: replacing a healthy daemon kills its child PTYs; defer code
-          // freshness until no live terminal sessions would be lost.
-          const replacementLabel = stalePackagedBundle
-            ? 'launched before the current app bundle was installed'
-            : 'launched from a different app path'
-          if (await shouldPreserveDaemonWithLiveSessions(socketPath, tokenPath, replacementLabel)) {
+        const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
+        if (resolverHealth === 'unhealthy') {
+          const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+          if (liveSessionCount !== 0) {
+            console.warn(
+              liveSessionCount === null
+                ? '[daemon] Preserving daemon with unavailable macOS system resolver because live session state could not be verified'
+                : `[daemon] Preserving daemon with unavailable macOS system resolver because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
+            )
             return createPreservedDaemonHandle(runtimeDir)
           }
-          console.warn(
-            stalePackagedBundle
-              ? '[daemon] Replacing daemon launched before the current app bundle was installed'
-              : '[daemon] Replacing daemon launched from a different app path'
-          )
+          console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
           await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
         } else {
-          // Why: daemon is already running from a previous app session and
-          // responded to a protocol-level ping. Safe to reuse.
-          return createPreservedDaemonHandle(runtimeDir)
+          // Why: a protocol-healthy daemon can outlive the app bundle that
+          // launched it. In dev this happens after deleting/rebuilding a
+          // worktree; in packaged apps it happens when the stable
+          // /Applications/Orca.app path is replaced during update.
+          const identity = getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
+          const stalePackagedBundle =
+            app.isPackaged &&
+            isDaemonStaleForCurrentBundle(runtimeDir, socketPath, tokenPath, app.getVersion())
+          if (identity === 'mismatch' || stalePackagedBundle) {
+            // Why: replacing a healthy daemon kills its child PTYs; defer code
+            // freshness until no live terminal sessions would be lost.
+            const replacementLabel = stalePackagedBundle
+              ? 'launched before the current app bundle was installed'
+              : 'launched from a different app path'
+            if (
+              await shouldPreserveDaemonWithLiveSessions(socketPath, tokenPath, replacementLabel)
+            ) {
+              return createPreservedDaemonHandle(runtimeDir)
+            }
+            console.warn(
+              stalePackagedBundle
+                ? '[daemon] Replacing daemon launched before the current app bundle was installed'
+                : '[daemon] Replacing daemon launched from a different app path'
+            )
+            await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+          } else {
+            // Why: daemon is already running from a previous app session and
+            // responded to a protocol-level ping. Safe to reuse.
+            return createPreservedDaemonHandle(runtimeDir)
+          }
         }
       }
     }
@@ -329,7 +345,7 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
   }
 }
 
-export async function initDaemonPtyProvider(): Promise<void> {
+export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void> {
   const runtimeDir = getRuntimeDir()
 
   const newSpawner = new DaemonSpawner({
@@ -341,6 +357,11 @@ export async function initDaemonPtyProvider(): Promise<void> {
   // throws, a stale spawner would prevent shutdownDaemon() from cleaning up
   // correctly on retry.
   const info = await newSpawner.ensureRunning()
+  if (signal?.aborted) {
+    // Why: startup fail-open may already have allowed fallback LocalPtyProvider
+    // PTYs to spawn. A late daemon swap would strand those PTYs on the old owner.
+    return
+  }
 
   const newAdapter = new DaemonPtyAdapter({
     socketPath: info.socketPath,
@@ -368,10 +389,19 @@ export async function initDaemonPtyProvider(): Promise<void> {
   if (routedAdapter instanceof DaemonPtyRouter) {
     await routedAdapter.discoverLegacySessions()
   }
+  if (signal?.aborted) {
+    // Why: same late-swap guard after legacy discovery, which can also exceed
+    // the first-window startup timeout on slow or stale daemon state.
+    return
+  }
 
   spawner = newSpawner
   adapter = routedAdapter
   setLocalPtyProvider(routedAdapter)
+  // Why: desktop startup now lets the first window register PTY listeners
+  // before daemon init finishes. Rebind here so daemon PTYs still fan out
+  // data/exit events through the renderer and runtime listeners.
+  rebindLocalProviderListeners()
 }
 
 // Why: the Manage Sessions IPC handlers need read access to the current

@@ -1,3 +1,4 @@
+import { performance } from 'node:perf_hooks'
 import { describe, expect, it } from 'vitest'
 import {
   extractTerminalFileLinks,
@@ -75,6 +76,16 @@ describe('terminal path helpers', () => {
       const links = extractTerminalFileLinks('foo.ts:12:3 failed')
       expect(links).toHaveLength(1)
       expect(links[0]).toMatchObject({ pathText: 'foo.ts', line: 12, column: 3 })
+    })
+
+    it('keeps huge no-separator terminal tokens off the hover hot path', () => {
+      const line = `${'b'.repeat(80 * 500)} package.json`
+      const startedAt = performance.now()
+
+      const links = extractTerminalFileLinks(line)
+
+      expect(performance.now() - startedAt).toBeLessThan(100)
+      expect(links.map((link) => link.displayText)).toEqual(['package.json'])
     })
   })
 

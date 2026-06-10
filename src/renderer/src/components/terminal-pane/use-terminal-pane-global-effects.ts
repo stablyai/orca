@@ -118,6 +118,7 @@ export function useTerminalPaneGlobalEffects({
             restoreScrollStateAfterLayout(pane.terminal, position)
           }
         }
+        manager.resetWebglTextureAtlases()
       })
       wasVisibleRef.current = true
       applyPendingFollowOutputRequests()
@@ -134,6 +135,34 @@ export function useTerminalPaneGlobalEffects({
     wasVisibleRef.current = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, isVisible])
+
+  useEffect(() => {
+    if (!isActive || !isVisible) {
+      return
+    }
+    const onFocus = (): void => {
+      // Why: WebGL atlas corruption does not always raise context loss; window
+      // focus regain is a low-cost recovery point for agent TUI glyph damage.
+      managerRef.current?.resetWebglTextureAtlases()
+    }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [isActive, isVisible, managerRef])
+
+  useEffect(() => {
+    const manager = managerRef.current
+    const activePane = isActive && isVisible ? manager?.getActivePane() : null
+    const ptyId = activePane
+      ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
+      : null
+    if (!ptyId || ptyId.startsWith('remote:')) {
+      return
+    }
+    // Why: main uses this as a scheduler hint only, so the foreground pane's
+    // renderer output gets first chance at the bounded ACK reserve.
+    window.api.pty.setActiveRendererPty?.(ptyId, true)
+    return () => window.api.pty.setActiveRendererPty?.(ptyId, false)
+  }, [isActive, isVisible, managerRef, paneTransportsRef])
 
   useEffect(() => {
     const onToggleExpand = (event: Event): void => {

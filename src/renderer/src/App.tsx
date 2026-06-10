@@ -39,23 +39,15 @@ import { useAutomationDispatchEvents } from './hooks/useAutomationDispatchEvents
 import RetainedAgentsSyncGate from './components/dashboard/RetainedAgentsSyncGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
-import Terminal from './components/Terminal'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import RightSidebar from './components/right-sidebar'
-import { StatusBar } from './components/status-bar/StatusBar'
-import { UpdateCard } from './components/UpdateCard'
 import { StarNagCard } from './components/StarNagCard'
 import { TelemetryFirstLaunchSurface } from './components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { onOnboardingReopened } from './components/onboarding/show-onboarding-event'
 import { shouldShowOnboarding } from './components/onboarding/should-show-onboarding'
-import { SshPassphraseDialog } from './components/settings/SshPassphraseDialog'
-import DeleteWorktreeDialog from './components/sidebar/DeleteWorktreeDialog'
 import { MarkdownTemplatePicker } from './components/editor/MarkdownTemplatePicker'
-import {
-  FloatingTerminalPanel,
-  FloatingTerminalToggleButton
-} from './components/floating-terminal/FloatingTerminalPanel'
+import { FloatingTerminalToggleButton } from './components/floating-terminal/FloatingTerminalToggleButton'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import {
   isFloatingWorkspacePanelFocused,
@@ -63,7 +55,7 @@ import {
   isFloatingWorkspaceTerminalInputTarget,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut
 } from '@/lib/floating-workspace-terminal-actions'
-import { DictationController } from './components/dictation/DictationController'
+import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -116,14 +108,15 @@ import {
 import { selectFloatingVisibleTabCount } from './store/selectors'
 import type { VirtualizedScrollAnchor } from './hooks/useVirtualizedScrollAnchor'
 import type { RemoteWorkspacePatchResult } from '../../shared/remote-workspace-types'
-import type { OnboardingState } from '../../shared/types'
-import { ContextualTourOverlay } from './components/contextual-tours/ContextualTourOverlay'
-import { SetupGuideTelemetryObserver } from './components/setup-guide/SetupGuideTelemetryObserver'
+import type { OnboardingState, UpdateStatus } from '../../shared/types'
 import {
   getFeatureTipsAppOpenDecision,
   isCliFeatureTipCompleted
 } from './components/feature-tips/feature-tip-startup-gate'
-import { trackOrcaCliFeatureTipShown } from './components/feature-tips/feature-tip-telemetry'
+import {
+  trackCmdJPaletteFeatureTipShown,
+  trackOrcaCliFeatureTipShown
+} from './components/feature-tips/feature-tip-telemetry'
 import {
   keybindingMatchesAction,
   type KeybindingActionId,
@@ -132,6 +125,7 @@ import {
 import { isGitRepoKind } from '../../shared/repo-kind'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { resolveMountedLazyModalIds, type LazyModalId } from './lazy-modal-mount-state'
+import { translate } from '@/i18n/i18n'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isWindows = !isMac && navigator.userAgent.includes('Windows')
@@ -168,7 +162,7 @@ function WindowControls(): React.JSX.Element {
     <div className="window-controls">
       <button
         className="window-controls-btn"
-        aria-label="Minimize"
+        aria-label={translate('auto.App.bbb7f90669', 'Minimize')}
         onClick={() => window.api.ui.minimize()}
       >
         <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden>
@@ -177,7 +171,11 @@ function WindowControls(): React.JSX.Element {
       </button>
       <button
         className="window-controls-btn"
-        aria-label={maximized ? 'Restore' : 'Maximize'}
+        aria-label={
+          maximized
+            ? translate('auto.App.66f0a552e5', 'Restore')
+            : translate('auto.App.c9d6f98459', 'Maximize')
+        }
         onClick={() => window.api.ui.maximize()}
       >
         {maximized ? (
@@ -194,7 +192,7 @@ function WindowControls(): React.JSX.Element {
       </button>
       <button
         className="window-controls-btn window-controls-close"
-        aria-label="Close"
+        aria-label={translate('auto.App.e960d18540', 'Close')}
         // Why: IPC to main so the BrowserWindow 'close' event fires, which
         // sends 'window:close-requested' back to the renderer and keeps the
         // terminal-running confirmation guard active. window.close() is
@@ -210,6 +208,9 @@ function WindowControls(): React.JSX.Element {
 }
 
 const Landing = lazy(() => import('./components/Landing'))
+const WorktreeCreationPanel = lazy(
+  () => import('./components/worktree-creation/WorktreeCreationPanel')
+)
 const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
@@ -223,9 +224,42 @@ const NewWorkspaceComposerModal = lazy(() => import('./components/NewWorkspaceCo
 const WorkspaceCleanupDialog = lazy(
   () => import('./components/workspace-cleanup/WorkspaceCleanupDialog')
 )
+const Terminal = lazy(() => import('./components/Terminal'))
+const StatusBar = lazy(() =>
+  import('./components/status-bar/StatusBar').then((module) => ({ default: module.StatusBar }))
+)
 const SetupGuideModal = lazy(() => import('./components/setup-guide/SetupGuideModal'))
 const FeatureWallModal = lazy(() => import('./components/feature-wall/FeatureWallModal'))
 const FeatureTipsModal = lazy(() => import('./components/feature-tips/FeatureTipsModal'))
+const DeleteWorktreeDialog = lazy(() => import('./components/sidebar/DeleteWorktreeDialog'))
+const DictationController = lazy(() =>
+  import('./components/dictation/DictationController').then((module) => ({
+    default: module.DictationController
+  }))
+)
+const SshPassphraseDialog = lazy(() =>
+  import('./components/settings/SshPassphraseDialog').then((module) => ({
+    default: module.SshPassphraseDialog
+  }))
+)
+const UpdateCard = lazy(() =>
+  import('./components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
+)
+const ContextualTourOverlay = lazy(() =>
+  import('./components/contextual-tours/ContextualTourOverlay').then((module) => ({
+    default: module.ContextualTourOverlay
+  }))
+)
+const SetupGuideTelemetryObserver = lazy(() =>
+  import('./components/setup-guide/SetupGuideTelemetryObserver').then((module) => ({
+    default: module.SetupGuideTelemetryObserver
+  }))
+)
+const FloatingTerminalPanel = lazy(() =>
+  import('./components/floating-terminal/FloatingTerminalPanel').then((module) => ({
+    default: module.FloatingTerminalPanel
+  }))
+)
 // Why: lazy-loaded so the WebP asset + overlay module aren't fetched unless
 // the user opts into the experimental flag.
 const PetOverlay = lazy(() => import('./components/pet/PetOverlay'))
@@ -246,7 +280,7 @@ function applyRemoteWorkspacePatchStatus(
       revision: result.snapshot.revision,
       updatedAt: result.snapshot.updatedAt,
       lastSyncedAt: Date.now(),
-      message: 'Workspace uploaded'
+      message: translate('auto.App.332dbfa497', 'Workspace uploaded')
     })
     return
   }
@@ -262,6 +296,16 @@ function applyRemoteWorkspacePatchStatus(
         ? 'Workspace changed on another device'
         : 'Remote workspace sync unavailable')
   })
+}
+
+function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
+  if (status.state === 'idle') {
+    return false
+  }
+  if (status.state === 'checking' || status.state === 'not-available') {
+    return status.userInitiated === true
+  }
+  return true
 }
 
 function App(): React.JSX.Element {
@@ -321,6 +365,16 @@ function App(): React.JSX.Element {
   const featureInteractions = useAppStore((s) => s.featureInteractions)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activePendingCreationId = useAppStore((s) => s.activePendingCreationId)
+  // Why: the creation loader is debounced — a fast create resolves before its
+  // entry's loaderVisible flips, so the content area keeps showing the prior
+  // workspace (or Landing) and never flashes a loader. Only a create still
+  // pending past the debounce gates the loader and hides the terminal.
+  const activeCreationLoaderVisible = useAppStore(
+    (s) =>
+      s.activePendingCreationId != null &&
+      s.pendingWorktreeCreations[s.activePendingCreationId]?.loaderVisible === true
+  )
   // Why: App swaps the sidebar between workspace and landing layouts when the
   // active workspace is slept/deleted. Keep virtualized scroll memory above
   // that remount so the left workspace list doesn't restart at scrollTop 0.
@@ -333,6 +387,8 @@ function App(): React.JSX.Element {
   const canExpandPaneByTabId = useAppStore((s) => s.canExpandPaneByTabId)
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const keybindings = useAppStore((s) => s.keybindings)
+  const updateStatus = useAppStore((s) => s.updateStatus)
+  const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const leftSidebarShortcutLabel = useShortcutLabel('sidebar.left.toggle')
   const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
   const historyBackShortcutLabel = useShortcutLabel('worktree.history.back')
@@ -345,6 +401,20 @@ function App(): React.JSX.Element {
   const showFloatingTerminalButton =
     floatingTerminalEnabled &&
     (floatingTerminalTriggerLocation === 'floating-button' || !statusBarVisible)
+  const hasMountedTerminalWorkbenchRef = useRef(false)
+  if (activeWorktreeId !== null) {
+    hasMountedTerminalWorkbenchRef.current = true
+  }
+  // Why: skip the terminal bundle on the no-workspace landing path, but once a
+  // workspace has mounted, keep Terminal-owned hidden panes alive through sleep
+  // and shutdown transitions where activeWorktreeId can briefly become null.
+  const shouldMountTerminalWorkbench =
+    activeWorktreeId !== null || hasMountedTerminalWorkbenchRef.current
+  // Why: a closed empty floating workspace is not startup-critical. Once it owns
+  // tabs, keep it mounted while closed so hidden terminal/browser/editor panes
+  // retain their local state.
+  const shouldMountFloatingTerminalPanel =
+    floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
   // Why: the floating workspace is a transient overlay; hotkey minimize should
   // return keyboard focus to the surface the user was working in before it.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
@@ -436,17 +506,25 @@ function App(): React.JSX.Element {
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const groupBy = useAppStore((s) => s.groupBy)
   const sortBy = useAppStore((s) => s.sortBy)
+  const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const showDotfilesByWorktree = useAppStore((s) => s.showDotfilesByWorktree)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const acknowledgedAgentsByPaneKey = useAppStore((s) => s.acknowledgedAgentsByPaneKey)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+  const shouldMountContextualTourOverlay = activeContextualTourId !== null
+  const shouldMountSetupGuideTelemetryObserver = persistedUIReady
+  const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
   const isFullScreen = useAppStore((s) => s.isFullScreen)
   const settings = useAppStore((s) => s.settings)
+  const dictationState = useAppStore((s) => s.dictationState)
+  const hasSshCredentialRequest = useAppStore((s) => s.sshCredentialQueue.length > 0)
+  const shouldMountDictationController =
+    settings?.voice?.enabled === true || dictationState !== 'idle'
   const primarySelectionMiddleClickPaste = resolvePrimarySelectionMiddleClickPaste(
     settings?.primarySelectionMiddleClickPaste
   )
@@ -493,7 +571,10 @@ function App(): React.JSX.Element {
   // cannot live under RightSidebar because App unmounts that subtree when the
   // sidebar is closed, which leaves stale "Rebasing"/"Merging" badges behind
   // until some unrelated view remount happens to refresh them.
-  useGitStatusPolling()
+  // Why: visible-window polling runs immediately on mount. Wait until the
+  // workspace session has hydrated so git status work cannot compete with the
+  // first window becoming usable.
+  useGitStatusPolling({ enabled: workspaceSessionReady })
   // Why: the editor must hear external filesystem changes regardless of
   // which right-sidebar panel is visible (Explorer unmounts when the user
   // switches to Source Control or Checks). Wiring this at App level mirrors
@@ -577,6 +658,8 @@ function App(): React.JSX.Element {
     featureTipsPromptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
+    } else if (featureTipsDecision.tipId === 'cmd-j-palette') {
+      trackCmdJPaletteFeatureTipShown('app_open')
     }
     // Why: once a tip is visible, app quit/crash should not make it reappear
     // on the next launch just because the user never clicked a dismiss button.
@@ -755,6 +838,10 @@ function App(): React.JSX.Element {
             }
           }
 
+          // Why: main overlaps daemon/hook startup with renderer hydration for
+          // first paint, but restored terminals still need those services ready
+          // before they mount and spawn/reconnect PTYs.
+          await window.api.app.awaitFirstWindowStartupServices()
           reconnectStarted = true
           await actions.reconnectPersistedTerminals(abortController.signal)
           syncZoomCSSVar()
@@ -797,13 +884,15 @@ function App(): React.JSX.Element {
           // a no-op. The "Restart now" action calls app.relaunch (defined in
           // src/main/ipc/app.ts) so the user can recover with one click instead
           // of having to find a quit/relaunch path themselves.
-          toast.error('Session restore failed', {
-            description:
-              "Changes won't be saved until restart. Your previous tabs are safe on disk.",
+          toast.error(translate('auto.App.12e77cf12b', 'Session restore failed'), {
+            description: translate(
+              'auto.App.0a9e810705',
+              "Changes won't be saved until restart. Your previous tabs are safe on disk."
+            ),
             duration: Infinity,
             dismissible: true,
             action: {
-              label: 'Restart now',
+              label: translate('auto.App.caea5b51b9', 'Restart now'),
               onClick: () => {
                 void window.api.app.relaunch()
               }
@@ -816,6 +905,7 @@ function App(): React.JSX.Element {
           // on-disk file we failed to load.
           if (!reconnectStarted) {
             try {
+              await window.api.app.awaitFirstWindowStartupServices()
               await actions.reconnectPersistedTerminals(abortController.signal)
             } catch (reconnectErr) {
               console.error(
@@ -1022,6 +1112,7 @@ function App(): React.JSX.Element {
         rightSidebarWidth,
         groupBy,
         sortBy,
+        projectOrderBy,
         showActiveOnly: false,
         hideSleepingWorkspaces: !showSleepingWorkspaces,
         showSleepingWorkspaces,
@@ -1046,6 +1137,7 @@ function App(): React.JSX.Element {
     rightSidebarWidth,
     groupBy,
     sortBy,
+    projectOrderBy,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     showDotfilesByWorktree,
@@ -1126,6 +1218,9 @@ function App(): React.JSX.Element {
   // split-column chrome. Full-page navigation views keep the draggable app
   // titlebar so their page-level controls can live in that window strip.
   const workspaceActive = activeView === 'terminal' && activeWorktreeId !== null
+  // Why: Tasks/Landing keep the full titlebar only when the sidebar is collapsed;
+  // with it open, mirror workspace view so titlebar-left sits flush above nav.
+  const stackedSidebarOpen = !workspaceActive && showSidebar && sidebarOpen
   // Why: suppress right sidebar controls on full-page navigation surfaces
   // since those surfaces intentionally own the full content area.
   const showRightSidebarControls = canShowRightSidebarForView(activeView)
@@ -1283,7 +1378,8 @@ function App(): React.JSX.Element {
       // app-level mod shortcuts (B, L, Shift+E/F/G) have no panel-level
       // counterpart, so suppressing them here would silently no-op when
       // focus lives inside the floating panel.
-      if (isFloatingWorkspacePanelFocused()) {
+      const floatingWorkspaceFocused = isFloatingWorkspacePanelFocused()
+      if (floatingWorkspaceFocused) {
         if (
           isFloatingWorkspacePanelShortcut(e, shortcutPlatform, null, keybindings, {
             context,
@@ -1299,6 +1395,37 @@ function App(): React.JSX.Element {
         e.preventDefault()
         notifyTerminalCapture('sidebar.left.toggle')
         actions.toggleSidebar()
+        return
+      }
+
+      // Why: rename the active terminal tab. Cmd+R is free in the app/terminal
+      // focus zone because the browser pane owns its own Cmd+R reload and that
+      // focus never reaches this renderer-window handler. Only terminal tabs
+      // have an inline title editor, so other active tab types fall through.
+      if (workspaceActive && !floatingWorkspaceFocused && matchShortcut('tab.rename')) {
+        const store = useAppStore.getState()
+        if (store.activeTabType === 'terminal' && store.activeTabId) {
+          e.preventDefault()
+          notifyTerminalCapture('tab.rename')
+          store.setRenamingTabId(store.activeTabId)
+          return
+        }
+      }
+
+      // Why: open the active worktree's inline title editor. Open/reveal it
+      // first so the card is mounted and visible even when sidebar filters or
+      // collapse state would otherwise hide it.
+      if (
+        workspaceActive &&
+        !floatingWorkspaceFocused &&
+        matchShortcut('workspace.rename') &&
+        activeWorktreeId
+      ) {
+        e.preventDefault()
+        notifyTerminalCapture('workspace.rename')
+        const store = useAppStore.getState()
+        store.setSidebarOpen(true)
+        requestScrollToCurrentWorkspaceRevealAndRename()
         return
       }
 
@@ -1394,7 +1521,8 @@ function App(): React.JSX.Element {
     floatingVisibleTabCount,
     keybindings,
     settings?.terminalShortcutPolicy,
-    setFloatingTerminalOpenWithFocus
+    setFloatingTerminalOpenWithFocus,
+    workspaceActive
   ])
 
   useLayoutEffect(() => {
@@ -1454,14 +1582,14 @@ function App(): React.JSX.Element {
               <TooltipTrigger asChild>
                 <button
                   className="titlebar-icon-button"
-                  aria-label="Application menu"
+                  aria-label={translate('auto.App.8b0b8eb54f', 'Application menu')}
                   onClick={() => window.api.ui.popupMenu()}
                 >
                   <MoreHorizontal size={14} />
                 </button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                Application menu
+                {translate('auto.App.8b0b8eb54f', 'Application menu')}
               </TooltipContent>
             </Tooltip>
           </>
@@ -1473,8 +1601,13 @@ function App(): React.JSX.Element {
             {settings?.showTitlebarAppName !== false && (
               <ContextMenu>
                 <ContextMenuTrigger asChild>
-                  <div className="titlebar-app-name" aria-label="Orca">
-                    <span className="titlebar-app-name-main">Orca</span>
+                  <div
+                    className="titlebar-app-name"
+                    aria-label={translate('auto.App.5096cbbc86', 'Orca')}
+                  >
+                    <span className="titlebar-app-name-main">
+                      {translate('auto.App.5096cbbc86', 'Orca')}
+                    </span>
                   </div>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
@@ -1483,7 +1616,7 @@ function App(): React.JSX.Element {
                       void actions.updateSettings({ showTitlebarAppName: false })
                     }}
                   >
-                    Hide App Name
+                    {translate('auto.App.e81217c1b7', 'Hide App Name')}
                   </ContextMenuItem>
                 </ContextMenuContent>
               </ContextMenu>
@@ -1496,13 +1629,15 @@ function App(): React.JSX.Element {
               <button
                 className="sidebar-toggle"
                 onClick={actions.toggleSidebar}
-                aria-label="Toggle sidebar"
+                aria-label={translate('auto.App.e4b9e7dff7', 'Toggle sidebar')}
               >
                 <PanelLeft size={16} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {`Toggle sidebar (${leftSidebarShortcutLabel})`}
+              {translate('auto.App.ce37cf5279', 'Toggle sidebar ({{value0}})', {
+                value0: leftSidebarShortcutLabel
+              })}
             </TooltipContent>
           </Tooltip>
         )}
@@ -1520,13 +1655,15 @@ function App(): React.JSX.Element {
                 className="sidebar-toggle sidebar-toggle-compact"
                 onClick={() => useAppStore.getState().goBackWorktree()}
                 disabled={!canGoBackWorktree}
-                aria-label="Go back"
+                aria-label={translate('auto.App.064bd07810', 'Go back')}
               >
                 <ArrowLeft size={12} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {`Go back (${historyBackShortcutLabel})`}
+              {translate('auto.App.fe21e8f6f5', 'Go back ({{value0}})', {
+                value0: historyBackShortcutLabel
+              })}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -1535,13 +1672,15 @@ function App(): React.JSX.Element {
                 className="sidebar-toggle sidebar-toggle-compact"
                 onClick={() => useAppStore.getState().goForwardWorktree()}
                 disabled={!canGoForwardWorktree}
-                aria-label="Go forward"
+                aria-label={translate('auto.App.cf9099fe98', 'Go forward')}
               >
                 <ArrowRight size={12} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {`Go forward (${historyForwardShortcutLabel})`}
+              {translate('auto.App.f7aa73e785', 'Go forward ({{value0}})', {
+                value0: historyForwardShortcutLabel
+              })}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -1555,16 +1694,55 @@ function App(): React.JSX.Element {
         <button
           className="sidebar-toggle mr-2"
           onClick={actions.toggleRightSidebar}
-          aria-label="Toggle right sidebar"
+          aria-label={translate('auto.App.9e0b441a91', 'Toggle right sidebar')}
         >
           <PanelRight size={16} />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {`Toggle right sidebar (${rightSidebarShortcutLabel})`}
+        {translate('auto.App.c184e056de', 'Toggle right sidebar ({{value0}})', {
+          value0: rightSidebarShortcutLabel
+        })}
       </TooltipContent>
     </Tooltip>
   ) : null
+
+  const titlebarMainStrip = (
+    <>
+      {activeView === 'activity' ? (
+        <ActivityTitlebarControls />
+      ) : (
+        <div
+          id="titlebar-tabs"
+          className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
+        />
+      )}
+      {showTitlebarExpandButton && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              className="titlebar-icon-button"
+              onClick={handleToggleExpand}
+              aria-label={translate('auto.App.c1cf0b0e4a', 'Collapse pane')}
+              disabled={!activeTabCanExpand}
+            >
+              <Minimize2 size={14} />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {translate('auto.App.c1cf0b0e4a', 'Collapse pane')}
+          </TooltipContent>
+        </Tooltip>
+      )}
+      {/* Why: when the right sidebar is open, its own header renders
+      an identical close button — hide this copy so only one is
+      visible at a time. */}
+      {!rightSidebarOpen && rightSidebarToggle}
+      {/* Why: reserve space so content is not obscured by the
+      fixed-position window-controls overlay on Windows. */}
+      {isWindows && <div className="window-controls-titlebar-spacer" />}
+    </>
+  )
 
   return (
     <div
@@ -1585,7 +1763,7 @@ function App(): React.JSX.Element {
     >
       <TooltipProvider delayDuration={400}>
         <ConfirmationDialogProvider>
-          <WorkspacePortScanner />
+          <WorkspacePortScanner enabled={workspaceSessionReady} />
           {/* Why: leaf-mounted retention sync keeps agent-status retention
             subscriptions from re-rendering the App tree. */}
           <RetainedAgentsSyncGate />
@@ -1595,8 +1773,11 @@ function App(): React.JSX.Element {
             boundaryId="app.workspace-shell"
             surface="workspace-shell"
             resetKey={activeView}
-            title="The workspace shell hit an error."
-            description="The app is still running. Retry the shell or use the menu to report the crash details."
+            title={translate('auto.App.df1d56bf87', 'The workspace shell hit an error.')}
+            description={translate(
+              'auto.App.8504ddf267',
+              'The app is still running. Retry the shell or use the menu to report the crash details.'
+            )}
           >
             <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
               {/* Why: the non-workspace titlebar lives inside this left+center
@@ -1609,51 +1790,15 @@ function App(): React.JSX.Element {
                 to the top of the window. Left titlebar controls move to a
                 header above the sidebar. Settings, landing, and the tasks
                 page keep the titlebar. */}
-                {!workspaceActive ? (
+                {!workspaceActive && !stackedSidebarOpen ? (
                   <div className="titlebar">
-                    <div
-                      className={`flex items-center${showSidebar && sidebarOpen ? ' overflow-hidden shrink-0' : ' shrink-0 mr-2'}`}
-                      style={{ width: showSidebar && sidebarOpen ? sidebarWidth : undefined }}
-                    >
-                      {titlebarLeftControls}
-                    </div>
-                    {activeView === 'activity' ? (
-                      <ActivityTitlebarControls />
-                    ) : (
-                      <div
-                        id="titlebar-tabs"
-                        className={`flex flex-1 min-w-0 self-stretch${activeView !== 'terminal' || !activeWorktreeId ? ' invisible pointer-events-none' : ''}`}
-                      />
-                    )}
-                    {showTitlebarExpandButton && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            className="titlebar-icon-button"
-                            onClick={handleToggleExpand}
-                            aria-label="Collapse pane"
-                            disabled={!activeTabCanExpand}
-                          >
-                            <Minimize2 size={14} />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom" sideOffset={6}>
-                          Collapse pane
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                    {/* Why: when the right sidebar is open, its own header renders
-                    an identical close button — hide this copy so only one is
-                    visible at a time. */}
-                    {!rightSidebarOpen && rightSidebarToggle}
-                    {/* Why: reserve space so content is not obscured by the
-                    fixed-position window-controls overlay on Windows. */}
-                    {isWindows && <div className="window-controls-titlebar-spacer" />}
+                    <div className="flex items-center shrink-0 mr-2">{titlebarLeftControls}</div>
+                    {titlebarMainStrip}
                   </div>
                 ) : null}
                 <div className="flex flex-row flex-1 min-h-0 overflow-hidden">
                   {showSidebar ? (
-                    workspaceActive ? (
+                    workspaceActive || stackedSidebarOpen ? (
                       /* Why: left column wraps the sidebar with a titlebar-height
                      header above it. The header holds the same controls
                      (traffic lights, sidebar toggle, "Orca" title, agent badge)
@@ -1677,7 +1822,7 @@ function App(): React.JSX.Element {
                           className={`titlebar-left${
                             sidebarOpen
                               ? ''
-                              : ' absolute top-0 left-0 z-10 w-max border-r border-border'
+                              : ' titlebar-left-floating absolute top-0 left-0 z-10 w-max border-r border-border'
                           }`}
                           style={{
                             // Why: the Sidebar resize hook updates the sidebar DOM width
@@ -1700,8 +1845,14 @@ function App(): React.JSX.Element {
                             boundaryId="sidebar.worktrees"
                             surface="sidebar"
                             resetKey={activeView}
-                            title="The workspace list hit an error."
-                            description="The active workspace remains open. Retry the list or switch views."
+                            title={translate(
+                              'auto.App.1468601e7b',
+                              'The workspace list hit an error.'
+                            )}
+                            description={translate(
+                              'auto.App.bdc71dddc9',
+                              'The active workspace remains open. Retry the list or switch views.'
+                            )}
                           >
                             <Sidebar
                               worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
@@ -1715,8 +1866,11 @@ function App(): React.JSX.Element {
                         boundaryId="sidebar.worktrees"
                         surface="sidebar"
                         resetKey={activeView}
-                        title="The workspace list hit an error."
-                        description="The active page remains open. Retry the list or switch views."
+                        title={translate('auto.App.1468601e7b', 'The workspace list hit an error.')}
+                        description={translate(
+                          'auto.App.cba0fafda5',
+                          'The active page remains open. Retry the list or switch views.'
+                        )}
                       >
                         <Sidebar
                           worktreeScrollOffsetRef={worktreeSidebarScrollOffsetRef}
@@ -1725,76 +1879,105 @@ function App(): React.JSX.Element {
                       </RecoverableRenderErrorBoundary>
                     )
                   ) : null}
-                  <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
-                    {/* Why: right sidebar toggle floats at the top-right of the center
+                  <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+                    {stackedSidebarOpen ? (
+                      <div className="titlebar">{titlebarMainStrip}</div>
+                    ) : null}
+                    <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
+                      {/* Why: right sidebar toggle floats at the top-right of the center
                     column so it's always accessible whether the right sidebar is
                     open or closed. Match the RightSidebar header's 36px height and
                     top-0 anchor so the icon's vertical center is identical between
                     open and closed states — otherwise toggling makes the icon jump
                     a few pixels, which reads as layout jitter. */}
-                    {workspaceActive && !rightSidebarOpen && (
-                      <div
-                        className="absolute top-0 z-10 flex items-center h-[36px]"
-                        style={
-                          {
-                            // Why: right: var(--window-controls-width) is the single
-                            // mechanism that keeps the toggle clear of the
-                            // fixed-position window-controls overlay on Windows (138px)
-                            // and sits at the right edge on non-Windows (0px). No
-                            // internal spacer needed — adding one would push the button
-                            // a further 138px to the left and cover the pane-actions
-                            // Ellipsis button with an un-clickable div.
-                            right: 'var(--window-controls-width)',
-                            WebkitAppRegion: 'no-drag'
-                          } as React.CSSProperties
-                        }
-                      >
-                        {rightSidebarToggle}
-                      </div>
-                    )}
-                    <div className="flex flex-1 min-w-0 min-h-0 flex-col">
-                      <div
-                        className={
-                          activeView !== 'terminal' || !activeWorktreeId
-                            ? 'hidden flex-1 min-w-0 min-h-0'
-                            : 'flex flex-1 min-w-0 min-h-0'
-                        }
-                      >
-                        <RecoverableRenderErrorBoundary
-                          boundaryId="terminal.workbench"
-                          surface="terminal-workbench"
-                          resetKey="terminal"
-                          title="The workspace workbench hit an error."
-                          description="Terminal, browser, or editor rendering failed in this workspace. Retry to remount it."
+                      {workspaceActive && !rightSidebarOpen && (
+                        <div
+                          className="absolute top-0 z-10 flex items-center h-[36px]"
+                          style={
+                            {
+                              // Why: right: var(--window-controls-width) is the single
+                              // mechanism that keeps the toggle clear of the
+                              // fixed-position window-controls overlay on Windows (138px)
+                              // and sits at the right edge on non-Windows (0px). No
+                              // internal spacer needed — adding one would push the button
+                              // a further 138px to the left and cover the pane-actions
+                              // Ellipsis button with an un-clickable div.
+                              right: 'var(--window-controls-width)',
+                              WebkitAppRegion: 'no-drag'
+                            } as React.CSSProperties
+                          }
                         >
-                          <Terminal />
-                        </RecoverableRenderErrorBoundary>
+                          {rightSidebarToggle}
+                        </div>
+                      )}
+                      <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                        {shouldMountTerminalWorkbench ? (
+                          <div
+                            className={
+                              activeView !== 'terminal' ||
+                              !activeWorktreeId ||
+                              activeCreationLoaderVisible
+                                ? 'hidden flex-1 min-w-0 min-h-0'
+                                : 'flex flex-1 min-w-0 min-h-0'
+                            }
+                          >
+                            <Suspense fallback={null}>
+                              <RecoverableRenderErrorBoundary
+                                boundaryId="terminal.workbench"
+                                surface="terminal-workbench"
+                                resetKey="terminal"
+                                title={translate(
+                                  'auto.App.5a9519aef0',
+                                  'The workspace workbench hit an error.'
+                                )}
+                                description={translate(
+                                  'auto.App.98d4ea2823',
+                                  'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.'
+                                )}
+                              >
+                                <Terminal />
+                              </RecoverableRenderErrorBoundary>
+                            </Suspense>
+                          </div>
+                        ) : null}
+                        <Suspense fallback={null}>
+                          <RecoverableRenderErrorBoundary
+                            boundaryId={`page.${activeView}`}
+                            surface="page"
+                            resetKey={activeView}
+                            title={translate('auto.App.b7a714db1e', 'This page hit an error.')}
+                            description={translate(
+                              'auto.App.03a14f6b5b',
+                              'Retry the page or navigate to another Orca surface.'
+                            )}
+                          >
+                            {activeView === 'settings' ? <Settings /> : null}
+                            {activeView === 'skills' ? <SkillsPage /> : null}
+                            {activeView === 'tasks' ? <TaskPage /> : null}
+                            {activeView === 'automations' ? <AutomationsPage /> : null}
+                            {activeView === 'activity' ? <ActivityPrototypePage /> : null}
+                            {activeView === 'space' ? <WorkspaceSpacePage /> : null}
+                            {activeView === 'mobile' ? <MobilePage /> : null}
+                            {activeView === 'terminal' &&
+                            activeCreationLoaderVisible &&
+                            activePendingCreationId ? (
+                              <WorktreeCreationPanel creationId={activePendingCreationId} />
+                            ) : null}
+                            {activeView === 'terminal' &&
+                            !activeWorktreeId &&
+                            !activeCreationLoaderVisible ? (
+                              <Landing />
+                            ) : null}
+                          </RecoverableRenderErrorBoundary>
+                        </Suspense>
                       </div>
-                      <Suspense fallback={null}>
-                        <RecoverableRenderErrorBoundary
-                          boundaryId={`page.${activeView}`}
-                          surface="page"
-                          resetKey={activeView}
-                          title="This page hit an error."
-                          description="Retry the page or navigate to another Orca surface."
-                        >
-                          {activeView === 'settings' ? <Settings /> : null}
-                          {activeView === 'skills' ? <SkillsPage /> : null}
-                          {activeView === 'tasks' ? <TaskPage /> : null}
-                          {activeView === 'automations' ? <AutomationsPage /> : null}
-                          {activeView === 'activity' ? <ActivityPrototypePage /> : null}
-                          {activeView === 'space' ? <WorkspaceSpacePage /> : null}
-                          {activeView === 'mobile' ? <MobilePage /> : null}
-                          {activeView === 'terminal' && !activeWorktreeId ? <Landing /> : null}
-                        </RecoverableRenderErrorBoundary>
-                      </Suspense>
+                      {showFloatingTerminalButton ? (
+                        <FloatingTerminalToggleButton
+                          open={floatingTerminalOpen}
+                          onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
+                        />
+                      ) : null}
                     </div>
-                    {showFloatingTerminalButton ? (
-                      <FloatingTerminalToggleButton
-                        open={floatingTerminalOpen}
-                        onToggle={() => setFloatingTerminalOpenWithFocus((open) => !open)}
-                      />
-                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1807,39 +1990,58 @@ function App(): React.JSX.Element {
                   boundaryId="right-sidebar"
                   surface="right-sidebar"
                   resetKey={rightSidebarTab}
-                  title="The right sidebar hit an error."
-                  description="Retry the sidebar or switch tabs to reload this surface."
+                  title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
+                  description={translate(
+                    'auto.App.8d1e160ed1',
+                    'Retry the sidebar or switch tabs to reload this surface.'
+                  )}
                 >
                   <RightSidebar />
                 </RecoverableRenderErrorBoundary>
               ) : null}
             </div>
           </RecoverableRenderErrorBoundary>
-          {floatingTerminalEnabled ? (
-            <RecoverableRenderErrorBoundary
-              boundaryId="overlay.floating-workspace"
-              surface="overlay"
-              resetKey={floatingTerminalOpen}
-              compact
-              title="The floating workspace hit an error."
-              description="Retry the floating workspace or close and reopen it."
-            >
-              <FloatingTerminalPanel
-                open={floatingTerminalOpen}
-                onOpenChange={setFloatingTerminalOpenWithFocus}
-              />
-            </RecoverableRenderErrorBoundary>
+          {shouldMountFloatingTerminalPanel ? (
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.floating-workspace"
+                surface="overlay"
+                resetKey={floatingTerminalOpen}
+                compact
+                title={translate('auto.App.1b3024bcd6', 'The floating workspace hit an error.')}
+                description={translate(
+                  'auto.App.7cbfbf622f',
+                  'Retry the floating workspace or close and reopen it.'
+                )}
+              >
+                <FloatingTerminalPanel
+                  open={floatingTerminalOpen}
+                  onOpenChange={setFloatingTerminalOpenWithFocus}
+                />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
           ) : null}
-          <RecoverableRenderErrorBoundary
-            boundaryId="overlay.status-bar"
-            surface="overlay"
-            resetKey={activeView}
-            compact
-            title="The status bar hit an error."
-            description="Retry the status bar to remount its controls."
-          >
-            <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
-          </RecoverableRenderErrorBoundary>
+          {statusBarVisible ? (
+            <Suspense
+              fallback={
+                <div className="h-6 min-h-[24px] shrink-0 border-t border-border bg-[var(--bg-titlebar,var(--card))]" />
+              }
+            >
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.status-bar"
+                surface="overlay"
+                resetKey={activeView}
+                compact
+                title={translate('auto.App.2e8ff36f94', 'The status bar hit an error.')}
+                description={translate(
+                  'auto.App.8a023cea1f',
+                  'Retry the status bar to remount its controls.'
+                )}
+              >
+                <StatusBar floatingTerminalOpen={floatingTerminalOpen} />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
+          ) : null}
           {/* Why: root overlays can render Radix <Tooltip>s; keep them inside
             the shared provider so lazy surfaces mount safely from any entry point. */}
           <Suspense fallback={null}>
@@ -1916,8 +2118,16 @@ function App(): React.JSX.Element {
               </RecoverableRenderErrorBoundary>
             ) : null}
           </Suspense>
-          {persistedUIReady ? <SetupGuideTelemetryObserver /> : null}
-          <ContextualTourOverlay />
+          {shouldMountSetupGuideTelemetryObserver ? (
+            <Suspense fallback={null}>
+              <SetupGuideTelemetryObserver />
+            </Suspense>
+          ) : null}
+          {shouldMountContextualTourOverlay ? (
+            <Suspense fallback={null}>
+              <ContextualTourOverlay />
+            </Suspense>
+          ) : null}
           {/* Why: mount PetOverlay only after persisted UI hydration, with
           both independent pet toggles allowing it; otherwise a hidden pet
           flashes while the store still has default visibility. */}
@@ -1933,14 +2143,18 @@ function App(): React.JSX.Element {
               </RecoverableRenderErrorBoundary>
             </Suspense>
           ) : null}
-          <RecoverableRenderErrorBoundary
-            boundaryId="overlay.update-card"
-            surface="overlay"
-            resetKey={activeView}
-            compact
-          >
-            <UpdateCard />
-          </RecoverableRenderErrorBoundary>
+          {shouldMountUpdateCard ? (
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.update-card"
+                surface="overlay"
+                resetKey={activeView}
+                compact
+              >
+                <UpdateCard />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
+          ) : null}
           <RecoverableRenderErrorBoundary
             boundaryId="overlay.star-nag"
             surface="overlay"
@@ -1972,22 +2186,30 @@ function App(): React.JSX.Element {
           >
             <ZoomOverlay />
           </RecoverableRenderErrorBoundary>
-          <RecoverableRenderErrorBoundary
-            boundaryId="modal.ssh-passphrase"
-            surface="modal"
-            resetKey={activeModal}
-            compact
-          >
-            <SshPassphraseDialog />
-          </RecoverableRenderErrorBoundary>
-          <RecoverableRenderErrorBoundary
-            boundaryId="modal.delete-worktree"
-            surface="modal"
-            resetKey={activeModal === 'delete-worktree'}
-            compact
-          >
-            <DeleteWorktreeDialog />
-          </RecoverableRenderErrorBoundary>
+          <Suspense fallback={null}>
+            {activeModal === 'delete-worktree' ? (
+              <RecoverableRenderErrorBoundary
+                boundaryId="modal.delete-worktree"
+                surface="modal"
+                resetKey
+                compact
+              >
+                <DeleteWorktreeDialog />
+              </RecoverableRenderErrorBoundary>
+            ) : null}
+          </Suspense>
+          {hasSshCredentialRequest ? (
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="modal.ssh-passphrase"
+                surface="modal"
+                resetKey={activeModal}
+                compact
+              >
+                <SshPassphraseDialog />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
+          ) : null}
           <RecoverableRenderErrorBoundary
             boundaryId="modal.markdown-template-picker"
             surface="modal"
@@ -2002,8 +2224,11 @@ function App(): React.JSX.Element {
             reportAsCrash={false}
             resetKey={activeModal}
             compact
-            title="The crash report dialog hit an error."
-            description="Use the Help menu after retrying if you still need diagnostics."
+            title={translate('auto.App.722d03aa62', 'The crash report dialog hit an error.')}
+            description={translate(
+              'auto.App.acd66311dc',
+              'Use the Help menu after retrying if you still need diagnostics.'
+            )}
           >
             <CrashReportDialog />
           </RecoverableRenderErrorBoundary>
@@ -2013,8 +2238,11 @@ function App(): React.JSX.Element {
                 boundaryId="modal.onboarding"
                 surface="modal"
                 resetKey={onboardingSettingsDetourActive}
-                title="Onboarding hit an error."
-                description="Retry onboarding or close it and continue in the app."
+                title={translate('auto.App.f02d37278a', 'Onboarding hit an error.')}
+                description={translate(
+                  'auto.App.221a95ba38',
+                  'Retry onboarding or close it and continue in the app.'
+                )}
               >
                 <OnboardingFlow
                   onboarding={onboarding}
@@ -2024,14 +2252,18 @@ function App(): React.JSX.Element {
               </RecoverableRenderErrorBoundary>
             </Suspense>
           ) : null}
-          <RecoverableRenderErrorBoundary
-            boundaryId="overlay.dictation"
-            surface="overlay"
-            resetKey={activeView}
-            compact
-          >
-            <DictationController />
-          </RecoverableRenderErrorBoundary>
+          {shouldMountDictationController ? (
+            <Suspense fallback={null}>
+              <RecoverableRenderErrorBoundary
+                boundaryId="overlay.dictation"
+                surface="overlay"
+                resetKey={activeView}
+                compact
+              >
+                <DictationController />
+              </RecoverableRenderErrorBoundary>
+            </Suspense>
+          ) : null}
           <RecoverableRenderErrorBoundary
             boundaryId="overlay.recent-tab-switcher"
             surface="overlay"

@@ -14,6 +14,7 @@ import { DiffCommentCard } from './DiffCommentCard'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
 import { installDiffCommentZoneMouseDownStopper } from './diff-comment-zone-mouse-events'
 import { NotesSendMenu, type NotesSendMenuScope } from '../editor/NotesSendMenu'
+import { translate } from '@/i18n/i18n'
 
 // Why: Monaco glyph-margin *decorations* don't expose click events in a way
 // that lets us show a polished popover anchored to a line. So instead we own a
@@ -105,7 +106,10 @@ function getSingleCommentSendScopes(
   return [
     {
       id: 'note',
-      label: 'This note',
+      label: translate(
+        'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
+        'This note'
+      ),
       notes: comment.sentAt ? [] : [comment],
       prompt: formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
     }

@@ -1,5 +1,7 @@
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
+import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { translate } from '@/i18n/i18n'
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -55,6 +57,9 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'opencode-go') {
     return <OpenCodeGoIcon size={13} />
   }
+  if (provider === 'kimi') {
+    return <AgentIcon agent="kimi" size={13} />
+  }
   return <ClaudeIcon size={13} />
 }
 
@@ -74,7 +79,12 @@ function ErrorMessage({
   return (
     <div className="space-y-0.5">
       <div className={`text-[11px] font-medium ${labelClass}`}>
-        {stale ? 'Refresh failed — showing cached data' : 'Usage unavailable'}
+        {stale
+          ? translate(
+              'auto.components.status.bar.tooltip.a9a318b7a3',
+              'Refresh failed — showing cached data'
+            )
+          : translate('auto.components.status.bar.tooltip.7567cd1c6b', 'Usage unavailable')}
       </div>
       <div className={detailClass}>{message}</div>
     </div>
@@ -90,14 +100,29 @@ export function getWindowSections(
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
-    return [...bucketSections, { label: 'Weekly', window: p.weekly }]
+    return [
+      ...bucketSections,
+      {
+        label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
+        window: p.weekly
+      }
+    ]
   }
   const sections: { label: string; window: RateLimitWindow | null }[] = [
-    { label: 'Session', window: p.session },
-    { label: 'Weekly', window: p.weekly }
+    {
+      label: translate('auto.components.status.bar.tooltip.94038ad2fa', 'Session'),
+      window: p.session
+    },
+    {
+      label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
+      window: p.weekly
+    }
   ]
   if (p.monthly !== undefined && p.monthly !== null) {
-    sections.push({ label: 'Monthly', window: p.monthly })
+    sections.push({
+      label: translate('auto.components.status.bar.tooltip.7f7f208060', 'Monthly'),
+      window: p.monthly
+    })
   }
   return sections
 }
@@ -139,7 +164,11 @@ export function ProviderPanel({
   const emptyBarClass = inverted ? 'bg-background/20' : 'bg-muted'
 
   if (!p) {
-    return <span className={`text-xs ${mutedClass}`}>No data available</span>
+    return (
+      <span className={`text-xs ${mutedClass}`}>
+        {translate('auto.components.status.bar.tooltip.6d6df77f41', 'No data available')}
+      </span>
+    )
   }
 
   const name =
@@ -151,7 +180,9 @@ export function ProviderPanel({
           ? 'Gemini'
           : p.provider === 'opencode-go'
             ? 'OpenCode Go'
-            : p.provider
+            : p.provider === 'kimi'
+              ? 'Kimi'
+              : p.provider
 
   if (p.status === 'unavailable') {
     return (
@@ -160,7 +191,9 @@ export function ProviderPanel({
           <ProviderIcon provider={p.provider} />
           {name}
         </div>
-        <div className={mutedClass}>{p.error ?? 'Unavailable'}</div>
+        <div className={mutedClass}>
+          {p.error ?? translate('auto.components.status.bar.tooltip.1292d4f2ee', 'Unavailable')}
+        </div>
       </div>
     )
   }
@@ -173,7 +206,13 @@ export function ProviderPanel({
           {name}
         </div>
         <div className="mt-2">
-          <ErrorMessage message={p.error ?? 'Unable to fetch usage'} inverted={inverted} />
+          <ErrorMessage
+            message={
+              p.error ??
+              translate('auto.components.status.bar.tooltip.2c35eca8d4', 'Unable to fetch usage')
+            }
+            inverted={inverted}
+          />
         </div>
       </div>
     )
@@ -204,7 +243,10 @@ export function ProviderPanel({
           />
         </div>
         <div className={`flex justify-between ${mutedClass}`}>
-          <span>{leftPct}% left</span>
+          <span>
+            {leftPct}
+            {translate('auto.components.status.bar.tooltip.cedb7b99e3', '% left')}
+          </span>
           {resetLabel && <span>{resetLabel}</span>}
         </div>
       </div>

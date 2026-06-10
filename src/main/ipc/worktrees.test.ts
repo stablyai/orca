@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { lstat, mkdir, mkdtemp, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import type { CreateWorktreeResult } from '../../shared/types'
 
 const {
   handleMock,
@@ -1335,9 +1336,11 @@ describe('registerWorktreeHandlers', () => {
 
   it('returns the PR head push target when resolving a fork PR base', async () => {
     getPullRequestPushTargetMock.mockResolvedValue({
-      remoteName: 'pr-prateek-orca',
-      branchName: 'prateek/fix-sidebar-agents-toggle',
-      remoteUrl: 'git@github.com:prateek/orca.git'
+      pushTarget: {
+        remoteName: 'pr-prateek-orca',
+        branchName: 'prateek/fix-sidebar-agents-toggle',
+        remoteUrl: 'git@github.com:prateek/orca.git'
+      }
     })
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'rev-parse') {
@@ -1358,6 +1361,8 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(result).toMatchObject({
       baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'prateek/fix-sidebar-agents-toggle',
       pushTarget: {
         remoteName: 'pr-prateek-orca',
         branchName: 'prateek/fix-sidebar-agents-toggle',
@@ -1420,7 +1425,11 @@ describe('registerWorktreeHandlers', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'], {
       cwd: '/workspace/repo'
     })
-    expect(result).toMatchObject({ baseBranch: 'abc123' })
+    expect(result).toEqual({
+      baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'feat/onboarding-model-choice-782'
+    })
   })
 
   it('falls back to refs/pull/<N>/head when branch fetch fails for a PR', async () => {
@@ -1457,7 +1466,11 @@ describe('registerWorktreeHandlers', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'], {
       cwd: '/workspace/repo'
     })
-    expect(result).toMatchObject({ baseBranch: 'abc123' })
+    expect(result).toEqual({
+      baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'feat/onboarding-model-choice-782'
+    })
   })
 
   it('does not fall back to refs/pull/<N>/head when branch fetch hits a network failure', async () => {
@@ -1598,28 +1611,38 @@ describe('registerWorktreeHandlers', () => {
         if (args[0] === 'remote') {
           return { stdout: 'origin\n', stderr: '' }
         }
-        if (args[0] === 'worktree' && args[1] === 'list') {
-          return {
-            stdout: 'worktree /remote/repo\nHEAD abc123\nbranch refs/heads/main\n',
-            stderr: ''
-          }
+        if (args[0] === 'merge-base') {
+          return { stdout: '', stderr: '' }
         }
-        if (args[0] === 'status') {
-          return { stdout: ' M package.json\n', stderr: '' }
+        if (args[0] === 'log') {
+          return { stdout: 'commit-a\ncommit-b\ncommit-c\n', stderr: '' }
         }
         return { stdout: '', stderr: '' }
       }),
       fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
       addWorktree: vi.fn().mockResolvedValue(undefined),
-      listWorktrees: vi.fn().mockResolvedValue([
-        {
-          path: '/remote/improve-dashboard',
-          head: 'abc123',
-          branch: 'refs/heads/improve-dashboard',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/repo',
+            head: 'base123',
+            branch: 'refs/heads/main',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/improve-dashboard',
+            head: 'abc123',
+            branch: 'refs/heads/improve-dashboard',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: false, stdout: ' M package.json\n' }),
+      refreshLocalBaseRefForWorktreeCreate: vi.fn().mockResolvedValue(undefined)
     }
     const mux = {
       request: vi.fn().mockResolvedValue(undefined),
@@ -1637,24 +1660,27 @@ describe('registerWorktreeHandlers', () => {
     getActiveMultiplexerMock.mockReturnValue(mux)
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
 
-    const result = await handlers['worktrees:create'](null, {
+    const result = (await handlers['worktrees:create'](null, {
       repoId: 'repo-ssh',
       name: 'improve-dashboard'
-    })
+    })) as CreateWorktreeResult
 
     expect(provider.exec).toHaveBeenCalledWith(
-      ['merge-base', '--is-ancestor', 'main', 'refs/remotes/origin/main'],
+      ['merge-base', '--is-ancestor', 'refs/heads/main', 'refs/remotes/origin/main'],
       '/remote/repo'
     )
-    expect(provider.exec).toHaveBeenCalledWith(['worktree', 'list', '--porcelain'], '/remote/repo')
     expect(provider.exec).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=no'],
+      ['log', '--format=%H', 'refs/heads/main..refs/remotes/origin/main'],
       '/remote/repo'
     )
+    expect(provider.worktreeIsClean).toHaveBeenCalledWith('/remote/repo', {
+      includeUntracked: false
+    })
     expect(provider.exec).not.toHaveBeenCalledWith(
       ['reset', '--hard', 'refs/remotes/origin/main'],
       expect.any(String)
     )
+    expect(provider.refreshLocalBaseRefForWorktreeCreate).not.toHaveBeenCalled()
     expect(result).toEqual(
       expect.objectContaining({
         localBaseRefRefresh: {
@@ -1665,6 +1691,297 @@ describe('registerWorktreeHandlers', () => {
         }
       })
     )
+  })
+
+  it('refreshes SSH local base through the narrow relay RPC when the setting is on', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'merge-base') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'log') {
+          return { stdout: 'commit-a\ncommit-b\n', stderr: '' }
+        }
+        throw new Error(`unexpected generic exec: ${args.join(' ')}`)
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/repo',
+            head: 'base123',
+            branch: 'refs/heads/main',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/improve-dashboard',
+            head: 'abc123',
+            branch: 'refs/heads/improve-dashboard',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
+      refreshLocalBaseRefForWorktreeCreate: vi.fn().mockResolvedValue(undefined)
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getSettings.mockReturnValue({
+      branchPrefix: 'none',
+      nestWorkspaces: false,
+      refreshLocalBaseRefOnWorktreeCreate: true,
+      workspaceDir: '/workspace'
+    })
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })) as CreateWorktreeResult
+
+    expect(provider.exec).toHaveBeenCalledWith(
+      ['merge-base', '--is-ancestor', 'refs/heads/main', 'refs/remotes/origin/main'],
+      '/remote/repo'
+    )
+    expect(provider.exec).toHaveBeenCalledWith(
+      ['log', '--format=%H', 'refs/heads/main..refs/remotes/origin/main'],
+      '/remote/repo'
+    )
+    expect(provider.refreshLocalBaseRefForWorktreeCreate).toHaveBeenCalledWith({
+      repoPath: '/remote/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main',
+      ownerWorktreePath: '/remote/repo'
+    })
+    expect(provider.exec).not.toHaveBeenCalledWith(
+      ['reset', '--hard', 'refs/remotes/origin/main'],
+      expect.any(String)
+    )
+    expect(provider.exec).not.toHaveBeenCalledWith(
+      ['update-ref', 'refs/heads/main', 'refs/remotes/origin/main'],
+      expect.any(String)
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        localBaseRefRefresh: {
+          status: 'updated',
+          baseRef: 'origin/main',
+          localBranch: 'main',
+          ownerWorktreePath: '/remote/repo'
+        }
+      })
+    )
+  })
+
+  it('returns SSH local base update suggestion when a full local base ref is safely behind', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'refs/remotes/origin/main'
+    }
+    let registeredRoots = false
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'merge-base' || args[0] === 'log') {
+          if (!registeredRoots) {
+            throw new Error('Path outside authorized workspace')
+          }
+          return {
+            stdout: args[0] === 'log' ? 'commit-a\ncommit-b\ncommit-c\ncommit-d\n' : '',
+            stderr: ''
+          }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockImplementation(async () => {
+        if (!registeredRoots) {
+          throw new Error('No workspace roots registered yet')
+        }
+        return [
+          {
+            path: '/remote/repo',
+            head: 'base123',
+            branch: 'refs/heads/main',
+            isBare: false,
+            isMainWorktree: true
+          },
+          {
+            path: '/remote/improve-dashboard',
+            head: 'abc123',
+            branch: 'refs/heads/improve-dashboard',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]
+      }),
+      worktreeIsClean: vi.fn().mockImplementation(async () => {
+        if (!registeredRoots) {
+          throw new Error('Path outside authorized workspace')
+        }
+        return { clean: true }
+      }),
+      refreshLocalBaseRefForWorktreeCreate: vi.fn().mockResolvedValue(undefined)
+    }
+    const mux = {
+      request: vi.fn().mockImplementation(async (method: string) => {
+        if (method === 'session.registerRoot') {
+          registeredRoots = true
+        }
+      }),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })
+
+    expect(provider.exec).toHaveBeenCalledWith(
+      ['merge-base', '--is-ancestor', 'refs/heads/main', 'refs/remotes/origin/main'],
+      '/remote/repo'
+    )
+    expect(provider.exec).toHaveBeenCalledWith(
+      ['log', '--format=%H', 'refs/heads/main..refs/remotes/origin/main'],
+      '/remote/repo'
+    )
+    expect(provider.listWorktrees).toHaveBeenCalledWith('/remote/repo')
+    expect(provider.worktreeIsClean).toHaveBeenCalledWith('/remote/repo', {
+      includeUntracked: false
+    })
+    expect(provider.refreshLocalBaseRefForWorktreeCreate).toHaveBeenCalledWith({
+      repoPath: '/remote/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main',
+      ownerWorktreePath: '/remote/repo',
+      checkOnly: true
+    })
+    expect(provider.exec).not.toHaveBeenCalledWith(
+      ['reset', '--hard', 'refs/remotes/origin/main'],
+      expect.any(String)
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        localBaseRefUpdateSuggestion: {
+          baseRef: 'origin/main',
+          localBranch: 'main',
+          behind: 4
+        }
+      })
+    )
+  })
+
+  it('does not suggest SSH local base updates when the relay cannot refresh local refs', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'refs/remotes/origin/main'
+    }
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.refreshLocalBaseRefForWorktreeCreate'),
+      { code: -32601 }
+    )
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        if (args[0] === 'merge-base') {
+          return { stdout: '', stderr: '' }
+        }
+        if (args[0] === 'log') {
+          return { stdout: 'commit-a\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/repo',
+            head: 'base123',
+            branch: 'refs/heads/main',
+            isBare: false,
+            isMainWorktree: true
+          }
+        ])
+        .mockResolvedValueOnce([
+          {
+            path: '/remote/improve-dashboard',
+            head: 'abc123',
+            branch: 'refs/heads/improve-dashboard',
+            isBare: false,
+            isMainWorktree: false
+          }
+        ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true }),
+      refreshLocalBaseRefForWorktreeCreate: vi.fn().mockRejectedValue(methodNotFound)
+    }
+    const mux = {
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue(mux)
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = (await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })) as CreateWorktreeResult
+
+    expect(provider.refreshLocalBaseRefForWorktreeCreate).toHaveBeenCalledWith({
+      repoPath: '/remote/repo',
+      fullRef: 'refs/heads/main',
+      remoteTrackingRef: 'refs/remotes/origin/main',
+      ownerWorktreePath: '/remote/repo',
+      checkOnly: true
+    })
+    expect(result.localBaseRefUpdateSuggestion).toBeUndefined()
   })
 
   it('reads remote orca.yaml and returns a setup launch payload during SSH create', async () => {
@@ -2173,6 +2490,7 @@ describe('registerWorktreeHandlers', () => {
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi
         .fn()
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
           {
             path: '/remote/first-worktree',
@@ -2182,6 +2500,7 @@ describe('registerWorktreeHandlers', () => {
             isMainWorktree: false
           }
         ])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
           {
             path: '/remote/second-worktree',
@@ -2628,6 +2947,66 @@ describe('registerWorktreeHandlers', () => {
     expect(result).toEqual(
       expect.objectContaining({
         worktree: expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
+      })
+    )
+  })
+
+  it('threads the local base update suggestion from local create results', async () => {
+    const remoteBase = {
+      remote: 'origin',
+      branch: 'main',
+      ref: 'refs/remotes/origin/main',
+      base: 'origin/main'
+    }
+    runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
+    runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
+    addWorktreeMock.mockResolvedValue({
+      localBaseRefUpdateSuggestion: {
+        baseRef: 'origin/main',
+        localBranch: 'main',
+        behind: 2
+      }
+    })
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/improve-dashboard',
+        head: 'created-sha',
+        branch: 'improve-dashboard',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'created-sha\n', stderr: '' })
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'improve-dashboard'
+    })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/improve-dashboard',
+      'improve-dashboard',
+      'origin/main',
+      false,
+      false,
+      {
+        suggestLocalBaseRefUpdate: true,
+        remoteTrackingBase: {
+          remote: 'origin',
+          branch: 'main',
+          ref: 'refs/remotes/origin/main',
+          base: 'origin/main'
+        }
+      }
+    )
+    expect(result).toEqual(
+      expect.objectContaining({
+        localBaseRefUpdateSuggestion: {
+          baseRef: 'origin/main',
+          localBranch: 'main',
+          behind: 2
+        }
       })
     )
   })
@@ -4320,7 +4699,7 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('rejects unregistered delete paths before teardown, hooks, or git removal', async () => {
+  it('reports already-missing unregistered delete paths before teardown, hooks, or git removal', async () => {
     mockKnownFeatureWorktree('/workspace/real-feature')
     getEffectiveHooksMock.mockReturnValue({
       scripts: {
@@ -4332,7 +4711,9 @@ describe('registerWorktreeHandlers', () => {
       handlers['worktrees:remove'](null, {
         worktreeId: 'repo-1::/workspace/not-a-worktree'
       })
-    ).rejects.toThrow('Refusing to delete unregistered worktree path')
+    ).rejects.toThrow(
+      'Worktree is no longer registered with Git and its directory is already gone.'
+    )
 
     expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
     expect(runHookMock).not.toHaveBeenCalled()
@@ -4358,6 +4739,27 @@ describe('registerWorktreeHandlers', () => {
     expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(
       'repo-1::/workspace/already-deleted-wt'
     )
+    expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
+      repoId: 'repo-1'
+    })
+  })
+
+  it('cleans up an already-missing unregistered worktree after force recovery', async () => {
+    const worktreeId = 'repo-1::/workspace/already-deleted-wt'
+    mockKnownFeatureWorktree('/workspace/real-feature')
+
+    await expect(handlers['worktrees:remove'](null, { worktreeId })).rejects.toThrow(
+      'Worktree is no longer registered with Git and its directory is already gone.'
+    )
+
+    await handlers['worktrees:remove'](null, { worktreeId, force: true })
+
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId)
+    expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
     expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
       repoId: 'repo-1'
     })

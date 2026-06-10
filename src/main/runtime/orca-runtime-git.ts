@@ -16,7 +16,10 @@ import type {
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
-import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../shared/source-control-ai'
+import {
+  mergeLegacyCommitMessageAiIntoSourceControlAi,
+  type ResolvedSourceControlAiGenerationParams
+} from '../../shared/source-control-ai'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import { getRemoteFileUrl } from '../git/repo'
 import {
@@ -72,6 +75,7 @@ type RuntimeCommitMessageSettingsOverride = Partial<
   >
 > & {
   commitMessageDiscoveryHostKey?: string
+  sourceControlAiResolvedParams?: ResolvedSourceControlAiGenerationParams
 }
 
 function getRuntimeGitGenerationSettings(
@@ -447,16 +451,18 @@ export class RuntimeGitCommands {
     const discoveryHostKey =
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(target.connectionId ?? null)
-    const resolvedSettings = resolveCommitMessageSettings(
-      getRuntimeGitGenerationSettings(
-        this.host.getRuntimeSettings(),
-        settingsOverride,
-        'commitMessage'
-      ),
-      discoveryHostKey,
-      'commitMessage',
-      target.repo ?? null
-    )
+    const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
+      ? { ok: true as const, params: settingsOverride.sourceControlAiResolvedParams }
+      : resolveCommitMessageSettings(
+          getRuntimeGitGenerationSettings(
+            this.host.getRuntimeSettings(),
+            settingsOverride,
+            'commitMessage'
+          ),
+          discoveryHostKey,
+          'commitMessage',
+          target.repo ?? null
+        )
     if (!resolvedSettings.ok) {
       return { success: false, error: resolvedSettings.error }
     }
@@ -532,16 +538,18 @@ export class RuntimeGitCommands {
     const discoveryHostKey =
       settingsOverride?.commitMessageDiscoveryHostKey ??
       getCommitMessageModelDiscoveryHostKey(target.connectionId ?? null)
-    const resolvedSettings = resolveCommitMessageSettings(
-      getRuntimeGitGenerationSettings(
-        this.host.getRuntimeSettings(),
-        settingsOverride,
-        'pullRequest'
-      ),
-      discoveryHostKey,
-      'pullRequest',
-      target.repo ?? null
-    )
+    const resolvedSettings = settingsOverride?.sourceControlAiResolvedParams
+      ? { ok: true as const, params: settingsOverride.sourceControlAiResolvedParams }
+      : resolveCommitMessageSettings(
+          getRuntimeGitGenerationSettings(
+            this.host.getRuntimeSettings(),
+            settingsOverride,
+            'pullRequest'
+          ),
+          discoveryHostKey,
+          'pullRequest',
+          target.repo ?? null
+        )
     if (!resolvedSettings.ok) {
       return { success: false, error: resolvedSettings.error }
     }

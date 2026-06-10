@@ -11,6 +11,7 @@ import type {
   JiraViewer
 } from '../../../../shared/types'
 import type { CacheEntry } from './github'
+import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import {
   jiraConnect,
   jiraDisconnect,
@@ -22,6 +23,7 @@ import {
   jiraTestConnection
 } from '@/runtime/runtime-jira-client'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { translate } from '@/i18n/i18n'
 
 const CACHE_TTL = 60_000
 const MAX_CACHE_ENTRIES = 500
@@ -147,6 +149,7 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       const prev = get().jiraStatus
       if (
         prev.connected !== status.connected ||
+        prev.credentialError !== status.credentialError ||
         prev.viewer?.email !== status.viewer?.email ||
         getSelectedSiteId(prev) !== getSelectedSiteId(status) ||
         (prev.sites?.length ?? 0) !== (status.sites?.length ?? 0)
@@ -196,7 +199,13 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
         })
         void get().checkJiraConnection()
       } else if (result.ok) {
-        return { ok: false as const, error: 'Jira connection was superseded by a newer request.' }
+        return {
+          ok: false as const,
+          error: translate(
+            'auto.store.slices.jira.856083302c',
+            'Jira connection was superseded by a newer request.'
+          )
+        }
       }
       return result
     } catch (error) {
@@ -312,6 +321,11 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       .catch((error) => {
         console.warn('[jira] fetchJiraIssue failed:', error)
         if (
+          isIntegrationCredentialDecryptionError(error) &&
+          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+        ) {
+          void get().checkJiraConnection()
+        } else if (
           looksLikeAuthError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
         ) {
@@ -365,6 +379,11 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       .catch((error) => {
         console.warn('[jira] searchJiraIssues failed:', error)
         if (
+          isIntegrationCredentialDecryptionError(error) &&
+          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+        ) {
+          void get().checkJiraConnection()
+        } else if (
           looksLikeAuthError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
         ) {
@@ -418,6 +437,11 @@ export const createJiraSlice: StateCreator<AppState, [], [], JiraSlice> = (set, 
       .catch((error) => {
         console.warn('[jira] listJiraIssues failed:', error)
         if (
+          isIntegrationCredentialDecryptionError(error) &&
+          canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
+        ) {
+          void get().checkJiraConnection()
+        } else if (
           looksLikeAuthError(error) &&
           canWriteJiraReadResult(contextKey, requestMutationGeneration, get().settings)
         ) {

@@ -1,5 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: setup-guide readiness is driven by bounded IPC probes and browser focus events; the state cannot be derived synchronously from render inputs. */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
@@ -20,14 +20,18 @@ import {
   type FeatureWallSetupProgress
 } from '../feature-wall/feature-wall-setup-progress'
 import { deriveIntegrationConnectionStatus } from '../feature-wall/use-integration-connection-status'
+import { useSetupGuideBrowserMilestoneProgress } from './setup-guide-browser-milestone-progress'
 import {
   getComputerUsePermissionSetupState,
   getCurrentSetupScriptProbeState,
   getSetupGuideProgressReady,
-  getSetupScriptProbeSignature,
-  INITIAL_SETUP_SCRIPT_PROBE_STATE,
-  type SetupScriptProbeState
+  getSetupScriptProbeSignature
 } from './setup-guide-progress-readiness'
+import {
+  readSetupScriptProbeCache,
+  setSetupScriptProbeCache,
+  subscribeSetupScriptProbeCache
+} from './setup-script-probe-cache'
 
 const SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS = 15_000
 
@@ -60,8 +64,10 @@ export function useSetupGuideProgress(
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
-  const [setupScriptProbe, setSetupScriptProbe] = useState<SetupScriptProbeState>(
-    INITIAL_SETUP_SCRIPT_PROBE_STATE
+  const setupScriptProbe = useSyncExternalStore(
+    subscribeSetupScriptProbeCache,
+    readSetupScriptProbeCache,
+    readSetupScriptProbeCache
   )
   const [computerUsePermissionsReady, setComputerUsePermissionsReady] = useState(false)
   const [computerUsePermissionStatusChecked, setComputerUsePermissionStatusChecked] =
@@ -147,14 +153,14 @@ export function useSetupGuideProgress(
     // visibility readiness so a wedged read cannot hide the checklist forever.
     const timeoutId = window.setTimeout(() => {
       if (activeSetupScriptProbeSignatureRef.current === signature) {
-        setSetupScriptProbe({ signature, ready: true, hasSetupScript: false })
+        setSetupScriptProbeCache({ signature, ready: true, hasSetupScript: false })
       }
     }, SETUP_SCRIPT_PROBE_SETTLE_TIMEOUT_MS)
 
     const settle = (hasSetupScript: boolean): void => {
       window.clearTimeout(timeoutId)
       if (activeSetupScriptProbeSignatureRef.current === signature) {
-        setSetupScriptProbe({ signature, ready: true, hasSetupScript })
+        setSetupScriptProbeCache({ signature, ready: true, hasSetupScript })
       }
     }
 
@@ -268,7 +274,7 @@ export function useSetupGuideProgress(
     computerUsePermissionStatusChecked: currentComputerUsePermissionStatusChecked
   })
 
-  return useMemo(
+  const rawProgress = useMemo(
     () =>
       getFeatureWallSetupProgress({
         ready,
@@ -306,4 +312,5 @@ export function useSetupGuideProgress(
       worktreesByRepo
     ]
   )
+  return useSetupGuideBrowserMilestoneProgress(rawProgress)
 }

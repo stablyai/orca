@@ -120,6 +120,28 @@ describe('LocalPtyProvider', () => {
       expect(typeof result.id).toBe('string')
     })
 
+    it('reattaches to an existing caller-supplied session id without spawning', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24, sessionId: 'serve-session-1' })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+
+      expect(second).toEqual({ id: 'serve-session-1', pid: 12345, isReattach: true })
+      expect(mockProc.resize).toHaveBeenCalledWith(120, 40)
+      expect(spawnMock).not.toHaveBeenCalled()
+    })
+
+    it('does not reattach numeric caller session ids that can collide after restart', async () => {
+      const first = await provider.spawn({ cols: 80, rows: 24 })
+      spawnMock.mockClear()
+
+      const second = await provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+
+      expect(second.id).not.toBe(first.id)
+      expect(second.isReattach).toBeUndefined()
+      expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
     it('calls node-pty spawn with correct args', async () => {
       await provider.spawn({ cols: 120, rows: 40, cwd: '/tmp' })
       expect(spawnMock).toHaveBeenCalledWith(
@@ -157,6 +179,35 @@ describe('LocalPtyProvider', () => {
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
       expect(spawnCall[2].env.CUSTOM_VAR).toBe('custom-value')
+    })
+
+    it('honors explicit terminal env overrides after deleting requested defaults', async () => {
+      provider.configure({
+        buildSpawnEnv: (_id, env) => {
+          env.TERM_PROGRAM = 'Orca'
+          env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-attribution'
+          env.PATH = `/tmp/orca-attribution:${env.PATH ?? ''}`
+          return env
+        }
+      })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        env: {
+          TERM: 'screen-256color',
+          PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
+          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        },
+        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      })
+
+      const spawnCall = spawnMock.mock.calls.at(-1)!
+      expect(spawnCall[2].name).toBe('screen-256color')
+      expect(spawnCall[2].env.TERM).toBe('screen-256color')
+      expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+      expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     })
 
     it('does not pass a Windows Codex home into WSL terminals', async () => {

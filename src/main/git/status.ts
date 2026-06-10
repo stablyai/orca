@@ -30,6 +30,7 @@ import {
 } from '../../shared/git-uncommitted-line-stats'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { gitExecFileAsync, gitExecFileAsyncBuffer, gitOptionalLocksDisabledEnv } from './runner'
+import { describeMaxBufferOverflowError, isMaxBufferOverflowError } from './max-buffer-overflow'
 import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
@@ -46,9 +47,11 @@ type EffectiveUpstreamStatusCacheEntry = {
 }
 
 const effectiveUpstreamStatusCache = new Map<string, EffectiveUpstreamStatusCacheEntry>()
+const effectiveUpstreamStatusInFlight = new Map<string, Promise<GitUpstreamStatus>>()
 
 export function clearEffectiveUpstreamStatusCacheForTests(): void {
   effectiveUpstreamStatusCache.clear()
+  effectiveUpstreamStatusInFlight.clear()
 }
 
 export type GetStatusOptions = {
@@ -136,6 +139,7 @@ export async function getStatus(
         // Changed entries: "1 XY sub mH mI mW hH path" or "2 XY sub mH mI mW hH X\tscore\tpath\torigPath"
         const parts = line.split(' ')
         const xy = parts[1]
+        const submodule = parseSubmoduleStatus(parts[2])
         const indexStatus = xy[0]
         const worktreeStatus = xy[1]
 
@@ -147,24 +151,41 @@ export async function getStatus(
           const path = decodeGitCQuotedPath(tabParts[0].split(' ').slice(9).join(' '))
           const oldPath = decodeGitCQuotedPath(tabParts.slice(1).join('\t'))
           if (indexStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged', oldPath })
+            entries.push({
+              path,
+              status: parseStatusChar(indexStatus),
+              area: 'staged',
+              oldPath,
+              ...(submodule ? { submodule } : {})
+            })
           }
           if (worktreeStatus !== '.') {
             entries.push({
               path,
               status: parseStatusChar(worktreeStatus),
               area: 'unstaged',
-              oldPath
+              oldPath,
+              ...(submodule ? { submodule } : {})
             })
           }
         } else {
           // Regular change entry
           const path = decodeGitCQuotedPath(parts.slice(8).join(' '))
           if (indexStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(indexStatus), area: 'staged' })
+            entries.push({
+              path,
+              status: parseStatusChar(indexStatus),
+              area: 'staged',
+              ...(submodule ? { submodule } : {})
+            })
           }
           if (worktreeStatus !== '.') {
-            entries.push({ path, status: parseStatusChar(worktreeStatus), area: 'unstaged' })
+            entries.push({
+              path,
+              status: parseStatusChar(worktreeStatus),
+              area: 'unstaged',
+              ...(submodule ? { submodule } : {})
+            })
           }
         }
       } else if (line.startsWith('? ')) {
@@ -184,38 +205,19 @@ export async function getStatus(
 
     if (shouldProbeEffectiveUpstreamStatus(branch, upstreamName)) {
       const branchName = getShortBranchName(branch)
-      const cacheKey = branchName
-        ? getEffectiveUpstreamStatusCacheKey(worktreePath, branchName, upstreamName)
-        : null
-      effectiveUpstreamStatus = cacheKey
-        ? readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
-        : undefined
-      let probedSameNameOriginRef = false
-      try {
-        if (!effectiveUpstreamStatus) {
-          effectiveUpstreamStatus = await getEffectiveGitUpstreamStatus((args) => {
-            if (
-              branchName &&
-              args[0] === 'rev-parse' &&
-              args.includes(`refs/remotes/origin/${branchName}`)
-            ) {
-              probedSameNameOriginRef = true
-            }
-            return gitExecFileAsync(args, { cwd: worktreePath })
-          })
-          if (cacheKey) {
-            rememberEffectiveUpstreamStatus(
-              cacheKey,
-              effectiveUpstreamStatus,
-              Date.now(),
-              probedSameNameOriginRef
-            )
-          }
+      if (branchName) {
+        const cacheKey = getEffectiveUpstreamStatusCacheKey(worktreePath, branchName, upstreamName)
+        try {
+          effectiveUpstreamStatus = await readOrProbeEffectiveUpstreamStatus(
+            cacheKey,
+            worktreePath,
+            branchName
+          )
+        } catch {
+          // Why: git status polling should not fail just because the richer
+          // upstream probe hit a transient ref/read error; the explicit
+          // upstream-status path will surface those failures when invoked.
         }
-      } catch {
-        // Why: git status polling should not fail just because the richer
-        // upstream probe hit a transient ref/read error; the explicit
-        // upstream-status path will surface those failures when invoked.
       }
     }
   } catch {
@@ -353,6 +355,56 @@ function rememberEffectiveUpstreamStatus(
   })
 }
 
+async function readOrProbeEffectiveUpstreamStatus(
+  cacheKey: string,
+  worktreePath: string,
+  branchName: string
+): Promise<GitUpstreamStatus> {
+  const cached = readCachedEffectiveUpstreamStatus(cacheKey, Date.now())
+  if (cached) {
+    return cached
+  }
+
+  const inFlight = effectiveUpstreamStatusInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+
+  // Why: source-control mount and root git refresh can overlap during startup.
+  // Coalesce the richer upstream probe so a stable missing ref fails once.
+  const probe = probeEffectiveUpstreamStatus(worktreePath, branchName).then((result) => {
+    rememberEffectiveUpstreamStatus(
+      cacheKey,
+      result.status,
+      Date.now(),
+      result.probedSameNameOriginRef
+    )
+    return result.status
+  })
+  effectiveUpstreamStatusInFlight.set(cacheKey, probe)
+  try {
+    return await probe
+  } finally {
+    if (effectiveUpstreamStatusInFlight.get(cacheKey) === probe) {
+      effectiveUpstreamStatusInFlight.delete(cacheKey)
+    }
+  }
+}
+
+async function probeEffectiveUpstreamStatus(
+  worktreePath: string,
+  branchName: string
+): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
+  let probedSameNameOriginRef = false
+  const status = await getEffectiveGitUpstreamStatus((args) => {
+    if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {
+      probedSameNameOriginRef = true
+    }
+    return gitExecFileAsync(args, { cwd: worktreePath })
+  })
+  return { status, probedSameNameOriginRef }
+}
+
 function shouldProbeEffectiveUpstreamStatus(
   branch: string | undefined,
   upstreamName: string | undefined
@@ -393,6 +445,17 @@ function parseStatusChar(char: string): GitFileStatus {
       return 'copied'
     default:
       return 'modified'
+  }
+}
+
+function parseSubmoduleStatus(submoduleField: string | undefined): GitStatusEntry['submodule'] {
+  if (!submoduleField?.startsWith('S')) {
+    return undefined
+  }
+  return {
+    commitChanged: submoduleField[1] === 'C',
+    trackedChanges: submoduleField[2] === 'M',
+    untrackedChanges: submoduleField[3] === 'U'
   }
 }
 
@@ -1150,16 +1213,28 @@ export async function getStagedCommitContext(
     return null
   }
 
-  const { stdout: stagedPatch } = await gitExecFileAsync(
-    ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-    {
-      cwd: worktreePath,
-      // Why: the prompt builder truncates large staged patches later. Give git
-      // enough buffer room to reach that truncation step instead of failing at
-      // Node's default execFile limit first.
-      maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+  let stagedPatch = ''
+  try {
+    const patchResult = await gitExecFileAsync(
+      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+      {
+        cwd: worktreePath,
+        maxBuffer: MAX_STAGED_COMMIT_CONTEXT_BYTES
+      }
+    )
+    stagedPatch = patchResult.stdout
+  } catch (error) {
+    if (!isMaxBufferOverflowError(error)) {
+      throw error
     }
-  )
+    // Why: a very large staged diff overflows maxBuffer (ENOBUFS). The patch is
+    // optional context that gets truncated to STAGED_DIFF_BYTE_BUDGET anyway, so
+    // degrade to the file-name summary instead of failing commit-message generation.
+    console.warn(
+      '[git] Staged patch too large to read; using file summary only:',
+      describeMaxBufferOverflowError(error)
+    )
+  }
 
   return {
     branch: branchResult.stdout.trim() || null,

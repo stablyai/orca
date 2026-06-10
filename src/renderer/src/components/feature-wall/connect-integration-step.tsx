@@ -2,6 +2,7 @@ import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { IntegrationStepState } from './use-integration-connection-status'
+import { translate } from '@/i18n/i18n'
 
 export type { IntegrationStepState }
 
@@ -67,7 +68,15 @@ export function IntegrationStep(props: {
         </span>
         {canToggle ? (
           <span className="shrink-0 text-[12px] font-medium text-muted-foreground">
-            {expanded ? 'Done' : 'Change'}
+            {expanded
+              ? translate(
+                  'auto.components.feature.wall.connect.integration.step.5538eb6743',
+                  'Done'
+                )
+              : translate(
+                  'auto.components.feature.wall.connect.integration.step.0f47ff17c6',
+                  'Change'
+                )}
           </span>
         ) : null}
       </button>
@@ -110,11 +119,17 @@ export function CodeHostTaskNote(props: {
       <Check className="mt-px size-3.5 shrink-0 text-status-success" />
       <div className="min-w-0 flex-1">
         <span>
-          <span className="font-semibold text-foreground">{props.providerName}</span> issues are
-          already available as a task source.
+          <span className="font-semibold text-foreground">{props.providerName}</span>{' '}
+          {translate(
+            'auto.components.feature.wall.connect.integration.step.8de7b6848c',
+            'issues are already available as a task source.'
+          )}
         </span>
         <span className="mt-0.5 block text-[12px]">
-          Connect a tracker above only if your team plans work there.
+          {translate(
+            'auto.components.feature.wall.connect.integration.step.05334a6812',
+            'Connect a tracker above only if your team plans work there.'
+          )}
         </span>
         {props.onAccept ? (
           <Button
@@ -123,7 +138,11 @@ export function CodeHostTaskNote(props: {
             className="mt-1.5 h-auto px-0 text-[12px] text-foreground hover:bg-transparent hover:underline"
             onClick={props.onAccept}
           >
-            Use {props.providerName} issues for tasks
+            {translate(
+              'auto.components.feature.wall.connect.integration.step.use_provider_issues',
+              'Use {{value0}} issues for tasks',
+              { value0: props.providerName }
+            )}
           </Button>
         ) : null}
       </div>

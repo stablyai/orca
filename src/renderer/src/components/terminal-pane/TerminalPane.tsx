@@ -47,7 +47,11 @@ import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import { getFitOverrideForPty, onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
-import { getDriverForPty, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
+import {
+  getDriverForPty,
+  isPtyLocked,
+  onDriverChange
+} from '@/lib/pane-manager/mobile-driver-state'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit } from '@/lib/pane-manager/pane-tree-ops'
 import { captureTerminalShutdownLayout } from './terminal-shutdown-layout-capture'
@@ -80,6 +84,7 @@ import {
 } from '@/components/terminal-quick-commands/TerminalQuickCommandDialog'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { pasteTerminalClipboard } from './terminal-clipboard-paste'
+import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-recovery'
 
 // Why: registry lives in a leaf module so the store slice can import it
 // without re-entering the `slice → TerminalPane → store → slice` cycle
@@ -94,6 +99,7 @@ import {
 import { getCachedTerminalTabForWorktree } from './terminal-tab-lookup'
 import { getCachedTerminalGroupIdForWorktree } from './terminal-unified-tab-lookup'
 import { useRepoById } from '@/store/selectors'
+import { translate } from '@/i18n/i18n'
 
 type TerminalPaneProps = {
   tabId: string
@@ -337,6 +343,7 @@ export default function TerminalPane({
   const paneTitlesRef = useRef<Record<number, string>>({})
   paneTitlesRef.current = paneTitles
   const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
+  const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
   const [renamingPaneId, setRenamingPaneId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
@@ -388,7 +395,6 @@ export default function TerminalPane({
   const clearWorktreeUnread = useAppStore((store) => store.clearWorktreeUnread)
   const clearTerminalTabUnread = useAppStore((store) => store.clearTerminalTabUnread)
   const clearTerminalPaneUnread = useAppStore((store) => store.clearTerminalPaneUnread)
-  const recordFeatureInteraction = useAppStore((store) => store.recordFeatureInteraction)
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
@@ -408,10 +414,6 @@ export default function TerminalPane({
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
   const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
-  const handleSplitPaneCommand = useCallback(() => {
-    recordFeatureInteraction('terminal-pane-split')
-  }, [recordFeatureInteraction])
-
   useEffect(() => {
     if (startup) {
       consumeTabStartupCommand(tabId)
@@ -518,16 +520,28 @@ export default function TerminalPane({
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
     const currentPanes = manager.getPanes()
     const currentLeafIds = new Set(currentPanes.map((p) => p.leafId))
+    const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
+    const scrollbackPreserveLeafIds = new Set(
+      [...currentLeafIds].filter((leafId) => !clearedScrollbackLeafIds.has(leafId))
+    )
     // Preserve existing buffersByLeafId so layout-only persists (resize, split,
     // reorder) don't clobber previously captured scrollback. Drop entries for
     // leaves that no longer exist.
     const mergedBuffers = mergeCapturedLeafState({
       prior: existing?.buffersByLeafId,
       fresh: {},
-      currentLeafIds
+      currentLeafIds: scrollbackPreserveLeafIds
     })
     if (Object.keys(mergedBuffers).length > 0) {
       layout.buffersByLeafId = mergedBuffers
+    }
+    const mergedScrollbackRefs = mergeCapturedLeafState({
+      prior: existing?.scrollbackRefsByLeafId,
+      fresh: {},
+      currentLeafIds: scrollbackPreserveLeafIds
+    })
+    if (Object.keys(mergedScrollbackRefs).length > 0) {
+      layout.scrollbackRefsByLeafId = mergedScrollbackRefs
     }
     // Why: between pane creation and the deferred rAF where PTYs actually
     // attach, all transports have getPtyId() === null. The merge below
@@ -575,7 +589,19 @@ export default function TerminalPane({
       layout.titlesByLeafId = titlesByLeafId
     }
     setTabLayout(tabId, layout)
+    for (const leafId of currentLeafIds) {
+      clearedScrollbackLeafIds.delete(leafId)
+    }
   }, [tabId, setTabLayout])
+
+  const clearPaneScrollback = useCallback(
+    (pane: ManagedPane): void => {
+      clearedScrollbackLeafIdsRef.current.add(pane.leafId)
+      pane.terminal.clear()
+      persistLayoutSnapshot()
+    },
+    [persistLayoutSnapshot]
+  )
 
   useEffect(() => {
     if (!terminalTab) {
@@ -1063,7 +1089,7 @@ export default function TerminalPane({
     setSearchOpen,
     onSearchSelectedText: handleSearchSelectedText,
     onRequestClosePane: handleRequestClosePane,
-    onSplitPaneCommand: handleSplitPaneCommand,
+    onClearPaneScrollback: clearPaneScrollback,
     searchOpenRef,
     searchStateRef,
     macOptionAsAltRef,
@@ -1093,6 +1119,68 @@ export default function TerminalPane({
     isVisibleRef,
     toggleExpandPane
   })
+
+  useEffect(() => {
+    if (
+      !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ ||
+      !isVisible ||
+      !isActive
+    ) {
+      return
+    }
+
+    const cleanupCallbacks: (() => void)[] = []
+    const fitAndForward = (): void => {
+      const manager = managerRef.current
+      if (!manager) {
+        return
+      }
+      for (const pane of manager.getPanes()) {
+        safeFit(pane)
+        const transport = paneTransportsRef.current.get(pane.id)
+        if (!transport?.isConnected()) {
+          continue
+        }
+        const ptyId = transport.getPtyId()
+        if (!ptyId) {
+          continue
+        }
+        // Why: match pty-connection resize guards so web refit retries do not
+        // forward SIGWINCH while mobile-lock or phone-fit overrides are active.
+        if (getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
+          continue
+        }
+        // Why: skip forwarding a stale near-zero fit to the host PTY while the
+        // overlay is still settling after a worktree switch.
+        if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
+          continue
+        }
+        transport.resize(pane.terminal.cols, pane.terminal.rows)
+      }
+    }
+    const scheduleFrame = (): void => {
+      const frameId = requestAnimationFrame(fitAndForward)
+      cleanupCallbacks.push(() => cancelAnimationFrame(frameId))
+    }
+    const scheduleTimer = (delayMs: number): void => {
+      const timerId = window.setTimeout(fitAndForward, delayMs)
+      cleanupCallbacks.push(() => window.clearTimeout(timerId))
+    }
+
+    // Why: web-restored terminals can fit before the remote PTY transport is
+    // ready, then become xterm no-ops. Forward the settled cols explicitly.
+    scheduleFrame()
+    scheduleTimer(50)
+    scheduleTimer(150)
+    scheduleTimer(400)
+    scheduleTimer(900)
+
+    return () => {
+      for (const cleanup of cleanupCallbacks) {
+        cleanup()
+      }
+    }
+  }, [isActive, isVisible])
 
   useEffect(() => {
     const container = containerRef.current
@@ -1164,7 +1252,15 @@ export default function TerminalPane({
         readClipboardText: window.api.ui.readClipboardText,
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
-        pasteText: (text, options) => pasteTerminalText(pane.terminal, text, options),
+        pasteText: (text, options) => {
+          pasteTerminalText(pane.terminal, text, options)
+          if (options?.forceBracketedPaste) {
+            const manager = managerRef.current
+            if (manager) {
+              scheduleImagePasteWebglAtlasRecovery(manager)
+            }
+          }
+        },
         onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
       }).catch(() => {
         /* ignore clipboard failures */
@@ -1387,9 +1483,13 @@ export default function TerminalPane({
         existingLayout: existing,
         // Why: beforeunload skips local/floating bytes because session payloads
         // immediately prune them; worktree sleep keeps them as defense-in-depth.
-        captureBuffers: shouldCaptureScrollbackBuffers
+        captureBuffers: shouldCaptureScrollbackBuffers,
+        clearedScrollbackLeafIds: clearedScrollbackLeafIdsRef.current
       })
       setTabLayout(tabId, layout)
+      for (const pane of panes) {
+        clearedScrollbackLeafIdsRef.current.delete(pane.leafId)
+      }
     }
     shutdownBufferCaptures.set(tabId, captureBuffers)
     return () => {
@@ -1588,7 +1688,7 @@ export default function TerminalPane({
     fallbackCwd: cwd ?? '',
     toggleExpandPane,
     onRequestClosePane: handleRequestClosePane,
-    onSplitPaneCommand: handleSplitPaneCommand,
+    onClearPaneScrollback: clearPaneScrollback,
     onSetTitle: handleStartRename,
     onPasteError: setTerminalError,
     onAgentSessionForkReady: setAgentSessionFork,
@@ -1685,6 +1785,9 @@ export default function TerminalPane({
     // users still see its output while typing elsewhere. Hiding on `isActive`
     // blanked the previously focused pane and exposed the white group body.
     display: isVisible || shouldMeasureHiddenStartup ? 'flex' : 'none',
+    // Why: split divider lines intentionally overdraw inside the pane tree.
+    // `hidden` reliably clips that pseudo-element paint at the terminal body.
+    overflow: 'hidden',
     ...(shouldMeasureHiddenStartup ? { opacity: 0, pointerEvents: 'none' } : {}),
     ['--orca-terminal-divider-color' as string]:
       effectiveAppearance?.dividerColor ?? DEFAULT_TERMINAL_DIVIDER_DARK,
@@ -1854,8 +1957,14 @@ export default function TerminalPane({
               <input
                 ref={renameInputRef}
                 className="pane-title-input"
-                aria-label="Pane title"
-                placeholder="Pane title"
+                aria-label={translate(
+                  'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
+                  'Pane title'
+                )}
+                placeholder={translate(
+                  'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
+                  'Pane title'
+                )}
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => {
@@ -1873,7 +1982,11 @@ export default function TerminalPane({
                   type="button"
                   className="pane-title-text"
                   onClick={() => handleStartRename(pane.id)}
-                  aria-label={`Edit pane title: ${title}`}
+                  aria-label={translate(
+                    'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
+                    'Edit pane title: {{value0}}',
+                    { value0: title }
+                  )}
                 >
                   {title}
                 </button>
@@ -1888,13 +2001,20 @@ export default function TerminalPane({
                         e.stopPropagation()
                         handleRemoveTitle(pane.id)
                       }}
-                      aria-label={`Remove pane title: ${title}`}
+                      aria-label={translate(
+                        'auto.components.terminal.pane.TerminalPane.f984ab2a30',
+                        'Remove pane title: {{value0}}',
+                        { value0: title }
+                      )}
                     >
                       <X className="size-3" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={4}>
-                    Remove title
+                    {translate(
+                      'auto.components.terminal.pane.TerminalPane.ac112e9036',
+                      'Remove title'
+                    )}
                   </TooltipContent>
                 </Tooltip>
               </>

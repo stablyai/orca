@@ -107,10 +107,12 @@ export function normalizeTerminalLayoutSnapshot(
       : null
   const ptyIdsByLeafId = remapLeafRecord(snapshot.ptyIdsByLeafId, rewrite)
   const buffersByLeafId = remapLeafRecord(snapshot.buffersByLeafId, rewrite)
+  const scrollbackRefsByLeafId = remapLeafRecord(snapshot.scrollbackRefsByLeafId, rewrite)
   const titlesByLeafId = remapLeafRecord(snapshot.titlesByLeafId, rewrite)
   const {
     ptyIdsByLeafId: _oldPtyIdsByLeafId,
     buffersByLeafId: _oldBuffersByLeafId,
+    scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
     titlesByLeafId: _oldTitlesByLeafId,
     ...snapshotWithoutLeafRecords
   } = snapshot
@@ -122,6 +124,7 @@ export function normalizeTerminalLayoutSnapshot(
       expandedLeafId,
       ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
       ...(buffersByLeafId ? { buffersByLeafId } : {}),
+      ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
       ...(titlesByLeafId ? { titlesByLeafId } : {})
     },
     changed: true

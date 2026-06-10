@@ -20,9 +20,11 @@ describe('resolveGitHubPrStartPoint', () => {
 
   it('falls back to the GitHub PR head ref when a direct branch fetch fails', async () => {
     getPullRequestPushTargetMock.mockResolvedValue({
-      remoteName: 'pr-contributor-orca',
-      branchName: 'feat/onboarding-model-choice-782',
-      remoteUrl: 'git@github.com:contributor/orca.git'
+      pushTarget: {
+        remoteName: 'pr-contributor-orca',
+        branchName: 'feat/onboarding-model-choice-782',
+        remoteUrl: 'git@github.com:contributor/orca.git'
+      }
     })
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'fetch' && String(args[2]).startsWith('+refs/heads/')) {
@@ -50,6 +52,8 @@ describe('resolveGitHubPrStartPoint', () => {
     expect(gitExec).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'])
     expect(result).toEqual({
       baseBranch: 'def456',
+      headSha: 'def456',
+      branchNameOverride: 'feat/onboarding-model-choice-782',
       pushTarget: {
         remoteName: 'pr-contributor-orca',
         branchName: 'feat/onboarding-model-choice-782',
@@ -79,7 +83,11 @@ describe('resolveGitHubPrStartPoint', () => {
     })
 
     expect(getPullRequestPushTargetMock).toHaveBeenCalledWith('/repo-root', 1849, null)
-    expect(result).toEqual({ baseBranch: 'def456' })
+    expect(result).toEqual({
+      baseBranch: 'def456',
+      headSha: 'def456',
+      branchNameOverride: 'feat/onboarding-model-choice-782'
+    })
   })
 
   it('resolves an inaccessible fork PR even when push-target discovery fails', async () => {
@@ -102,7 +110,11 @@ describe('resolveGitHubPrStartPoint', () => {
 
     expect(getPullRequestPushTargetMock).toHaveBeenCalledWith('/repo-root', 1849, null)
     expect(gitExec).toHaveBeenCalledWith(['fetch', 'origin', 'refs/pull/1849/head'])
-    expect(result).toEqual({ baseBranch: 'abc123' })
+    expect(result).toEqual({
+      baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'feat/onboarding-model-choice-782'
+    })
   })
 
   it('uses PR metadata when the caller did not pass a head ref', async () => {
@@ -112,9 +124,11 @@ describe('resolveGitHubPrStartPoint', () => {
       isCrossRepository: true
     })
     getPullRequestPushTargetMock.mockResolvedValue({
-      remoteName: 'pr-contributor-orca',
-      branchName: 'contributor/fix',
-      remoteUrl: 'git@github.com:contributor/orca.git'
+      pushTarget: {
+        remoteName: 'pr-contributor-orca',
+        branchName: 'contributor/fix',
+        remoteUrl: 'git@github.com:contributor/orca.git'
+      }
     })
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'rev-parse') {
@@ -133,11 +147,51 @@ describe('resolveGitHubPrStartPoint', () => {
     expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 1738, 'pr', null)
     expect(result).toEqual({
       baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'contributor/fix',
       pushTarget: {
         remoteName: 'pr-contributor-orca',
         branchName: 'contributor/fix',
         remoteUrl: 'git@github.com:contributor/orca.git'
       }
+    })
+  })
+
+  it('surfaces maintainerCanModify=false for a fork PR so the caller can warn', async () => {
+    getPullRequestPushTargetMock.mockResolvedValue({
+      pushTarget: {
+        remoteName: 'pr-contributor-orca',
+        branchName: 'contributor/fix',
+        remoteUrl: 'git@github.com:contributor/orca.git'
+      },
+      maintainerCanModify: false
+    })
+    const gitExec = vi.fn(async (args: string[]) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: 'abc123\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    const result = await resolveGitHubPrStartPoint({
+      repoPath: '/repo-root',
+      prNumber: 1849,
+      headRefName: 'contributor/fix',
+      isCrossRepository: true,
+      gitExec,
+      resolveRemote: async () => 'origin'
+    })
+
+    expect(result).toEqual({
+      baseBranch: 'abc123',
+      headSha: 'abc123',
+      branchNameOverride: 'contributor/fix',
+      pushTarget: {
+        remoteName: 'pr-contributor-orca',
+        branchName: 'contributor/fix',
+        remoteUrl: 'git@github.com:contributor/orca.git'
+      },
+      maintainerCanModify: false
     })
   })
 

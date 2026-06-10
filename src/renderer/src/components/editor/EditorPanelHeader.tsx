@@ -1,15 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  Columns2,
-  Copy,
-  Eye,
-  ExternalLink,
-  FileText,
-  ListTree,
-  MoreHorizontal,
-  Pencil,
-  Rows2
-} from 'lucide-react'
+import { Columns2, Copy, Eye, ExternalLink, FileText, ListTree, Pencil, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
 import {
@@ -33,6 +23,8 @@ import type { EditorHeaderOpenFileState } from './editor-header'
 import { getEditorHeaderCopyState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
+import { EditorPanelMarkdownActionsMenu } from './EditorPanelMarkdownActionsMenu'
+import { translate } from '@/i18n/i18n'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -62,6 +54,8 @@ type EditorPanelHeaderProps = {
   canShowMarkdownTableOfContents: boolean
   isMarkdownTableOfContentsDisabled: boolean
   showMarkdownTableOfContents: boolean
+  canShowMarkdownFrontmatterToggle: boolean
+  markdownFrontmatterVisible: boolean
   sideBySide: boolean
   openFileState: EditorHeaderOpenFileState
   onCopyPath: () => void
@@ -72,6 +66,7 @@ type EditorPanelHeaderProps = {
   onToggleSideBySide: () => void
   onEditorToggleChange: (next: EditorToggleValue) => void
   onToggleMarkdownTableOfContents: () => void
+  onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
 }
 
@@ -93,6 +88,8 @@ export function EditorPanelHeader({
   canShowMarkdownTableOfContents,
   isMarkdownTableOfContentsDisabled,
   showMarkdownTableOfContents,
+  canShowMarkdownFrontmatterToggle,
+  markdownFrontmatterVisible,
   sideBySide,
   openFileState,
   onCopyPath,
@@ -103,6 +100,7 @@ export function EditorPanelHeader({
   onToggleSideBySide,
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
+  onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf
 }: EditorPanelHeaderProps): React.JSX.Element {
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
@@ -148,7 +146,11 @@ export function EditorPanelHeader({
             <Input
               ref={renameInputRef}
               data-editor-header-rename-input="true"
-              aria-label={`Rename file ${currentFileName}`}
+              aria-label={translate(
+                'auto.components.editor.EditorPanelHeader.1bb1e226ec',
+                'Rename file {{value0}}',
+                { value0: currentFileName }
+              )}
               defaultValue={currentFileName}
               // Why: the header is narrow in floating mode; this keeps the
               // edit field aligned with the path label without growing chrome.
@@ -217,7 +219,7 @@ export function EditorPanelHeader({
               }}
             >
               <Pencil className="w-3.5 h-3.5 mr-1.5" />
-              Rename
+              {translate('auto.components.editor.EditorPanelHeader.84cdc0794b', 'Rename')}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
@@ -226,7 +228,7 @@ export function EditorPanelHeader({
               }}
             >
               <Copy className="w-3.5 h-3.5 mr-1.5" />
-              Copy Path
+              {translate('auto.components.editor.EditorPanelHeader.7c08a1f990', 'Copy Path')}
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => {
@@ -234,13 +236,19 @@ export function EditorPanelHeader({
               }}
             >
               <Copy className="w-3.5 h-3.5 mr-1.5" />
-              Copy Relative Path
+              {translate(
+                'auto.components.editor.EditorPanelHeader.269ce4842b',
+                'Copy Relative Path'
+              )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {canShowMarkdownPreview && (
               <DropdownMenuItem onSelect={onOpenMarkdownPreview}>
                 <Eye className="w-3.5 h-3.5 mr-1.5" />
-                Open Markdown Preview
+                {translate(
+                  'auto.components.editor.EditorPanelHeader.4157f3cbf3',
+                  'Open Markdown Preview'
+                )}
                 <DropdownMenuShortcut>{markdownPreviewShortcutLabel}</DropdownMenuShortcut>
               </DropdownMenuItem>
             )}
@@ -260,7 +268,10 @@ export function EditorPanelHeader({
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0 disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                 onClick={() => onOpenDiffTargetFile(isMarkdown ? 'rich' : undefined)}
-                aria-label="Open file"
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.a10d9b8337',
+                  'Open file'
+                )}
                 disabled={!openFileState.canOpen}
               >
                 <FileText size={14} />
@@ -269,9 +280,18 @@ export function EditorPanelHeader({
             <TooltipContent side="bottom" sideOffset={4}>
               {openFileState.canOpen
                 ? isMarkdown
-                  ? 'Open file tab to use rich markdown editing'
-                  : 'Open file tab'
-                : 'This diff has no modified-side file to open'}
+                  ? translate(
+                      'auto.components.editor.EditorPanelHeader.f0fd4174b5',
+                      'Open file tab to use rich markdown editing'
+                    )
+                  : translate(
+                      'auto.components.editor.EditorPanelHeader.9b80bbe1de',
+                      'Open file tab'
+                    )
+                : translate(
+                    'auto.components.editor.EditorPanelHeader.c98ce191da',
+                    'This diff has no modified-side file to open'
+                  )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -297,13 +317,19 @@ export function EditorPanelHeader({
                 type="button"
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
                 onClick={onOpenPreviewToSide}
-                aria-label="Open Preview to the Side"
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.fb8331694e',
+                  'Open Preview to the Side'
+                )}
               >
                 <Eye size={14} />
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
-              Open Preview to the Side
+              {translate(
+                'auto.components.editor.EditorPanelHeader.fb8331694e',
+                'Open Preview to the Side'
+              )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -321,7 +347,15 @@ export function EditorPanelHeader({
               </button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
-              {sideBySide ? 'Switch to inline diff' : 'Switch to side-by-side diff'}
+              {sideBySide
+                ? translate(
+                    'auto.components.editor.EditorPanelHeader.94756f08ba',
+                    'Switch to inline diff'
+                  )
+                : translate(
+                    'auto.components.editor.EditorPanelHeader.e836faacfa',
+                    'Switch to side-by-side diff'
+                  )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
@@ -349,7 +383,10 @@ export function EditorPanelHeader({
                 }`}
                 onClick={onToggleMarkdownTableOfContents}
                 disabled={isMarkdownTableOfContentsDisabled}
-                aria-label="Table of Contents"
+                aria-label={translate(
+                  'auto.components.editor.EditorPanelHeader.5447c4f68f',
+                  'Table of Contents'
+                )}
                 aria-pressed={showMarkdownTableOfContents}
               >
                 <ListTree size={14} />
@@ -357,41 +394,27 @@ export function EditorPanelHeader({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
               {isMarkdownTableOfContentsDisabled
-                ? 'Table of Contents is available in rich or preview mode'
-                : 'Table of Contents'}
+                ? translate(
+                    'auto.components.editor.EditorPanelHeader.146cb5473c',
+                    'Table of Contents is available in rich or preview mode'
+                  )
+                : translate(
+                    'auto.components.editor.EditorPanelHeader.5447c4f68f',
+                    'Table of Contents'
+                  )}
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
       )}
-      {hasViewModeToggle && isMarkdown && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
-              aria-label="More actions"
-              title="More actions"
-            >
-              <MoreHorizontal size={14} />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" sideOffset={4}>
-            <DropdownMenuItem
-              // Why: the item is disabled (not hidden) only in source/Monaco
-              // mode, which has no document DOM to export. We intentionally
-              // don't poll the DOM (canExportActiveMarkdown) at render time:
-              // the Radix content renders in a Portal and the lookup can
-              // race with the active surface's paint, producing a stuck
-              // disabled state. exportActiveMarkdownToPdf is a safe no-op
-              // when no subtree is found.
-              disabled={mdViewMode === 'source'}
-              onSelect={onExportMarkdownToPdf}
-            >
-              Export as PDF
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      <EditorPanelMarkdownActionsMenu
+        isMarkdown={isMarkdown}
+        hasViewModeToggle={hasViewModeToggle}
+        mdViewMode={mdViewMode}
+        canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+        markdownFrontmatterVisible={markdownFrontmatterVisible}
+        onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
+        onExportMarkdownToPdf={onExportMarkdownToPdf}
+      />
     </div>
   )
 }

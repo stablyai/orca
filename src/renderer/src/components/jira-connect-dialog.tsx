@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
+import { translate } from '@/i18n/i18n'
 
 type JiraConnectDialogProps = {
   open: boolean
@@ -116,9 +117,14 @@ export function JiraConnectDialog({
         className={cn('sm:max-w-md', contentClassName)}
       >
         <DialogHeader className="gap-3">
-          <DialogTitle className="leading-tight">Connect Jira site</DialogTitle>
+          <DialogTitle className="leading-tight">
+            {translate('auto.components.jira.connect.dialog.8388bdea2b', 'Connect Jira site')}
+          </DialogTitle>
           <DialogDescription>
-            Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.
+            {translate(
+              'auto.components.jira.connect.dialog.d785c42b8b',
+              'Use a Jira Cloud site URL, Atlassian email, and API token to browse issues.'
+            )}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -131,12 +137,15 @@ export function JiraConnectDialog({
           <div className="flex flex-col gap-3">
             <div className="space-y-2">
               <Label htmlFor={siteUrlId} className="text-xs">
-                Jira Cloud site URL
+                {translate('auto.components.jira.connect.dialog.e176f9d0c5', 'Jira Cloud site URL')}
               </Label>
               <Input
                 id={siteUrlId}
                 autoFocus
-                placeholder="https://example.atlassian.net"
+                placeholder={translate(
+                  'auto.components.jira.connect.dialog.70fcd360c4',
+                  'https://example.atlassian.net'
+                )}
                 value={siteUrl}
                 onChange={(event) => {
                   setSiteUrl(event.target.value)
@@ -147,12 +156,15 @@ export function JiraConnectDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor={emailId} className="text-xs">
-                Atlassian email
+                {translate('auto.components.jira.connect.dialog.2849ddb295', 'Atlassian email')}
               </Label>
               <Input
                 id={emailId}
                 type="email"
-                placeholder="you@example.com"
+                placeholder={translate(
+                  'auto.components.jira.connect.dialog.e91b9a4073',
+                  'you@example.com'
+                )}
                 value={email}
                 onChange={(event) => {
                   setEmail(event.target.value)
@@ -163,12 +175,15 @@ export function JiraConnectDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor={tokenId} className="text-xs">
-                API token
+                {translate('auto.components.jira.connect.dialog.3d81bf3ab3', 'API token')}
               </Label>
               <Input
                 id={tokenId}
                 type="password"
-                placeholder="Atlassian API token"
+                placeholder={translate(
+                  'auto.components.jira.connect.dialog.7b3967c12f',
+                  'Atlassian API token'
+                )}
                 value={apiToken}
                 onChange={(event) => {
                   setApiToken(event.target.value)
@@ -185,7 +200,7 @@ export function JiraConnectDialog({
               </p>
             ) : null}
             <p className="text-xs text-muted-foreground">
-              Create a token in{' '}
+              {translate('auto.components.jira.connect.dialog.8090504a3e', 'Create a token in')}{' '}
               <button
                 type="button"
                 className="text-primary underline-offset-2 hover:underline"
@@ -195,7 +210,10 @@ export function JiraConnectDialog({
                   )
                 }
               >
-                Atlassian account settings
+                {translate(
+                  'auto.components.jira.connect.dialog.fdd26d81cc',
+                  'Atlassian account settings'
+                )}
               </button>
               .
             </p>
@@ -211,16 +229,16 @@ export function JiraConnectDialog({
               onClick={() => onOpenChange(false)}
               disabled={connectState === 'connecting'}
             >
-              Cancel
+              {translate('auto.components.jira.connect.dialog.79e7aaed39', 'Cancel')}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {connectState === 'connecting' ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Verifying…
+                  {translate('auto.components.jira.connect.dialog.4a2ab52781', 'Verifying…')}
                 </>
               ) : (
-                'Connect'
+                translate('auto.components.jira.connect.dialog.63ce735809', 'Connect')
               )}
             </Button>
           </DialogFooter>

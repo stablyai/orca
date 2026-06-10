@@ -10,6 +10,47 @@ export type WorktreeSidebarDropPreview = {
   previewOffsetsByWorktreeId: ReadonlyMap<string, number>
 }
 
+export type WorktreeSidebarStatusDropTarget = {
+  status: string | null
+  isPinDrop: boolean
+}
+
+export type WorktreeSidebarTrackedStatusDropTarget = {
+  target: WorktreeSidebarStatusDropTarget
+  preview: WorktreeSidebarDropPreview | null
+  x: number
+  y: number
+}
+
+const STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX = 6
+
+function hasWorktreeSidebarStatusDropTarget(target: WorktreeSidebarStatusDropTarget): boolean {
+  return target.isPinDrop || target.status !== null
+}
+
+export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
+  currentTarget: WorktreeSidebarStatusDropTarget
+  currentPreview: WorktreeSidebarDropPreview | null
+  latestTrackedTarget: WorktreeSidebarTrackedStatusDropTarget | null
+  x: number
+  y: number
+}): {
+  target: WorktreeSidebarStatusDropTarget
+  preview: WorktreeSidebarDropPreview | null
+} {
+  if (hasWorktreeSidebarStatusDropTarget(args.currentTarget)) {
+    return { target: args.currentTarget, preview: args.currentPreview }
+  }
+  const latest = args.latestTrackedTarget
+  if (!latest || !hasWorktreeSidebarStatusDropTarget(latest.target)) {
+    return { target: args.currentTarget, preview: args.currentPreview }
+  }
+  const distance = Math.hypot(args.x - latest.x, args.y - latest.y)
+  return distance <= STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX
+    ? { target: latest.target, preview: latest.preview }
+    : { target: args.currentTarget, preview: args.currentPreview }
+}
+
 export function computeWorktreeSidebarDropPreview(args: {
   pointerY: number
   containerTop: number

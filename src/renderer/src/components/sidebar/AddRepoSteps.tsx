@@ -6,19 +6,22 @@ import { DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/di
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { NestedRepoScanResult, Repo } from '../../../../shared/types'
+import { RemoteFileBrowser } from './RemoteFileBrowser'
+import type { NestedRepoScanResult } from '../../../../shared/types'
 import type { SshTarget, SshConnectionState } from '../../../../shared/ssh-types'
 import { createNestedRepoTelemetryAttemptId } from '../../../../shared/nested-repo-telemetry'
+import { translate } from '@/i18n/i18n'
 
 // ── Remote project hook ─────────────────────────────────────────────
 
 export function useRemoteRepo(
-  fetchWorktrees: (repoId: string) => Promise<unknown>,
-  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested' | 'setup') => void,
-  setAddedRepo: (repo: Repo | null) => void,
+  fetchWorktrees: (
+    repoId: string,
+    options?: { requireAuthoritative?: boolean }
+  ) => Promise<unknown>,
+  setStep: (step: 'add' | 'clone' | 'remote' | 'create' | 'nested') => void,
   closeModal: () => void,
-  setExistingWorkspaceSource?: (source: AddRepoExistingWorkspaceSource) => void,
+  onGitRepoReady?: (repoId: string) => void | Promise<void>,
   scanNestedRepos?: (
     path: string,
     connectionId?: string,
@@ -113,7 +116,11 @@ export function useRemoteRepo(
     try {
       await window.api.ssh.connect({ targetId })
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Connection failed')
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.sidebar.AddRepoSteps.3e64e8a70d', 'Connection failed')
+      )
     }
   }, [])
 
@@ -186,14 +193,17 @@ export function useRemoteRepo(
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
-      toast.success('Remote project added', { description: repo.displayName })
-      setAddedRepo(repo)
-      setExistingWorkspaceSource?.('ssh_remote_path')
-      await fetchWorktrees(repo.id)
+      toast.success(
+        translate('auto.components.sidebar.AddRepoSteps.df8b0e6c22', 'Remote project added'),
+        { description: repo.displayName }
+      )
+      // Why: the repo is already persisted here; if SSH refresh is temporarily
+      // non-authoritative, finish onto the project row instead of stranding the dialog.
+      await fetchWorktrees(repo.id, { requireAuthoritative: true })
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
-      setStep('setup')
+      await onGitRepoReady?.(repo.id)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes('Not a valid git repository')) {
@@ -224,10 +234,8 @@ export function useRemoteRepo(
     onNestedScanResult,
     fetchWorktrees,
     mountedRef,
-    setStep,
-    setAddedRepo,
     closeModal,
-    setExistingWorkspaceSource
+    onGitRepoReady
   ])
 
   return {
@@ -257,6 +265,7 @@ type CloneStepProps = {
   cloneProgress: { phase: string; percent: number } | null
   isCloning: boolean
   disableDestinationPicker?: boolean
+  runtimeEnvironmentId?: string | null
   onUrlChange: (value: string) => void
   onDestChange: (value: string) => void
   onPickDestination: () => void
@@ -270,11 +279,13 @@ export function CloneStep({
   cloneProgress,
   isCloning,
   disableDestinationPicker = false,
+  runtimeEnvironmentId,
   onUrlChange,
   onDestChange,
   onPickDestination,
   onClone
 }: CloneStepProps): React.JSX.Element {
+  const [browsingDestination, setBrowsingDestination] = useState(false)
   const canClone = !!cloneUrl.trim() && !!cloneDestination.trim() && !isCloning
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
@@ -284,21 +295,64 @@ export function CloneStep({
       }
     }
   }
+
+  if (browsingDestination && runtimeEnvironmentId) {
+    return (
+      <>
+        <DialogHeader>
+          <DialogTitle>
+            {translate(
+              'auto.components.sidebar.AddRepoSteps.a93ef169b5',
+              'Browse server filesystem'
+            )}
+          </DialogTitle>
+          <DialogDescription>
+            {translate(
+              'auto.components.sidebar.AddRepoSteps.fe8e629fe3',
+              'Navigate to a directory and click Select to choose it.'
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <RemoteFileBrowser
+          runtimeEnvironmentId={runtimeEnvironmentId}
+          initialPath={cloneDestination || '~'}
+          onSelect={(path) => {
+            onDestChange(path)
+            setBrowsingDestination(false)
+          }}
+          onCancel={() => setBrowsingDestination(false)}
+        />
+      </>
+    )
+  }
+
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Clone from URL</DialogTitle>
-        <DialogDescription>Enter the Git URL and choose where to clone it.</DialogDescription>
+        <DialogTitle>
+          {translate('auto.components.sidebar.AddRepoSteps.c05f88a31f', 'Clone from URL')}
+        </DialogTitle>
+        <DialogDescription>
+          {translate(
+            'auto.components.sidebar.AddRepoSteps.5b2ea674b1',
+            'Enter the Git URL and choose where to clone it.'
+          )}
+        </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3 pt-1">
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground">Git URL</label>
+          <label className="text-[11px] font-medium text-muted-foreground">
+            {translate('auto.components.sidebar.AddRepoSteps.3d4acbe693', 'Git URL')}
+          </label>
           <Input
             value={cloneUrl}
             onChange={(e) => onUrlChange(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="https://github.com/user/repo.git"
+            placeholder={translate(
+              'auto.components.sidebar.AddRepoSteps.b698a4a29d',
+              'https://github.com/user/repo.git'
+            )}
             className="h-8 text-xs"
             disabled={isCloning}
             autoFocus
@@ -306,13 +360,18 @@ export function CloneStep({
         </div>
 
         <div className="space-y-1">
-          <label className="text-[11px] font-medium text-muted-foreground">Clone location</label>
+          <label className="text-[11px] font-medium text-muted-foreground">
+            {translate('auto.components.sidebar.AddRepoSteps.04a4c4e84a', 'Clone location')}
+          </label>
           <div className="flex gap-2">
             <Input
               value={cloneDestination}
               onChange={(e) => onDestChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="/path/to/destination"
+              placeholder={translate(
+                'auto.components.sidebar.AddRepoSteps.2ce3f6edf8',
+                '/path/to/destination'
+              )}
               className="h-8 text-xs flex-1"
               disabled={isCloning}
             />
@@ -320,9 +379,30 @@ export function CloneStep({
               variant="outline"
               size="sm"
               className="h-8 px-2 shrink-0"
-              onClick={onPickDestination}
-              disabled={isCloning || disableDestinationPicker}
-              title={disableDestinationPicker ? 'Enter a server path manually' : 'Choose folder'}
+              onClick={() => {
+                if (runtimeEnvironmentId) {
+                  setBrowsingDestination(true)
+                  return
+                }
+                onPickDestination()
+              }}
+              disabled={isCloning || (disableDestinationPicker && !runtimeEnvironmentId)}
+              title={
+                runtimeEnvironmentId
+                  ? translate(
+                      'auto.components.sidebar.AddRepoSteps.a93ef169b5',
+                      'Browse server filesystem'
+                    )
+                  : translate('auto.components.sidebar.AddRepoSteps.569326d9cc', 'Choose folder')
+              }
+              aria-label={
+                runtimeEnvironmentId
+                  ? translate(
+                      'auto.components.sidebar.AddRepoSteps.a93ef169b5',
+                      'Browse server filesystem'
+                    )
+                  : translate('auto.components.sidebar.AddRepoSteps.569326d9cc', 'Choose folder')
+              }
             >
               <Folder className="size-3.5" />
             </Button>
@@ -336,7 +416,9 @@ export function CloneStep({
           disabled={!cloneUrl.trim() || !cloneDestination.trim() || isCloning}
           className="w-full"
         >
-          {isCloning ? 'Cloning...' : 'Clone'}
+          {isCloning
+            ? translate('auto.components.sidebar.AddRepoSteps.69f5b5380d', 'Cloning...')
+            : translate('auto.components.sidebar.AddRepoSteps.32a7256d85', 'Clone')}
         </Button>
 
         {/* Why: progress bar lives below the button so it doesn't push the

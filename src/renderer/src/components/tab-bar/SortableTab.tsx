@@ -1,17 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Minimize2, Columns2, Rows2, Pin, PinOff } from 'lucide-react'
+import { X, Minimize2, Pin } from 'lucide-react'
 import { ShellIcon } from './shell-icons'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { stripLeadingAgentTitleDecoration } from '@/lib/agent-title-decoration'
 import { useTabAgent } from '@/lib/use-tab-agent'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TerminalTab } from '../../../../shared/types'
@@ -22,9 +15,12 @@ import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getDropIndicatorClasses,
   getTabRootStateClasses,
+  getTabStripBorderClasses,
   type DropIndicator
 } from './drop-indicator'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
+import { SortableTabContextMenu } from './SortableTabContextMenu'
+import { translate } from '@/i18n/i18n'
 
 type SortableTabProps = {
   tab: TerminalTab
@@ -44,20 +40,8 @@ type SortableTabProps = {
   onSplitGroup: (direction: 'left' | 'right' | 'up' | 'down', sourceVisibleTabId: string) => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
+  includeTopTabBorder?: boolean
 }
-
-export const TAB_COLORS = [
-  { label: 'None', value: null },
-  { label: 'Blue', value: '#3b82f6' },
-  { label: 'Purple', value: '#a855f7' },
-  { label: 'Pink', value: '#ec4899' },
-  { label: 'Red', value: '#ef4444' },
-  { label: 'Orange', value: '#f97316' },
-  { label: 'Yellow', value: '#eab308' },
-  { label: 'Green', value: '#22c55e' },
-  { label: 'Teal', value: '#14b8a6' },
-  { label: 'Gray', value: '#9ca3af' }
-]
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -78,13 +62,16 @@ export default function SortableTab({
   onToggleExpand,
   onSplitGroup,
   dragData,
-  dropIndicator
+  dropIndicator,
+  includeTopTabBorder = true
 }: SortableTabProps): React.JSX.Element {
   // Why: subscribe to the per-tab boolean directly so only the tab whose unread
   // status actually flipped re-renders. Reading the whole `unreadTerminalTabs`
   // map in TabBar would invalidate every SortableTab on every bell event
   // because the slice returns a fresh object reference on each mark/clear.
   const hasUnreadActivity = useAppStore((s) => s.unreadTerminalTabs[tab.id] === true)
+  const renamingTabId = useAppStore((s) => s.renamingTabId)
+  const setRenamingTabId = useAppStore((s) => s.setRenamingTabId)
 
   // Why: createTab stamps the shell used at creation time, so changing the
   // default shell later does not repaint existing tabs as a different shell.
@@ -170,6 +157,17 @@ export default function SortableTab({
     })
   }, [])
 
+  // Why: the tab.rename shortcut can't reach this component's local editing
+  // state directly, so it sets renamingTabId in the store; the matching tab
+  // opens its editor and immediately clears the flag so it fires once.
+  useEffect(() => {
+    if (renamingTabId !== tab.id) {
+      return
+    }
+    handleRenameOpen()
+    setRenamingTabId(null)
+  }, [renamingTabId, tab.id, handleRenameOpen, setRenamingTabId])
+
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
@@ -219,7 +217,7 @@ export default function SortableTab({
       // tab still reads as "selected + has activity". The wash is
       // rendered as an absolutely-positioned child below so the ::after
       // pseudo-element stays free for the drop indicator.
-      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none border-t ${hasTabsToRight ? 'border-r' : ''} border-border ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none shrink-0 outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -311,7 +309,11 @@ export default function SortableTab({
           ref={setRenameInputElement}
           data-tab-rename-input="true"
           value={renameValue}
-          aria-label={`Rename tab ${tabTitle}`}
+          aria-label={translate(
+            'auto.components.tab.bar.SortableTab.ab19f603eb',
+            'Rename tab {{value0}}',
+            { value0: tabTitle }
+          )}
           onChange={(event) => setRenameValue(event.target.value)}
           onBlur={commitRename}
           onKeyDown={(event) => {
@@ -347,8 +349,21 @@ export default function SortableTab({
           className="h-5 w-[72px] min-w-[72px] max-w-[72px] mr-1 px-1 py-0 text-xs"
           spellCheck={false}
         />
-      ) : (
+      ) : isEditing || menuOpen ? (
         <span className="truncate max-w-[72px] mr-1">{displayTitle}</span>
+      ) : (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="truncate max-w-[72px] mr-1">{displayTitle}</span>
+          </TooltipTrigger>
+          <TooltipContent
+            side="bottom"
+            sideOffset={6}
+            className="max-w-80 whitespace-normal break-words text-left"
+          >
+            {displayTitle}
+          </TooltipContent>
+        </Tooltip>
       )}
       {tab.color && !isEditing && (
         <span
@@ -368,15 +383,15 @@ export default function SortableTab({
             e.stopPropagation()
             onToggleExpand(tab.id)
           }}
-          title="Collapse pane"
-          aria-label="Collapse pane"
+          title={translate('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
+          aria-label={translate('auto.components.tab.bar.SortableTab.fdb2691425', 'Collapse pane')}
         >
           <Minimize2 className="w-3 h-3" />
         </button>
       )}
       {!isEditing && !isPinned && (
         <button
-          className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
+          className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
             isActive
               ? 'text-muted-foreground hover:text-foreground hover:bg-muted'
               : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted'
@@ -386,9 +401,25 @@ export default function SortableTab({
           // instead of bypassing the render layer by calling closeTab() on
           // the store — a store-only assertion would pass even if this
           // button had been accidentally unmounted.
-          aria-label={`Close tab ${tabTitle}`}
-          onPointerDown={(e) => e.stopPropagation()}
+          aria-label={translate(
+            'auto.components.tab.bar.SortableTab.6df69d9388',
+            'Close tab {{value0}}',
+            { value0: tabTitle }
+          )}
+          type="button"
+          data-tab-close-button="true"
+          onPointerDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
+          onMouseDown={(e) => {
+            if (e.button === 0) {
+              e.stopPropagation()
+            }
+          }}
           onClick={(e) => {
+            e.preventDefault()
             e.stopPropagation()
             onClose(tab.id)
           }}
@@ -409,101 +440,25 @@ export default function SortableTab({
           setMenuOpen(true)
         }}
       >
-        {isEditing || menuOpen ? (
-          tabRoot
-        ) : (
-          <Tooltip>
-            <TooltipTrigger asChild>{tabRoot}</TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              sideOffset={6}
-              className="max-w-80 whitespace-normal break-words text-left"
-            >
-              {displayTitle}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        {tabRoot}
       </div>
 
-      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none fixed size-px opacity-0"
-            style={{ left: menuPoint.x, top: menuPoint.y }}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="w-48" sideOffset={0} align="start">
-          <DropdownMenuItem onSelect={() => onSplitGroup('up', tab.id)}>
-            <Rows2 className="mr-1.5 size-3.5" />
-            Split Up
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('down', tab.id)}>
-            <Rows2 className="mr-1.5 size-3.5" />
-            Split Down
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('left', tab.id)}>
-            <Columns2 className="mr-1.5 size-3.5" />
-            Split Left
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onSplitGroup('right', tab.id)}>
-            <Columns2 className="mr-1.5 size-3.5" />
-            Split Right
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={onTogglePin}>
-            {isPinned ? (
-              <PinOff className="mr-1.5 size-3.5" />
-            ) : (
-              <Pin className="mr-1.5 size-3.5" />
-            )}
-            {isPinned ? 'Unpin Tab' : 'Pin Tab'}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => !isPinned && onClose(tab.id)} disabled={isPinned}>
-            Close
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onCloseOthers(tab.id)} disabled={tabCount <= 1}>
-            Close Others
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onCloseToRight(tab.id)} disabled={!hasTabsToRight}>
-            Close Tabs To The Right
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={handleRenameOpen}>Change Title</DropdownMenuItem>
-          <div className="px-2 pt-1.5 pb-1">
-            <div className="text-xs font-medium text-muted-foreground mb-1.5">Tab Color</div>
-            <div className="flex flex-wrap gap-2">
-              {TAB_COLORS.map((color) => {
-                const isSelected = tab.color === color.value
-                return (
-                  <DropdownMenuItem
-                    key={color.label}
-                    className={`relative h-4 w-4 min-w-4 p-0 rounded-full border ${
-                      isSelected
-                        ? 'ring-1 ring-foreground/70 ring-offset-1 ring-offset-popover'
-                        : ''
-                    } ${
-                      color.value
-                        ? 'border-transparent'
-                        : 'border-muted-foreground/50 bg-transparent'
-                    }`}
-                    style={color.value ? { backgroundColor: color.value } : undefined}
-                    onSelect={() => {
-                      onSetTabColor(tab.id, color.value)
-                    }}
-                  >
-                    {color.value === null && (
-                      <span className="absolute block h-px w-3 rotate-45 bg-muted-foreground/80" />
-                    )}
-                  </DropdownMenuItem>
-                )
-              })}
-            </div>
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <SortableTabContextMenu
+        tab={tab}
+        open={menuOpen}
+        point={menuPoint}
+        tabCount={tabCount}
+        hasTabsToRight={hasTabsToRight}
+        isPinned={isPinned}
+        onOpenChange={setMenuOpen}
+        onClose={onClose}
+        onCloseOthers={onCloseOthers}
+        onCloseToRight={onCloseToRight}
+        onRenameOpen={handleRenameOpen}
+        onSetTabColor={onSetTabColor}
+        onTogglePin={onTogglePin}
+        onSplitGroup={onSplitGroup}
+      />
     </>
   )
 }

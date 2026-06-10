@@ -1,17 +1,9 @@
 /* eslint-disable max-lines -- Why: Codex hook trust parsing, hashing, and byte-preserving TOML edits share one fragile file-format contract; splitting would make the compatibility shim harder to audit. */
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  realpathSync,
-  unlinkSync,
-  writeFileSync
-} from 'fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { createHash, randomUUID } from 'crypto'
 import { escapeRegex } from '../../shared/string-utils'
+import { copyFileWithWindowsRetry, renameFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 
 // Why: Codex 0.129+ gates each hook on a `trusted_hash` entry in
 // ~/.codex/config.toml under [hooks.state."<key>"]. Without it the hook is in
@@ -576,9 +568,9 @@ export function writeConfigAtomically(configPath: string, contents: string): voi
   try {
     writeFileSync(tmpPath, contents, 'utf-8')
     if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
+      copyFileWithWindowsRetry(configPath, `${configPath}.bak`)
     }
-    renameSync(tmpPath, configPath)
+    renameFileWithWindowsRetry(tmpPath, configPath)
     renamed = true
   } finally {
     if (!renamed && existsSync(tmpPath)) {

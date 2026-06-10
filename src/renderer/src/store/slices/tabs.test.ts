@@ -113,6 +113,14 @@ describe('TabsSlice', () => {
     store = createTestStore()
   })
 
+  it('setRenamingTabId sets and clears the tab rename signal', () => {
+    expect(store.getState().renamingTabId).toBeNull()
+    store.getState().setRenamingTabId('terminal-tab-1')
+    expect(store.getState().renamingTabId).toBe('terminal-tab-1')
+    store.getState().setRenamingTabId(null)
+    expect(store.getState().renamingTabId).toBeNull()
+  })
+
   // ─── createUnifiedTab ───────────────────────────────────────────────
 
   describe('createUnifiedTab', () => {
@@ -179,6 +187,29 @@ describe('TabsSlice', () => {
       const group = store.getState().groupsByWorktree[WT][0]
       expect(group.tabOrder).toEqual(['file-b.ts'])
       expect(group.tabOrder).not.toContain(preview1.id)
+    })
+
+    it('replaces editor preview tabs with diff preview tabs', () => {
+      store.getState().createUnifiedTab(WT, 'editor', {
+        id: 'file-a.ts',
+        label: 'file-a.ts',
+        isPreview: true
+      })
+      store.getState().createUnifiedTab(WT, 'diff', {
+        id: 'diff-file-b.ts',
+        entityId: 'diff-file-b.ts',
+        label: 'file-b.ts',
+        isPreview: true
+      })
+
+      expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([
+        expect.objectContaining({
+          id: 'diff-file-b.ts',
+          contentType: 'diff',
+          isPreview: true
+        })
+      ])
+      expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual(['diff-file-b.ts'])
     })
 
     it('reuses the existing group for the worktree', () => {
@@ -384,7 +415,7 @@ describe('TabsSlice', () => {
       expect(sourceGroup?.activeTabId).toBe(t1.id)
     })
 
-    it('records the split-pane command interaction when creating an empty split group', () => {
+    it('records generic pane interaction when creating an empty split group', () => {
       const setMock = vi.mocked(window.api.ui.set)
       store.getState().hydratePersistedUI(getDefaultUIState())
       setMock.mockClear()
@@ -393,9 +424,7 @@ describe('TabsSlice', () => {
 
       store.getState().createEmptySplitGroup(WT, sourceGroupId, 'right')
 
-      expect(store.getState().featureInteractions['terminal-pane-split']).toMatchObject({
-        interactionCount: 1
-      })
+      expect(store.getState().featureInteractions['terminal-pane-split']).toBeUndefined()
       expect(store.getState().featureInteractions['terminal-panes']).toMatchObject({
         interactionCount: 1
       })
@@ -939,6 +968,89 @@ describe('TabsSlice', () => {
       expect(layout.direction).toBe('horizontal')
       expect(layout.first).toEqual({ type: 'leaf', groupId: sourceGroupId })
       expect(layout.second).toEqual({ type: 'leaf', groupId: newGroupId })
+    })
+
+    it('creates a unified tab directly in a sibling split without publishing a source-group midpoint', () => {
+      const terminal = store.getState().createUnifiedTab(WT, 'terminal', {
+        id: 'terminal-1',
+        label: 'Terminal 1'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      store.setState({ activeWorktreeId: WT })
+      const publishedSimulatorGroupIds: (string | null)[] = []
+      const unsubscribe = store.subscribe((state) => {
+        publishedSimulatorGroupIds.push(
+          state.unifiedTabsByWorktree[WT]?.find((tab) => tab.contentType === 'simulator')
+            ?.groupId ?? null
+        )
+      })
+
+      const simulator = store.getState().createUnifiedTabInSplit(
+        WT,
+        'simulator',
+        {
+          sourceGroupId,
+          splitDirection: 'right'
+        },
+        {
+          id: 'simulator-1',
+          label: 'Mobile Emulator'
+        }
+      )
+      unsubscribe()
+
+      expect(simulator).not.toBeNull()
+      expect(publishedSimulatorGroupIds).not.toContain(sourceGroupId)
+      const state = store.getState()
+      const simulatorGroupId = simulator!.groupId
+      expect(state.activeWorktreeId).toBe(WT)
+      expect(state.activeTabType).toBe('simulator')
+      expect(state.activeGroupIdByWorktree[WT]).toBe(simulatorGroupId)
+      expect(
+        state.groupsByWorktree[WT].find((group) => group.id === sourceGroupId)?.tabOrder
+      ).toEqual([terminal.id])
+      expect(
+        state.groupsByWorktree[WT].find((group) => group.id === simulatorGroupId)?.tabOrder
+      ).toEqual([simulator!.id])
+      const layout = state.layoutByWorktree[WT]
+      expect(layout.type).toBe('split')
+      if (layout.type !== 'split') {
+        throw new Error('expected split layout after split tab creation')
+      }
+      expect(layout.direction).toBe('horizontal')
+      expect(layout.first).toEqual({ type: 'leaf', groupId: sourceGroupId })
+      expect(layout.second).toEqual({ type: 'leaf', groupId: simulatorGroupId })
+    })
+
+    it('creates a split tab without stealing focus when activation is disabled', () => {
+      store.getState().createUnifiedTab(WT, 'terminal', {
+        id: 'terminal-1',
+        label: 'Terminal 1'
+      })
+      const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
+      store.setState({ activeWorktreeId: WT })
+
+      const simulator = store.getState().createUnifiedTabInSplit(
+        WT,
+        'simulator',
+        {
+          sourceGroupId,
+          splitDirection: 'right'
+        },
+        {
+          id: 'simulator-1',
+          label: 'Mobile Emulator',
+          activate: false
+        }
+      )
+
+      expect(simulator).not.toBeNull()
+      const state = store.getState()
+      expect(state.activeGroupIdByWorktree[WT]).toBe(sourceGroupId)
+      expect(state.activeTabType).toBe('terminal')
+      expect(
+        state.groupsByWorktree[WT].find((group) => group.id === simulator!.groupId)?.recentTabIds
+      ).toEqual([])
     })
 
     it('treats splitting the only tab onto its own pane body as a no-op', () => {
@@ -1543,6 +1655,188 @@ describe('TabsSlice', () => {
       expect(store.getState().unifiedTabsByWorktree[WT]).toEqual([])
       expect(store.getState().groupsByWorktree[WT][0].tabOrder).toEqual([])
       expect(store.getState().groupsByWorktree[WT][0].activeTabId).toBeNull()
+    })
+
+    it('keeps simulator tabs because they reconnect their own backing stream', () => {
+      const terminalGroupId = 'g-terminal'
+      const simulatorGroupId = 'g-simulator'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              entityId: 'terminal-1',
+              groupId: terminalGroupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'Terminal 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'simulator-1',
+              entityId: 'simulator-1',
+              groupId: simulatorGroupId,
+              worktreeId: WT,
+              contentType: 'simulator',
+              label: 'iPhone 17 Pro',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 2
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: terminalGroupId,
+              worktreeId: WT,
+              activeTabId: 'terminal-1',
+              tabOrder: ['terminal-1']
+            },
+            {
+              id: simulatorGroupId,
+              worktreeId: WT,
+              activeTabId: 'simulator-1',
+              tabOrder: ['simulator-1']
+            }
+          ]
+        },
+        layoutByWorktree: {
+          [WT]: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: terminalGroupId },
+            second: { type: 'leaf', groupId: simulatorGroupId }
+          }
+        },
+        activeGroupIdByWorktree: { [WT]: simulatorGroupId },
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              ptyId: 'pty-1',
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'terminal-1': ['pty-1'] }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      expect(result.renderableTabCount).toBe(2)
+      expect(result.activeRenderableTabId).toBe('simulator-1')
+      expect(state.unifiedTabsByWorktree[WT].map((tab) => tab.id)).toEqual([
+        'terminal-1',
+        'simulator-1'
+      ])
+      expect(state.groupsByWorktree[WT].map((group) => group.tabOrder)).toEqual([
+        ['terminal-1'],
+        ['simulator-1']
+      ])
+      expect(state.layoutByWorktree[WT]).toEqual({
+        type: 'split',
+        direction: 'horizontal',
+        first: { type: 'leaf', groupId: terminalGroupId },
+        second: { type: 'leaf', groupId: simulatorGroupId }
+      })
+    })
+
+    it('collapses empty split groups when reconciliation drops a stale tab', () => {
+      const terminalGroupId = 'g-terminal'
+      const staleGroupId = 'g-stale'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              entityId: 'terminal-1',
+              groupId: terminalGroupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'Terminal 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            },
+            {
+              id: 'stale-browser',
+              entityId: 'missing-browser',
+              groupId: staleGroupId,
+              worktreeId: WT,
+              contentType: 'browser',
+              label: 'Missing browser',
+              customLabel: null,
+              color: null,
+              sortOrder: 1,
+              createdAt: 2
+            }
+          ]
+        },
+        groupsByWorktree: {
+          [WT]: [
+            {
+              id: terminalGroupId,
+              worktreeId: WT,
+              activeTabId: 'terminal-1',
+              tabOrder: ['terminal-1']
+            },
+            {
+              id: staleGroupId,
+              worktreeId: WT,
+              activeTabId: 'stale-browser',
+              tabOrder: ['stale-browser']
+            }
+          ]
+        },
+        layoutByWorktree: {
+          [WT]: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: terminalGroupId },
+            second: { type: 'leaf', groupId: staleGroupId }
+          }
+        },
+        activeGroupIdByWorktree: { [WT]: staleGroupId },
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              ptyId: 'pty-1',
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'terminal-1': ['pty-1'] },
+        browserTabsByWorktree: { [WT]: [] }
+      })
+
+      const result = store.getState().reconcileWorktreeTabModel(WT)
+      const state = store.getState()
+
+      expect(result.renderableTabCount).toBe(1)
+      expect(result.activeRenderableTabId).toBe('terminal-1')
+      expect(state.groupsByWorktree[WT]).toEqual([
+        expect.objectContaining({ id: terminalGroupId, tabOrder: ['terminal-1'] })
+      ])
+      expect(state.layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId: terminalGroupId })
+      expect(state.activeGroupIdByWorktree[WT]).toBe(terminalGroupId)
     })
 
     it('restores live runtime terminal tabs into the unified tab model', () => {

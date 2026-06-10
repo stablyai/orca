@@ -24,4 +24,12 @@ export function registerSessionHandlers(store: Store): void {
     store.flush()
     event.returnValue = true
   })
+
+  ipcMain.on(
+    'session:read-terminal-scrollback-sync',
+    (event, args: { ref?: unknown } | undefined) => {
+      event.returnValue =
+        typeof args?.ref === 'string' ? store.readTerminalScrollbackSnapshot(args.ref) : null
+    }
+  )
 }

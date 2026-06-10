@@ -185,7 +185,9 @@ describe('client UI RPC methods', () => {
         tasks: { firstInteractedAt: 100, interactionCount: 2 }
       },
       contextualToursSeenIds: ['tasks'],
-      contextualToursAutoEligible: true
+      contextualToursAutoEligible: true,
+      usageEmptyStateDismissed: true,
+      browserDefaultZoomLevel: 1.5
     }
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -218,7 +220,9 @@ describe('client UI RPC methods', () => {
         tasks: { firstInteractedAt: 100, interactionCount: 2 }
       },
       contextualToursSeenIds: ['tasks'],
-      contextualToursAutoEligible: true
+      contextualToursAutoEligible: true,
+      usageEmptyStateDismissed: true,
+      browserDefaultZoomLevel: 1.5
     }
     const response = await dispatcher.dispatch(makeRequest('ui.set', payload))
 

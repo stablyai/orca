@@ -1,3 +1,4 @@
+import { type ReactNode } from 'react'
 import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
@@ -6,6 +7,7 @@ import { BottomDrawer } from './BottomDrawer'
 export type ActionSheetAction = {
   label: string
   icon?: LucideIcon
+  renderIcon?: () => ReactNode
   destructive?: boolean
   disabled?: boolean
   hint?: string
@@ -56,6 +58,7 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
       <View style={styles.actionGroup}>
         {actions.map((action, i) => {
           const Icon = iconForAction(action.label, action.destructive, action.icon)
+          const customIcon = action.renderIcon?.()
           return (
             <View key={action.label}>
               {i > 0 && <View style={styles.separator} />}
@@ -73,10 +76,12 @@ export function ActionSheetContent({ title, message, actions, onClose }: Content
                   }
                 }}
               >
-                <Icon
-                  size={16}
-                  color={action.destructive ? colors.statusRed : colors.textSecondary}
-                />
+                {customIcon ?? (
+                  <Icon
+                    size={16}
+                    color={action.destructive ? colors.statusRed : colors.textSecondary}
+                  />
+                )}
                 <View style={styles.actionTextBlock}>
                   <Text
                     style={[

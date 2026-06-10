@@ -10,7 +10,7 @@ import {
   getLineageGroupKey,
   getLineageRenderInfo,
   getPRGroupKey,
-  getProjectGroupOrdering
+  type PendingCreationRef
 } from './worktree-list-groups'
 import type {
   DetectedWorktree,
@@ -341,6 +341,56 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('emits an empty ungrouped repo placeholder before imported cards are merged', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      repoMap,
+      null,
+      new Set(),
+      new Map([[repo.id, 0]]),
+      undefined,
+      'manual',
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set([repo.id]),
+      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: 'repo:repo-1', label: 'orca', count: 0 },
+      {
+        type: 'imported-worktrees-card',
+        key: 'imported-worktrees-card:repo-group:repo-1',
+        placement: 'repo-group'
+      }
+    ])
+  })
+
+  it('skips stale empty placeholder repo ids that are absent from repoMap', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set([repo.id])
+    )
+
+    expect(rows).toEqual([])
+  })
+
   it('does not emit unpinned imported worktree cards outside repo grouping', () => {
     const rows = buildRows(
       'workspace-status',
@@ -561,10 +611,36 @@ describe('buildRows project grouping order', () => {
     [repoB.id, repoB],
     [repoC.id, repoC]
   ])
-  const wA: Worktree = { ...worktree, id: 'wt-a', repoId: repoA.id, displayName: 'a' }
-  const wAStale: Worktree = { ...worktree, id: 'wt-a-stale', repoId: repoA.id, displayName: 'a2' }
-  const wB: Worktree = { ...worktree, id: 'wt-b', repoId: repoB.id, displayName: 'b' }
-  const wC: Worktree = { ...worktree, id: 'wt-c', repoId: repoC.id, displayName: 'c' }
+  // Activity: C (300) is freshest, then A (200), then B (100). wAStale (50) is
+  // an older sibling of A so a repo's rank is its max child, not its first.
+  const wA: Worktree = {
+    ...worktree,
+    id: 'wt-a',
+    repoId: repoA.id,
+    displayName: 'a',
+    lastActivityAt: 200
+  }
+  const wAStale: Worktree = {
+    ...worktree,
+    id: 'wt-a-stale',
+    repoId: repoA.id,
+    displayName: 'a2',
+    lastActivityAt: 50
+  }
+  const wB: Worktree = {
+    ...worktree,
+    id: 'wt-b',
+    repoId: repoB.id,
+    displayName: 'b',
+    lastActivityAt: 100
+  }
+  const wC: Worktree = {
+    ...worktree,
+    id: 'wt-c',
+    repoId: repoC.id,
+    displayName: 'c',
+    lastActivityAt: 300
+  }
 
   it('orders repo headers by explicit repoOrder, not first-encounter', () => {
     // Worktree stream encounters in order C, A, B — but repoOrder says B, A, C.
@@ -586,11 +662,10 @@ describe('buildRows project grouping order', () => {
     expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
   })
 
-  it('orders repo headers by first encounter when caller uses visible worktree order', () => {
-    // Caller already sorted worktrees by recency: C is freshest, then A, then B.
-    // Even though repoOrder pins B, A, C, dynamic sorts must follow the freshest
-    // worktree out of each repo so a just-active worktree's parent group
-    // bubbles to the top of the sidebar.
+  it('orders repo headers by max(lastActivityAt) per repo in Recent mode', () => {
+    // repoOrder pins B, A, C, but Recent ignores it: C (300) > A (200) > B (100).
+    // The incoming array is name-sorted (not pre-sorted by recency), proving the
+    // resolver computes the timestamp itself rather than trusting encounter order.
     const repoOrder = new Map([
       [repoB.id, 0],
       [repoA.id, 1],
@@ -598,58 +673,57 @@ describe('buildRows project grouping order', () => {
     ])
     const rows = buildRows(
       'repo',
-      [wC, wA, wB],
+      [wA, wB, wC],
       map,
       null,
       new Set(),
       repoOrder,
       undefined,
-      'visible-worktree-order'
+      'recent'
     )
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-c', 'repo:repo-a', 'repo:repo-b'])
   })
 
-  it('orders repo headers by each repo highest-ranked visible child', () => {
-    const repoOrder = new Map([
-      [repoB.id, 0],
-      [repoA.id, 1],
-      [repoC.id, 2]
-    ])
+  it("uses each repo's freshest visible child, not its first, in Recent mode", () => {
+    // repo-a has a fresh child (200) and a stale one (50); its rank is the max.
     const rows = buildRows(
       'repo',
-      [wA, wB, wAStale, wC],
+      [wAStale, wA, wB, wC],
       map,
       null,
       new Set(),
-      repoOrder,
       undefined,
-      'visible-worktree-order'
+      undefined,
+      'recent'
     )
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'repo:repo-a' },
-      { type: 'item', worktree: { id: 'wt-a' } },
-      { type: 'item', worktree: { id: 'wt-a-stale' } },
-      { type: 'header', key: 'repo:repo-b' },
-      { type: 'item', worktree: { id: 'wt-b' } },
       { type: 'header', key: 'repo:repo-c' },
-      { type: 'item', worktree: { id: 'wt-c' } }
+      { type: 'item', worktree: { id: 'wt-c' } },
+      { type: 'header', key: 'repo:repo-a' },
+      // Child rows keep their input order; only the header rank uses max activity.
+      { type: 'item', worktree: { id: 'wt-a-stale' } },
+      { type: 'item', worktree: { id: 'wt-a' } },
+      { type: 'header', key: 'repo:repo-b' },
+      { type: 'item', worktree: { id: 'wt-b' } }
     ])
   })
 
-  it('keeps the main workspace first inside its project group', () => {
+  it('keeps the main workspace first inside its project group in Recent mode', () => {
     const main = {
       ...wA,
       id: 'wt-a-main',
       displayName: 'main',
-      isMainWorktree: true
+      isMainWorktree: true,
+      lastActivityAt: 10
     }
     const freshChild = {
       ...wA,
       id: 'wt-a-fresh-child',
       displayName: 'fresh-child',
-      isMainWorktree: false
+      isMainWorktree: false,
+      lastActivityAt: 500
     }
     const rows = buildRows(
       'repo',
@@ -659,7 +733,7 @@ describe('buildRows project grouping order', () => {
       new Set(),
       undefined,
       undefined,
-      'visible-worktree-order'
+      'recent'
     )
 
     expect(rows).toMatchObject([
@@ -671,7 +745,7 @@ describe('buildRows project grouping order', () => {
     ])
   })
 
-  it('keeps repoOrder for manual project group ordering', () => {
+  it('orders repo headers by repoOrder in Manual mode (default), ignoring activity', () => {
     const repoOrder = new Map([
       [repoB.id, 0],
       [repoA.id, 1],
@@ -699,17 +773,43 @@ describe('buildRows project grouping order', () => {
   })
 })
 
-describe('getProjectGroupOrdering', () => {
-  it.each([
-    ['repo', 'recent', 'visible-worktree-order'],
-    ['repo', 'smart', 'visible-worktree-order'],
-    ['repo', 'name', 'manual'],
-    ['repo', 'repo', 'manual'],
-    ['none', 'recent', 'manual'],
-    ['workspace-status', 'recent', 'manual'],
-    ['pr-status', 'recent', 'manual']
-  ] as const)('uses %s/%s -> %s', (groupBy, sortBy, expected) => {
-    expect(getProjectGroupOrdering(groupBy, sortBy)).toBe(expected)
+describe('buildRows Recent project order fallbacks', () => {
+  const active: Repo = { ...repo, id: 'repo-active', displayName: 'active', addedAt: 0 }
+  // Empty project has no visible worktrees, so Recent falls back to addedAt.
+  const empty: Repo = { ...repo, id: 'repo-empty', displayName: 'empty', addedAt: 999 }
+  const map = new Map([
+    [active.id, active],
+    [empty.id, empty]
+  ])
+  const activeWorktree: Worktree = {
+    ...worktree,
+    id: 'wt-active',
+    repoId: active.id,
+    displayName: 'active',
+    lastActivityAt: 100
+  }
+
+  it('sorts placeholder projects after projects with activity', () => {
+    // empty.addedAt (999) is numerically higher than active's worktree (100),
+    // but a real activity timestamp must always outrank an addedAt fallback.
+    const rows = buildRows(
+      'repo',
+      [activeWorktree],
+      map,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      'recent',
+      {},
+      undefined,
+      false,
+      undefined,
+      [],
+      new Set([empty.id])
+    )
+    const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
+    expect(headerKeys).toEqual(['repo:repo-active', 'repo:repo-empty'])
   })
 })
 
@@ -792,6 +892,12 @@ describe('project groups', () => {
       key: 'project-group:group-1',
       count: 1
     })
+    expect(rows[1]).toMatchObject({
+      type: 'header',
+      key: 'repo:repo-1',
+      projectGroupDepth: 1,
+      count: 0
+    })
   })
 
   it('does not resurrect filtered repos as empty Project Group headers', () => {
@@ -867,6 +973,156 @@ describe('project groups', () => {
     ])
   })
 
+  it('disambiguates duplicate top-level repo basenames without renaming repos', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const paymentsApi: Repo = {
+      ...repo,
+      id: 'repo-payments-api',
+      path: '/workspace/platform/payments/api',
+      displayName: 'api'
+    }
+    const billingApi: Repo = {
+      ...repo,
+      id: 'repo-billing-api',
+      path: '/workspace/platform/billing/api',
+      displayName: 'api'
+    }
+    const webRepo: Repo = {
+      ...repo,
+      id: 'repo-web',
+      path: '/workspace/platform/web',
+      displayName: 'web'
+    }
+    const repos = new Map([
+      [paymentsApi.id, paymentsApi],
+      [billingApi.id, billingApi],
+      [webRepo.id, webRepo]
+    ])
+    const worktrees = [
+      { ...worktree, id: 'wt-payments-api', repoId: paymentsApi.id },
+      { ...worktree, id: 'wt-billing-api', repoId: billingApi.id },
+      { ...worktree, id: 'wt-web', repoId: webRepo.id }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      repos,
+      null,
+      new Set(),
+      new Map([
+        [paymentsApi.id, 0],
+        [billingApi.id, 1],
+        [webRepo.id, 2]
+      ]),
+      undefined,
+      'manual',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.label)).toEqual([
+      'Platform',
+      'payments/api',
+      'billing/api',
+      'web'
+    ])
+    expect(paymentsApi.displayName).toBe('api')
+    expect(billingApi.displayName).toBe('api')
+  })
+
+  it('disambiguates duplicate repo basenames inside each Project Group scope', () => {
+    const group: ProjectGroup = {
+      id: 'group-1',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const paymentsApi: Repo = {
+      ...repo,
+      id: 'repo-payments-api',
+      path: '/workspace/platform/payments/api',
+      displayName: 'api',
+      projectGroupId: group.id,
+      projectGroupOrder: 0
+    }
+    const billingApi: Repo = {
+      ...repo,
+      id: 'repo-billing-api',
+      path: '/workspace/platform/billing/api',
+      displayName: 'api',
+      projectGroupId: group.id,
+      projectGroupOrder: 1
+    }
+    const webRepo: Repo = {
+      ...repo,
+      id: 'repo-web',
+      path: '/workspace/platform/web',
+      displayName: 'web',
+      projectGroupId: group.id,
+      projectGroupOrder: 2
+    }
+    const repos = new Map([
+      [paymentsApi.id, paymentsApi],
+      [billingApi.id, billingApi],
+      [webRepo.id, webRepo]
+    ])
+    const worktrees = [
+      { ...worktree, id: 'wt-payments-api', repoId: paymentsApi.id },
+      { ...worktree, id: 'wt-billing-api', repoId: billingApi.id },
+      { ...worktree, id: 'wt-web', repoId: webRepo.id }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      repos,
+      null,
+      new Set(),
+      new Map([
+        [paymentsApi.id, 0],
+        [billingApi.id, 1],
+        [webRepo.id, 2]
+      ]),
+      undefined,
+      'manual',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      [group]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.label)).toEqual([
+      'Platform',
+      'payments/api',
+      'billing/api',
+      'web'
+    ])
+    expect(paymentsApi.displayName).toBe('api')
+    expect(billingApi.displayName).toBe('api')
+  })
+
   it('orders repos inside a Project Group by projectGroupOrder in manual mode', () => {
     const group: ProjectGroup = {
       id: 'group-1',
@@ -925,6 +1181,71 @@ describe('project groups', () => {
       'project-group:group-1',
       'repo:repo-b',
       'repo:repo-a'
+    ])
+  })
+
+  it('orders repos inside a Project Group by activity in recent mode, keeping tabOrder', () => {
+    const groupA: ProjectGroup = {
+      id: 'group-a',
+      name: 'Platform',
+      parentPath: '/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 1,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const groupB: ProjectGroup = { ...groupA, id: 'group-b', name: 'Infra', tabOrder: 0 }
+    // Inside group A: repoStale ordered first by projectGroupOrder, but repoFresh
+    // is more recently active so recent mode must lift it above repoStale.
+    const repoStale: Repo = {
+      ...repo,
+      id: 'repo-stale',
+      displayName: 'stale',
+      projectGroupId: groupA.id,
+      projectGroupOrder: 0
+    }
+    const repoFresh: Repo = {
+      ...repo,
+      id: 'repo-fresh',
+      displayName: 'fresh',
+      projectGroupId: groupA.id,
+      projectGroupOrder: 1
+    }
+    const groupedMap = new Map([
+      [repoStale.id, repoStale],
+      [repoFresh.id, repoFresh]
+    ])
+    const worktrees = [
+      { ...worktree, id: 'wt-stale', repoId: repoStale.id, lastActivityAt: 10 },
+      { ...worktree, id: 'wt-fresh', repoId: repoFresh.id, lastActivityAt: 500 }
+    ]
+
+    const rows = buildRows(
+      'repo',
+      worktrees,
+      groupedMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      'recent',
+      {},
+      new Map(worktrees.map((entry) => [entry.id, entry])),
+      false,
+      undefined,
+      // Group headers always follow tabOrder (Infra=0 before Platform=1),
+      // independent of projectOrderBy.
+      [groupA, groupB]
+    )
+
+    expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
+      'project-group:group-b',
+      'project-group:group-a',
+      'repo:repo-fresh',
+      'repo:repo-stale'
     ])
   })
 
@@ -1341,5 +1662,114 @@ describe('WorktreeList header styles', () => {
     expect(source).toContain('resolveProjectGroupHeaderColor({')
     expect(source).toContain('headerKey: row.key')
     expect(source).toContain('color={repoHeaderColor}')
+  })
+})
+
+describe('buildRows pending creations', () => {
+  function makePendingCreation(creationId: string, repoId: string): PendingCreationRef {
+    return { creationId, repoId }
+  }
+
+  it('nests a pending creation under its repo, above the repo worktrees', () => {
+    const rows = buildRows(
+      'repo',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [makePendingCreation('c1', repo.id)]
+    )
+
+    const types = rows.map((row) => row.type)
+    const headerIndex = types.indexOf('header')
+    const pendingIndex = rows.findIndex(
+      (row) => row.type === 'pending-creation' && row.creationId === 'c1'
+    )
+    const itemIndex = types.indexOf('item')
+    expect(headerIndex).toBeGreaterThanOrEqual(0)
+    expect(pendingIndex).toBe(headerIndex + 1)
+    expect(pendingIndex).toBeLessThan(itemIndex)
+  })
+
+  it('creates a repo group for a pending creation in a repo with no worktrees yet', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [makePendingCreation('c1', repo.id)]
+    )
+
+    expect(rows.map((row) => row.type)).toEqual(['header', 'pending-creation'])
+  })
+
+  it('keeps a pending creation visible when its repo metadata is temporarily missing', () => {
+    const rows = buildRows(
+      'repo',
+      [],
+      new Map(),
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map(),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [makePendingCreation('c1', repo.id)]
+    )
+
+    expect(rows).toMatchObject([
+      { type: 'header', key: `repo:${repo.id}`, label: 'Unknown' },
+      { type: 'pending-creation', creationId: 'c1', repo: undefined }
+    ])
+  })
+
+  it('surfaces pending creations at the top for non-repo groupings', () => {
+    const rows = buildRows(
+      'none',
+      [worktree],
+      repoMap,
+      null,
+      new Set(),
+      undefined,
+      undefined,
+      undefined,
+      {},
+      new Map([[worktree.id, worktree]]),
+      false,
+      undefined,
+      [],
+      new Set(),
+      new Map(),
+      [makePendingCreation('c1', repo.id)]
+    )
+
+    expect(rows[0]).toMatchObject({ type: 'pending-creation', creationId: 'c1' })
   })
 })

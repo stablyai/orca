@@ -2,8 +2,8 @@ import type { Dispatch, SetStateAction } from 'react'
 import { CloneStep } from './AddRepoSteps'
 import { RemoteStep } from './AddRepoRemoteStep'
 import { CreateStep } from './AddRepoCreateStep'
-import { SetupStep } from './AddRepoSetupStep'
-import { AddRepoLocalStartStep, AddRepoServerPathStartStep } from './AddRepoStartSteps'
+import { AddRepoLocalStartStep } from './AddRepoStartSteps'
+import { AddRepoServerPathStartStep } from './AddRepoServerStartStep'
 import { AddRepoNestedImportStep } from './AddRepoNestedImportStep'
 import type { AddRepoDialogStep } from './add-repo-dialog-types'
 import type { NestedRepoScanResult } from '../../../../shared/types'
@@ -12,6 +12,8 @@ import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types
 type AddRepoDialogStepContentProps = {
   step: AddRepoDialogStep
   isRuntimeEnvironmentActive: boolean
+  activeRuntimeEnvironmentId: string | null | undefined
+  isSshLikely: boolean
   repoCount: number
   isAdding: boolean
   addProjectBusyLabel: string | null
@@ -38,9 +40,6 @@ type AddRepoDialogStepContentProps = {
   createKind: 'git' | 'folder'
   createError: string | null
   isCreating: boolean
-  addedRepoName: string
-  hiddenWorktreeCount: number
-  primaryBranchName: string | null
   onBrowse: () => void
   onOpenCloneStep: () => void
   onOpenCreateStep: () => void
@@ -60,22 +59,19 @@ type AddRepoDialogStepContentProps = {
   onClone: () => void
   onNestedGroupNameChange: (name: string) => void
   onNestedSelectedPathsChange: Dispatch<SetStateAction<Set<string>>>
-  onNestedBack: () => void
   onImportNestedRepos: (mode: 'group' | 'separate') => void
   onCreateNameChange: (name: string) => void
   onCreateParentChange: (parent: string) => void
   onCreateKindChange: (kind: 'git' | 'folder') => void
   onPickCreateParent: () => void
   onCreate: () => void
-  onStartPrimaryWorktree: () => void
-  onUseExistingWorktrees: () => void
-  onCreateWorktree: (name?: string) => void
-  onConfigureRepo: () => void
 }
 
 export function AddRepoDialogStepContent({
   step,
   isRuntimeEnvironmentActive,
+  activeRuntimeEnvironmentId,
+  isSshLikely,
   repoCount,
   isAdding,
   addProjectBusyLabel,
@@ -102,9 +98,6 @@ export function AddRepoDialogStepContent({
   createKind,
   createError,
   isCreating,
-  addedRepoName,
-  hiddenWorktreeCount,
-  primaryBranchName,
   onBrowse,
   onOpenCloneStep,
   onOpenCreateStep,
@@ -124,22 +117,18 @@ export function AddRepoDialogStepContent({
   onClone,
   onNestedGroupNameChange,
   onNestedSelectedPathsChange,
-  onNestedBack,
   onImportNestedRepos,
   onCreateNameChange,
   onCreateParentChange,
   onCreateKindChange,
   onPickCreateParent,
-  onCreate,
-  onStartPrimaryWorktree,
-  onUseExistingWorktrees,
-  onCreateWorktree,
-  onConfigureRepo
-}: AddRepoDialogStepContentProps): React.JSX.Element {
+  onCreate
+}: AddRepoDialogStepContentProps): React.JSX.Element | null {
   if (step === 'add' && isRuntimeEnvironmentActive) {
     return (
       <AddRepoServerPathStartStep
         serverPath={serverPath}
+        runtimeEnvironmentId={activeRuntimeEnvironmentId}
         isAddingServerPath={isAddingServerPath}
         addProjectBusyLabel={addProjectBusyLabel}
         onServerPathChange={onServerPathChange}
@@ -154,6 +143,7 @@ export function AddRepoDialogStepContent({
     return (
       <AddRepoLocalStartStep
         repoCount={repoCount}
+        isSshLikely={isSshLikely}
         isAdding={isAdding}
         addProjectBusyLabel={addProjectBusyLabel}
         nestedScanInProgress={nestedScanInProgress}
@@ -195,6 +185,7 @@ export function AddRepoDialogStepContent({
         cloneProgress={cloneProgress}
         isCloning={isCloning}
         disableDestinationPicker={isRuntimeEnvironmentActive}
+        runtimeEnvironmentId={activeRuntimeEnvironmentId}
         onUrlChange={onCloneUrlChange}
         onDestChange={onCloneDestinationChange}
         onPickDestination={onPickCloneDestination}
@@ -209,11 +200,11 @@ export function AddRepoDialogStepContent({
         scan={nestedScan}
         groupName={nestedGroupName}
         selectedPaths={nestedSelectedPaths}
+        isFirstRepoImport={repoCount === 0}
         isAdding={isAdding}
         scanInProgress={nestedScanInProgress}
         onGroupNameChange={onNestedGroupNameChange}
         onSelectedPathsChange={onNestedSelectedPathsChange}
-        onBack={onNestedBack}
         onImport={onImportNestedRepos}
         onStopScan={onStopNestedScan}
       />
@@ -229,6 +220,7 @@ export function AddRepoDialogStepContent({
         createError={createError}
         isCreating={isCreating}
         manualParentEntry={isRuntimeEnvironmentActive}
+        runtimeEnvironmentId={activeRuntimeEnvironmentId}
         onNameChange={onCreateNameChange}
         onParentChange={onCreateParentChange}
         onKindChange={onCreateKindChange}
@@ -238,15 +230,5 @@ export function AddRepoDialogStepContent({
     )
   }
 
-  return (
-    <SetupStep
-      repoName={addedRepoName}
-      hiddenWorktreeCount={hiddenWorktreeCount}
-      primaryBranchName={primaryBranchName ?? undefined}
-      onStartPrimaryWorktree={onStartPrimaryWorktree}
-      onUseExistingWorktrees={onUseExistingWorktrees}
-      onCreateWorktree={onCreateWorktree}
-      onConfigureRepo={onConfigureRepo}
-    />
-  )
+  return null
 }
