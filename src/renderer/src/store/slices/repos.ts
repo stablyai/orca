@@ -15,6 +15,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import { selectProjectGroupRemovalTargets } from './project-group-removal-targets'
 import { getRepoIdFromWorktreeId } from './worktree-helpers'
 import { reconcileFetchedRepos } from './repo-identity-reconcile'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rpc-client'
@@ -50,6 +51,31 @@ type NestedRepoScanControls = {
   scanId?: string
   onProgress?: (scan: NestedRepoScanResult) => void
 }
+
+export type DeleteProjectGroupWithContainedProjectsOptions = {
+  removeContainedProjects: boolean
+}
+
+export type ProjectRemovalFailure = {
+  projectId: string
+  reason: string
+}
+
+export type DeleteProjectGroupWithContainedProjectsResult =
+  | {
+      status: 'deleted-group'
+      groupId: string
+      requestedProjectIds: string[]
+      removedProjectIds: string[]
+      failedProjectRemovals: ProjectRemovalFailure[]
+    }
+  | {
+      status: 'missing-group' | 'group-delete-failed'
+      groupId: string
+      requestedProjectIds: string[]
+      removedProjectIds: []
+      failedProjectRemovals: []
+    }
 
 function normalizeNestedRepoScanResult(scan: NestedRepoScanResult): NestedRepoScanResult {
   return {
@@ -136,6 +162,10 @@ export type RepoSlice = {
     updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string) => Promise<boolean>
+  deleteProjectGroupWithContainedProjects: (
+    groupId: string,
+    options: DeleteProjectGroupWithContainedProjectsOptions
+  ) => Promise<DeleteProjectGroupWithContainedProjectsResult>
   moveProjectToGroup: (
     projectId: string,
     groupId: string | null,
@@ -285,9 +315,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return result
     } catch (err) {
       console.error('Failed to import nested repos:', err)
-      toast.error(translate("auto.store.slices.repos.6d3318e813", "Failed to import repositories"), {
-        description: err instanceof Error ? err.message : String(err)
-      })
+      toast.error(
+        translate('auto.store.slices.repos.6d3318e813', 'Failed to import repositories'),
+        {
+          description: err instanceof Error ? err.message : String(err)
+        }
+      )
       return null
     }
   },
@@ -379,6 +412,71 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
+  deleteProjectGroupWithContainedProjects: async (groupId, options) => {
+    const targets = selectProjectGroupRemovalTargets(get().projectGroups, get().repos, groupId)
+    const requestedProjectIds = options.removeContainedProjects ? targets.projectIds : []
+    if (!targets.groupExists) {
+      return {
+        status: 'missing-group',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    const deleted = await get().deleteProjectGroup(groupId)
+    if (!deleted) {
+      return {
+        status: 'group-delete-failed',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    if (!options.removeContainedProjects) {
+      return {
+        status: 'deleted-group',
+        groupId,
+        requestedProjectIds,
+        removedProjectIds: [],
+        failedProjectRemovals: []
+      }
+    }
+
+    const removedProjectIds: string[] = []
+    const failedProjectRemovals: ProjectRemovalFailure[] = []
+    for (const projectId of targets.projectIds) {
+      const existedBeforeRemoval = get().repos.some((repo) => repo.id === projectId)
+      try {
+        if (existedBeforeRemoval) {
+          await get().removeProject(projectId)
+        }
+      } catch (err) {
+        console.error('Failed to remove contained project:', err)
+      }
+      const stillExists = get().repos.some((repo) => repo.id === projectId)
+      if (stillExists) {
+        failedProjectRemovals.push({
+          projectId,
+          reason: 'Project remained in Orca after removeProject completed.'
+        })
+      } else {
+        removedProjectIds.push(projectId)
+      }
+    }
+
+    return {
+      status: 'deleted-group',
+      groupId,
+      requestedProjectIds,
+      removedProjectIds,
+      failedProjectRemovals
+    }
+  },
+
   moveProjectToGroup: async (projectId, groupId, order) => {
     try {
       const target = getActiveRuntimeTarget(get().settings)
@@ -453,18 +551,25 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return { repos: [...s.repos, repo] }
       })
       if (alreadyAdded) {
-        toast.info(translate("auto.store.slices.repos.a8e4b3af5b", "Project already added"), { description: repo.displayName })
-      } else {
-        toast.success(isGitRepoKind(repo) ? translate("auto.store.slices.repos.8bb3ad7935", "Project added") : translate("auto.store.slices.repos.90d129b48b", "Folder added"), {
+        toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
           description: repo.displayName
         })
+      } else {
+        toast.success(
+          isGitRepoKind(repo)
+            ? translate('auto.store.slices.repos.8bb3ad7935', 'Project added')
+            : translate('auto.store.slices.repos.90d129b48b', 'Folder added'),
+          {
+            description: repo.displayName
+          }
+        )
       }
       return repo
     } catch (err) {
       console.error('Failed to add project:', err)
       const message = err instanceof Error ? err.message : String(err)
       const duration = ERROR_TOAST_DURATION
-      toast.error(translate("auto.store.slices.repos.c6e022ddfc", "Failed to add project"), {
+      toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
         description: message,
         duration
       })
@@ -477,7 +582,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     if (target.kind !== 'local') {
       // Why: OS folder pickers return client-local paths. Remote environments
       // need an explicit server path, which the Add Project dialog handles.
-      toast.error(translate("auto.store.slices.repos.e649269645", "Use a server path to add projects from a remote runtime."))
+      toast.error(
+        translate(
+          'auto.store.slices.repos.e649269645',
+          'Use a server path to add projects from a remote runtime.'
+        )
+      )
       return null
     }
     const path = await window.api.repos.pickFolder()
@@ -523,7 +633,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     } catch (err) {
       console.error('Failed to add folder:', err)
       const message = err instanceof Error ? err.message : String(err)
-      toast.error(translate("auto.store.slices.repos.b7e14472ae", "Failed to add folder"), { description: message, duration: ERROR_TOAST_DURATION })
+      toast.error(translate('auto.store.slices.repos.b7e14472ae', 'Failed to add folder'), {
+        description: message,
+        duration: ERROR_TOAST_DURATION
+      })
       return null
     }
   },

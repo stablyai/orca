@@ -3176,7 +3176,11 @@
           "9be10d49ea": "并取消其项目的分组。",
           "69f5cb97d0": "删除",
           "591f330288": "删除项目组",
-          "2c14ce677a": "正在删除..."
+          "2c14ce677a": "正在删除...",
+          "eeabb8e8e4": "Remove {{value0}} contained {{value1}} from Orca",
+          "55f75628c0": "Project folders on disk are not deleted.",
+          "897e5d3d4c": "Delete Group and Remove Projects",
+          "fec7e9c8ae": "Delete Group"
         },
         "ProjectGroupNameDialog": {
           "d99a034073": "取消",
@@ -3524,7 +3528,9 @@
           "20bebf9c7f": "显示 {{value0}} 个子工作区",
           "c1f4a31623": "显示 {{value0}} 个子工作区",
           "e97297cb75": "隐藏 {{value0}} 个子工作区",
-          "0cd15956d4": "隐藏 {{value0}} 个子工作区"
+          "0cd15956d4": "隐藏 {{value0}} 个子工作区",
+          "b667b59632": "Some projects could not be removed from Orca",
+          "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",
@@ -5190,7 +5196,11 @@
           "fac59213fc": "搜索内置主题",
           "cb330ef7f8": "{{value0}} 的",
           "c822571b2e": "匹配“{{value0}}”",
-          "3119c012a5": "字符串"
+          "3119c012a5": "字符串",
+          "builtin_themes": "Built-in",
+          "imported_from": "Imported from {{value0}}",
+          "imported_themes": "Imported",
+          "search_terminal_themes": "Search terminal themes"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -5567,7 +5577,9 @@
           "b739d2abfe": "深色分隔线颜色",
           "7add204bd5": "选择深色模式下使用的终端主题。",
           "9499ad1dc4": "黑暗主题",
-          "f012172e21": "选择深色模式下用于终端窗格的主题。"
+          "f012172e21": "选择深色模式下用于终端窗格的主题。",
+          "import_themes_title": "Import Themes",
+          "import_themes_description": "Imported themes are available in both the dark and light theme pickers."
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 洋红色",
@@ -7102,7 +7114,20 @@
             "e989914ad6": "字体家族",
             "33031c1465": "文字大小",
             "0fe0073f0c": "新窗格和实时更新的默认终端字体大小。",
-            "5930244899": "字体大小"
+            "5930244899": "字体大小",
+            "warp_import": {
+              "title": "Import themes from Warp",
+              "description": "Import Warp themes as Orca terminal themes.",
+              "keyword_warp": "warp",
+              "keyword_themes": "themes",
+              "keyword_yaml": "yaml"
+            },
+            "yaml_import": {
+              "title": "Import from YAML",
+              "description": "Import theme YAML files as Orca terminal themes.",
+              "keyword_yaml": "yaml",
+              "keyword_custom": "custom"
+            }
           },
           "windows": {
             "search": {
@@ -7213,6 +7238,42 @@
               }
             }
           }
+        },
+        "WarpThemeImportModal": {
+          "title": "Import themes from Warp",
+          "description": "Import Warp themes as Orca terminal themes.",
+          "yaml_title": "Import theme YAML",
+          "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
+          "yaml_no_themes_found": "No themes found in the selected files.",
+          "choose_file": "Choose File",
+          "choose_folder": "Choose Folder",
+          "loading": "Loading Warp themes...",
+          "found_theme_one": "Found 1 theme",
+          "found_theme_other": "Found {{value0}} themes",
+          "found_in_source": " in {{value0}}",
+          "clear_all": "Clear all",
+          "select_all": "Select all",
+          "colors_only": "Colors only",
+          "no_themes_found": "No custom Warp themes found.",
+          "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
+          "choose_manually": "Choose a theme YAML file or folder to import manually.",
+          "skipped_files": "Skipped files",
+          "more_skipped_files": "{{value0}} more skipped files.",
+          "cancel": "Cancel",
+          "import_theme_one": "Import 1 Theme",
+          "import_theme_other": "Import {{value0}} Themes",
+          "import_themes": "Import Themes"
+        },
+        "useWarpThemeImport": {
+          "unknown_error": "Unknown error",
+          "imported_one": "Imported 1 theme",
+          "imported_other": "Imported {{value0}} themes",
+          "import_failed": "Failed to import themes",
+          "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.",
+          "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+        },
+        "YamlThemeImportButton": {
+          "label": "Import from YAML"
         }
       },
       "right": {
