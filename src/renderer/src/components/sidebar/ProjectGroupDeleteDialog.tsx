@@ -1,4 +1,5 @@
 import React, { useCallback, useId, useRef, useState } from 'react'
+import { Check } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -8,17 +9,16 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Label } from '@/components/ui/label'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 
 type ProjectGroupDeleteDialogProps = {
   open: boolean
   groupName: string
   projectCount: number
   projectNames: string[]
-  deleteChildRepos: boolean
-  onDeleteChildReposChange: (deleteChildRepos: boolean) => void
+  removeContainedProjects: boolean
+  onRemoveContainedProjectsChange: (removeContainedProjects: boolean) => void
   onOpenChange: (open: boolean) => void
   onConfirm: () => Promise<void> | void
 }
@@ -28,16 +28,22 @@ export function ProjectGroupDeleteDialog({
   groupName,
   projectCount,
   projectNames,
-  deleteChildRepos,
-  onDeleteChildReposChange,
+  removeContainedProjects,
+  onRemoveContainedProjectsChange,
   onOpenChange,
   onConfirm
 }: ProjectGroupDeleteDialogProps): React.JSX.Element {
   const [deleting, setDeleting] = useState(false)
   const [wasOpen, setWasOpen] = useState(open)
   const mountedRef = useRef(true)
-  const checkboxId = useId()
+  const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const removeProjectsId = useId()
   const projectLabel = projectCount === 1 ? 'project' : 'projects'
+  const removeContainedProjectCopy = translate(
+    'auto.components.sidebar.ProjectGroupDeleteDialog.e8e48d9e7b',
+    'Remove {{value0}} contained {{value1}}',
+    { value0: projectCount, value1: projectLabel }
+  )
 
   const handleDialogContentRef = useCallback((node: HTMLDivElement | null): void => {
     // Why: deleting can resolve after the dialog closes; the content ref keeps
@@ -90,6 +96,10 @@ export function ProjectGroupDeleteDialog({
         ref={handleDialogContentRef}
         className="max-w-sm sm:max-w-sm"
         showCloseButton={false}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          confirmButtonRef.current?.focus()
+        }}
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
@@ -100,55 +110,78 @@ export function ProjectGroupDeleteDialog({
           </DialogTitle>
           <DialogDescription className="text-xs">
             {translate('auto.components.sidebar.ProjectGroupDeleteDialog.69f5cb97d0', 'Delete')}{' '}
-            <span className="break-all font-medium text-foreground">{groupName}</span>{' '}
-            {translate(
-              'auto.components.sidebar.ProjectGroupDeleteDialog.9be10d49ea',
-              'and ungroup its projects.'
-            )}
+            <span className="break-all font-medium text-foreground">{groupName}</span>.
           </DialogDescription>
         </DialogHeader>
         {projectCount > 0 && (
-          <div
-            className="rounded-md border border-border bg-muted/30 p-3"
-            data-disabled={deleting ? 'true' : undefined}
-          >
-            <div className="flex items-start gap-2.5">
-              <Checkbox
-                id={checkboxId}
-                checked={deleteChildRepos}
-                disabled={deleting}
-                onCheckedChange={(checked) => onDeleteChildReposChange(checked === true)}
-                aria-describedby={`${checkboxId}-description`}
-                className="mt-0.5"
-              />
-              <div className="min-w-0 space-y-1">
-                <Label htmlFor={checkboxId} className="text-xs leading-4">
+          <div className="space-y-2 text-xs">
+            {projectNames.length > 0 && (
+              <div className="rounded-md border border-border/70 bg-muted/35 px-3 py-2">
+                <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.05em] text-muted-foreground">
                   {translate(
-                    'auto.components.sidebar.ProjectGroupDeleteDialog.eeabb8e8e4',
-                    'Remove {{value0}} contained {{value1}} from Orca',
-                    { value0: projectCount, value1: projectLabel }
+                    'auto.components.sidebar.ProjectGroupDeleteDialog.0e0e6764af',
+                    'Contained projects'
                   )}
-                </Label>
-                <p id={`${checkboxId}-description`} className="text-xs text-muted-foreground">
+                </div>
+                <ul
+                  className="min-w-0 space-y-0.5 text-foreground"
+                  aria-label={translate(
+                    'auto.components.sidebar.ProjectGroupDeleteDialog.0e0e6764af',
+                    'Contained projects'
+                  )}
+                >
+                  {projectNames.slice(0, 4).map((projectName, index) => (
+                    <li key={`${projectName}:${index}`} className="truncate" title={projectName}>
+                      {projectName}
+                    </li>
+                  ))}
+                  {projectNames.length > 4 ? (
+                    <li className="text-muted-foreground">
+                      +{projectNames.length - 4}{' '}
+                      {translate(
+                        'auto.components.sidebar.ProjectGroupDeleteDialog.ad407c2d55',
+                        'more'
+                      )}
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            )}
+            <button
+              type="button"
+              role="checkbox"
+              aria-checked={removeContainedProjects}
+              aria-describedby={`${removeProjectsId}-description`}
+              disabled={deleting}
+              onClick={() => onRemoveContainedProjectsChange(!removeContainedProjects)}
+              className={cn(
+                'flex w-full items-start gap-2 rounded-sm px-1 py-1 text-left text-foreground/85 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                deleting && 'cursor-not-allowed opacity-70'
+              )}
+            >
+              <span
+                className={cn(
+                  'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors',
+                  removeContainedProjects
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-muted-foreground bg-transparent'
+                )}
+              >
+                {removeContainedProjects ? <Check className="size-3" strokeWidth={3} /> : null}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-medium">{removeContainedProjectCopy}</span>
+                <span
+                  id={`${removeProjectsId}-description`}
+                  className="mt-0.5 block text-muted-foreground"
+                >
                   {translate(
                     'auto.components.sidebar.ProjectGroupDeleteDialog.55f75628c0',
                     'Project folders on disk are not deleted.'
                   )}
-                </p>
-                {projectNames.length > 0 && (
-                  <ul
-                    className="scrollbar-sleek mt-1 max-h-24 space-y-0.5 overflow-y-auto rounded-sm border border-border/70 bg-background/60 px-2 py-1.5 text-xs text-foreground"
-                    aria-label="Contained projects"
-                  >
-                    {projectNames.map((projectName, index) => (
-                      <li key={`${projectName}:${index}`} className="truncate" title={projectName}>
-                        {projectName}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
+                </span>
+              </span>
+            </button>
           </div>
         )}
         <DialogFooter>
@@ -163,6 +196,7 @@ export function ProjectGroupDeleteDialog({
             {translate('auto.components.sidebar.ProjectGroupDeleteDialog.ca65b78f78', 'Cancel')}
           </Button>
           <Button
+            ref={confirmButtonRef}
             type="button"
             variant="destructive"
             size="sm"
@@ -175,15 +209,10 @@ export function ProjectGroupDeleteDialog({
                   'auto.components.sidebar.ProjectGroupDeleteDialog.2c14ce677a',
                   'Deleting...'
                 )
-              : deleteChildRepos
-                ? translate(
-                    'auto.components.sidebar.ProjectGroupDeleteDialog.897e5d3d4c',
-                    'Delete Group and Remove Projects'
-                  )
-                : translate(
-                    'auto.components.sidebar.ProjectGroupDeleteDialog.fec7e9c8ae',
-                    'Delete Group'
-                  )}
+              : translate(
+                  'auto.components.sidebar.ProjectGroupDeleteDialog.fec7e9c8ae',
+                  'Delete Group'
+                )}
           </Button>
         </DialogFooter>
       </DialogContent>

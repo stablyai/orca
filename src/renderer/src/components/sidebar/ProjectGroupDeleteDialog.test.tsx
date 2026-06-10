@@ -31,8 +31,8 @@ function renderDialog(
         groupName="Platform"
         projectCount={2}
         projectNames={['API', 'Web app']}
-        deleteChildRepos={false}
-        onDeleteChildReposChange={vi.fn()}
+        removeContainedProjects={false}
+        onRemoveContainedProjectsChange={vi.fn()}
         onOpenChange={vi.fn()}
         onConfirm={vi.fn()}
         {...overrides}
@@ -51,46 +51,64 @@ function findButton(label: string): HTMLButtonElement {
   return button
 }
 
-function getCheckbox(): HTMLButtonElement {
-  const checkbox = document.body.querySelector('[role="checkbox"]')
+function getCheckbox(label: string): HTMLButtonElement {
+  const checkbox = Array.from(document.body.querySelectorAll('[role="checkbox"]')).find((entry) =>
+    entry.textContent?.includes(label)
+  )
   if (!(checkbox instanceof HTMLButtonElement)) {
-    throw new Error('Checkbox not rendered')
+    throw new Error(`Checkbox not rendered: ${label}`)
   }
   return checkbox
 }
 
 describe('ProjectGroupDeleteDialog', () => {
-  it('omits the contained project checkbox for empty groups', () => {
+  it('omits the contained project panel for empty groups', () => {
     renderDialog({ projectCount: 0 })
 
     expect(document.body.querySelector('[role="checkbox"]')).toBeNull()
     expect(document.body.textContent).not.toContain('contained project')
   })
 
-  it('renders an accessible checkbox and reports checked intent', () => {
-    const onDeleteChildReposChange = vi.fn()
-    renderDialog({ onDeleteChildReposChange })
+  it('renders compact contained project handling and reports remove intent', () => {
+    const onRemoveContainedProjectsChange = vi.fn()
+    renderDialog({ onRemoveContainedProjectsChange })
 
-    expect(getCheckbox().getAttribute('aria-checked')).toBe('false')
-    expect(document.body.textContent).toContain('Remove 2 contained projects from Orca')
+    expect(document.body.textContent).toContain('Delete Platform.')
+    expect(document.body.textContent).toContain('Contained projects')
+    expect(document.body.textContent).not.toContain('unless selected below')
+    expect(getCheckbox('Remove 2 contained projects').getAttribute('aria-checked')).toBe('false')
+    expect(document.body.textContent).toContain('Remove 2 contained projects')
+    expect(document.body.textContent).not.toContain('Remove 2 contained projects from Orca')
     expect(document.body.textContent).toContain('Project folders on disk are not deleted.')
     expect(document.body.textContent).toContain('API')
     expect(document.body.textContent).toContain('Web app')
 
     act(() => {
-      getCheckbox().click()
+      getCheckbox('Remove 2 contained projects').click()
     })
 
-    expect(onDeleteChildReposChange).toHaveBeenCalledWith(true)
+    expect(onRemoveContainedProjectsChange).toHaveBeenCalledWith(true)
   })
 
-  it('names the broader destructive action when child project removal is checked', () => {
-    renderDialog({ deleteChildRepos: true })
+  it('focuses the delete group action when opened', () => {
+    renderDialog()
 
-    expect(findButton('Delete Group and Remove Projects')).toBeTruthy()
+    expect(document.activeElement).toBe(findButton('Delete Group'))
   })
 
-  it('disables checkbox, cancel, and delete actions while deleting', async () => {
+  it('keeps the panel copy and destructive action label stable when project removal is selected', () => {
+    renderDialog({ removeContainedProjects: true })
+
+    expect(document.body.textContent).toContain('Delete Platform.')
+    expect(document.body.textContent).not.toContain('will stay in Orca')
+    expect(document.body.textContent).not.toContain('will be removed from Orca')
+    expect(document.body.textContent).not.toContain('unless selected below')
+    expect(getCheckbox('Remove 2 contained projects').getAttribute('aria-checked')).toBe('true')
+    expect(findButton('Delete Group')).toBeTruthy()
+    expect(document.body.textContent).not.toContain('Delete Group and Remove Projects')
+  })
+
+  it('disables project choices, cancel, and delete actions while deleting', async () => {
     let finishConfirm: () => void = () => undefined
     const onConfirm = vi.fn(
       () =>
@@ -104,7 +122,7 @@ describe('ProjectGroupDeleteDialog', () => {
       findButton('Delete Group').click()
     })
 
-    expect(getCheckbox().disabled).toBe(true)
+    expect(getCheckbox('Remove 2 contained projects').disabled).toBe(true)
     expect(findButton('Cancel').disabled).toBe(true)
     expect(findButton('Deleting...').disabled).toBe(true)
 

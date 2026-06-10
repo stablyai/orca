@@ -209,7 +209,7 @@ type ProjectGroupNameDialogState =
 type ProjectGroupDeleteDialogState = {
   groupId: string
   groupName: string
-  deleteChildRepos: boolean
+  removeContainedProjects: boolean
 }
 
 // How long to wait after a sortEpoch bump before actually re-sorting.
@@ -4271,11 +4271,11 @@ const WorktreeList = React.memo(function WorktreeList({
       ),
     [projectGroupDeleteTargets, repoMap]
   )
-  const projectGroupDeleteChildRepos =
-    projectGroupDeleteProjectCount > 0 && projectGroupDeleteDialog?.deleteChildRepos === true
+  const projectGroupRemoveContainedProjects =
+    projectGroupDeleteProjectCount > 0 && projectGroupDeleteDialog?.removeContainedProjects === true
 
   const handleDeleteProjectGroup = useCallback((groupId: string, groupName: string) => {
-    setProjectGroupDeleteDialog({ groupId, groupName, deleteChildRepos: false })
+    setProjectGroupDeleteDialog({ groupId, groupName, removeContainedProjects: false })
   }, [])
 
   const handleConfirmDeleteProjectGroup = useCallback(async () => {
@@ -4286,7 +4286,7 @@ const WorktreeList = React.memo(function WorktreeList({
       const result = await deleteProjectGroupWithContainedProjects(
         projectGroupDeleteDialog.groupId,
         {
-          removeContainedProjects: projectGroupDeleteChildRepos
+          removeContainedProjects: projectGroupRemoveContainedProjects
         }
       )
       // Why: a missing group is already in the desired end state, so close
@@ -4334,7 +4334,7 @@ const WorktreeList = React.memo(function WorktreeList({
     }
   }, [
     deleteProjectGroupWithContainedProjects,
-    projectGroupDeleteChildRepos,
+    projectGroupRemoveContainedProjects,
     projectGroupDeleteDialog
   ])
 
@@ -4655,10 +4655,10 @@ const WorktreeList = React.memo(function WorktreeList({
         groupName={projectGroupDeleteDialog?.groupName ?? ''}
         projectCount={projectGroupDeleteProjectCount}
         projectNames={projectGroupDeleteProjectNames}
-        deleteChildRepos={projectGroupDeleteChildRepos}
-        onDeleteChildReposChange={(deleteChildRepos) => {
+        removeContainedProjects={projectGroupRemoveContainedProjects}
+        onRemoveContainedProjectsChange={(removeContainedProjects) => {
           setProjectGroupDeleteDialog((current) =>
-            current ? { ...current, deleteChildRepos } : current
+            current ? { ...current, removeContainedProjects } : current
           )
         }}
         onOpenChange={(open) => {
