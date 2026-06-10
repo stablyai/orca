@@ -37,6 +37,7 @@ import {
 } from '@/runtime/runtime-asana-client'
 import { AsanaUserAvatar } from '@/components/AsanaUserAvatar'
 import type { AsanaComment, AsanaTask, AsanaUser } from '../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type AsanaIssueWorkspaceProps = {
   task: AsanaTask | null
@@ -82,9 +83,15 @@ function buildAsanaPrompt(task: AsanaTask): string {
 async function copyTextToClipboard(text: string, label: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
-    toast.success(`${label} copied`)
+    toast.success(
+      translate('auto.components.AsanaIssueWorkspace.43e26f1a9b', '{{label}} copied', { label })
+    )
   } catch {
-    toast.error(`Failed to copy ${label.toLowerCase()}`)
+    toast.error(
+      translate('auto.components.AsanaIssueWorkspace.c1be5501dd', 'Failed to copy {{label}}', {
+        label: label.toLowerCase()
+      })
+    )
   }
 }
 
@@ -231,7 +238,14 @@ export default function AsanaIssueWorkspace({
       } catch (error) {
         setFullTask(previous)
         patchAsanaTask(previous.gid, previous)
-        toast.error(error instanceof Error ? error.message : 'Failed to update Asana task.')
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.AsanaIssueWorkspace.3c481bf8d7',
+                'Failed to update Asana task.'
+              )
+        )
       } finally {
         setPendingField(null)
       }
@@ -303,7 +317,11 @@ export default function AsanaIssueWorkspace({
       setComments((prev) => [...prev, comment])
       setCommentDraft('')
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to add comment.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate('auto.components.AsanaIssueWorkspace.c76cc7f483', 'Failed to add comment.')
+      )
     } finally {
       setCommentSubmitting(false)
     }
@@ -315,22 +333,25 @@ export default function AsanaIssueWorkspace({
     }
     return [
       {
-        label: 'Open in Asana',
+        label: translate('auto.components.AsanaIssueWorkspace.9bd2fa9f44', 'Open in Asana'),
         icon: ExternalLink,
         action: () => window.api.shell.openUrl(displayed.url)
       },
       {
-        label: 'Copy URL',
+        label: translate('auto.components.AsanaIssueWorkspace.45f81355bc', 'Copy URL'),
         icon: Clipboard,
         action: () => void copyTextToClipboard(displayed.url, 'URL')
       },
       {
-        label: 'Copy suggested branch name',
+        label: translate(
+          'auto.components.AsanaIssueWorkspace.47bdb1b01a',
+          'Copy suggested branch name'
+        ),
         icon: GitBranch,
         action: () => void copyTextToClipboard(buildAsanaBranchName(displayed), 'Branch name')
       },
       {
-        label: 'Copy prompt',
+        label: translate('auto.components.AsanaIssueWorkspace.fc73c32b3c', 'Copy prompt'),
         icon: Clipboard,
         action: () => void copyTextToClipboard(buildAsanaPrompt(displayed), 'Prompt')
       }
@@ -351,7 +372,12 @@ export default function AsanaIssueWorkspace({
           <SheetTitle>{displayed?.title ?? 'Asana task'}</SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
-          <SheetDescription>Preview, edit, and start work from the selected task.</SheetDescription>
+          <SheetDescription>
+            {translate(
+              'auto.components.AsanaIssueWorkspace.d714b420a0',
+              'Preview, edit, and start work from the selected task.'
+            )}
+          </SheetDescription>
         </VisuallyHidden.Root>
 
         {displayed ? (
@@ -374,7 +400,7 @@ export default function AsanaIssueWorkspace({
                   className="hidden shrink-0 gap-2 sm:inline-flex"
                   size="sm"
                 >
-                  Start workspace
+                  {translate('auto.components.AsanaIssueWorkspace.80593bc32c', 'Start workspace')}
                   <ArrowRight className="size-4" />
                 </Button>
                 <Tooltip>
@@ -384,13 +410,16 @@ export default function AsanaIssueWorkspace({
                       size="icon-sm"
                       className="shrink-0"
                       onClick={onClose}
-                      aria-label="Close Asana task preview"
+                      aria-label={translate(
+                        'auto.components.AsanaIssueWorkspace.c8ea562d51',
+                        'Close Asana task preview'
+                      )}
                     >
                       <X className="size-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    Close
+                    {translate('auto.components.AsanaIssueWorkspace.70508a18ed', 'Close')}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -404,9 +433,24 @@ export default function AsanaIssueWorkspace({
                   ) : null}
                   {(
                     [
-                      { status: 'approved', label: 'Approve' },
-                      { status: 'changes_requested', label: 'Request changes' },
-                      { status: 'rejected', label: 'Reject' }
+                      {
+                        status: 'approved',
+                        label: translate(
+                          'auto.components.AsanaIssueWorkspace.64974917e5',
+                          'Approve'
+                        )
+                      },
+                      {
+                        status: 'changes_requested',
+                        label: translate(
+                          'auto.components.AsanaIssueWorkspace.570fa07349',
+                          'Request changes'
+                        )
+                      },
+                      {
+                        status: 'rejected',
+                        label: translate('auto.components.AsanaIssueWorkspace.c13fceb092', 'Reject')
+                      }
                     ] as const
                   ).map(({ status, label }) => {
                     const active = displayed.approvalStatus === status
@@ -451,12 +495,17 @@ export default function AsanaIssueWorkspace({
                   ) : (
                     <Circle className="size-3" />
                   )}
-                  {displayed.completed ? 'Completed' : 'Mark complete'}
+                  {displayed.completed
+                    ? translate('auto.components.AsanaIssueWorkspace.98229f40ea', 'Completed')
+                    : translate('auto.components.AsanaIssueWorkspace.dad2b1d01f', 'Mark complete')}
                 </button>
               )}
 
               {displayed.dueOn ? (
-                <span className="text-[11px] text-muted-foreground">Due {displayed.dueOn}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {translate('auto.components.AsanaIssueWorkspace.b3b8e19ea8', 'Due')}{' '}
+                  {displayed.dueOn}
+                </span>
               ) : null}
 
               <Popover>
@@ -484,7 +533,7 @@ export default function AsanaIssueWorkspace({
                     }
                     className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
                   >
-                    Unassigned
+                    {translate('auto.components.AsanaIssueWorkspace.826e6443f8', 'Unassigned')}
                   </button>
                   {users.map((user) => (
                     <button
@@ -507,7 +556,9 @@ export default function AsanaIssueWorkspace({
               <div className="min-h-0 overflow-y-auto scrollbar-sleek">
                 <section className="border-b border-border/40 px-4 py-4">
                   <div className="grid gap-2">
-                    <label className="text-[11px] font-medium text-muted-foreground">Title</label>
+                    <label className="text-[11px] font-medium text-muted-foreground">
+                      {translate('auto.components.AsanaIssueWorkspace.073516facf', 'Title')}
+                    </label>
                     <div className="flex gap-2">
                       <Input
                         value={titleDraft}
@@ -539,7 +590,9 @@ export default function AsanaIssueWorkspace({
                 <section className="border-b border-border/40 px-4 py-4">
                   <div className="mb-2 flex items-center gap-2">
                     <AsanaIcon className="size-3 text-muted-foreground" />
-                    <span className="text-xs font-medium text-foreground">Description</span>
+                    <span className="text-xs font-medium text-foreground">
+                      {translate('auto.components.AsanaIssueWorkspace.1fd599c26c', 'Description')}
+                    </span>
                     <span className="text-xs text-muted-foreground">
                       {projectLabel} · {displayed.assignee?.name ?? 'Unassigned'}
                     </span>
@@ -548,7 +601,10 @@ export default function AsanaIssueWorkspace({
                     <textarea
                       value={notesDraft}
                       onChange={(event) => setNotesDraft(event.target.value)}
-                      placeholder="No description provided."
+                      placeholder={translate(
+                        'auto.components.AsanaIssueWorkspace.312fe2188b',
+                        'No description provided.'
+                      )}
                       rows={5}
                       className="min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
                     />
@@ -565,7 +621,10 @@ export default function AsanaIssueWorkspace({
                         ) : (
                           <Save className="size-4" />
                         )}
-                        Save description
+                        {translate(
+                          'auto.components.AsanaIssueWorkspace.fd28d604ba',
+                          'Save description'
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -574,7 +633,9 @@ export default function AsanaIssueWorkspace({
                 <section className="px-4 py-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium text-foreground">Comments</span>
+                      <span className="text-[13px] font-medium text-foreground">
+                        {translate('auto.components.AsanaIssueWorkspace.d79323a259', 'Comments')}
+                      </span>
                       {comments.length > 0 ? (
                         <span className="text-[12px] text-muted-foreground">{comments.length}</span>
                       ) : null}
@@ -592,7 +653,7 @@ export default function AsanaIssueWorkspace({
                         ) : (
                           <RefreshCw className="size-3" />
                         )}
-                        Retry
+                        {translate('auto.components.AsanaIssueWorkspace.e43b2f6250', 'Retry')}
                       </Button>
                     ) : null}
                   </div>
@@ -605,7 +666,12 @@ export default function AsanaIssueWorkspace({
                       <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
                     </div>
                   ) : comments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No comments yet.</p>
+                    <p className="text-sm text-muted-foreground">
+                      {translate(
+                        'auto.components.AsanaIssueWorkspace.58eb8f7b03',
+                        'No comments yet.'
+                      )}
+                    </p>
                   ) : (
                     <div className="flex flex-col gap-3">
                       {comments.map((comment) => (
@@ -639,7 +705,7 @@ export default function AsanaIssueWorkspace({
                   onClick={() => onUse(displayed)}
                   className="mb-3 w-full justify-center gap-2 sm:hidden"
                 >
-                  Start workspace
+                  {translate('auto.components.AsanaIssueWorkspace.80593bc32c', 'Start workspace')}
                   <ArrowRight className="size-4" />
                 </Button>
                 <div className="grid gap-1">
@@ -672,7 +738,10 @@ export default function AsanaIssueWorkspace({
                 <textarea
                   value={commentDraft}
                   onChange={(event) => setCommentDraft(event.target.value)}
-                  placeholder="Add an Asana comment..."
+                  placeholder={translate(
+                    'auto.components.AsanaIssueWorkspace.f60c8c4109',
+                    'Add an Asana comment...'
+                  )}
                   rows={2}
                   disabled={commentSubmitting}
                   className="min-h-10 flex-1 resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -687,7 +756,7 @@ export default function AsanaIssueWorkspace({
                   ) : (
                     <Send className="size-4" />
                   )}
-                  Comment
+                  {translate('auto.components.AsanaIssueWorkspace.1bd0e2fc2d', 'Comment')}
                 </Button>
               </div>
             </div>

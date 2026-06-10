@@ -24,6 +24,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
+import { TaskProviderShortcut } from './task-provider-shortcut'
 import { translate } from '@/i18n/i18n'
 
 export { getSetupGuideSidebarEntryReady, shouldShowSetupGuideEntry } from './SetupGuideSidebarEntry'
@@ -54,40 +55,6 @@ function HideSidebarMenu({ onHide }: { onHide: () => void }): React.JSX.Element 
         {translate('auto.components.sidebar.SidebarNav.d599269755', 'Hide from sidebar')}
       </ContextMenuItem>
     </ContextMenuContent>
-  )
-}
-
-function TaskProviderShortcut({
-  canBrowseTasks,
-  label,
-  onOpen,
-  children
-}: {
-  canBrowseTasks: boolean
-  label: string
-  onOpen: () => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  return (
-    <span
-      role={canBrowseTasks ? 'button' : undefined}
-      tabIndex={-1}
-      onClick={(e) => {
-        e.stopPropagation()
-        if (!canBrowseTasks) {
-          return
-        }
-        onOpen()
-      }}
-      className={cn(
-        'rounded p-0.5 text-muted-foreground/70',
-        canBrowseTasks ? 'transition-colors hover:text-foreground' : 'cursor-default'
-      )}
-      aria-label={canBrowseTasks ? label : undefined}
-      aria-hidden={canBrowseTasks ? undefined : true}
-    >
-      {children}
-    </span>
   )
 }
 
@@ -303,7 +270,10 @@ const SidebarNav = React.memo(function SidebarNav() {
                 {visibleTaskProviders.includes('asana') ? (
                   <TaskProviderShortcut
                     canBrowseTasks={canBrowseTasks}
-                    label="Open Asana tasks"
+                    label={translate(
+                      'auto.components.sidebar.SidebarNav.824f0a2299',
+                      'Open Asana tasks'
+                    )}
                     onOpen={() => {
                       openTaskPage({ taskSource: 'asana' })
                     }}

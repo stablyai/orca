@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import type { AsanaWorkspace } from '../../../../shared/types'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
+import { translate } from '@/i18n/i18n'
 
 type AsanaTestResult = { state: 'ok' | 'error'; error?: string }
 
@@ -109,20 +110,29 @@ export function AsanaIntegrationCard(): React.JSX.Element {
       <div className="flex items-center gap-3">
         <AsanaIcon className="size-5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1 space-y-0.5">
-          <p className="text-sm font-medium">Asana</p>
+          <p className="text-sm font-medium">
+            {translate('auto.components.settings.asana.integration.card.c85ef21457', 'Asana')}
+          </p>
           <p className="text-xs text-muted-foreground">
             {asanaStatus.connected
-              ? `${asanaWorkspaces.length} workspace${asanaWorkspaces.length === 1 ? '' : 's'} connected`
-              : 'Connect Asana with a Personal Access Token to browse, create, and link tasks.'}
+              ? translate(
+                  'auto.components.settings.asana.integration.card.6fcf15da92',
+                  '{{count}} workspace{{suffix}} connected',
+                  { count: asanaWorkspaces.length, suffix: asanaWorkspaces.length === 1 ? '' : 's' }
+                )
+              : translate(
+                  'auto.components.settings.asana.integration.card.5606735ec4',
+                  'Connect Asana with a Personal Access Token to browse, create, and link tasks.'
+                )}
           </p>
         </div>
         {asanaStatus.connected ? (
           <div className="flex shrink-0 items-center gap-1.5">
             <Button variant="outline" size="sm" onClick={openForm}>
-              Reconnect
+              {translate('auto.components.settings.asana.integration.card.b27685f5c1', 'Reconnect')}
             </Button>
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-              Connected
+              {translate('auto.components.settings.asana.integration.card.92478056f1', 'Connected')}
             </span>
           </div>
         ) : (
@@ -130,7 +140,10 @@ export function AsanaIntegrationCard(): React.JSX.Element {
             className="shrink-0 rounded-full border border-border/50 bg-muted/40 px-2.5 py-1 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             onClick={openForm}
           >
-            Connect Asana
+            {translate(
+              'auto.components.settings.asana.integration.card.ea71ac55e3',
+              'Connect Asana'
+            )}
           </button>
         )}
       </div>
@@ -140,7 +153,10 @@ export function AsanaIntegrationCard(): React.JSX.Element {
           <Input
             autoFocus
             type="password"
-            placeholder="Asana Personal Access Token"
+            placeholder={translate(
+              'auto.components.settings.asana.integration.card.48d26a9e60',
+              'Asana Personal Access Token'
+            )}
             value={apiTokenDraft}
             onChange={(e) => {
               setApiTokenDraft(e.target.value)
@@ -164,7 +180,10 @@ export function AsanaIntegrationCard(): React.JSX.Element {
               onClick={() => window.api.shell.openUrl('https://app.asana.com/0/my-apps')}
             >
               <ExternalLink className="size-3.5" />
-              Create a Personal Access Token
+              {translate(
+                'auto.components.settings.asana.integration.card.c7fb4f4eb6',
+                'Create a Personal Access Token'
+              )}
             </button>
             <div className="flex items-center gap-2">
               <Button
@@ -173,7 +192,7 @@ export function AsanaIntegrationCard(): React.JSX.Element {
                 onClick={closeForm}
                 disabled={connectState === 'connecting'}
               >
-                Cancel
+                {translate('auto.components.settings.asana.integration.card.62dff4dbad', 'Cancel')}
               </Button>
               <Button
                 variant="outline"
@@ -184,10 +203,13 @@ export function AsanaIntegrationCard(): React.JSX.Element {
                 {connectState === 'connecting' ? (
                   <>
                     <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                    Verifying…
+                    {translate(
+                      'auto.components.settings.asana.integration.card.47677169c2',
+                      'Verifying…'
+                    )}
                   </>
                 ) : (
-                  'Connect'
+                  translate('auto.components.settings.asana.integration.card.2e722b4f81', 'Connect')
                 )}
               </Button>
             </div>
@@ -214,7 +236,10 @@ export function AsanaIntegrationCard(): React.JSX.Element {
                 {testResult?.state === 'ok' ? (
                   <span className="flex shrink-0 items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
                     <CheckCircle2 className="size-3.5" />
-                    Verified
+                    {translate(
+                      'auto.components.settings.asana.integration.card.d51fefc10b',
+                      'Verified'
+                    )}
                   </span>
                 ) : null}
                 {testResult?.state === 'error' ? (
@@ -232,15 +257,22 @@ export function AsanaIntegrationCard(): React.JSX.Element {
                   {testing ? (
                     <>
                       <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                      Testing…
+                      {translate(
+                        'auto.components.settings.asana.integration.card.24e507c8bf',
+                        'Testing…'
+                      )}
                     </>
                   ) : (
-                    'Test'
+                    translate('auto.components.settings.asana.integration.card.90428fc2cc', 'Test')
                   )}
                 </Button>
                 <button
                   onClick={() => void handleDisconnect(workspace.id)}
-                  aria-label={`Disconnect ${workspace.name}`}
+                  aria-label={translate(
+                    'auto.components.settings.asana.integration.card.7fde3c624d',
+                    'Disconnect {{name}}',
+                    { name: workspace.name }
+                  )}
                   className="rounded-md p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
                 >
                   <Unlink className="size-3.5" />
@@ -250,8 +282,10 @@ export function AsanaIntegrationCard(): React.JSX.Element {
           })}
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
             <Lock className="size-3 shrink-0" />
-            Asana tokens are encrypted by the active runtime and stored locally. Reconnecting with a
-            new token replaces the stored credentials for every workspace.
+            {translate(
+              'auto.components.settings.asana.integration.card.b9c92b30a6',
+              'Asana tokens are encrypted by the active runtime and stored locally. Reconnecting with a new token replaces the stored credentials for every workspace.'
+            )}
           </p>
         </div>
       ) : null}

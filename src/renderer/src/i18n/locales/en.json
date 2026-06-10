@@ -1484,7 +1484,64 @@
         "ff90d0abc7": "Start workspace from {{value0}}",
         "fe28c9821f": "view",
         "8d1e17a3ef": "Open {{value0}} in GitHub",
-        "4ac8ff2275": "Open {{value0}} in Jira"
+        "4ac8ff2275": "Open {{value0}} in Jira",
+        "bc1074f9a4": "Asana",
+        "3f20c094d7": "Assigned",
+        "2f85fbe5d5": "All",
+        "9157504fe2": "Done",
+        "d39615c625": "Pending approval",
+        "05d6812c6b": "Approved",
+        "32880242b4": "Rejected",
+        "f34e409b2a": "Changes requested",
+        "9e417e77cb": "Completed",
+        "93d638998c": "Asana task created",
+        "519248264c": "Failed to create Asana task.",
+        "e08a96ca69": "Failed to switch Asana workspace.",
+        "05baeac422": "All Asana workspaces",
+        "d11b72edd2": "New Asana task",
+        "1a81f215d9": "Refresh Asana tasks",
+        "9a2d6b54e1": "Search Asana tasks by name",
+        "c1a9c802a4": "Clear search",
+        "a253cab9e7": "Filter Asana tasks by project",
+        "51ab088494": "All projects",
+        "b9713333b7": "Connect your Asana account",
+        "fb57b9a0e6": "Browse, edit, create, and start work from Asana tasks directly from here.",
+        "07d9af763f": "Connect Asana",
+        "0707d121a4": "Hide Asana",
+        "f58805cf0b": "Asana tasks",
+        "87577025bf": "shown",
+        "7bbe7ee232": "Task",
+        "176fccaa02": "Status",
+        "972dd6d868": "Project",
+        "38ee49efd9": "Assignee",
+        "0eaa878fe6": "Updated",
+        "10b5bb47de": "No Asana tasks found",
+        "ab69d644a6": "Try a different search.",
+        "c14cefa172": "No tasks match the selected preset.",
+        "6412e9cd97": "Start workspace",
+        "fb1893ef59": "Open in Asana",
+        "f5008427d6": "Use a Personal Access Token to browse and link Asana tasks across your workspaces.",
+        "efd0fd5b38": "Asana Personal Access Token",
+        "6b649a80e6": "Create a token in",
+        "de053ddb11": "Asana developer settings",
+        "ac11f04198": "Your token is encrypted via the OS keychain and stored locally.",
+        "fdb5289c56": "Cancel",
+        "fd91a71a62": "Verifying…",
+        "9d5129e86c": "Connect",
+        "6d0f529087": "Create a task in the selected workspace or a specific project.",
+        "b29ee75052": "Title",
+        "a193d848ad": "Short summary",
+        "de15170bf3": "Description (optional)",
+        "6cb941999d": "What's going on?",
+        "70f01de9d9": "No project",
+        "4708731ed6": "No project (workspace task)",
+        "7e48556cc4": "Unassigned",
+        "73a6473ca6": "to submit.",
+        "f0a040e827": "Creating…",
+        "5cab63cece": "Create task",
+        "85bcd0f0c7": "Start workspace from {{title}}",
+        "5d4d1dbbe3": "Open {{title}} in Asana",
+        "3b8d9385c3": "Filing in {{workspace}}"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -3304,7 +3361,8 @@
           "196c1b5362": "Open GitLab tasks",
           "0ccba862b8": "Open GitHub tasks",
           "fee535205b": "Tasks",
-          "d599269755": "Hide from sidebar"
+          "d599269755": "Hide from sidebar",
+          "824f0a2299": "Open Asana tasks"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -5422,7 +5480,9 @@
           "dd67a1b6e1": "Show GitLab in the Tasks source picker and sidebar shortcuts.",
           "7c5d7fdc20": "GitLab",
           "1db47236cd": "Show GitHub in the Tasks source picker and sidebar shortcuts.",
-          "e14063e727": "GitHub"
+          "e14063e727": "GitHub",
+          "2c43792500": "Asana",
+          "072fa0fbad": "Show Asana in the Tasks source picker and sidebar shortcuts."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -6476,7 +6536,16 @@
             "41ccade05c": "gh",
             "b79c21bd42": "github",
             "7166b9090c": "GitHub authentication via the gh CLI.",
-            "f16e41cc72": "GitHub Integration"
+            "f16e41cc72": "GitHub Integration",
+            "96833f8187": "Asana Integration",
+            "e4239b2ace": "Connect Asana with a Personal Access Token to browse and link tasks.",
+            "028ab137b0": "asana",
+            "0c0d9a1bb4": "integration",
+            "229ba34329": "personal access token",
+            "a2a1409657": "pat",
+            "953409dded": "api token",
+            "4336b898e7": "connect",
+            "144d004576": "disconnect"
           }
         },
         "jira": {
@@ -6915,7 +6984,8 @@
             "cf0e3e0c2f": "provider",
             "2ec54bee51": "tasks",
             "765f0c544d": "Choose which task providers appear in the Tasks page and sidebar shortcuts.",
-            "5b8e4aace5": "Task Providers"
+            "5b8e4aace5": "Task Providers",
+            "3eddeefe04": "asana"
           }
         },
         "terminal": {
@@ -7207,6 +7277,28 @@
         "agent-generated-tab-title-copy": {
           "19ad21615a": "Auto-generate tab titles",
           "b036c7a409": "Derive short stable tab names from the first known agent prompt. Manual renames always win."
+        },
+        "asana": {
+          "integration": {
+            "card": {
+              "c85ef21457": "Asana",
+              "5606735ec4": "Connect Asana with a Personal Access Token to browse, create, and link tasks.",
+              "b27685f5c1": "Reconnect",
+              "92478056f1": "Connected",
+              "ea71ac55e3": "Connect Asana",
+              "48d26a9e60": "Asana Personal Access Token",
+              "c7fb4f4eb6": "Create a Personal Access Token",
+              "62dff4dbad": "Cancel",
+              "47677169c2": "Verifying…",
+              "2e722b4f81": "Connect",
+              "d51fefc10b": "Verified",
+              "24e507c8bf": "Testing…",
+              "90428fc2cc": "Test",
+              "b9c92b30a6": "Asana tokens are encrypted by the active runtime and stored locally. Reconnecting with a new token replaces the stored credentials for every workspace.",
+              "6fcf15da92": "{{count}} workspace{{suffix}} connected",
+              "7fde3c624d": "Disconnect {{name}}"
+            }
+          }
         }
       },
       "right": {
@@ -9965,6 +10057,36 @@
           "8490e5d36a": "Confirm",
           "56f5c60e0c": "Cancel"
         }
+      },
+      "AsanaIssueWorkspace": {
+        "3c481bf8d7": "Failed to update Asana task.",
+        "c76cc7f483": "Failed to add comment.",
+        "9bd2fa9f44": "Open in Asana",
+        "45f81355bc": "Copy URL",
+        "47bdb1b01a": "Copy suggested branch name",
+        "fc73c32b3c": "Copy prompt",
+        "d714b420a0": "Preview, edit, and start work from the selected task.",
+        "80593bc32c": "Start workspace",
+        "c8ea562d51": "Close Asana task preview",
+        "70508a18ed": "Close",
+        "64974917e5": "Approve",
+        "570fa07349": "Request changes",
+        "c13fceb092": "Reject",
+        "98229f40ea": "Completed",
+        "dad2b1d01f": "Mark complete",
+        "b3b8e19ea8": "Due",
+        "826e6443f8": "Unassigned",
+        "073516facf": "Title",
+        "1fd599c26c": "Description",
+        "312fe2188b": "No description provided.",
+        "fd28d604ba": "Save description",
+        "d79323a259": "Comments",
+        "e43b2f6250": "Retry",
+        "58eb8f7b03": "No comments yet.",
+        "f60c8c4109": "Add an Asana comment...",
+        "1bd0e2fc2d": "Comment",
+        "43e26f1a9b": "{{label}} copied",
+        "c1be5501dd": "Failed to copy {{label}}"
       }
     },
     "i18n": {

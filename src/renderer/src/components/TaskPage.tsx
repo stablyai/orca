@@ -347,7 +347,7 @@ const SOURCE_OPTIONS: SourceOption[] = [
   },
   {
     id: 'asana',
-    label: 'Asana',
+    label: translate('auto.components.TaskPage.bc1074f9a4', 'Asana'),
     Icon: ({ className }) => <AsanaIcon className={className} />
   }
 ]
@@ -366,9 +366,9 @@ type AsanaPresetId = 'assigned' | 'all' | 'done'
 type AsanaPreset = { id: AsanaPresetId; label: string }
 
 const ASANA_PRESETS: AsanaPreset[] = [
-  { id: 'assigned', label: 'Assigned' },
-  { id: 'all', label: 'All' },
-  { id: 'done', label: 'Done' }
+  { id: 'assigned', label: translate('auto.components.TaskPage.3f20c094d7', 'Assigned') },
+  { id: 'all', label: translate('auto.components.TaskPage.2f85fbe5d5', 'All') },
+  { id: 'done', label: translate('auto.components.TaskPage.9157504fe2', 'Done') }
 ]
 
 // Why: Radix Select forbids an empty-string item value, so use a sentinel for
@@ -435,16 +435,19 @@ const ASANA_MUTED_BADGE = 'border-border/50 bg-muted/40 text-muted-foreground'
 
 const ASANA_APPROVAL_BADGES: Record<AsanaApprovalStatus, { label: string; className: string }> = {
   pending: {
-    label: 'Pending approval',
+    label: translate('auto.components.TaskPage.d39615c625', 'Pending approval'),
     className: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-200'
   },
-  approved: { label: 'Approved', className: ASANA_GREEN_BADGE },
+  approved: {
+    label: translate('auto.components.TaskPage.05d6812c6b', 'Approved'),
+    className: ASANA_GREEN_BADGE
+  },
   rejected: {
-    label: 'Rejected',
+    label: translate('auto.components.TaskPage.32880242b4', 'Rejected'),
     className: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-200'
   },
   changes_requested: {
-    label: 'Changes requested',
+    label: translate('auto.components.TaskPage.f34e409b2a', 'Changes requested'),
     className: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
   }
 }
@@ -456,7 +459,10 @@ function getAsanaTaskStatusBadge(task: AsanaTask): { label: string; className: s
     return ASANA_APPROVAL_BADGES[task.approvalStatus]
   }
   return task.completed
-    ? { label: 'Completed', className: ASANA_GREEN_BADGE }
+    ? {
+        label: translate('auto.components.TaskPage.9e417e77cb', 'Completed'),
+        className: ASANA_GREEN_BADGE
+      }
     : { label: task.section ?? 'Open', className: ASANA_MUTED_BADGE }
 }
 
@@ -6990,12 +6996,16 @@ export default function TaskPage(): React.JSX.Element {
         setNewAsanaTaskNotes('')
         setNewAsanaTaskAssigneeGid(null)
         setAsanaRefreshNonce((n) => n + 1)
-        toast.success('Asana task created')
+        toast.success(translate('auto.components.TaskPage.93d638998c', 'Asana task created'))
       } else {
         toast.error(result.error)
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to create Asana task.')
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : translate('auto.components.TaskPage.519248264c', 'Failed to create Asana task.')
+      )
     } finally {
       setNewAsanaTaskSubmitting(false)
     }
@@ -7210,7 +7220,12 @@ export default function TaskPage(): React.JSX.Element {
                             setAsanaError(null)
                             setAsanaLoading(true)
                             void selectAsanaWorkspace(value).catch(() => {
-                              toast.error('Failed to switch Asana workspace.')
+                              toast.error(
+                                translate(
+                                  'auto.components.TaskPage.e08a96ca69',
+                                  'Failed to switch Asana workspace.'
+                                )
+                              )
                             })
                           }}
                         >
@@ -7218,7 +7233,12 @@ export default function TaskPage(): React.JSX.Element {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="all">All Asana workspaces</SelectItem>
+                            <SelectItem value="all">
+                              {translate(
+                                'auto.components.TaskPage.05baeac422',
+                                'All Asana workspaces'
+                              )}
+                            </SelectItem>
                             {asanaWorkspaces.map((workspace) => (
                               <SelectItem key={workspace.id} value={workspace.id}>
                                 {workspace.name}
@@ -7998,7 +8018,10 @@ export default function TaskPage(): React.JSX.Element {
                                 setNewAsanaTaskAssigneeGid(null)
                                 setNewAsanaTaskOpen(true)
                               }}
-                              aria-label="New Asana task"
+                              aria-label={translate(
+                                'auto.components.TaskPage.d11b72edd2',
+                                'New Asana task'
+                              )}
                               className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               {asanaProjectsLoading ? (
@@ -8009,7 +8032,7 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            New Asana task
+                            {translate('auto.components.TaskPage.d11b72edd2', 'New Asana task')}
                           </TooltipContent>
                         </Tooltip>
                         <Tooltip>
@@ -8019,7 +8042,10 @@ export default function TaskPage(): React.JSX.Element {
                               size="icon"
                               onClick={() => setAsanaRefreshNonce((n) => n + 1)}
                               disabled={asanaLoading}
-                              aria-label="Refresh Asana tasks"
+                              aria-label={translate(
+                                'auto.components.TaskPage.1a81f215d9',
+                                'Refresh Asana tasks'
+                              )}
                               className="border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
                               {asanaLoading ? (
@@ -8030,7 +8056,10 @@ export default function TaskPage(): React.JSX.Element {
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            Refresh Asana tasks
+                            {translate(
+                              'auto.components.TaskPage.1a81f215d9',
+                              'Refresh Asana tasks'
+                            )}
                           </TooltipContent>
                         </Tooltip>
                       </div>
@@ -8059,13 +8088,19 @@ export default function TaskPage(): React.JSX.Element {
                               setAsanaRefreshNonce((n) => n + 1)
                             }
                           }}
-                          placeholder="Search Asana tasks by name"
+                          placeholder={translate(
+                            'auto.components.TaskPage.9a2d6b54e1',
+                            'Search Asana tasks by name'
+                          )}
                           className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
                         />
                         {asanaSearchInput ? (
                           <button
                             type="button"
-                            aria-label="Clear search"
+                            aria-label={translate(
+                              'auto.components.TaskPage.c1a9c802a4',
+                              'Clear search'
+                            )}
                             onClick={() => {
                               setAsanaSearchInput('')
                               setAppliedAsanaSearch('')
@@ -8090,13 +8125,23 @@ export default function TaskPage(): React.JSX.Element {
                           disabled={asanaProjectsLoading || appliedAsanaSearch.trim().length > 0}
                         >
                           <SelectTrigger
-                            aria-label="Filter Asana tasks by project"
+                            aria-label={translate(
+                              'auto.components.TaskPage.a253cab9e7',
+                              'Filter Asana tasks by project'
+                            )}
                             className="h-8 w-[200px] shrink-0 rounded-md border-border/50 bg-background text-xs"
                           >
-                            <SelectValue placeholder="All projects" />
+                            <SelectValue
+                              placeholder={translate(
+                                'auto.components.TaskPage.51ab088494',
+                                'All projects'
+                              )}
+                            />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={ASANA_ALL_PROJECTS}>All projects</SelectItem>
+                            <SelectItem value={ASANA_ALL_PROJECTS}>
+                              {translate('auto.components.TaskPage.51ab088494', 'All projects')}
+                            </SelectItem>
                             {availableAsanaProjects.map((project) => (
                               <SelectItem key={project.gid} value={project.gid}>
                                 {project.name}
@@ -9321,9 +9366,14 @@ export default function TaskPage(): React.JSX.Element {
             ) : !asanaStatus.connected ? (
               <div className="mt-4 flex flex-col items-center justify-center rounded-md border border-border/50 bg-muted/50 px-6 py-14 text-center shadow-sm">
                 <AsanaIcon className="mb-4 size-8 text-muted-foreground/60" />
-                <p className="text-base font-medium text-foreground">Connect your Asana account</p>
+                <p className="text-base font-medium text-foreground">
+                  {translate('auto.components.TaskPage.b9713333b7', 'Connect your Asana account')}
+                </p>
                 <p className="mt-2 max-w-sm text-sm text-muted-foreground">
-                  Browse, edit, create, and start work from Asana tasks directly from here.
+                  {translate(
+                    'auto.components.TaskPage.fb57b9a0e6',
+                    'Browse, edit, create, and start work from Asana tasks directly from here.'
+                  )}
                 </p>
                 <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                   <Button
@@ -9334,10 +9384,10 @@ export default function TaskPage(): React.JSX.Element {
                       setAsanaConnectOpen(true)
                     }}
                   >
-                    Connect Asana
+                    {translate('auto.components.TaskPage.07d9af763f', 'Connect Asana')}
                   </Button>
                   <Button variant="outline" onClick={() => hideTaskSource('asana', 'Asana')}>
-                    Hide Asana
+                    {translate('auto.components.TaskPage.0707d121a4', 'Hide Asana')}
                   </Button>
                 </div>
               </div>
@@ -9345,19 +9395,24 @@ export default function TaskPage(): React.JSX.Element {
               <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
                 <div className="flex h-10 flex-none items-center justify-between gap-3 border-b border-border/50 bg-muted/35 px-3">
                   <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    Asana tasks
+                    {translate('auto.components.TaskPage.f58805cf0b', 'Asana tasks')}
                   </div>
                   <div className="shrink-0 text-[11px] text-muted-foreground">
-                    {displayedAsanaTasks.length} shown
+                    {displayedAsanaTasks.length}{' '}
+                    {translate('auto.components.TaskPage.87577025bf', 'shown')}
                   </div>
                 </div>
 
                 <div className="grid h-8 flex-none grid-cols-[minmax(0,1fr)_120px_140px_96px] items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground max-md:!hidden lg:grid-cols-[minmax(0,1.4fr)_120px_148px_136px_96px_64px]">
-                  <span>Task</span>
-                  <span>Status</span>
-                  <span className="block max-lg:!hidden">Project</span>
-                  <span className="block max-lg:!hidden">Assignee</span>
-                  <span>Updated</span>
+                  <span>{translate('auto.components.TaskPage.7bbe7ee232', 'Task')}</span>
+                  <span>{translate('auto.components.TaskPage.176fccaa02', 'Status')}</span>
+                  <span className="block max-lg:!hidden">
+                    {translate('auto.components.TaskPage.972dd6d868', 'Project')}
+                  </span>
+                  <span className="block max-lg:!hidden">
+                    {translate('auto.components.TaskPage.38ee49efd9', 'Assignee')}
+                  </span>
+                  <span>{translate('auto.components.TaskPage.0eaa878fe6', 'Updated')}</span>
                   <span className="max-lg:!hidden" />
                 </div>
 
@@ -9384,11 +9439,19 @@ export default function TaskPage(): React.JSX.Element {
 
                   {!asanaLoading && asanaTasks.length === 0 && !asanaError ? (
                     <div className="px-4 py-10 text-center">
-                      <p className="text-sm font-medium text-foreground">No Asana tasks found</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {translate('auto.components.TaskPage.10b5bb47de', 'No Asana tasks found')}
+                      </p>
                       <p className="mt-2 text-sm text-muted-foreground">
                         {asanaSearchInput
-                          ? 'Try a different search.'
-                          : 'No tasks match the selected preset.'}
+                          ? translate(
+                              'auto.components.TaskPage.ab69d644a6',
+                              'Try a different search.'
+                            )
+                          : translate(
+                              'auto.components.TaskPage.c14cefa172',
+                              'No tasks match the selected preset.'
+                            )}
                       </p>
                     </div>
                   ) : null}
@@ -9488,13 +9551,20 @@ export default function TaskPage(): React.JSX.Element {
                                     event.stopPropagation()
                                     handleUseAsanaItem(task)
                                   }}
-                                  aria-label={`Start workspace from ${task.title}`}
+                                  aria-label={translate(
+                                    'auto.components.TaskPage.85bcd0f0c7',
+                                    'Start workspace from {{title}}',
+                                    { title: task.title }
+                                  )}
                                 >
                                   <ArrowRight className="size-3.5" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" sideOffset={6}>
-                                Start workspace
+                                {translate(
+                                  'auto.components.TaskPage.6412e9cd97',
+                                  'Start workspace'
+                                )}
                               </TooltipContent>
                             </Tooltip>
                             <Tooltip>
@@ -9506,13 +9576,17 @@ export default function TaskPage(): React.JSX.Element {
                                     event.stopPropagation()
                                     window.api.shell.openUrl(task.url)
                                   }}
-                                  aria-label={`Open ${task.title} in Asana`}
+                                  aria-label={translate(
+                                    'auto.components.TaskPage.5d4d1dbbe3',
+                                    'Open {{title}} in Asana',
+                                    { title: task.title }
+                                  )}
                                 >
                                   <ExternalLink className="size-3.5" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent side="bottom" sideOffset={6}>
-                                Open in Asana
+                                {translate('auto.components.TaskPage.fb1893ef59', 'Open in Asana')}
                               </TooltipContent>
                             </Tooltip>
                           </div>
@@ -12152,16 +12226,24 @@ export default function TaskPage(): React.JSX.Element {
           }}
         >
           <DialogHeader className="gap-3">
-            <DialogTitle className="leading-tight">Connect Asana</DialogTitle>
+            <DialogTitle className="leading-tight">
+              {translate('auto.components.TaskPage.07d9af763f', 'Connect Asana')}
+            </DialogTitle>
             <DialogDescription>
-              Use a Personal Access Token to browse and link Asana tasks across your workspaces.
+              {translate(
+                'auto.components.TaskPage.f5008427d6',
+                'Use a Personal Access Token to browse and link Asana tasks across your workspaces.'
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <Input
               autoFocus
               type="password"
-              placeholder="Asana Personal Access Token"
+              placeholder={translate(
+                'auto.components.TaskPage.efd0fd5b38',
+                'Asana Personal Access Token'
+              )}
               value={asanaApiTokenDraft}
               onChange={(e) => {
                 setAsanaApiTokenDraft(e.target.value)
@@ -12176,18 +12258,21 @@ export default function TaskPage(): React.JSX.Element {
               <p className="text-xs text-destructive">{asanaConnectError}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              Create a token in{' '}
+              {translate('auto.components.TaskPage.6b649a80e6', 'Create a token in')}{' '}
               <button
                 className="text-primary underline-offset-2 hover:underline"
                 onClick={() => window.api.shell.openUrl('https://app.asana.com/0/my-apps')}
               >
-                Asana developer settings
+                {translate('auto.components.TaskPage.de053ddb11', 'Asana developer settings')}
               </button>
               .
             </p>
             <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 shrink-0" />
-              Your token is encrypted via the OS keychain and stored locally.
+              {translate(
+                'auto.components.TaskPage.ac11f04198',
+                'Your token is encrypted via the OS keychain and stored locally.'
+              )}
             </p>
           </div>
           <DialogFooter>
@@ -12196,7 +12281,7 @@ export default function TaskPage(): React.JSX.Element {
               onClick={() => setAsanaConnectOpen(false)}
               disabled={asanaConnectState === 'connecting'}
             >
-              Cancel
+              {translate('auto.components.TaskPage.fdb5289c56', 'Cancel')}
             </Button>
             <Button
               onClick={() => void handleAsanaConnect()}
@@ -12205,10 +12290,10 @@ export default function TaskPage(): React.JSX.Element {
               {asanaConnectState === 'connecting' ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Verifying…
+                  {translate('auto.components.TaskPage.fd91a71a62', 'Verifying…')}
                 </>
               ) : (
-                'Connect'
+                translate('auto.components.TaskPage.9d5129e86c', 'Connect')
               )}
             </Button>
           </DialogFooter>
@@ -12233,22 +12318,30 @@ export default function TaskPage(): React.JSX.Element {
           }}
         >
           <DialogHeader>
-            <DialogTitle>New Asana task</DialogTitle>
+            <DialogTitle>
+              {translate('auto.components.TaskPage.d11b72edd2', 'New Asana task')}
+            </DialogTitle>
             <DialogDescription>
               {selectedAsanaWorkspaceId && selectedAsanaWorkspaceId !== 'all'
-                ? `Filing in ${
-                    asanaWorkspaces.find((w) => w.id === selectedAsanaWorkspaceId)?.name ??
-                    'this workspace'
-                  }`
-                : 'Create a task in the selected workspace or a specific project.'}
+                ? translate('auto.components.TaskPage.3b8d9385c3', 'Filing in {{workspace}}', {
+                    workspace:
+                      asanaWorkspaces.find((w) => w.id === selectedAsanaWorkspaceId)?.name ??
+                      'this workspace'
+                  })
+                : translate(
+                    'auto.components.TaskPage.6d0f529087',
+                    'Create a task in the selected workspace or a specific project.'
+                  )}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[11px] font-medium text-muted-foreground">Title</label>
+              <label className="text-[11px] font-medium text-muted-foreground">
+                {translate('auto.components.TaskPage.b29ee75052', 'Title')}
+              </label>
               <Input
                 autoFocus
-                placeholder="Short summary"
+                placeholder={translate('auto.components.TaskPage.a193d848ad', 'Short summary')}
                 value={newAsanaTaskTitle}
                 onChange={(e) => setNewAsanaTaskTitle(e.target.value)}
                 onKeyDown={(e) => {
@@ -12262,10 +12355,10 @@ export default function TaskPage(): React.JSX.Element {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                Description (optional)
+                {translate('auto.components.TaskPage.de15170bf3', 'Description (optional)')}
               </label>
               <textarea
-                placeholder="What's going on?"
+                placeholder={translate('auto.components.TaskPage.6cb941999d', "What's going on?")}
                 value={newAsanaTaskNotes}
                 onChange={(e) => setNewAsanaTaskNotes(e.target.value)}
                 disabled={newAsanaTaskSubmitting}
@@ -12276,7 +12369,9 @@ export default function TaskPage(): React.JSX.Element {
             <div className="grid gap-3 sm:grid-cols-2">
               {availableAsanaProjects.length > 0 ? (
                 <div className="flex min-w-0 flex-col gap-1">
-                  <label className="text-[11px] font-medium text-muted-foreground">Project</label>
+                  <label className="text-[11px] font-medium text-muted-foreground">
+                    {translate('auto.components.TaskPage.972dd6d868', 'Project')}
+                  </label>
                   <Select
                     value={newAsanaTaskProjectId ?? 'none'}
                     onValueChange={(value) =>
@@ -12285,10 +12380,17 @@ export default function TaskPage(): React.JSX.Element {
                     disabled={newAsanaTaskSubmitting}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="No project" />
+                      <SelectValue
+                        placeholder={translate('auto.components.TaskPage.70f01de9d9', 'No project')}
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">No project (workspace task)</SelectItem>
+                      <SelectItem value="none">
+                        {translate(
+                          'auto.components.TaskPage.4708731ed6',
+                          'No project (workspace task)'
+                        )}
+                      </SelectItem>
                       {availableAsanaProjects.map((project) => (
                         <SelectItem key={project.gid} value={project.gid}>
                           {project.name}
@@ -12300,7 +12402,9 @@ export default function TaskPage(): React.JSX.Element {
               ) : null}
               {availableAsanaUsers.length > 0 ? (
                 <div className="flex min-w-0 flex-col gap-1">
-                  <label className="text-[11px] font-medium text-muted-foreground">Assignee</label>
+                  <label className="text-[11px] font-medium text-muted-foreground">
+                    {translate('auto.components.TaskPage.38ee49efd9', 'Assignee')}
+                  </label>
                   <Select
                     value={newAsanaTaskAssigneeGid ?? 'none'}
                     onValueChange={(value) =>
@@ -12309,10 +12413,14 @@ export default function TaskPage(): React.JSX.Element {
                     disabled={newAsanaTaskSubmitting}
                   >
                     <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Unassigned" />
+                      <SelectValue
+                        placeholder={translate('auto.components.TaskPage.7e48556cc4', 'Unassigned')}
+                      />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="none">Unassigned</SelectItem>
+                      <SelectItem value="none">
+                        {translate('auto.components.TaskPage.7e48556cc4', 'Unassigned')}
+                      </SelectItem>
                       {availableAsanaUsers.map((user) => (
                         <SelectItem key={user.gid} value={user.gid}>
                           <span className="flex min-w-0 items-center gap-2">
@@ -12326,7 +12434,9 @@ export default function TaskPage(): React.JSX.Element {
                 </div>
               ) : null}
             </div>
-            <p className="text-[10px] text-muted-foreground">{submitShortcutLabel} to submit.</p>
+            <p className="text-[10px] text-muted-foreground">
+              {submitShortcutLabel} {translate('auto.components.TaskPage.73a6473ca6', 'to submit.')}
+            </p>
           </div>
           <DialogFooter>
             <Button
@@ -12334,7 +12444,7 @@ export default function TaskPage(): React.JSX.Element {
               onClick={() => setNewAsanaTaskOpen(false)}
               disabled={newAsanaTaskSubmitting}
             >
-              Cancel
+              {translate('auto.components.TaskPage.fdb5289c56', 'Cancel')}
             </Button>
             <Button
               onClick={() => void handleCreateAsanaTask()}
@@ -12343,10 +12453,10 @@ export default function TaskPage(): React.JSX.Element {
               {newAsanaTaskSubmitting ? (
                 <>
                   <LoaderCircle className="size-4 animate-spin" />
-                  Creating…
+                  {translate('auto.components.TaskPage.f0a040e827', 'Creating…')}
                 </>
               ) : (
-                'Create task'
+                translate('auto.components.TaskPage.5cab63cece', 'Create task')
               )}
             </Button>
           </DialogFooter>

@@ -63,8 +63,11 @@ const TASK_PROVIDER_OPTIONS: readonly {
   },
   {
     id: 'asana',
-    label: 'Asana',
-    description: 'Show Asana in the Tasks source picker and sidebar shortcuts.',
+    label: translate('auto.components.settings.TasksPane.2c43792500', 'Asana'),
+    description: translate(
+      'auto.components.settings.TasksPane.072fa0fbad',
+      'Show Asana in the Tasks source picker and sidebar shortcuts.'
+    ),
     Icon: ({ className }) => <AsanaIcon className={className} />
   }
 ]
