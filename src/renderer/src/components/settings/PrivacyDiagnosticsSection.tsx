@@ -57,12 +57,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
     try {
       await window.api.diagnostics.openTraceFolder()
     } catch {
-      toast.error(
-        translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.b85fe972cd',
-          'Could not open trace folder'
-        )
-      )
+      toast.error(translate("auto.components.settings.PrivacyDiagnosticsSection.b85fe972cd", "Could not open trace folder"))
     }
   }, [])
 
@@ -77,20 +72,10 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       setPreviewOpened(false)
       setTicketId(null)
       await refreshStatus()
-      toast.success(
-        translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.32d767f84d',
-          'Local trace files cleared'
-        )
-      )
+      toast.success(translate("auto.components.settings.PrivacyDiagnosticsSection.32d767f84d", "Local trace files cleared"))
     } catch {
       if (mountedRef.current) {
-        toast.error(
-          translate(
-            'auto.components.settings.PrivacyDiagnosticsSection.9666a05580',
-            'Could not clear trace files'
-          )
-        )
+        toast.error(translate("auto.components.settings.PrivacyDiagnosticsSection.9666a05580", "Could not clear trace files"))
       }
     }
   }, [refreshStatus])
@@ -109,12 +94,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       setBundle(nextBundle)
       setPreviewOpened(false)
       setTicketId(null)
-      toast.success(
-        translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.a2b3505c77',
-          'Diagnostic bundle preview created'
-        )
-      )
+      toast.success(translate("auto.components.settings.PrivacyDiagnosticsSection.a2b3505c77", "Diagnostic bundle preview created"))
     } catch (error) {
       if (mountedRef.current) {
         toast.error(getDiagnosticsErrorMessage(error, 'Could not create diagnostic bundle'))
@@ -137,12 +117,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
         return
       }
       setPreviewOpened(true)
-      toast.success(
-        translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.db3228e01a',
-          'Diagnostic bundle preview opened'
-        )
-      )
+      toast.success(translate("auto.components.settings.PrivacyDiagnosticsSection.db3228e01a", "Diagnostic bundle preview opened"))
     } catch (error) {
       if (mountedRef.current) {
         toast.error(getDiagnosticsErrorMessage(error, 'Could not open diagnostic bundle preview'))
@@ -168,12 +143,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       setBundle(null)
       setPreviewOpened(false)
       setTicketId(upload.ticketId)
-      toast.success(
-        translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.49fc6c80e8',
-          'Diagnostic bundle uploaded'
-        )
-      )
+      toast.success(translate("auto.components.settings.PrivacyDiagnosticsSection.49fc6c80e8", "Diagnostic bundle uploaded"))
     } catch (error) {
       if (mountedRef.current) {
         toast.error(getDiagnosticsErrorMessage(error, 'Could not upload diagnostic bundle'))
@@ -198,12 +168,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       activeBundleSubmissionIdRef.current = null
       setBundle(null)
       setPreviewOpened(false)
-      toast.success(
-        translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.860bca9ec9',
-          'Diagnostic bundle preview discarded'
-        )
-      )
+      toast.success(translate("auto.components.settings.PrivacyDiagnosticsSection.860bca9ec9", "Diagnostic bundle preview discarded"))
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
@@ -227,20 +192,10 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       if (!mountedRef.current) {
         return
       }
-      toast.success(
-        translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.13eb2c65a1',
-          'Diagnostic ticket copied'
-        )
-      )
+      toast.success(translate("auto.components.settings.PrivacyDiagnosticsSection.13eb2c65a1", "Diagnostic ticket copied"))
     } catch {
       if (mountedRef.current) {
-        toast.error(
-          translate(
-            'auto.components.settings.PrivacyDiagnosticsSection.7a4944595b',
-            'Could not copy diagnostic ticket'
-          )
-        )
+        toast.error(translate("auto.components.settings.PrivacyDiagnosticsSection.7a4944595b", "Could not copy diagnostic ticket"))
       }
     } finally {
       if (mountedRef.current) {
@@ -260,12 +215,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
         return
       }
       setTicketId(null)
-      toast.success(
-        translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.c18cbe45df',
-          'Uploaded diagnostic bundle deleted'
-        )
-      )
+      toast.success(translate("auto.components.settings.PrivacyDiagnosticsSection.c18cbe45df", "Uploaded diagnostic bundle deleted"))
     } catch (error) {
       if (mountedRef.current) {
         toast.error(getDiagnosticsErrorMessage(error, 'Could not delete diagnostic bundle'))
@@ -285,10 +235,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       <Separator />
       <Section
         icon={<FileText className="size-4" />}
-        title={translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.af2fc82cde',
-          'Diagnostic bundle'
-        )}
+        title={translate("auto.components.settings.PrivacyDiagnosticsSection.af2fc82cde", "Diagnostic bundle")}
         description={getDiagnosticBundleDescription({ bundle, previewOpened, ticketId })}
       >
         <PrivacyDiagnosticBundleControls
@@ -314,34 +261,17 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       <Separator />
       <Section
         icon={<Folder className="size-4" />}
-        title={translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.fe81a52cb2',
-          'Open trace folder'
-        )}
-        description={translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.5ff57fc986',
-          'Reveals {{value0}} in your file manager.',
-          { value0: status?.traceFilePath || 'the trace folder' }
-        )}
+        title={translate("auto.components.settings.PrivacyDiagnosticsSection.fe81a52cb2", "Open trace folder")}
+        description={translate("auto.components.settings.PrivacyDiagnosticsSection.5ff57fc986", "Reveals {{value0}} in your file manager.", { value0: status?.traceFilePath || 'the trace folder' })}
       >
         <Button variant="outline" size="sm" onClick={() => void handleOpenFolder()}>
-          {translate(
-            'auto.components.settings.PrivacyDiagnosticsSection.fe81a52cb2',
-            'Open trace folder'
-          )}
-        </Button>
+          {translate("auto.components.settings.PrivacyDiagnosticsSection.fe81a52cb2", "Open trace folder")}</Button>
       </Section>
       <Separator />
       <Section
         icon={<Trash2 className="size-4" />}
-        title={translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.4ff08ff3a7',
-          'Clear local traces'
-        )}
-        description={translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.9ca08a9f8f',
-          'Deletes every rotated trace file on this machine.'
-        )}
+        title={translate("auto.components.settings.PrivacyDiagnosticsSection.4ff08ff3a7", "Clear local traces")}
+        description={translate("auto.components.settings.PrivacyDiagnosticsSection.9ca08a9f8f", "Deletes every rotated trace file on this machine.")}
       >
         <Button
           variant="outline"
@@ -349,25 +279,15 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
           disabled={!status?.localFileEnabled}
           onClick={() => void handleClear()}
         >
-          {translate(
-            'auto.components.settings.PrivacyDiagnosticsSection.4ff08ff3a7',
-            'Clear local traces'
-          )}
-        </Button>
+          {translate("auto.components.settings.PrivacyDiagnosticsSection.4ff08ff3a7", "Clear local traces")}</Button>
       </Section>
       <Separator />
       <Section
         icon={<Globe className="size-4" />}
-        title={translate(
-          'auto.components.settings.PrivacyDiagnosticsSection.acc7c66e6e',
-          'OTLP export'
-        )}
+        title={translate("auto.components.settings.PrivacyDiagnosticsSection.acc7c66e6e", "OTLP export")}
         description={
           status?.otlpStatus ??
-          translate(
-            'auto.components.settings.PrivacyDiagnosticsSection.7c9d9820b6',
-            'Set ORCA_OTLP_TRACES_URL to point Orca at your own OpenTelemetry collector.'
-          )
+          translate("auto.components.settings.PrivacyDiagnosticsSection.7c9d9820b6", "Set ORCA_OTLP_TRACES_URL to point Orca at your own OpenTelemetry collector.")
         }
       >
         <span
@@ -377,12 +297,7 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
               : 'text-xs text-muted-foreground'
           }
         >
-          {status?.otlpEnabled
-            ? translate('auto.components.settings.PrivacyDiagnosticsSection.46ea3fb2d0', 'Enabled')
-            : translate(
-                'auto.components.settings.PrivacyDiagnosticsSection.1fb00a8995',
-                'Disabled'
-              )}
+          {status?.otlpEnabled ? translate("auto.components.settings.PrivacyDiagnosticsSection.46ea3fb2d0", "Enabled") : translate("auto.components.settings.PrivacyDiagnosticsSection.1fb00a8995", "Disabled")}
         </span>
       </Section>
     </>
