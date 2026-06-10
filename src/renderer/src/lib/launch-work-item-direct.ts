@@ -9,10 +9,8 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { getWorkspaceIntentName, getWorkspaceSeedName, isGitLabIssueUrl } from '@/lib/new-workspace'
-import {
-  getLaunchableWorkItemDraftContent,
-  type LinkedWorkItemContext
-} from '@/lib/linked-work-item-context'
+import { getLaunchableWorkItemDraftContent } from '@/lib/linked-work-item-context'
+import { isOrcaCliAvailableForLaunch } from '@/lib/orca-cli-launch-availability'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getConnectionId } from '@/lib/connection-context'
 import type {
@@ -47,7 +45,8 @@ export type LaunchableWorkItem = {
    *  `type: 'issue'` / `number: null` to reuse the GitHub draft-paste flow,
    *  so this field is the only signal that the worktree is Linear-linked. */
   linearIdentifier?: string
-  linkedContext?: LinkedWorkItemContext
+  linearWorkspaceId?: string
+  linearOrganizationUrlKey?: string
 }
 
 // Why: bracketed paste markers and ready-wait grace timing live in
@@ -87,8 +86,14 @@ export type LaunchWorkItemDirectArgs = {
   launchPlatform?: NodeJS.Platform
 }
 
-function getDirectDraftContent(item: LaunchableWorkItem): string {
-  return getLaunchableWorkItemDraftContent(item)
+async function getDirectDraftContent(
+  item: LaunchableWorkItem,
+  repoConnectionId: string | null
+): Promise<string> {
+  const cliAvailable = item.linearIdentifier
+    ? await isOrcaCliAvailableForLaunch({ remote: repoConnectionId !== null })
+    : false
+  return getLaunchableWorkItemDraftContent({ ...item, cliAvailable })
 }
 
 /**
@@ -198,7 +203,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
   let effectiveAgent: TuiAgent | null = null
   let draftLaunchedNatively = false
-  const draftContent = getDirectDraftContent(item)
+  const draftContent = await getDirectDraftContent(item, repoConnectionId)
   let startupPlanFailed = false
   try {
     const result = await store.createWorktree(
@@ -217,7 +222,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       resolvedBranchNameOverride,
       undefined,
       item.type === 'mr' && item.number ? item.number : undefined,
-      item.type === 'issue' && item.number && isGitLabIssueUrl(item.url) ? item.number : undefined
+      item.type === 'issue' && item.number && isGitLabIssueUrl(item.url) ? item.number : undefined,
+      undefined,
+      undefined,
+      undefined,
+      item.linearWorkspaceId,
+      item.linearOrganizationUrlKey
     )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path

@@ -85,7 +85,8 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
       'computer',
       'emulator',
       'note',
-      'diagnostics'
+      'diagnostics',
+      'linear'
     ].includes(commandPath[0])
   ) {
     return false
@@ -123,7 +124,8 @@ export function isCommandGroup(commandPath: string[]): boolean {
         'emulator',
         'agent',
         'environment',
-        'diagnostics'
+        'diagnostics',
+        'linear'
       ].includes(commandPath[0])) ||
     (commandPath.length === 2 && commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
     (commandPath.length === 2 &&

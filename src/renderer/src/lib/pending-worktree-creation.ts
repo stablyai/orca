@@ -36,6 +36,8 @@ export type WorktreeCreationRequest = {
   pushTarget?: GitPushTarget
   agent: TuiAgent | null
   linkedLinearIssue?: string
+  linkedLinearIssueWorkspaceId?: string | null
+  linkedLinearIssueOrganizationUrlKey?: string | null
   branchNameOverride?: string
   workspaceStatus?: WorkspaceStatus
   linkedGitLabMR?: number

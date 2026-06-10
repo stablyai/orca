@@ -6247,8 +6247,8 @@ export default function TaskPage(): React.JSX.Element {
   // strings (e.g. "ENG-123") so we use 0 as a placeholder number since the
   // provider-generic work item shape still expects numeric issue metadata.
   const openComposerForLinearItem = useCallback(
-    (issue: LinearIssue, renderedText?: string): void => {
-      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue, renderedText)
+    (issue: LinearIssue): void => {
+      const linkedWorkItem = buildLinearIssueLinkedWorkItem(issue)
       openModal('new-workspace-composer', {
         linkedWorkItem,
         prefilledName: getLinearIssueWorkspaceName(issue),
@@ -6259,12 +6259,12 @@ export default function TaskPage(): React.JSX.Element {
   )
 
   const handleUseLinearItem = useCallback(
-    (issue: LinearIssue, renderedText?: string): void => {
+    (issue: LinearIssue): void => {
       // Why: same rationale as handleUseWorkItem — open the New Workspace
       // dialog pre-filled rather than yolo-creating the worktree, so the
       // user can confirm name / agent / setup before the worktree lands in
       // the sidebar. Telemetry attribution flows via openComposerForLinearItem.
-      openComposerForLinearItem(issue, renderedText)
+      openComposerForLinearItem(issue)
     },
     [openComposerForLinearItem]
   )

@@ -237,6 +237,11 @@ describe('launchWorkItemDirect', () => {
       'feature/fix',
       undefined,
       undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined
     )
   })
@@ -271,6 +276,11 @@ describe('launchWorkItemDirect', () => {
       undefined,
       undefined,
       'ENG-42',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
       undefined,
       undefined,
       undefined,
