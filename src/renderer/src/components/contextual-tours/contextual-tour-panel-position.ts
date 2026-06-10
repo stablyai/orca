@@ -121,14 +121,18 @@ function getUnclampedPanelPosition(args: {
   }
 }
 
-export function getContextualTourPanelCssPosition(args: {
-  position: ContextualTourPanelPosition
-  panelHostRect?: Pick<DOMRect, 'left' | 'top'> | null
-}): Pick<ContextualTourPanelPosition, 'left' | 'top' | 'arrowOffset'> {
-  const { position, panelHostRect } = args
-  const left = panelHostRect ? position.left - panelHostRect.left : position.left
-  const top = panelHostRect ? position.top - panelHostRect.top : position.top
-  return { left, top, arrowOffset: position.arrowOffset }
+export function getContextualTourTargetRectInHost(
+  targetRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>,
+  hostRect: Pick<DOMRect, 'left' | 'top'>
+): Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'> {
+  return {
+    left: targetRect.left - hostRect.left,
+    right: targetRect.right - hostRect.left,
+    top: targetRect.top - hostRect.top,
+    bottom: targetRect.bottom - hostRect.top,
+    width: targetRect.width,
+    height: targetRect.height
+  }
 }
 
 function clampNumber(value: number, min: number, max: number): number {

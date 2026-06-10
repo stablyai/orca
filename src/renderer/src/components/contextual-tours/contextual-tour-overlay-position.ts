@@ -3,7 +3,7 @@ import type { ContextualTourStepPlacement } from '../../../../shared/contextual-
 import type { ContextualTourPanelPlacement } from './contextual-tour-panel-position'
 import {
   clampContextualTourPanelPosition,
-  getContextualTourPanelCssPosition
+  getContextualTourTargetRectInHost
 } from './contextual-tour-panel-position'
 
 const PANEL_FALLBACK_SIZE = { width: 304, height: 172 }
@@ -24,22 +24,24 @@ export function getContextualTourOverlayPanelPosition(args: {
   const panel = panelRect
     ? { width: panelRect.width, height: panelRect.height }
     : PANEL_FALLBACK_SIZE
+  // Why: hosted panels portal into dialog/sheet content whose overflow clips
+  // them, so position and clamp in host space — viewport clamping can park the
+  // panel in the clipped region outside the host and leave only a sliver visible.
+  const hostRect = args.panelHost?.getBoundingClientRect()
   const clamped = clampContextualTourPanelPosition({
-    targetRect: args.targetRect,
-    viewport: args.viewport,
+    targetRect: hostRect
+      ? getContextualTourTargetRectInHost(args.targetRect, hostRect)
+      : args.targetRect,
+    viewport: hostRect ? { width: hostRect.width, height: hostRect.height } : args.viewport,
     panel,
     preferredPlacement: args.preferredPlacement
-  })
-  const cssPosition = getContextualTourPanelCssPosition({
-    position: clamped,
-    panelHostRect: args.panelHost?.getBoundingClientRect()
   })
   return {
     panelPlacement: clamped.placement,
     panelPosition: {
-      left: cssPosition.left,
-      top: cssPosition.top,
-      '--contextual-tour-arrow-offset': `${cssPosition.arrowOffset}px`
+      left: clamped.left,
+      top: clamped.top,
+      '--contextual-tour-arrow-offset': `${clamped.arrowOffset}px`
     }
   }
 }
