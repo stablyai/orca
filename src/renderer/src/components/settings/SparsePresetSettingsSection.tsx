@@ -1,55 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Bookmark, LoaderCircle, Pencil, Plus, Save, Trash2, X } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import type { SparsePreset } from '../../../../shared/types'
 import { useAppStore } from '../../store'
-import { cn } from '@/lib/utils'
 import { parseSparsePresetDirectories } from '@/lib/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
-import { Input } from '../ui/input'
-import { Label } from '../ui/label'
 import { getSparsePresetOperationErrorMessage } from './sparse-preset-operation-error'
-import { formatSparsePresetUpdatedAt } from './sparse-preset-date'
+import { SparsePresetDraftEditor, type SparsePresetDraft } from './sparse-preset-draft-editor'
+import { SparsePresetSettingsRow } from './sparse-preset-settings-row'
 import { translate } from '@/i18n/i18n'
 
 type SparsePresetSettingsSectionProps = {
   repoId: string
-}
-
-type SparsePresetDraft = {
-  mode: 'new' | 'edit'
-  presetId?: string
-  name: string
-  directoriesText: string
-}
-
-function SparsePresetDirectoryPreview({
-  directories
-}: {
-  directories: string[]
-}): React.JSX.Element {
-  const visibleDirectories = directories.slice(0, 6)
-  const hiddenCount = directories.length - visibleDirectories.length
-
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {visibleDirectories.map((directory) => (
-        <span
-          key={directory}
-          className="min-w-0 max-w-full truncate rounded-md border border-border/50 bg-muted/35 px-2 py-1 font-mono text-[11px] text-foreground/80"
-          title={directory}
-        >
-          {directory}
-        </span>
-      ))}
-      {hiddenCount > 0 ? (
-        <span className="rounded-md border border-border/50 bg-muted/35 px-2 py-1 text-[11px] text-muted-foreground">
-          +{hiddenCount}{' '}
-          {translate('auto.components.settings.SparsePresetSettingsSection.8b64731aaf', 'more')}
-        </span>
-      ) : null}
-    </div>
-  )
 }
 
 export function SparsePresetSettingsSection({
@@ -190,142 +152,6 @@ export function SparsePresetSettingsSection({
     }
   }
 
-  const renderDraftEditor = (): React.JSX.Element | null => {
-    if (!draft) {
-      return null
-    }
-
-    return (
-      <div className="rounded-xl border border-border/60 bg-background/80 p-4 shadow-sm">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <h5 className="text-sm font-semibold">
-              {draft.mode === 'new'
-                ? translate(
-                    'auto.components.settings.SparsePresetSettingsSection.d7565029a9',
-                    'New Preset'
-                  )
-                : translate(
-                    'auto.components.settings.SparsePresetSettingsSection.623b4cf910',
-                    'Edit Preset'
-                  )}
-            </h5>
-            <p className="text-xs text-muted-foreground">
-              {translate(
-                'auto.components.settings.SparsePresetSettingsSection.694cc55ecb',
-                'Saved directories are used when creating sparse worktrees for this repository.'
-              )}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={translate(
-              'auto.components.settings.SparsePresetSettingsSection.b9922ec194',
-              'Cancel preset edit'
-            )}
-            onClick={() => setDraft(null)}
-            disabled={submitting}
-          >
-            <X className="size-3.5" />
-          </Button>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-          <div className="space-y-2">
-            <Label htmlFor="sparse-preset-settings-name">
-              {translate('auto.components.settings.SparsePresetSettingsSection.a6fcdd9e3c', 'Name')}
-            </Label>
-            <Input
-              id="sparse-preset-settings-name"
-              value={draft.name}
-              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-              placeholder={translate(
-                'auto.components.settings.SparsePresetSettingsSection.3b6f1abd3e',
-                'e.g. web-only'
-              )}
-              maxLength={80}
-              autoComplete="off"
-              spellCheck={false}
-              className="h-9 text-sm"
-            />
-            {nameError ? <p className="text-xs text-destructive">{nameError}</p> : null}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="sparse-preset-settings-directories">
-              {translate(
-                'auto.components.settings.SparsePresetSettingsSection.caf33029cc',
-                'Directories'
-              )}
-            </Label>
-            <textarea
-              id="sparse-preset-settings-directories"
-              value={draft.directoriesText}
-              onChange={(event) => setDraft({ ...draft, directoriesText: event.target.value })}
-              placeholder={translate(
-                'auto.components.settings.SparsePresetSettingsSection.fde7ff2cc3',
-                'packages/web shared/ui'
-              )}
-              rows={5}
-              spellCheck={false}
-              className="w-full min-w-0 resize-y rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none transition-[color,box-shadow] placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            />
-            {parsedDirectories?.error ? (
-              <p className="text-xs text-destructive">{parsedDirectories.error}</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {parsedDirectories?.directories.length === 1
-                  ? translate(
-                      'auto.components.settings.SparsePresetSettingsSection.b532b9c17d',
-                      '1 directory will be saved.'
-                    )
-                  : translate(
-                      'auto.components.settings.SparsePresetSettingsSection.3dfa765ca7',
-                      '{{value0}} directories will be saved.',
-                      { value0: parsedDirectories?.directories.length ?? 0 }
-                    )}{' '}
-                {translate(
-                  'auto.components.settings.SparsePresetSettingsSection.c240a16f25',
-                  'Use repo-relative paths like packages/web or apps/api.'
-                )}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-4 flex justify-end gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setDraft(null)}
-            disabled={submitting}
-          >
-            {translate('auto.components.settings.SparsePresetSettingsSection.2d7d45e991', 'Cancel')}
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void handleSaveDraft()}
-            disabled={!canSaveDraft}
-          >
-            {submitting ? (
-              <LoaderCircle className="size-3.5 animate-spin" />
-            ) : (
-              <Save className="size-3.5" />
-            )}
-            {translate(
-              'auto.components.settings.SparsePresetSettingsSection.a05bc9183f',
-              'Save Preset'
-            )}
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <section className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -367,7 +193,17 @@ export function SparsePresetSettingsSection({
         </div>
       ) : null}
 
-      {renderDraftEditor()}
+      {draft ? (
+        <SparsePresetDraftEditor
+          draft={draft}
+          setDraft={setDraft}
+          nameError={nameError}
+          parsedDirectories={parsedDirectories}
+          canSaveDraft={canSaveDraft}
+          submitting={submitting}
+          onSave={() => void handleSaveDraft()}
+        />
+      ) : null}
 
       {presets === undefined ? (
         <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
@@ -390,108 +226,18 @@ export function SparsePresetSettingsSection({
         </div>
       ) : (
         <div className="space-y-2">
-          {sortedPresets.map((preset) => {
-            // Why: users can already have locally persisted presets from older
-            // builds or hand-edited state; a bad timestamp must not blank Settings.
-            const updatedLabel = formatSparsePresetUpdatedAt(preset.updatedAt)
-            const isDeleting = deletingPresetId === preset.id
-
-            return (
-              <div
-                key={preset.id}
-                className="rounded-xl border border-border/50 bg-background/70 px-4 py-3 shadow-sm"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-muted/30">
-                    <Bookmark className="size-4 text-muted-foreground" />
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <h4 className="min-w-0 truncate text-sm font-medium">{preset.name}</h4>
-                      <span className="text-[11px] text-muted-foreground">
-                        {preset.directories.length === 1
-                          ? translate(
-                              'auto.components.settings.SparsePresetSettingsSection.9d3c087fc0',
-                              '1 directory'
-                            )
-                          : translate(
-                              'auto.components.settings.SparsePresetSettingsSection.d7b3f0bdc3',
-                              '{{value0}} directories',
-                              { value0: preset.directories.length }
-                            )}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {updatedLabel
-                          ? translate(
-                              'auto.components.settings.SparsePresetSettingsSection.568d7e1e49',
-                              'Updated {{value0}}',
-                              { value0: updatedLabel }
-                            )
-                          : translate(
-                              'auto.components.settings.SparsePresetSettingsSection.ba9ad2d4cd',
-                              'Updated date unknown'
-                            )}
-                      </span>
-                    </div>
-                    <SparsePresetDirectoryPreview directories={preset.directories} />
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={translate(
-                        'auto.components.settings.SparsePresetSettingsSection.fe1f2c6572',
-                        'Edit {{value0}}',
-                        { value0: preset.name }
-                      )}
-                      onClick={() => startEditPreset(preset)}
-                      disabled={submitting || deletingPresetId !== null}
-                    >
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={confirmingDeleteId === preset.id ? 'destructive' : 'ghost'}
-                      size="sm"
-                      aria-label={translate(
-                        'auto.components.settings.SparsePresetSettingsSection.2ef2b2674b',
-                        'Delete {{value0}}',
-                        { value0: preset.name }
-                      )}
-                      onClick={() => void handleDeletePreset(preset)}
-                      onBlur={() => setConfirmingDeleteId(null)}
-                      disabled={submitting || (deletingPresetId !== null && !isDeleting)}
-                      className={cn(
-                        'w-[6.5rem] px-2 text-xs',
-                        confirmingDeleteId !== preset.id && 'text-muted-foreground'
-                      )}
-                    >
-                      {isDeleting ? (
-                        <LoaderCircle className="size-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-3.5" />
-                      )}
-                      {isDeleting
-                        ? translate(
-                            'auto.components.settings.SparsePresetSettingsSection.a7bcf206b1',
-                            'Deleting'
-                          )
-                        : confirmingDeleteId === preset.id
-                          ? translate(
-                              'auto.components.settings.SparsePresetSettingsSection.755c6a1a0d',
-                              'Confirm'
-                            )
-                          : translate(
-                              'auto.components.settings.SparsePresetSettingsSection.6fa754d20f',
-                              'Delete'
-                            )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          {sortedPresets.map((preset) => (
+            <SparsePresetSettingsRow
+              key={preset.id}
+              preset={preset}
+              confirmingDeleteId={confirmingDeleteId}
+              deletingPresetId={deletingPresetId}
+              submitting={submitting}
+              onEdit={startEditPreset}
+              onDelete={handleDeletePreset}
+              onClearDeleteConfirm={() => setConfirmingDeleteId(null)}
+            />
+          ))}
         </div>
       )}
     </section>
