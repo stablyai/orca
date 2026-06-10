@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/types'
 import { useAppStore } from '../../store'
 import {
+  canBrowseProjectWorktreeFolder,
   getRepositoryPaneSearchEntries,
   matchesRepositoryIdentitySearch,
   RepositoryPane
@@ -33,6 +34,7 @@ describe('RepositoryPane search entries', () => {
     expect(matchesSettingsSearch('local settings scripts', entries)).toBe(true)
     expect(matchesSettingsSearch('../worktrees', entries)).toBe(true)
     expect(matchesSettingsSearch('worktree path', entries)).toBe(true)
+    expect(matchesSettingsSearch('worktree folder', entries)).toBe(true)
   })
 
   it('matches project identity searches on display name and path only', () => {
@@ -74,5 +76,66 @@ describe('RepositoryPane search entries', () => {
         settingsSearchInputQuery: ''
       })
     }
+  })
+
+  it('renders the worktree folder setting for Git repos but not folder repos', () => {
+    const gitHtml = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(RepositoryPane, {
+          repo,
+          yamlHooks: null,
+          hasHooksFile: false,
+          hooksInspectionReady: true,
+          mayNeedUpdate: false,
+          updateRepo: vi.fn(),
+          removeProject: vi.fn()
+        })
+      )
+    )
+    const folderHtml = renderToStaticMarkup(
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(RepositoryPane, {
+          repo: { ...repo, kind: 'folder' },
+          yamlHooks: null,
+          hasHooksFile: false,
+          hooksInspectionReady: true,
+          mayNeedUpdate: false,
+          updateRepo: vi.fn(),
+          removeProject: vi.fn()
+        })
+      )
+    )
+
+    expect(gitHtml).toContain('Worktree Folder')
+    expect(gitHtml).toContain('lucide-folder-open')
+    expect(folderHtml).not.toContain('Worktree Folder')
+  })
+
+  it('hides the worktree folder Browse button for SSH and remote runtime projects', () => {
+    const render = (project: Repo): string =>
+      renderToStaticMarkup(
+        React.createElement(
+          TooltipProvider,
+          null,
+          React.createElement(RepositoryPane, {
+            repo: project,
+            yamlHooks: null,
+            hasHooksFile: false,
+            hooksInspectionReady: true,
+            mayNeedUpdate: false,
+            updateRepo: vi.fn(),
+            removeProject: vi.fn()
+          })
+        )
+      )
+
+    expect(render({ ...repo, connectionId: 'ssh-1' })).not.toContain('lucide-folder-open')
+
+    expect(canBrowseProjectWorktreeFolder(repo, 'env-1')).toBe(false)
+    expect(canBrowseProjectWorktreeFolder(repo, '  ')).toBe(true)
   })
 })

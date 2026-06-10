@@ -1,4 +1,5 @@
-import { basename, resolve, relative, isAbsolute, posix, sep, win32 } from 'path'
+import { realpathSync } from 'fs'
+import { posix, win32 } from 'path'
 import type {
   GitWorktreeInfo,
   GlobalSettings,
@@ -12,9 +13,10 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getWslHome, parseWslPath } from '../wsl'
+import { normalizeRepoWorktreeFolderPath } from '../repo-worktree-folder-path'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
-type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
+type WorktreeLayoutRepo = Pick<Repo, 'path' | 'kind' | 'worktreeBasePath' | 'worktreeFolderPath'>
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -65,11 +67,12 @@ export function sanitizeWorktreeDisplayName(input: string): string | undefined {
  * Ensure a target path is within the workspace directory (prevent path traversal).
  */
 export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {
-  const resolvedWorkspaceDir = resolve(workspaceDir)
-  const resolvedTargetPath = resolve(targetPath)
-  const rel = relative(resolvedWorkspaceDir, resolvedTargetPath)
+  const pathOps = getWorktreePathOps(targetPath, workspaceDir)
+  const resolvedWorkspaceDir = pathOps.resolve(workspaceDir)
+  const resolvedTargetPath = pathOps.resolve(targetPath)
+  const rel = pathOps.relative(resolvedWorkspaceDir, resolvedTargetPath)
 
-  if (isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
+  if (pathOps.isAbsolute(rel) || rel === '..' || rel.startsWith(`..${pathOps.sep}`)) {
     throw new Error('Invalid worktree path')
   }
 
@@ -94,6 +97,76 @@ export function computeBranchName(
   return sanitizedName
 }
 
+export type EffectiveWorktreeLayout = OrcaWorkspaceLayout & {
+  source: 'project' | 'wsl-default' | 'global'
+}
+
+export type RemoteWorktreeLayout = OrcaWorkspaceLayout & {
+  source: 'project' | 'ssh-sibling'
+}
+
+export function resolveEffectiveWorktreeLayout(
+  repo: Partial<WorktreeLayoutRepo> & Pick<Repo, 'path'>,
+  settings: Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
+): EffectiveWorktreeLayout {
+  const projectPath = normalizeRepoWorktreeFolderPath(repo.worktreeFolderPath, repo)
+  if (projectPath) {
+    return { path: projectPath, nestWorkspaces: false, source: 'project' }
+  }
+
+  const basePath = getRepoWorktreeBasePath(repo)
+  if (basePath) {
+    return {
+      path: computeWorkspaceRoot(repo.path, { workspaceDir: basePath }),
+      nestWorkspaces: settings.nestWorkspaces,
+      source: 'project'
+    }
+  }
+
+  const wsl = parseWslPath(repo.path)
+  if (wsl) {
+    const wslHome = getWslHome(wsl.distro)
+    if (wslHome) {
+      return {
+        path: win32.join(wslHome, 'orca', 'workspaces'),
+        nestWorkspaces: settings.nestWorkspaces,
+        source: 'wsl-default'
+      }
+    }
+  }
+
+  return {
+    path: settings.workspaceDir,
+    nestWorkspaces: settings.nestWorkspaces,
+    source: 'global'
+  }
+}
+
+export function resolveRemoteWorktreeLayout(
+  repo: Partial<WorktreeLayoutRepo> & Pick<Repo, 'path'>
+): RemoteWorktreeLayout {
+  const projectPath = normalizeRepoWorktreeFolderPath(repo.worktreeFolderPath, repo)
+  if (projectPath) {
+    return { path: projectPath, nestWorkspaces: false, source: 'project' }
+  }
+
+  const basePath = getRepoWorktreeBasePath(repo)
+  if (basePath) {
+    return {
+      path: resolveWorkspaceDirForRepo(repo.path, basePath),
+      nestWorkspaces: false,
+      source: 'project'
+    }
+  }
+
+  const pathOps = getWorktreePathOps(repo.path)
+  return {
+    path: pathOps.dirname(repo.path),
+    nestWorkspaces: false,
+    source: 'ssh-sibling'
+  }
+}
+
 /**
  * Compute the filesystem path where the worktree directory will be created.
  *
@@ -107,10 +180,14 @@ export function computeBranchName(
 export function computeWorktreePath(
   sanitizedName: string,
   repoPath: string,
-  settings: WorktreePathSettings
+  settings: { nestWorkspaces: boolean; workspaceDir: string },
+  options: { useWslDefault?: boolean } = {}
 ): string {
-  const workspaceRoot = computeWorkspaceRoot(repoPath, settings)
-  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+  const workspaceRoot =
+    options.useWslDefault === false
+      ? resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
+      : computeWorkspaceRoot(repoPath, settings)
+  const pathOps = getWorktreePathOps(repoPath, workspaceRoot)
 
   if (settings.nestWorkspaces) {
     const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
@@ -134,26 +211,8 @@ export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir:
   return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
 }
 
-export function computeRemoteWorktreePath(
-  sanitizedName: string,
-  repoPath: string,
-  settings: WorktreePathSettings,
-  options: { useConfiguredAbsolutePath?: boolean } = {}
-): string {
-  if (
-    options.useConfiguredAbsolutePath ||
-    isWorkspaceDirRelativeToRepo(repoPath, settings.workspaceDir)
-  ) {
-    return computeWorktreePath(sanitizedName, repoPath, settings)
-  }
-  // Why: absolute global workspaceDir values belong to the desktop machine.
-  // SSH worktrees keep the legacy repo-sibling root unless a repo-specific
-  // path opts into a remote-host location.
-  return getRuntimePathOps(repoPath, repoPath).join(repoPath, '..', sanitizedName)
-}
-
 export function getWorktreePathSettings(
-  repo: WorktreeBasePathRepo,
+  repo: Partial<WorktreeLayoutRepo> & Pick<Repo, 'path'>,
   settings: WorktreePathSettings
 ): WorktreePathSettings {
   return {
@@ -163,9 +222,13 @@ export function getWorktreePathSettings(
 }
 
 export function getWorktreeCreationLayout(
-  repo: WorktreeBasePathRepo,
+  repo: Partial<WorktreeLayoutRepo> & Pick<Repo, 'path'>,
   settings: WorktreePathSettings
 ): OrcaWorkspaceLayout {
+  const folderPath = normalizeRepoWorktreeFolderPath(repo.worktreeFolderPath, repo)
+  if (folderPath) {
+    return { path: folderPath, nestWorkspaces: false }
+  }
   return {
     path: getEffectiveWorktreeBasePath(repo, settings),
     nestWorkspaces: settings.nestWorkspaces
@@ -174,6 +237,55 @@ export function getWorktreeCreationLayout(
 
 export function hasRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): boolean {
   return getRepoWorktreeBasePath(repo) !== undefined
+}
+
+export function computeWorktreePathForLayout(
+  sanitizedName: string,
+  repoPath: string,
+  layout: Pick<OrcaWorkspaceLayout, 'path' | 'nestWorkspaces'>
+): string {
+  return computeWorktreePath(
+    sanitizedName,
+    repoPath,
+    { workspaceDir: layout.path, nestWorkspaces: layout.nestWorkspaces },
+    { useWslDefault: false }
+  )
+}
+
+export function computeRemoteWorktreePath(
+  sanitizedName: string,
+  repo: Partial<WorktreeLayoutRepo> & Pick<Repo, 'path'>
+): string
+export function computeRemoteWorktreePath(
+  sanitizedName: string,
+  repoPath: string,
+  settings: WorktreePathSettings,
+  options?: { useConfiguredAbsolutePath?: boolean }
+): string
+export function computeRemoteWorktreePath(
+  sanitizedName: string,
+  repoOrPath: (Partial<WorktreeLayoutRepo> & Pick<Repo, 'path'>) | string,
+  settings?: WorktreePathSettings,
+  options: { useConfiguredAbsolutePath?: boolean } = {}
+): string {
+  if (typeof repoOrPath !== 'string') {
+    const layout = resolveRemoteWorktreeLayout(repoOrPath)
+    return computeWorktreePathForLayout(sanitizedName, repoOrPath.path, layout)
+  }
+  if (
+    !settings ||
+    options.useConfiguredAbsolutePath ||
+    isWorkspaceDirRelativeToRepo(repoOrPath, settings.workspaceDir)
+  ) {
+    if (!settings) {
+      return getWorktreePathOps(repoOrPath).join(repoOrPath, '..', sanitizedName)
+    }
+    return computeWorktreePath(sanitizedName, repoOrPath, settings)
+  }
+  // Why: absolute global workspaceDir values belong to the desktop machine.
+  // SSH worktrees keep the legacy repo-sibling root unless a repo-specific
+  // path opts into a remote-host location.
+  return getWorktreePathOps(repoOrPath, repoOrPath).join(repoOrPath, '..', sanitizedName)
 }
 
 export function areWorktreePathsEqual(
@@ -190,9 +302,25 @@ export function areWorktreePathsEqual(
     // create spuriously fails until the next full reload repopulates state.
     return left.toLowerCase() === right.toLowerCase()
   }
-  const left = normalizePosixWorktreePathForComparison(leftPath, platform)
-  const right = normalizePosixWorktreePathForComparison(rightPath, platform)
+  const left = normalizePosixWorktreePathForComparison(
+    realpathExistingPosixPath(leftPath),
+    platform
+  )
+  const right = normalizePosixWorktreePathForComparison(
+    realpathExistingPosixPath(rightPath),
+    platform
+  )
   return left === right
+}
+
+function realpathExistingPosixPath(pathValue: string): string {
+  try {
+    // Why: git worktree list reports canonical paths on macOS, where /var is
+    // a symlink to /private/var. Match the path Git returns after creation.
+    return realpathSync(pathValue)
+  } catch {
+    return pathValue
+  }
 }
 
 function looksLikeWindowsPath(pathValue: string): boolean {
@@ -219,7 +347,7 @@ function getRuntimePathOps(
   repoPath: string,
   workspaceDir: string
 ): Pick<typeof posix, 'basename' | 'isAbsolute' | 'join' | 'normalize'> {
-  return looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(workspaceDir) ? win32 : posix
+  return getWorktreePathOps(repoPath, workspaceDir)
 }
 
 function resolveWorkspaceDirForRepo(repoPath: string, workspaceDir: string): string {
@@ -234,9 +362,13 @@ function isWorkspaceDirRelativeToRepo(repoPath: string, workspaceDir: string): b
 }
 
 function getEffectiveWorktreeBasePath(
-  repo: WorktreeBasePathRepo,
+  repo: Partial<WorktreeLayoutRepo> & Pick<Repo, 'path'>,
   settings: WorktreePathSettings
 ): string {
+  const folderPath = normalizeRepoWorktreeFolderPath(repo.worktreeFolderPath, repo)
+  if (folderPath) {
+    return folderPath
+  }
   return getRepoWorktreeBasePath(repo) ?? settings.workspaceDir
 }
 
@@ -250,6 +382,10 @@ function shouldMirrorWorkspaceDirInsideWsl(repoPath: string, workspaceDir: strin
     return false
   }
   return !isWslUncPath(workspaceDir)
+}
+
+function getWorktreePathOps(...paths: string[]) {
+  return paths.some(looksLikeWindowsPath) ? win32 : posix
 }
 
 /**
@@ -285,7 +421,11 @@ export function mergeWorktree(
     isBare: git.isBare,
     ...(git.isSparse === true ? { isSparse: true } : {}),
     isMainWorktree: git.isMainWorktree,
-    displayName: meta?.displayName || branchShort || defaultDisplayName || basename(git.path),
+    displayName:
+      meta?.displayName ||
+      branchShort ||
+      defaultDisplayName ||
+      getWorktreePathOps(git.path).basename(git.path),
     comment: meta?.comment || '',
     linkedIssue: meta?.linkedIssue ?? null,
     linkedPR: meta?.linkedPR ?? null,

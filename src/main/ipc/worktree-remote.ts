@@ -58,11 +58,9 @@ import {
   computeBranchName,
   computeWorktreePath,
   computeRemoteWorktreePath,
-  computeWorkspaceRoot,
   ensurePathWithinWorkspace,
-  getWorktreeCreationLayout,
-  getWorktreePathSettings,
-  hasRepoWorktreeBasePath,
+  resolveEffectiveWorktreeLayout,
+  resolveRemoteWorktreeLayout,
   shouldSetDisplayName,
   mergeWorktree,
   areWorktreePathsEqual
@@ -1153,7 +1151,6 @@ export async function createRemoteWorktree(
   const fsProvider = getSshFilesystemProvider(repo.connectionId!)
 
   const settings = store.getSettings()
-  const worktreePathSettings = getWorktreePathSettings(repo, settings)
   let effectiveRequestedName = args.name
   const sanitizedName = sanitizeWorktreeName(args.name)
   let effectiveSanitizedName = sanitizedName
@@ -1174,9 +1171,8 @@ export async function createRemoteWorktree(
     username
   )
 
-  let remotePath = computeRemoteWorktreePath(sanitizedName, repo.path, worktreePathSettings, {
-    useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
-  })
+  const remoteLayout = resolveRemoteWorktreeLayout(repo)
+  let remotePath = computeRemoteWorktreePath(sanitizedName, repo)
 
   // Determine base branch
   // Why: previously fell back to a hardcoded 'origin/main' when
@@ -1215,14 +1211,7 @@ export async function createRemoteWorktree(
         : args.name.trim()
           ? `${args.name}-${suffix}`
           : effectiveSanitizedName
-    remotePath = computeRemoteWorktreePath(
-      effectiveSanitizedName,
-      repo.path,
-      worktreePathSettings,
-      {
-        useConfiguredAbsolutePath: hasRepoWorktreeBasePath(repo)
-      }
-    )
+    remotePath = computeRemoteWorktreePath(effectiveSanitizedName, repo)
     if (!(await remotePathExists(fsProvider, remotePath))) {
       remotePathResolved = true
       break
@@ -1426,7 +1415,10 @@ export async function createRemoteWorktree(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: 'ssh',
-    orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+    orcaCreationWorkspaceLayout: {
+      path: remoteLayout.path,
+      nestWorkspaces: remoteLayout.nestWorkspaces
+    },
     baseRef: baseBranch,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
@@ -1529,7 +1521,9 @@ export async function createLocalWorktree(
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
   const settings = store.getSettings()
-  const worktreePathSettings = getWorktreePathSettings(repo, settings)
+  // Why: Store.updateRepo mutates repo objects in place; an in-flight create
+  // must keep using the layout that was current when the handler started.
+  const worktreeLayout = resolveEffectiveWorktreeLayout(repo, settings)
 
   const username = getGitUsername(repo.path)
   const requestedName = args.name
@@ -1591,8 +1585,6 @@ export async function createLocalWorktree(
       .catch(() => undefined)
     emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
   }
-  const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
-
   // Why: this validation does not depend on remote refs, so it can overlap a
   // required remote-tracking base refresh.
   const primarySetupScript = getEffectiveHooks(repo)?.scripts.setup
@@ -1723,8 +1715,16 @@ export async function createLocalWorktree(
     }
 
     worktreePath = ensurePathWithinWorkspace(
-      computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
-      workspaceRoot
+      computeWorktreePath(
+        effectiveSanitizedName,
+        repo.path,
+        {
+          workspaceDir: worktreeLayout.path,
+          nestWorkspaces: worktreeLayout.nestWorkspaces
+        },
+        { useWslDefault: false }
+      ),
+      worktreeLayout.path
     )
     if (existsSync(worktreePath)) {
       continue
@@ -1919,7 +1919,10 @@ export async function createLocalWorktree(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: 'desktop',
-    orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+    orcaCreationWorkspaceLayout: {
+      path: worktreeLayout.path,
+      nestWorkspaces: worktreeLayout.nestWorkspaces
+    },
     baseRef: baseBranch,
     ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
     ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),

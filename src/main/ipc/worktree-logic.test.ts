@@ -2,6 +2,8 @@
 single setup-free pure-logic module, and splitting them would make the related
 edge cases harder to audit together. */
 import { join, resolve } from 'path'
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync } from 'fs'
+import { tmpdir } from 'os'
 import { describe, expect, it } from 'vitest'
 import {
   sanitizeWorktreeName,
@@ -19,7 +21,8 @@ import {
   formatWorktreeRemovalError,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
-  areWorktreePathsEqual
+  areWorktreePathsEqual,
+  resolveEffectiveWorktreeLayout
 } from './worktree-logic'
 
 describe('sanitizeWorktreeName', () => {
@@ -252,6 +255,40 @@ describe('computeWorktreePath', () => {
   })
 })
 
+describe('effective worktree layouts', () => {
+  it('uses a flat project override ahead of the global nested layout', () => {
+    const layout = resolveEffectiveWorktreeLayout(
+      {
+        path: '/repos/my-project',
+        worktreeFolderPath: '/project-worktrees'
+      },
+      { nestWorkspaces: true, workspaceDir: '/global-worktrees' }
+    )
+
+    expect(layout).toEqual({
+      path: '/project-worktrees',
+      nestWorkspaces: false,
+      source: 'project'
+    })
+    expect(
+      computeWorktreePath('feature', '/repos/my-project', {
+        workspaceDir: layout.path,
+        nestWorkspaces: layout.nestWorkspaces
+      })
+    ).toBe(join('/project-worktrees', 'feature'))
+  })
+
+  it('keeps SSH defaults as repo siblings and overrides as flat roots', () => {
+    expect(computeRemoteWorktreePath('feature', { path: '/remote/repo' })).toBe('/remote/feature')
+    expect(
+      computeRemoteWorktreePath('feature', {
+        path: 'C:\\remote\\repo',
+        worktreeFolderPath: 'D:\\worktrees'
+      })
+    ).toBe('D:\\worktrees\\feature')
+  })
+})
+
 describe('areWorktreePathsEqual', () => {
   it('treats Windows slash and casing differences as the same path', () => {
     expect(
@@ -275,6 +312,35 @@ describe('areWorktreePathsEqual', () => {
         'darwin'
       )
     ).toBe(true)
+  })
+
+  it('treats existing POSIX symlink aliases as the same path', () => {
+    if (process.platform === 'win32') {
+      return
+    }
+
+    const root = mkdtempSync(join(tmpdir(), 'orca-worktree-path-equal-'))
+    try {
+      const realRoot = join(root, 'real')
+      const aliasRoot = join(root, 'alias')
+      mkdirSync(join(realRoot, 'created-worktree'), { recursive: true })
+      symlinkSync(realRoot, aliasRoot, 'dir')
+
+      expect(
+        areWorktreePathsEqual(
+          join(aliasRoot, 'created-worktree'),
+          join(realRoot, 'created-worktree'),
+          'darwin'
+        )
+      ).toBe(true)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+        return
+      }
+      throw error
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 

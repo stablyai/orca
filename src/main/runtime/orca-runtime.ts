@@ -442,14 +442,12 @@ import { AgentDetector } from '../stats/agent-detector'
 import {
   computeBranchName,
   computeWorktreePath,
-  computeWorkspaceRoot,
   ensurePathWithinWorkspace,
   formatWorktreeRemovalError,
-  getWorktreeCreationLayout,
-  getWorktreePathSettings,
   isOrphanCompatiblePreflightError,
   isOrphanedWorktreeError,
   mergeWorktree,
+  resolveEffectiveWorktreeLayout,
   sanitizeWorktreeName,
   shouldSetDisplayName,
   areWorktreePathsEqual
@@ -6981,6 +6979,7 @@ export class OrcaRuntimeService {
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
+        | 'worktreeFolderPath'
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -6989,24 +6988,31 @@ export class OrcaRuntimeService {
         | 'projectGroupId'
         | 'projectGroupOrder'
       >
-    > & { sourceControlAi?: Repo['sourceControlAi'] | null }
+    > & { sourceControlAi?: Repo['sourceControlAi'] | null; worktreeFolderPath?: string | null }
   ): Promise<Repo> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
-    const sanitizedUpdates = omitUndefinedProperties(updates)
-    if ('worktreeBasePath' in updates && updates.worktreeBasePath === undefined) {
-      sanitizedUpdates.worktreeBasePath = undefined
+    const repoUpdates = { ...updates }
+    if ('worktreeFolderPath' in repoUpdates && repoUpdates.worktreeFolderPath === null) {
+      repoUpdates.worktreeFolderPath = undefined
     }
-    if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
-      sanitizedUpdates.sourceControlAi = null
+    const compactUpdates = omitUndefinedProperties(repoUpdates)
+    if ('worktreeBasePath' in repoUpdates && repoUpdates.worktreeBasePath === undefined) {
+      compactUpdates.worktreeBasePath = undefined
     }
-    const updated = this.store.updateRepo(repo.id, sanitizedUpdates)
+    if ('worktreeFolderPath' in repoUpdates && repoUpdates.worktreeFolderPath === undefined) {
+      compactUpdates.worktreeFolderPath = undefined
+    }
+    if ('sourceControlAi' in repoUpdates && repoUpdates.sourceControlAi === null) {
+      compactUpdates.sourceControlAi = null
+    }
+    const updated = this.store.updateRepo(repo.id, compactUpdates)
     if (!updated) {
       throw new Error('repo_not_found')
     }
-    if ('worktreeBasePath' in updates) {
+    if ('worktreeBasePath' in repoUpdates || 'worktreeFolderPath' in repoUpdates) {
       invalidateAuthorizedRootsCache()
     }
     this.invalidateResolvedWorktreeCache()
@@ -8935,6 +8941,12 @@ export class OrcaRuntimeService {
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const createSettings = this.store.getSettings()
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
+    // Why: Store.updateRepo mutates repo objects in place; local Git creates
+    // must keep the project-folder decision made when this request started.
+    const localWorktreeLayout =
+      !isFolderRepo(repo) && !repo.connectionId
+        ? resolveEffectiveWorktreeLayout(repo, createSettings)
+        : null
     const requestedAgentEnabled =
       requestedAgent !== undefined
         ? isTuiAgentEnabled(requestedAgent, createSettings.disabledTuiAgents)
@@ -9086,7 +9098,6 @@ export class OrcaRuntimeService {
       }
     }
     const settings = createSettings
-    const worktreePathSettings = getWorktreePathSettings(repo, settings)
     let effectiveRequestedName = args.name
     const requestedDisplayName = args.displayName?.trim() || undefined
     const sanitizedName = sanitizeWorktreeName(args.name)
@@ -9153,10 +9164,7 @@ export class OrcaRuntimeService {
       }
     }
 
-    const workspaceRoot = computeWorkspaceRoot(repo.path, worktreePathSettings)
-    // Why: CLI-managed WSL worktrees live under ~/orca/workspaces inside the
-    // distro filesystem through computeWorkspaceRoot. If home lookup fails,
-    // still validate against the effective workspace dir.
+    const worktreeLayout = localWorktreeLayout ?? resolveEffectiveWorktreeLayout(repo, settings)
     let worktreePath = ''
     let worktreePathResolved = !args.branchNameOverride
     for (let suffix = 1; suffix < 100; suffix += 1) {
@@ -9168,8 +9176,16 @@ export class OrcaRuntimeService {
             ? `${args.name}-${suffix}`
             : effectiveSanitizedName
       worktreePath = ensurePathWithinWorkspace(
-        computeWorktreePath(effectiveSanitizedName, repo.path, worktreePathSettings),
-        workspaceRoot
+        computeWorktreePath(
+          effectiveSanitizedName,
+          repo.path,
+          {
+            workspaceDir: worktreeLayout.path,
+            nestWorkspaces: worktreeLayout.nestWorkspaces
+          },
+          { useWslDefault: false }
+        ),
+        worktreeLayout.path
       )
       if (!args.branchNameOverride || !(await pathExists(worktreePath))) {
         worktreePathResolved = true
@@ -9353,7 +9369,10 @@ export class OrcaRuntimeService {
       createdAt: now,
       orcaCreatedAt: now,
       orcaCreationSource: 'runtime',
-      orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+      orcaCreationWorkspaceLayout: {
+        path: worktreeLayout.path,
+        nestWorkspaces: worktreeLayout.nestWorkspaces
+      },
       ...displayNameMeta,
       baseRef: baseBranch,
       ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),

@@ -11,7 +11,11 @@ vi.mock('../wsl', () => ({
   parseWslPath: parseWslPathMock
 }))
 
-import { computeWorktreePath } from './worktree-logic'
+import {
+  computeWorktreePath,
+  resolveEffectiveWorktreeLayout,
+  computeWorktreePathForLayout
+} from './worktree-logic'
 
 describe('computeWorktreePath WSL layout', () => {
   beforeEach(() => {
@@ -61,6 +65,35 @@ describe('computeWorktreePath WSL layout', () => {
         nestWorkspaces: false,
         workspaceDir: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees'
       })
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees\\feature')
+  })
+
+  it('does not remap a WSL project override through the inherited WSL default', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+
+    const layout = resolveEffectiveWorktreeLayout(
+      {
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+        worktreeFolderPath: '/home/jin/custom-worktrees'
+      },
+      { nestWorkspaces: true, workspaceDir: 'C:\\workspaces' }
+    )
+
+    expect(layout).toEqual({
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees',
+      nestWorkspaces: false,
+      source: 'project'
+    })
+    expect(
+      computeWorktreePathForLayout(
+        'feature',
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+        layout
+      )
     ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\custom-worktrees\\feature')
   })
 })

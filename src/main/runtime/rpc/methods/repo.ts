@@ -68,6 +68,7 @@ const RepoUpdate = RepoSelector.extend({
     hookSettings: z.unknown().optional(),
     worktreeBaseRef: OptionalString,
     worktreeBasePath: OptionalString,
+    worktreeFolderPath: z.union([z.string(), z.null()]).optional(),
     kind: z.enum(['git', 'folder']).optional(),
     symlinkPaths: z.array(z.string()).optional(),
     issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),

@@ -55,6 +55,7 @@ import type {
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import type { SshRemotePtyLease, SshTarget } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
+import { normalizeRepoWorktreeFolderPath } from './repo-worktree-folder-path'
 import { getGitUsername } from './git/repo'
 import {
   getDefaultPersistedState,
@@ -700,7 +701,9 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
 }
 
 function sanitizeRepoUpdatesForPersistence<
-  T extends Partial<Pick<Repo, 'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath'>>
+  T extends Partial<
+    Pick<Repo, 'badgeColor' | 'repoIcon' | 'upstream' | 'worktreeBasePath' | 'worktreeFolderPath'>
+  >
 >(updates: T): T {
   const sanitized = { ...updates }
   if ('badgeColor' in sanitized) {
@@ -2603,6 +2606,7 @@ export class Store {
         | 'hookSettings'
         | 'worktreeBaseRef'
         | 'worktreeBasePath'
+        | 'worktreeFolderPath'
         | 'kind'
         | 'symlinkPaths'
         | 'issueSourcePreference'
@@ -2618,6 +2622,24 @@ export class Store {
       return null
     }
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    const nextIsFolder =
+      sanitizedUpdates.kind === 'folder' ||
+      (sanitizedUpdates.kind === undefined && isFolderRepo(repo))
+    if (nextIsFolder) {
+      delete repo.worktreeFolderPath
+      delete sanitizedUpdates.worktreeFolderPath
+    } else if ('worktreeFolderPath' in sanitizedUpdates) {
+      const normalizedWorktreeFolderPath = normalizeRepoWorktreeFolderPath(
+        sanitizedUpdates.worktreeFolderPath,
+        repo
+      )
+      if (normalizedWorktreeFolderPath === undefined) {
+        delete repo.worktreeFolderPath
+        delete sanitizedUpdates.worktreeFolderPath
+      } else {
+        sanitizedUpdates.worktreeFolderPath = normalizedWorktreeFolderPath
+      }
+    }
     if ('projectGroupId' in sanitizedUpdates) {
       const nextGroupId = sanitizedUpdates.projectGroupId
       if (
@@ -2687,6 +2709,7 @@ export class Store {
       repoIcon: rawRepoIcon,
       upstream: rawUpstream,
       sourceControlAi: rawSourceControlAi,
+      worktreeFolderPath,
       ...repoWithoutIcon
     } = repo
     const repoIcon = sanitizeRepoIcon(rawRepoIcon)
@@ -2706,6 +2729,7 @@ export class Store {
       ...(repoIcon !== undefined ? { repoIcon } : {}),
       ...(upstream !== undefined ? { upstream } : {}),
       ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
+      ...(!isFolderRepo(repo) && worktreeFolderPath ? { worktreeFolderPath } : {}),
       kind: isFolderRepo(repo) ? 'folder' : 'git',
       gitUsername,
       hookSettings: {

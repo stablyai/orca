@@ -7,6 +7,7 @@ import { realpath } from 'fs/promises'
 import type { Store } from '../persistence'
 import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
+import { getLocalRepoAllowedRoots } from './filesystem-auth-roots'
 
 export const PATH_ACCESS_DENIED_MESSAGE =
   'Access denied: path resolves outside allowed directories. If this blocks a legitimate workflow, please file a GitHub issue.'
@@ -63,7 +64,7 @@ export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string
 export function getAllowedRoots(store: Store): string[] {
   const localRepos = getLocalRepos(store)
   const settings = store.getSettings()
-  const roots = localRepos.map((repo) => resolve(repo.path))
+  const roots = localRepos.flatMap(getLocalRepoAllowedRoots)
   if (settings.workspaceDir) {
     if (localRepos.length === 0) {
       roots.push(resolve(settings.workspaceDir))

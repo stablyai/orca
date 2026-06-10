@@ -2351,6 +2351,29 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.issueSourcePreference).toBeUndefined()
   })
 
+  it('updateRepo normalizes and clears per-project worktree folders', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', { worktreeFolderPath: '  /worktrees/repo  ' })
+    expect(updated!.worktreeFolderPath).toBe('/worktrees/repo')
+
+    store.updateRepo('r1', { worktreeFolderPath: '' })
+    expect(store.getRepo('r1')!.worktreeFolderPath).toBeUndefined()
+  })
+
+  it('updateRepo rejects invalid worktree folders and clears them for folder repos', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ worktreeFolderPath: '/worktrees/repo' }))
+
+    expect(() => store.updateRepo('r1', { worktreeFolderPath: 'relative/path' })).toThrow(
+      'absolute'
+    )
+
+    store.updateRepo('r1', { kind: 'folder' })
+    expect(store.getRepo('r1')!.worktreeFolderPath).toBeUndefined()
+  })
+
   it('updateRepo stamps legacy external-worktree visibility before changing old repos', async () => {
     const store = await createStore()
     store.addRepo(

@@ -26,14 +26,23 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
     {
       title: translate(
         'auto.components.settings.repository.search.443d127b5a',
-        'Worktree Location'
+        'Worktree Folder'
       ),
       description: translate(
         'auto.components.settings.repository.search.cd33a5525e',
-        'Project-specific directory for new worktrees.'
+        'Optional folder for new worktrees from this project.'
       ),
       keywords: [
         repo.displayName,
+        repo.path,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.41405c7a7c',
+          'worktree folder'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.d0863b3a8e',
+          'workspace folder'
+        ),
         ...translateSearchKeyword(
           'auto.components.settings.repository.search.f3e6dee5fe',
           'worktree path'

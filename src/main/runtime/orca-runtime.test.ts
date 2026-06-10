@@ -1453,6 +1453,140 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('creates runtime local worktrees under the project folder override without suffix retry', async () => {
+    const repo = {
+      id: TEST_REPO_ID,
+      path: TEST_REPO_PATH,
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      worktreeFolderPath: '/project-worktrees'
+    }
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [repo],
+      getRepo: (id: string) => (id === repo.id ? repo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    computeWorktreePathMock.mockReturnValue('/project-worktrees/runtime-project-feature')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/project-worktrees/runtime-project-feature')
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/project-worktrees/runtime-project-feature',
+        head: 'def',
+        branch: 'runtime-project-feature',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'runtime-project-feature'
+    })
+
+    expect(addWorktree).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      '/project-worktrees/runtime-project-feature',
+      'runtime-project-feature',
+      'origin/main',
+      false
+    )
+    expect(metaById[result.worktree.id]).toMatchObject({
+      orcaCreationWorkspaceLayout: {
+        path: '/project-worktrees',
+        nestWorkspaces: false
+      }
+    })
+  })
+
+  it('uses the project folder captured when runtime local create starts', async () => {
+    const repo = {
+      id: TEST_REPO_ID,
+      path: TEST_REPO_PATH,
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1,
+      worktreeFolderPath: '/project-worktrees'
+    }
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [repo],
+      getRepo: (id: string) => (id === repo.id ? repo : undefined),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      }
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    let resolvePr!: (value: null) => void
+    getPRForBranchMock.mockReturnValue(
+      new Promise<null>((resolve) => {
+        resolvePr = resolve
+      })
+    )
+    computeWorktreePathMock.mockImplementation(
+      (
+        sanitizedName: string,
+        _repoPath: string,
+        settings: { nestWorkspaces: boolean; workspaceDir: string }
+      ) => `${settings.workspaceDir}/${sanitizedName}`
+    )
+    ensurePathWithinWorkspaceMock.mockImplementation((targetPath: string) => targetPath)
+    vi.mocked(listWorktrees).mockResolvedValueOnce([
+      {
+        path: '/project-worktrees/runtime-captured-layout',
+        head: 'def',
+        branch: 'runtime-captured-layout',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
+      stdout: '',
+      stderr: ''
+    })
+    try {
+      const createPromise = runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'runtime-captured-layout'
+      })
+
+      await vi.waitFor(() => {
+        expect(getPRForBranchMock).toHaveBeenCalled()
+      })
+      repo.worktreeFolderPath = '/changed-worktrees'
+      resolvePr(null)
+      const result = await createPromise
+
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        '/project-worktrees/runtime-captured-layout',
+        'runtime-captured-layout',
+        'origin/main',
+        false
+      )
+      expect(metaById[result.worktree.id]).toMatchObject({
+        orcaCreationWorkspaceLayout: {
+          path: '/project-worktrees',
+          nestWorkspaces: false
+        }
+      })
+    } finally {
+      gitSpy.mockRestore()
+    }
+  })
+
   it('does not create runtime local worktrees when remote-tracking base refresh fails', async () => {
     const runtime = new OrcaRuntimeService(store)
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
