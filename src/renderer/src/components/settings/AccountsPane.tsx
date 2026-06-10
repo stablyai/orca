@@ -597,11 +597,10 @@ export function AccountsPane({
                 {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate('auto.components.settings.AccountsPane.c0a52abfc5', 'Showing')}
-                {accountRuntime.label}{' '}
                 {translate(
-                  'auto.components.settings.AccountsPane.5568bb6d5c',
-                  'accounts. New accounts are added there.'
+                  'auto.components.settings.AccountsPane.c0a52abfc5',
+                  'Showing accounts for {{value0}}. New accounts are added there.',
+                  { value0: accountRuntime.label }
                 )}
               </p>
             </div>
@@ -679,12 +678,8 @@ export function AccountsPane({
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.AccountsPane.3fe7862418',
-                  'No managed Claude accounts for'
-                )}
-                {accountRuntime.label}
-                {translate(
-                  'auto.components.settings.AccountsPane.dea08560b4',
-                  ". Orca will use that environment's system default Claude login until you add one here."
+                  "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
+                  { value0: accountRuntime.label }
                 )}
               </div>
             ) : (
@@ -855,11 +850,10 @@ export function AccountsPane({
                 {translate('auto.components.settings.AccountsPane.94d351af4a', 'Accounts')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate('auto.components.settings.AccountsPane.c0a52abfc5', 'Showing')}
-                {accountRuntime.label}{' '}
                 {translate(
-                  'auto.components.settings.AccountsPane.5568bb6d5c',
-                  'accounts. New accounts are added there.'
+                  'auto.components.settings.AccountsPane.c0a52abfc5',
+                  'Showing accounts for {{value0}}. New accounts are added there.',
+                  { value0: accountRuntime.label }
                 )}
               </p>
             </div>
@@ -960,12 +954,8 @@ export function AccountsPane({
               <div className="rounded-md border border-dashed border-border/70 px-3 py-4 text-xs text-muted-foreground">
                 {translate(
                   'auto.components.settings.AccountsPane.b4c9450319',
-                  'No managed Codex accounts for'
-                )}
-                {accountRuntime.label}
-                {translate(
-                  'auto.components.settings.AccountsPane.d46f735a85',
-                  ". Orca will use that environment's system default Codex login until you add one here."
+                  "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
+                  { value0: accountRuntime.label }
                 )}
               </div>
             ) : (
