@@ -6525,6 +6525,15 @@ export class OrcaRuntimeService {
     return { resolvedPath: dirPath, entries: mapped }
   }
 
+  async isGitAvailable(): Promise<boolean> {
+    try {
+      await gitExecFileAsync(['--version'], { cwd: process.cwd(), timeout: 3000 })
+      return true
+    } catch {
+      return false
+    }
+  }
+
   async importNestedRepos(args: {
     parentPath: string
     groupName: string
@@ -6722,6 +6731,9 @@ export class OrcaRuntimeService {
 
     let createdDir = false
     try {
+      // Why: default create-project parents are host-home based and may not exist
+      // before the first project is created on a fresh runtime.
+      await mkdir(trimmedParentPath, { recursive: true })
       const existingStat = await stat(targetPath).catch((error: unknown) => {
         if (isENOENT(error)) {
           return null
@@ -9335,6 +9347,9 @@ export class OrcaRuntimeService {
 
     const worktreeId = `${repo.id}::${created.path}`
     const now = Date.now()
+    // Why: persisted compare refs must survive local branches whose names look
+    // like remote labels, e.g. a local branch literally named "origin/main".
+    const metadataBaseRef = remoteTrackingBase?.ref ?? baseBranch
     const displayNameMeta = requestedDisplayName
       ? { displayName: requestedDisplayName }
       : shouldSetDisplayName(effectiveRequestedName, branchName, effectiveSanitizedName)
@@ -9355,13 +9370,13 @@ export class OrcaRuntimeService {
       orcaCreationSource: 'runtime',
       orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
-      baseRef: baseBranch,
+      baseRef: metadataBaseRef,
       ...(checkoutExistingBranch ? { preserveBranchOnDelete: true } : {}),
       ...(configuredPushTarget ? { pushTarget: configuredPushTarget } : {}),
       ...(sparseDirectories.length > 0
         ? {
             sparseDirectories,
-            sparseBaseRef: baseBranch,
+            sparseBaseRef: metadataBaseRef,
             sparsePresetId: args.sparseCheckout?.presetId
           }
         : {}),

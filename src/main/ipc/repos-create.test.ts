@@ -21,6 +21,7 @@ const {
   readdirMock,
   rmMock,
   gitExecFileAsyncMock,
+  homedirMock,
   invalidateAuthorizedRootsCacheMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -37,6 +38,7 @@ const {
   readdirMock: vi.fn(),
   rmMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  homedirMock: vi.fn(),
   invalidateAuthorizedRootsCacheMock: vi.fn()
 }))
 
@@ -53,6 +55,10 @@ vi.mock('fs/promises', () => ({
   access: accessMock,
   readdir: readdirMock,
   rm: rmMock
+}))
+
+vi.mock('os', () => ({
+  homedir: homedirMock
 }))
 
 vi.mock('../git/runner', () => ({
@@ -88,7 +94,7 @@ type CreateResult =
   | { error: string }
 
 describe('repos:create', () => {
-  const handlers = new Map<string, (event: unknown, args: unknown) => Promise<unknown>>()
+  const handlers = new Map<string, (event: unknown, args: unknown) => unknown>()
   const mockWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
@@ -101,12 +107,19 @@ describe('repos:create', () => {
     }
     return handler(null, args) as Promise<CreateResult>
   }
+  const callDefaultCreateProjectParent = (): Promise<string> => {
+    const handler = handlers.get('repos:getDefaultCreateProjectParent')
+    if (!handler) {
+      throw new Error('repos:getDefaultCreateProjectParent handler was never registered')
+    }
+    return Promise.resolve(handler(null, undefined)).then((value) => value as string)
+  }
 
   beforeEach(() => {
     handlers.clear()
     handleMock.mockReset()
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
-      handlers.set(channel, handler as (event: unknown, args: unknown) => Promise<unknown>)
+      handlers.set(channel, handler as (event: unknown, args: unknown) => unknown)
     })
     removeHandlerMock.mockReset()
     mockStore.getRepos.mockReset().mockReturnValue([])
@@ -120,6 +133,7 @@ describe('repos:create', () => {
     mkdirMock.mockReset().mockResolvedValue(undefined)
     rmMock.mockReset().mockResolvedValue(undefined)
     gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+    homedirMock.mockReset().mockReturnValue('/Users/alice')
 
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -128,11 +142,17 @@ describe('repos:create', () => {
     expect(handlers.has('repos:create')).toBe(true)
   })
 
+  it('registers the home-backed create-project default handler', async () => {
+    expect(handlers.has('repos:getDefaultCreateProjectParent')).toBe(true)
+    await expect(callDefaultCreateProjectParent()).resolves.toBe('/Users/alice/orca/projects')
+  })
+
   it('unregisters any previously-registered repos:create handler', () => {
     // registerRepoHandlers must call removeHandler('repos:create') before
     // ipcMain.handle to avoid the "second handler for same channel" throw
     // when this module is re-registered (e.g., after a reload).
     expect(removeHandlerMock).toHaveBeenCalledWith('repos:create')
+    expect(removeHandlerMock).toHaveBeenCalledWith('repos:getDefaultCreateProjectParent')
   })
 
   // ── input validation ──────────────────────────────────────────────
@@ -172,24 +192,26 @@ describe('repos:create', () => {
 
   // ── existing-directory handling ───────────────────────────────────
 
-  it('rejects a non-empty existing directory without calling mkdir', async () => {
+  it('rejects a non-empty existing directory without creating the target', async () => {
     accessMock.mockResolvedValueOnce(undefined) // exists
     readdirMock.mockResolvedValueOnce(['README.md', '.DS_Store'])
 
     const result = await callCreate({ parentPath: '/tmp', name: 'busy', kind: 'git' })
 
     expect(result).toMatchObject({ error: expect.stringContaining('not empty') })
-    expect(mkdirMock).not.toHaveBeenCalled()
+    expect(mkdirMock).toHaveBeenCalledWith('/tmp', { recursive: true })
+    expect(mkdirMock).not.toHaveBeenCalledWith('/tmp/busy', expect.anything())
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
-  it('accepts an empty existing directory and does not call mkdir', async () => {
+  it('accepts an empty existing directory and does not create the target', async () => {
     accessMock.mockResolvedValueOnce(undefined) // exists
     readdirMock.mockResolvedValueOnce([])
 
     const result = await callCreate({ parentPath: '/tmp', name: 'empty', kind: 'folder' })
 
-    expect(mkdirMock).not.toHaveBeenCalled()
+    expect(mkdirMock).toHaveBeenCalledWith('/tmp', { recursive: true })
+    expect(mkdirMock).not.toHaveBeenCalledWith('/tmp/empty', expect.anything())
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({ path: '/tmp/empty', kind: 'folder' })
     )
@@ -200,7 +222,24 @@ describe('repos:create', () => {
     // accessMock rejects by default → path does not exist
     await callCreate({ parentPath: '/tmp', name: 'brand-new', kind: 'folder' })
 
-    expect(mkdirMock).toHaveBeenCalledWith('/tmp/brand-new', { recursive: false })
+    expect(mkdirMock).toHaveBeenNthCalledWith(1, '/tmp', { recursive: true })
+    expect(mkdirMock).toHaveBeenNthCalledWith(2, '/tmp/brand-new', { recursive: false })
+  })
+
+  it('creates a missing default parent before creating the project directory', async () => {
+    const result = await callCreate({
+      parentPath: '/Users/alice/orca/projects',
+      name: 'first-project',
+      kind: 'folder'
+    })
+
+    expect(mkdirMock).toHaveBeenNthCalledWith(1, '/Users/alice/orca/projects', {
+      recursive: true
+    })
+    expect(mkdirMock).toHaveBeenNthCalledWith(2, '/Users/alice/orca/projects/first-project', {
+      recursive: false
+    })
+    expect(result).toHaveProperty('repo.path', '/Users/alice/orca/projects/first-project')
   })
 
   // ── plain folder happy path ───────────────────────────────────────
@@ -233,7 +272,8 @@ describe('repos:create', () => {
   it('creates a git repo with an empty initial commit (in order)', async () => {
     const result = await callCreate({ parentPath: '/tmp', name: 'gitproj', kind: 'git' })
 
-    expect(mkdirMock).toHaveBeenCalledWith('/tmp/gitproj', { recursive: false })
+    expect(mkdirMock).toHaveBeenNthCalledWith(1, '/tmp', { recursive: true })
+    expect(mkdirMock).toHaveBeenNthCalledWith(2, '/tmp/gitproj', { recursive: false })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(1, ['init'], { cwd: '/tmp/gitproj' })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,

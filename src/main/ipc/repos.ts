@@ -4,6 +4,7 @@ boundary. Splitting by line count would scatter tightly coupled repo behavior. *
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { dialog, ipcMain } from 'electron'
 import { randomUUID } from 'crypto'
+import { homedir } from 'os'
 import { z } from 'zod'
 import type { Store } from '../persistence'
 import type {
@@ -130,6 +131,7 @@ type CompletedNestedRepoScan = {
 }
 const completedNestedRepoScans = new Map<string, CompletedNestedRepoScan>()
 const MAX_COMPLETED_NESTED_SCAN_RESULTS = 50
+const GIT_AVAILABILITY_TIMEOUT_MS = 1500
 
 const ProjectGroupCreateArgs = z.object({
   name: z.string().min(1),
@@ -270,6 +272,22 @@ async function cleanupOwnedCloneTarget(metadata: ActiveCloneMetadata): Promise<v
     return
   }
   await cleanupClaimedCloneTarget(metadata.path, metadata.claimedTarget)
+}
+
+async function isGitAvailable(): Promise<boolean> {
+  try {
+    await gitExecFileAsync(['--version'], {
+      cwd: process.cwd(),
+      timeout: GIT_AVAILABILITY_TIMEOUT_MS
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
+function getDefaultCreateProjectParent(): string {
+  return join(homedir(), 'orca', 'projects')
 }
 
 function markCloneAbortCleanupPending(metadata: ActiveCloneMetadata): void {
@@ -456,6 +474,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.removeHandler('repos:pickDirectory')
   ipcMain.removeHandler('repos:clone')
   ipcMain.removeHandler('repos:cloneAbort')
+  ipcMain.removeHandler('repos:isGitAvailable')
+  ipcMain.removeHandler('repos:getDefaultCreateProjectParent')
   ipcMain.removeHandler('repos:getGitUsername')
   ipcMain.removeHandler('repos:getBaseRefDefault')
   ipcMain.removeHandler('repos:searchBaseRefs')
@@ -469,6 +489,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   ipcMain.handle('repos:list', () => {
     return store.getRepos()
   })
+
+  ipcMain.handle('repos:isGitAvailable', () => isGitAvailable())
+  ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent())
 
   ipcMain.handle('projectGroups:list', () => store.getProjectGroups())
 
@@ -901,6 +924,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       let createdDir = false
       let targetExists = false
       try {
+        // Why: the name-first default points at ~/orca/projects, which may not
+        // exist yet on a fresh install; create only the parent before probing target.
+        await mkdir(parentPath, { recursive: true })
         await access(targetPath)
         targetExists = true
       } catch (err) {

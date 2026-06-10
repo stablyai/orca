@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import type { ContextualTourId } from '../../../../shared/contextual-tours'
-import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
+import {
+  hasFeatureInteraction,
+  type FeatureInteractionState
+} from '../../../../shared/feature-interactions'
 import { useAppStore } from '@/store'
 
 const TOUR_SOURCES = {
@@ -9,8 +12,33 @@ const TOUR_SOURCES = {
   browser: 'browser_visible',
   tasks: 'tasks_open',
   automations: 'automations_open',
+  'floating-workspace': 'floating_workspace_visible',
   'workspace-creation': 'workspace_creation_visible'
 } satisfies Record<ContextualTourId, string>
+
+export type UseContextualTourOptions = {
+  recordFeatureInteraction?: boolean | undefined
+  featureInteractionPersisted?: Promise<void> | undefined
+  wasFeaturePreviouslyInteracted?: boolean | undefined
+}
+
+export function createContextualTourInteractionSnapshot(args: {
+  id: ContextualTourId
+  featureInteractions: FeatureInteractionState
+  recordFeatureInteraction: (id: ContextualTourId) => Promise<void>
+  recordFeatureInteractionForTour: boolean
+  featureInteractionPersisted?: Promise<void> | undefined
+  wasFeaturePreviouslyInteracted?: boolean | undefined
+}): { persisted: Promise<void>; wasPreviouslyInteracted: boolean } {
+  const wasPreviouslyInteracted =
+    args.wasFeaturePreviouslyInteracted ?? hasFeatureInteraction(args.featureInteractions, args.id)
+  return {
+    wasPreviouslyInteracted,
+    persisted: args.recordFeatureInteractionForTour
+      ? args.recordFeatureInteraction(args.id)
+      : (args.featureInteractionPersisted ?? Promise.resolve())
+  }
+}
 
 export async function shouldRequestContextualTourAfterInteraction(args: {
   id: ContextualTourId
@@ -25,8 +53,14 @@ export async function shouldRequestContextualTourAfterInteraction(args: {
 export function useContextualTour(
   id: ContextualTourId,
   enabled: boolean,
-  source: string = TOUR_SOURCES[id]
+  source: string = TOUR_SOURCES[id],
+  options: UseContextualTourOptions = {}
 ): void {
+  const {
+    recordFeatureInteraction: shouldRecordFeatureInteraction = true,
+    featureInteractionPersisted,
+    wasFeaturePreviouslyInteracted
+  } = options
   const requestContextualTour = useAppStore((s) => s.requestContextualTour)
   const suppressContextualTour = useAppStore((s) => s.suppressContextualTour)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -62,19 +96,32 @@ export function useContextualTour(
     ) {
       return
     }
-    const wasPreviouslyInteracted = hasFeatureInteraction(
-      useAppStore.getState().featureInteractions,
-      id
-    )
+    const snapshot = createContextualTourInteractionSnapshot({
+      id,
+      featureInteractions: useAppStore.getState().featureInteractions,
+      recordFeatureInteraction,
+      recordFeatureInteractionForTour: shouldRecordFeatureInteraction,
+      featureInteractionPersisted,
+      wasFeaturePreviouslyInteracted
+    })
     enabledInteractionSnapshotRef.current = {
       id,
       source,
-      // Why: recording writes featureInteractions; subscribing here would retrigger
-      // this effect and repeatedly persist the same enabled source.
-      wasPreviouslyInteracted,
-      persisted: recordFeatureInteraction(id)
+      // Why: recording writes featureInteractions; subscribing here would
+      // retrigger this effect and repeatedly persist the same enabled source.
+      wasPreviouslyInteracted: snapshot.wasPreviouslyInteracted,
+      persisted: snapshot.persisted
     }
-  }, [enabled, id, persistedUIReady, recordFeatureInteraction, source])
+  }, [
+    enabled,
+    featureInteractionPersisted,
+    id,
+    persistedUIReady,
+    recordFeatureInteraction,
+    shouldRecordFeatureInteraction,
+    source,
+    wasFeaturePreviouslyInteracted
+  ])
 
   useEffect(() => {
     // Why: source disable should end through the overlay so a shown tour gets

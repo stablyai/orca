@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, Home, Pencil } from 'lucide-react'
+import { Folder, FolderOpen, Pencil } from 'lucide-react'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -113,9 +113,6 @@ export function CreateProjectLocationField({
         </div>
       ) : createParent ? (
         <div className="group flex items-center gap-2.5 rounded-md border border-border bg-background/40 h-11 min-w-0 px-3 text-sm">
-          <span className="shrink-0 inline-flex items-center justify-center size-7 rounded-md border border-border/70 bg-background/50 text-muted-foreground">
-            <Home className="size-3.5" />
-          </span>
           <span className="flex-1 min-w-0 truncate font-mono text-[12px]" title={createParent}>
             {createParent}
           </span>

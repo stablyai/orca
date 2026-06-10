@@ -1397,7 +1397,10 @@ describe('OrcaRuntimeService', () => {
           }
         }
       )
-      expect(result.worktree).toMatchObject({ path: createdWorktree.path })
+      expect(result.worktree).toMatchObject({
+        path: createdWorktree.path,
+        baseRef: 'refs/remotes/origin/main'
+      })
     } finally {
       gitSpy.mockRestore()
     }
@@ -3173,6 +3176,33 @@ describe('OrcaRuntimeService', () => {
       expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
     } finally {
       await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('creates a missing runtime parent before creating the project directory', async () => {
+    const added: Record<string, unknown>[] = []
+    const createStore = {
+      ...store,
+      getRepos: () => [...added] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        added.push(repo)
+      },
+      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
+    }
+    const runtime = new OrcaRuntimeService(createStore as never)
+    const tempRoot = await mkdtemp('/tmp/orca-runtime-create-parent-')
+    const parentDir = join(tempRoot, 'orca', 'projects')
+    try {
+      const result = await runtime.createRepo(parentDir, 'first-project', 'folder')
+      if ('error' in result) {
+        throw new Error(result.error)
+      }
+
+      expect((await lstat(parentDir)).isDirectory()).toBe(true)
+      expect((await lstat(join(parentDir, 'first-project'))).isDirectory()).toBe(true)
+      expect(result).toHaveProperty('repo.path', join(parentDir, 'first-project'))
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
     }
   })
 
