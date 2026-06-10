@@ -709,6 +709,7 @@ function PRReviewersPanel({
       patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(logins.length === 1 ? 'Reviewer requested' : 'Reviewers requested')
     } catch {
       if (reviewerPanelMountedRef.current) {
@@ -768,6 +769,7 @@ function PRReviewersPanel({
       patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId)
       onReviewersRequested(nextReviewRequests)
       setReviewerInput('')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(logins.length === 1 ? 'Reviewer removed' : 'Reviewers removed')
     } catch {
       if (reviewerPanelMountedRef.current) {
@@ -2439,6 +2441,7 @@ function ConversationTab({
       })
       onBodyUpdated(resolvedBodyDraft)
       setBodyEditing(false)
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success('Description updated.')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to update description.')
@@ -2915,6 +2918,7 @@ function PRActionsPanel({
         updates: { state: nextState }
       })
       toast.success(nextState === 'closed' ? 'Pull request closed' : 'Pull request reopened')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
     } catch (err) {
       applyStatePatch(previousState)
@@ -2952,6 +2956,7 @@ function PRActionsPanel({
       }
       applyStatePatch('merged')
       toast.success('Pull request merged')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
     } catch {
       toast.error('Failed to merge pull request')
@@ -2979,6 +2984,7 @@ function PRActionsPanel({
         return
       }
       toast.success(enabled ? 'Auto-merge enabled' : 'Auto-merge disabled')
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
     } catch {
       toast.error(enabled ? 'Failed to enable auto-merge' : 'Failed to disable auto-merge')
@@ -4297,6 +4303,7 @@ function GHEditSection({
           patchProjectRowIfNeeded({ state: prevState })
         },
         onSuccess: () => {
+          useAppStore.getState().recordFeatureInteraction('github-tasks')
           patchWorkItem(item.id, { state: newState }, item.repoId)
           patchProjectRowIfNeeded({ state: newState })
           onMutated()
@@ -4341,6 +4348,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ labels: newLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
@@ -4371,6 +4379,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ labels: prevLabels })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -4422,6 +4431,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: prevAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onError: (err) => toast.error(err)
@@ -4441,6 +4451,7 @@ function GHEditSection({
             patchProjectRowIfNeeded({ assignees: newAssignees })
           },
           onSuccess: () => {
+            useAppStore.getState().recordFeatureInteraction('github-tasks')
             onMutated()
           },
           onRevert: () => {
@@ -5488,6 +5499,7 @@ export default function GitHubItemDialog({
 
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
+      useAppStore.getState().recordFeatureInteraction('github-tasks')
       // Why: skip refreshDetails() — gh api --cache 60s returns stale data
       // that overwrites the optimistic comment. The next dialog open (after
       // cache expiry) will pick up the server-confirmed version.

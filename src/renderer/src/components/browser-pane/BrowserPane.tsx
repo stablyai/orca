@@ -4092,6 +4092,10 @@ function BrowserPagePane({
     [annotationBannerSendModeId, annotationTraySendModeId, closeAgentSendPopoverTargetMode]
   )
 
+  const handleBrowserAnnotationsSentToAgent = useCallback((): void => {
+    recordFeatureInteraction('browser-annotations-sent-to-agent')
+  }, [recordFeatureInteraction])
+
   const handleClearBrowserAnnotations = useCallback((): void => {
     if (browserAnnotationsRef.current.length === 0) {
       return
@@ -4712,6 +4716,7 @@ function BrowserPagePane({
                     prompt={browserAnnotationsPrompt}
                     promptDelivery="submit-after-ready"
                     launchSource="notes_send"
+                    onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                   />
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -4922,6 +4927,7 @@ function BrowserPagePane({
                     prompt={browserAnnotationsPrompt}
                     promptDelivery="submit-after-ready"
                     launchSource="notes_send"
+                    onPromptDelivered={handleBrowserAnnotationsSentToAgent}
                   />
                 </DropdownMenuContent>
               </DropdownMenu>

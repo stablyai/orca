@@ -100,6 +100,8 @@ export function FloatingWorkspacePane({
           onChange={() => {
             if (!settings.floatingTerminalEnabled) {
               useAppStore.getState().recordFeatureInteraction('floating-workspace')
+            } else {
+              useAppStore.getState().recordFeatureInteraction('floating-workspace-hidden')
             }
             updateSettings({
               floatingTerminalEnabled: !settings.floatingTerminalEnabled

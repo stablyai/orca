@@ -25,6 +25,12 @@ import {
   TERMINAL_PANE_SPLIT_SOURCES
 } from './feature-education-telemetry'
 import { FEATURE_WALL_SETUP_STEP_IDS } from './feature-wall-setup-steps'
+import {
+  FEATURE_INTERACTION_CATEGORIES,
+  FEATURE_INTERACTION_IDS,
+  FEATURE_INTERACTION_USAGE_BUCKETS,
+  getFeatureInteractionCategory
+} from './feature-interactions'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from './setup-script-import-providers'
 import { WORKSPACE_SOURCE_VALUES, type WorkspaceSource } from './workspace-source'
 import { appStarSourceSchema } from './gh-star-source'
@@ -300,6 +306,27 @@ export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>
 const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 
 const appOpenedSchema = z.object({ nth_repo_added: nthRepoAddedSchema }).strict()
+
+export const featureInteractionIdSchema = z.enum(FEATURE_INTERACTION_IDS)
+export const featureInteractionCategorySchema = z.enum(FEATURE_INTERACTION_CATEGORIES)
+export const featureInteractionUsageBucketSchema = z.enum(FEATURE_INTERACTION_USAGE_BUCKETS)
+export const featureInteractionUsageBucketSourceSchema = z.enum([
+  'crossed_now',
+  'observed_existing'
+])
+const featureInteractionUsageBucketReachedSchema = z
+  .object({
+    feature_id: featureInteractionIdSchema,
+    feature_category: featureInteractionCategorySchema,
+    count_bucket: featureInteractionUsageBucketSchema,
+    bucket_source: featureInteractionUsageBucketSourceSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+  .refine((value) => getFeatureInteractionCategory(value.feature_id) === value.feature_category, {
+    message: 'feature_category must match feature_id',
+    path: ['feature_category']
+  })
 
 const repoAddedSchema = z
   .object({ method: repoMethodSchema, nth_repo_added: nthRepoAddedSchema })
@@ -1230,6 +1257,7 @@ const terminalPaneSplitSchema = z
 export const eventSchemas = {
   app_opened: appOpenedSchema,
   app_starred_orca: appStarredOrcaSchema,
+  feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
@@ -1308,10 +1336,27 @@ export type EventProps<N extends EventName> = EventMap[N]
 // Safely skips non-`ZodObject` schemas (e.g. a future `z.discriminatedUnion`
 // or `z.union`) — those have no `.shape`, and probing `key in undefined`
 // would throw at module load and take the telemetry module down on import.
+function eventSchemaShape(schema: z.ZodTypeAny): z.ZodRawShape | null {
+  if (schema instanceof z.ZodObject) {
+    return schema.shape
+  }
+
+  const shapeBearingSchema = schema as { shape?: unknown }
+  // Why: refined object schemas may still expose `.shape` even if a Zod
+  // version stops preserving `instanceof ZodObject` through refinement.
+  if (shapeBearingSchema.shape && typeof shapeBearingSchema.shape === 'object') {
+    return shapeBearingSchema.shape as z.ZodRawShape
+  }
+  return null
+}
+
 function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
   return new Set(
     (Object.entries(eventSchemas) as [EventName, z.ZodTypeAny][])
-      .filter(([, schema]) => schema instanceof z.ZodObject && key in schema.shape)
+      .filter(([, schema]) => {
+        const shape = eventSchemaShape(schema)
+        return shape !== null && key in shape
+      })
       .map(([name]) => name)
   )
 }
@@ -1336,6 +1381,7 @@ export const COHORT_EXTENDED: readonly EventName[] = Array.from(COHORT_EXTENDED_
 type _CohortExtendedRoster =
   | 'app_opened'
   | 'app_starred_orca'
+  | 'feature_interaction_usage_bucket_reached'
   | 'repo_added'
   | 'add_repo_setup_step_action'
   | 'add_repo_existing_workspaces_detected'

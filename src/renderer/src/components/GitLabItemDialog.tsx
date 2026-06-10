@@ -31,6 +31,7 @@ import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '@/store'
 import type {
   GitLabAssignableUser,
   GitLabPipelineJob,
@@ -534,6 +535,7 @@ export default function GitLabItemDialog({
           setTitleDraft('')
           setBodyDraft('')
           setLabelDraft('')
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         }
       } else if (mountedRef.current) {
         toast.error(res.error)
@@ -671,6 +673,7 @@ export default function GitLabItemDialog({
           setReviewerOptions((current) =>
             current ? dedupeGitLabUsers([...current, ...result.reviewers]) : current
           )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         } else {
           toast.error(result.error)
         }
@@ -722,6 +725,7 @@ export default function GitLabItemDialog({
           current ? { ...current, comments: [...current.comments, result.comment] } : current
         )
         setInlineCommentBody('')
+        useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         toast.success('Inline comment added')
       } else {
         toast.error(result.error)
@@ -751,6 +755,7 @@ export default function GitLabItemDialog({
       if (res.ok) {
         if (mountedRef.current) {
           toast.success(`Closed MR !${item.number}`)
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           handleRefresh()
         }
       } else {
@@ -775,6 +780,7 @@ export default function GitLabItemDialog({
       if (res.ok) {
         if (mountedRef.current) {
           toast.success(`Reopened MR !${item.number}`)
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           handleRefresh()
         }
       } else {
@@ -799,6 +805,7 @@ export default function GitLabItemDialog({
       if (res.ok) {
         if (mountedRef.current) {
           toast.success(`Merged MR !${item.number}`)
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           handleRefresh()
         }
       } else {
@@ -831,6 +838,7 @@ export default function GitLabItemDialog({
           setCommentDraftState((current) =>
             current.itemId === itemId ? { itemId, value: '' } : current
           )
+          useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           handleRefresh()
         }
       } else {
@@ -870,6 +878,7 @@ export default function GitLabItemDialog({
                   }
                 : current
             )
+            useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           }
         } else if (mountedRef.current) {
           toast.error(res.error)
