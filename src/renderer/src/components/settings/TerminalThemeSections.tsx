@@ -46,17 +46,19 @@ export function DarkTerminalThemeSection({
       <div className="space-y-6">
         {/* Why: Warp import produces terminal themes, so its button lives with
             the theme pickers rather than in the Typography header. */}
-        <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.TerminalThemeSections.9499ad1dc4',
-            'Dark Theme'
-          )}
-          description={translate(
-            'auto.components.settings.TerminalThemeSections.f012172e21',
-            'Choose the theme used for terminal panes in dark mode.'
-          )}
-          action={showWarpThemeImport ? <WarpThemeImportButton warpThemes={warpThemes} /> : null}
-        />
+        <div className="space-y-3">
+          <SettingsSubsectionHeader
+            title={translate(
+              'auto.components.settings.TerminalThemeSections.9499ad1dc4',
+              'Dark Theme'
+            )}
+            description={translate(
+              'auto.components.settings.TerminalThemeSections.f012172e21',
+              'Choose the theme used for terminal panes in dark mode.'
+            )}
+          />
+          {showWarpThemeImport ? <WarpThemeImportButton warpThemes={warpThemes} /> : null}
+        </div>
 
         <SearchableSetting
           title={translate(
