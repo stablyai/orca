@@ -302,7 +302,17 @@ const nthRepoAddedSchema = z.number().int().nonnegative().optional()
 const appOpenedSchema = z.object({ nth_repo_added: nthRepoAddedSchema }).strict()
 
 const repoAddedSchema = z
-  .object({ method: repoMethodSchema, nth_repo_added: nthRepoAddedSchema })
+  // Why: `is_git_repo` is the real git-vs-folder signal, sourced from git
+  // detection at the add point. It moved here from `onboarding_completed`
+  // once project selection left onboarding (1.4.46). `.optional()` so
+  // SSH/remote or any path that genuinely can't determine git-ness validates
+  // cleanly instead of crashing the track call — same fail-soft intent as
+  // `nthRepoAddedSchema`. Never default-guess `false`; omit instead.
+  .object({
+    method: repoMethodSchema,
+    is_git_repo: z.boolean().optional(),
+    nth_repo_added: nthRepoAddedSchema
+  })
   .strict()
 
 const appStarredOrcaSchema = z
@@ -926,10 +936,12 @@ const onboardingTaskSourcesSnapshotSchema = z
     cohort: cohortSchema
   })
   .strict()
+// Why: no `is_git_repo` here — the signal moved to `repo_added.is_git_repo`.
+// Project selection left onboarding in 1.4.46, so this event now fires before
+// any repo is chosen; the old field was always `false` and meaningless.
 const onboardingCompletedSchema = z
   .object({
     path: onboardingPathSchema,
-    is_git_repo: z.boolean(),
     total_duration_ms: z.number().int().nonnegative(),
     cohort: cohortSchema
   })
