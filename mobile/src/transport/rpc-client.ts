@@ -29,6 +29,7 @@ import {
   updateTerminalSubscriptionViewport as updateCachedTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
 import { describeSocketEvent } from './socket-event-debug'
+import { redactedEndpoint } from './endpoint-redaction'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -263,17 +264,6 @@ export function connect(
     }
   }
 
-  // Why: don't dump device tokens / full URLs into log scrolls; truncate to
-  // the host:port so reconnect lifecycles are still readable.
-  function redactedEndpoint(ep: string): string {
-    try {
-      const m = ep.match(/^wss?:\/\/([^/]+)/i)
-      return m ? m[1] : 'unknown'
-    } catch {
-      return 'unknown'
-    }
-  }
-
   function waitForConnected(timeoutMs?: number): Promise<void> {
     if (state === 'connected') {
       return Promise.resolve()
@@ -473,6 +463,15 @@ export function connect(
             for (const [id, stream] of streamListeners) {
               if (stream.cancelled) {
                 removeStreamListener(id)
+                continue
+              }
+              // Why: setState('connected') above runs state listeners
+              // synchronously, and those listeners may subscribe right away
+              // (home-screen notification/account streams). Such streams are
+              // already sent on this connection; re-sending them here would
+              // register a duplicate server-side subscription and every event
+              // would be delivered twice (double mobile notifications).
+              if (stream.sent) {
                 continue
               }
               if (stream.method === 'browser.screencast') {
@@ -704,6 +703,12 @@ export function connect(
     sharedKey = null
     activeBrowserScreencastRequestId = null
     pendingBrowserScreencastRequestId = null
+    // Why: `sent` means "sent on the current connection". The dead socket's
+    // subscriptions are gone server-side, so every surviving stream must be
+    // eligible for the re-send loop when the next connection authenticates.
+    for (const stream of streamListeners.values()) {
+      stream.sent = false
+    }
     if (handshakeTimer) {
       clearTimeout(handshakeTimer)
       handshakeTimer = null

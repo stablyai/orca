@@ -581,6 +581,56 @@ describe('mobile rpc-client connection timeout', () => {
     }
   })
 
+  it('does not duplicate a subscribe issued from a connected state listener', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    const socket = mockSockets[0]!
+
+    // Mirrors the home screen's wireUp: it subscribes synchronously inside the
+    // setState('connected') listener call, before the auth handler's stream
+    // re-send loop runs.
+    client.onStateChange((state) => {
+      if (state === 'connected') {
+        client.subscribe('notifications.subscribe', {}, () => {})
+      }
+    })
+
+    socket.open()
+    socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    expect(sentRequests(socket, 'notifications.subscribe')).toHaveLength(1)
+
+    client.close()
+  })
+
+  it('re-sends a retained listener-issued subscribe exactly once per connection', () => {
+    const client = connect('ws://desktop.invalid', 'token', 'server-key')
+    let subscribed = false
+    client.onStateChange((state) => {
+      if (state === 'connected' && !subscribed) {
+        subscribed = true
+        client.subscribe('notifications.subscribe', {}, () => {})
+      }
+    })
+
+    const firstSocket = mockSockets[0]!
+    firstSocket.open()
+    firstSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    firstSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+    expect(sentRequests(firstSocket, 'notifications.subscribe')).toHaveLength(1)
+
+    firstSocket.close()
+    vi.advanceTimersByTime(500)
+    const secondSocket = mockSockets[1]!
+    secondSocket.open()
+    secondSocket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+    secondSocket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
+    expect(sentRequests(secondSocket, 'notifications.subscribe')).toHaveLength(1)
+
+    client.close()
+  })
+
   // Repro for issue #5049: Android sessions that appear connected (or stuck
   // "Reconnecting…") after the app returns to the foreground, recoverable
   // only by restarting the app. notifyForeground is the recovery hook the

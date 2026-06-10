@@ -24,6 +24,12 @@ type SubscribeResult = {
 }
 
 const scheduledNotificationIdsByHostAndNotificationId = new Map<string, string>()
+// Why: duplicate events for the same notification can arrive in the same tick
+// (e.g. transport-level double delivery). The dedupe map alone can't catch
+// them — both calls would read it before either writes — so in-flight shows
+// are reserved synchronously: concurrent duplicates are dropped, and a
+// dismiss arriving mid-show awaits the entry so the banner can't outlive it.
+const inFlightLocalNotificationShowsByKey = new Map<string, Promise<void>>()
 
 function getStoredNotificationKey(hostId: string, notificationId: string): string {
   return `${encodeURIComponent(hostId)}:${encodeURIComponent(notificationId)}`
@@ -69,6 +75,28 @@ function configureNotificationChannel(): void {
 }
 
 async function showLocalNotification(event: NotificationEvent, hostId: string): Promise<void> {
+  const storedKey = event.notificationId
+    ? getStoredNotificationKey(hostId, event.notificationId)
+    : null
+  if (!storedKey) {
+    await scheduleLocalNotification(event, hostId, null)
+    return
+  }
+  if (inFlightLocalNotificationShowsByKey.has(storedKey)) {
+    return
+  }
+  const show = scheduleLocalNotification(event, hostId, storedKey).finally(() => {
+    inFlightLocalNotificationShowsByKey.delete(storedKey)
+  })
+  inFlightLocalNotificationShowsByKey.set(storedKey, show)
+  await show
+}
+
+async function scheduleLocalNotification(
+  event: NotificationEvent,
+  hostId: string,
+  storedKey: string | null
+): Promise<void> {
   const enabled = await loadPushNotificationsEnabled()
   if (!enabled) {
     return
@@ -79,9 +107,6 @@ async function showLocalNotification(event: NotificationEvent, hostId: string): 
     return
   }
 
-  const storedKey = event.notificationId
-    ? getStoredNotificationKey(hostId, event.notificationId)
-    : null
   const previousIdentifier = storedKey
     ? scheduledNotificationIdsByHostAndNotificationId.get(storedKey)
     : undefined
@@ -112,6 +137,14 @@ async function dismissLocalNotification(
     return
   }
   const storedKey = getStoredNotificationKey(hostId, event.notificationId)
+  // Why: the desktop can emit a dismiss right behind the matching
+  // notification (auto-dismiss on acknowledgement). Wait for an in-flight
+  // show so its identifier lands in the map; otherwise the lookup misses and
+  // the banner survives forever.
+  const inFlightShow = inFlightLocalNotificationShowsByKey.get(storedKey)
+  if (inFlightShow) {
+    await inFlightShow.catch(() => {})
+  }
   const identifier = scheduledNotificationIdsByHostAndNotificationId.get(storedKey)
   if (!identifier) {
     return
