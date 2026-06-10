@@ -162,6 +162,7 @@ const ghosttyMock = {
 
 const warpThemesMock = {
   open: true,
+  mode: 'warp' as const,
   preview: {
     found: true,
     sourceLabel: 'themes',
@@ -174,6 +175,7 @@ const warpThemesMock = {
   importSignal: 0,
   selectedThemeIds: new Set<string>(),
   handleClick: vi.fn(),
+  handleImportYamlClick: vi.fn(),
   handlePreviewSource: vi.fn(),
   handleToggleTheme: vi.fn(),
   handleToggleAll: vi.fn(),

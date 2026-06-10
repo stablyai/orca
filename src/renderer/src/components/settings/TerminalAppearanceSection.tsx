@@ -127,6 +127,7 @@ export function TerminalAppearanceSection({
       {showWarpThemeImport ? (
         <WarpThemeImportModal
           open={warpThemes.open}
+          mode={warpThemes.mode}
           preview={warpThemes.preview}
           loading={warpThemes.loading}
           desktopOnly={warpThemes.desktopOnly}
