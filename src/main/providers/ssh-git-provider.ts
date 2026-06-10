@@ -21,6 +21,10 @@ import { JsonRpcErrorCode } from '../ssh/relay-protocol'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import type { CommitMessagePlan } from '../../shared/commit-message-plan'
 import type { RemoteCommitMessageExecResult } from '../text-generation/commit-message-text-generation'
+import {
+  describeMaxBufferOverflowError,
+  isMaxBufferOverflowError
+} from '../git/max-buffer-overflow'
 
 type NonInteractiveExecQueueEntry = {
   started: boolean
@@ -115,10 +119,25 @@ export class SshGitProvider implements IGitProvider {
     if (!stagedSummary) {
       return null
     }
-    const { stdout: stagedPatch } = await this.exec(
-      ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
-      worktreePath
-    )
+    let stagedPatch = ''
+    try {
+      const patchResult = await this.exec(
+        ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
+        worktreePath
+      )
+      stagedPatch = patchResult.stdout
+    } catch (error) {
+      if (!isMaxBufferOverflowError(error)) {
+        throw error
+      }
+      // Why: a very large staged diff can overflow the remote exec buffer. The
+      // patch is optional context (truncated later anyway), so degrade to the
+      // file-name summary instead of failing commit-message generation.
+      console.warn(
+        '[ssh-git] Staged patch too large to read; using file summary only:',
+        describeMaxBufferOverflowError(error)
+      )
+    }
     return {
       branch: branchResult.stdout.trim() || null,
       stagedSummary,

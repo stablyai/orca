@@ -1259,6 +1259,31 @@ describe('createWorktree base status merge', () => {
     })
   })
 
+  it('merges create result metadata into a worktree inserted by the watcher race', async () => {
+    const store = createTestStore()
+    const watcherWorktree = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1'
+    })
+    const createdWorktree = makeWorktree({
+      ...watcherWorktree,
+      baseRef: 'refs/remotes/origin/main'
+    })
+    store.setState({
+      worktreesByRepo: { repo1: [watcherWorktree] }
+    } as Partial<AppState>)
+    mockApi.worktrees.create.mockResolvedValue({ worktree: createdWorktree })
+
+    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
+
+    expect(store.getState().worktreesByRepo.repo1).toHaveLength(1)
+    expect(store.getState().worktreesByRepo.repo1[0]).toMatchObject({
+      id: watcherWorktree.id,
+      baseRef: 'refs/remotes/origin/main'
+    })
+  })
+
   it.each([
     {
       status: 'skipped_dirty_worktree',

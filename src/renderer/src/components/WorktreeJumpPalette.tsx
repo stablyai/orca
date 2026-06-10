@@ -247,7 +247,9 @@ function getSettingsTargetFromSectionId(sectionId: string): {
 }
 
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
-  const { i18n } = useTranslation()
+  // Why: subscribe this palette to language changes; translated memo contents
+  // recompute on the rerender without using i18n.language as a fake dependency.
+  useTranslation()
   const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
@@ -581,10 +583,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     () => buildCmdJSettingsResults(settingsSections),
     [settingsSections]
   )
-  const actionResults = useMemo(
-    () => buildCmdJActionResults(getCmdJQuickActions()),
-    [i18n.language]
-  )
+  const actionResults = useMemo(() => buildCmdJActionResults(getCmdJQuickActions()), [])
 
   const prefetchCreateWorkspaceBaseForComposer = useCallback((initialRepoId?: string): void => {
     const state = useAppStore.getState()
@@ -782,7 +781,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       appendPaletteListEntries(entries, visibleOpenTabItems)
     }
     return entries
-  }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length, i18n.language])
+  }, [hasQuery, paletteSections, showCreateAction, worktreeItems.length])
 
   const selectionItemIds = useMemo(
     () => getWorktreePaletteSelectionItemIds(listEntries),

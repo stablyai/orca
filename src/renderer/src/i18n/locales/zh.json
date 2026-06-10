@@ -16,7 +16,8 @@
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "spanish": "Español"
       },
       "statusBar": {
         "claudeToggleDescription": "显示活动工作区的 Claude Token 和成本使用情况。",
@@ -3793,12 +3794,14 @@
               "suggestion": {
                 "toast": {
                   "670864ab52": "使本地 {{value0}} 保持最新",
-                  "84c62e4d7f": "Could not turn on {{value0}}",
-                  "442552c656": "Open Settings and try again.",
-                  "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
-                  "3d260e1a5d": "Settings › {{value0}}",
-                  "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "84c62e4d7f": "无法开启 {{value0}}",
+                  "442552c656": "打开设置并重试。",
+                  "f15fd80989": "新工作树是最新的，但本地 {{value0}} 落后 {{value1}} {{value2}}，因此 AI 差异可能会与过时历史比较。让 Orca 自动保持它最新。可随时在",
+                  "3d260e1a5d": "设置 › {{value0}}",
+                  "34a03a6565": "保持 {{value0}} 最新",
+                  "4a18052018": "本地 {{value0}} 落后于 {{value1}}",
+                  "commit": "次提交",
+                  "commits": "次提交"
                 }
               }
             }
@@ -4945,6 +4948,12 @@
           "95a0411b3e": "模板",
           "175daba180": "例子",
           "b20c5df6ca": "添加“orca.yaml”文件以启用此存储库的共享设置、存档或议题自动化默认值。示例模板：",
+          "56f9a4a1d0": "正在使用 `orca.yaml`",
+          "623e0c9f31": "无法解析 `orca.yaml`",
+          "5a67e4793d": "未检测到 `orca.yaml`",
+          "07ba35bc68": "检查 `scripts:` 下的缩进。钩子键应使用两个空格，命令行应使用四个空格。",
+          "787ca433ef": "仅定义支持的键：`scripts`、`setup`、`archive` 和 `issueCommand`。",
+          "ecc73d9125": "将你的文件与下面可用的模板进行比较，并在需要时复制该结构。",
           "925f9e0dc4": "文本前景",
           "0cc712b823": "核心配置文件存在于存储库根目录中，但 Orca 尚无法解析支持的钩子定义。",
           "c90b858573": "文本-​​Amber-700 深色：文本-Amber-300",
@@ -6460,7 +6469,7 @@
             "28192e3a63": "掌握",
             "e3e9adde59": "主要的",
             "0e993bf00f": "当您创建工作区时，Orca 会刷新远程库并安全地快进匹配的本地分支，例如 main 或 master。这使得像 git diff main...HEAD 这样的命令无法与过时的历史记录进行比较。如果该分支有未提交的更改或仅限本地提交，Orca 会跳过更新。",
-            "f8bda25f29": "保持本地主要更新",
+            "f8bda25f29": "保持本地 main 最新",
             "769ddd7f81": "风俗",
             "1d2fae1fa2": "git 用户名",
             "f83c8937c4": "分支命名",
@@ -7271,7 +7280,7 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f8bda25f29": "保持本地 main 最新"
                     }
                   }
                 }

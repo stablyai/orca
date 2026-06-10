@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampContextualTourPanelPosition,
-  getContextualTourPanelCssPosition
+  getContextualTourTargetRectInHost
 } from './contextual-tour-panel-position'
 
 describe('contextual tour panel position', () => {
@@ -40,25 +40,33 @@ describe('contextual tour panel position', () => {
     expect(position.arrowOffset).toBeLessThan(120)
   })
 
-  it('converts viewport panel coordinates into hosted dialog coordinates', () => {
-    const position = {
-      left: 838,
-      top: 168,
-      placement: 'right' as const,
-      arrowOffset: 64
-    }
-
+  it('translates a viewport target rect into hosted dialog coordinates', () => {
     expect(
-      getContextualTourPanelCssPosition({
-        position,
-        panelHostRect: { left: 500, top: 80 }
-      })
-    ).toEqual({ left: 338, top: 88, arrowOffset: 64 })
-    expect(getContextualTourPanelCssPosition({ position })).toEqual({
-      left: 838,
-      top: 168,
-      arrowOffset: 64
+      getContextualTourTargetRectInHost(
+        { left: 555, right: 1018, top: 240, bottom: 315, width: 463, height: 75 },
+        { left: 500, top: 80 }
+      )
+    ).toEqual({ left: 55, right: 518, top: 160, bottom: 235, width: 463, height: 75 })
+  })
+
+  it('keeps a hosted panel inside a dialog whose field spans nearly its full width', () => {
+    // Regression: the workspace-creation tour panel was clamped against the
+    // viewport, so it sat to the right of the Project field — outside the
+    // dialog content that clips overflow — and only a sliver was visible.
+    const hostRect = { left: 55, top: 42 }
+    const position = clampContextualTourPanelPosition({
+      targetRect: getContextualTourTargetRectInHost(
+        { left: 110, right: 1018, top: 240, bottom: 315, width: 908, height: 75 },
+        hostRect
+      ),
+      viewport: { width: 1020, height: 910 },
+      panel: { width: 320, height: 180 }
     })
+
+    expect(position.placement).toBe('bottom')
+    expect(position.left).toBeGreaterThanOrEqual(12)
+    expect(position.left + 320).toBeLessThanOrEqual(1020 - 12)
+    expect(position.top + 180).toBeLessThanOrEqual(910 - 12)
   })
 
   it('flips below the target when neither side has horizontal room', () => {

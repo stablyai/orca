@@ -10,6 +10,7 @@ import type {
 } from '../../../../shared/types'
 import { AlertTriangle, ChevronRight, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
@@ -40,77 +41,8 @@ type HookSettingsPolicyDraft = Partial<
   Pick<RepoHookSettings, 'setupRunPolicy' | 'commandSourcePolicy'>
 >
 
-const SETUP_RUN_POLICY_OPTIONS: PolicyOption<SetupRunPolicy>[] = [
-  {
-    policy: 'ask',
-    label: translate(
-      'auto.components.settings.RepositoryHooksSection.e03d9a8f38',
-      'Ask every time'
-    ),
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.90b1f50137',
-      'Prompt before running setup.'
-    )
-  },
-  {
-    policy: 'run-by-default',
-    label: translate(
-      'auto.components.settings.RepositoryHooksSection.d3ef1ab247',
-      'Run by default'
-    ),
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.022ba10cf2',
-      'Run setup automatically.'
-    )
-  },
-  {
-    policy: 'skip-by-default',
-    label: translate(
-      'auto.components.settings.RepositoryHooksSection.15debc1fd9',
-      'Skip by default'
-    ),
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.99e3264a49',
-      'Only run setup when chosen.'
-    )
-  }
-]
-
-const COMMAND_SOURCE_POLICY_OPTIONS: PolicyOption<HookCommandSourcePolicy>[] = [
-  {
-    policy: 'shared-only',
-    label: translate(
-      'auto.components.settings.RepositoryHooksSection.d88b6ff88f',
-      'orca.yaml only'
-    ),
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.29397e8bbc',
-      'Run only committed repo commands; ignore local commands.'
-    )
-  },
-  {
-    policy: 'local-only',
-    label: translate('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only'),
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.0e8b2a520d',
-      'Ignore orca.yaml; run only your local commands.'
-    )
-  },
-  {
-    policy: 'run-both',
-    label: translate('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both'),
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.8561b0665f',
-      'orca.yaml first, then your local commands.'
-    )
-  }
-]
-
-const COMMAND_SOURCE_LABEL: Record<HookCommandSourcePolicy, string> = {
-  'shared-only': 'orca.yaml only',
-  'local-only': 'Local only',
-  'run-both': 'Run both'
-}
+// Why: this is a literal issue-command template token, not app data for i18next to fill.
+const ARTIFACT_URL_TEMPLATE_TOKEN = '{{artifact_url}}'
 
 type LocalHookField = {
   name: LocalHookName
@@ -118,60 +50,6 @@ type LocalHookField = {
   description: string
   placeholder: string
 }
-
-const LOCAL_HOOK_FIELDS: LocalHookField[] = [
-  {
-    name: 'setup',
-    label: translate('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script'),
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.f0710e1c83',
-      'Runs after a new worktree is created; install deps, copy env files, run migrations.'
-    ),
-    placeholder: translate(
-      'auto.components.settings.RepositoryHooksSection.a3fc966677',
-      '# e.g. pnpm install cp "$ORCA_ROOT_PATH/.env" "$ORCA_WORKTREE_PATH/.env"'
-    )
-  },
-  {
-    name: 'archive',
-    label: translate(
-      'auto.components.settings.RepositoryHooksSection.9a100323ff',
-      'Archive Script'
-    ),
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.6f90ebe3fd',
-      'Runs before a worktree is archived or removed.'
-    ),
-    placeholder: translate(
-      'auto.components.settings.RepositoryHooksSection.9b821fa19d',
-      '# e.g. echo "Cleaning up $ORCA_WORKSPACE_NAME"'
-    )
-  }
-]
-
-const ENV_VARS: readonly { name: string; description: string }[] = [
-  {
-    name: '$ORCA_ROOT_PATH',
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.30952c4aa4',
-      'Path to the main repo checkout. Useful for copying shared files, like .env, into a worktree.'
-    )
-  },
-  {
-    name: '$ORCA_WORKTREE_PATH',
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.54c73d88d0',
-      'Path to the worktree being created. Setup commands run from this directory.'
-    )
-  },
-  {
-    name: '$ORCA_WORKSPACE_NAME',
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.0fa21e19ec',
-      'Name of the workspace, usually based on the branch name.'
-    )
-  }
-]
 
 const EXAMPLE_TEMPLATE = `scripts:
   setup: |
@@ -244,58 +122,234 @@ export function getLocalCommandSourcePolicyNotice({
       }
 }
 
-const YAML_STATE_STYLES: Record<
-  string,
-  { card: string; title: string; heading: string; description: string }
-> = {
+const YAML_STATE_STYLES: Record<string, { card: string; titleClassName: string }> = {
   loaded: {
     card: 'border-emerald-500/20 bg-emerald-500/5',
-    title: translate(
-      'auto.components.settings.RepositoryHooksSection.32f417fe17',
-      'text-emerald-700 dark:text-emerald-300'
-    ),
-    heading: 'Using `orca.yaml`',
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.ca424ff135',
-      'Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.'
-    )
+    titleClassName: 'text-emerald-700 dark:text-emerald-300'
   },
   'update-available': {
     card: 'border-amber-500/20 bg-amber-500/5',
-    title: translate(
-      'auto.components.settings.RepositoryHooksSection.c90b858573',
-      'text-amber-700 dark:text-amber-300'
-    ),
-    heading: '`orca.yaml` could not be parsed',
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.aba825233f',
-      'The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.'
-    )
+    titleClassName: 'text-amber-700 dark:text-amber-300'
   },
   invalid: {
     card: 'border-amber-500/20 bg-amber-500/5',
-    title: translate(
-      'auto.components.settings.RepositoryHooksSection.c90b858573',
-      'text-amber-700 dark:text-amber-300'
-    ),
-    heading: '`orca.yaml` could not be parsed',
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.0cc712b823',
-      'The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.'
-    )
+    titleClassName: 'text-amber-700 dark:text-amber-300'
   },
   missing: {
     card: 'border-border/50 bg-muted/20',
-    title: translate(
-      'auto.components.settings.RepositoryHooksSection.925f9e0dc4',
-      'text-foreground'
-    ),
-    heading: 'No `orca.yaml` detected',
-    description: translate(
-      'auto.components.settings.RepositoryHooksSection.b20c5df6ca',
-      'Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:'
-    )
+    titleClassName: 'text-foreground'
   }
+}
+
+function getSetupRunPolicyOptions(): PolicyOption<SetupRunPolicy>[] {
+  return [
+    {
+      policy: 'ask',
+      label: translate(
+        'auto.components.settings.RepositoryHooksSection.e03d9a8f38',
+        'Ask every time'
+      ),
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.90b1f50137',
+        'Prompt before running setup.'
+      )
+    },
+    {
+      policy: 'run-by-default',
+      label: translate(
+        'auto.components.settings.RepositoryHooksSection.d3ef1ab247',
+        'Run by default'
+      ),
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.022ba10cf2',
+        'Run setup automatically.'
+      )
+    },
+    {
+      policy: 'skip-by-default',
+      label: translate(
+        'auto.components.settings.RepositoryHooksSection.15debc1fd9',
+        'Skip by default'
+      ),
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.99e3264a49',
+        'Only run setup when chosen.'
+      )
+    }
+  ]
+}
+
+function getCommandSourcePolicyOptions(): PolicyOption<HookCommandSourcePolicy>[] {
+  return [
+    {
+      policy: 'shared-only',
+      label: translate(
+        'auto.components.settings.RepositoryHooksSection.d88b6ff88f',
+        'orca.yaml only'
+      ),
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.29397e8bbc',
+        'Run only committed repo commands; ignore local commands.'
+      )
+    },
+    {
+      policy: 'local-only',
+      label: translate('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only'),
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.0e8b2a520d',
+        'Ignore orca.yaml; run only your local commands.'
+      )
+    },
+    {
+      policy: 'run-both',
+      label: translate('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both'),
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.8561b0665f',
+        'orca.yaml first, then your local commands.'
+      )
+    }
+  ]
+}
+
+function getCommandSourceLabel(policy: HookCommandSourcePolicy): string {
+  switch (policy) {
+    case 'shared-only':
+      return translate(
+        'auto.components.settings.RepositoryHooksSection.d88b6ff88f',
+        'orca.yaml only'
+      )
+    case 'local-only':
+      return translate('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only')
+    case 'run-both':
+      return translate('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both')
+  }
+}
+
+function getLocalHookFields(): readonly [LocalHookField, LocalHookField] {
+  return [
+    {
+      name: 'setup',
+      label: translate(
+        'auto.components.settings.RepositoryHooksSection.52b31baf02',
+        'Setup Script'
+      ),
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.f0710e1c83',
+        'Runs after a new worktree is created; install deps, copy env files, run migrations.'
+      ),
+      placeholder: translate(
+        'auto.components.settings.RepositoryHooksSection.a3fc966677',
+        '# e.g. pnpm install cp "$ORCA_ROOT_PATH/.env" "$ORCA_WORKTREE_PATH/.env"'
+      )
+    },
+    {
+      name: 'archive',
+      label: translate(
+        'auto.components.settings.RepositoryHooksSection.9a100323ff',
+        'Archive Script'
+      ),
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.6f90ebe3fd',
+        'Runs before a worktree is archived or removed.'
+      ),
+      placeholder: translate(
+        'auto.components.settings.RepositoryHooksSection.9b821fa19d',
+        '# e.g. echo "Cleaning up $ORCA_WORKSPACE_NAME"'
+      )
+    }
+  ]
+}
+
+function getEnvVars(): readonly { name: string; description: string }[] {
+  return [
+    {
+      name: '$ORCA_ROOT_PATH',
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.30952c4aa4',
+        'Path to the main repo checkout. Useful for copying shared files, like .env, into a worktree.'
+      )
+    },
+    {
+      name: '$ORCA_WORKTREE_PATH',
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.54c73d88d0',
+        'Path to the worktree being created. Setup commands run from this directory.'
+      )
+    },
+    {
+      name: '$ORCA_WORKSPACE_NAME',
+      description: translate(
+        'auto.components.settings.RepositoryHooksSection.0fa21e19ec',
+        'Name of the workspace, usually based on the branch name.'
+      )
+    }
+  ]
+}
+
+function getYamlStateCopy(yamlState: string): { heading: string; description: string } {
+  switch (yamlState) {
+    case 'loaded':
+      return {
+        heading: translate(
+          'auto.components.settings.RepositoryHooksSection.56f9a4a1d0',
+          'Using `orca.yaml`'
+        ),
+        description: translate(
+          'auto.components.settings.RepositoryHooksSection.ca424ff135',
+          'Shared hook and issue-automation defaults are defined in the repo and available to everyone who uses it.'
+        )
+      }
+    case 'update-available':
+      return {
+        heading: translate(
+          'auto.components.settings.RepositoryHooksSection.623e0c9f31',
+          '`orca.yaml` could not be parsed'
+        ),
+        description: translate(
+          'auto.components.settings.RepositoryHooksSection.aba825233f',
+          'The file contains configuration keys that this version of Orca does not recognize. You may need to update Orca, or check the file for typos.'
+        )
+      }
+    case 'invalid':
+      return {
+        heading: translate(
+          'auto.components.settings.RepositoryHooksSection.623e0c9f31',
+          '`orca.yaml` could not be parsed'
+        ),
+        description: translate(
+          'auto.components.settings.RepositoryHooksSection.0cc712b823',
+          'The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.'
+        )
+      }
+    default:
+      return {
+        heading: translate(
+          'auto.components.settings.RepositoryHooksSection.5a67e4793d',
+          'No `orca.yaml` detected'
+        ),
+        description: translate(
+          'auto.components.settings.RepositoryHooksSection.b20c5df6ca',
+          'Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:'
+        )
+      }
+  }
+}
+
+function getParseErrorFixes(): readonly string[] {
+  return [
+    translate(
+      'auto.components.settings.RepositoryHooksSection.07ba35bc68',
+      'Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.'
+    ),
+    translate(
+      'auto.components.settings.RepositoryHooksSection.787ca433ef',
+      'Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.'
+    ),
+    translate(
+      'auto.components.settings.RepositoryHooksSection.ecc73d9125',
+      'Compare your file against the working template below and copy that shape if needed.'
+    )
+  ]
 }
 
 function PolicyOptionGrid<P extends string>({
@@ -419,6 +473,8 @@ function YamlScriptBlock({ content }: { content: string }): React.JSX.Element {
 }
 
 function EnvVarChips(): React.JSX.Element {
+  const envVars = getEnvVars()
+
   return (
     <div className="space-y-1.5">
       <p className="text-[11px] text-muted-foreground">
@@ -429,7 +485,7 @@ function EnvVarChips(): React.JSX.Element {
       </p>
       <TooltipProvider delayDuration={150}>
         <div className="flex flex-wrap gap-1.5">
-          {ENV_VARS.map(({ name, description }) => (
+          {envVars.map(({ name, description }) => (
             <Tooltip key={name}>
               <TooltipTrigger asChild>
                 <code
@@ -686,6 +742,9 @@ export function RepositoryHooksSection({
   onCopyTemplate,
   onUpdateHookSettings
 }: RepositoryHooksSectionProps): React.JSX.Element {
+  // Why: this component uses the lightweight translate() helper; subscribe here
+  // so render-time option/copy builders refresh when the UI language changes.
+  useTranslation()
   const settings = useAppStore((s) => s.settings)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const yamlState = yamlHooks
@@ -710,6 +769,11 @@ export function RepositoryHooksSection({
 
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
+  const setupRunPolicyOptions = getSetupRunPolicyOptions()
+  const commandSourcePolicyOptions = getCommandSourcePolicyOptions()
+  const localHookFields = getLocalHookFields()
+  const yamlStateCopy = getYamlStateCopy(yamlState)
+  const parseErrorFixes = getParseErrorFixes()
 
   const [issueCommandDraft, setIssueCommandDraft] = useState('')
   const [hasSharedIssueCommand, setHasSharedIssueCommand] = useState(false)
@@ -956,7 +1020,7 @@ export function RepositoryHooksSection({
       >
         <ScriptEditor
           key={`${repo.id}:setup`}
-          field={LOCAL_HOOK_FIELDS[0]}
+          field={localHookFields[0]}
           value={hookSettingsDraft.scripts.setup ?? ''}
           hasShared={hasSharedSetupScript}
           sharedScript={sharedSetupScript}
@@ -994,7 +1058,7 @@ export function RepositoryHooksSection({
             </p>
           </div>
           <SegmentedPolicyToggle
-            options={SETUP_RUN_POLICY_OPTIONS}
+            options={setupRunPolicyOptions}
             selected={selectedSetupRunPolicy}
             onSelect={(policy) => updateHookSettingsPolicyDraft({ setupRunPolicy: policy })}
           />
@@ -1024,7 +1088,7 @@ export function RepositoryHooksSection({
       >
         <ScriptEditor
           key={`${repo.id}:archive`}
-          field={LOCAL_HOOK_FIELDS[1]}
+          field={localHookFields[1]}
           value={hookSettingsDraft.scripts.archive ?? ''}
           hasShared={hasSharedArchiveScript}
           sharedScript={sharedArchiveScript}
@@ -1070,7 +1134,8 @@ export function RepositoryHooksSection({
               <code className="rounded bg-muted px-1 py-0.5">
                 {translate(
                   'auto.components.settings.RepositoryHooksSection.c85c2c88a2',
-                  '{{artifact_url}}'
+                  '{{artifact_url}}',
+                  { artifact_url: ARTIFACT_URL_TEMPLATE_TOKEN }
                 )}
               </code>{' '}
               {translate(
@@ -1089,7 +1154,8 @@ export function RepositoryHooksSection({
             onBlur={commitIssueCommand}
             placeholder={translate(
               'auto.components.settings.RepositoryHooksSection.4084720f47',
-              'Complete {{artifact_url}}'
+              'Complete {{artifact_url}}',
+              { artifact_url: ARTIFACT_URL_TEMPLATE_TOKEN }
             )}
             rows={4}
             spellCheck={false}
@@ -1168,7 +1234,7 @@ export function RepositoryHooksSection({
               </span>
             </div>
             <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-foreground">
-              {COMMAND_SOURCE_LABEL[selectedCommandSourcePolicy]}
+              {getCommandSourceLabel(selectedCommandSourcePolicy)}
             </span>
           </summary>
 
@@ -1199,7 +1265,7 @@ export function RepositoryHooksSection({
                 </p>
               </div>
               <PolicyOptionGrid
-                options={COMMAND_SOURCE_POLICY_OPTIONS}
+                options={commandSourcePolicyOptions}
                 selected={selectedCommandSourcePolicy}
                 onSelect={(policy) =>
                   updateHookSettingsPolicyDraft({ commandSourcePolicy: policy })
@@ -1211,12 +1277,12 @@ export function RepositoryHooksSection({
             <div className={`space-y-3 rounded-xl border p-3 ${YAML_STATE_STYLES[yamlState].card}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="space-y-1">
-                  <p className={`text-sm font-medium ${YAML_STATE_STYLES[yamlState].title}`}>
-                    {YAML_STATE_STYLES[yamlState].heading}
+                  <p
+                    className={`text-sm font-medium ${YAML_STATE_STYLES[yamlState].titleClassName}`}
+                  >
+                    {yamlStateCopy.heading}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {YAML_STATE_STYLES[yamlState].description}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{yamlStateCopy.description}</p>
                 </div>
               </div>
 
@@ -1234,7 +1300,7 @@ export function RepositoryHooksSection({
                         )}
                       </p>
                       <ol className="space-y-1.5 pl-4 text-[11.5px]">
-                        {PARSE_ERROR_FIXES.map((fix) => (
+                        {parseErrorFixes.map((fix) => (
                           <li key={fix} className="list-decimal leading-5">
                             {fix}
                           </li>
@@ -1260,12 +1326,6 @@ export function RepositoryHooksSection({
     </section>
   )
 }
-
-const PARSE_ERROR_FIXES = [
-  'Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.',
-  'Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.',
-  'Compare your file against the working template below and copy that shape if needed.'
-]
 
 function renderYamlScriptPreview(hooks: OrcaHooks | null): string {
   const fmt = (key: string, cmd?: string): string =>

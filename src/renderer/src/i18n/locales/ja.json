@@ -16,7 +16,8 @@
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "spanish": "Español"
       },
       "statusBar": {
         "claudeToggleDescription": "アクティブなワークスペースのClaude トークンとコストの使用状況を表示します。",
@@ -3793,12 +3794,14 @@
               "suggestion": {
                 "toast": {
                   "670864ab52": "ローカル {{value0}} を最新の状態に保つ",
-                  "84c62e4d7f": "Could not turn on {{value0}}",
-                  "442552c656": "Open Settings and try again.",
-                  "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
-                  "3d260e1a5d": "Settings › {{value0}}",
-                  "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "84c62e4d7f": "{{value0}} をオンにできませんでした",
+                  "442552c656": "設定を開いてもう一度お試しください。",
+                  "f15fd80989": "新しいワークツリーは最新ですが、ローカル {{value0}} は {{value1}} {{value2}} 遅れているため、AI diff が古い履歴と比較する可能性があります。Orca が自動で最新状態を保つようにできます。これはいつでもここで変更できます",
+                  "3d260e1a5d": "設定 › {{value0}}",
+                  "34a03a6565": "{{value0}} を最新の状態に保つ",
+                  "4a18052018": "ローカル {{value0}} は {{value1}} より遅れています",
+                  "commit": "コミット",
+                  "commits": "コミット"
                 }
               }
             }
@@ -4945,6 +4948,12 @@
           "95a0411b3e": "テンプレート",
           "175daba180": "例",
           "b20c5df6ca": "「orca.yaml」ファイルを追加して、このリポジトリの共有セットアップ、アーカイブ、またはイシュー自動化のデフォルトを有効にします。テンプレートの例:",
+          "56f9a4a1d0": "`orca.yaml` を使用中",
+          "623e0c9f31": "`orca.yaml` を解析できませんでした",
+          "5a67e4793d": "`orca.yaml` が見つかりません",
+          "07ba35bc68": "`scripts:` の下のインデントを確認してください。フックキーは2スペース、コマンド行は4スペースにします。",
+          "787ca433ef": "サポートされているキーのみを定義してください: `scripts`、`setup`、`archive`、`issueCommand`。",
+          "ecc73d9125": "下の動作するテンプレートと比較し、必要に応じてその形式をコピーしてください。",
           "925f9e0dc4": "テキスト前景",
           "0cc712b823": "コア構成ファイルはリポジトリ ルートに存在しますが、Orca はサポートされているフック定義をまだ解析できませんでした。",
           "c90b858573": "テキスト-アンバー-700 ダーク:テキスト-アンバー-300",
@@ -7271,7 +7280,7 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f8bda25f29": "ローカル main を最新の状態に保つ"
                     }
                   }
                 }

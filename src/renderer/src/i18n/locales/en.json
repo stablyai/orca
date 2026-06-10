@@ -16,7 +16,8 @@
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "spanish": "Español"
       },
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",
@@ -3061,7 +3062,9 @@
                   "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
                   "3d260e1a5d": "Settings › {{value0}}",
                   "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "4a18052018": "Local {{value0}} is behind {{value1}}",
+                  "commit": "commit",
+                  "commits": "commits"
                 }
               }
             }
@@ -4960,6 +4963,12 @@
           "95a0411b3e": "template",
           "175daba180": "Example",
           "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
+          "56f9a4a1d0": "Using `orca.yaml`",
+          "623e0c9f31": "`orca.yaml` could not be parsed",
+          "5a67e4793d": "No `orca.yaml` detected",
+          "07ba35bc68": "Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.",
+          "787ca433ef": "Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.",
+          "ecc73d9125": "Compare your file against the working template below and copy that shape if needed.",
           "925f9e0dc4": "text-foreground",
           "0cc712b823": "The core configuration file exists in the repo root, but Orca could not parse the supported hook definitions yet.",
           "c90b858573": "text-amber-700 dark:text-amber-300",

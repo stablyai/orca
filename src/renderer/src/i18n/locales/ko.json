@@ -16,7 +16,8 @@
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "spanish": "Español"
       },
       "statusBar": {
         "claudeToggleDescription": "활성 워크스페이스에 대한 Claude 토큰 및 비용 사용량을 표시합니다.",
@@ -3793,12 +3794,14 @@
               "suggestion": {
                 "toast": {
                   "670864ab52": "로컬 {{value0}}을 최신 상태로 유지",
-                  "84c62e4d7f": "Could not turn on {{value0}}",
-                  "442552c656": "Open Settings and try again.",
-                  "f15fd80989": "Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in",
-                  "3d260e1a5d": "Settings › {{value0}}",
-                  "34a03a6565": "Keep {{value0}} up to date",
-                  "4a18052018": "Local {{value0}} is behind {{value1}}"
+                  "84c62e4d7f": "{{value0}}을(를) 켤 수 없습니다.",
+                  "442552c656": "설정을 열고 다시 시도하세요.",
+                  "f15fd80989": "새 워크트리는 최신 상태이지만 로컬 {{value0}}이(가) {{value1}} {{value2}} 뒤처져 있어 AI diff가 오래된 기록과 비교될 수 있습니다. Orca가 자동으로 최신 상태를 유지하도록 하세요. 언제든지 여기에서 변경할 수 있습니다",
+                  "3d260e1a5d": "설정 › {{value0}}",
+                  "34a03a6565": "{{value0}} 최신 상태로 유지",
+                  "4a18052018": "로컬 {{value0}}이(가) {{value1}}보다 뒤처져 있습니다",
+                  "commit": "커밋",
+                  "commits": "커밋"
                 }
               }
             }
@@ -4945,6 +4948,12 @@
           "95a0411b3e": "주형",
           "175daba180": "예",
           "b20c5df6ca": "이 저장소에 대한 공유 설정, 아카이브 또는 발행 자동화 기본값을 활성화하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:",
+          "56f9a4a1d0": "`orca.yaml` 사용 중",
+          "623e0c9f31": "`orca.yaml`을 구문 분석할 수 없습니다",
+          "5a67e4793d": "`orca.yaml`을 찾을 수 없습니다",
+          "07ba35bc68": "`scripts:` 아래의 들여쓰기를 확인하세요. 후크 키는 두 칸, 명령 줄은 네 칸을 사용해야 합니다.",
+          "787ca433ef": "지원되는 키만 정의하세요: `scripts`, `setup`, `archive`, `issueCommand`.",
+          "ecc73d9125": "아래의 작동하는 템플릿과 비교하고 필요한 경우 그 형식을 복사하세요.",
           "925f9e0dc4": "텍스트 전경",
           "0cc712b823": "핵심 구성 파일이 저장소 루트에 있지만 Orca가 아직 지원되는 후크 정의를 구문 분석할 수 없습니다.",
           "c90b858573": "텍스트-호박-700 어두움:텍스트-호박-300",
@@ -7271,7 +7280,7 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f8bda25f29": "로컬 main을 최신 상태로 유지"
                     }
                   }
                 }

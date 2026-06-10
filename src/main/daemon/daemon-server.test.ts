@@ -198,6 +198,21 @@ describe('DaemonServer', () => {
       expect(result).toEqual({ pong: true })
     })
 
+    it('handles ptySpawnHealth through the daemon process', async () => {
+      const ptySpawnHealthCheck = vi.fn(async () => {})
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        ptySpawnHealthCheck,
+        spawnSubprocess: () => createMockSubprocess()
+      })
+      await server.start()
+      const c = await connectClient()
+
+      await expect(c.request('ptySpawnHealth', undefined)).resolves.toEqual({ healthy: true })
+      expect(ptySpawnHealthCheck).toHaveBeenCalledOnce()
+    })
+
     it('handles systemResolverHealth', async () => {
       await startServer()
       const c = await connectClient()
