@@ -12,6 +12,7 @@ import {
 import { ScrollArea } from '../ui/scroll-area'
 import { SettingsBadge } from './SettingsFormControls'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
+import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
 type WarpThemeImportModalProps = Pick<
@@ -75,9 +76,17 @@ export function WarpThemeImportModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-sm">Import themes from Warp</DialogTitle>
+          <DialogTitle className="text-sm">
+            {translate(
+              'auto.components.settings.WarpThemeImportModal.title',
+              'Import themes from Warp'
+            )}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            Import Warp themes as Orca terminal themes.
+            {translate(
+              'auto.components.settings.WarpThemeImportModal.description',
+              'Import Warp themes as Orca terminal themes.'
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -92,7 +101,10 @@ export function WarpThemeImportModal({
                 onClick={() => void handlePreviewSource({ kind: 'chooseFile' })}
               >
                 <FileUp className="size-4" />
-                Choose File
+                {translate(
+                  'auto.components.settings.WarpThemeImportModal.choose_file',
+                  'Choose File'
+                )}
               </Button>
               <Button
                 variant="outline"
@@ -102,7 +114,10 @@ export function WarpThemeImportModal({
                 onClick={() => void handlePreviewSource({ kind: 'chooseFolder' })}
               >
                 <FolderOpen className="size-4" />
-                Choose Folder
+                {translate(
+                  'auto.components.settings.WarpThemeImportModal.choose_folder',
+                  'Choose Folder'
+                )}
               </Button>
             </div>
           ) : null}
@@ -110,21 +125,47 @@ export function WarpThemeImportModal({
           {loading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              Loading Warp themes...
+              {translate(
+                'auto.components.settings.WarpThemeImportModal.loading',
+                'Loading Warp themes...'
+              )}
             </div>
           ) : preview == null ? null : preview.found ? (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>
-                  Found {preview.themes.length} theme{preview.themes.length === 1 ? '' : 's'}
-                  {preview.sourceLabel ? ` in ${preview.sourceLabel}` : ''}
+                  {preview.themes.length === 1
+                    ? translate(
+                        'auto.components.settings.WarpThemeImportModal.found_theme_one',
+                        'Found 1 theme'
+                      )
+                    : translate(
+                        'auto.components.settings.WarpThemeImportModal.found_theme_other',
+                        'Found {{value0}} themes',
+                        { value0: preview.themes.length }
+                      )}
+                  {preview.sourceLabel
+                    ? translate(
+                        'auto.components.settings.WarpThemeImportModal.found_in_source',
+                        ' in {{value0}}',
+                        { value0: preview.sourceLabel }
+                      )
+                    : ''}
                 </span>
                 <button
                   type="button"
                   className="text-xs font-medium text-foreground hover:underline"
                   onClick={() => handleToggleAll(!allSelected)}
                 >
-                  {allSelected ? 'Clear all' : 'Select all'}
+                  {allSelected
+                    ? translate(
+                        'auto.components.settings.WarpThemeImportModal.clear_all',
+                        'Clear all'
+                      )
+                    : translate(
+                        'auto.components.settings.WarpThemeImportModal.select_all',
+                        'Select all'
+                      )}
                 </button>
               </div>
 
@@ -167,7 +208,12 @@ export function WarpThemeImportModal({
                                 {theme.unsupportedFeatures.join(', ')}
                               </p>
                             ) : (
-                              <p className="text-xs text-muted-foreground">Colors only</p>
+                              <p className="text-xs text-muted-foreground">
+                                {translate(
+                                  'auto.components.settings.WarpThemeImportModal.colors_only',
+                                  'Colors only'
+                                )}
+                              </p>
                             )}
                           </div>
                           <ThemeSwatches theme={theme} />
@@ -180,14 +226,32 @@ export function WarpThemeImportModal({
             </div>
           ) : (
             <div className="space-y-2 text-xs text-muted-foreground">
-              <p>{preview.error ?? 'No Warp themes found in the selected source.'}</p>
-              {!desktopOnly ? <p>Choose a Warp theme file or folder to import manually.</p> : null}
+              <p>
+                {preview.error ??
+                  translate(
+                    'auto.components.settings.WarpThemeImportModal.no_themes_found',
+                    'No Warp themes found in the selected source.'
+                  )}
+              </p>
+              {!desktopOnly ? (
+                <p>
+                  {translate(
+                    'auto.components.settings.WarpThemeImportModal.choose_manually',
+                    'Choose a Warp theme file or folder to import manually.'
+                  )}
+                </p>
+              ) : null}
             </div>
           )}
 
           {!loading && preview && skippedCount > 0 ? (
             <div className="rounded-lg border border-border/50 p-3">
-              <p className="mb-2 text-xs font-medium">Skipped files</p>
+              <p className="mb-2 text-xs font-medium">
+                {translate(
+                  'auto.components.settings.WarpThemeImportModal.skipped_files',
+                  'Skipped files'
+                )}
+              </p>
               <ul className="scrollbar-sleek max-h-24 space-y-1 overflow-auto text-xs text-muted-foreground">
                 {preview.skippedFiles.slice(0, 8).map((file) => (
                   <li key={`${file.label}:${file.reason}`} className="flex gap-2">
@@ -196,7 +260,13 @@ export function WarpThemeImportModal({
                   </li>
                 ))}
                 {preview.skippedFiles.length > 8 ? (
-                  <li>{preview.skippedFiles.length - 8} more skipped files.</li>
+                  <li>
+                    {translate(
+                      'auto.components.settings.WarpThemeImportModal.more_skipped_files',
+                      '{{value0}} more skipped files.',
+                      { value0: preview.skippedFiles.length - 8 }
+                    )}
+                  </li>
                 ) : null}
               </ul>
             </div>
@@ -207,14 +277,27 @@ export function WarpThemeImportModal({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            Cancel
+            {translate('auto.components.settings.WarpThemeImportModal.cancel', 'Cancel')}
           </Button>
           <Button
             disabled={!preview?.found || selectedCount === 0 || loading}
             onClick={() => void handleApply()}
           >
-            Import {selectedCount > 0 ? selectedCount : ''} Theme
-            {selectedCount === 1 ? '' : 's'}
+            {selectedCount === 1
+              ? translate(
+                  'auto.components.settings.WarpThemeImportModal.import_theme_one',
+                  'Import 1 Theme'
+                )
+              : selectedCount > 0
+                ? translate(
+                    'auto.components.settings.WarpThemeImportModal.import_theme_other',
+                    'Import {{value0}} Themes',
+                    { value0: selectedCount }
+                  )
+                : translate(
+                    'auto.components.settings.WarpThemeImportModal.import_themes',
+                    'Import Themes'
+                  )}
           </Button>
         </DialogFooter>
       </DialogContent>

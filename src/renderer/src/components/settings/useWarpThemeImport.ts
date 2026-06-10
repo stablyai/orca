@@ -9,6 +9,7 @@ import {
   type WarpThemeImportSource
 } from '../../../../shared/terminal-custom-themes'
 import { useMountedRef } from '../../hooks/useMountedRef'
+import { translate } from '@/i18n/i18n'
 
 export type UseWarpThemeImportReturn = {
   open: boolean
@@ -52,7 +53,10 @@ export function useWarpThemeImport(
         )
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error'
+      const message =
+        err instanceof Error
+          ? err.message
+          : translate('auto.components.settings.useWarpThemeImport.unknown_error', 'Unknown error')
       if (mountedRef.current) {
         setPreview({ found: false, themes: [], skippedFiles: [], error: message })
         setSelectedThemeIds(new Set())
@@ -99,9 +103,17 @@ export function useWarpThemeImport(
     const overflowCount = byId.size + newThemeCount - MAX_TERMINAL_CUSTOM_THEMES
     if (overflowCount > 0) {
       setApplyError(
-        `Importing these themes would exceed the ${MAX_TERMINAL_CUSTOM_THEMES} custom terminal theme limit. Deselect ${overflowCount} new theme${
-          overflowCount === 1 ? '' : 's'
-        } and try again.`
+        overflowCount === 1
+          ? translate(
+              'auto.components.settings.useWarpThemeImport.over_limit_one',
+              'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.',
+              { value0: MAX_TERMINAL_CUSTOM_THEMES }
+            )
+          : translate(
+              'auto.components.settings.useWarpThemeImport.over_limit_other',
+              'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again.',
+              { value0: MAX_TERMINAL_CUSTOM_THEMES, value1: overflowCount }
+            )
       )
       return
     }
@@ -118,14 +130,31 @@ export function useWarpThemeImport(
       const count = selectedThemes.length
       // Why: report success via a toast and dismiss the modal rather than
       // leaving an "imported" state inside the dialog.
-      toast.success(`Imported ${count} Warp theme${count === 1 ? '' : 's'}`)
+      toast.success(
+        count === 1
+          ? translate(
+              'auto.components.settings.useWarpThemeImport.imported_one',
+              'Imported 1 Warp theme'
+            )
+          : translate(
+              'auto.components.settings.useWarpThemeImport.imported_other',
+              'Imported {{value0}} Warp themes',
+              { value0: count }
+            )
+      )
       // Bump the signal so the theme picker scrolls to / highlights the
       // newly-imported themes, which otherwise sit off-screen below the
       // built-in list.
       setImportSignal((value) => value + 1)
       handleOpenChange(false)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to import Warp themes'
+      const message =
+        err instanceof Error
+          ? err.message
+          : translate(
+              'auto.components.settings.useWarpThemeImport.import_failed',
+              'Failed to import Warp themes'
+            )
       if (mountedRef.current) {
         setApplyError(message)
       }

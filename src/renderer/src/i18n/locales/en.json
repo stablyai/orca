@@ -4351,6 +4351,35 @@
           "273e7e81fe": "Configs",
           "1f744a72f4": "Config"
         },
+        "WarpThemeImportModal": {
+          "title": "Import themes from Warp",
+          "description": "Import Warp themes as Orca terminal themes.",
+          "choose_file": "Choose File",
+          "choose_folder": "Choose Folder",
+          "loading": "Loading Warp themes...",
+          "found_theme_one": "Found 1 theme",
+          "found_theme_other": "Found {{value0}} themes",
+          "found_in_source": " in {{value0}}",
+          "clear_all": "Clear all",
+          "select_all": "Select all",
+          "colors_only": "Colors only",
+          "no_themes_found": "No Warp themes found in the selected source.",
+          "choose_manually": "Choose a Warp theme file or folder to import manually.",
+          "skipped_files": "Skipped files",
+          "more_skipped_files": "{{value0}} more skipped files.",
+          "cancel": "Cancel",
+          "import_theme_one": "Import 1 Theme",
+          "import_theme_other": "Import {{value0}} Themes",
+          "import_themes": "Import Themes"
+        },
+        "useWarpThemeImport": {
+          "unknown_error": "Unknown error",
+          "imported_one": "Imported 1 Warp theme",
+          "imported_other": "Imported {{value0}} Warp themes",
+          "import_failed": "Failed to import Warp themes",
+          "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.",
+          "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+        },
         "GitPane": {
           "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
           "e02ea23a32": "Orca Attribution",

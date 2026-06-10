@@ -4319,6 +4319,35 @@
           "273e7e81fe": "構成",
           "1f744a72f4": "構成"
         },
+        "WarpThemeImportModal": {
+          "title": "Warp からテーマをインポート",
+          "description": "Warp テーマを Orca のターミナルテーマとしてインポートします。",
+          "choose_file": "ファイルを選択",
+          "choose_folder": "フォルダーを選択",
+          "loading": "Warp テーマを読み込み中...",
+          "found_theme_one": "1 件のテーマが見つかりました",
+          "found_theme_other": "{{value0}} 件のテーマが見つかりました",
+          "found_in_source": "（{{value0}}）",
+          "clear_all": "すべてクリア",
+          "select_all": "すべて選択",
+          "colors_only": "カラーのみ",
+          "no_themes_found": "選択したソースに Warp テーマが見つかりませんでした。",
+          "choose_manually": "Warp テーマのファイルまたはフォルダーを選択して手動でインポートします。",
+          "skipped_files": "スキップされたファイル",
+          "more_skipped_files": "他 {{value0}} 件のファイルがスキップされました。",
+          "cancel": "キャンセル",
+          "import_theme_one": "1 件のテーマをインポート",
+          "import_theme_other": "{{value0}} 件のテーマをインポート",
+          "import_themes": "テーマをインポート"
+        },
+        "useWarpThemeImport": {
+          "unknown_error": "不明なエラー",
+          "imported_one": "1 件の Warp テーマをインポートしました",
+          "imported_other": "{{value0}} 件の Warp テーマをインポートしました",
+          "import_failed": "Warp テーマのインポートに失敗しました",
+          "over_limit_one": "これらのテーマをインポートすると、カスタムターミナルテーマの上限（{{value0}} 件）を超えます。新しいテーマを 1 件選択解除して、もう一度お試しください。",
+          "over_limit_other": "これらのテーマをインポートすると、カスタムターミナルテーマの上限（{{value0}} 件）を超えます。新しいテーマを {{value1}} 件選択解除して、もう一度お試しください。"
+        },
         "GitPane": {
           "d2eede4c54": "Orca の帰属をコミット、PR、イシューに追加します。",
           "e02ea23a32": "Orcaの帰属",

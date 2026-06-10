@@ -57,7 +57,7 @@ type TerminalAppearanceSearchOptions = {
   showWarpImport?: boolean
 }
 
-const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
+const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     ...getTerminalTypographySearchEntries(),
     ...getTerminalCursorSearchEntries(),
@@ -65,16 +65,17 @@ const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
     ...getTerminalDarkThemeSearchEntries(),
     ...getTerminalLightThemeSearchEntries(),
     ...getTerminalWindowSearchEntries(),
-    ...getTerminalGhosttyImportSearchEntries(),
-    ...getTerminalWarpImportSearchEntries()
+    ...getTerminalGhosttyImportSearchEntries()
   ]
 )
 
-const getTerminalAppearanceSearchEntriesWithoutWarp = createLocalizedCatalog(
-  (): SettingsSearchEntry[] =>
-    getTerminalAppearanceSearchEntriesWithWarp().filter(
-      (entry) => entry.title !== 'Import themes from Warp'
-    )
+// Why: compose rather than filter — entry titles are localized, so matching on
+// an English title would leak the Warp entry back in under non-English locales.
+const getTerminalAppearanceSearchEntriesWithWarp = createLocalizedCatalog(
+  (): SettingsSearchEntry[] => [
+    ...getTerminalAppearanceSearchEntriesWithoutWarp(),
+    ...getTerminalWarpImportSearchEntries()
+  ]
 )
 
 export function getTerminalAppearanceSearchEntries(
