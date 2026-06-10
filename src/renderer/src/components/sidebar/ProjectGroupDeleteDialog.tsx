@@ -137,7 +137,7 @@ export function ProjectGroupDeleteDialog({
                 </p>
                 {projectNames.length > 0 && (
                   <ul
-                    className="mt-1 max-h-24 space-y-0.5 overflow-y-auto rounded-sm border border-border/70 bg-background/60 px-2 py-1.5 text-xs text-foreground"
+                    className="scrollbar-sleek mt-1 max-h-24 space-y-0.5 overflow-y-auto rounded-sm border border-border/70 bg-background/60 px-2 py-1.5 text-xs text-foreground"
                     aria-label="Contained projects"
                   >
                     {projectNames.map((projectName, index) => (
