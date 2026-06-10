@@ -12,12 +12,10 @@ import {
   Eye,
   FolderInput,
   FolderPlus,
-  Loader2,
   Plus,
   Shapes,
   SlidersHorizontal,
-  Trash2,
-  Workflow
+  Trash2
 } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -30,12 +28,7 @@ import {
 } from '@/store/selectors'
 import WorktreeCard from './WorktreeCard'
 import { PendingWorktreeRow } from './PendingWorktreeRow'
-import WorktreeCardAgents, {
-  SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT
-} from './WorktreeCardAgents'
-import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
-import { SshDisconnectedDialog } from './SshDisconnectedDialog'
-import { WorktreeCardStatusSlot } from './WorktreeCardStatusSlot'
+import { SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT } from './WorktreeCardAgents'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -117,14 +110,12 @@ import {
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
   type ScrollToCurrentWorkspaceRevealRequestDetail
 } from '@/lib/scroll-to-current-workspace-status'
 import { isRepoHeaderActionTarget, useRepoHeaderDrag } from './project-header-drag'
-import WorktreeContextMenu from './WorktreeContextMenu'
 import {
   buildManualOrderUpdatesForGroupDrop,
   buildManualOrderUpdatesForVisibleGroups,
@@ -176,7 +167,6 @@ import {
   pruneWorktreeSelection,
   updateWorktreeSelection
 } from './worktree-multi-selection'
-import { branchDisplayName } from './WorktreeCardHelpers'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
@@ -191,7 +181,6 @@ import {
 } from '../../../../shared/worktree-ownership'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
-import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import ImportedWorktreesVisibilityLine from './ImportedWorktreesVisibilityLine'
 import {
   keepImportedWorktreesHiddenCard,
@@ -362,10 +351,10 @@ function getWorktreeVisibilityMenuLabel(repo: Repo): string {
   return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
 }
 
-// Why: child workspace cards are already nested inside the parent card body;
-// using the full tree step makes the second-level card drift too far right.
-const LINEAGE_INDENT = 14
 const SIDEBAR_POINTER_DRAG_THRESHOLD_PX = 4
+// Why: nested child worktree cards sit inside the parent card body. Preserve
+// the legacy lineage surface offset instead of using the full sidebar tree step.
+const NESTED_LINEAGE_CARD_INDENT = 14
 
 type VirtualizedWorktreeViewportProps = {
   rows: Row[]
@@ -396,7 +385,6 @@ type VirtualizedWorktreeViewportProps = {
   selectedWorktrees: readonly Worktree[]
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
   onImmediateWorktreeActivate: (worktreeId: string) => void
-  onToggleWorktreeUnread: (worktree: Worktree) => void
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree
@@ -439,7 +427,6 @@ type VirtualizedWorktreeViewportProps = {
     draggedIds: readonly string[]
     dropIndex: number
   }) => void
-  showInlineAgentCards: boolean
   // Why: broad grouping changes still remount the viewport, while add/delete
   // stays mounted for row-key anchoring and layout animation. These refs bridge
   // both paths so the virtualizer never falls back to scrollTop 0.
@@ -744,7 +731,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   selectedWorktrees,
   onSelectionGesture,
   onImmediateWorktreeActivate,
-  onToggleWorktreeUnread,
   onContextMenuSelect,
   repoMap,
   worktreeMap,
@@ -762,7 +748,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   onDropWorktreesOnWorkspaceBoard,
   shouldShowWorkspaceBoardDropIndicator,
   onReorderWorktrees,
-  showInlineAgentCards,
   scrollOffsetRef,
   scrollAnchorRef
 }: VirtualizedWorktreeViewportProps) {
@@ -771,7 +756,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const directScrollInputUntilRef = useRef(0)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
   const [pinDragOver, setPinDragOver] = useState(false)
-  const [lineageReconnectWorktreeId, setLineageReconnectWorktreeId] = useState<string | null>(null)
   const [worktreeDragState, setWorktreeDragState] = useState<WorktreeRowDragState>(
     WORKTREE_ROW_DRAG_INITIAL_STATE
   )
@@ -780,9 +764,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const [highlightedRevealWorktreeId, setHighlightedRevealWorktreeId] = useState<string | null>(
     null
   )
-  const renamingWorktreeId = useAppStore((s) => s.renamingWorktreeId)
   const setRenamingWorktreeId = useAppStore((s) => s.setRenamingWorktreeId)
-  const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const worktreeDragSessionRef = useRef<WorktreeSidebarDragSession | null>(null)
   const worktreePointerDragRef = useRef<WorktreePointerDrag | null>(null)
   const worktreePointerAutoscrollFrameIdRef = useRef<number | null>(null)
@@ -851,7 +833,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const sshConnectedGeneration = useAppStore((s) => s.sshConnectedGeneration)
   const prVisibleRefreshGeneration = useAppStore((s) => s.prVisibleRefreshGeneration)
   const settings = useAppStore((s) => s.settings)
-  const deleteStateByWorktreeId = useAppStore((s) => s.deleteStateByWorktreeId)
   const reorderRepos = useAppStore((s) => s.reorderRepos)
 
   useEffect(
@@ -1015,41 +996,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     () => renderRows.findIndex((row) => renderRowContainsWorktree(row, activeWorktreeId)),
     [renderRows, activeWorktreeId]
   )
-  const activeLineageChildRow = useMemo(() => {
-    if (activeWorktreeId === null) {
-      return null
-    }
-    for (const row of renderRows) {
-      if (row.type !== 'lineage-group') {
-        continue
-      }
-      const child = row.rows.slice(1).find((item) => item.worktree.id === activeWorktreeId)
-      if (child) {
-        return child
-      }
-    }
-    return null
-  }, [activeWorktreeId, renderRows])
-  const activeLineageChildWorktreeId = activeLineageChildRow?.worktree.id ?? null
-  const activeLineageChildConnectionId = activeLineageChildRow?.repo?.connectionId ?? null
-  const activeLineageChildSshStatus = useAppStore((s) =>
-    activeLineageChildConnectionId
-      ? (s.sshConnectionStates.get(activeLineageChildConnectionId)?.status ?? 'disconnected')
-      : null
-  )
-  const activeLineageChildTargetLabel = useAppStore((s) =>
-    activeLineageChildConnectionId ? s.sshTargetLabels.get(activeLineageChildConnectionId) : null
-  )
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const activeLineageChildSshDisconnected =
-    activeLineageChildSshStatus !== null && activeLineageChildSshStatus !== 'connected'
-  const lineageReconnectPromptKey =
-    activeLineageChildWorktreeId && activeLineageChildSshDisconnected
-      ? activeLineageChildWorktreeId
-      : null
-  const [lastLineageReconnectPromptKey, setLastLineageReconnectPromptKey] = useState<string | null>(
-    null
-  )
   const renderRowsRef = useRef(renderRows)
   renderRowsRef.current = renderRows
   const getVirtualItemKey = useCallback(
@@ -1535,16 +1482,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [activeModal, keybindings, markDirectScrollInput, navigateWorktree])
-
-  // Why: lightweight nested cards do not mount WorktreeCard, so the viewport
-  // owns the SSH reconnect prompt for an active lineage child. The prompt key
-  // keeps dismissals sticky until the active/disconnected child changes.
-  if (lineageReconnectPromptKey !== lastLineageReconnectPromptKey) {
-    setLastLineageReconnectPromptKey(lineageReconnectPromptKey)
-    if (lineageReconnectPromptKey) {
-      setLineageReconnectWorktreeId(lineageReconnectPromptKey)
-    }
-  }
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -2770,24 +2707,6 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         className="worktree-sidebar-scrollbar h-full overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-inset pt-px"
         style={WORKTREE_SIDEBAR_SCROLL_STYLE}
       >
-        {activeLineageChildConnectionId && activeLineageChildSshStatus ? (
-          <SshDisconnectedDialog
-            open={
-              lineageReconnectWorktreeId === activeLineageChildWorktreeId &&
-              activeLineageChildSshDisconnected
-            }
-            onOpenChange={(open) => {
-              if (!open) {
-                setLineageReconnectWorktreeId(null)
-              }
-            }}
-            targetId={activeLineageChildConnectionId}
-            targetLabel={
-              activeLineageChildTargetLabel ?? activeLineageChildRow?.repo?.displayName ?? ''
-            }
-            status={activeLineageChildSshStatus}
-          />
-        ) : null}
         <div
           role="presentation"
           className="relative w-full"
@@ -3294,9 +3213,17 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               forceActiveSurface = false
             ) => {
               const lineageToggleGroupKey = itemRow.lineageGroupKey
-              // Why: child cards render inside the parent card body, so their
-              // first nested level starts flush with that inset.
+              // Why: child card rows own lineage depth, while WorktreeCard
+              // still owns the project/group inset inside each card surface.
               const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
+              const nestedCardPaddingLeft = nested
+                ? Math.max(0, itemRow.depth) * NESTED_LINEAGE_CARD_INDENT
+                : 0
+              const inheritedCardContentIndent = getWorktreeCardContentIndent({
+                isGrouped: groupBy !== 'none',
+                groupDepth: itemRow.groupDepth,
+                lineageDepth: 0
+              })
               // Why: grouped rows inherit their project/group header depth,
               // while the card surface still spans the full hit/background row.
               const paddingLeft = getWorktreeCardContentIndent({
@@ -3304,6 +3231,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 groupDepth: itemRow.groupDepth,
                 lineageDepth: paddingDepth
               })
+              const cardContentIndent = nested ? inheritedCardContentIndent : paddingLeft
               const worktreeDragGroupKey = groupKeyByWorktreeId.get(itemRow.worktree.id)
               const worktreeDragGroupIndex = groupIndexByWorktreeId.get(itemRow.worktree.id)
               const revealHighlightTone =
@@ -3340,7 +3268,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     nested ? undefined : handleWorktreeRowPointerDown(event, itemRow.worktree.id)
                   }
                   style={{
-                    paddingLeft: nested && paddingLeft > 0 ? `${paddingLeft}px` : undefined
+                    paddingLeft:
+                      nested && nestedCardPaddingLeft > 0 ? `${nestedCardPaddingLeft}px` : undefined
                   }}
                 >
                   <WorktreeCard
@@ -3356,8 +3285,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     revealHighlightTone={revealHighlightTone}
                     selectedWorktrees={selectedWorktrees}
                     nativeDragEnabled={false}
-                    contentIndent={nested ? 0 : paddingLeft}
-                    flushSurface={!nested}
+                    contentIndent={cardContentIndent}
+                    flushSurface
                     onImmediateActivate={onImmediateWorktreeActivate}
                     onSelectionGesture={onSelectionGesture}
                     onContextMenuSelect={onContextMenuSelect}
@@ -3384,241 +3313,36 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               )
             }
 
-            const renderLineageChildCard = (child: WorktreeItemRow) => {
-              const isActive = activeWorktreeId === child.worktree.id
-              const isDeleting = deleteStateByWorktreeId[child.worktree.id]?.isDeleting ?? false
-              const revealHighlightTone =
-                agentSendTargetWorktreeId === child.worktree.id ? 'ai' : 'default'
-              const showStatus = cardProps.includes('status')
-              const showUnreadQuickAction = cardProps.includes('unread')
-              const unreadTooltip = child.worktree.isUnread ? 'Mark read' : 'Mark unread'
-              const stopQuickActionPointerPropagation = (
-                event: React.PointerEvent<HTMLButtonElement>
-              ) => {
-                event.stopPropagation()
-              }
-              const handleToggleUnreadQuick = (event: React.MouseEvent<HTMLButtonElement>) => {
-                event.preventDefault()
-                event.stopPropagation()
-                onToggleWorktreeUnread(child.worktree)
-              }
-              const handleClick = (event: React.MouseEvent<HTMLDivElement>) => {
-                event.preventDefault()
-                event.stopPropagation()
-                if (isDeleting) {
-                  return
+            const renderLineageDescendants = (
+              parent: WorktreeItemRow,
+              descendants: readonly WorktreeItemRow[]
+            ): React.ReactNode | undefined => {
+              const childNodes: React.ReactNode[] = []
+              let cursor = 0
+              while (cursor < descendants.length) {
+                const child = descendants[cursor]
+                if (!child || child.depth !== parent.depth + 1) {
+                  cursor++
+                  continue
                 }
-                const selectionOnly = onSelectionGesture(event, child.worktree.id)
-                if (selectionOnly) {
-                  return
+
+                let nextSiblingIndex = cursor + 1
+                while (
+                  nextSiblingIndex < descendants.length &&
+                  descendants[nextSiblingIndex]!.depth > child.depth
+                ) {
+                  nextSiblingIndex++
                 }
-                onImmediateWorktreeActivate(child.worktree.id)
-                activateWorktreeFromSidebar(child.worktree.id)
-                if (child.repo?.connectionId) {
-                  const sshStatus =
-                    useAppStore.getState().sshConnectionStates.get(child.repo.connectionId)
-                      ?.status ?? 'disconnected'
-                  if (sshStatus !== 'connected') {
-                    setLineageReconnectWorktreeId(child.worktree.id)
-                  }
-                }
+
+                const childLineageChildren = renderLineageDescendants(
+                  child,
+                  descendants.slice(cursor + 1, nextSiblingIndex)
+                )
+                childNodes.push(renderWorktreeRow(child, true, childLineageChildren))
+                cursor = nextSiblingIndex
               }
-              const lineageToggleGroupKey = child.lineageGroupKey
-              const childCardIndent = Math.max(0, child.depth) * LINEAGE_INDENT
-              const childContentIndent = Math.max(0, child.depth - 1) * LINEAGE_INDENT
-              return (
-                <div
-                  key={child.worktree.id}
-                  // Why: lineage child workspaces need their whole card surface
-                  // nested, not only the text/status content inside the card.
-                  style={childCardIndent > 0 ? { paddingLeft: `${childCardIndent}px` } : undefined}
-                >
-                  <WorktreeContextMenu
-                    worktree={child.worktree}
-                    selectedWorktrees={selectedWorktrees}
-                    onContextMenuSelect={(event) => onContextMenuSelect(event, child.worktree)}
-                  >
-                    <div
-                      id={getWorktreeOptionId(child.worktree.id)}
-                      role="option"
-                      aria-selected={selectedWorktreeIds.has(child.worktree.id)}
-                      aria-current={isActive ? 'page' : undefined}
-                      aria-busy={isDeleting}
-                      data-worktree-card-surface="true"
-                      data-worktree-card-active={isActive ? 'true' : undefined}
-                      className={cn(
-                        'relative flex w-full cursor-pointer items-start gap-1.5 rounded-lg border border-transparent py-1.5 pr-2 transition-colors',
-                        highlightedRevealWorktreeId === child.worktree.id && [
-                          'scroll-to-current-workspace-reveal-highlight',
-                          revealHighlightTone === 'ai' &&
-                            'scroll-to-current-workspace-reveal-highlight--ai'
-                        ],
-                        isActive
-                          ? 'border-black/[0.015] bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:border-border/40 dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-                          : 'worktree-sidebar-card-hover',
-                        isDeleting && 'cursor-not-allowed opacity-50 grayscale'
-                      )}
-                      data-scroll-reveal-highlight={
-                        highlightedRevealWorktreeId === child.worktree.id ? 'true' : undefined
-                      }
-                      onClick={handleClick}
-                      onDoubleClick={(event) => event.stopPropagation()}
-                    >
-                      {isDeleting && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
-                          <div className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm">
-                            <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                            {translate(
-                              'auto.components.sidebar.WorktreeList.5fc9d1891b',
-                              'Deleting…'
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      <div
-                        className="flex min-w-0 flex-1 items-start gap-1.5 pl-2"
-                        style={
-                          childContentIndent > 0
-                            ? { paddingLeft: `calc(0.5rem + ${childContentIndent}px)` }
-                            : undefined
-                        }
-                      >
-                        <span className="mt-[2px] flex w-4 shrink-0 justify-center pt-[2px]">
-                          <WorktreeCardStatusSlot
-                            worktreeId={child.worktree.id}
-                            showStatus={showStatus}
-                            showUnreadAction={showUnreadQuickAction}
-                            isUnread={child.worktree.isUnread}
-                            unreadTooltip={unreadTooltip}
-                            onPointerDown={stopQuickActionPointerPropagation}
-                            onToggleUnread={handleToggleUnreadQuick}
-                          />
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <WorktreeTitleInlineRename
-                            displayName={child.worktree.displayName}
-                            className="text-[12px]"
-                            onRename={(displayName) =>
-                              updateWorktreeMeta(child.worktree.id, { displayName })
-                            }
-                            beginEditing={renamingWorktreeId === child.worktree.id}
-                            onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
-                          />
-                          <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                            {child.repo && groupBy !== 'repo' ? (
-                              <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
-                                <RepoBadgeMark color={child.repo.badgeColor} />
-                                <span className="max-w-[6rem] truncate lowercase">
-                                  {child.repo.displayName}
-                                </span>
-                              </span>
-                            ) : null}
-                            <span className="truncate text-[10.5px] leading-none text-muted-foreground">
-                              {branchDisplayName(child.worktree.branch)}
-                            </span>
-                          </div>
-                          {child.worktree.linkedIssue || child.worktree.comment ? (
-                            <div className="mt-1.5 truncate text-[10.5px] leading-tight text-muted-foreground">
-                              {child.worktree.linkedIssue ? (
-                                <span className="font-medium text-foreground/80">
-                                  #{child.worktree.linkedIssue}
-                                </span>
-                              ) : null}
-                              {child.worktree.linkedIssue && child.worktree.comment ? '  ' : null}
-                              {child.worktree.comment}
-                            </div>
-                          ) : null}
-                          {showInlineAgentCards ? (
-                            // Why: nested lineage children use this lightweight
-                            // renderer instead of WorktreeCard, so their inline
-                            // agent rows must be mounted here explicitly.
-                            <WorktreeCardAgents
-                              worktreeId={child.worktree.id}
-                              className="mt-1 divide-y-0"
-                            />
-                          ) : null}
-                          {child.lineageChildCount > 0 && lineageToggleGroupKey ? (
-                            <div className="mt-1.5 flex min-w-0 justify-start">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="xs"
-                                    className="h-[18px] max-w-[8rem] gap-1 rounded-md border border-worktree-sidebar-border bg-worktree-sidebar px-1.5 text-[10px] font-medium leading-none text-muted-foreground shadow-none hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-                                    aria-label={
-                                      child.lineageCollapsed
-                                        ? child.lineageChildCount === 1
-                                          ? translate(
-                                              'auto.components.sidebar.WorktreeList.20bebf9c7f',
-                                              'Show {{value0}} child workspace',
-                                              { value0: child.lineageChildCount }
-                                            )
-                                          : translate(
-                                              'auto.components.sidebar.WorktreeList.c1f4a31623',
-                                              'Show {{value0}} child workspaces',
-                                              { value0: child.lineageChildCount }
-                                            )
-                                        : child.lineageChildCount === 1
-                                          ? translate(
-                                              'auto.components.sidebar.WorktreeList.e97297cb75',
-                                              'Hide {{value0}} child workspace',
-                                              { value0: child.lineageChildCount }
-                                            )
-                                          : translate(
-                                              'auto.components.sidebar.WorktreeList.0cd15956d4',
-                                              'Hide {{value0}} child workspaces',
-                                              { value0: child.lineageChildCount }
-                                            )
-                                    }
-                                    aria-expanded={!child.lineageCollapsed}
-                                    onClick={(event) => {
-                                      event.preventDefault()
-                                      event.stopPropagation()
-                                      toggleGroupWithScrollAnchor(lineageToggleGroupKey)
-                                    }}
-                                  >
-                                    <Workflow className="size-2.5" />
-                                    <span className="truncate">
-                                      {child.lineageChildCount}{' '}
-                                      {child.lineageChildCount === 1
-                                        ? translate(
-                                            'auto.components.sidebar.WorktreeList.0c6ee14f23',
-                                            'child'
-                                          )
-                                        : translate(
-                                            'auto.components.sidebar.WorktreeList.045a8aed48',
-                                            'children'
-                                          )}
-                                    </span>
-                                    <ChevronDown
-                                      className={cn(
-                                        'size-2.5 transition-transform',
-                                        child.lineageCollapsed && '-rotate-90'
-                                      )}
-                                    />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="right" sideOffset={8}>
-                                  {child.lineageCollapsed
-                                    ? translate(
-                                        'auto.components.sidebar.WorktreeList.84a2238242',
-                                        'Show child workspaces'
-                                      )
-                                    : translate(
-                                        'auto.components.sidebar.WorktreeList.ebc5c7dcef',
-                                        'Hide child workspaces'
-                                      )}
-                                </TooltipContent>
-                              </Tooltip>
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  </WorktreeContextMenu>
-                </div>
-              )
+
+              return childNodes.length > 0 ? childNodes : undefined
             }
 
             if (row.type === 'lineage-group') {
@@ -3650,9 +3374,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       ? renderWorktreeRow(
                           parent,
                           false,
-                          children.length > 0
-                            ? children.map((child) => renderLineageChildCard(child))
-                            : undefined,
+                          renderLineageDescendants(parent, children),
                           childIsActive
                         )
                       : null}
@@ -4552,13 +4274,6 @@ const WorktreeList = React.memo(function WorktreeList({
     [updateWorktreeMeta, worktreeMap, workspaceStatuses]
   )
 
-  const toggleWorktreeUnread = useCallback(
-    (worktree: Worktree) => {
-      void updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
-    },
-    [updateWorktreeMeta]
-  )
-
   const moveWorktreesToStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       const updates = new Map<string, { workspaceStatus: WorkspaceStatus }>()
@@ -4900,7 +4615,6 @@ const WorktreeList = React.memo(function WorktreeList({
         selectedWorktrees={selectedWorktrees}
         onSelectionGesture={updateSelectionForGesture}
         onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
-        onToggleWorktreeUnread={toggleWorktreeUnread}
         onContextMenuSelect={selectForContextMenu}
         repoMap={repoMap}
         worktreeMap={worktreeMap}
@@ -4918,7 +4632,6 @@ const WorktreeList = React.memo(function WorktreeList({
         onDropWorktreesOnWorkspaceBoard={dropWorktreesOnWorkspaceBoard}
         shouldShowWorkspaceBoardDropIndicator={shouldShowWorkspaceBoardDropIndicator}
         onReorderWorktrees={reorderWorktrees}
-        showInlineAgentCards={cardProps.includes('inline-agents')}
         scrollOffsetRef={scrollOffsetRef}
         scrollAnchorRef={scrollAnchorRef}
       />

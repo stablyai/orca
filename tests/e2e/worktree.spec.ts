@@ -324,4 +324,78 @@ test.describe('Create Workspace', () => {
         })
     }
   })
+
+  test('names the workspace after the PR title when the pasted URL suggestion is selected', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    const title = `E2E selected URL resolution ${Date.now()}`
+    const url = 'https://github.com/stablyai/orca/pull/2050'
+    const linkedWorkspacePattern = new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+    try {
+      await orcaPage.getByRole('button', { name: 'New workspace', exact: true }).click()
+
+      const dialog = orcaPage.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
+      await expect(dialog).toBeVisible()
+      await expect(dialog.getByRole('combobox').first()).toBeVisible()
+
+      await electronApp.evaluate(
+        ({ ipcMain }, { title, url }) => {
+          ipcMain.removeHandler('gh:workItemByOwnerRepo')
+          ipcMain.handle(
+            'gh:workItemByOwnerRepo',
+            (_event: unknown, args: { number: number; repoId?: string }) => ({
+              id: `e2e-pr-${args.number}`,
+              type: 'pr',
+              number: args.number,
+              title,
+              state: 'open',
+              url,
+              labels: [],
+              updatedAt: '2026-05-26T00:00:00.000Z',
+              author: 'e2e',
+              repoId: args.repoId ?? 'e2e-repo'
+            })
+          )
+          ipcMain.removeHandler('worktrees:resolvePrBase')
+          // Why: the fixture repo's default branch is master and has no
+          // remote; resolve the PR base to a ref that actually exists.
+          ipcMain.handle('worktrees:resolvePrBase', () => ({ baseBranch: 'master' }))
+        },
+        { title, url }
+      )
+
+      const nameInput = dialog.getByPlaceholder(/Type a name/i)
+      await expect(nameInput).toBeVisible()
+      await nameInput.fill(url)
+
+      // Why: this is the regression PR #4900 missed — selecting the resolved
+      // suggestion row (instead of submitting the raw URL) must not leave the
+      // pasted URL behind as the workspace name. The suggestion popover is
+      // portaled outside the dialog element, so locate it page-wide.
+      const suggestion = orcaPage.getByRole('option', { name: linkedWorkspacePattern })
+      await expect(suggestion).toBeVisible()
+      await suggestion.click()
+
+      const createButton = dialog.getByRole('button', { name: /Create (Workspace|Worktree)/i })
+      await expect(createButton).toBeEnabled()
+      await createButton.click()
+
+      await expect(dialog).toBeHidden({ timeout: 15_000 })
+      await expect(orcaPage.getByRole('option', { name: linkedWorkspacePattern })).toBeVisible({
+        timeout: 10_000
+      })
+      await expect(orcaPage.getByRole('option', { name: /https-github/i })).toHaveCount(0)
+      await expect(orcaPage.getByText('Linked PR #2050')).toBeVisible()
+    } finally {
+      await orcaPage
+        .evaluate(() => {
+          window.__store?.getState().closeModal()
+        })
+        .catch(() => {
+          /* page may already be torn down */
+        })
+    }
+  })
 })
