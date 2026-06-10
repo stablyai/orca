@@ -2753,7 +2753,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         data-worktree-sidebar
         tabIndex={0}
         role="listbox"
-        aria-label={translate("auto.components.sidebar.WorktreeList.bfbedc547b", "Worktrees")}
+        aria-label={translate('auto.components.sidebar.WorktreeList.bfbedc547b', 'Worktrees')}
         aria-orientation="vertical"
         aria-multiselectable="true"
         aria-activedescendant={activeDescendantId}
@@ -3006,7 +3006,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             size="icon-xs"
                             data-repo-header-action=""
                             className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                            aria-label={translate("auto.components.sidebar.WorktreeList.79465e9034", "Group actions for {{value0}}", { value0: row.label })}
+                            aria-label={translate(
+                              'auto.components.sidebar.WorktreeList.79465e9034',
+                              'Group actions for {{value0}}',
+                              { value0: row.label }
+                            )}
                             onClick={(event) => event.stopPropagation()}
                             onKeyDown={stopRepoHeaderKeyboardToggle}
                             onPointerDown={handleRepoHeaderActionPointerDown}
@@ -3035,7 +3039,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               }
                             }}
                           >
-                            {translate("auto.components.sidebar.WorktreeList.4d7b73658c", "Rename group")}</DropdownMenuItem>
+                            {translate(
+                              'auto.components.sidebar.WorktreeList.4d7b73658c',
+                              'Rename group'
+                            )}
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             variant="destructive"
                             onSelect={() => {
@@ -3044,12 +3052,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               }
                             }}
                           >
-                            {translate("auto.components.sidebar.WorktreeList.902115cdbe", "Delete group")}</DropdownMenuItem>
+                            {translate(
+                              'auto.components.sidebar.WorktreeList.902115cdbe',
+                              'Delete group'
+                            )}
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : null}
 
-                    {row.repo && groupBy === "repo" ? (
+                    {row.repo && groupBy === 'repo' ? (
                       <DropdownMenu modal={false}>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -3060,7 +3072,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 size="icon-xs"
                                 data-repo-header-action=""
                                 className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-                                aria-label={translate("auto.components.sidebar.WorktreeList.609633a9e6", "Project actions for {{value0}}", { value0: row.label })}
+                                aria-label={translate(
+                                  'auto.components.sidebar.WorktreeList.609633a9e6',
+                                  'Project actions for {{value0}}',
+                                  { value0: row.label }
+                                )}
                                 onClick={(event) => event.stopPropagation()}
                                 onKeyDown={stopRepoHeaderKeyboardToggle}
                                 onPointerDown={handleRepoHeaderActionPointerDown}
@@ -3070,7 +3086,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             </DropdownMenuTrigger>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            {translate("auto.components.sidebar.WorktreeList.2ef41bf9a7", "Project actions")}</TooltipContent>
+                            {translate(
+                              'auto.components.sidebar.WorktreeList.2ef41bf9a7',
+                              'Project actions'
+                            )}
+                          </TooltipContent>
                         </Tooltip>
                         <DropdownMenuContent
                           align="end"
@@ -3094,7 +3114,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             }}
                           >
                             <SlidersHorizontal className="size-3.5" />
-                            {translate("auto.components.sidebar.WorktreeList.2cdffbc728", "Project Settings")}</DropdownMenuItem>
+                            {translate(
+                              'auto.components.sidebar.WorktreeList.2cdffbc728',
+                              'Project Settings'
+                            )}
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onSelect={() => {
                               if (row.repo) {
@@ -3106,7 +3130,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             }}
                           >
                             <Shapes className="size-3.5" />
-                            {translate("auto.components.sidebar.WorktreeList.e82d3589a1", "Change Project Icon")}</DropdownMenuItem>
+                            {translate(
+                              'auto.components.sidebar.WorktreeList.e82d3589a1',
+                              'Change Project Icon'
+                            )}
+                          </DropdownMenuItem>
                           {row.repo && isGitRepoKind(row.repo) ? (
                             <DropdownMenuItem
                               onSelect={() => {
@@ -3127,12 +3155,20 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             }}
                           >
                             <FolderPlus className="size-3.5" />
-                            {translate("auto.components.sidebar.WorktreeList.cbfd565f83", "New group from project")}</DropdownMenuItem>
+                            {translate(
+                              'auto.components.sidebar.WorktreeList.cbfd565f83',
+                              'New group from project'
+                            )}
+                          </DropdownMenuItem>
                           {projectGroups.length > 0 ? (
                             <DropdownMenuSub>
                               <DropdownMenuSubTrigger>
                                 <FolderInput className="size-3.5" />
-                                {translate("auto.components.sidebar.WorktreeList.4a08fb55f2", "Move to group")}</DropdownMenuSubTrigger>
+                                {translate(
+                                  'auto.components.sidebar.WorktreeList.4a08fb55f2',
+                                  'Move to group'
+                                )}
+                              </DropdownMenuSubTrigger>
                               <DropdownMenuSubContent>
                                 {projectGroups.map((group) => (
                                   <DropdownMenuItem
@@ -3159,7 +3195,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               }}
                             >
                               <CircleX className="size-3.5" />
-                              {translate("auto.components.sidebar.WorktreeList.64e55f7f01", "Remove from group")}</DropdownMenuItem>
+                              {translate(
+                                'auto.components.sidebar.WorktreeList.64e55f7f01',
+                                'Remove from group'
+                              )}
+                            </DropdownMenuItem>
                           ) : null}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -3171,12 +3211,16 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             }}
                           >
                             <Trash2 className="size-3.5" />
-                            {translate("auto.components.sidebar.WorktreeList.c83968f87f", "Remove Project")}</DropdownMenuItem>
+                            {translate(
+                              'auto.components.sidebar.WorktreeList.c83968f87f',
+                              'Remove Project'
+                            )}
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : null}
 
-                    {row.repo && groupBy === "repo" ? (
+                    {row.repo && groupBy === 'repo' ? (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           {createState?.disabled ? (
@@ -3208,7 +3252,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               data-repo-header-action=""
                               className="size-5 shrink-0 rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-accent/70 hover:text-foreground focus:opacity-100 group-hover:opacity-100"
                               aria-label={
-                                createState?.ariaLabel ?? translate("auto.components.sidebar.WorktreeList.bb85cd86ba", "Create workspace for {{value0}}", { value0: row.label })
+                                createState?.ariaLabel ??
+                                translate(
+                                  'auto.components.sidebar.WorktreeList.bb85cd86ba',
+                                  'Create workspace for {{value0}}',
+                                  { value0: row.label }
+                                )
                               }
                               onKeyDown={stopRepoHeaderKeyboardToggle}
                               onClick={(event) => {
@@ -3224,7 +3273,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                           )}
                         </TooltipTrigger>
                         <TooltipContent side="bottom" sideOffset={6}>
-                          {createState?.tooltip ?? translate("auto.components.sidebar.WorktreeList.bb85cd86ba", "Create workspace for {{value0}}", { value0: row.label })}
+                          {createState?.tooltip ??
+                            translate(
+                              'auto.components.sidebar.WorktreeList.bb85cd86ba',
+                              'Create workspace for {{value0}}',
+                              { value0: row.label }
+                            )}
                         </TooltipContent>
                       </Tooltip>
                     ) : null}
@@ -3414,7 +3468,11 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/50 backdrop-blur-[1px]">
                           <div className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-background px-3 py-1 text-[11px] font-medium text-foreground shadow-sm">
                             <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                            {translate("auto.components.sidebar.WorktreeList.5fc9d1891b", "Deleting…")}</div>
+                            {translate(
+                              'auto.components.sidebar.WorktreeList.5fc9d1891b',
+                              'Deleting…'
+                            )}
+                          </div>
                         </div>
                       )}
                       <div
@@ -3447,7 +3505,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             onBeginEditingConsumed={() => setRenamingWorktreeId(null)}
                           />
                           <div className="mt-1 flex min-w-0 items-center gap-1.5">
-                            {child.repo && groupBy !== "repo" ? (
+                            {child.repo && groupBy !== 'repo' ? (
                               <span className="flex h-[16px] shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 text-[10px] font-semibold leading-none text-foreground dark:bg-accent/50 dark:border-border/60">
                                 <RepoBadgeMark color={child.repo.badgeColor} />
                                 <span className="max-w-[6rem] truncate lowercase">
@@ -3488,7 +3546,31 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                     variant="ghost"
                                     size="xs"
                                     className="h-[18px] max-w-[8rem] gap-1 rounded-md border border-worktree-sidebar-border bg-worktree-sidebar px-1.5 text-[10px] font-medium leading-none text-muted-foreground shadow-none hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-                                    aria-label={translate("auto.components.sidebar.WorktreeList.0c6ee14f23", "{{value0}} {{value1}} child {{value2}}", { value0: child.lineageCollapsed ? 'Show' : 'Hide', value1: child.lineageChildCount, value2: child.lineageChildCount === 1 ? 'workspace' : 'workspaces' })}
+                                    aria-label={
+                                      child.lineageCollapsed
+                                        ? child.lineageChildCount === 1
+                                          ? translate(
+                                              'auto.components.sidebar.WorktreeList.20bebf9c7f',
+                                              'Show {{value0}} child workspace',
+                                              { value0: child.lineageChildCount }
+                                            )
+                                          : translate(
+                                              'auto.components.sidebar.WorktreeList.c1f4a31623',
+                                              'Show {{value0}} child workspaces',
+                                              { value0: child.lineageChildCount }
+                                            )
+                                        : child.lineageChildCount === 1
+                                          ? translate(
+                                              'auto.components.sidebar.WorktreeList.e97297cb75',
+                                              'Hide {{value0}} child workspace',
+                                              { value0: child.lineageChildCount }
+                                            )
+                                          : translate(
+                                              'auto.components.sidebar.WorktreeList.0cd15956d4',
+                                              'Hide {{value0}} child workspaces',
+                                              { value0: child.lineageChildCount }
+                                            )
+                                    }
                                     aria-expanded={!child.lineageCollapsed}
                                     onClick={(event) => {
                                       event.preventDefault()
@@ -3499,7 +3581,15 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                     <Workflow className="size-2.5" />
                                     <span className="truncate">
                                       {child.lineageChildCount}{' '}
-                                      {child.lineageChildCount === 1 ? translate("auto.components.sidebar.WorktreeList.0c6ee14f23", "child") : translate("auto.components.sidebar.WorktreeList.045a8aed48", "children")}
+                                      {child.lineageChildCount === 1
+                                        ? translate(
+                                            'auto.components.sidebar.WorktreeList.0c6ee14f23',
+                                            'child'
+                                          )
+                                        : translate(
+                                            'auto.components.sidebar.WorktreeList.045a8aed48',
+                                            'children'
+                                          )}
                                     </span>
                                     <ChevronDown
                                       className={cn(
@@ -3511,8 +3601,14 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                 </TooltipTrigger>
                                 <TooltipContent side="right" sideOffset={8}>
                                   {child.lineageCollapsed
-                                    ? translate("auto.components.sidebar.WorktreeList.84a2238242", "Show child workspaces")
-                                    : translate("auto.components.sidebar.WorktreeList.ebc5c7dcef", "Hide child workspaces")}
+                                    ? translate(
+                                        'auto.components.sidebar.WorktreeList.84a2238242',
+                                        'Show child workspaces'
+                                      )
+                                    : translate(
+                                        'auto.components.sidebar.WorktreeList.ebc5c7dcef',
+                                        'Hide child workspaces'
+                                      )}
                                 </TooltipContent>
                               </Tooltip>
                             </div>
@@ -4711,14 +4807,17 @@ const WorktreeList = React.memo(function WorktreeList({
       >
         <div className="worktree-sidebar-scrollbar flex h-full flex-col overflow-y-scroll overflow-x-hidden pl-1 scrollbar-sleek pt-px">
           <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
-            <span>{translate("auto.components.sidebar.WorktreeList.b7acbf038b", "No workspaces found")}</span>
+            <span>
+              {translate('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
+            </span>
             {hasFilters && (
               <button
                 onClick={clearFilters}
                 className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-[11px] px-2.5 py-1 rounded-md cursor-pointer hover:bg-accent transition-colors"
               >
                 <CircleX className="size-3.5" />
-                {translate("auto.components.sidebar.WorktreeList.370c6a55dd", "Clear Filters")}</button>
+                {translate('auto.components.sidebar.WorktreeList.370c6a55dd', 'Clear Filters')}
+              </button>
             )}
           </div>
         </div>
@@ -4731,12 +4830,20 @@ const WorktreeList = React.memo(function WorktreeList({
       <ProjectGroupNameDialog
         open={projectGroupNameDialog !== null}
         title={
-          projectGroupNameDialog?.type === 'rename' ? translate("auto.components.sidebar.WorktreeList.f9dc6cc5d3", "Rename Project Group") : translate("auto.components.sidebar.WorktreeList.13757c053c", "New Project Group")
+          projectGroupNameDialog?.type === 'rename'
+            ? translate('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
+            : translate('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
         }
         description={
           projectGroupNameDialog?.type === 'rename'
-            ? translate("auto.components.sidebar.WorktreeList.bc1460beb3", "Update the group name shown in the sidebar.")
-            : translate("auto.components.sidebar.WorktreeList.d880ea0744", "Create a group and move this project into it.")
+            ? translate(
+                'auto.components.sidebar.WorktreeList.bc1460beb3',
+                'Update the group name shown in the sidebar.'
+              )
+            : translate(
+                'auto.components.sidebar.WorktreeList.d880ea0744',
+                'Create a group and move this project into it.'
+              )
         }
         initialName={
           projectGroupNameDialog?.type === 'rename'

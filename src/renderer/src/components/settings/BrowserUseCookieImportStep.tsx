@@ -68,7 +68,7 @@ export function BrowserUseCookieImportStep({
     if (result.ok) {
       toast.success(
         translate(
-          'auto.components.settings.BrowserUsePane.2ea4617e3a',
+          'auto.components.settings.BrowserUsePane.8f2675c2f3',
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
         )

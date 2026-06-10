@@ -695,7 +695,7 @@ function normalizeStoredWebOverrides(
         section,
         actionId,
         message: translate(
-          'auto.web.web.preload.api.10898045f3',
+          'auto.web.web.preload.api.76122208ca',
           'Shortcut for "{{value0}}" was ignored: {{value1}}',
           { value0: actionId, value1: error }
         )

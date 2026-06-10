@@ -70,13 +70,14 @@ function expressionNameText(node) {
   return undefined
 }
 
-function reportAt(root, filePath, sourceFile, node, key) {
+function reportAt(root, filePath, sourceFile, node, key, fallback) {
   const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
   return {
     filePath: normalizePath(root, filePath),
     line: position.line + 1,
     column: position.character + 1,
-    key
+    key,
+    fallback
   }
 }
 
@@ -103,7 +104,17 @@ export function collectLocalizationKeyReferences(filePath, sourceText, root = pr
         firstArg &&
         ts.isStringLiteralLike(firstArg)
       ) {
-        references.push(reportAt(root, filePath, sourceFile, firstArg, firstArg.text))
+        const secondArg = node.arguments[1]
+        references.push(
+          reportAt(
+            root,
+            filePath,
+            sourceFile,
+            firstArg,
+            firstArg.text,
+            secondArg && ts.isStringLiteralLike(secondArg) ? secondArg.text : undefined
+          )
+        )
       }
     }
 
@@ -124,6 +135,52 @@ function formatMissingReferences(missing) {
 
 function formatMissingKeys(label, keys) {
   return keys.map((key) => `${label}: ${key}`).join('\n')
+}
+
+function normalizeInterpolationVariables(value) {
+  return collectInterpolationVariables(value)
+    .map((variable) => variable.slice(2, -2))
+    .join('|')
+}
+
+function formatInconsistentFallbackVariables(inconsistentFallbackVariables) {
+  return inconsistentFallbackVariables
+    .map(({ key, references }) => {
+      const locations = references
+        .map(
+          (reference) =>
+            `  ${reference.filePath}:${reference.line}:${reference.column} ${JSON.stringify(reference.fallback)}`
+        )
+        .join('\n')
+      return `${key}\n${locations}`
+    })
+    .join('\n\n')
+}
+
+function collectInconsistentFallbackVariables(references) {
+  const byKey = new Map()
+
+  for (const reference of references) {
+    if (typeof reference.fallback !== 'string') {
+      continue
+    }
+    const existing = byKey.get(reference.key) ?? []
+    existing.push(reference)
+    byKey.set(reference.key, existing)
+  }
+
+  return [...byKey.entries()]
+    .map(([key, keyReferences]) => {
+      const uniqueFallbackVariables = new Set(
+        keyReferences.map((reference) => normalizeInterpolationVariables(reference.fallback))
+      )
+      return {
+        key,
+        references: keyReferences,
+        uniqueFallbackVariableCount: uniqueFallbackVariables.size
+      }
+    })
+    .filter(({ uniqueFallbackVariableCount }) => uniqueFallbackVariableCount > 1)
 }
 
 function collectInterpolationVariables(value) {
@@ -227,6 +284,14 @@ export async function main(root = process.cwd()) {
     console.error('Localization keys are missing from src/renderer/src/i18n/locales/en.json.')
     console.error('')
     console.error(formatMissingReferences(missing))
+    return 1
+  }
+
+  const inconsistentFallbackVariables = collectInconsistentFallbackVariables(references)
+  if (inconsistentFallbackVariables.length > 0) {
+    console.error('Localization keys are used with inconsistent interpolation placeholders.')
+    console.error('')
+    console.error(formatInconsistentFallbackVariables(inconsistentFallbackVariables))
     return 1
   }
 

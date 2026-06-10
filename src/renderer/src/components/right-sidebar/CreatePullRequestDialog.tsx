@@ -218,11 +218,23 @@ export function CreatePullRequestDialog({
         const number = result.existingReview.number
         toast.success(
           number
-            ? translate("auto.components.right.sidebar.CreatePullRequestDialog.edc35a7027", "{{value0}} #{{value1}} is already open", { value0: copy.titleLabel, value1: number })
-            : translate("auto.components.right.sidebar.CreatePullRequestDialog.edc35a7027", "{{value0}} is already open", { value0: copy.titleLabel }),
+            ? translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.edc35a7027',
+                '{{value0}} #{{value1}} is already open',
+                { value0: copy.titleLabel, value1: number }
+              )
+            : translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.21c7a1daa0',
+                '{{value0}} is already open',
+                { value0: copy.titleLabel }
+              ),
           {
             action: {
-              label: translate("auto.components.right.sidebar.CreatePullRequestDialog.7a21f0dae8", "Open on {{value0}}", { value0: copy.providerName }),
+              label: translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.7a21f0dae8',
+                'Open on {{value0}}',
+                { value0: copy.providerName }
+              ),
               onClick: () => window.api.shell.openUrl(result.existingReview!.url)
             }
           }
@@ -282,7 +294,13 @@ export function CreatePullRequestDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <div className="flex min-w-0 items-center justify-between gap-2 pr-8">
-            <DialogTitle className="min-w-0 truncate">{translate("auto.components.right.sidebar.CreatePullRequestDialog.b7f43474d7", "Create")}{copy.titleLabel}</DialogTitle>
+            <DialogTitle className="min-w-0 truncate">
+              {translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.db9cee18f7',
+                'Create'
+              )}{' '}
+              {copy.titleLabel}
+            </DialogTitle>
             {aiGenerationEnabled ? (
               <CreatePullRequestGenerateButton
                 generating={generating}
@@ -296,12 +314,26 @@ export function CreatePullRequestDialog({
             ) : null}
           </div>
           <DialogDescription>
-            {translate("auto.components.right.sidebar.CreatePullRequestDialog.f658ff2455", "Confirm the target branch and")}{copy.shortLabel} {translate("auto.components.right.sidebar.CreatePullRequestDialog.b504b3ceb1", "details before creating the hosted review.")}</DialogDescription>
+            {translate(
+              'auto.components.right.sidebar.CreatePullRequestDialog.f658ff2455',
+              'Confirm the target branch and'
+            )}
+            {copy.shortLabel}{' '}
+            {translate(
+              'auto.components.right.sidebar.CreatePullRequestDialog.b504b3ceb1',
+              'details before creating the hosted review.'
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1">
-            <Label>{translate("auto.components.right.sidebar.CreatePullRequestDialog.6f5f1962b6", "Head branch")}</Label>
+            <Label>
+              {translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.6f5f1962b6',
+                'Head branch'
+              )}
+            </Label>
             <div className="inline-flex max-w-full items-center rounded-full border border-border bg-muted px-2 py-1 text-xs font-medium text-foreground">
               <span className="truncate">{branch}</span>
             </div>
@@ -309,9 +341,18 @@ export function CreatePullRequestDialog({
 
           <div className="space-y-2">
             <div className="space-y-1">
-              <Label htmlFor="create-pr-base">{translate("auto.components.right.sidebar.CreatePullRequestDialog.8584ccb43c", "Base branch")}</Label>
+              <Label htmlFor="create-pr-base">
+                {translate(
+                  'auto.components.right.sidebar.CreatePullRequestDialog.8584ccb43c',
+                  'Base branch'
+                )}
+              </Label>
               <p className="text-xs text-muted-foreground">
-                {translate("auto.components.right.sidebar.CreatePullRequestDialog.0fad57a14c", "Search remote branches or enter a branch name.")}</p>
+                {translate(
+                  'auto.components.right.sidebar.CreatePullRequestDialog.0fad57a14c',
+                  'Search remote branches or enter a branch name.'
+                )}
+              </p>
             </div>
             <div className="relative">
               <Input
@@ -321,7 +362,10 @@ export function CreatePullRequestDialog({
                   setBaseQuery(event.target.value)
                   setBase(event.target.value)
                 }}
-                placeholder={translate("auto.components.right.sidebar.CreatePullRequestDialog.694550a610", "main")}
+                placeholder={translate(
+                  'auto.components.right.sidebar.CreatePullRequestDialog.694550a610',
+                  'main'
+                )}
                 aria-invalid={!base.trim()}
                 className="pr-8"
               />
@@ -353,28 +397,48 @@ export function CreatePullRequestDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="create-pr-title">{translate("auto.components.right.sidebar.CreatePullRequestDialog.68314b4369", "Title")}</Label>
+            <Label htmlFor="create-pr-title">
+              {translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.68314b4369',
+                'Title'
+              )}
+            </Label>
             <Input
               id="create-pr-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
-              placeholder={translate("auto.components.right.sidebar.CreatePullRequestDialog.68314b4369", "Title")}
+              placeholder={translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.68314b4369',
+                'Title'
+              )}
               aria-invalid={!title.trim()}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="create-pr-body">{translate("auto.components.right.sidebar.CreatePullRequestDialog.1cd53359db", "Description")}</Label>
+            <Label htmlFor="create-pr-body">
+              {translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.1cd53359db',
+                'Description'
+              )}
+            </Label>
             <textarea
               id="create-pr-body"
               value={body}
               onChange={(event) => setBody(event.target.value)}
               rows={6}
-              placeholder={translate("auto.components.right.sidebar.CreatePullRequestDialog.02b2ce911f", "Description (optional)")}
+              placeholder={translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.02b2ce911f',
+                'Description (optional)'
+              )}
               className="w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
             />
             <p className="text-xs text-muted-foreground">
-              {translate("auto.components.right.sidebar.CreatePullRequestDialog.0c9f9a568c", "Supports Markdown formatting. Use Generate with AI to auto-fill from your changes.")}</p>
+              {translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.0c9f9a568c',
+                'Supports Markdown formatting. Use Generate with AI to auto-fill from your changes.'
+              )}
+            </p>
           </div>
 
           <label className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
@@ -384,12 +448,21 @@ export function CreatePullRequestDialog({
               onChange={(event) => setDraft(event.target.checked)}
               className="size-4 shrink-0 rounded border-border accent-primary"
             />
-            <span className="min-w-0 flex-1 truncate">{translate("auto.components.right.sidebar.CreatePullRequestDialog.7ef56f3efe", "Create as draft")}</span>
+            <span className="min-w-0 flex-1 truncate">
+              {translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.7ef56f3efe',
+                'Create as draft'
+              )}
+            </span>
           </label>
 
           {stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase() ? (
             <p className="text-xs text-destructive">
-              {translate("auto.components.right.sidebar.CreatePullRequestDialog.27ef4b195c", "Choose a different base branch before creating a")}{copy.reviewLabel}.
+              {translate(
+                'auto.components.right.sidebar.CreatePullRequestDialog.27ef4b195c',
+                'Choose a different base branch before creating a'
+              )}
+              {copy.reviewLabel}.
             </p>
           ) : null}
           {generateError ? <p className="text-xs text-destructive">{generateError}</p> : null}
@@ -398,10 +471,24 @@ export function CreatePullRequestDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={submitting}>
-            {translate("auto.components.right.sidebar.CreatePullRequestDialog.2bc1b4345e", "Cancel")}</Button>
+            {translate(
+              'auto.components.right.sidebar.CreatePullRequestDialog.2bc1b4345e',
+              'Cancel'
+            )}
+          </Button>
           <Button onClick={() => void handleSubmit()} disabled={submitDisabled}>
             {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
-            {pushBeforeCreate ? translate("auto.components.right.sidebar.CreatePullRequestDialog.a154fe55e6", "Push & Create {{value0}}", { value0: copy.shortLabel }) : translate("auto.components.right.sidebar.CreatePullRequestDialog.b7f43474d7", "Create {{value0}}", { value0: copy.shortLabel })}
+            {pushBeforeCreate
+              ? translate(
+                  'auto.components.right.sidebar.CreatePullRequestDialog.a154fe55e6',
+                  'Push & Create {{value0}}',
+                  { value0: copy.shortLabel }
+                )
+              : translate(
+                  'auto.components.right.sidebar.CreatePullRequestDialog.b7f43474d7',
+                  'Create {{value0}}',
+                  { value0: copy.shortLabel }
+                )}
           </Button>
         </DialogFooter>
       </DialogContent>

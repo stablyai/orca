@@ -59,7 +59,16 @@ export function BrowserProfileRow({
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       toast.success(
-        translate("auto.components.settings.BrowserProfileRow.d420c43729", "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}.", { value0: result.summary.importedCookies, value1: browser?.label ?? browserFamily, value2: browserProfile ? ` (${browserProfile})` : '', value3: profile.label })
+        translate(
+          'auto.components.settings.BrowserProfileRow.d420c43729',
+          'Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}.',
+          {
+            value0: result.summary.importedCookies,
+            value1: browser?.label ?? browserFamily,
+            value2: browserProfile ? ` (${browserProfile})` : '',
+            value3: profile.label
+          }
+        )
       )
     } else {
       toast.error(result.reason)
@@ -70,7 +79,11 @@ export function BrowserProfileRow({
     const result = await useAppStore.getState().importCookiesToProfile(profile.id)
     if (result.ok) {
       toast.success(
-        translate("auto.components.settings.BrowserProfileRow.d420c43729", "Imported {{value0}} cookies from file into {{value1}}.", { value0: result.summary.importedCookies, value1: profile.label })
+        translate(
+          'auto.components.settings.BrowserProfileRow.b4c167764d',
+          'Imported {{value0}} cookies from file into {{value1}}.',
+          { value0: result.summary.importedCookies, value1: profile.label }
+        )
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -106,13 +119,19 @@ export function BrowserProfileRow({
           <span className="truncate text-sm font-medium">{profile.label}</span>
           {isActive ? (
             <span className="shrink-0 rounded border border-border/50 px-1.5 text-[10px] font-medium leading-4 text-foreground/80">
-              {translate("auto.components.settings.BrowserProfileRow.c29648fe5b", "Active")}</span>
+              {translate('auto.components.settings.BrowserProfileRow.c29648fe5b', 'Active')}
+            </span>
           ) : null}
         </div>
         {sourceLabel ? (
           <p className="truncate text-[11px] text-muted-foreground">{sourceLabel}</p>
         ) : (
-          <p className="text-[11px] text-muted-foreground">{translate("auto.components.settings.BrowserProfileRow.796d846483", "No cookies imported")}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {translate(
+              'auto.components.settings.BrowserProfileRow.796d846483',
+              'No cookies imported'
+            )}
+          </p>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
@@ -137,13 +156,17 @@ export function BrowserProfileRow({
               ) : (
                 <Import className="size-3" />
               )}
-              {translate("auto.components.settings.BrowserProfileRow.cdec84552f", "Import Cookies")}</Button>
+              {translate('auto.components.settings.BrowserProfileRow.cdec84552f', 'Import Cookies')}
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
-                  <DropdownMenuSubTrigger>{translate("auto.components.settings.BrowserProfileRow.7df818977e", "From")}{browser.label}</DropdownMenuSubTrigger>
+                  <DropdownMenuSubTrigger>
+                    {translate('auto.components.settings.BrowserProfileRow.7df818977e', 'From')}
+                    {browser.label}
+                  </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent>
                       {browser.profiles.map((bp) => (
@@ -164,13 +187,15 @@ export function BrowserProfileRow({
                   key={browser.family}
                   onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  {translate("auto.components.settings.BrowserProfileRow.7df818977e", "From")}{browser.label}
+                  {translate('auto.components.settings.BrowserProfileRow.7df818977e', 'From')}
+                  {browser.label}
                 </DropdownMenuItem>
               )
             )}
             {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-              {translate("auto.components.settings.BrowserProfileRow.ebb78dfd6f", "From File…")}</DropdownMenuItem>
+              {translate('auto.components.settings.BrowserProfileRow.ebb78dfd6f', 'From File…')}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         {isDefault ? (
@@ -182,7 +207,12 @@ export function BrowserProfileRow({
             onClick={async () => {
               const ok = await useAppStore.getState().clearDefaultSessionCookies()
               if (ok) {
-                toast.success(translate("auto.components.settings.BrowserProfileRow.2d4bea7f35", "Default cookies cleared."))
+                toast.success(
+                  translate(
+                    'auto.components.settings.BrowserProfileRow.2d4bea7f35',
+                    'Default cookies cleared.'
+                  )
+                )
               }
             }}
           >
@@ -196,7 +226,13 @@ export function BrowserProfileRow({
             onClick={async () => {
               const ok = await useAppStore.getState().deleteBrowserSessionProfile(profile.id)
               if (ok) {
-                toast.success(translate("auto.components.settings.BrowserProfileRow.8e636cae25", "Profile \"{{value0}}\" removed.", { value0: profile.label }))
+                toast.success(
+                  translate(
+                    'auto.components.settings.BrowserProfileRow.8e636cae25',
+                    'Profile "{{value0}}" removed.',
+                    { value0: profile.label }
+                  )
+                )
               }
             }}
           >

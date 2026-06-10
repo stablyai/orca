@@ -27,23 +27,50 @@ export function UpdateStatusSegment({
       return {
         icon: <Download className="size-3 text-muted-foreground" />,
         label: `${pct}%`,
-        tooltip: translate("auto.components.status.bar.UpdateStatusSegment.248ee5d8ef", "Orca v{{value0}} downloading… {{value1}}%", { value0: status.version, value1: pct }),
-        ariaLabel: translate("auto.components.status.bar.UpdateStatusSegment.fd1d3b3a1d", "Update downloading, {{value0}} percent. Click to expand.", { value0: pct })
+        tooltip: translate(
+          'auto.components.status.bar.UpdateStatusSegment.248ee5d8ef',
+          'Orca v{{value0}} downloading… {{value1}}%',
+          { value0: status.version, value1: pct }
+        ),
+        ariaLabel: translate(
+          'auto.components.status.bar.UpdateStatusSegment.fd1d3b3a1d',
+          'Update downloading, {{value0}} percent. Click to expand.',
+          { value0: pct }
+        )
       }
     }
     if (status.state === 'downloaded') {
       return {
         icon: <CheckCircle2 className="size-3 text-emerald-500" />,
-        label: translate("auto.components.status.bar.UpdateStatusSegment.57a29c3b0e", "Update ready"),
-        tooltip: translate("auto.components.status.bar.UpdateStatusSegment.248ee5d8ef", "Orca v{{value0}} ready to install", { value0: status.version }),
-        ariaLabel: translate("auto.components.status.bar.UpdateStatusSegment.962404f68e", "Update ready to install. Click to expand.")
+        label: translate(
+          'auto.components.status.bar.UpdateStatusSegment.57a29c3b0e',
+          'Update ready'
+        ),
+        tooltip: translate(
+          'auto.components.status.bar.UpdateStatusSegment.9d13213a56',
+          'Orca v{{value0}} ready to install',
+          { value0: status.version }
+        ),
+        ariaLabel: translate(
+          'auto.components.status.bar.UpdateStatusSegment.962404f68e',
+          'Update ready to install. Click to expand.'
+        )
       }
     }
     return {
       icon: <AlertCircle className="size-3 text-yellow-500" />,
-      label: translate("auto.components.status.bar.UpdateStatusSegment.8533c12c3c", "Update failed"),
-      tooltip: translate("auto.components.status.bar.UpdateStatusSegment.2201df6987", "Update failed — click to see details"),
-      ariaLabel: translate("auto.components.status.bar.UpdateStatusSegment.5cd13105a3", "Update failed. Click to expand.")
+      label: translate(
+        'auto.components.status.bar.UpdateStatusSegment.8533c12c3c',
+        'Update failed'
+      ),
+      tooltip: translate(
+        'auto.components.status.bar.UpdateStatusSegment.2201df6987',
+        'Update failed — click to see details'
+      ),
+      ariaLabel: translate(
+        'auto.components.status.bar.UpdateStatusSegment.5cd13105a3',
+        'Update failed. Click to expand.'
+      )
     }
   })()
 

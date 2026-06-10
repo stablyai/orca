@@ -117,9 +117,9 @@ export function FloatingTerminalWindowControls({
           <TooltipContent side="bottom" sideOffset={6}>
             {translate(
               'auto.components.floating.terminal.FloatingTerminalWindowControls.648352c51f',
-              'Open'
+              'Open {{value0}} in floating workspace',
+              { value0: defaultAgentLabel ?? defaultAgent }
             )}
-            {defaultAgentLabel ?? defaultAgent}
           </TooltipContent>
         </Tooltip>
       ) : null}
