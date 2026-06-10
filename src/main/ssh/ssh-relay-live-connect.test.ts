@@ -20,15 +20,21 @@ vi.mock('electron', () => ({
 import { SshConnection } from './ssh-connection'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
+import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const LIVE_HOST = process.env.ORCA_LIVE_SSH_HOST
 const LIVE_USER = process.env.ORCA_LIVE_SSH_USER ?? 'leyni'
-const LIVE_IDENTITY = (process.env.ORCA_LIVE_SSH_IDENTITY ?? '~/.ssh/id_ed25519').replace(
-  /^~/,
-  process.env.HOME ?? '~'
+// Reuse the SSH config home expander so `~` resolves with the right
+// separators on Windows too, not just POSIX.
+const LIVE_IDENTITY = resolveSshConfigHomePath(
+  process.env.ORCA_LIVE_SSH_IDENTITY ?? '~/.ssh/id_ed25519'
 )
-const LIVE_PORT = Number(process.env.ORCA_LIVE_SSH_PORT ?? 22)
+const rawLivePort = process.env.ORCA_LIVE_SSH_PORT
+const LIVE_PORT = rawLivePort ? Number.parseInt(rawLivePort, 10) : 22
+if (!Number.isInteger(LIVE_PORT) || LIVE_PORT < 1 || LIVE_PORT > 65535) {
+  throw new Error(`Invalid ORCA_LIVE_SSH_PORT: ${rawLivePort}`)
+}
 
 const startedAt = Date.now()
 function log(step: string): void {
