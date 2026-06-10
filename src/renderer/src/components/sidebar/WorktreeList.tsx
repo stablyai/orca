@@ -4289,6 +4289,23 @@ const WorktreeList = React.memo(function WorktreeList({
           removeContainedProjects: projectGroupDeleteChildRepos
         }
       )
+      // Why: a missing group is already in the desired end state, so close
+      // quietly; only a real delete failure warrants an error toast.
+      if (result.status === 'group-delete-failed') {
+        toast.error(
+          translate(
+            'auto.components.sidebar.WorktreeList.groupDeleteFailed',
+            'Failed to delete group'
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.WorktreeList.groupDeleteFailedDesc',
+              'Something went wrong while deleting the group. No projects were removed.'
+            )
+          }
+        )
+        return
+      }
       if (result.status === 'deleted-group' && result.failedProjectRemovals.length > 0) {
         const failedCount = result.failedProjectRemovals.length
         const requestedCount = result.requestedProjectIds.length

@@ -3530,7 +3530,9 @@
           "e97297cb75": "{{value0}} 個の子ワークスペースを非表示",
           "0cd15956d4": "{{value0}} 個の子ワークスペースを非表示",
           "b667b59632": "Some projects could not be removed from Orca",
-          "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group."
+          "f94466bc39": "{{value0}} of {{value1}} contained project{{value2}} remained after deleting the group.",
+          "groupDeleteFailed": "Failed to delete group",
+          "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed."
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",
