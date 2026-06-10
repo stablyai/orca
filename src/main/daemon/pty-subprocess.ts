@@ -29,6 +29,7 @@ import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../gi
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 
 const PANE_IDENTITY_ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_TAB_ID', 'ORCA_WORKTREE_ID'] as const
+const PTY_SPAWN_HEALTH_TIMEOUT_MS = 2_000
 
 export type PtySubprocessOptions = {
   sessionId: string
@@ -229,6 +230,75 @@ function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string):
     formatted.stack = err.stack
   }
   return formatted
+}
+
+export async function checkPtySpawnHealth(): Promise<void> {
+  if (process.platform !== 'darwin') {
+    return
+  }
+
+  ensureNodePtySpawnHelperExecutable()
+  preflightMacNodePtySpawnEnvironment()
+
+  const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
+    ? process.env.ORCA_USER_DATA_PATH
+    : getDefaultCwd()
+
+  let proc: pty.IPty
+  try {
+    proc = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
+      name: 'xterm-256color',
+      cols: 2,
+      rows: 1,
+      cwd,
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color'
+      }
+    })
+  } catch (err) {
+    throw formatPtySpawnError(err, '/bin/sh', cwd)
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    let exitDisposable: { dispose(): void } | undefined
+    const finish = (error?: Error, opts?: { kill?: boolean }): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      exitDisposable?.dispose()
+      if (opts?.kill) {
+        try {
+          proc.kill()
+        } catch {
+          // Best-effort cleanup for a short-lived health probe.
+        }
+      }
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      finish(new Error(`PTY spawn health check timed out after ${PTY_SPAWN_HEALTH_TIMEOUT_MS}ms`), {
+        kill: true
+      })
+    }, PTY_SPAWN_HEALTH_TIMEOUT_MS)
+
+    // Why: ping only proves the daemon protocol is alive. A real short-lived
+    // PTY spawn catches stale node-pty helper paths captured by this process.
+    exitDisposable = proc.onExit(({ exitCode }) => {
+      if (exitCode === 0) {
+        finish()
+        return
+      }
+      finish(new Error(`PTY spawn health check exited with code ${exitCode}`))
+    })
+  })
 }
 
 function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
