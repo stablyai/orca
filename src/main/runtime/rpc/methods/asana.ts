@@ -51,10 +51,8 @@ const CreateTask = z.object({
   assigneeGid: OptionalString
 })
 
-const TaskUpdate = z.object({
-  gid: requiredString('Task id is required'),
-  workspaceId: OptionalString,
-  updates: z.object({
+const TaskUpdateFields = z
+  .object({
     title: OptionalString,
     notes: OptionalPlainString,
     completed: z.boolean().optional(),
@@ -62,6 +60,17 @@ const TaskUpdate = z.object({
     assigneeGid: z.union([z.string(), z.null()]).optional(),
     dueOn: z.union([z.string(), z.null()]).optional()
   })
+  // Why: every field is optional, so reject {} before it reaches the Asana
+  // layer as a no-op/invalid mutation.
+  .refine(
+    (updates) => Object.values(updates).some((value) => value !== undefined),
+    'At least one update field is required'
+  )
+
+const TaskUpdate = z.object({
+  gid: requiredString('Task id is required'),
+  workspaceId: OptionalString,
+  updates: TaskUpdateFields
 })
 
 const TaskComment = z.object({

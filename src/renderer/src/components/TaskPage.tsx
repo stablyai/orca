@@ -3649,7 +3649,12 @@ export default function TaskPage(): React.JSX.Element {
     setActiveAsanaPreset(asanaPreset)
     setAsanaSearchInput(asanaQuery)
     setAppliedAsanaSearch(asanaQuery)
-    setSelectedAsanaProjectId(taskResumeState?.asanaProjectId ?? null)
+    // Why: the cleared filter persists as '' (line ~3897/8122); restore it to
+    // null so the Select matches ASANA_ALL_PROJECTS instead of requesting an
+    // empty project gid.
+    setSelectedAsanaProjectId(
+      taskResumeState?.asanaProjectId?.trim() ? taskResumeState.asanaProjectId : null
+    )
 
     // Why: settings and persisted UI hydrate asynchronously. Apply the restored
     // Tasks context exactly once so later source/filter clicks remain local.
@@ -6044,6 +6049,8 @@ export default function TaskPage(): React.JSX.Element {
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
+      asanaConnectOpen ||
+      newAsanaTaskOpen ||
       activeModal !== 'none'
     ) {
       return
@@ -6081,8 +6088,10 @@ export default function TaskPage(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [
     activeModal,
+    asanaConnectOpen,
     closeTaskPage,
     dialogWorkItem,
+    newAsanaTaskOpen,
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
@@ -6978,14 +6987,27 @@ export default function TaskPage(): React.JSX.Element {
     if (!title) {
       return
     }
+    // Why: scope 'all' drops workspaceId; without a project either, the create
+    // request has no deterministic destination, so require one concrete target.
+    const targetWorkspaceId =
+      selectedAsanaWorkspaceId && selectedAsanaWorkspaceId !== 'all'
+        ? selectedAsanaWorkspaceId
+        : undefined
+    const targetProjectId = newAsanaTaskProjectId ?? undefined
+    if (!targetWorkspaceId && !targetProjectId) {
+      toast.error(
+        translate(
+          'auto.components.TaskPage.9eb7bf8dbb',
+          'Select an Asana workspace or project before creating a task.'
+        )
+      )
+      return
+    }
     setNewAsanaTaskSubmitting(true)
     try {
       const result = await asanaCreateTask(settings, {
-        workspaceId:
-          selectedAsanaWorkspaceId && selectedAsanaWorkspaceId !== 'all'
-            ? selectedAsanaWorkspaceId
-            : undefined,
-        projectId: newAsanaTaskProjectId ?? undefined,
+        workspaceId: targetWorkspaceId,
+        projectId: targetProjectId,
         title,
         notes: newAsanaTaskNotes.trim() || undefined,
         assigneeGid: newAsanaTaskAssigneeGid ?? undefined
@@ -12448,7 +12470,12 @@ export default function TaskPage(): React.JSX.Element {
             </Button>
             <Button
               onClick={() => void handleCreateAsanaTask()}
-              disabled={!newAsanaTaskTitle.trim() || newAsanaTaskSubmitting}
+              disabled={
+                !newAsanaTaskTitle.trim() ||
+                newAsanaTaskSubmitting ||
+                (!(selectedAsanaWorkspaceId && selectedAsanaWorkspaceId !== 'all') &&
+                  !newAsanaTaskProjectId)
+              }
             >
               {newAsanaTaskSubmitting ? (
                 <>

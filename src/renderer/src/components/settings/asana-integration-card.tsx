@@ -26,7 +26,7 @@ export function AsanaIntegrationCard(): React.JSX.Element {
   const [apiTokenDraft, setApiTokenDraft] = useState('')
   const [connectState, setConnectState] = useState<'idle' | 'connecting' | 'error'>('idle')
   const [connectError, setConnectError] = useState<string | null>(null)
-  const [testingWorkspaceId, setTestingWorkspaceId] = useState<string | null>(null)
+  const [testingWorkspaceIds, setTestingWorkspaceIds] = useState<Set<string>>(new Set())
   const [testResultByWorkspace, setTestResultByWorkspace] = useState<
     Record<string, AsanaTestResult>
   >({})
@@ -76,21 +76,32 @@ export function AsanaIntegrationCard(): React.JSX.Element {
   }
 
   const handleTest = async (workspaceId: string): Promise<void> => {
-    setTestingWorkspaceId(workspaceId)
+    // Why: track in-flight tests per workspace so concurrent tests don't clear
+    // each other's loading state.
+    setTestingWorkspaceIds((prev) => new Set(prev).add(workspaceId))
     setTestResultByWorkspace((prev) => {
       const next = { ...prev }
       delete next[workspaceId]
       return next
     })
-    const result = await testAsanaConnection(workspaceId)
-    if (!mountedRef.current) {
-      return
+    try {
+      const result = await testAsanaConnection(workspaceId)
+      if (!mountedRef.current) {
+        return
+      }
+      setTestResultByWorkspace((prev) => ({
+        ...prev,
+        [workspaceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
+      }))
+    } finally {
+      if (mountedRef.current) {
+        setTestingWorkspaceIds((prev) => {
+          const next = new Set(prev)
+          next.delete(workspaceId)
+          return next
+        })
+      }
     }
-    setTestResultByWorkspace((prev) => ({
-      ...prev,
-      [workspaceId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
-    }))
-    setTestingWorkspaceId(null)
   }
 
   const handleDisconnect = async (workspaceId: string): Promise<void> => {
@@ -221,7 +232,7 @@ export function AsanaIntegrationCard(): React.JSX.Element {
         <div className="mt-3 space-y-2">
           {asanaWorkspaces.map((workspace) => {
             const testResult = testResultByWorkspace[workspace.id]
-            const testing = testingWorkspaceId === workspace.id
+            const testing = testingWorkspaceIds.has(workspace.id)
             return (
               <div
                 key={workspace.id}

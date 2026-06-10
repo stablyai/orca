@@ -218,7 +218,10 @@ export function getWorkspaceIntentName(args: {
     const action = detectIntentAction(sourceText) ?? defaultActionForWorkItem(item)
     const identity = workItemIdentity(item)
     if (action) {
-      displayName = `${action} ${identity}`
+      // Why: providers without a short identity (e.g. Asana) return an empty
+      // identity, so fall back to the title subject instead of a bare action.
+      const subject = compactWorkItemTitle(item.title, item)
+      displayName = [action, identity || subject].filter(Boolean).join(' ')
     } else {
       const subject = compactWorkItemTitle(item.title, item)
       displayName = [identity, subject].filter(Boolean).join(' ')

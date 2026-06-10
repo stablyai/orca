@@ -518,7 +518,7 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
     next.asanaQuery = input.asanaQuery
   }
   if (typeof input.asanaProjectId === 'string' && input.asanaProjectId.trim()) {
-    next.asanaProjectId = input.asanaProjectId
+    next.asanaProjectId = input.asanaProjectId.trim()
   }
 
   return Object.keys(next).length > 0 ? next : undefined

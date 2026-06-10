@@ -58,6 +58,14 @@ function getSelectedWorkspaceId(status: AsanaConnectionStatus): AsanaWorkspaceSe
   return status.selectedWorkspaceId ?? status.activeWorkspaceId ?? null
 }
 
+// Why: task data is served by the active runtime (local vs environment RPC), so
+// cache keys must include the runtime scope or switching runtimes serves stale
+// tasks from a different backend until the TTL expires.
+function getAsanaRuntimeScope(settings: AppState['settings']): string {
+  const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
+  return environmentId ? `env:${environmentId}` : 'local'
+}
+
 function clearAsanaInflight(): void {
   inflightTaskRequests.clear()
   inflightSearchRequests.clear()
@@ -168,7 +176,8 @@ export const createAsanaSlice: StateCreator<AppState, [], [], AsanaSlice> = (set
   },
 
   fetchAsanaTask: async (gid, workspaceId) => {
-    const taskCacheKey = `${workspaceId ?? 'selected'}::${gid}`
+    const runtimeScope = getAsanaRuntimeScope(get().settings)
+    const taskCacheKey = `${runtimeScope}::${workspaceId ?? 'selected'}::${gid}`
     const cached = get().asanaTaskCache[taskCacheKey] ?? get().asanaTaskCache[gid]
     if (isFresh(cached)) {
       return cached.data
@@ -202,8 +211,9 @@ export const createAsanaSlice: StateCreator<AppState, [], [], AsanaSlice> = (set
   },
 
   searchAsanaTasks: async (query, limit = 30) => {
+    const runtimeScope = getAsanaRuntimeScope(get().settings)
     const workspaceId = getSelectedWorkspaceId(get().asanaStatus)
-    const cacheKey = `${workspaceId ?? 'default'}::${query}::${limit}`
+    const cacheKey = `${runtimeScope}::${workspaceId ?? 'default'}::${query}::${limit}`
     const cached = get().asanaSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []
@@ -237,8 +247,9 @@ export const createAsanaSlice: StateCreator<AppState, [], [], AsanaSlice> = (set
   },
 
   listAsanaTasks: async (filter = 'assigned', limit = 30, projectId = null) => {
+    const runtimeScope = getAsanaRuntimeScope(get().settings)
     const workspaceId = getSelectedWorkspaceId(get().asanaStatus)
-    const cacheKey = `${workspaceId ?? 'default'}::list::${filter}::${limit}::${projectId ?? 'all'}`
+    const cacheKey = `${runtimeScope}::${workspaceId ?? 'default'}::list::${filter}::${limit}::${projectId ?? 'all'}`
     const cached = get().asanaSearchCache[cacheKey]
     if (isFresh(cached)) {
       return cached.data ?? []

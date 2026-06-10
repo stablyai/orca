@@ -18,6 +18,9 @@ import type {
 export const ASANA_API_BASE = 'https://app.asana.com/api/1.0'
 
 const MAX_CONCURRENT = 4
+// Why: every Asana call funnels through the shared fetch helpers; without a
+// timeout a stalled socket hangs the main-process operation indefinitely.
+const ASANA_REQUEST_TIMEOUT_MS = 30_000
 let running = 0
 const queue: (() => void)[] = []
 
@@ -214,13 +217,38 @@ function writeWorkspaceFile(file: AsanaWorkspaceFile): void {
   })
 }
 
+// Why: persist the on-disk format alongside the bytes so reads don't depend on
+// the *current* safeStorage availability. If that flips between write and read,
+// a marker-less heuristic would decrypt plaintext as garbage (or vice versa).
+const TOKEN_ENC_PREFIX = 'asana-token:v1:enc\n'
+const TOKEN_PLAIN_PREFIX = 'asana-token:v1:plain\n'
+
 function writeEncryptedToken(path: string, apiToken: string): void {
   if (safeStorage.isEncryptionAvailable()) {
-    writeFileSync(path, safeStorage.encryptString(apiToken), { mode: 0o600 })
+    const encrypted = safeStorage.encryptString(apiToken)
+    writeFileSync(path, Buffer.concat([Buffer.from(TOKEN_ENC_PREFIX), encrypted]), { mode: 0o600 })
     return
   }
   console.warn('[asana] safeStorage encryption unavailable — storing token in plaintext')
-  writeFileSync(path, apiToken, { encoding: 'utf-8', mode: 0o600 })
+  writeFileSync(path, `${TOKEN_PLAIN_PREFIX}${apiToken}`, { encoding: 'utf-8', mode: 0o600 })
+}
+
+function decodeStoredToken(raw: Buffer): string | null {
+  const header = raw.subarray(0, 32).toString('utf-8')
+  if (header.startsWith(TOKEN_ENC_PREFIX)) {
+    // Encrypted on disk but no key available now — credentials are unreadable.
+    if (!safeStorage.isEncryptionAvailable()) {
+      return null
+    }
+    return safeStorage.decryptString(raw.subarray(Buffer.byteLength(TOKEN_ENC_PREFIX)))
+  }
+  if (header.startsWith(TOKEN_PLAIN_PREFIX)) {
+    return raw.subarray(Buffer.byteLength(TOKEN_PLAIN_PREFIX)).toString('utf-8')
+  }
+  // Legacy token without a format marker — fall back to the prior heuristic.
+  return safeStorage.isEncryptionAvailable()
+    ? safeStorage.decryptString(raw)
+    : raw.toString('utf-8')
 }
 
 function readToken(workspaceId: string): string | null {
@@ -233,10 +261,10 @@ function readToken(workspaceId: string): string | null {
     return null
   }
   try {
-    const raw = readFileSync(path)
-    const token = safeStorage.isEncryptionAvailable()
-      ? safeStorage.decryptString(raw)
-      : raw.toString('utf-8')
+    const token = decodeStoredToken(readFileSync(path))
+    if (token === null) {
+      return null
+    }
     cachedTokens.set(workspaceId, token)
     return token
   } catch {
@@ -310,7 +338,11 @@ async function requestWithToken(
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
   headers.set('Authorization', authHeader(apiToken))
-  const response = await fetch(`${ASANA_API_BASE}${path}`, { ...init, headers })
+  const response = await fetch(`${ASANA_API_BASE}${path}`, {
+    signal: AbortSignal.timeout(ASANA_REQUEST_TIMEOUT_MS),
+    ...init,
+    headers
+  })
   if (!response.ok) {
     throw new AsanaApiError(await readAsanaError(response), response.status)
   }
@@ -329,7 +361,11 @@ export async function asanaRequest<T>(
   headers.set('Accept', 'application/json')
   headers.set('Content-Type', 'application/json')
   headers.set('Authorization', client.authorization)
-  const response = await fetch(`${ASANA_API_BASE}${path}`, { ...init, headers })
+  const response = await fetch(`${ASANA_API_BASE}${path}`, {
+    signal: AbortSignal.timeout(ASANA_REQUEST_TIMEOUT_MS),
+    ...init,
+    headers
+  })
   if (!response.ok) {
     throw new AsanaApiError(await readAsanaError(response), response.status)
   }

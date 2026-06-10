@@ -203,9 +203,12 @@ export default function AsanaIssueWorkspace({
     if (!displayed) {
       return
     }
+    // Why: a newer task selection bumps requestIdRef; bail on repaint if this
+    // refresh resolved after the user moved on, to avoid stale data.
+    const activeRequestId = requestIdRef.current
     try {
       const latest = await asanaGetTask(settings, displayed.gid, displayed.workspaceId)
-      if (latest) {
+      if (latest && activeRequestId === requestIdRef.current) {
         setFullTask(latest)
         patchAsanaTask(latest.gid, latest)
       }
@@ -223,6 +226,9 @@ export default function AsanaIssueWorkspace({
       if (!displayed || pendingField) {
         return
       }
+      // Why: guard the rollback repaint so a stale mutation can't overwrite a
+      // task the user selected while the request was in flight.
+      const activeRequestId = requestIdRef.current
       setPendingField(field)
       const previous = displayed
       try {
@@ -236,7 +242,9 @@ export default function AsanaIssueWorkspace({
         }
         await refreshTask()
       } catch (error) {
-        setFullTask(previous)
+        if (activeRequestId === requestIdRef.current) {
+          setFullTask(previous)
+        }
         patchAsanaTask(previous.gid, previous)
         toast.error(
           error instanceof Error
@@ -576,6 +584,10 @@ export default function AsanaIssueWorkspace({
                         variant="outline"
                         onClick={handleSaveTitle}
                         disabled={pendingField === 'title'}
+                        aria-label={translate(
+                          'auto.components.AsanaIssueWorkspace.b160e69749',
+                          'Save title'
+                        )}
                       >
                         {pendingField === 'title' ? (
                           <LoaderCircle className="size-4 animate-spin" />

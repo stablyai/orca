@@ -1541,7 +1541,8 @@
         "5cab63cece": "Create task",
         "85bcd0f0c7": "Start workspace from {{title}}",
         "5d4d1dbbe3": "Open {{title}} in Asana",
-        "3b8d9385c3": "Filing in {{workspace}}"
+        "3b8d9385c3": "Filing in {{workspace}}",
+        "9eb7bf8dbb": "Select an Asana workspace or project before creating a task."
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -10086,7 +10087,8 @@
         "f60c8c4109": "Add an Asana comment...",
         "1bd0e2fc2d": "Comment",
         "43e26f1a9b": "{{label}} copied",
-        "c1be5501dd": "Failed to copy {{label}}"
+        "c1be5501dd": "Failed to copy {{label}}",
+        "b160e69749": "Save title"
       }
     },
     "i18n": {
