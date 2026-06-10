@@ -11,7 +11,7 @@ import {
   LinearIntegrationCard
 } from '@/components/settings/task-tracker-integration-cards'
 import { useIntegrationProviderStatusRefresh } from '@/components/settings/use-integration-provider-status-refresh'
-import { CodeHostTaskNote, IntegrationProgress, IntegrationStep } from './connect-integration-step'
+import { IntegrationProgress, IntegrationStep } from './connect-integration-step'
 import {
   deriveIntegrationFlowState,
   useIntegrationConnectionStatus
@@ -63,7 +63,6 @@ export function ConnectIntegrationsList(): React.JSX.Element {
     trackerChecking: status.trackerChecking
   })
   const reviewDone = status.reviewConnected
-  const trackerDone = status.trackerProviderName !== null
   const taskResolved = flow.taskResolved
   const reviewExpanded = !reviewDone || reopened.review
   const reviewCanToggle = reviewDone
@@ -151,9 +150,14 @@ export function ConnectIntegrationsList(): React.JSX.Element {
       >
         <LinearIntegrationCard />
         <JiraIntegrationCard />
-        {status.codeHostTaskProviderName && !trackerDone ? (
-          <CodeHostTaskNote providerName={status.codeHostTaskProviderName} />
-        ) : null}
+        <p className="px-1 pt-1 text-[12px] leading-snug text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.ConnectIntegrationsList.code_host_tasks_caption',
+            "Your code host's issues also work as tasks."
+          )}
+        </p>
+        <GitHubIntegrationCard />
+        <GitLabIntegrationCard />
       </IntegrationStep>
     </div>
   )

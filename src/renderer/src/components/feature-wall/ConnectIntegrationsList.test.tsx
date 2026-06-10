@@ -158,6 +158,24 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).not.toContain('Use GitHub issues')
   })
 
+  it('offers GitHub and GitLab as task sources when review came from a non-task provider', async () => {
+    // Bitbucket satisfies review but cannot serve tasks, so step 2 must still
+    // offer the code hosts as connectable task sources alongside the trackers.
+    installStore(
+      makePreflightStatus({
+        bitbucket: { configured: true, authenticated: true, account: 'acme' }
+      })
+    )
+
+    const { markup } = await renderConnectIntegrationsList()
+
+    expect(markup).toContain('issues also work as tasks.')
+    expect(markup).toContain('gh auth login')
+    expect(markup).toContain('glab auth login')
+    expect(markup).toContain('Linear')
+    expect(markup).toContain('Jira')
+  })
+
   it('lists the code host alongside a connected tracker in the task summary', async () => {
     installStore(makePreflightStatus({ gh: { installed: true, authenticated: true } }))
     if (!storeState.current) {

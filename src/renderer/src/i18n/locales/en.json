@@ -8941,13 +8941,12 @@
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",
-            "code_host_tasks_summary": "issues available as tasks · add Linear or Jira if your team plans work there"
+            "code_host_tasks_summary": "issues available as tasks · add Linear or Jira if your team plans work there",
+            "code_host_tasks_caption": "Your code host's issues also work as tasks."
           },
           "connect": {
             "integration": {
               "step": {
-                "05334a6812": "Connect a tracker above only if your team plans work there.",
-                "8de7b6848c": "issues are already available as a task source.",
                 "0f47ff17c6": "Change",
                 "5538eb6743": "Done"
               }

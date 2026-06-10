@@ -105,29 +105,3 @@ export function IntegrationProgress(props: {
     </div>
   )
 }
-
-// Acknowledges the step-1 code host as an already-usable task source so we
-// don't ask the user to connect the same gh/glab auth twice. The step resolves
-// from the connection itself; the copy never claims a tracker exists.
-export function CodeHostTaskNote(props: { providerName: string }): React.JSX.Element {
-  return (
-    <div className="flex items-start gap-2.5 border-t border-border px-1 pb-1 pt-3 text-[13px] leading-snug text-muted-foreground">
-      <Check className="mt-px size-3.5 shrink-0 text-status-success" />
-      <div className="min-w-0 flex-1">
-        <span>
-          <span className="font-semibold text-foreground">{props.providerName}</span>{' '}
-          {translate(
-            'auto.components.feature.wall.connect.integration.step.8de7b6848c',
-            'issues are already available as a task source.'
-          )}
-        </span>
-        <span className="mt-0.5 block text-[12px]">
-          {translate(
-            'auto.components.feature.wall.connect.integration.step.05334a6812',
-            'Connect a tracker above only if your team plans work there.'
-          )}
-        </span>
-      </div>
-    </div>
-  )
-}
