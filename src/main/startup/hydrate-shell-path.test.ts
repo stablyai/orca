@@ -186,14 +186,30 @@ describe('mergePathSegments', () => {
     )
   })
 
-  it('skips segments already on PATH so re-hydration is a no-op', () => {
+  it('promotes shell segments already on PATH so shell ordering wins', () => {
     process.env.PATH = joinPath('/Users/tester/.cargo/bin', '/usr/bin')
 
     const added = mergePathSegments(['/Users/tester/.cargo/bin', '/Users/tester/.opencode/bin'])
 
     expect(added).toEqual(['/Users/tester/.opencode/bin'])
     expect(process.env.PATH).toBe(
-      joinPath('/Users/tester/.opencode/bin', '/Users/tester/.cargo/bin', '/usr/bin')
+      joinPath('/Users/tester/.cargo/bin', '/Users/tester/.opencode/bin', '/usr/bin')
+    )
+  })
+
+  it('moves user-local shell paths ahead of packaged Homebrew fallbacks', () => {
+    process.env.PATH = joinPath(
+      '/opt/homebrew/bin',
+      '/Users/tester/.local/bin',
+      '/usr/bin',
+      '/bin'
+    )
+
+    const added = mergePathSegments(['/Users/tester/.local/bin', '/opt/homebrew/bin'])
+
+    expect(added).toEqual([])
+    expect(process.env.PATH).toBe(
+      joinPath('/Users/tester/.local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin')
     )
   })
 
