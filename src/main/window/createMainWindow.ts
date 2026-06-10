@@ -234,6 +234,10 @@ export function createMainWindow(
     minHeight: MIN_HEIGHT,
     title: opts?.title ?? 'Orca',
     show: false,
+    // Why: macOS swallows the app-activating click by default, so clicking
+    // back into Orca (e.g. the floating workspace) needed a second click.
+    // macOS-only option; Windows/Linux already deliver that click.
+    acceptFirstMouse: true,
     // Why: on macOS the menu lives in the system menu bar, so the in-window
     // menu bar is irrelevant. On Windows/Linux we auto-hide so the menu bar
     // doesn't consume a dedicated row of vertical space on every launch —
