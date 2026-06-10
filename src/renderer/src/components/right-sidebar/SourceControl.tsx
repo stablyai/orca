@@ -220,6 +220,19 @@ export type SourceControlActionError = {
   message: string
 }
 
+export function resolveSourceControlBaseRef(input: {
+  worktreeBaseRef?: string | null
+  repoBaseRef?: string | null
+  defaultBaseRef?: string | null
+}): string | null {
+  return (
+    input.worktreeBaseRef?.trim() ||
+    input.repoBaseRef?.trim() ||
+    input.defaultBaseRef?.trim() ||
+    null
+  )
+}
+
 const EMPTY_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 const EMPTY_BRANCH_CHANGE_ENTRIES: GitBranchChangeEntry[] = []
 
@@ -1153,7 +1166,15 @@ function SourceControlInner(): React.JSX.Element {
     }
   }, [activeRepo, isBranchVisible, isFolder])
 
-  const effectiveBaseRef = activeRepo?.worktreeBaseRef ?? defaultBaseRef
+  const normalizedWorktreeBaseRef = activeWorktree?.baseRef?.trim() || null
+  const normalizedRepoBaseRef = activeRepo?.worktreeBaseRef?.trim() || null
+  const effectiveBaseRef = resolveSourceControlBaseRef({
+    worktreeBaseRef: normalizedWorktreeBaseRef,
+    repoBaseRef: normalizedRepoBaseRef,
+    defaultBaseRef
+  })
+  const baseRefOwnedByWorktree = normalizedWorktreeBaseRef !== null
+  const pinnedBaseRef = normalizedWorktreeBaseRef ?? normalizedRepoBaseRef
   const hasUncommittedEntries = entries.length > 0
 
   const hostedReviewCreation =
@@ -4557,14 +4578,22 @@ function SourceControlInner(): React.JSX.Element {
           </DialogHeader>
           <BaseRefPicker
             repoId={activeRepo.id}
-            currentBaseRef={activeRepo.worktreeBaseRef}
+            currentBaseRef={pinnedBaseRef ?? undefined}
             onSelect={(ref) => {
-              void updateRepo(activeRepo.id, { worktreeBaseRef: ref })
+              if (baseRefOwnedByWorktree && activeWorktreeId) {
+                void updateWorktreeMeta(activeWorktreeId, { baseRef: ref })
+              } else {
+                void updateRepo(activeRepo.id, { worktreeBaseRef: ref })
+              }
               setBaseRefDialogOpen(false)
               window.setTimeout(() => void refreshBranchCompare(), 0)
             }}
             onUsePrimary={() => {
-              void updateRepo(activeRepo.id, { worktreeBaseRef: undefined })
+              if (baseRefOwnedByWorktree && activeWorktreeId) {
+                void updateWorktreeMeta(activeWorktreeId, { baseRef: undefined })
+              } else {
+                void updateRepo(activeRepo.id, { worktreeBaseRef: undefined })
+              }
               setBaseRefDialogOpen(false)
               window.setTimeout(() => void refreshBranchCompare(), 0)
             }}
