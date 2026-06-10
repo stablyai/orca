@@ -86,12 +86,12 @@ export function ConnectIntegrationsList(): React.JSX.Element {
         state={flow.review}
         expanded={reviewExpanded}
         title={translate(
-          'auto.components.feature.wall.ConnectIntegrationsList.38c72bdc65',
-          'Keep review status in view'
+          'auto.components.feature.wall.ConnectIntegrationsList.review_step_title',
+          'See PR status while agents work'
         )}
         description={translate(
-          'auto.components.feature.wall.ConnectIntegrationsList.1e6e3201fd',
-          'Connect a review provider so Orca can show PR or MR status, checks, and reviews while agents work.'
+          'auto.components.feature.wall.ConnectIntegrationsList.review_step_description',
+          'Connect a review provider so Orca can show PR or MR status, checks, and reviews.'
         )}
         summary={
           <>
