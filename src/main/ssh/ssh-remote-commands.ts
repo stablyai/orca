@@ -14,8 +14,9 @@ export function makeRemoteDirectoryCommand(host: RemoteHostPlatform, remotePath:
   if (!isWindowsRemoteHost(host)) {
     return `mkdir -p ${shellEscape(remotePath)}`
   }
+  // New-Item has no -LiteralPath parameter (unlike most *-Item cmdlets); -Path is the only option.
   return powerShellCommand(
-    `$null = New-Item -ItemType Directory -Force -LiteralPath ${powerShellLiteral(remotePath)}`
+    `$null = New-Item -ItemType Directory -Force -Path ${powerShellLiteral(remotePath)}`
   )
 }
 
@@ -88,8 +89,9 @@ export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: s
   if (!isWindowsRemoteHost(host)) {
     return `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
   }
+  // New-Item has no -LiteralPath parameter (unlike most *-Item cmdlets); -Path is the only option.
   return powerShellCommand(
-    `$ErrorActionPreference = "Stop"; try { $null = New-Item -ItemType Directory -LiteralPath ${powerShellLiteral(lockDir)}; 'OK' } catch { 'BUSY' }`
+    `$ErrorActionPreference = "Stop"; try { $null = New-Item -ItemType Directory -Path ${powerShellLiteral(lockDir)}; 'OK' } catch { 'BUSY' }`
   )
 }
 
