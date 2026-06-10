@@ -3,6 +3,7 @@ task source controls, and GitHub task list co-located so the wiring between the
 selected repo, the task filters, and the work-item list stays readable in one
 place while this surface is still evolving. */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import {
   AlertCircle,
@@ -19,11 +20,8 @@ import {
   ExternalLink,
   Eye,
   Files,
-  Github,
-  Gitlab,
   GitMerge,
   GitPullRequest,
-  LayoutGrid,
   List,
   LoaderCircle,
   Lock,
@@ -224,26 +222,30 @@ import {
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
 import { translate } from '@/i18n/i18n'
-
-type TaskSource = TaskProvider
-
-type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
-type GitLabIssueFilter = 'opened' | 'assigned-to-me'
-
-const GITLAB_MR_FILTERS: { id: GitLabTaskFilter; label: string }[] = [
-  { id: 'opened', label: translate('auto.components.TaskPage.606a85c774', 'Open') },
-  { id: 'merged', label: translate('auto.components.TaskPage.37a82eaaf8', 'Merged') },
-  { id: 'closed', label: translate('auto.components.TaskPage.d09bf34db7', 'Closed') },
-  { id: 'all', label: translate('auto.components.TaskPage.c2268a9982', 'All') }
-]
-
-const GITLAB_ISSUE_FILTERS: { id: GitLabIssueFilter; label: string }[] = [
-  { id: 'opened', label: translate('auto.components.TaskPage.606a85c774', 'Open') },
-  {
-    id: 'assigned-to-me',
-    label: translate('auto.components.TaskPage.94f0339621', 'Assigned to me')
-  }
-]
+import {
+  getGitHubModeButtons,
+  getGitHubTaskKindPresets,
+  getGitLabIssueFilters,
+  getGitLabMRFilters,
+  getJiraPresets,
+  getLinearDisplayProperties,
+  getLinearGroupOptions,
+  getLinearModeOptions,
+  getLinearOrderOptions,
+  getLinearPriorityLabel,
+  getLinearViewOptions,
+  getSourceOptions,
+  type GitHubTaskKind,
+  type GitLabIssueFilter,
+  type GitLabTaskFilter,
+  type JiraPresetId,
+  LinearIcon,
+  type LinearDisplayProperty,
+  type LinearGroupBy,
+  type LinearMode,
+  type LinearOrderBy,
+  type LinearViewMode
+} from '@/components/task-page-localized-options'
 
 function isGitLabMRFilter(value: GitLabTaskFilter | GitLabIssueFilter): value is GitLabTaskFilter {
   return value === 'opened' || value === 'merged' || value === 'closed' || value === 'all'
@@ -254,95 +256,6 @@ function isGitLabIssueFilter(
 ): value is GitLabIssueFilter {
   return value === 'opened' || value === 'assigned-to-me'
 }
-type TaskQueryPreset = {
-  id: TaskViewPresetId
-  label: string
-  query: string
-}
-type GitHubTaskKind = 'issues' | 'prs'
-
-const ISSUE_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
-  {
-    id: 'issues',
-    label: translate('auto.components.TaskPage.606a85c774', 'Open'),
-    query: getTaskPresetQuery('issues')
-  },
-  {
-    id: 'my-issues',
-    label: translate('auto.components.TaskPage.94f0339621', 'Assigned to me'),
-    query: getTaskPresetQuery('my-issues')
-  }
-]
-
-const PR_TASK_QUERY_PRESETS: TaskQueryPreset[] = [
-  {
-    id: 'prs',
-    label: translate('auto.components.TaskPage.606a85c774', 'Open'),
-    query: getTaskPresetQuery('prs')
-  },
-  {
-    id: 'my-prs',
-    label: translate('auto.components.TaskPage.7698af5263', 'Mine'),
-    query: getTaskPresetQuery('my-prs')
-  },
-  {
-    id: 'review',
-    label: translate('auto.components.TaskPage.524f095d55', 'Needs review'),
-    query: getTaskPresetQuery('review')
-  }
-]
-
-function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[] {
-  return kind === 'prs' ? PR_TASK_QUERY_PRESETS : ISSUE_TASK_QUERY_PRESETS
-}
-
-type SourceOption = {
-  id: TaskSource
-  label: string
-  Icon: (props: { className?: string }) => React.JSX.Element
-  disabled?: boolean
-}
-
-function LinearIcon({ className }: { className?: string }): React.JSX.Element {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
-      <path d="M2.886 4.18A11.982 11.982 0 0 1 11.99 0C18.624 0 24 5.376 24 12.009c0 3.64-1.62 6.903-4.18 9.105L2.887 4.18ZM1.817 5.626l16.556 16.556c-.524.33-1.075.62-1.65.866L.951 7.277c.247-.575.537-1.126.866-1.65ZM.322 9.163l14.515 14.515c-.71.172-1.443.282-2.195.322L0 11.358a12 12 0 0 1 .322-2.195Zm-.17 4.862 9.823 9.824a12.02 12.02 0 0 1-9.824-9.824Z" />
-    </svg>
-  )
-}
-
-const SOURCE_OPTIONS: SourceOption[] = [
-  {
-    id: 'github',
-    label: translate('auto.components.TaskPage.acef77f7ca', 'GitHub'),
-    Icon: ({ className }) => <Github className={className} />
-  },
-  {
-    id: 'gitlab',
-    label: translate('auto.components.TaskPage.11a828abf8', 'GitLab'),
-    Icon: ({ className }) => <Gitlab className={className} />
-  },
-  {
-    id: 'linear',
-    label: translate('auto.components.TaskPage.8675cd6188', 'Linear'),
-    Icon: ({ className }) => <LinearIcon className={className} />
-  },
-  {
-    id: 'jira',
-    label: translate('auto.components.TaskPage.9cd11ba218', 'Jira'),
-    Icon: ({ className }) => <JiraIcon className={className} />
-  }
-]
-
-type JiraPresetId = 'assigned' | 'reported' | 'all' | 'done'
-type JiraPreset = { id: JiraPresetId; label: string }
-
-const JIRA_PRESETS: JiraPreset[] = [
-  { id: 'assigned', label: translate('auto.components.TaskPage.1301d376f1', 'Assigned') },
-  { id: 'reported', label: translate('auto.components.TaskPage.bd9965df51', 'Reported') },
-  { id: 'all', label: translate('auto.components.TaskPage.4b6e40e42c', 'All Open') },
-  { id: 'done', label: translate('auto.components.TaskPage.18451e99df', 'Done') }
-]
 
 const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
@@ -406,14 +319,6 @@ const GITHUB_TASK_STICKY_TITLE_CELL_CLASS = cn(
   GITHUB_TASK_ROW_SURFACE_CLASS,
   GITHUB_TASK_ROW_HOVER_SURFACE_CLASS
 )
-
-type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
-
-const GITHUB_MODE_BUTTONS: GitHubModeButton[] = [
-  { id: 'issues', label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues') },
-  { id: 'prs', label: translate('auto.components.TaskPage.137e2a8a01', 'PRs') },
-  { id: 'project', label: translate('auto.components.TaskPage.727069bee5', 'Projects') }
-]
 
 function isPRFocusedTaskView(preset: TaskViewPresetId | null, query: string): boolean {
   if (preset === 'prs' || preset === 'my-prs' || preset === 'review') {
@@ -483,22 +388,7 @@ function formatRelativeTime(input: string): string {
   return relativeTimeFormatter.format(diffDays, 'day')
 }
 
-// Why: Linear encodes priority as an integer (0–4). Map to human-readable
-// labels so the table column is scannable without memorising the scale.
-const LINEAR_PRIORITY_LABELS: Record<number, string> = {
-  0: 'None',
-  1: 'Urgent',
-  2: 'High',
-  3: 'Medium',
-  4: 'Low'
-}
-
-type LinearViewMode = 'list' | 'board'
-type LinearMode = 'issues' | 'projects' | 'views'
 type LinearProjectTab = 'overview' | 'issues'
-type LinearGroupBy = 'none' | 'status' | 'assignee' | 'priority' | 'team'
-type LinearOrderBy = 'priority' | 'updated' | 'identifier'
-type LinearDisplayProperty = 'state' | 'priority' | 'assignee' | 'team' | 'labels' | 'updated'
 
 type LinearGroupSection = {
   key: string
@@ -512,26 +402,7 @@ type LinearIssueListRow =
 
 const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
 
-const LINEAR_MODE_OPTIONS: { id: LinearMode; label: string }[] = [
-  { id: 'issues', label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues') },
-  { id: 'projects', label: translate('auto.components.TaskPage.727069bee5', 'Projects') },
-  { id: 'views', label: translate('auto.components.TaskPage.e78ec261ed', 'Views') }
-]
-
 const LINEAR_CUSTOM_VIEW_MODELS = ['issue', 'project'] satisfies readonly LinearCustomViewModel[]
-
-const LINEAR_VIEW_OPTIONS: {
-  id: LinearViewMode
-  label: string
-  Icon: typeof List
-}[] = [
-  { id: 'list', label: translate('auto.components.TaskPage.a6f7e93d7f', 'List'), Icon: List },
-  {
-    id: 'board',
-    label: translate('auto.components.TaskPage.d747aed72f', 'Board'),
-    Icon: LayoutGrid
-  }
-]
 
 function mergeLinearCollectionResults<T>(
   results: LinearCollectionResult<T>[]
@@ -544,29 +415,6 @@ function mergeLinearCollectionResults<T>(
   }
 }
 
-const LINEAR_GROUP_OPTIONS: { id: LinearGroupBy; label: string }[] = [
-  { id: 'none', label: translate('auto.components.TaskPage.50387522d7', 'No grouping') },
-  { id: 'status', label: translate('auto.components.TaskPage.154b0fa623', 'Status') },
-  { id: 'assignee', label: translate('auto.components.TaskPage.d2a876ca53', 'Assignee') },
-  { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
-  { id: 'team', label: translate('auto.components.TaskPage.a98cbe7664', 'Team') }
-]
-
-const LINEAR_ORDER_OPTIONS: { id: LinearOrderBy; label: string }[] = [
-  { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
-  { id: 'updated', label: translate('auto.components.TaskPage.f362667d55', 'Updated') },
-  { id: 'identifier', label: translate('auto.components.TaskPage.d8a517ad89', 'Identifier') }
-]
-
-const LINEAR_DISPLAY_PROPERTIES: { id: LinearDisplayProperty; label: string }[] = [
-  { id: 'state', label: translate('auto.components.TaskPage.154b0fa623', 'Status') },
-  { id: 'priority', label: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority') },
-  { id: 'assignee', label: translate('auto.components.TaskPage.d2a876ca53', 'Assignee') },
-  { id: 'team', label: translate('auto.components.TaskPage.a98cbe7664', 'Team') },
-  { id: 'labels', label: translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels') },
-  { id: 'updated', label: translate('auto.components.TaskPage.f362667d55', 'Updated') }
-]
-
 const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
   'state',
   'priority',
@@ -575,10 +423,6 @@ const DEFAULT_LINEAR_DISPLAY_PROPERTIES: LinearDisplayProperty[] = [
   'labels',
   'updated'
 ]
-
-function getLinearPriorityLabel(priority: number): string {
-  return LINEAR_PRIORITY_LABELS[priority] ?? `P${priority}`
-}
 
 function getLinearStatusSectionState(section: LinearGroupSection): LinearIssue['state'] | null {
   if (!section.key.startsWith('status:')) {
@@ -2587,6 +2431,7 @@ const hasUpstreamCandidateDivergence = (
   !sameGitHubOwnerRepo(s.sources.prs, s.sources.upstreamCandidate)
 
 export default function TaskPage(): React.JSX.Element {
+  useTranslation()
   const settings = useAppStore((s) => s.settings)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const taskResumeState = useAppStore((s) => s.taskResumeState)
@@ -2744,9 +2589,19 @@ export default function TaskPage(): React.JSX.Element {
       preflightStatus?.glab?.installed
     ]
   )
+  const sourceOptions = getSourceOptions()
+  const githubModeButtons = getGitHubModeButtons()
+  const linearModeOptions = getLinearModeOptions()
+  const jiraPresets = getJiraPresets()
+  const gitLabIssueFilters = getGitLabIssueFilters()
+  const gitLabMRFilters = getGitLabMRFilters()
+  const linearViewOptions = getLinearViewOptions()
+  const linearGroupOptions = getLinearGroupOptions()
+  const linearOrderOptions = getLinearOrderOptions()
+  const linearDisplayPropertyOptions = getLinearDisplayProperties()
   const visibleSourceOptions = useMemo(
-    () => SOURCE_OPTIONS.filter((source) => visibleTaskProviders.includes(source.id)),
-    [visibleTaskProviders]
+    () => sourceOptions.filter((source) => visibleTaskProviders.includes(source.id)),
+    [sourceOptions, visibleTaskProviders]
   )
   const hideTaskSource = useCallback(
     (provider: TaskProvider, label: string) => {
@@ -2785,7 +2640,7 @@ export default function TaskPage(): React.JSX.Element {
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
 
   const preferredTaskSource = pageData.taskSource ?? defaultTaskSource
-  const [taskSource, setTaskSource] = useState<TaskSource>(
+  const [taskSource, setTaskSource] = useState<TaskProvider>(
     resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
   )
   const taskSourceManuallyChangedRef = useRef(false)
@@ -6778,7 +6633,7 @@ export default function TaskPage(): React.JSX.Element {
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     {projectModeVisible ? (
                       <div className="flex items-center gap-1 text-xs">
-                        {GITHUB_MODE_BUTTONS.map((mode) => {
+                        {githubModeButtons.map((mode) => {
                           const active =
                             mode.id === 'project'
                               ? githubMode === 'project'
@@ -7137,7 +6992,7 @@ export default function TaskPage(): React.JSX.Element {
                           'Linear task mode'
                         )}
                       >
-                        {LINEAR_MODE_OPTIONS.map((mode) => {
+                        {linearModeOptions.map((mode) => {
                           const active = linearMode === mode.id
                           return (
                             <button
@@ -7355,7 +7210,7 @@ export default function TaskPage(): React.JSX.Element {
                   <div className="rounded-md rounded-b-none border border-border/50 bg-muted/50 p-3 shadow-sm">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap gap-2">
-                        {JIRA_PRESETS.map((preset) => {
+                        {jiraPresets.map((preset) => {
                           const active = !jiraSearchInput && activeJiraPreset === preset.id
                           return (
                             <button
@@ -7564,8 +7419,8 @@ export default function TaskPage(): React.JSX.Element {
                           <div className="flex flex-wrap gap-2">
                             {gitlabView === 'issues' || gitlabView === 'mrs'
                               ? (gitlabView === 'issues'
-                                  ? GITLAB_ISSUE_FILTERS
-                                  : GITLAB_MR_FILTERS
+                                  ? gitLabIssueFilters
+                                  : gitLabMRFilters
                                 ).map(({ id, label }) => {
                                   const active = activeGitlabFilter === id
                                   return (
@@ -8968,7 +8823,7 @@ export default function TaskPage(): React.JSX.Element {
                       'Linear view mode'
                     )}
                   >
-                    {LINEAR_VIEW_OPTIONS.map(({ id, label, Icon }) => {
+                    {linearViewOptions.map(({ id, label, Icon }) => {
                       const active = linearViewMode === id
                       return (
                         <Tooltip key={id}>
@@ -9019,7 +8874,7 @@ export default function TaskPage(): React.JSX.Element {
                         value={linearViewMode}
                         onValueChange={(value) => setLinearViewMode(value as LinearViewMode)}
                       >
-                        {LINEAR_VIEW_OPTIONS.map(({ id, label, Icon }) => (
+                        {linearViewOptions.map(({ id, label, Icon }) => (
                           <DropdownMenuRadioItem key={id} value={id}>
                             <Icon className="size-3.5" />
                             {label}
@@ -9035,7 +8890,7 @@ export default function TaskPage(): React.JSX.Element {
                         value={linearGroupBy}
                         onValueChange={(value) => setLinearGroupBy(value as LinearGroupBy)}
                       >
-                        {LINEAR_GROUP_OPTIONS.map((option) => (
+                        {linearGroupOptions.map((option) => (
                           <DropdownMenuRadioItem key={option.id} value={option.id}>
                             {option.label}
                           </DropdownMenuRadioItem>
@@ -9050,7 +8905,7 @@ export default function TaskPage(): React.JSX.Element {
                         value={linearOrderBy}
                         onValueChange={(value) => setLinearOrderBy(value as LinearOrderBy)}
                       >
-                        {LINEAR_ORDER_OPTIONS.map((option) => (
+                        {linearOrderOptions.map((option) => (
                           <DropdownMenuRadioItem key={option.id} value={option.id}>
                             {option.label}
                           </DropdownMenuRadioItem>
@@ -9061,7 +8916,7 @@ export default function TaskPage(): React.JSX.Element {
                         <Eye className="size-3.5" />
                         {translate('auto.components.TaskPage.a26a48252e', 'Display properties')}
                       </DropdownMenuLabel>
-                      {LINEAR_DISPLAY_PROPERTIES.map((property) => (
+                      {linearDisplayPropertyOptions.map((property) => (
                         <DropdownMenuCheckboxItem
                           key={property.id}
                           checked={effectiveLinearDisplayProperties.has(property.id)}
