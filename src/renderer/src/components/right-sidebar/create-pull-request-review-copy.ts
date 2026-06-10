@@ -1,42 +1,28 @@
-import type {
-  CreateHostedReviewResult,
-  HostedReviewProvider
-} from '../../../../shared/hosted-review'
+import type { CreateHostedReviewResult } from '../../../../shared/hosted-review'
+import { translate } from '@/i18n/i18n'
 
-export type CreatePullRequestReviewCopy = {
-  shortLabel: 'PR' | 'MR'
-  reviewLabel: 'pull request' | 'merge request'
-  titleLabel: 'Pull Request' | 'Merge Request'
-  providerName: 'GitHub' | 'GitLab'
-}
+export type { LocalizedHostedReviewCopy as CreatePullRequestReviewCopy } from '@/i18n/hosted-review-localized-copy'
 
-export function reviewCopy(provider: HostedReviewProvider): CreatePullRequestReviewCopy {
-  return provider === 'gitlab'
-    ? {
-        shortLabel: 'MR',
-        reviewLabel: 'merge request',
-        titleLabel: 'Merge Request',
-        providerName: 'GitLab'
-      }
-    : {
-        shortLabel: 'PR',
-        reviewLabel: 'pull request',
-        titleLabel: 'Pull Request',
-        providerName: 'GitHub'
-      }
-}
+export { localizedHostedReviewCopy as reviewCopy } from '@/i18n/hosted-review-localized-copy'
 
 export function formatCreateError(
   result: CreateHostedReviewResult,
   pushed: boolean,
-  shortLabel: 'PR' | 'MR'
+  shortLabel: string
 ): string {
   if (result.ok) {
     return ''
   }
   if (pushed) {
     const prefix = new RegExp(`^Create ${shortLabel} failed:\\s*`, 'i')
-    return `Push succeeded, but ${shortLabel} creation failed: ${result.error.replace(prefix, '')}`
+    return translate(
+      'auto.components.right.sidebar.create.pull.request.review.copy.a1f8c3d2e4',
+      'Push succeeded, but {{value0}} creation failed: {{value1}}',
+      {
+        value0: shortLabel,
+        value1: result.error.replace(prefix, '')
+      }
+    )
   }
   return result.error
 }

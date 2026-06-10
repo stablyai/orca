@@ -177,9 +177,9 @@ export function CreatePullRequestDialogForm({
         <p className="text-xs text-destructive">
           {translate(
             'auto.components.right.sidebar.CreatePullRequestDialog.27ef4b195c',
-            'Choose a different base branch before creating a'
+            'Choose a different base branch before creating a {{value0}}.',
+            { value0: copy.reviewLabel }
           )}
-          {copy.reviewLabel}.
         </p>
       ) : null}
       {generateError ? <p className="text-xs text-destructive">{generateError}</p> : null}

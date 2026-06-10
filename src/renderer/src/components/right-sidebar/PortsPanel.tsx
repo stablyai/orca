@@ -329,9 +329,12 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">
           {translate(
             'auto.components.right.sidebar.PortsPanel.f59c783b7a',
-            'Port scan unavailable on'
+            'Port scan unavailable on {{value0}}: {{value1}}',
+            {
+              value0: displayScan.platform,
+              value1: displayScan.unavailableReason
+            }
           )}
-          {displayScan.platform}: {displayScan.unavailableReason}
         </div>
       )}
 
@@ -1072,8 +1075,9 @@ function ForwardedPortRow({
         </div>
         {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            {translate('auto.components.right.sidebar.PortsPanel.de349d4560', 'opens')}
-            {advertisedBrowserUrl}
+            {translate('auto.components.right.sidebar.PortsPanel.de349d4560', 'opens {{value0}}', {
+              value0: advertisedBrowserUrl
+            })}
           </div>
         )}
       </div>
@@ -1150,8 +1154,11 @@ function DetectedPortRow({
         </div>
         {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            {translate('auto.components.right.sidebar.PortsPanel.c7e920aa7c', 'advertised as')}
-            {advertisedBrowserUrl}
+            {translate(
+              'auto.components.right.sidebar.PortsPanel.c7e920aa7c',
+              'advertised as {{value0}}',
+              { value0: advertisedBrowserUrl }
+            )}
           </div>
         )}
       </div>

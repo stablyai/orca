@@ -195,6 +195,7 @@ import {
 } from './source-control-text-generation-defaults'
 import { useSourceControlAi } from './use-source-control-ai'
 import { translate } from '@/i18n/i18n'
+import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 
 export {
   appendCommitFailureCustomInstruction,
@@ -419,27 +420,6 @@ type CreatedHostedReview = {
   provider: HostedReviewProvider
   number: number
   url: string
-}
-
-function hostedReviewCreationCopy(provider: HostedReviewProvider | null | undefined): {
-  shortLabel: 'PR' | 'MR'
-  reviewLabel: 'pull request' | 'merge request'
-  titleLabel: 'Pull Request' | 'Merge Request'
-  providerName: 'GitHub' | 'GitLab'
-} {
-  return provider === 'gitlab'
-    ? {
-        shortLabel: 'MR',
-        reviewLabel: 'merge request',
-        titleLabel: 'Merge Request',
-        providerName: 'GitLab'
-      }
-    : {
-        shortLabel: 'PR',
-        reviewLabel: 'pull request',
-        titleLabel: 'Pull Request',
-        providerName: 'GitHub'
-      }
 }
 
 export function readCommitDraftForWorktree(
@@ -1182,7 +1162,7 @@ function SourceControlInner(): React.JSX.Element {
       : null
   const hostedReviewCreateProvider =
     hostedReviewCreation?.provider === 'gitlab' ? 'gitlab' : 'github'
-  const hostedReviewCreateCopy = hostedReviewCreationCopy(hostedReviewCreateProvider)
+  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
   const hostedReviewCacheKey =
     activeRepo && branchName
       ? getHostedReviewCacheKey(
@@ -1969,7 +1949,7 @@ function SourceControlInner(): React.JSX.Element {
       if (!activeRepo || !branchName) {
         return
       }
-      const copy = hostedReviewCreationCopy(result.provider)
+      const copy = localizedHostedReviewCopy(result.provider)
       setRightSidebarOpen(true)
       setRightSidebarTab('checks')
       try {
@@ -2392,7 +2372,11 @@ function SourceControlInner(): React.JSX.Element {
     if (!title) {
       setCreatePrErrors((prev) => ({
         ...prev,
-        [activeWorktreeId]: `Enter a ${hostedReviewCreateCopy.reviewLabel} title.`
+        [activeWorktreeId]: translate(
+          'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
+          'Enter a {{value0}} title.',
+          { value0: hostedReviewCreateCopy.reviewLabel }
+        )
       }))
       return
     }
@@ -2400,7 +2384,11 @@ function SourceControlInner(): React.JSX.Element {
     if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branchName).toLowerCase()) {
       setCreatePrErrors((prev) => ({
         ...prev,
-        [activeWorktreeId]: `Choose a different base branch before creating a ${hostedReviewCreateCopy.reviewLabel}.`
+        [activeWorktreeId]: translate(
+          'auto.components.right.sidebar.SourceControl.ae743199cd',
+          'Choose a different base branch before creating a {{value0}}.',
+          { value0: hostedReviewCreateCopy.reviewLabel }
+        )
       }))
       return
     }
@@ -2474,7 +2462,11 @@ function SourceControlInner(): React.JSX.Element {
         [activeWorktreeId]:
           error instanceof Error
             ? error.message
-            : `Failed to create ${hostedReviewCreateCopy.reviewLabel}`
+            : translate(
+                'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
+                'Failed to create {{value0}}',
+                { value0: hostedReviewCreateCopy.reviewLabel }
+              )
       }))
     } finally {
       createPrInFlightRef.current[activeWorktreeId] = false
@@ -4722,7 +4714,7 @@ function PullRequestComposer({
   onPrimaryAction,
   onDropdownAction
 }: PullRequestComposerProps): React.JSX.Element {
-  const copy = hostedReviewCreationCopy(provider)
+  const copy = localizedHostedReviewCopy(provider)
   const ReviewIcon = provider === 'gitlab' ? GitMerge : GitPullRequestArrow
   const normalizedBase = stripBaseRef(base)
   const strippedBranch = stripBaseRef(branch)
@@ -4739,7 +4731,11 @@ function PullRequestComposer({
   if (generating) {
     createDisabledReason = 'Wait for AI generation to finish.'
   } else if (title.trim().length === 0) {
-    createDisabledReason = `Enter a ${copy.reviewLabel} title.`
+    createDisabledReason = translate(
+      'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
+      'Enter a {{value0}} title.',
+      { value0: copy.reviewLabel }
+    )
   } else if (normalizedBase.trim().length === 0) {
     createDisabledReason = 'Choose a base branch.'
   } else if (baseSameAsBranch) {
@@ -4758,8 +4754,11 @@ function PullRequestComposer({
           <div className="flex min-w-0 items-center gap-1.5 text-xs">
             <ReviewIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="font-medium text-foreground">
-              {translate('auto.components.right.sidebar.SourceControl.e1970d327d', 'New')}{' '}
-              {copy.reviewLabel}
+              {translate(
+                'auto.components.right.sidebar.SourceControl.e1970d327d',
+                'New {{value0}}',
+                { value0: copy.reviewLabel }
+              )}
             </span>
           </div>
           {aiGenerationEnabled ? (
@@ -5057,9 +5056,9 @@ function PullRequestComposer({
             <span>
               {translate(
                 'auto.components.right.sidebar.SourceControl.ae743199cd',
-                'Choose a different base branch before creating a'
+                'Choose a different base branch before creating a {{value0}}.',
+                { value0: copy.reviewLabel }
               )}
-              {copy.reviewLabel}.
             </span>
           </p>
         ) : null}

@@ -170,15 +170,24 @@ export function BrowserToolbarMenu({
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       toast.success(
-        translate(
-          'auto.components.browser.pane.BrowserToolbarMenu.6aa42813e4',
-          'Imported {{value0}} cookies from {{value1}}{{value2}}.',
-          {
-            value0: result.summary.importedCookies,
-            value1: browser?.label ?? browserFamily,
-            value2: browserProfile ? ` (${browserProfile})` : ''
-          }
-        )
+        browserProfile
+          ? translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.c5f0e4d3b2a1',
+              'Imported {{value0}} cookies from {{value1}} ({{value2}}).',
+              {
+                value0: result.summary.importedCookies,
+                value1: browser?.label ?? browserFamily,
+                value2: browserProfile
+              }
+            )
+          : translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.d6a1f5e4c3b2',
+              'Imported {{value0}} cookies from {{value1}}.',
+              {
+                value0: result.summary.importedCookies,
+                value1: browser?.label ?? browserFamily
+              }
+            )
       )
     } else {
       toast.error(result.reason)

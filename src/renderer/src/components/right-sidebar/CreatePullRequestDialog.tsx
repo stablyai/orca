@@ -259,9 +259,9 @@ export function CreatePullRequestDialog({
             <DialogTitle className="min-w-0 truncate">
               {translate(
                 'auto.components.right.sidebar.CreatePullRequestDialog.db9cee18f7',
-                'Create'
-              )}{' '}
-              {copy.titleLabel}
+                'Create {{value0}}',
+                { value0: copy.titleLabel }
+              )}
             </DialogTitle>
             {aiGenerationEnabled ? (
               <CreatePullRequestGenerateButton
@@ -278,12 +278,8 @@ export function CreatePullRequestDialog({
           <DialogDescription>
             {translate(
               'auto.components.right.sidebar.CreatePullRequestDialog.f658ff2455',
-              'Confirm the target branch and'
-            )}
-            {copy.shortLabel}{' '}
-            {translate(
-              'auto.components.right.sidebar.CreatePullRequestDialog.b504b3ceb1',
-              'details before creating the hosted review.'
+              'Confirm the target branch and {{value0}} details before creating the hosted review.',
+              { value0: copy.shortLabel }
             )}
           </DialogDescription>
         </DialogHeader>

@@ -59,16 +59,26 @@ export function BrowserProfileRow({
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       toast.success(
-        translate(
-          'auto.components.settings.BrowserProfileRow.d420c43729',
-          'Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}.',
-          {
-            value0: result.summary.importedCookies,
-            value1: browser?.label ?? browserFamily,
-            value2: browserProfile ? ` (${browserProfile})` : '',
-            value3: profile.label
-          }
-        )
+        browserProfile
+          ? translate(
+              'auto.components.settings.BrowserProfileRow.a3f8c2d1e0b4',
+              'Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.',
+              {
+                value0: result.summary.importedCookies,
+                value1: browser?.label ?? browserFamily,
+                value2: browserProfile,
+                value3: profile.label
+              }
+            )
+          : translate(
+              'auto.components.settings.BrowserProfileRow.b4e9d3f2a1c5',
+              'Imported {{value0}} cookies from {{value1}} into {{value2}}.',
+              {
+                value0: result.summary.importedCookies,
+                value1: browser?.label ?? browserFamily,
+                value2: profile.label
+              }
+            )
       )
     } else {
       toast.error(result.reason)

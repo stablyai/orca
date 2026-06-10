@@ -1456,12 +1456,17 @@ export function ResourceUsageStatusSegment({
             </div>
             {orphanCount > 0 && (
               <span className="shrink-0 text-yellow-500" aria-live="polite">
-                {orphanCount}{' '}
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
-                  'orphan'
-                )}
-                {orphanCount === 1 ? '' : 's'}
+                {orphanCount === 1
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.30ff2c3c31',
+                      '{{value0}} orphan',
+                      { value0: orphanCount }
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.b8f4a2c1d0e3',
+                      '{{value0}} orphans',
+                      { value0: orphanCount }
+                    )}
               </span>
             )}
           </div>
@@ -1600,9 +1605,9 @@ export function ResourceUsageStatusSegment({
                 <span className="min-w-0 truncate px-4 text-center">
                   {translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
-                    'Review inactive workspaces ('
+                    'Review inactive workspaces ({{value0}})',
+                    { value0: oldWorkspaceCount }
                   )}
-                  {oldWorkspaceCount})
                 </span>
                 <ChevronRight
                   className="absolute right-2.5 size-3.5 text-muted-foreground"
@@ -1616,16 +1621,17 @@ export function ResourceUsageStatusSegment({
                 onClick={() => void handleKillOrphans()}
                 className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent/60"
               >
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89',
-                  'Kill'
-                )}
-                {orphanCount}{' '}
-                {translate(
-                  'auto.components.status.bar.ResourceUsageStatusSegment.996295bff2',
-                  'orphan terminal'
-                )}
-                {orphanCount === 1 ? '' : 's'}
+                {orphanCount === 1
+                  ? translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
+                      'Kill {{value0}} orphan terminal',
+                      { value0: orphanCount }
+                    )
+                  : translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
+                      'Kill {{value0}} orphan terminals',
+                      { value0: orphanCount }
+                    )}
               </button>
             ) : null}
           </div>
@@ -1669,17 +1675,17 @@ export function ResourceUsageStatusSegment({
           <DialogHeader>
             <DialogTitle className="text-sm">
               {translate(
-                'auto.components.status.bar.ResourceUsageStatusSegment.4bb076fa89',
-                'Kill'
-              )}{' '}
-              <span className="font-medium text-foreground">
-                {killConfirm?.label ??
-                  translate(
-                    'auto.components.status.bar.ResourceUsageStatusSegment.138b99bd80',
-                    'this session'
-                  )}
-              </span>
-              ?
+                'auto.components.status.bar.ResourceUsageStatusSegment.e9a5d3c2b1f0',
+                'Kill {{value0}}?',
+                {
+                  value0:
+                    killConfirm?.label ??
+                    translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.138b99bd80',
+                      'this session'
+                    )
+                }
+              )}
             </DialogTitle>
             <DialogDescription className="text-xs">
               {translate(
