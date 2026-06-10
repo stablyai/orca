@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   registerLivePaneManager,
   resetAllTerminalWebglAtlases,
@@ -6,23 +6,35 @@ import {
 } from './pane-manager-registry'
 
 describe('pane manager registry', () => {
+  // Why: the registry is module-global; unregister in afterEach so a failed
+  // assertion cannot leak fake managers into later tests.
+  const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
+
+  function registerManager(): { resetWebglTextureAtlases: ReturnType<typeof vi.fn> } {
+    const manager = { resetWebglTextureAtlases: vi.fn() }
+    registerLivePaneManager(manager)
+    registeredManagers.push(manager)
+    return manager
+  }
+
+  afterEach(() => {
+    for (const manager of registeredManagers.splice(0)) {
+      unregisterLivePaneManager(manager)
+    }
+  })
+
   it('resets atlases on every registered manager', () => {
-    const first = { resetWebglTextureAtlases: vi.fn() }
-    const second = { resetWebglTextureAtlases: vi.fn() }
-    registerLivePaneManager(first)
-    registerLivePaneManager(second)
+    const first = registerManager()
+    const second = registerManager()
 
     resetAllTerminalWebglAtlases()
 
     expect(first.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
     expect(second.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    unregisterLivePaneManager(first)
-    unregisterLivePaneManager(second)
   })
 
   it('stops resetting managers after they unregister', () => {
-    const manager = { resetWebglTextureAtlases: vi.fn() }
-    registerLivePaneManager(manager)
+    const manager = registerManager()
     unregisterLivePaneManager(manager)
 
     resetAllTerminalWebglAtlases()

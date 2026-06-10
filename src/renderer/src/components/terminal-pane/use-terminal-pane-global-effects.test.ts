@@ -139,6 +139,16 @@ function useMountForFileDrop(
 }
 
 describe('useTerminalPaneGlobalEffects', () => {
+  // Why: the live-manager registry is module-global; unregister in afterEach
+  // so a failed assertion cannot leak fake managers into later tests.
+  const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
+
+  function registerManagerForReset<T extends { resetWebglTextureAtlases(): void }>(manager: T): T {
+    registerLivePaneManager(manager)
+    registeredManagers.push(manager)
+    return manager
+  }
+
   beforeEach(() => {
     resetHookRefs()
     vi.clearAllMocks()
@@ -158,6 +168,9 @@ describe('useTerminalPaneGlobalEffects', () => {
   })
 
   afterEach(() => {
+    for (const manager of registeredManagers.splice(0)) {
+      unregisterLivePaneManager(manager)
+    }
     delete (globalThis as unknown as { window?: unknown }).window
     delete (globalThis as unknown as { ResizeObserver?: unknown }).ResizeObserver
   })
@@ -196,7 +209,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     // Why: the resume path resets atlases through the live-manager registry
     // (shared glyph atlas), so the fake manager must be registered to observe
     // its reset in the ordering assertion.
-    registerLivePaneManager(manager)
+    registerManagerForReset(manager)
     const isActiveRef = { current: false }
     const isVisibleRef = { current: false }
     beginHookRender()
@@ -228,7 +241,6 @@ describe('useTerminalPaneGlobalEffects', () => {
       'restore:terminal-b',
       'reset-atlas'
     ])
-    unregisterLivePaneManager(manager)
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
     })
@@ -339,7 +351,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
     // Why: focus recovery resets every registered manager (shared glyph
     // atlas), so the fake manager observes the reset through the registry.
-    registerLivePaneManager(manager)
+    registerManagerForReset(manager)
     beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',
@@ -369,7 +381,6 @@ describe('useTerminalPaneGlobalEffects', () => {
     listener(new Event('focus'))
 
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    unregisterLivePaneManager(manager)
   })
 
   it('ignores terminal file drops for another terminal tab', () => {
