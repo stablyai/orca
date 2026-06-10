@@ -8,6 +8,7 @@ import { join } from 'path'
 import { safeStorage } from 'electron'
 import {
   CredentialDecryptionError,
+  credentialFileHasContent,
   readStoredCredentialToken
 } from '../integration-credential-file'
 import type {
@@ -111,7 +112,7 @@ function emptySiteFile(): JiraSiteFile {
 }
 
 function hasStoredToken(siteId: string): boolean {
-  return cachedTokens.has(siteId) || existsSync(getTokenPath(siteId))
+  return cachedTokens.has(siteId) || credentialFileHasContent(getTokenPath(siteId))
 }
 
 function normalizeSite(input: unknown): JiraSite | null {

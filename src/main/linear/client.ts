@@ -8,6 +8,7 @@ import { homedir } from 'os'
 import { join } from 'path'
 import {
   CredentialDecryptionError,
+  credentialFileHasContent,
   readStoredCredentialToken
 } from '../integration-credential-file'
 import type {
@@ -382,7 +383,7 @@ export function hasStoredToken(workspaceId?: string): boolean {
   if (cachedTokens.has(workspaceId)) {
     return true
   }
-  return existsSync(getWorkspaceTokenPath(workspaceId))
+  return credentialFileHasContent(getWorkspaceTokenPath(workspaceId))
 }
 
 function clearTokenFile(workspaceId: string): void {

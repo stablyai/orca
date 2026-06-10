@@ -235,5 +235,6 @@ describe('Jira client credential storage', () => {
     })
 
     expect(fetchMock).not.toHaveBeenCalled()
+    expect(jira.getStatus()).toMatchObject({ connected: false })
   })
 })

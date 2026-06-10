@@ -300,5 +300,6 @@ describe('Linear client workspace storage', () => {
     })
 
     expect(linearClientMock).not.toHaveBeenCalled()
+    expect(linear.getStatus()).toMatchObject({ connected: false })
   })
 })

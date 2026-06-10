@@ -1,8 +1,19 @@
+import { statSync } from 'fs'
 import { safeStorage } from 'electron'
 import {
   credentialDecryptionMessage,
   type IntegrationCredentialService
 } from '../shared/integration-credential-errors'
+
+// Why: connection status treats a token file as a saved credential; empty
+// files read as "missing", so counting them would split-brain getStatus.
+export function credentialFileHasContent(path: string): boolean {
+  try {
+    return statSync(path).size > 0
+  } catch {
+    return false
+  }
+}
 
 export class CredentialDecryptionError extends Error {
   constructor(service: IntegrationCredentialService) {
