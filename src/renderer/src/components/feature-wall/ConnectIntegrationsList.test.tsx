@@ -147,7 +147,7 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).not.toContain('Run in terminal')
   })
 
-  it('auto-resolves the task step from a connected code host with a tracker invitation', async () => {
+  it('auto-resolves the task step from a connected code host but keeps it open for trackers', async () => {
     installStore(makePreflightStatus({ gh: { installed: true, authenticated: true } }))
 
     const { markup } = await renderConnectIntegrationsList()
@@ -156,6 +156,10 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).toContain('issues available as tasks')
     expect(markup).toContain('add Linear or Jira if your team plans work there')
     expect(markup).not.toContain('Use GitHub issues')
+    // The step is done but stays expanded so Linear/Jira remain discoverable
+    // for teams that plan work in a dedicated tracker.
+    expect(markup).toContain('Add Linear access')
+    expect(markup).toContain('Connect Jira')
   })
 
   it('offers GitHub and GitLab as task sources when review came from a non-task provider', async () => {
@@ -189,5 +193,7 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).toContain('GitHub')
     expect(markup).toContain('connected for tasks')
     expect(markup).toContain(' and ')
+    // A connected tracker collapses the step to its summary.
+    expect(markup).not.toContain('Connect Jira')
   })
 })

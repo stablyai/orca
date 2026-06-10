@@ -40,18 +40,16 @@ function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Elem
 }
 
 // Progressive two-step integration setup: first connect a code host for review
-// status, then a task source. Only one step is active at a time — connecting a
-// step collapses it to a summary and promotes the next. Done-state is driven by
-// real provider connection status, never an optimistic click.
+// status, then a task source. Connecting step 1 collapses it to a summary and
+// promotes step 2, which stays open until a dedicated tracker connects so
+// Linear/Jira remain discoverable. Done-state is driven by real provider
+// connection status, never an optimistic click.
 export function ConnectIntegrationsList(): React.JSX.Element {
   useIntegrationProviderStatusRefresh()
   const status = useIntegrationConnectionStatus()
-  // Lets a done step reopen inline via "Change" without losing its connected
-  // state. Cleared once the user collapses it again.
-  const [reopened, setReopened] = useState<{ review: boolean; task: boolean }>({
-    review: false,
-    task: false
-  })
+  // Lets the done review step reopen inline via "Change" without losing its
+  // connected state. Cleared once the user collapses it again.
+  const [reviewReopened, setReviewReopened] = useState(false)
 
   // A code host doubles as a task source, so a connected GitHub/GitLab
   // resolves step 2 on its own. The collapsed summary still invites a
@@ -63,11 +61,21 @@ export function ConnectIntegrationsList(): React.JSX.Element {
     trackerChecking: status.trackerChecking
   })
   const reviewDone = status.reviewConnected
-  const taskResolved = flow.taskResolved
-  const reviewExpanded = !reviewDone || reopened.review
+  const trackerDone = status.trackerProviderName !== null
+  const reviewExpanded = !reviewDone || reviewReopened
   const reviewCanToggle = reviewDone
-  // Step 2 only becomes reachable once review status is connected.
-  const taskExpanded = reviewDone && (!taskResolved || reopened.task)
+  // User's explicit expand/collapse of step 2, snapshotted against the tracker
+  // state so a tracker connecting (or disconnecting) restores the default.
+  const [taskToggle, setTaskToggle] = useState<{
+    expanded: boolean
+    whenTrackerDone: boolean
+  } | null>(null)
+  const taskToggleCurrent = taskToggle !== null && taskToggle.whenTrackerDone === trackerDone
+  // Step 2 only becomes reachable once review status is connected. It stays
+  // open even when the code host already resolved it — many teams plan work in
+  // Linear/Jira and would otherwise never see those options — and collapses by
+  // default only once a dedicated tracker connects.
+  const taskExpanded = reviewDone && (taskToggleCurrent ? taskToggle.expanded : !trackerDone)
 
   return (
     <div className="space-y-2.5">
@@ -102,7 +110,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             )}
           </>
         }
-        onToggle={() => setReopened((r) => ({ ...r, review: !r.review }))}
+        onToggle={() => setReviewReopened((value) => !value)}
         canToggle={reviewCanToggle}
       >
         <GitHubIntegrationCard />
@@ -145,7 +153,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             </>
           )
         }
-        onToggle={() => setReopened((r) => ({ ...r, task: !r.task }))}
+        onToggle={() => setTaskToggle({ expanded: !taskExpanded, whenTrackerDone: trackerDone })}
         canToggle={reviewDone}
       >
         <LinearIntegrationCard />
