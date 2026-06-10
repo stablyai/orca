@@ -1,6 +1,6 @@
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 import { isWindowsRemoteHost, joinRemotePath, remoteDirname } from './ssh-remote-platform'
-import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
+import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { shellEscape } from './ssh-connection-utils'
 
 export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
@@ -196,9 +196,9 @@ export function relayLivenessProbeCommand(
     [
       `& ${powerShellLiteral(windowsOptions.nodePath)}`,
       '-e',
-      powerShellLiteral(js),
-      powerShellLiteral(dir),
-      ...windowsOptions.pipePaths.map((pipePath) => powerShellLiteral(pipePath))
+      powerShellNativeArg(js),
+      powerShellNativeArg(dir),
+      ...windowsOptions.pipePaths.map((pipePath) => powerShellNativeArg(pipePath))
     ].join(' ')
   )
 }
