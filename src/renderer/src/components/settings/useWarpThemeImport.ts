@@ -48,9 +48,7 @@ export function useWarpThemeImport(
       const result = await window.api.settings.previewWarpThemeImport(source)
       if (mountedRef.current) {
         setPreview(result)
-        setSelectedThemeIds(
-          new Set(result.sampleFallback ? [] : result.themes.map((theme) => theme.id))
-        )
+        setSelectedThemeIds(new Set(result.themes.map((theme) => theme.id)))
       }
     } catch (err) {
       const message =

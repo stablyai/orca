@@ -219,24 +219,12 @@ describe('useWarpThemeImport', () => {
     expect(warp.desktopOnly).toBe(true)
   })
 
-  it('does not preselect sample fallback themes', async () => {
+  it('keeps an empty errorless preview unselected and not found', async () => {
     const previewResponse: WarpThemeImportPreview = {
-      found: true,
-      sampleFallback: true,
-      sourceLabel: 'Warp sample themes',
+      found: false,
+      sourceLabel: 'Warp themes',
       skippedFiles: [],
-      themes: [
-        {
-          id: 'warp:sample:sample-yaml',
-          selectionValue: 'custom:warp:sample:sample-yaml',
-          name: 'Sample',
-          source: 'warp',
-          mode: 'dark',
-          terminal: { background: '#000000', foreground: '#ffffff', black: '#111111' },
-          importedAt: '2026-06-05T00:00:00.000Z',
-          sourceLabel: 'Warp sample themes'
-        }
-      ]
+      themes: []
     }
     vi.stubGlobal('window', {
       api: { settings: { previewWarpThemeImport: vi.fn().mockResolvedValue(previewResponse) } }
@@ -248,6 +236,8 @@ describe('useWarpThemeImport', () => {
     warp = useWarpThemeImport(vi.fn(), baseSettings)
 
     expect(warp.selectedThemeIds.size).toBe(0)
+    expect(warp.preview?.found).toBe(false)
+    expect(warp.preview?.error).toBeUndefined()
   })
 
   it('blocks applying new distinct themes that exceed the custom theme cap', async () => {

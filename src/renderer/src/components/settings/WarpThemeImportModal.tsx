@@ -230,9 +230,17 @@ export function WarpThemeImportModal({
                 {preview.error ??
                   translate(
                     'auto.components.settings.WarpThemeImportModal.no_themes_found',
-                    'No Warp themes found in the selected source.'
+                    'No custom Warp themes found.'
                   )}
               </p>
+              {!preview.error ? (
+                <p>
+                  {translate(
+                    'auto.components.settings.WarpThemeImportModal.builtin_themes_hint',
+                    "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night."
+                  )}
+                </p>
+              ) : null}
               {!desktopOnly ? (
                 <p>
                   {translate(

@@ -9,7 +9,6 @@ import type {
 import { makeCustomTerminalThemeSelection } from '../../shared/terminal-custom-themes'
 import { getWarpThemeDirectories } from './discovery'
 import { parseWarpThemeYamlWithTimeout } from './parser-runner'
-import { BUNDLED_WARP_THEMES, BUNDLED_WARP_THEME_SOURCE_LABEL } from './bundled-themes'
 import {
   sanitizeReadError,
   scanWarpThemeDirectory,
@@ -35,7 +34,6 @@ type ThemeSourceSelection =
   | {
       canceled: false
       sourceLabel: string
-      sampleFallback?: boolean
       files: ThemeFileCandidate[]
       skippedFiles: WarpThemeImportSkippedFile[]
       rootReadable?: boolean
@@ -68,12 +66,6 @@ async function filesFromDirectory(
 async function filesFromAutoDirectories(
   budget?: PreviewOperationBudget
 ): Promise<ThemeSourceSelection> {
-  const bundledFiles = BUNDLED_WARP_THEMES.map((theme) => ({
-    path: theme.label,
-    label: theme.label,
-    content: theme.content,
-    sourceLabel: BUNDLED_WARP_THEME_SOURCE_LABEL
-  }))
   const directories = getWarpThemeDirectories()
   let localSelection: ThemeSourceSelection | null = null
   const unreadableSkippedFiles: WarpThemeImportSkippedFile[] = []
@@ -121,11 +113,13 @@ async function filesFromAutoDirectories(
       ]
     }
   }
+  // Why: Warp's preloaded themes live inside the Warp app binary, not on disk,
+  // so an absent or empty themes folder is a genuine empty result — the
+  // renderer explains this and points at Orca's built-in equivalents.
   return {
     canceled: false,
-    sampleFallback: true,
-    sourceLabel: BUNDLED_WARP_THEME_SOURCE_LABEL,
-    files: bundledFiles,
+    sourceLabel: 'Warp themes',
+    files: [],
     skippedFiles: unreadableSkippedFiles
   }
 }
@@ -262,14 +256,12 @@ export async function previewWarpThemeImport(
     themes.push(parsed.theme)
   }
 
+  // Why: an empty result carries no error — the renderer owns the localized
+  // empty-state copy; `error` is reserved for genuine failures.
   return {
     found: themes.length > 0,
-    ...(selection.sampleFallback ? { sampleFallback: true } : {}),
     sourceLabel: selection.sourceLabel,
     themes,
-    skippedFiles,
-    ...(themes.length === 0 && skippedFiles.length === 0
-      ? { error: 'No Warp theme files found.' }
-      : {})
+    skippedFiles
   }
 }
