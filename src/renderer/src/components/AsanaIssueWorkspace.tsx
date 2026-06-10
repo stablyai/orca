@@ -1,24 +1,7 @@
-/* eslint-disable max-lines -- Why: the Asana drawer co-locates preview,
-   metadata edits, and comments so the task page has one full task surface. */
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Asana task hydration, comments, completion, and user options are loaded from provider IPC for the selected task. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ArrowRight,
-  CheckCircle2,
-  Circle,
-  Clipboard,
-  ExternalLink,
-  GitBranch,
-  LoaderCircle,
-  RefreshCw,
-  Save,
-  Send,
-  X
-} from 'lucide-react'
-import { toast } from 'sonner'
+import React from 'react'
+import { ArrowRight, CheckCircle2, Circle, LoaderCircle, Save, Send, X } from 'lucide-react'
 import { VisuallyHidden } from 'radix-ui'
 
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { AsanaIcon } from '@/components/icons/AsanaIcon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,18 +9,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { createBrowserUuid } from '@/lib/browser-uuid'
-import { useAppStore } from '@/store'
-import {
-  asanaAddTaskComment,
-  asanaGetTask,
-  asanaListAssignableUsers,
-  asanaTaskComments,
-  asanaUpdateTask
-} from '@/runtime/runtime-asana-client'
 import { AsanaUserAvatar } from '@/components/AsanaUserAvatar'
-import type { AsanaComment, AsanaTask, AsanaUser } from '../../../shared/types'
+import type { AsanaTask } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { formatRelativeTime } from './asana-task-drawer-format'
+import { AsanaTaskComments } from './AsanaTaskComments'
+import { useAsanaTaskDrawer } from './use-asana-task-drawer'
+
+export { buildAsanaBranchName } from './asana-task-drawer-format'
 
 type AsanaIssueWorkspaceProps = {
   task: AsanaTask | null
@@ -45,328 +24,37 @@ type AsanaIssueWorkspaceProps = {
   onClose: () => void
 }
 
-const relativeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-
-function formatRelativeTime(input: string): string {
-  const date = new Date(input)
-  if (Number.isNaN(date.getTime())) {
-    return 'recently'
-  }
-  const diffMinutes = Math.round((date.getTime() - Date.now()) / 60_000)
-  if (Math.abs(diffMinutes) < 60) {
-    return relativeFormatter.format(diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return relativeFormatter.format(diffHours, 'hour')
-  }
-  return relativeFormatter.format(Math.round(diffHours / 24), 'day')
-}
-
-// Why: Asana task gids are long numeric strings with no short human key, so the
-// branch name leans on the title slug prefixed with a trailing gid fragment for
-// uniqueness.
-export function buildAsanaBranchName(task: AsanaTask): string {
-  const slug = task.title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 52)
-  const shortId = task.gid.slice(-6)
-  return slug ? `asana-${shortId}-${slug}` : `asana-${shortId}`
-}
-
-function buildAsanaPrompt(task: AsanaTask): string {
-  return `Complete Asana task: ${task.title}\n\n${task.url}`
-}
-
-async function copyTextToClipboard(text: string, label: string): Promise<void> {
-  try {
-    await window.api.ui.writeClipboardText(text)
-    toast.success(
-      translate('auto.components.AsanaIssueWorkspace.43e26f1a9b', '{{label}} copied', { label })
-    )
-  } catch {
-    toast.error(
-      translate('auto.components.AsanaIssueWorkspace.c1be5501dd', 'Failed to copy {{label}}', {
-        label: label.toLowerCase()
-      })
-    )
-  }
-}
-
 export default function AsanaIssueWorkspace({
   task,
   onUse,
   onClose
 }: AsanaIssueWorkspaceProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const patchAsanaTask = useAppStore((s) => s.patchAsanaTask)
-  const [fullTask, setFullTask] = useState<AsanaTask | null>(null)
-  const [taskLoading, setTaskLoading] = useState(false)
-  const [comments, setComments] = useState<AsanaComment[]>([])
-  const [commentsLoading, setCommentsLoading] = useState(false)
-  const [commentsError, setCommentsError] = useState<string | null>(null)
-  const [users, setUsers] = useState<AsanaUser[]>([])
-  const [pendingField, setPendingField] = useState<string | null>(null)
-  const [titleDraft, setTitleDraft] = useState('')
-  const [notesDraft, setNotesDraft] = useState('')
-  const [commentDraft, setCommentDraft] = useState('')
-  const [commentSubmitting, setCommentSubmitting] = useState(false)
-  const requestIdRef = useRef(0)
-  const optimisticCommentsRef = useRef<AsanaComment[]>([])
-
-  const displayed = fullTask ?? task
-  const workspaceId = displayed?.workspaceId ?? undefined
-
-  const loadComments = useCallback(
-    async (targetTask: AsanaTask, requestId: number): Promise<void> => {
-      setCommentsLoading(true)
-      setCommentsError(null)
-      try {
-        let fetched = await asanaTaskComments(settings, targetTask.gid, targetTask.workspaceId)
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        const optimistic = optimisticCommentsRef.current
-        if (optimistic.length > 0) {
-          const fetchedIds = new Set(fetched.map((comment) => comment.gid))
-          fetched = [...fetched, ...optimistic.filter((comment) => !fetchedIds.has(comment.gid))]
-        }
-        setComments(fetched)
-      } catch (error) {
-        if (requestId === requestIdRef.current) {
-          setCommentsError(error instanceof Error ? error.message : 'Failed to load comments.')
-        }
-      } finally {
-        if (requestId === requestIdRef.current) {
-          setCommentsLoading(false)
-        }
-      }
-    },
-    [settings]
-  )
-
-  useEffect(() => {
-    if (!task) {
-      setFullTask(null)
-      setTaskLoading(false)
-      setComments([])
-      setCommentsError(null)
-      setUsers([])
-      setCommentDraft('')
-      optimisticCommentsRef.current = []
-      return
-    }
-
-    requestIdRef.current += 1
-    const requestId = requestIdRef.current
-    optimisticCommentsRef.current = []
-    setFullTask(task)
-    setTitleDraft(task.title)
-    setNotesDraft(task.description ?? '')
-    setComments([])
-    setCommentsError(null)
-    setTaskLoading(true)
-
-    void asanaGetTask(settings, task.gid, task.workspaceId)
-      .then((result) => {
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        if (result) {
-          setFullTask(result)
-          setTitleDraft(result.title)
-          setNotesDraft(result.description ?? '')
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (requestId === requestIdRef.current) {
-          setTaskLoading(false)
-        }
-      })
-
-    void asanaListAssignableUsers(settings, task.workspaceId)
-      .then((nextUsers) => {
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        setUsers(nextUsers)
-      })
-      .catch(() => {})
-
-    void loadComments(task, requestId)
-  }, [task, loadComments, settings])
-
-  const refreshTask = useCallback(async (): Promise<void> => {
-    if (!displayed) {
-      return
-    }
-    // Why: a newer task selection bumps requestIdRef; bail on repaint if this
-    // refresh resolved after the user moved on, to avoid stale data.
-    const activeRequestId = requestIdRef.current
-    try {
-      const latest = await asanaGetTask(settings, displayed.gid, displayed.workspaceId)
-      if (latest && activeRequestId === requestIdRef.current) {
-        setFullTask(latest)
-        patchAsanaTask(latest.gid, latest)
-      }
-    } catch {
-      // Keep the visible task snapshot if refresh fails.
-    }
-  }, [displayed, patchAsanaTask, settings])
-
-  const mutateTask = useCallback(
-    async (
-      field: string,
-      updates: Parameters<typeof asanaUpdateTask>[2],
-      optimistic?: Partial<AsanaTask>
-    ): Promise<void> => {
-      if (!displayed || pendingField) {
-        return
-      }
-      // Why: guard the rollback repaint so a stale mutation can't overwrite a
-      // task the user selected while the request was in flight.
-      const activeRequestId = requestIdRef.current
-      setPendingField(field)
-      const previous = displayed
-      try {
-        if (optimistic) {
-          setFullTask({ ...displayed, ...optimistic })
-          patchAsanaTask(displayed.gid, optimistic)
-        }
-        const result = await asanaUpdateTask(settings, displayed.gid, updates, workspaceId)
-        if (!result.ok) {
-          throw new Error(result.error)
-        }
-        await refreshTask()
-      } catch (error) {
-        if (activeRequestId === requestIdRef.current) {
-          setFullTask(previous)
-        }
-        patchAsanaTask(previous.gid, previous)
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : translate(
-                'auto.components.AsanaIssueWorkspace.3c481bf8d7',
-                'Failed to update Asana task.'
-              )
-        )
-      } finally {
-        setPendingField(null)
-      }
-    },
-    [displayed, patchAsanaTask, pendingField, refreshTask, settings, workspaceId]
-  )
-
-  const handleSaveTitle = useCallback(() => {
-    if (!displayed) {
-      return
-    }
-    const title = titleDraft.trim()
-    if (!title || title === displayed.title) {
-      setTitleDraft(displayed.title)
-      return
-    }
-    void mutateTask('title', { title }, { title })
-  }, [displayed, mutateTask, titleDraft])
-
-  const handleSaveNotes = useCallback(() => {
-    if (!displayed) {
-      return
-    }
-    const notes = notesDraft
-    if (notes === (displayed.description ?? '')) {
-      return
-    }
-    void mutateTask('notes', { notes }, { description: notes })
-  }, [displayed, mutateTask, notesDraft])
-
-  const handleToggleCompleted = useCallback(() => {
-    if (!displayed) {
-      return
-    }
-    const completed = !displayed.completed
-    void mutateTask('completed', { completed }, { completed })
-  }, [displayed, mutateTask])
-
-  const handleSetApproval = useCallback(
-    (approvalStatus: 'approved' | 'rejected' | 'changes_requested') => {
-      // Why: Asana keeps approval_status and completed in sync — any decision
-      // other than pending completes the task.
-      void mutateTask('approval', { approvalStatus }, { approvalStatus, completed: true })
-    },
-    [mutateTask]
-  )
-
-  const handleSubmitComment = useCallback(async (): Promise<void> => {
-    if (!displayed || commentSubmitting) {
-      return
-    }
-    const text = commentDraft.trim()
-    if (!text) {
-      return
-    }
-    setCommentSubmitting(true)
-    try {
-      const result = await asanaAddTaskComment(settings, displayed.gid, text, displayed.workspaceId)
-      if (!result.ok) {
-        throw new Error(result.error)
-      }
-      const comment: AsanaComment = {
-        gid: result.id || createBrowserUuid(),
-        text,
-        createdAt: new Date().toISOString(),
-        user: { gid: 'local', name: 'You' }
-      }
-      optimisticCommentsRef.current.push(comment)
-      setComments((prev) => [...prev, comment])
-      setCommentDraft('')
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : translate('auto.components.AsanaIssueWorkspace.c76cc7f483', 'Failed to add comment.')
-      )
-    } finally {
-      setCommentSubmitting(false)
-    }
-  }, [commentDraft, commentSubmitting, displayed, settings])
-
-  const actionItems = useMemo(() => {
-    if (!displayed) {
-      return []
-    }
-    return [
-      {
-        label: translate('auto.components.AsanaIssueWorkspace.9bd2fa9f44', 'Open in Asana'),
-        icon: ExternalLink,
-        action: () => window.api.shell.openUrl(displayed.url)
-      },
-      {
-        label: translate('auto.components.AsanaIssueWorkspace.45f81355bc', 'Copy URL'),
-        icon: Clipboard,
-        action: () => void copyTextToClipboard(displayed.url, 'URL')
-      },
-      {
-        label: translate(
-          'auto.components.AsanaIssueWorkspace.47bdb1b01a',
-          'Copy suggested branch name'
-        ),
-        icon: GitBranch,
-        action: () => void copyTextToClipboard(buildAsanaBranchName(displayed), 'Branch name')
-      },
-      {
-        label: translate('auto.components.AsanaIssueWorkspace.fc73c32b3c', 'Copy prompt'),
-        icon: Clipboard,
-        action: () => void copyTextToClipboard(buildAsanaPrompt(displayed), 'Prompt')
-      }
-    ]
-  }, [displayed])
-
-  const projectLabel = displayed?.projects[0]?.name ?? displayed?.workspaceName ?? 'Asana'
+  const {
+    displayed,
+    projectLabel,
+    taskLoading,
+    pendingField,
+    users,
+    comments,
+    commentsLoading,
+    commentsError,
+    titleDraft,
+    setTitleDraft,
+    notesDraft,
+    setNotesDraft,
+    commentDraft,
+    setCommentDraft,
+    commentSubmitting,
+    requestIdRef,
+    loadComments,
+    mutateTask,
+    handleSaveTitle,
+    handleSaveNotes,
+    handleToggleCompleted,
+    handleSetApproval,
+    handleSubmitComment,
+    actionItems
+  } = useAsanaTaskDrawer(task)
 
   return (
     <Sheet open={task !== null} onOpenChange={(open) => !open && onClose()}>
@@ -642,74 +330,12 @@ export default function AsanaIssueWorkspace({
                   </div>
                 </section>
 
-                <section className="px-4 py-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-medium text-foreground">
-                        {translate('auto.components.AsanaIssueWorkspace.d79323a259', 'Comments')}
-                      </span>
-                      {comments.length > 0 ? (
-                        <span className="text-[12px] text-muted-foreground">{comments.length}</span>
-                      ) : null}
-                    </div>
-                    {commentsError ? (
-                      <Button
-                        variant="outline"
-                        size="xs"
-                        onClick={() => void loadComments(displayed, requestIdRef.current)}
-                        disabled={commentsLoading}
-                        className="gap-1"
-                      >
-                        {commentsLoading ? (
-                          <LoaderCircle className="size-3 animate-spin" />
-                        ) : (
-                          <RefreshCw className="size-3" />
-                        )}
-                        {translate('auto.components.AsanaIssueWorkspace.e43b2f6250', 'Retry')}
-                      </Button>
-                    ) : null}
-                  </div>
-                  {commentsError ? (
-                    <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                      {commentsError}
-                    </div>
-                  ) : commentsLoading && comments.length === 0 ? (
-                    <div className="flex items-center justify-center py-8">
-                      <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : comments.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      {translate(
-                        'auto.components.AsanaIssueWorkspace.58eb8f7b03',
-                        'No comments yet.'
-                      )}
-                    </p>
-                  ) : (
-                    <div className="flex flex-col gap-3">
-                      {comments.map((comment) => (
-                        <div
-                          key={comment.gid}
-                          className="rounded-md border border-border/50 bg-muted/20"
-                        >
-                          <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
-                            <span className="truncate text-[13px] font-semibold text-foreground">
-                              {comment.user?.name ?? 'Unknown'}
-                            </span>
-                            <span className="shrink-0 text-[12px] text-muted-foreground">
-                              {formatRelativeTime(comment.createdAt)}
-                            </span>
-                          </div>
-                          <div className="px-3 py-2">
-                            <CommentMarkdown
-                              content={comment.text}
-                              className="text-[13px] leading-relaxed"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </section>
+                <AsanaTaskComments
+                  comments={comments}
+                  commentsLoading={commentsLoading}
+                  commentsError={commentsError}
+                  onRetry={() => void loadComments(displayed, requestIdRef.current)}
+                />
               </div>
 
               <aside className="border-t border-border/50 bg-muted/20 px-3 py-3 xl:border-l xl:border-t-0">

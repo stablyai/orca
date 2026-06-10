@@ -1,6 +1,3 @@
-/* eslint-disable max-lines -- Why: the Asana slice owns workspace status, task
-   caches, and optimistic patch propagation as one store boundary so active
-   workspace changes invalidate every related query coherently. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {

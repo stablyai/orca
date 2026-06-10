@@ -1,10 +1,3 @@
-/* eslint-disable max-lines -- Why: Asana credential storage and authenticated
-request plumbing share one boundary so encrypted token lifecycle and
-multi-workspace selection cannot drift between task operations. */
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs'
-import { homedir } from 'os'
-import { join } from 'path'
-import { safeStorage } from 'electron'
 import type {
   AsanaConnectArgs,
   AsanaConnectionStatus,
@@ -12,63 +5,34 @@ import type {
   AsanaWorkspace,
   AsanaWorkspaceSelection
 } from '../../shared/types'
+import { acquire, release } from './asana-concurrency'
+import {
+  AsanaApiError,
+  asanaRequest,
+  authHeader,
+  requestWithToken,
+  type AsanaClientForWorkspace,
+  type AsanaMeResponse
+} from './asana-request'
+import {
+  deleteToken,
+  getWorkspaceFile,
+  hasStoredToken,
+  readToken,
+  saveToken,
+  writeWorkspaceFile
+} from './asana-credential-store'
 
-// Why: Asana's REST base is fixed (unlike Jira's per-site host), so clients
-// only carry the bearer token; every request targets this origin.
-export const ASANA_API_BASE = 'https://app.asana.com/api/1.0'
+// Re-export the surface the query/mutation layer (issues.ts) still imports from
+// this module, keeping the credential/request internals split into focused files.
+export { acquire, release } from './asana-concurrency'
+export {
+  ASANA_API_BASE,
+  AsanaApiError,
+  asanaRequest,
+  type AsanaClientForWorkspace
+} from './asana-request'
 
-const MAX_CONCURRENT = 4
-// Why: every Asana call funnels through the shared fetch helpers; without a
-// timeout a stalled socket hangs the main-process operation indefinitely.
-const ASANA_REQUEST_TIMEOUT_MS = 30_000
-let running = 0
-const queue: (() => void)[] = []
-
-export function acquire(): Promise<void> {
-  if (running < MAX_CONCURRENT) {
-    running += 1
-    return Promise.resolve()
-  }
-  return new Promise((resolve) =>
-    queue.push(() => {
-      running += 1
-      resolve()
-    })
-  )
-}
-
-export function release(): void {
-  running -= 1
-  const next = queue.shift()
-  if (next) {
-    next()
-  }
-}
-
-type AsanaWorkspaceFile = {
-  version: 1
-  activeWorkspaceId: string | null
-  selectedWorkspaceId: AsanaWorkspaceSelection | null
-  workspaces: AsanaWorkspace[]
-}
-
-export type AsanaClientForWorkspace = {
-  workspace: AsanaWorkspace
-  authorization: string
-}
-
-export class AsanaApiError extends Error {
-  status: number | null
-
-  constructor(message: string, status: number | null = null) {
-    super(message)
-    this.status = status
-  }
-}
-
-let cachedWorkspaceFile: AsanaWorkspaceFile | null = null
-let workspaceFileLoaded = false
-const cachedTokens = new Map<string, string>()
 // Why: Asana exposes no API to detect a workspace's plan tier — the premium
 // search endpoint must be probed and returns 402 on free tiers. Remember that
 // once per workspace so repeat searches skip the doomed call and go straight to
@@ -83,211 +47,6 @@ export function isSearchUnavailable(workspaceId: string): boolean {
   return searchUnavailableWorkspaces.has(workspaceId)
 }
 
-function getOrcaDir(): string {
-  return join(homedir(), '.orca')
-}
-
-function getWorkspaceFilePath(): string {
-  return join(getOrcaDir(), 'asana-workspaces.json')
-}
-
-function getTokenDir(): string {
-  return join(getOrcaDir(), 'asana-tokens')
-}
-
-function getTokenPath(workspaceId: string): string {
-  return join(getTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.enc`)
-}
-
-function ensureOrcaDir(): void {
-  const dir = getOrcaDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-}
-
-function ensureTokenDir(): void {
-  const dir = getTokenDir()
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true })
-  }
-}
-
-function emptyWorkspaceFile(): AsanaWorkspaceFile {
-  return {
-    version: 1,
-    activeWorkspaceId: null,
-    selectedWorkspaceId: null,
-    workspaces: []
-  }
-}
-
-function hasStoredToken(workspaceId: string): boolean {
-  return cachedTokens.has(workspaceId) || existsSync(getTokenPath(workspaceId))
-}
-
-function normalizeWorkspace(input: unknown): AsanaWorkspace | null {
-  if (!input || typeof input !== 'object') {
-    return null
-  }
-  const record = input as Record<string, unknown>
-  if (
-    typeof record.id !== 'string' ||
-    typeof record.name !== 'string' ||
-    typeof record.userGid !== 'string' ||
-    typeof record.userName !== 'string'
-  ) {
-    return null
-  }
-  return {
-    id: record.id,
-    name: record.name,
-    userGid: record.userGid,
-    userName: record.userName,
-    userEmail: typeof record.userEmail === 'string' ? record.userEmail : null
-  }
-}
-
-function readWorkspaceFileFromDisk(): AsanaWorkspaceFile {
-  const path = getWorkspaceFilePath()
-  if (!existsSync(path)) {
-    return emptyWorkspaceFile()
-  }
-  try {
-    const parsed = JSON.parse(
-      readFileSync(path, { encoding: 'utf-8' })
-    ) as Partial<AsanaWorkspaceFile>
-    const workspaces = Array.isArray(parsed.workspaces)
-      ? parsed.workspaces
-          .map((workspace) => normalizeWorkspace(workspace))
-          .filter((workspace): workspace is AsanaWorkspace => workspace !== null)
-          .filter((workspace) => hasStoredToken(workspace.id))
-      : []
-    const activeWorkspaceId =
-      typeof parsed.activeWorkspaceId === 'string' &&
-      workspaces.some((workspace) => workspace.id === parsed.activeWorkspaceId)
-        ? parsed.activeWorkspaceId
-        : (workspaces[0]?.id ?? null)
-    const selectedWorkspaceId =
-      parsed.selectedWorkspaceId === 'all' ||
-      (typeof parsed.selectedWorkspaceId === 'string' &&
-        workspaces.some((workspace) => workspace.id === parsed.selectedWorkspaceId))
-        ? parsed.selectedWorkspaceId
-        : activeWorkspaceId
-    return { version: 1, activeWorkspaceId, selectedWorkspaceId, workspaces }
-  } catch {
-    return emptyWorkspaceFile()
-  }
-}
-
-function getWorkspaceFile(): AsanaWorkspaceFile {
-  if (!workspaceFileLoaded || !cachedWorkspaceFile) {
-    cachedWorkspaceFile = readWorkspaceFileFromDisk()
-    workspaceFileLoaded = true
-  }
-  return cachedWorkspaceFile
-}
-
-function writeWorkspaceFile(file: AsanaWorkspaceFile): void {
-  ensureOrcaDir()
-  const workspaces = file.workspaces.filter((workspace) => hasStoredToken(workspace.id))
-  const activeWorkspaceId =
-    file.activeWorkspaceId &&
-    workspaces.some((workspace) => workspace.id === file.activeWorkspaceId)
-      ? file.activeWorkspaceId
-      : (workspaces[0]?.id ?? null)
-  const selectedWorkspaceId =
-    file.selectedWorkspaceId === 'all'
-      ? 'all'
-      : file.selectedWorkspaceId &&
-          workspaces.some((workspace) => workspace.id === file.selectedWorkspaceId)
-        ? file.selectedWorkspaceId
-        : activeWorkspaceId
-
-  cachedWorkspaceFile = {
-    version: 1,
-    activeWorkspaceId,
-    selectedWorkspaceId,
-    workspaces
-  }
-  workspaceFileLoaded = true
-  writeFileSync(getWorkspaceFilePath(), JSON.stringify(cachedWorkspaceFile, null, 2), {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
-}
-
-// Why: persist the on-disk format alongside the bytes so reads don't depend on
-// the *current* safeStorage availability. If that flips between write and read,
-// a marker-less heuristic would decrypt plaintext as garbage (or vice versa).
-const TOKEN_ENC_PREFIX = 'asana-token:v1:enc\n'
-const TOKEN_PLAIN_PREFIX = 'asana-token:v1:plain\n'
-
-function writeEncryptedToken(path: string, apiToken: string): void {
-  if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(apiToken)
-    writeFileSync(path, Buffer.concat([Buffer.from(TOKEN_ENC_PREFIX), encrypted]), { mode: 0o600 })
-    return
-  }
-  console.warn('[asana] safeStorage encryption unavailable — storing token in plaintext')
-  writeFileSync(path, `${TOKEN_PLAIN_PREFIX}${apiToken}`, { encoding: 'utf-8', mode: 0o600 })
-}
-
-function decodeStoredToken(raw: Buffer): string | null {
-  const header = raw.subarray(0, 32).toString('utf-8')
-  if (header.startsWith(TOKEN_ENC_PREFIX)) {
-    // Encrypted on disk but no key available now — credentials are unreadable.
-    if (!safeStorage.isEncryptionAvailable()) {
-      return null
-    }
-    return safeStorage.decryptString(raw.subarray(Buffer.byteLength(TOKEN_ENC_PREFIX)))
-  }
-  if (header.startsWith(TOKEN_PLAIN_PREFIX)) {
-    return raw.subarray(Buffer.byteLength(TOKEN_PLAIN_PREFIX)).toString('utf-8')
-  }
-  // Legacy token without a format marker — fall back to the prior heuristic.
-  return safeStorage.isEncryptionAvailable()
-    ? safeStorage.decryptString(raw)
-    : raw.toString('utf-8')
-}
-
-function readToken(workspaceId: string): string | null {
-  const cached = cachedTokens.get(workspaceId)
-  if (cached) {
-    return cached
-  }
-  const path = getTokenPath(workspaceId)
-  if (!existsSync(path)) {
-    return null
-  }
-  try {
-    const token = decodeStoredToken(readFileSync(path))
-    if (token === null) {
-      return null
-    }
-    cachedTokens.set(workspaceId, token)
-    return token
-  } catch {
-    return null
-  }
-}
-
-function saveToken(workspaceId: string, apiToken: string): void {
-  ensureOrcaDir()
-  ensureTokenDir()
-  writeEncryptedToken(getTokenPath(workspaceId), apiToken)
-  cachedTokens.set(workspaceId, apiToken)
-}
-
-function deleteToken(workspaceId: string): void {
-  cachedTokens.delete(workspaceId)
-  try {
-    unlinkSync(getTokenPath(workspaceId))
-  } catch {
-    // Token may not exist — safe to ignore.
-  }
-}
-
 function workspaceToViewer(workspace: AsanaWorkspace | null): AsanaViewer | null {
   if (!workspace) {
     return null
@@ -297,82 +56,6 @@ function workspaceToViewer(workspace: AsanaWorkspace | null): AsanaViewer | null
     name: workspace.userName,
     email: workspace.userEmail
   }
-}
-
-function authHeader(apiToken: string): string {
-  return `Bearer ${apiToken}`
-}
-
-type AsanaMeResponse = {
-  data?: {
-    gid?: string
-    name?: string
-    email?: string
-    workspaces?: { gid?: string; name?: string }[]
-  }
-}
-
-async function readAsanaError(response: Response): Promise<string> {
-  try {
-    const data = (await response.json()) as {
-      errors?: { message?: string }[]
-    }
-    const messages = (data.errors ?? [])
-      .map((error) => error.message)
-      .filter((message): message is string => Boolean(message))
-    if (messages.length > 0) {
-      return messages.join('; ')
-    }
-  } catch {
-    // Fall through to status text.
-  }
-  return response.statusText || `Asana request failed (${response.status})`
-}
-
-async function requestWithToken(
-  apiToken: string,
-  path: string,
-  init?: RequestInit
-): Promise<unknown> {
-  const headers = new Headers(init?.headers)
-  headers.set('Accept', 'application/json')
-  headers.set('Content-Type', 'application/json')
-  headers.set('Authorization', authHeader(apiToken))
-  const response = await fetch(`${ASANA_API_BASE}${path}`, {
-    signal: AbortSignal.timeout(ASANA_REQUEST_TIMEOUT_MS),
-    ...init,
-    headers
-  })
-  if (!response.ok) {
-    throw new AsanaApiError(await readAsanaError(response), response.status)
-  }
-  if (response.status === 204) {
-    return null
-  }
-  return response.json()
-}
-
-export async function asanaRequest<T>(
-  client: AsanaClientForWorkspace,
-  path: string,
-  init?: RequestInit
-): Promise<T> {
-  const headers = new Headers(init?.headers)
-  headers.set('Accept', 'application/json')
-  headers.set('Content-Type', 'application/json')
-  headers.set('Authorization', client.authorization)
-  const response = await fetch(`${ASANA_API_BASE}${path}`, {
-    signal: AbortSignal.timeout(ASANA_REQUEST_TIMEOUT_MS),
-    ...init,
-    headers
-  })
-  if (!response.ok) {
-    throw new AsanaApiError(await readAsanaError(response), response.status)
-  }
-  if (response.status === 204) {
-    return null as T
-  }
-  return (await response.json()) as T
 }
 
 export function getClients(selection?: AsanaWorkspaceSelection | null): AsanaClientForWorkspace[] {
