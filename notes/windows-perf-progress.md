@@ -9,8 +9,9 @@ All changes must be proven with before/after benchmark numbers.
 - [x] Benchmark harness for startup time (`tools/benchmarks/startup-time-bench.mjs`)
 - [x] Startup bottleneck FIXED + verified: **19.31s → 1.80s median** (fixture);
       real-world profile was 62s of blocked main thread → now 0 icacls spawns steady-state
-- [ ] OpenCode freeze investigation + fix (research done; moving to Windows e2e repro —
-      NOTE: all terminal-perf e2e run on ubuntu in CI, real ConPTY path never tested)
+- [x] OpenCode freeze ROOT CAUSE found + fixed: MessagePart hook flood (see F5/D2).
+      Benchmark: 22.9 MB / 540 ms / 400 main-process fanouts per turn → 469 KB / 79 ms / 120
+      (legacy vs throttled plugin behavior through the real hook HTTP pipeline)
 - [x] General Windows sync-work audit (results below)
 
 ## Key facts / environment
@@ -94,6 +95,59 @@ Ranked offenders beyond the ACL grant (#1):
 
 Gap in coverage: no test exercises rapid continuous ConPTY-scale data + sync onPtyData
 accumulation on Windows.
+
+### F5 — ROOT CAUSE (2026-06-10): OpenCode MessagePart hook flood
+
+Eliminated candidates first: ran `terminal-foreground-redraw-freeze.spec.ts` on THIS Windows
+machine (real ConPTY + daemon provider) — passes; renderer output scheduler protections hold.
+The raw TUI-output-flood theory doesn't explain an OpenCode-specific permanent freeze.
+
+The actual mechanism (src/main/opencode/hook-service.ts plugin source):
+- OpenCode publishes `message.part.updated` with the FULL accumulated text of the part on
+  every streamed append (architecture: parts are republished, not deltas).
+- Orca's plugin POSTed that full text to the agent-hook server on EVERY event →
+  **O(n²) bytes per streaming turn**. A 120KB reply in 400 updates = ~23 MB through
+  loopback HTTP + main-process JSON.parse; real turns are worse (per-token updates).
+- Main process spends its whole loop on HTTP receive + parse + normalize + fanout. UI symptom
+  matches the user report exactly: everything dead (window close needs main + renderer
+  round-trip), EXCEPT the sidebar agent indicator — which is the one thing fed by the very
+  agentStatus:set flood that's starving everything else.
+- Why Windows-biased: same flood exists on macOS but combines on Windows with ConPTY
+  full-frame redraw volume and generally slower process IO; also Windows daemon-PTY path
+  adds main-process onPtyData work.
+- Why "5 seconds after sending the prompt": that's when the accumulated text gets big.
+- Why OpenCode keeps working: plugin POST failures are swallowed; the session is healthy.
+- Downstream payloads were already bounded (prompt 200 chars, lastAssistantMessage 8000
+  chars via agent-status-types normalization) — the renderer wasn't the bottleneck; the
+  main-process ingest was.
+
+### F6 — Windows e2e perf coverage gap
+
+All terminal-perf e2e specs run on ubuntu-latest in CI. Verified they DO run on a Windows
+dev machine (`npx playwright test ... --project electron-headless` works locally). Consider
+a Windows CI lane for the terminal-perf suite.
+
+## OpenCode fix (D2)
+
+1. **Plugin throttle + cap (source fix)** — `src/main/opencode/hook-service.ts`:
+   assistant MessagePart posts are trailing-edge coalesced to ≥250ms apart and text is
+   capped at 4000 chars (leading edge posts immediately so previews stay snappy; pending
+   snapshot flushed before SessionIdle so the done-row preview is the final message; user
+   prompts bypass the throttle slot). Plugin file is rewritten on every Orca-launched
+   OpenCode spawn, so the fix deploys to new sessions immediately.
+2. **Listener-side cap (stale-plugin defense)** — `src/shared/agent-hook-listener.ts`:
+   OpenCode MessagePart text capped at 8000 chars at ingest (OPENCODE_HOOK_TEXT_MAX_CHARS)
+   so pre-fix plugins in long-running OpenCode processes can't blow up state maps.
+3. **Benchmark/regression test** — `src/main/agent-hooks/opencode-message-part-flood-bench.test.ts`
+   drives the real hook HTTP pipeline with both behaviors. Measured on this machine:
+   | metric/turn | legacy plugin | throttled plugin |
+   |---|---|---|
+   | posts | 400 | 120 |
+   | bytes through main | 22.9 MB | 469 KB (49x less) |
+   | wall time | 540 ms | 79 ms |
+   | listener fanouts | 400 | 120 |
+4. Behavioral plugin tests — `src/main/opencode/hook-plugin-message-part-throttle.test.ts`
+   executes the generated plugin with fake timers + stubbed fetch.
 
 ## Findings
 
