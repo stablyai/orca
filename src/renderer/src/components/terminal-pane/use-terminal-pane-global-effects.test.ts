@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: these hook tests share a mocked React lifecycle harness with global event cases. */
 import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import { RESET_TERMINAL_WEBGL_ATLAS_EVENT, SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 
 const mocks = vi.hoisted(() => ({
@@ -357,6 +357,42 @@ describe('useTerminalPaneGlobalEffects', () => {
     listener(new Event('focus'))
 
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears WebGL texture atlases for a matching reset-atlas event', () => {
+    const { manager } = useMountForFileDrop()
+
+    const resetListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === RESET_TERMINAL_WEBGL_ATLAS_EVENT)
+
+    expect(resetListener).toBeDefined()
+    const listener = resetListener?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('expected reset-atlas listener')
+    }
+    manager.resetWebglTextureAtlases.mockClear()
+    listener(new CustomEvent(RESET_TERMINAL_WEBGL_ATLAS_EVENT, { detail: { tabId: 'tab-1' } }))
+
+    expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores reset-atlas events for another terminal tab', () => {
+    const { manager } = useMountForFileDrop()
+
+    const resetListener = vi
+      .mocked(window.addEventListener)
+      .mock.calls.find(([eventName]) => eventName === RESET_TERMINAL_WEBGL_ATLAS_EVENT)
+
+    expect(resetListener).toBeDefined()
+    const listener = resetListener?.[1]
+    if (typeof listener !== 'function') {
+      throw new Error('expected reset-atlas listener')
+    }
+    manager.resetWebglTextureAtlases.mockClear()
+    listener(new CustomEvent(RESET_TERMINAL_WEBGL_ATLAS_EVENT, { detail: { tabId: 'tab-2' } }))
+
+    expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
   })
 
   it('ignores terminal file drops for another terminal tab', () => {

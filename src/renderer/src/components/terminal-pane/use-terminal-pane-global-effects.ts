@@ -2,9 +2,11 @@ import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
   PASTE_TERMINAL_TEXT_EVENT,
+  RESET_TERMINAL_WEBGL_ATLAS_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
   type FocusTerminalPaneDetail,
-  type PasteTerminalTextDetail
+  type PasteTerminalTextDetail,
+  type ResetTerminalWebglAtlasDetail
 } from '@/constants/terminal'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { fitAndFocusPanes, fitPanes } from './pane-helpers'
@@ -203,6 +205,21 @@ export function useTerminalPaneGlobalEffects({
     window.addEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
     return () => window.removeEventListener(FOCUS_TERMINAL_PANE_EVENT, onFocusPane)
   }, [tabId, managerRef, scheduleFollowOutputIfNeeded])
+
+  useEffect(() => {
+    const onResetAtlas = (event: Event): void => {
+      const detail = (event as CustomEvent<ResetTerminalWebglAtlasDetail | undefined>).detail
+      if (!detail?.tabId || detail.tabId !== tabId) {
+        return
+      }
+      // Why: WebGL atlas corruption can occur with no context-loss event while
+      // a CSS-hidden surface (floating workspace) holds a live context; the
+      // owning surface dispatches this when it becomes visible again.
+      managerRef.current?.resetWebglTextureAtlases()
+    }
+    window.addEventListener(RESET_TERMINAL_WEBGL_ATLAS_EVENT, onResetAtlas)
+    return () => window.removeEventListener(RESET_TERMINAL_WEBGL_ATLAS_EVENT, onResetAtlas)
+  }, [tabId, managerRef])
 
   useEffect(() => {
     const onPasteText = (event: Event): void => {

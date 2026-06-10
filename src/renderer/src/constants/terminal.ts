@@ -7,6 +7,10 @@ export const SPLIT_TERMINAL_PANE_EVENT = 'orca-split-terminal-pane'
 export const REQUEST_ACTIVE_TERMINAL_PANE_SPLIT_EVENT = 'orca-request-active-terminal-pane-split'
 export const CLOSE_TERMINAL_PANE_EVENT = 'orca-close-terminal-pane'
 export const BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT = 'orca-background-mount-terminal-worktree'
+// Why: surfaces that show/hide terminals with CSS only (floating workspace)
+// never flip TerminalPane visibility, so they need an explicit trigger for
+// WebGL glyph-atlas recovery when they become visible again.
+export const RESET_TERMINAL_WEBGL_ATLAS_EVENT = 'orca-reset-terminal-webgl-atlas'
 
 // Why: sidebar open/close is an instantaneous width change. If we wait for
 // the ResizeObserver rAF (and the 150ms debounced global fit) to catch up,
@@ -40,6 +44,10 @@ export type FocusTerminalPaneDetail = {
 export type PasteTerminalTextDetail = {
   tabId: string
   text: string
+}
+
+export type ResetTerminalWebglAtlasDetail = {
+  tabId: string
 }
 
 export type SplitTerminalPaneDetail = {
