@@ -56,7 +56,9 @@ type AccountsPaneProps = {
 }
 
 function getHostRuntimeLabel(): string {
-  return navigator.userAgent.includes('Windows') ? 'Windows' : 'This device'
+  return navigator.userAgent.includes('Windows')
+    ? 'Windows'
+    : translate('auto.components.settings.AccountsPane.9baf45d071', 'This device')
 }
 
 function getCodexAccountLabel(
@@ -229,7 +231,9 @@ function getSelectedAccountRuntime(
     return {
       runtime: 'wsl',
       wslDistro: selectedDistro,
-      label: selectedDistro ? `WSL ${selectedDistro}` : 'WSL default'
+      label: selectedDistro
+        ? `WSL ${selectedDistro}`
+        : translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL default')
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }
@@ -1152,12 +1156,8 @@ export function AccountsPane({
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.AccountsPane.c2aee76420',
-                'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for'
-              )}
-              {accountRuntime.label}
-              {translate(
-                'auto.components.settings.AccountsPane.d708749337',
-                '. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.'
+                'Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.',
+                { value0: accountRuntime.label }
               )}
             </p>
           </div>
