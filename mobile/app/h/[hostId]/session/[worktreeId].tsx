@@ -3859,11 +3859,16 @@ export default function SessionScreen() {
 
           {visibleTabs.length > 0 && (
             <View style={styles.tabBar}>
+              {/* Why: tab taps must register on the first press while the live
+                  keyboard is open instead of being eaten by keyboard dismissal
+                  (#5106); leaving a non-live tab still closes the keyboard
+                  because the live input unmounts. */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.tabScroll}
                 contentContainerStyle={styles.tabContent}
+                keyboardShouldPersistTaps="handled"
               >
                 {visibleTabs.map((t) => (
                   <Pressable
@@ -4099,10 +4104,14 @@ export default function SessionScreen() {
           >
             {/* Accessory keys */}
             <View style={styles.accessoryBar}>
+              {/* Why: with default tap handling the first tap on any accessory
+                  key dismisses the open keyboard and is swallowed, so live
+                  input lost its keyboard on every Esc/Tab press (#5106). */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.accessoryContent}
+                keyboardShouldPersistTaps="always"
               >
                 <Pressable
                   style={({ pressed }) => [
