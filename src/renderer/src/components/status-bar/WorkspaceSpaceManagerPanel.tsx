@@ -1081,7 +1081,7 @@ function WorkspaceRow({
         checked={canDelete && selected}
         disabled={!canDelete}
         label={translate(
-          'auto.components.status.bar.WorkspaceSpaceManagerPanel.f39d291997',
+          'auto.components.status.bar.WorkspaceSpaceManagerPanel.0d1c78d749',
           'Select {{value0}}',
           { value0: worktree.displayName }
         )}

@@ -668,11 +668,10 @@ export function AccountsPane({
                 </div>
                 <span className="truncate text-[11px] text-muted-foreground">
                   {translate(
-                    'auto.components.settings.AccountsPane.fcc4093fc1',
-                    'Use your current'
+                    'auto.components.settings.AccountsPane.e05d0ff737',
+                    'Use your current {{value0}} Claude login.',
+                    { value0: accountRuntime.label }
                   )}
-                  {accountRuntime.label}{' '}
-                  {translate('auto.components.settings.AccountsPane.3455cf43fa', 'Claude login.')}
                 </span>
               </div>
             </button>

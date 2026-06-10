@@ -18,6 +18,13 @@ const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   4: 'border-border/60 bg-foreground/75'
 }
 
+function translateActivityLabel(label: UsageProviderOverview['activityLabel']): string {
+  if (label === 'turns') {
+    return translate('auto.components.stats.usage.overview.sections.c8f3a2d1e0b4', 'turns')
+  }
+  return translate('auto.components.stats.usage.overview.sections.d9a4b3e2f1c5', 'events')
+}
+
 function formatDayLabel(day: string): string {
   const parsed = new Date(`${day}T12:00:00`)
   if (Number.isNaN(parsed.getTime())) {
@@ -221,12 +228,18 @@ export function ProviderUsageRow({
       <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
         <span>
           {formatUsageTokens(provider.totalTokens)}{' '}
-          {translate('auto.components.stats.usage.overview.sections.32330a6e66', 'tokens')}
+          {translate('auto.components.stats.usage.overview.sections.6762f6a682', 'tokens')}
         </span>
         <span>
-          {provider.sessions.toLocaleString()}{' '}
-          {translate('auto.components.stats.usage.overview.sections.9564a3b21b', 'sessions -')}
-          {provider.activityCount.toLocaleString()} {provider.activityLabel}
+          {translate(
+            'auto.components.stats.usage.overview.sections.a7f937fb29',
+            '{{value0}} sessions - {{value1}} {{value2}}',
+            {
+              value0: provider.sessions.toLocaleString(),
+              value1: provider.activityCount.toLocaleString(),
+              value2: translateActivityLabel(provider.activityLabel)
+            }
+          )}
         </span>
         <span>{formatUsageCost(provider.estimatedCostUsd)}</span>
       </div>

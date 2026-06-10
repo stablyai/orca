@@ -114,7 +114,7 @@ export function BrowserImportHintButton({
     if (result.ok) {
       toast.success(
         translate(
-          'auto.components.browser.pane.BrowserImportHintButton.02e89014c5',
+          'auto.components.browser.pane.BrowserImportHintButton.d40d584769',
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
         )

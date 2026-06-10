@@ -1006,7 +1006,7 @@ function CandidateRow({
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
               {translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.1bffc07ba7',
+                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.ee81adfcef',
                 'View'
               )}
             </TooltipContent>
@@ -1029,7 +1029,7 @@ function CandidateRow({
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
                 {translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.a9957007eb',
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4d0b72481c',
                   'Ignore'
                 )}
               </TooltipContent>
@@ -1054,7 +1054,7 @@ function CandidateRow({
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
                 {translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.3828408538',
+                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.9cc26c019d',
                   'Remove'
                 )}
               </TooltipContent>

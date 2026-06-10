@@ -47,7 +47,7 @@ export function UpdateStatusSegment({
           'Update ready'
         ),
         tooltip: translate(
-          'auto.components.status.bar.UpdateStatusSegment.248ee5d8ef',
+          'auto.components.status.bar.UpdateStatusSegment.9d13213a56',
           'Orca v{{value0}} ready to install',
           { value0: status.version }
         ),

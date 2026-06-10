@@ -11,7 +11,8 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronDown, ChevronLeft, ChevronRight, File, FileText, Folder } from 'lucide-react-native'
-import { useHostClient } from '../../../../src/transport/client-context'
+import { useHostClient, useForceReconnect } from '../../../../src/transport/client-context'
+import { getWorktreeLabel } from '../../../../src/session/worktree-label'
 import type { RpcSuccess } from '../../../../src/transport/types'
 import { triggerError, triggerSelection } from '../../../../src/platform/haptics'
 import { colors, radii, spacing, typography } from '../../../../src/theme/mobile-theme'
@@ -104,17 +105,6 @@ function isMarkdownPath(relativePath: string): boolean {
   return /\.(md|mdx|markdown)$/i.test(relativePath)
 }
 
-function getWorktreeLabel(name: string | undefined, worktreeId: string): string {
-  if (name?.trim()) {
-    return name.trim()
-  }
-  const pathPart = worktreeId.includes('::')
-    ? worktreeId.slice(worktreeId.indexOf('::') + 2)
-    : worktreeId
-  const normalized = pathPart.replace(/\\/g, '/').replace(/\/+$/, '')
-  return normalized.slice(normalized.lastIndexOf('/') + 1) || 'Worktree'
-}
-
 export default function MobileFileExplorerScreen() {
   const { hostId, worktreeId, name } = useLocalSearchParams<{
     hostId: string
@@ -123,6 +113,7 @@ export default function MobileFileExplorerScreen() {
   }>()
   const router = useRouter()
   const { client, state: connState } = useHostClient(hostId)
+  const forceReconnect = useForceReconnect()
   const [files, setFiles] = useState<MobileFileEntry[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState(true)
@@ -287,7 +278,15 @@ export default function MobileFileExplorerScreen() {
       ) : error ? (
         <View style={styles.state}>
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryButton} onPress={() => void loadFiles()}>
+          {/* Why: while disconnected, re-sending the request is useless — revive
+              the parked transport instead (issue #5049); loadFiles re-runs via
+              its effect once the new client connects. */}
+          <Pressable
+            style={styles.retryButton}
+            onPress={() =>
+              connState !== 'connected' && hostId ? void forceReconnect(hostId) : void loadFiles()
+            }
+          >
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         </View>

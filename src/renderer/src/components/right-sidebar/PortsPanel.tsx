@@ -329,9 +329,12 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
         <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">
           {translate(
             'auto.components.right.sidebar.PortsPanel.f59c783b7a',
-            'Port scan unavailable on'
+            'Port scan unavailable on {{value0}}: {{value1}}',
+            {
+              value0: displayScan.platform,
+              value1: displayScan.unavailableReason
+            }
           )}
-          {displayScan.platform}: {displayScan.unavailableReason}
         </div>
       )}
 
@@ -539,7 +542,7 @@ function LocalPortRow({
             className="flex min-w-0 flex-1 items-center gap-2 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             tabIndex={0}
             aria-label={translate(
-              'auto.components.right.sidebar.PortsPanel.d41a8241ec',
+              'auto.components.right.sidebar.PortsPanel.5be4f7f727',
               'Port {{value0}} menu',
               { value0: port.port }
             )}
@@ -607,8 +610,11 @@ function LocalPortRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate('auto.components.right.sidebar.PortsPanel.fe2730d050', 'Copy')}
-                {address}
+                {translate(
+                  'auto.components.right.sidebar.PortsPanel.1004af16ab',
+                  'Copy {{value0}}',
+                  { value0: address }
+                )}
               </TooltipContent>
             </Tooltip>
             {canStopProcess && (
@@ -1069,8 +1075,9 @@ function ForwardedPortRow({
         </div>
         {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            {translate('auto.components.right.sidebar.PortsPanel.de349d4560', 'opens')}
-            {advertisedBrowserUrl}
+            {translate('auto.components.right.sidebar.PortsPanel.de349d4560', 'opens {{value0}}', {
+              value0: advertisedBrowserUrl
+            })}
           </div>
         )}
       </div>
@@ -1096,7 +1103,7 @@ function ForwardedPortRow({
           className="p-1 rounded hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
           onClick={handleCopyButtonClick}
           title={translate(
-            'auto.components.right.sidebar.PortsPanel.fe2730d050',
+            'auto.components.right.sidebar.PortsPanel.1004af16ab',
             'Copy {{value0}}',
             { value0: forwardedAddress }
           )}
@@ -1147,8 +1154,11 @@ function DetectedPortRow({
         </div>
         {advertisedBrowserUrl && (
           <div className="text-[11px] text-muted-foreground/70 truncate">
-            {translate('auto.components.right.sidebar.PortsPanel.c7e920aa7c', 'advertised as')}
-            {advertisedBrowserUrl}
+            {translate(
+              'auto.components.right.sidebar.PortsPanel.c7e920aa7c',
+              'advertised as {{value0}}',
+              { value0: advertisedBrowserUrl }
+            )}
           </div>
         )}
       </div>

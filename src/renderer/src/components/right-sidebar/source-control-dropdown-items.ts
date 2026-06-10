@@ -5,6 +5,10 @@ import type { PrimaryActionInputs } from './source-control-primary-action'
 import type { GitConflictOperation } from '../../../../shared/types'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import { translate } from '@/i18n/i18n'
+import {
+  localizedHostedReviewCopy,
+  resolveSupportedHostedReviewCopyProvider
+} from '@/i18n/hosted-review-localized-copy'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
@@ -91,25 +95,13 @@ function formatRebaseBaseRef(baseRef: string): string {
 
 function reviewCopy(
   provider: NonNullable<PrimaryActionInputs['hostedReviewCreation']>['provider'] | undefined
-): {
-  shortLabel: 'PR' | 'MR'
-  reviewLabel: 'pull request' | 'merge request'
-  providerName: 'GitHub' | 'GitLab'
+): ReturnType<typeof localizedHostedReviewCopy> & {
   authCommand: 'gh auth login' | 'glab auth login'
 } {
-  return provider === 'gitlab'
-    ? {
-        shortLabel: 'MR',
-        reviewLabel: 'merge request',
-        providerName: 'GitLab',
-        authCommand: 'glab auth login'
-      }
-    : {
-        shortLabel: 'PR',
-        reviewLabel: 'pull request',
-        providerName: 'GitHub',
-        authCommand: 'gh auth login'
-      }
+  return {
+    ...localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider)),
+    authCommand: provider === 'gitlab' ? 'glab auth login' : 'gh auth login'
+  }
 }
 
 /**

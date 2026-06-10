@@ -15,8 +15,8 @@ export function CreatePullRequestGenerateButton({
   generating: boolean
   generateDisabled: boolean
   generateDisabledReason: string | null | undefined
-  shortLabel: 'PR' | 'MR'
-  reviewLabel: 'pull request' | 'merge request'
+  shortLabel: string
+  reviewLabel: string
   onGenerate: () => void
   onCancelGenerate: () => void
 }): React.JSX.Element {
@@ -35,7 +35,7 @@ export function CreatePullRequestGenerateButton({
                 'Stop generating'
               )}
               aria-label={translate(
-                'auto.components.right.sidebar.CreatePullRequestGenerateButton.e041998cad',
+                'auto.components.right.sidebar.CreatePullRequestGenerateButton.e61d7e7ad4',
                 'Stop generating {{value0}} details',
                 { value0: reviewLabel }
               )}
@@ -50,13 +50,9 @@ export function CreatePullRequestGenerateButton({
           </TooltipTrigger>
           <TooltipContent side="left" sideOffset={6}>
             {translate(
-              'auto.components.right.sidebar.CreatePullRequestGenerateButton.f5513bdeb1',
-              'Generating'
-            )}
-            {shortLabel}{' '}
-            {translate(
               'auto.components.right.sidebar.CreatePullRequestGenerateButton.d47fd63012',
-              'details. Click to stop.'
+              'Generating {{value0}} details. Click to stop.',
+              { value0: shortLabel }
             )}
           </TooltipContent>
         </Tooltip>

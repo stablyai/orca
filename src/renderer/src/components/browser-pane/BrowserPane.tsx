@@ -4815,19 +4815,22 @@ function BrowserPagePane({
                       'auto.components.browser.pane.BrowserPane.b733a91bd9',
                       'Add feedback for the selected element.'
                     )
-                  : browserAnnotations.length > 0
+                  : browserAnnotations.length === 1
                     ? translate(
-                        'auto.components.browser.pane.BrowserPane.a3508d7e6e',
-                        '{{value0}} annotation{{value1}} ready. Select another element or copy all feedback.',
-                        {
-                          value0: browserAnnotations.length,
-                          value1: browserAnnotations.length === 1 ? '' : 's'
-                        }
+                        'auto.components.browser.pane.BrowserPane.074f0ed10b',
+                        '{{value0}} annotation ready. Select another element or copy all feedback.',
+                        { value0: browserAnnotations.length }
                       )
-                    : translate(
-                        'auto.components.browser.pane.BrowserPane.777b5bc4ec',
-                        'Click an element to add feedback for the agent.'
-                      )
+                    : browserAnnotations.length > 0
+                      ? translate(
+                          'auto.components.browser.pane.BrowserPane.a2164a6e5a',
+                          '{{value0}} annotations ready. Select another element or copy all feedback.',
+                          { value0: browserAnnotations.length }
+                        )
+                      : translate(
+                          'auto.components.browser.pane.BrowserPane.777b5bc4ec',
+                          'Click an element to add feedback for the agent.'
+                        )
                 : grab.state === 'confirming'
                   ? translate(
                       'auto.components.browser.pane.BrowserPane.e852e20cea',
@@ -5087,9 +5090,17 @@ function BrowserPagePane({
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
               <MessageSquarePlus className="size-4 text-muted-foreground" />
               <div className="min-w-0 flex-1 text-sm font-medium">
-                {browserAnnotations.length}{' '}
-                {translate('auto.components.browser.pane.BrowserPane.a3508d7e6e', 'annotation')}
-                {browserAnnotations.length === 1 ? '' : 's'}
+                {browserAnnotations.length === 1
+                  ? translate(
+                      'auto.components.browser.pane.BrowserPane.ea6af700da',
+                      '{{value0}} annotation',
+                      { value0: browserAnnotations.length }
+                    )
+                  : translate(
+                      'auto.components.browser.pane.BrowserPane.c13693fe27',
+                      '{{value0}} annotations',
+                      { value0: browserAnnotations.length }
+                    )}
               </div>
               <DropdownMenu
                 modal={false}

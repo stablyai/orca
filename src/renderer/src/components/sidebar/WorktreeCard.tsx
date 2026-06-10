@@ -574,11 +574,34 @@ const WorktreeCard = React.memo(function WorktreeCard({
   }, [])
 
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
-  const childWorkspaceLabel = `${lineageChildCount} child ${
-    lineageChildCount === 1 ? 'workspace' : 'workspaces'
-  }`
+  const lineageChildAriaLabel =
+    lineageChildCount === 1
+      ? lineageCollapsed
+        ? translate(
+            'auto.components.sidebar.WorktreeList.20bebf9c7f',
+            'Show {{value0}} child workspace',
+            { value0: lineageChildCount }
+          )
+        : translate(
+            'auto.components.sidebar.WorktreeList.e97297cb75',
+            'Hide {{value0}} child workspace',
+            { value0: lineageChildCount }
+          )
+      : lineageCollapsed
+        ? translate(
+            'auto.components.sidebar.WorktreeList.c1f4a31623',
+            'Show {{value0}} child workspaces',
+            { value0: lineageChildCount }
+          )
+        : translate(
+            'auto.components.sidebar.WorktreeList.0cd15956d4',
+            'Hide {{value0}} child workspaces',
+            { value0: lineageChildCount }
+          )
   const childWorkspaceShortLabel = `${lineageChildCount} ${
-    lineageChildCount === 1 ? 'child' : 'children'
+    lineageChildCount === 1
+      ? translate('auto.components.sidebar.WorktreeList.0c6ee14f23', 'child')
+      : translate('auto.components.sidebar.WorktreeList.045a8aed48', 'children')
   }`
   const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
 
@@ -1180,8 +1203,14 @@ const WorktreeCard = React.memo(function WorktreeCard({
           <div className="mt-0.5 flex items-start gap-1.5 rounded border border-amber-500/25 bg-amber-500/5 px-1.5 py-1 text-[10.5px] leading-snug text-amber-700 dark:text-amber-300">
             <AlertTriangle className="mt-[1px] size-3 shrink-0" />
             <span className="min-w-0 flex-1">
-              {remoteBranchConflict.remote}/{remoteBranchConflict.branchName}{' '}
-              {translate('auto.components.sidebar.WorktreeCard.a88c92d0e3', 'already exists.')}
+              {translate(
+                'auto.components.sidebar.WorktreeCard.a88c92d0e3',
+                '{{value0}}/{{value1}} already exists.',
+                {
+                  value0: remoteBranchConflict.remote,
+                  value1: remoteBranchConflict.branchName
+                }
+              )}
             </span>
           </div>
         )}
@@ -1214,7 +1243,7 @@ const WorktreeCard = React.memo(function WorktreeCard({
                   variant="ghost"
                   size="xs"
                   className="relative z-10 h-[18px] max-w-[8rem] gap-1 rounded-md border border-worktree-sidebar-border bg-worktree-sidebar px-1.5 text-[10px] font-medium leading-none text-muted-foreground shadow-none hover:bg-worktree-sidebar-accent hover:text-foreground focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
-                  aria-label={`${lineageCollapsed ? 'Show' : 'Hide'} ${childWorkspaceLabel}`}
+                  aria-label={lineageChildAriaLabel}
                   aria-expanded={!lineageCollapsed}
                   onClick={onLineageToggle}
                 >

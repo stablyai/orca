@@ -46,7 +46,13 @@ import {
 } from 'lucide-react-native'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import { loadHosts } from '../../../../src/transport/host-store'
-import { useHostClient } from '../../../../src/transport/client-context'
+import {
+  useHostClient,
+  useForceReconnect,
+  useReconnectAttempt,
+  useLastConnectedAt
+} from '../../../../src/transport/client-context'
+import { classifyConnection } from '../../../../src/transport/connection-health'
 import type { ConnectionState, RpcFailure, RpcSuccess } from '../../../../src/transport/types'
 import { useMobileDictation } from '../../../../src/hooks/use-mobile-dictation'
 import {
@@ -924,6 +930,9 @@ export default function SessionScreen() {
   // Why: shared client per host owned by RpcClientProvider. See
   // docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
+  const reconnectAttempts = useReconnectAttempt(hostId)
+  const lastConnectedAt = useLastConnectedAt(hostId)
+  const forceReconnectHost = useForceReconnect()
   const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
   const [terminals, setTerminals] = useState<Terminal[]>([])
   const terminalsRef = useRef<Terminal[]>([])
@@ -3640,6 +3649,17 @@ export default function SessionScreen() {
     void handleCreateTerminal()
   }, [client, creating, creatingBrowser, creatingMarkdown, showEmptyState, worktreeId])
 
+  // Why: the reconnect loop parks at its give-up cap; without an in-session
+  // affordance the only recovery is leaving the screen or restarting the
+  // app (issue #5049). Surface tap-to-retry once the verdict escalates.
+  const connectionVerdict = classifyConnection({
+    state: connState,
+    reconnectAttempts,
+    lastConnectedAt
+  })
+  const showConnectionRetry =
+    connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
+
   const terminalSummary =
     connState === 'connected'
       ? showLoadingState
@@ -3647,7 +3667,9 @@ export default function SessionScreen() {
         : visibleTabs.length === 1
           ? '1 tab'
           : `${visibleTabs.length} tabs`
-      : STATUS_LABELS[connState]
+      : showConnectionRetry
+        ? `${connectionVerdict.label} — tap to retry`
+        : STATUS_LABELS[connState]
 
   // Why: keep safe-area padding in layout at all times, then visually translate
   // the controls over the terminal when the keyboard appears. iOS keyboard
@@ -3790,12 +3812,22 @@ export default function SessionScreen() {
               <Text style={styles.sessionTitle} numberOfLines={1}>
                 {worktreeName || 'Terminal'}
               </Text>
-              <View style={styles.sessionMetaRow}>
+              <Pressable
+                style={styles.sessionMetaRow}
+                disabled={!showConnectionRetry}
+                onPress={() => {
+                  if (hostId) {
+                    void forceReconnectHost(hostId)
+                  }
+                }}
+                accessibilityRole={showConnectionRetry ? 'button' : undefined}
+                accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
+              >
                 <StatusDot state={connState} />
                 <Text style={styles.sessionMetaText} numberOfLines={1}>
                   {terminalSummary}
                 </Text>
-              </View>
+              </Pressable>
             </View>
             <Pressable
               style={({ pressed }) => [styles.filesButton, pressed && styles.filesButtonPressed]}

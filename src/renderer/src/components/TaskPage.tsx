@@ -6705,7 +6705,7 @@ export default function TaskPage(): React.JSX.Element {
                             aria-label={
                               selectedLinearTeamForExternalLink
                                 ? translate(
-                                    'auto.components.TaskPage.606a85c774',
+                                    'auto.components.TaskPage.246bd64aed',
                                     'Open {{value0}} in Linear',
                                     { value0: selectedLinearTeamForExternalLink.name }
                                   )
@@ -6722,7 +6722,7 @@ export default function TaskPage(): React.JSX.Element {
                         <TooltipContent side="bottom" sideOffset={6}>
                           {selectedLinearTeamForExternalLink
                             ? translate(
-                                'auto.components.TaskPage.606a85c774',
+                                'auto.components.TaskPage.246bd64aed',
                                 'Open {{value0}} in Linear',
                                 { value0: selectedLinearTeamForExternalLink.name }
                               )
@@ -6862,7 +6862,7 @@ export default function TaskPage(): React.JSX.Element {
                               aria-label={
                                 selectedGitHubRepoExternalLink
                                   ? translate(
-                                      'auto.components.TaskPage.606a85c774',
+                                      'auto.components.TaskPage.8d1e17a3ef',
                                       'Open {{value0}} in GitHub',
                                       { value0: selectedGitHubRepoExternalLink.label }
                                     )
@@ -6879,7 +6879,7 @@ export default function TaskPage(): React.JSX.Element {
                           <TooltipContent side="bottom" sideOffset={6}>
                             {selectedGitHubRepoExternalLink
                               ? translate(
-                                  'auto.components.TaskPage.606a85c774',
+                                  'auto.components.TaskPage.8d1e17a3ef',
                                   'Open {{value0}} in GitHub',
                                   { value0: selectedGitHubRepoExternalLink.label }
                                 )
@@ -8655,7 +8655,7 @@ export default function TaskPage(): React.JSX.Element {
                                     handleUseJiraItem(issue)
                                   }}
                                   aria-label={translate(
-                                    'auto.components.TaskPage.5e8061b088',
+                                    'auto.components.TaskPage.ff90d0abc7',
                                     'Start workspace from {{value0}}',
                                     { value0: issue.key }
                                   )}
@@ -8680,7 +8680,7 @@ export default function TaskPage(): React.JSX.Element {
                                     window.api.shell.openUrl(issue.url)
                                   }}
                                   aria-label={translate(
-                                    'auto.components.TaskPage.606a85c774',
+                                    'auto.components.TaskPage.4ac8ff2275',
                                     'Open {{value0}} in Jira',
                                     { value0: issue.key }
                                   )}
@@ -8991,7 +8991,9 @@ export default function TaskPage(): React.JSX.Element {
                             </button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom" sideOffset={6}>
-                            {label} {translate('auto.components.TaskPage.af377b13b1', 'view')}
+                            {translate('auto.components.TaskPage.af377b13b1', '{{value0}} view', {
+                              value0: label
+                            })}
                           </TooltipContent>
                         </Tooltip>
                       )
@@ -9285,7 +9287,7 @@ export default function TaskPage(): React.JSX.Element {
                                         handleUseLinearItem(issue)
                                       }}
                                       aria-label={translate(
-                                        'auto.components.TaskPage.5e8061b088',
+                                        'auto.components.TaskPage.ff90d0abc7',
                                         'Start workspace from {{value0}}',
                                         { value0: issue.identifier }
                                       )}
@@ -9300,7 +9302,7 @@ export default function TaskPage(): React.JSX.Element {
                                         window.api.shell.openUrl(issue.url)
                                       }}
                                       aria-label={translate(
-                                        'auto.components.TaskPage.606a85c774',
+                                        'auto.components.TaskPage.246bd64aed',
                                         'Open {{value0}} in Linear',
                                         { value0: issue.identifier }
                                       )}
@@ -9527,7 +9529,7 @@ export default function TaskPage(): React.JSX.Element {
                                     handleUseLinearItem(issue)
                                   }}
                                   aria-label={translate(
-                                    'auto.components.TaskPage.5e8061b088',
+                                    'auto.components.TaskPage.ff90d0abc7',
                                     'Start workspace from {{value0}}',
                                     { value0: issue.identifier }
                                   )}
@@ -9549,7 +9551,7 @@ export default function TaskPage(): React.JSX.Element {
                                     window.api.shell.openUrl(issue.url)
                                   }}
                                   aria-label={translate(
-                                    'auto.components.TaskPage.606a85c774',
+                                    'auto.components.TaskPage.246bd64aed',
                                     'Open {{value0}} in Linear',
                                     { value0: issue.identifier }
                                   )}

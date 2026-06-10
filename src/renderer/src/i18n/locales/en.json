@@ -144,7 +144,8 @@
             "10898045f3": "Shortcut for \"{{value0}}\" was ignored: Use a string array.",
             "36761d9604": "Unknown keybinding action \"{{value0}}\" was ignored.",
             "d2e43e426a": "{{value0}} must be an object.",
-            "fb290366b2": "Unavailable on web."
+            "fb290366b2": "Unavailable on web.",
+            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}"
           }
         },
         "runtime": {
@@ -742,7 +743,8 @@
         "b0b09778c8": "Failed to add review comment.",
         "16c1abe76c": "Mark viewed",
         "ba8e329d92": "Unmark viewed",
-        "3f79ffc8b7": "Open the PR details to view current reviewers."
+        "3f79ffc8b7": "Open the PR details to view current reviewers.",
+        "5c1c973855": "Remove reviewer"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1158,7 +1160,8 @@
         "19628e058d": "Failed to add review comment.",
         "50b8fb290f": "Mark viewed",
         "2b4fdb880c": "Unmark viewed",
-        "56ec6eafb7": "Open the PR details to view current reviewers."
+        "56ec6eafb7": "Open the PR details to view current reviewers.",
+        "7f964a365a": "Remove reviewer"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -1476,7 +1479,12 @@
         "aec5feeb69": "Failed to create Jira issue.",
         "7437e340b4": "Failed to create issue.",
         "9e03c17847": "Open the PR details to view current reviewers.",
-        "3b7f34282f": "closed"
+        "3b7f34282f": "closed",
+        "246bd64aed": "Open {{value0}} in Linear",
+        "ff90d0abc7": "Start workspace from {{value0}}",
+        "fe28c9821f": "view",
+        "8d1e17a3ef": "Open {{value0}} in GitHub",
+        "4ac8ff2275": "Open {{value0}} in Jira"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -1504,7 +1512,7 @@
       },
       "UpdateCard": {
         "68b235d264": "Restart to Update",
-        "02d4b8a6b9": "is downloaded. Restart when you're ready.",
+        "6714206e5a": "Orca v{{value0}} is downloaded. Restart when you're ready.",
         "93794ea932": "Orca v{{value0}} is downloading.",
         "8acbdd3961": "Minimize to status bar",
         "17412483da": "Ready to Install",
@@ -1517,7 +1525,7 @@
         "ec8fe71cfc": "Update",
         "44324ef542": "Release notes",
         "fdd4a364fa": "Sessions won't be interrupted.",
-        "c4890662e9": "is ready.",
+        "05ad78a6d1": "Orca v{{value0}} is ready.",
         "318d3b4bc7": "Dismiss update",
         "9abc59f814": "Update Available",
         "aad383aecc": "Read the full release notes",
@@ -1997,7 +2005,10 @@
             "bc43c37faf": "hidden",
             "0c6672f5e3": "Ignored cleanup suggestions",
             "fc49f79434": "mixed",
-            "2ddbd6fe8a": "checked"
+            "2ddbd6fe8a": "checked",
+            "ee81adfcef": "View",
+            "4d0b72481c": "Ignore",
+            "9cc26c019d": "Remove"
           }
         }
       },
@@ -2344,6 +2355,32 @@
                   "90eb94dc48": "Enter an http:// or https:// URL.",
                   "5553b283ce": "Enter a URL or file path."
                 }
+              },
+              "menu": {
+                "options": {
+                  "5501c2fb7a": "terminal",
+                  "9630dd5494": "shell",
+                  "a094576900": "new terminal",
+                  "4f23f4d01d": "new shell",
+                  "4f2a91e15b": "browser",
+                  "6d0e6a4b7a": "new browser",
+                  "c87ad57785": "browser tab",
+                  "cce7ef1d2c": "web",
+                  "5f17fb9d0c": "markdown",
+                  "44caaf7b36": "md",
+                  "fb50e3d874": "new markdown",
+                  "6d8b6b4117": "new file",
+                  "b330f72434": "mark",
+                  "37ff3ddca1": "open markdown",
+                  "164c394bab": "open file",
+                  "bbaf4f85a4": "mobile emulator",
+                  "3784b83bd4": "emulator",
+                  "a63847a742": "simulator",
+                  "1baeb07c17": "ios simulator",
+                  "8a580f88cf": "iphone",
+                  "7ecdc5ef08": "ipad",
+                  "14965cc123": "mobile"
+                }
               }
             }
           }
@@ -2372,29 +2409,31 @@
           "PortsStatusSegment": {
             "4ebf90c12e": "No external ports detected",
             "7dac3ecc9d": "External Ports",
-            "95495019ed": "Port scan unavailable on",
+            "95495019ed": "Port scan unavailable on {{value0}}: {{value1}}",
             "a8e4bdb412": " · {{value0}} external",
             "9aa11005bf": "workspace ·",
             "c22ea609fd": "Ports",
             "a11ed266ce": "workspace",
-            "ca41be2802": "Ports —",
+            "ca41be2802": "Ports — {{value0}} workspace {{value1}}{{value2}}",
             "b8bc3e420a": "Ports, {{value0}} workspace {{value1}}",
             "3a87d54dfb": "No workspace ports detected",
             "c174bbbfed": "Scanning for workspace ports...",
             "8caaa86e9a": "ports",
-            "45834a9ace": "port"
+            "45834a9ace": "port",
+            "4ae65d871a": "external",
+            "2b84c4d11f": "{{value0}} workspace · {{value1}} external"
           },
           "ResourceUsageStatusSegment": {
             "946d9f94d0": "Cancel",
             "67c4ecda49": "Force-quits this terminal. Any unsaved work in the pane is lost. This can't be undone.",
             "4bb076fa89": "Kill",
             "996295bff2": "orphan terminal",
-            "92924a14e3": "Review inactive workspaces (",
+            "92924a14e3": "Review inactive workspaces ({{value0}})",
             "27a74f91f0": "Nothing running right now",
             "1b24a32d3a": "Memory",
             "298f4be7f2": "CPU",
             "2aa2de6cb9": "Name",
-            "30ff2c3c31": "orphan",
+            "30ff2c3c31": "{{value0}} orphan",
             "6449a95c78": "How much of this machine's physical RAM the Orca-tracked processes are sitting on.",
             "e7ccce7e87": "of system RAM",
             "9e2525c89f": "Resident memory held by Orca plus the processes under each worktree's terminals.",
@@ -2429,7 +2468,12 @@
             "16bc3c998a": "Delete workspace {{value0}}",
             "0f9e50eb07": "Other",
             "d406915b78": "Renderer",
-            "81cd37af99": "Main"
+            "81cd37af99": "Main",
+            "fa6d36758d": "Kill session {{value0}}",
+            "b8f4a2c1d0e3": "{{value0}} orphans",
+            "c7e3b1a0d9f2": "Kill {{value0}} orphan terminal",
+            "d8f4c2b1e0a3": "Kill {{value0}} orphan terminals",
+            "e9a5d3c2b1f0": "Kill {{value0}}?"
           },
           "SshStatusSegment": {
             "3ad70e0365": "Manage SSH…",
@@ -2505,7 +2549,8 @@
             "962404f68e": "Update ready to install. Click to expand.",
             "248ee5d8ef": "Orca v{{value0}} downloading… {{value1}}%",
             "57a29c3b0e": "Update ready",
-            "fd1d3b3a1d": "Update downloading, {{value0}} percent. Click to expand."
+            "fd1d3b3a1d": "Update downloading, {{value0}} percent. Click to expand.",
+            "9d13213a56": "Orca v{{value0}} ready to install"
           },
           "WorkspaceSpaceCompactPanel": {
             "a471aa9c24": "Updated",
@@ -2597,7 +2642,8 @@
             "c5135e7e4a": "Scanning workspace sizes. You can leave this page.",
             "0990a63160": "No scanned workspace sizes yet.",
             "977bdf9a36": "No top-level items to show.",
-            "131662ac65": "{{value0}} open"
+            "131662ac65": "{{value0}} open",
+            "0d1c78d749": "Select {{value0}}"
           },
           "ports": {
             "status": {
@@ -2878,7 +2924,11 @@
               "0015facc1f": "Cache",
               "7f270458af": "Output",
               "9365b14a4e": "New input",
-              "3de9bf87fc": "No model yet"
+              "3de9bf87fc": "No model yet",
+              "6762f6a682": "tokens",
+              "a7f937fb29": "{{value0}} sessions - {{value1}} {{value2}}",
+              "c8f3a2d1e0b4": "turns",
+              "d9a4b3e2f1c5": "events"
             }
           }
         }
@@ -3371,7 +3421,7 @@
           "ccbd1e2c69": "Customize {{value0}} appearance"
         },
         "WorktreeCard": {
-          "a88c92d0e3": "already exists.",
+          "a88c92d0e3": "{{value0}}/{{value1}} already exists.",
           "6f09f58541": "Delete workspace",
           "0777de5970": "Primary worktree (original clone directory)",
           "0f33af979b": "Partial checkout. Files outside these paths are not on disk.",
@@ -3485,7 +3535,12 @@
           "84a2238242": "Show child workspaces",
           "045a8aed48": "children",
           "2ca6e29a3c": "repo",
-          "bb85cd86ba": "Create workspace for {{value0}}"
+          "bb85cd86ba": "Create workspace for {{value0}}",
+          "ebadb7eadb": "{{value0}} {{value1}} child {{value2}}",
+          "20bebf9c7f": "Show {{value0}} child workspace",
+          "c1f4a31623": "Show {{value0}} child workspaces",
+          "e97297cb75": "Hide {{value0}} child workspace",
+          "0cd15956d4": "Hide {{value0}} child workspaces"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -3704,7 +3759,12 @@
           "fe2ab66d45": "Killed {{value0}} of {{value1}} sessions. {{value2}} refused to exit.",
           "d762b41f41": "Restart failed.",
           "b5954e12d3": "Restart failed — check logs.",
-          "0e9da1b98e": "Daemon restarted."
+          "0e9da1b98e": "Daemon restarted.",
+          "d6372cc797": "Killed {{value0}} session{{value1}}.",
+          "87412c2a68": "Killed {{value0}} session.",
+          "a2f040ac1c": "Killed {{value0}} sessions.",
+          "63520148e2": "{{value0}} session refused to exit.",
+          "cc0a26cb14": "{{value0}} sessions refused to exit."
         }
       },
       "setup": {
@@ -3812,7 +3872,9 @@
           "b10cb4f696": "adding",
           "e4a28e8894": "Codex reported that the {{value0}} login needs a fresh sign-in. Sign in again before starting new Codex sessions.",
           "75ca9b718e": "Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.",
-          "b11078a9c2": "wsl"
+          "b11078a9c2": "wsl",
+          "350b2a1aa7": "Use your current",
+          "e05d0ff737": "Use your current {{value0}} Claude login."
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -4010,7 +4072,10 @@
           "cdec84552f": "Import Cookies",
           "796d846483": "No cookies imported",
           "c29648fe5b": "Active",
-          "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}."
+          "d420c43729": "Imported {{value0}} cookies from {{value1}}{{value2}} into {{value3}}.",
+          "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
+          "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
+          "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}."
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -4055,7 +4120,8 @@
           "de9b2f32f3": "Enable",
           "ad8cb0ee22": "Fix PATH",
           "0289434ed6": "Enabled",
-          "8b3054dac7": "Registering..."
+          "8b3054dac7": "Registering...",
+          "8f2675c2f3": "Imported {{value0}} cookies from file."
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -5012,7 +5078,8 @@
           "3595fd1948": "New Link",
           "54dee18f5c": "Hide Form",
           "8cf8790697": "Saved servers route this browser through a paired Orca runtime.",
-          "f75ce1c7a5": "Local keeps today's desktop behavior. Saved servers route supported client calls through the remote runtime."
+          "f75ce1c7a5": "Local keeps today's desktop behavior. Saved servers route supported client calls through the remote runtime.",
+          "d25f0688b1": "Remove"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -5231,7 +5298,7 @@
           "a6fcdd9e3c": "Name",
           "b9922ec194": "Cancel preset edit",
           "694cc55ecb": "Saved directories are used when creating sparse worktrees for this repository.",
-          "8b64731aaf": "more",
+          "8b64731aaf": "+{{value0}} more",
           "755c6a1a0d": "Confirm",
           "a7bcf206b1": "Deleting",
           "ba9ad2d4cd": "Updated date unknown",
@@ -5243,7 +5310,8 @@
           "3dfa765ca7": "{{value0}} directories will be saved.",
           "b532b9c17d": "1 directory will be saved.",
           "623b4cf910": "Edit Preset",
-          "68bbcd864a": "new"
+          "68bbcd864a": "new",
+          "2ef2b2674b": "Delete {{value0}}"
         },
         "SshDestructiveActionDialog": {
           "895b216267": "Cancel"
@@ -7180,7 +7248,7 @@
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
-            "27ef4b195c": "Choose a different base branch before creating a",
+            "27ef4b195c": "Choose a different base branch before creating a {{value0}}.",
             "7ef56f3efe": "Create as draft",
             "0c9f9a568c": "Supports Markdown formatting. Use Generate with AI to auto-fill from your changes.",
             "02b2ce911f": "Description (optional)",
@@ -7191,18 +7259,22 @@
             "8584ccb43c": "Base branch",
             "6f5f1962b6": "Head branch",
             "b504b3ceb1": "details before creating the hosted review.",
-            "f658ff2455": "Confirm the target branch and",
+            "f658ff2455": "Confirm the target branch and {{value0}} details before creating the hosted review.",
             "b7f43474d7": "Create {{value0}}",
             "7a21f0dae8": "Open on {{value0}}",
             "edc35a7027": "{{value0}} #{{value1}} is already open",
-            "a154fe55e6": "Push & Create {{value0}}"
+            "a154fe55e6": "Push & Create {{value0}}",
+            "21c7a1daa0": "{{value0}} is already open",
+            "db9cee18f7": "Create {{value0}}"
           },
           "CreatePullRequestGenerateButton": {
             "4012459f8a": "Generate with AI",
             "a0501572c1": "Generate {{value0}} details with AI",
-            "d47fd63012": "details. Click to stop.",
+            "d47fd63012": "Generating {{value0}} details. Click to stop.",
+            "bdf83ccb15": "Generating {{value0}}",
             "f5513bdeb1": "Generating",
             "a6ea6dc3aa": "Generating…",
+            "e61d7e7ad4": "Stop generating {{value0}} details",
             "e041998cad": "Stop generating"
           },
           "FileExplorer": {
@@ -7288,13 +7360,13 @@
             "b950b1948b": "Local Port",
             "9e5a4118b0": "Remote Port",
             "c9d106547a": "Forward",
-            "c7e920aa7c": "advertised as",
+            "c7e920aa7c": "advertised as {{value0}}",
             "e740075063": "Remove",
             "b3548e59f4": "Edit",
             "fe2730d050": "Copy {{value0}}",
             "b22b128b2a": "Open in Browser",
             "75aeea592f": "Open {{value0}} in Browser",
-            "de349d4560": "opens",
+            "de349d4560": "opens {{value0}}",
             "907eb53ed2": "Forward a Port",
             "04efd3dad4": "Forward a port to access remote services on your local machine.",
             "1f0d2a24f9": "No forwarded ports",
@@ -7319,7 +7391,7 @@
             "792baeb7ed": "Copy Address",
             "d41a8241ec": "Port",
             "a2a9fc6899": "No local ports detected",
-            "f59c783b7a": "Port scan unavailable on",
+            "f59c783b7a": "Port scan unavailable on {{value0}}: {{value1}}",
             "7822e3edc6": "Refresh Ports",
             "c1b115c375": "No workspace selected",
             "98e9a414f8": "Failed to open browser",
@@ -7341,7 +7413,10 @@
             "38b16cfbef": "No ports detected",
             "0d63d94db3": "Scanning...",
             "935dda7718": "Active Workspace",
-            "740aca88ab": "Workspace port scan failed."
+            "740aca88ab": "Workspace port scan failed.",
+            "5be4f7f727": "Port {{value0}} menu",
+            "7550998473": "Copy",
+            "1004af16ab": "Copy {{value0}}"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",
@@ -7409,7 +7484,7 @@
             "dd43c47089": "Choose an agent for this commit failure",
             "30b8d4f181": "Fix commit failure with AI",
             "4b37ae99b0": "Start the default AI agent to fix this commit failure",
-            "ae743199cd": "Choose a different base branch before creating a",
+            "ae743199cd": "Choose a different base branch before creating a {{value0}}.",
             "c5e4175139": "More {{value0}} and remote actions",
             "78ddfd0bb4": "Create as draft",
             "e64a632456": "main",
@@ -7421,9 +7496,11 @@
             "7d6a8f0082": "Title",
             "a6eda33521": "{{value0}} title",
             "02d8c04339": "Generate {{value0}} details with AI",
+            "aee92f8684": "Generate",
             "e868cec4e1": "Generating…",
+            "b355e740b2": "Stop generating {{value0}} details",
             "527e130b6f": "Stop generating",
-            "e1970d327d": "New",
+            "e1970d327d": "New {{value0}}",
             "f4c766f1ca": "Choose the agent and command template for this run.",
             "1a6a6e0bc5": "Generate Hosted Review Details",
             "6b122529d4": "Generate Commit Message",
@@ -7501,7 +7578,24 @@
             "72f2bea3f4": "Expand notes",
             "d13edef890": "Collapse notes",
             "0fad573938": "Uncommitted",
-            "77afaa8152": "All"
+            "77afaa8152": "All",
+            "d6fb1df5fe": "{{value0}} is already open",
+            "05838cfdeb": "{{value0}} conflict",
+            "d206117f90": "{{value0}} conflict ({{value1}})",
+            "0b5b8c234c": "Open {{value0}} ({{value1}})",
+            "d97ef8f221": "lines {{value0}}-{{value1}}",
+            "6f8bfa0eb9": "line {{value0}}",
+            "c569d29a02": "both modified",
+            "ea7287d84f": "both added",
+            "bd0151ef7b": "deleted by us",
+            "44594e8c61": "deleted by them",
+            "24773ee581": "added by us",
+            "c03d7c952f": "added by them",
+            "5b176fa431": "both deleted",
+            "31f6d46278": "Unresolved",
+            "2c417432b7": "Resolved locally",
+            "f3a8b2c1d0e5": "Enter a {{value0}} title.",
+            "e2b7a1c0d9f4": "Failed to create {{value0}}"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -7808,6 +7902,17 @@
           },
           "GitHistoryGraphSvg": {
             "47eff48230": "HEAD"
+          },
+          "create": {
+            "pull": {
+              "request": {
+                "review": {
+                  "copy": {
+                    "a1f8c3d2e4": "Push succeeded, but {{value0}} creation failed: {{value1}}"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -8281,7 +8386,8 @@
             "648352c51f": "Open {{value0}} in floating workspace",
             "82da3701e7": "Could not build launch command for {{value0}}.",
             "109870e023": "Maximize",
-            "b5686fee1e": "Restore"
+            "b5686fee1e": "Restore",
+            "1e502f1284": "Open"
           }
         }
       },
@@ -8643,6 +8749,18 @@
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",
             "8ab622e4d6": "notes"
+          },
+          "FeatureWallBrowserAction": {
+            "5022c43a88": "Browser could not open",
+            "c9eb68b474": "No workspace group is available for this worktree yet.",
+            "c9728107c5": "Try it out",
+            "25dd101f15": "Browser setup needs attention",
+            "e02b11e6b0": "Browser setup ready",
+            "d6d15077df": "Skill command copied and inserted below for review.",
+            "78e65f19d9": "Browser setup failed",
+            "b7345c18db": "An unexpected error occurred.",
+            "5f97caf76b": "Installing…",
+            "c2df599513": "Install CLI & Skill"
           }
         },
         "tips": {
@@ -9368,7 +9486,8 @@
             "e52a955e6f": "You can always find this in Settings > Browser.",
             "4f5ffaa6a1": "Import browser data",
             "b24fef25be": "Import",
-            "02e89014c5": "Imported {{value0}} cookies from {{value1}}{{value2}}."
+            "02e89014c5": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
+            "d40d584769": "Imported {{value0}} cookies from file."
           },
           "BrowserMobileDriverOverlay": {
             "a6914ee43f": "Take back",
@@ -9445,7 +9564,12 @@
             "31375046b7": "Download from {{value0}}",
             "acbe79fd01": "Grab page element ({{value0}})",
             "572046436a": "Remote browser",
-            "b313a7275b": "Opening remote browser"
+            "b313a7275b": "Opening remote browser",
+            "5f66313863": "annotation",
+            "ea6af700da": "{{value0}} annotation",
+            "c13693fe27": "{{value0}} annotations",
+            "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
+            "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback."
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",
@@ -9458,7 +9582,7 @@
             "ed8f54509d": "Default",
             "e5d31de1a9": "Viewport Size",
             "56f94f4ffa": "From File…",
-            "eb280bfb11": "From",
+            "eb280bfb11": "From {{value0}}",
             "2293adf620": "Import Cookies",
             "cf7cdc67ef": "New Profile…",
             "7b838540c7": "Browser menu",
@@ -9467,7 +9591,10 @@
             "4d2f9f13a7": "Failed to create profile.",
             "3ccd29d771": "Switched to {{value0}} profile",
             "569bce8eb1": "Create",
-            "bf648471c5": "Creating…"
+            "bf648471c5": "Creating…",
+            "53bbe3dab4": "Imported {{value0}} cookies from file.",
+            "c5f0e4d3b2a1": "Imported {{value0}} cookies from {{value1}} ({{value2}}).",
+            "d6a1f5e4c3b2": "Imported {{value0}} cookies from {{value1}}."
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "Attach to AI",
@@ -9837,6 +9964,20 @@
         "dialog": {
           "8490e5d36a": "Confirm",
           "56f5c60e0c": "Cancel"
+        }
+      }
+    },
+    "i18n": {
+      "hostedReview": {
+        "copy": {
+          "f0a4b8c2d1": "PR",
+          "e9f3a7b1c0": "pull request",
+          "d8e2f6a0b9": "Pull Request",
+          "c7d1e5f9a8": "GitHub",
+          "c4e8f1a2b9": "MR",
+          "b3d7e0f1a8": "merge request",
+          "a2c6d9e0f7": "Merge Request",
+          "91b5c8d7e6": "GitLab"
         }
       }
     }

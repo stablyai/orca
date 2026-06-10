@@ -194,8 +194,11 @@ import {
   hasConfiguredSourceControlTextGenerationDefaults
 } from './source-control-text-generation-defaults'
 import { useSourceControlAi } from './use-source-control-ai'
-import { CONFLICT_KIND_LABELS } from './source-control-conflict-labels'
 import { translate } from '@/i18n/i18n'
+import {
+  localizedHostedReviewCopy,
+  resolveSupportedHostedReviewCopyProvider
+} from '@/i18n/hosted-review-localized-copy'
 
 export {
   appendCommitFailureCustomInstruction,
@@ -420,27 +423,6 @@ type CreatedHostedReview = {
   provider: HostedReviewProvider
   number: number
   url: string
-}
-
-function hostedReviewCreationCopy(provider: HostedReviewProvider | null | undefined): {
-  shortLabel: 'PR' | 'MR'
-  reviewLabel: 'pull request' | 'merge request'
-  titleLabel: 'Pull Request' | 'Merge Request'
-  providerName: 'GitHub' | 'GitLab'
-} {
-  return provider === 'gitlab'
-    ? {
-        shortLabel: 'MR',
-        reviewLabel: 'merge request',
-        titleLabel: 'Merge Request',
-        providerName: 'GitLab'
-      }
-    : {
-        shortLabel: 'PR',
-        reviewLabel: 'pull request',
-        titleLabel: 'Pull Request',
-        providerName: 'GitHub'
-      }
 }
 
 export function readCommitDraftForWorktree(
@@ -1183,7 +1165,7 @@ function SourceControlInner(): React.JSX.Element {
       : null
   const hostedReviewCreateProvider =
     hostedReviewCreation?.provider === 'gitlab' ? 'gitlab' : 'github'
-  const hostedReviewCreateCopy = hostedReviewCreationCopy(hostedReviewCreateProvider)
+  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
   const hostedReviewCacheKey =
     activeRepo && branchName
       ? getHostedReviewCacheKey(
@@ -1970,7 +1952,9 @@ function SourceControlInner(): React.JSX.Element {
       if (!activeRepo || !branchName) {
         return
       }
-      const copy = hostedReviewCreationCopy(result.provider)
+      const copy = localizedHostedReviewCopy(
+        resolveSupportedHostedReviewCopyProvider(result.provider)
+      )
       setRightSidebarOpen(true)
       setRightSidebarTab('checks')
       try {
@@ -2393,7 +2377,11 @@ function SourceControlInner(): React.JSX.Element {
     if (!title) {
       setCreatePrErrors((prev) => ({
         ...prev,
-        [activeWorktreeId]: `Enter a ${hostedReviewCreateCopy.reviewLabel} title.`
+        [activeWorktreeId]: translate(
+          'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
+          'Enter a {{value0}} title.',
+          { value0: hostedReviewCreateCopy.reviewLabel }
+        )
       }))
       return
     }
@@ -2401,7 +2389,11 @@ function SourceControlInner(): React.JSX.Element {
     if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branchName).toLowerCase()) {
       setCreatePrErrors((prev) => ({
         ...prev,
-        [activeWorktreeId]: `Choose a different base branch before creating a ${hostedReviewCreateCopy.reviewLabel}.`
+        [activeWorktreeId]: translate(
+          'auto.components.right.sidebar.SourceControl.ae743199cd',
+          'Choose a different base branch before creating a {{value0}}.',
+          { value0: hostedReviewCreateCopy.reviewLabel }
+        )
       }))
       return
     }
@@ -2443,7 +2435,7 @@ function SourceControlInner(): React.JSX.Element {
                 { value0: hostedReviewCreateCopy.titleLabel, value1: number }
               )
             : translate(
-                'auto.components.right.sidebar.SourceControl.eef5446523',
+                'auto.components.right.sidebar.SourceControl.d6fb1df5fe',
                 '{{value0}} is already open',
                 { value0: hostedReviewCreateCopy.titleLabel }
               ),
@@ -2475,7 +2467,11 @@ function SourceControlInner(): React.JSX.Element {
         [activeWorktreeId]:
           error instanceof Error
             ? error.message
-            : `Failed to create ${hostedReviewCreateCopy.reviewLabel}`
+            : translate(
+                'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
+                'Failed to create {{value0}}',
+                { value0: hostedReviewCreateCopy.reviewLabel }
+              )
       }))
     } finally {
       createPrInFlightRef.current[activeWorktreeId] = false
@@ -4723,7 +4719,7 @@ function PullRequestComposer({
   onPrimaryAction,
   onDropdownAction
 }: PullRequestComposerProps): React.JSX.Element {
-  const copy = hostedReviewCreationCopy(provider)
+  const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
   const ReviewIcon = provider === 'gitlab' ? GitMerge : GitPullRequestArrow
   const normalizedBase = stripBaseRef(base)
   const strippedBranch = stripBaseRef(branch)
@@ -4740,7 +4736,11 @@ function PullRequestComposer({
   if (generating) {
     createDisabledReason = 'Wait for AI generation to finish.'
   } else if (title.trim().length === 0) {
-    createDisabledReason = `Enter a ${copy.reviewLabel} title.`
+    createDisabledReason = translate(
+      'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
+      'Enter a {{value0}} title.',
+      { value0: copy.reviewLabel }
+    )
   } else if (normalizedBase.trim().length === 0) {
     createDisabledReason = 'Choose a base branch.'
   } else if (baseSameAsBranch) {
@@ -4759,8 +4759,11 @@ function PullRequestComposer({
           <div className="flex min-w-0 items-center gap-1.5 text-xs">
             <ReviewIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="font-medium text-foreground">
-              {translate('auto.components.right.sidebar.SourceControl.e1970d327d', 'New')}
-              {copy.reviewLabel}
+              {translate(
+                'auto.components.right.sidebar.SourceControl.e1970d327d',
+                'New {{value0}}',
+                { value0: copy.reviewLabel }
+              )}
             </span>
           </div>
           {aiGenerationEnabled ? (
@@ -4774,7 +4777,7 @@ function PullRequestComposer({
                   'Stop generating'
                 )}
                 aria-label={translate(
-                  'auto.components.right.sidebar.SourceControl.527e130b6f',
+                  'auto.components.right.sidebar.SourceControl.b355e740b2',
                   'Stop generating {{value0}} details',
                   { value0: copy.reviewLabel }
                 )}
@@ -4809,7 +4812,7 @@ function PullRequestComposer({
                 )}
               >
                 <Sparkles className="size-3" />
-                {translate('auto.components.right.sidebar.SourceControl.02d8c04339', 'Generate')}
+                {translate('auto.components.right.sidebar.SourceControl.aee92f8684', 'Generate')}
               </button>
             )
           ) : null}
@@ -5058,9 +5061,9 @@ function PullRequestComposer({
             <span>
               {translate(
                 'auto.components.right.sidebar.SourceControl.ae743199cd',
-                'Choose a different base branch before creating a'
+                'Choose a different base branch before creating a {{value0}}.',
+                { value0: copy.reviewLabel }
               )}
-              {copy.reviewLabel}.
             </span>
           </p>
         ) : null}
@@ -6035,6 +6038,43 @@ function SectionHeader({
   )
 }
 
+function getLocalizedDiffCommentLineLabel(
+  comment: Pick<DiffComment, 'lineNumber' | 'startLine'>
+): string {
+  if (comment.startLine !== undefined && comment.startLine !== comment.lineNumber) {
+    return translate(
+      'auto.components.right.sidebar.SourceControl.d97ef8f221',
+      'lines {{value0}}-{{value1}}',
+      {
+        value0: comment.startLine,
+        value1: comment.lineNumber
+      }
+    )
+  }
+  return translate('auto.components.right.sidebar.SourceControl.6f8bfa0eb9', 'line {{value0}}', {
+    value0: comment.lineNumber
+  })
+}
+
+function getLocalizedConflictKindLabel(kind: NonNullable<GitStatusEntry['conflictKind']>): string {
+  switch (kind) {
+    case 'both_modified':
+      return translate('auto.components.right.sidebar.SourceControl.c569d29a02', 'both modified')
+    case 'both_added':
+      return translate('auto.components.right.sidebar.SourceControl.ea7287d84f', 'both added')
+    case 'deleted_by_us':
+      return translate('auto.components.right.sidebar.SourceControl.bd0151ef7b', 'deleted by us')
+    case 'deleted_by_them':
+      return translate('auto.components.right.sidebar.SourceControl.44594e8c61', 'deleted by them')
+    case 'added_by_us':
+      return translate('auto.components.right.sidebar.SourceControl.24773ee581', 'added by us')
+    case 'added_by_them':
+      return translate('auto.components.right.sidebar.SourceControl.c03d7c952f', 'added by them')
+    case 'both_deleted':
+      return translate('auto.components.right.sidebar.SourceControl.5b176fa431', 'both deleted')
+  }
+}
+
 function DiffCommentsInlineList({
   comments,
   onDelete,
@@ -6146,14 +6186,14 @@ function DiffCommentsInlineList({
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-left"
                   onClick={() => onOpen(c)}
                   title={translate(
-                    'auto.components.right.sidebar.SourceControl.0d963bf982',
+                    'auto.components.right.sidebar.SourceControl.0b5b8c234c',
                     'Open {{value0}} ({{value1}})',
-                    { value0: c.filePath, value1: getDiffCommentLineLabel(c).toLowerCase() }
+                    { value0: c.filePath, value1: getLocalizedDiffCommentLineLabel(c) }
                   )}
                   aria-label={translate(
                     'auto.components.right.sidebar.SourceControl.3eb9b2805e',
                     'Open note on {{value0}}',
-                    { value0: getDiffCommentLineLabel(c).toLowerCase() }
+                    { value0: getLocalizedDiffCommentLineLabel(c) }
                   )}
                 >
                   <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[10px] leading-none tabular-nums text-muted-foreground">
@@ -6576,7 +6616,9 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const dirPath = parentDir === '.' ? '' : parentDir
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
   const isResolvedLocally = entry.conflictStatus === 'resolved_locally'
-  const conflictLabel = entry.conflictKind ? CONFLICT_KIND_LABELS[entry.conflictKind] : null
+  const conflictLabel = entry.conflictKind
+    ? getLocalizedConflictKindLabel(entry.conflictKind)
+    : null
   // Why: the hint text ("Open and edit…", "Decide whether to…") was removed
   // from the sidebar because it's not actionable here — the user can only
   // click the row, and the conflict-kind label alone is sufficient context.
@@ -6732,19 +6774,29 @@ const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
 
 function ConflictBadge({ entry }: { entry: GitStatusEntry }): React.JSX.Element {
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
-  const label = isUnresolvedConflict ? 'Unresolved' : 'Resolved locally'
+  const label = isUnresolvedConflict
+    ? translate('auto.components.right.sidebar.SourceControl.31f6d46278', 'Unresolved')
+    : translate('auto.components.right.sidebar.SourceControl.2c417432b7', 'Resolved locally')
+  const conflictKindLabel = entry.conflictKind
+    ? getLocalizedConflictKindLabel(entry.conflictKind)
+    : null
   const Icon = isUnresolvedConflict ? TriangleAlert : CircleCheck
   const badge = (
     <span
       role="status"
-      aria-label={translate(
-        'auto.components.right.sidebar.SourceControl.413a3ba113',
-        '{{value0}} conflict{{value1}}',
-        {
-          value0: label,
-          value1: entry.conflictKind ? `, ${CONFLICT_KIND_LABELS[entry.conflictKind]}` : ''
-        }
-      )}
+      aria-label={
+        conflictKindLabel
+          ? translate(
+              'auto.components.right.sidebar.SourceControl.d206117f90',
+              '{{value0}} conflict ({{value1}})',
+              { value0: label, value1: conflictKindLabel }
+            )
+          : translate(
+              'auto.components.right.sidebar.SourceControl.05838cfdeb',
+              '{{value0}} conflict',
+              { value0: label }
+            )
+      }
       className={cn(
         'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold',
         isUnresolvedConflict

@@ -956,7 +956,7 @@ function PRReviewersPanel({
                       </TooltipTrigger>
                       <TooltipContent>
                         {translate(
-                          'auto.components.GitHubItemDialog.8b15a5e91c',
+                          'auto.components.GitHubItemDialog.5c1c973855',
                           'Remove reviewer'
                         )}
                       </TooltipContent>

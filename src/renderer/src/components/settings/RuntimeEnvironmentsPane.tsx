@@ -744,7 +744,7 @@ export function RuntimeEnvironmentsPane({
               disabled={removingId !== null}
             >
               {removingId !== null ? <Loader2 className="animate-spin" /> : <Trash2 />}
-              {translate('auto.components.settings.RuntimeEnvironmentsPane.aeb26635d2', 'Remove')}
+              {translate('auto.components.settings.RuntimeEnvironmentsPane.d25f0688b1', 'Remove')}
             </Button>
           </DialogFooter>
         </DialogContent>

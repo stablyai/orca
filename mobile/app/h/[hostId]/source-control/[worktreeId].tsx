@@ -30,7 +30,8 @@ import {
   Trash2,
   X
 } from 'lucide-react-native'
-import { useHostClient } from '../../../../src/transport/client-context'
+import { useHostClient, useForceReconnect } from '../../../../src/transport/client-context'
+import { getWorktreeLabel } from '../../../../src/session/worktree-label'
 import type { RpcClient } from '../../../../src/transport/rpc-client'
 import type { RpcSuccess } from '../../../../src/transport/types'
 import {
@@ -200,17 +201,6 @@ async function resolveMobileBranchCompareBaseRef(
   return result.defaultBaseRef?.trim() || null
 }
 
-function getWorktreeLabel(name: string | undefined, worktreeId: string): string {
-  if (name?.trim()) {
-    return name.trim()
-  }
-  const pathPart = worktreeId.includes('::')
-    ? worktreeId.slice(worktreeId.indexOf('::') + 2)
-    : worktreeId
-  const normalized = pathPart.replace(/\\/g, '/').replace(/\/+$/, '')
-  return normalized.slice(normalized.lastIndexOf('/') + 1) || 'Worktree'
-}
-
 function formatBranchLabel(branch: string | undefined, head: string | undefined): string {
   if (branch?.startsWith('refs/heads/')) {
     return branch.slice('refs/heads/'.length)
@@ -249,6 +239,7 @@ export default function MobileSourceControlScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const { client, state: connState } = useHostClient(hostId)
+  const forceReconnect = useForceReconnect()
   const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' })
   const [branchCompareState, setBranchCompareState] = useState<MobileBranchCompareState>({
     kind: 'idle'
@@ -1431,7 +1422,20 @@ export default function MobileSourceControlScreen() {
           </Text>
           <Text style={styles.stateText}>{screenState.message}</Text>
           {screenState.kind === 'error' ? (
-            <Pressable style={styles.retryButton} onPress={() => void loadStatus()}>
+            <Pressable
+              style={styles.retryButton}
+              onPress={() => {
+                // Why: retrying the request is useless while the transport's
+                // reconnect loop is parked at its give-up cap — revive the
+                // connection instead (issue #5049). loadStatus re-runs via
+                // its connState effect once the new client connects.
+                if (connState !== 'connected' && hostId) {
+                  void forceReconnect(hostId)
+                  return
+                }
+                void loadStatus()
+              }}
+            >
               <Text style={styles.retryText}>Retry</Text>
             </Pressable>
           ) : null}
