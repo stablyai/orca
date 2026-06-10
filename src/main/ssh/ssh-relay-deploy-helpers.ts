@@ -241,8 +241,11 @@ const EXEC_TIMEOUT_MS = 30_000
 export async function execCommand(
   conn: SshConnection,
   command: string,
-  options?: SshExecOptions
+  options?: SshExecOptions & { timeoutMs?: number }
 ): Promise<string> {
+  // Long-running commands (npm install of native deps on a cold cache) need
+  // more than the default probe timeout.
+  const timeoutMs = options?.timeoutMs ?? EXEC_TIMEOUT_MS
   const channel = await conn.exec(command, options)
   return new Promise((resolve, reject) => {
     let stdout = ''
@@ -283,8 +286,8 @@ export async function execCommand(
     }
     const timeout = setTimeout(() => {
       channel.close()
-      settle(reject, new Error(`Command "${command}" timed out after ${EXEC_TIMEOUT_MS / 1000}s`))
-    }, EXEC_TIMEOUT_MS)
+      settle(reject, new Error(`Command "${command}" timed out after ${timeoutMs / 1000}s`))
+    }, timeoutMs)
 
     // Why: remote reboot tears down exec channels with stream errors. Without
     // scoped listeners, Node treats those as uncaught exceptions.
