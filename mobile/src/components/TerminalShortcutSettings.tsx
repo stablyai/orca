@@ -106,17 +106,43 @@ export function TerminalShortcutSettings({
     })
   }, [])
 
+  const customKeysWriteChainRef = useRef<Promise<void>>(Promise.resolve())
+  const customKeysWriteSeqRef = useRef(0)
+  const pendingCustomKeysWritesRef = useRef(0)
+
+  // Why: same stale-snapshot guard as persistLayout — a focus/AppState refresh
+  // racing an in-flight save must not overwrite the optimistic state.
+  const persistCustomKeys = useCallback((next: CustomKey[]) => {
+    customKeysWriteSeqRef.current += 1
+    pendingCustomKeysWritesRef.current += 1
+    customKeysWriteChainRef.current = customKeysWriteChainRef.current
+      .catch(() => {})
+      .then(() => saveCustomKeys(next))
+      .catch(() => {})
+      .finally(() => {
+        pendingCustomKeysWritesRef.current -= 1
+      })
+  }, [])
+
   const refreshCustomKeys = useCallback(() => {
-    void loadCustomKeys().then(setCustomKeys)
+    const refreshSeq = customKeysWriteSeqRef.current
+    void loadCustomKeys().then((keys) => {
+      if (pendingCustomKeysWritesRef.current > 0 || refreshSeq !== customKeysWriteSeqRef.current) {
+        return
+      }
+      setCustomKeys(keys)
+    })
   }, [])
 
   const handleDeleteCustomKey = useCallback(
-    async (key: CustomKey) => {
-      const updated = customKeys.filter((k) => k.id !== key.id)
-      setCustomKeys(updated)
-      await saveCustomKeys(updated)
+    (key: CustomKey) => {
+      setCustomKeys((current) => {
+        const updated = current.filter((k) => k.id !== key.id)
+        persistCustomKeys(updated)
+        return updated
+      })
     },
-    [customKeys]
+    [persistCustomKeys]
   )
 
   useFocusEffect(
@@ -164,20 +190,23 @@ export function TerminalShortcutSettings({
     persistLayout(next)
   }, [persistLayout])
 
-  const reorderCustomKeys = useCallback((orderedKeys: string[]) => {
-    setCustomKeys((current) => {
-      const byId = new Map(current.map((key) => [key.id, key]))
-      const reordered = orderedKeys.flatMap((id) => {
-        const key = byId.get(id)
-        return key ? [key] : []
+  const reorderCustomKeys = useCallback(
+    (orderedKeys: string[]) => {
+      setCustomKeys((current) => {
+        const byId = new Map(current.map((key) => [key.id, key]))
+        const reordered = orderedKeys.flatMap((id) => {
+          const key = byId.get(id)
+          return key ? [key] : []
+        })
+        if (reordered.length !== current.length) {
+          return current
+        }
+        persistCustomKeys(reordered)
+        return reordered
       })
-      if (reordered.length !== current.length) {
-        return current
-      }
-      void saveCustomKeys(reordered)
-      return reordered
-    })
-  }, [])
+    },
+    [persistCustomKeys]
+  )
 
   const visibleBuiltInSet = useMemo(
     () => new Set(shortcutLayout.visibleBuiltInIds),
@@ -288,6 +317,9 @@ export function TerminalShortcutSettings({
         visible={showCustomKeyModal}
         onClose={() => setShowCustomKeyModal(false)}
         onKeysChanged={(keys) => {
+          // Why: the modal already persisted this list; bumping the sequence
+          // discards refreshes that read storage before its save landed.
+          customKeysWriteSeqRef.current += 1
           setCustomKeys(keys)
         }}
       />

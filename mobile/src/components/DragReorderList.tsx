@@ -155,6 +155,26 @@ export function DragReorderList<ItemT>({
     [onReorder, keySignature]
   )
 
+  // Why: screen-reader users can't long-press-drag; the handle exposes
+  // move up/down accessibility actions that commit the same reorder.
+  const moveRowByAccessibilityAction = useCallback(
+    (key: string, delta: number) => {
+      const fromIndex = keys.indexOf(key)
+      if (fromIndex === -1) {
+        return
+      }
+      const toIndex = Math.min(Math.max(fromIndex + delta, 0), keys.length - 1)
+      if (toIndex === fromIndex) {
+        return
+      }
+      const next = [...keys]
+      next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, key)
+      onReorder(next)
+    },
+    [keys, onReorder]
+  )
+
   const shared: DragSharedState = {
     positions,
     activeKey,
@@ -177,6 +197,7 @@ export function DragReorderList<ItemT>({
           updateDragPosition={updateDragPosition}
           onDragActiveChange={handleDragActiveChange}
           onCommit={commitReorder}
+          onAccessibilityMove={moveRowByAccessibilityAction}
         >
           {renderRow(item)}
         </DragReorderRow>
@@ -193,6 +214,7 @@ function DragReorderRow({
   updateDragPosition,
   onDragActiveChange,
   onCommit,
+  onAccessibilityMove,
   children
 }: {
   rowKey: string
@@ -202,6 +224,7 @@ function DragReorderRow({
   updateDragPosition: (key: string) => void
   onDragActiveChange: (active: boolean) => void
   onCommit: (orderedKeys: string[]) => void
+  onAccessibilityMove: (key: string, delta: number) => void
   children: ReactNode
 }): React.JSX.Element {
   const {
@@ -271,8 +294,21 @@ function DragReorderRow({
       <GestureDetector gesture={pan}>
         <Animated.View
           style={styles.handle}
+          accessible
           accessibilityRole="button"
           accessibilityLabel="Drag to reorder"
+          accessibilityHint="Use the move up and move down actions to reorder without dragging"
+          accessibilityActions={[
+            { name: 'moveUp', label: 'Move up' },
+            { name: 'moveDown', label: 'Move down' }
+          ]}
+          onAccessibilityAction={(event) => {
+            if (event.nativeEvent.actionName === 'moveUp') {
+              onAccessibilityMove(rowKey, -1)
+            } else if (event.nativeEvent.actionName === 'moveDown') {
+              onAccessibilityMove(rowKey, 1)
+            }
+          }}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
           <GripVertical size={18} color={colors.textMuted} />
