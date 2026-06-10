@@ -1505,6 +1505,51 @@ describe('createUISlice setup guide sidebar dismissal', () => {
     store.getState().hydratePersistedUI(makePersistedUI({ setupGuideSidebarDismissed: undefined }))
     expect(store.getState().setupGuideSidebarDismissed).toBe(false)
   })
+
+  it('persists browser milestone migration result once', () => {
+    const setMock = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', {
+      api: {
+        ui: {
+          set: setMock
+        }
+      }
+    })
+    const store = createUIStore()
+
+    store.getState().markSetupGuideBrowserMilestoneMigrated(true)
+    store.getState().markSetupGuideBrowserMilestoneMigrated(true)
+
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(true)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(true)
+    expect(setMock).toHaveBeenCalledTimes(1)
+    expect(setMock).toHaveBeenCalledWith({
+      setupGuideBrowserMilestoneMigrated: true,
+      setupGuideBrowserMilestoneLegacyComplete: true
+    })
+  })
+
+  it('hydrates browser milestone migration fields explicitly', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        setupGuideBrowserMilestoneMigrated: true,
+        setupGuideBrowserMilestoneLegacyComplete: true
+      })
+    )
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(true)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(true)
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        setupGuideBrowserMilestoneMigrated: undefined,
+        setupGuideBrowserMilestoneLegacyComplete: undefined
+      })
+    )
+    expect(store.getState().setupGuideBrowserMilestoneMigrated).toBe(false)
+    expect(store.getState().setupGuideBrowserMilestoneLegacyComplete).toBe(false)
+  })
 })
 
 describe('createUISlice browser import hint dismissal', () => {

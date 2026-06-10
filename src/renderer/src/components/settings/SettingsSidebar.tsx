@@ -12,6 +12,7 @@ import { Input } from '../ui/input'
 import { SetupGuideProgressRing } from '../setup-guide/SetupGuideProgressRing'
 import { useSettingsSetupGuideProgress } from './settings-setup-guide-progress'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
+import { translate } from '@/i18n/i18n'
 
 type NavSection = {
   id: string
@@ -74,7 +75,11 @@ function SettingsSetupGuideNavRow({
     <button
       type="button"
       aria-current={setupActive ? 'page' : undefined}
-      aria-label={`Onboarding checklist, ${progress.doneCount} of ${progress.total} done. Show setup guide.`}
+      aria-label={translate(
+        'auto.components.settings.SettingsSidebar.82db1b7de4',
+        'Onboarding checklist, {{value0}} of {{value1}} done. Show setup guide.',
+        { value0: progress.doneCount, value1: progress.total }
+      )}
       onClick={(event) =>
         onSelect({
           metaKey: event.metaKey,
@@ -97,7 +102,9 @@ function SettingsSetupGuideNavRow({
         tooltipLabel={`${progress.doneCount}/${progress.total} complete`}
       />
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-[13px] font-medium leading-4">Onboarding checklist</span>
+        <span className="truncate text-[13px] font-medium leading-4">
+          {translate('auto.components.settings.SettingsSidebar.6503182299', 'Onboarding checklist')}
+        </span>
       </span>
     </button>
   )
@@ -131,11 +138,14 @@ export function SettingsSidebar({
   const installStatusLabel = (status: SettingsNavInstallStatus): string => {
     switch (status) {
       case 'install':
-        return 'Not installed'
+        return translate(
+          'auto.components.settings.AgentSkillSetupPanel.5289300939',
+          'Not installed'
+        )
       case 'installed':
-        return 'Installed'
+        return translate('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')
       case 'checking':
-        return 'Checking'
+        return translate('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')
     }
   }
   const installStatusClassName = (status: SettingsNavInstallStatus): string =>
@@ -158,7 +168,7 @@ export function SettingsSidebar({
           className="w-full justify-start gap-2 text-[13px] text-muted-foreground"
         >
           <ArrowLeft className="size-4" />
-          Back to app
+          {translate('auto.components.settings.SettingsSidebar.60f8a673a7', 'Back to app')}
         </Button>
       </div>
 
@@ -169,7 +179,10 @@ export function SettingsSidebar({
             ref={searchInputRef}
             value={searchQuery}
             onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Search settings"
+            placeholder={translate(
+              'auto.components.settings.SettingsSidebar.dbceaa8840',
+              'Search settings'
+            )}
             className="pl-9 pr-14 text-[13px]"
           />
           {searchQuery === '' ? (
@@ -239,7 +252,7 @@ export function SettingsSidebar({
 
           <div className="space-y-2">
             <p className="px-3 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Projects
+              {translate('auto.components.settings.SettingsSidebar.5c9669ff9c', 'Projects')}
             </p>
 
             {repoSections.length > 0 ? (
@@ -273,7 +286,7 @@ export function SettingsSidebar({
                       {section.isRemote && (
                         <span className="ml-auto inline-flex shrink-0 items-center gap-1 text-[10px] text-muted-foreground">
                           <Server className="size-3" />
-                          SSH
+                          {translate('auto.components.settings.SettingsSidebar.e0900f83e7', 'SSH')}
                         </span>
                       )}
                     </button>
@@ -282,7 +295,15 @@ export function SettingsSidebar({
               </div>
             ) : (
               <p className="px-3 text-xs text-muted-foreground">
-                {hasRepos ? 'No matching project settings.' : 'No projects added yet.'}
+                {hasRepos
+                  ? translate(
+                      'auto.components.settings.SettingsSidebar.3e483e256b',
+                      'No matching project settings.'
+                    )
+                  : translate(
+                      'auto.components.settings.SettingsSidebar.df38d612b7',
+                      'No projects added yet.'
+                    )}
               </p>
             )}
           </div>

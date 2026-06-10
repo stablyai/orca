@@ -15,7 +15,9 @@ import {
   TwoAgentsAction,
   WorkspacesAction
 } from './FeatureWallSetupWorkflowActions'
+import { BrowserAction } from './FeatureWallBrowserAction'
 import {
+  SetupBrowserVisual,
   SetupMultipleReposVisual,
   SetupTwoAgentsVisual,
   SetupWorkspacesVisual
@@ -26,6 +28,7 @@ import { AgentStep } from '../onboarding/AgentStep'
 import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type FeatureWallSetupChecklistLayout = 'modal' | 'embedded'
 
@@ -150,6 +153,9 @@ function SelectedStepAction(props: FeatureWallSetupChecklistProps): React.JSX.El
   if (activeStep.id === 'two-worktrees') {
     return <WorkspacesAction done={activeDone} />
   }
+  if (activeStep.id === 'browser') {
+    return <BrowserAction done={activeDone} />
+  }
   if (activeStep.id === 'task-sources') {
     return <TaskSourcesAction />
   }
@@ -176,6 +182,9 @@ function SelectedStepVisual(props: { stepId: FeatureWallSetupStepId }): React.JS
   }
   if (props.stepId === 'add-two-repos') {
     return <SetupMultipleReposVisual />
+  }
+  if (props.stepId === 'browser') {
+    return <SetupBrowserVisual />
   }
   return null
 }
@@ -244,7 +253,10 @@ function TaskSourcesAction(): React.JSX.Element {
           }}
         >
           <ArrowUpRight className="size-3.5" />
-          See tasks
+          {translate(
+            'auto.components.feature.wall.FeatureWallSetupChecklist.b1f1981c5e',
+            'See tasks'
+          )}
         </Button>
       </div>
     </div>
@@ -262,6 +274,7 @@ export function FeatureWallSetupChecklist(
   const hasStepVisual =
     activeStep?.id === 'split-terminal' ||
     activeStep?.id === 'two-worktrees' ||
+    activeStep?.id === 'browser' ||
     activeStep?.id === 'add-two-repos'
   const parallelWorkSteps = getFeatureWallSetupStepsForSection('parallel-work')
   const setupSteps = getFeatureWallSetupStepsForSection('setup')
@@ -287,7 +300,10 @@ export function FeatureWallSetupChecklist(
         )}
       >
         <SetupSection
-          title="Milestones"
+          title={translate(
+            'auto.components.feature.wall.FeatureWallSetupChecklist.713cc529a5',
+            'Milestones'
+          )}
           steps={parallelWorkSteps}
           startOrdinal={1}
           activeStepId={activeStep?.id ?? null}
@@ -296,7 +312,10 @@ export function FeatureWallSetupChecklist(
           layout={layout}
         />
         <SetupSection
-          title="Setup"
+          title={translate(
+            'auto.components.feature.wall.FeatureWallSetupChecklist.1a6a7d6c80',
+            'Setup'
+          )}
           steps={setupSteps}
           startOrdinal={parallelWorkSteps.length + 1}
           activeStepId={activeStep?.id ?? null}
@@ -330,7 +349,15 @@ export function FeatureWallSetupChecklist(
                     : 'border-border bg-muted/30 text-muted-foreground'
                 )}
               >
-                {activeDone ? 'Done' : 'Not done yet'}
+                {activeDone
+                  ? translate(
+                      'auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405',
+                      'Done'
+                    )
+                  : translate(
+                      'auto.components.feature.wall.FeatureWallSetupChecklist.0235b268b2',
+                      'Not done yet'
+                    )}
               </span>
             </div>
             <div

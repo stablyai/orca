@@ -12,6 +12,7 @@ import {
   ContextMenuItem
 } from '@/components/ui/context-menu'
 import type { SearchFileResult, SearchMatch } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 // ─── Toggle Button ────────────────────────────────────────
 export function ToggleButton({
@@ -104,7 +105,10 @@ export function FileResultRow({
                 onClick={() => window.api.ui.writeClipboardText(fileResult.relativePath)}
               >
                 <Copy className="size-3.5" />
-                Copy Path
+                {translate(
+                  'auto.components.right.sidebar.SearchResultItems.3596b9668d',
+                  'Copy Path'
+                )}
               </ContextMenuItem>
             </ContextMenuContent>
           </ContextMenu>
@@ -200,7 +204,10 @@ export function MatchResultRow({
           onClick={() => window.api.ui.writeClipboardText(`${relativePath}#L${match.line}`)}
         >
           <Copy className="size-3.5" />
-          Copy Line Path
+          {translate(
+            'auto.components.right.sidebar.SearchResultItems.cc06595a3b',
+            'Copy Line Path'
+          )}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

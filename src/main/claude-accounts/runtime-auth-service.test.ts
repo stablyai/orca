@@ -2872,6 +2872,57 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(account2Credentials)
   })
 
+  it('does not clobber unverified live runtime credentials when switching accounts', async () => {
+    const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+    const account1Original = createClaudeCredentialsJson('one@example.com', 'one-original', 'org-a')
+    const unverifiedLiveCredentials = createClaudeCredentialsWithoutEmail('one-live', 'org-b')
+    const account2Credentials = createClaudeCredentialsJson('two@example.com', 'two', 'org-c')
+    const managedAuthPath1 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-1',
+      account1Original
+    )
+    const managedAuthPath2 = createManagedClaudeAuth(
+      testState.userDataDir,
+      'account-2',
+      account2Credentials
+    )
+    const settings = createSettings({
+      claudeManagedAccounts: [
+        createClaudeAccount('account-1', managedAuthPath1, {
+          email: 'one@example.com',
+          organizationUuid: 'org-a'
+        }),
+        createClaudeAccount('account-2', managedAuthPath2, {
+          email: 'two@example.com',
+          organizationUuid: 'org-c'
+        })
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const { markClaudePtyExited, markClaudePtySpawned } = await import('./live-pty-gate')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    await service.syncForCurrentSelection()
+
+    markClaudePtySpawned('live-claude-pty')
+    try {
+      writeFileSync(runtimeCredentialsPath, unverifiedLiveCredentials, 'utf-8')
+      settings.activeClaudeManagedAccountId = 'account-2'
+
+      await expect(service.syncForCurrentSelection()).rejects.toThrow(
+        'live Claude terminal has unverified refreshed auth'
+      )
+    } finally {
+      markClaudePtyExited('live-claude-pty')
+    }
+
+    expect(readManagedCredentialsForTest('account-1', managedAuthPath1)).toBe(account1Original)
+    expect(readFileSync(runtimeCredentialsPath, 'utf-8')).toBe(unverifiedLiveCredentials)
+  })
+
   it('routes refreshed Claude credentials to the matching managed account', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const account1Original = createClaudeCredentialsJson('one@example.com', 'one-original')

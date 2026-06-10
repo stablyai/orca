@@ -21,6 +21,7 @@ import { BrowserUseSkillSetupCard } from './BrowserUseSkillSetupCard'
 import { UsageAccountsCard } from './agents-orchestration/UsageAccountsCard'
 import { AiCommitPrSettingsCard } from './AiCommitPrSettingsCard'
 import { KeepAwakeCard } from './KeepAwakeCard'
+import { translate } from '@/i18n/i18n'
 
 export function FeatureWallBody(props: {
   selected: FeatureWallWorkflow
@@ -267,7 +268,7 @@ export function FeatureWallBody(props: {
           >
             <>
               <div className="text-center text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-                Setup
+                {translate('auto.components.feature.wall.FeatureWallBody.25ec5356d6', 'Setup')}
               </div>
               {settingContent}
             </>

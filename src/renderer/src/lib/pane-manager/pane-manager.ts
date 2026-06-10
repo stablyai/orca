@@ -30,6 +30,7 @@ import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
+  resetPaneWebglTextureAtlases,
   resumePaneRendering,
   setPaneGpuRenderingState,
   suspendPaneRendering
@@ -266,6 +267,10 @@ export class PaneManager {
       return
     }
     rebuildAttachedWebgl(pane)
+  }
+
+  resetWebglTextureAtlases(): void {
+    resetPaneWebglTextureAtlases(this.panes.values())
   }
 
   suspendRendering(): void {

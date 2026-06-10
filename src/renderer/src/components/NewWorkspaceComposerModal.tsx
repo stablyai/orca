@@ -22,6 +22,7 @@ import type {
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus
 } from '../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 type ComposerModalData = {
   prefilledName?: string
@@ -228,7 +229,10 @@ function QuickTabBody({
       <DialogHeader className="gap-1">
         <DialogTitle className="text-base font-semibold">{primaryActionLabel}</DialogTitle>
         <DialogDescription className="sr-only">
-          Choose the project, workspace name, and agent before creating the workspace.
+          {translate(
+            'auto.components.NewWorkspaceComposerModal.fa90f739a5',
+            'Choose the project, workspace name, and agent before creating the workspace.'
+          )}
         </DialogDescription>
       </DialogHeader>
       <NewWorkspaceComposerCard

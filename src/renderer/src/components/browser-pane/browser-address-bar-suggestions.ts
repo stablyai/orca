@@ -7,6 +7,7 @@ import {
   type SearchEngine
 } from '../../../../shared/browser-url'
 import type { BrowserHistoryEntry } from '../../../../shared/types'
+import { translate } from '@/i18n/i18n'
 
 export const MAX_BROWSER_ADDRESS_BAR_SUGGESTIONS = 8
 
@@ -82,7 +83,11 @@ export function buildBrowserAddressBarSuggestions({
     topAction = {
       url: buildSearchUrl(trimmed, searchEngine, { kagiSessionLink }),
       title: trimmed,
-      subtitle: `${SEARCH_ENGINE_LABELS[searchEngine]} Search`,
+      subtitle: translate(
+        'auto.components.browser.pane.browser.address.bar.suggestions.87fcdd0da9',
+        '{{value0}} Search',
+        { value0: SEARCH_ENGINE_LABELS[searchEngine] }
+      ),
       lastVisitedAt: 0,
       visitCount: 0,
       isSearch: true

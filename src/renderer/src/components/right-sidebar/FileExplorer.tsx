@@ -35,6 +35,7 @@ import {
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerSelection } from './useFileExplorerSelection'
 import { useFileExplorerVisibleRowProjection } from './useFileExplorerVisibleRowProjection'
+import { translate } from '@/i18n/i18n'
 
 function FileExplorerInner(): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
@@ -430,7 +431,10 @@ function FileExplorerInner(): React.JSX.Element {
   if (!worktreePath) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground px-4 text-center">
-        Select a workspace to browse files
+        {translate(
+          'auto.components.right.sidebar.FileExplorer.79b1537dd3',
+          'Select a workspace to browse files'
+        )}
       </div>
     )
   }

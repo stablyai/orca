@@ -43,6 +43,7 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-revi
 import { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getGitHubRepoCacheKey } from './github-cache-key'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
+import { translate } from '@/i18n/i18n'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: declared separately from CacheEntry<T> (not a generified E parameter)
@@ -1506,14 +1507,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1562,14 +1569,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1612,14 +1625,20 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     if (!table) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Project view not loaded' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
       }
     }
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
     if (rowIndex === -1) {
       return {
         ok: false,
-        error: { type: 'unknown', message: 'Row not found' }
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
       }
     }
     const previousRow = table.rows[rowIndex]
@@ -1629,7 +1648,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         ok: false,
         error: {
           type: 'validation_error',
-          message: 'Row has no owner/repo/number — cannot patch underlying item'
+          message: translate(
+            'auto.store.slices.github.87020f6605',
+            'Row has no owner/repo/number — cannot patch underlying item'
+          )
         }
       }
     }
@@ -1746,23 +1768,44 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const entry = state.projectViewCache[cacheKey]
     const table = entry?.data
     if (!table) {
-      return { ok: false, error: { type: 'unknown', message: 'Project view not loaded' } }
+      return {
+        ok: false,
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.a967f23983', 'Project view not loaded')
+        }
+      }
     }
     const row = table.rows.find((r) => r.id === rowId)
     if (!row) {
-      return { ok: false, error: { type: 'unknown', message: 'Row not found' } }
+      return {
+        ok: false,
+        error: {
+          type: 'unknown',
+          message: translate('auto.store.slices.github.f963485d37', 'Row not found')
+        }
+      }
     }
     if (row.itemType !== 'ISSUE') {
       return {
         ok: false,
-        error: { type: 'validation_error', message: 'Issue Type can only be set on Issues.' }
+        error: {
+          type: 'validation_error',
+          message: translate(
+            'auto.store.slices.github.83f9b126ad',
+            'Issue Type can only be set on Issues.'
+          )
+        }
       }
     }
     const { owner, repo, number } = parseSlugAndNumber(row) ?? {}
     if (!owner || !repo || !number) {
       return {
         ok: false,
-        error: { type: 'validation_error', message: 'Row has no owner/repo/number.' }
+        error: {
+          type: 'validation_error',
+          message: translate('auto.store.slices.github.683a21264b', 'Row has no owner/repo/number.')
+        }
       }
     }
     const previousRow = row
@@ -2571,7 +2614,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return { ok: false, error }
     }
     if (!hasUsableCommentPayload(result)) {
-      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+      return result.ok
+        ? {
+            ok: false,
+            error: translate(
+              'auto.store.slices.github.f129c42773',
+              'GitHub did not return the new comment.'
+            )
+          }
+        : result
     }
     set((s) => {
       const entry = s.commentsCache[cacheKey]
@@ -2633,7 +2684,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       return { ok: false, error }
     }
     if (!hasUsableCommentPayload(result)) {
-      return result.ok ? { ok: false, error: 'GitHub did not return the new comment.' } : result
+      return result.ok
+        ? {
+            ok: false,
+            error: translate(
+              'auto.store.slices.github.f129c42773',
+              'GitHub did not return the new comment.'
+            )
+          }
+        : result
     }
     const comment: PRComment = {
       ...result.comment,
@@ -3128,9 +3187,12 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       // pill visually reverts (optimistic patch above → resync via
       // fetchRepos below). Without this toast, the UI silently snaps back
       // and the user has no clue the write failed.
-      toast.error('Failed to save issue-source preference', {
-        duration: ERROR_TOAST_DURATION
-      })
+      toast.error(
+        translate('auto.store.slices.github.d49ef4b944', 'Failed to save issue-source preference'),
+        {
+          duration: ERROR_TOAST_DURATION
+        }
+      )
       // Why: the optimistic patch above may now disagree with disk. Resync
       // rather than leave a lie on screen. We only refetch repos — the cache
       // eviction below is still safe to run; worst case we trigger a

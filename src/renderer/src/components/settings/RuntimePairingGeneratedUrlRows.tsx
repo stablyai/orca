@@ -1,6 +1,7 @@
 import { Check, Copy } from 'lucide-react'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { translate } from '@/i18n/i18n'
 
 export function GeneratedUrlRow({
   label,
@@ -28,7 +29,11 @@ export function GeneratedUrlRow({
           variant="ghost"
           size="icon-xs"
           onClick={onCopy}
-          aria-label={`Copy ${label}`}
+          aria-label={translate(
+            'auto.components.settings.RuntimePairingGeneratedUrlRows.0495f68959',
+            'Copy {{value0}}',
+            { value0: label }
+          )}
         >
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
         </Button>

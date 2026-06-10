@@ -96,7 +96,7 @@ describe('worktree-palette-search', () => {
     )
 
     expect(results).toHaveLength(1)
-    expect(results[0].supportingText?.label).toBe('Comment')
+    expect(results[0].supportingText?.labelKind).toBe('comment')
     expect(results[0].supportingText?.text).toContain('implementation')
     expect(
       results[0].supportingText?.text.slice(
@@ -124,7 +124,7 @@ describe('worktree-palette-search', () => {
 
     expect(results).toHaveLength(1)
     expect(results[0].supportingText).toEqual({
-      label: 'PR',
+      labelKind: 'pr',
       text: 'Refresh the worktree quick jump palette',
       matchRange: { start: 21, end: 31 }
     })
@@ -209,7 +209,7 @@ describe('worktree-palette-search', () => {
 
     expect(results).toHaveLength(1)
     expect(results[0].supportingText).toEqual({
-      label: 'Issue',
+      labelKind: 'issue',
       text: 'Issue #304',
       matchRange: { start: 7, end: 10 }
     })
@@ -238,7 +238,7 @@ describe('worktree-palette-search', () => {
     expect(results).toHaveLength(1)
     expect(results[0].matchedField).toBe('port')
     expect(results[0].supportingText).toEqual({
-      label: 'Port',
+      labelKind: 'port',
       text: '3000 · vite',
       matchRange: { start: 0, end: 4 }
     })

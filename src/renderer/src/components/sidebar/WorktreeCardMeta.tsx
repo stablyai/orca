@@ -43,6 +43,7 @@ import type {
   WorktreeCardMetaBadgesRootProps,
   WorktreeCardDetailsHoverProps
 } from './worktree-card-meta-types'
+import { translate } from '@/i18n/i18n'
 
 export type {
   WorktreeCardIssueDisplay,
@@ -83,25 +84,51 @@ export const WorktreeCardMetaBadges = React.forwardRef<
       ref={ref}
       {...props}
       className={cn('ml-auto flex shrink-0 items-center gap-1 pr-1.5', className)}
-      aria-label="Workspace metadata"
+      aria-label={translate(
+        'auto.components.sidebar.WorktreeCardMeta.3e65e11cc6',
+        'Workspace metadata'
+      )}
     >
       {hasComment(comment) && (
-        <MetaIconBadge label="Workspace notes">
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.fe075cb851',
+            'Workspace notes'
+          )}
+        >
           <StickyNote className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {issue && (
-        <MetaIconBadge label={`Linked issue #${issue.number}`}>
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.3f2649eeb8',
+            'Linked issue #{{value0}}',
+            { value0: issue.number }
+          )}
+        >
           <CircleDot className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {linearIssue && (
-        <MetaIconBadge label={`Linked Linear ${linearIssue.identifier}`}>
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.b105fd3057',
+            'Linked Linear {{value0}}',
+            { value0: linearIssue.identifier }
+          )}
+        >
           <LinearIcon className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {review && (
-        <MetaIconBadge label={`Linked ${getReviewLabel(review)} #${review.number}`}>
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.3ea2702e62',
+            'Linked {{value0}} #{{value1}}',
+            { value0: getReviewLabel(review), value1: review.number }
+          )}
+        >
           <ReviewIcon review={review} />
         </MetaIconBadge>
       )}
@@ -197,23 +224,42 @@ export function WorktreeCardDetailsHover({
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<CircleDot className="size-3 text-muted-foreground" />}
-                label={`Issue #${issue.number}`}
+                label={translate(
+                  'auto.components.sidebar.WorktreeCardMeta.e97d8f2876',
+                  'Issue #{{value0}}',
+                  { value0: issue.number }
+                )}
                 actions={
                   <>
                     {issue.url && onOpenGitHubIssueInOrca && (
                       <MetadataActionIcon
-                        label="Open in Orca"
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
+                          'Open in Orca'
+                        )}
                         onClick={dismissAndRun(onOpenGitHubIssueInOrca)}
                       >
                         <MonitorUp className="size-3" />
                       </MetadataActionIcon>
                     )}
                     {issue.url && (
-                      <MetadataActionIcon label="View on GitHub" href={issue.url}>
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.b22f058067',
+                          'View on GitHub'
+                        )}
+                        href={issue.url}
+                      >
                         <ExternalLink className="size-3" />
                       </MetadataActionIcon>
                     )}
-                    <MetadataActionIcon label="Edit issue" onClick={onEditIssue}>
+                    <MetadataActionIcon
+                      label={translate(
+                        'auto.components.sidebar.WorktreeCardMeta.807b13b9ec',
+                        'Edit issue'
+                      )}
+                      onClick={onEditIssue}
+                    >
                       <Pencil className="size-3" />
                     </MetadataActionIcon>
                   </>
@@ -241,19 +287,32 @@ export function WorktreeCardDetailsHover({
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<LinearIcon className="size-3 text-muted-foreground" />}
-                label={`Linear ${linearIssue.identifier}`}
+                label={translate(
+                  'auto.components.sidebar.WorktreeCardMeta.5e982e6128',
+                  'Linear {{value0}}',
+                  { value0: linearIssue.identifier }
+                )}
                 actions={
                   <>
                     {linearIssue.url && onOpenLinearIssueInOrca && (
                       <MetadataActionIcon
-                        label="Open in Orca"
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
+                          'Open in Orca'
+                        )}
                         onClick={dismissAndRun(onOpenLinearIssueInOrca)}
                       >
                         <MonitorUp className="size-3" />
                       </MetadataActionIcon>
                     )}
                     {linearIssue.url && (
-                      <MetadataActionIcon label="View on Linear" href={linearIssue.url}>
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.e42941631a',
+                          'View on Linear'
+                        )}
+                        href={linearIssue.url}
+                      >
                         <ExternalLink className="size-3" />
                       </MetadataActionIcon>
                     )}
@@ -302,7 +361,11 @@ export function WorktreeCardDetailsHover({
                                 variant="ghost"
                                 size="icon-xs"
                                 className="size-6"
-                                aria-label={`More ${reviewLabel} actions`}
+                                aria-label={translate(
+                                  'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
+                                  'More {{value0}} actions',
+                                  { value0: reviewLabel }
+                                )}
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 <Ellipsis className="size-3" />
@@ -310,7 +373,11 @@ export function WorktreeCardDetailsHover({
                             </DropdownMenuTrigger>
                           </TooltipTrigger>
                           <TooltipContent side="top" sideOffset={4}>
-                            More {reviewLabel} actions
+                            {translate(
+                              'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
+                              'More {{value0}} actions',
+                              { value0: reviewLabel }
+                            )}
                           </TooltipContent>
                         </Tooltip>
                         <DropdownMenuContent align="end" className="w-40">
@@ -321,21 +388,35 @@ export function WorktreeCardDetailsHover({
                             }}
                           >
                             <Unlink className="size-3.5" />
-                            Unlink {reviewLabel}
+                            {translate(
+                              'auto.components.sidebar.WorktreeCardMeta.ae76907ca6',
+                              'Unlink {{value0}}',
+                              { value0: reviewLabel }
+                            )}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
                     {review.url && onOpenReviewInOrca && (
                       <MetadataActionIcon
-                        label="Open in Orca"
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
+                          'Open in Orca'
+                        )}
                         onClick={dismissAndRun(onOpenReviewInOrca)}
                       >
                         <MonitorUp className="size-3" />
                       </MetadataActionIcon>
                     )}
                     {review.url && (
-                      <MetadataActionIcon label={`View on ${reviewProvider}`} href={review.url}>
+                      <MetadataActionIcon
+                        label={translate(
+                          'auto.components.sidebar.WorktreeCardMeta.ad25c3ff05',
+                          'View on {{value0}}',
+                          { value0: reviewProvider }
+                        )}
+                        href={review.url}
+                      >
                         <ExternalLink className="size-3" />
                       </MetadataActionIcon>
                     )}
@@ -360,9 +441,15 @@ export function WorktreeCardDetailsHover({
             <WorktreeCardDetailSection>
               <DetailHeader
                 icon={<StickyNote className="size-3 text-muted-foreground" />}
-                label="Notes"
+                label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
                 actions={
-                  <MetadataActionIcon label="Edit notes" onClick={onEditComment}>
+                  <MetadataActionIcon
+                    label={translate(
+                      'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
+                      'Edit notes'
+                    )}
+                    onClick={onEditComment}
+                  >
                     <Pencil className="size-3" />
                   </MetadataActionIcon>
                 }

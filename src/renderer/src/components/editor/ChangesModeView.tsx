@@ -3,6 +3,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult, GitStatusEntry } from '../../../../shared/types'
 import { ConflictBanner } from './ConflictComponents'
 import { getDiffContentSignature } from './diff-content-signature'
+import { translate } from '@/i18n/i18n'
 
 const DiffViewer = lazy(() => import('./DiffViewer'))
 
@@ -37,7 +38,7 @@ export function ChangesModeView({
   if (!dc) {
     return (
       <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-        Loading diff...
+        {translate('auto.components.editor.ChangesModeView.54e0035b15', 'Loading diff...')}
       </div>
     )
   }
@@ -45,9 +46,14 @@ export function ChangesModeView({
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
         <div className="space-y-2">
-          <div className="text-sm font-medium text-foreground">Binary file</div>
+          <div className="text-sm font-medium text-foreground">
+            {translate('auto.components.editor.ChangesModeView.7dffb0f563', 'Binary file')}
+          </div>
           <div className="text-xs text-muted-foreground">
-            Text diff is unavailable for this file.
+            {translate(
+              'auto.components.editor.ChangesModeView.052c184f24',
+              'Text diff is unavailable for this file.'
+            )}
           </div>
         </div>
       </div>
@@ -69,7 +75,10 @@ export function ChangesModeView({
       {activeFile.conflict && <ConflictBanner file={activeFile} entry={activeConflictEntry} />}
       {isIdentical && (
         <div className="border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          No uncommitted changes.
+          {translate(
+            'auto.components.editor.ChangesModeView.ef25ae2d09',
+            'No uncommitted changes.'
+          )}
         </div>
       )}
       <div className="flex min-h-0 flex-1 flex-col">

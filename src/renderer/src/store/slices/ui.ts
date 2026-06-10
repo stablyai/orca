@@ -92,6 +92,7 @@ import {
 } from '../../lib/running-agent-targets'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { translate } from '@/i18n/i18n'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -743,6 +744,9 @@ export type UISlice = {
   dismissSetupScriptPrompt: (repoId: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
+  setupGuideBrowserMilestoneMigrated: boolean
+  setupGuideBrowserMilestoneLegacyComplete: boolean
+  markSetupGuideBrowserMilestoneMigrated: (legacyComplete: boolean) => void
   browserImportHintHidden: boolean
   setBrowserImportHintHidden: (hidden: boolean) => void
   usageEmptyStateDismissed: boolean
@@ -831,6 +835,10 @@ export type UISlice = {
   // rich content (title/media/description) during downloading, error, and downloaded
   // states. Cleared on idle/checking/not-available to prevent stale leakage.
   updateChangelog: ChangelogData | null
+  // Why: UpdateCard is lazy-loaded, so it may miss the transient
+  // checking/userInitiated status. Keep manual-check intent in the store until
+  // the resulting available/error/not-available state can consume it.
+  updateUserInitiatedCycle: boolean
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
@@ -954,7 +962,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           : s
       )
       const { toast } = await import('sonner')
-      toast.error(`Couldn't send to ${label}`, { description: message })
+      toast.error(
+        translate('auto.store.slices.ui.53883b7bc3', "Couldn't send to {{value0}}", {
+          value0: label
+        }),
+        { description: message }
+      )
       return false
     }
 
@@ -965,7 +978,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       launch_source: mode.launchSource,
       request_kind: 'followup'
     })
-    toast.success(`Sent to ${label}`)
+    toast.success(
+      translate('auto.store.slices.ui.66e3bd7ce6', 'Sent to {{value0}}', { value0: label })
+    )
     get().closeAgentSendPopoverTargetMode(mode.id, mode.instanceId)
     return true
   },
@@ -1655,6 +1670,23 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ setupGuideSidebarDismissed: dismissed }).catch(console.error)
       return { setupGuideSidebarDismissed: dismissed }
     }),
+  setupGuideBrowserMilestoneMigrated: true,
+  setupGuideBrowserMilestoneLegacyComplete: false,
+  markSetupGuideBrowserMilestoneMigrated: (legacyComplete) =>
+    set((s) => {
+      if (
+        s.setupGuideBrowserMilestoneMigrated &&
+        s.setupGuideBrowserMilestoneLegacyComplete === legacyComplete
+      ) {
+        return s
+      }
+      const updates = {
+        setupGuideBrowserMilestoneMigrated: true,
+        setupGuideBrowserMilestoneLegacyComplete: legacyComplete
+      }
+      window.api.ui.set(updates).catch(console.error)
+      return updates
+    }),
   browserImportHintHidden: false,
   setBrowserImportHintHidden: (hidden) =>
     set((s) => {
@@ -2021,6 +2053,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           validRepoIds
         ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
+        setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
+        setupGuideBrowserMilestoneLegacyComplete:
+          ui.setupGuideBrowserMilestoneLegacyComplete === true,
         browserImportHintHidden: ui.browserImportHintHidden === true,
         // Why: default false when undefined so existing users still see the CTA;
         // only an explicit dismissal persists true.
@@ -2046,9 +2081,17 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setUpdateStatus: (status) => {
     const prevState = get().updateStatus.state
     const update: Partial<
-      Pick<UISlice, 'updateStatus' | 'updateChangelog' | 'updateCardCollapsed'>
+      Pick<
+        UISlice,
+        'updateStatus' | 'updateChangelog' | 'updateCardCollapsed' | 'updateUserInitiatedCycle'
+      >
     > = {
       updateStatus: status
+    }
+    if (status.state === 'checking') {
+      update.updateUserInitiatedCycle = status.userInitiated === true
+    } else if (status.state === 'idle') {
+      update.updateUserInitiatedCycle = false
     }
     if (status.state === 'available') {
       // Why: cache changelog from each 'available' payload so the card retains
@@ -2075,6 +2118,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set(update)
   },
   updateChangelog: null,
+  updateUserInitiatedCycle: false,
   dismissedUpdateVersion: null,
   clearDismissedUpdateVersion: () => {
     set({ dismissedUpdateVersion: null })
@@ -2097,7 +2141,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (activeNudgeId) {
         void window.api.updater.dismissNudge().catch(console.error)
       }
-      return { dismissedUpdateVersion }
+      return { dismissedUpdateVersion, updateUserInitiatedCycle: false }
     }),
   updateCardCollapsed: false,
   setUpdateCardCollapsed: (collapsed) => set({ updateCardCollapsed: collapsed }),

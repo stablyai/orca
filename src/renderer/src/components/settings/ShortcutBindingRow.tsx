@@ -12,6 +12,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { SearchableSetting } from './SearchableSetting'
+import { translate } from '@/i18n/i18n'
 
 type ShortcutBindingRowProps = {
   item: KeybindingDefinition
@@ -109,7 +110,11 @@ export function ShortcutBindingRow({
   return (
     <SearchableSetting
       title={item.title}
-      description={`${groupTitle} shortcut`}
+      description={translate(
+        'auto.components.settings.ShortcutBindingRow.3b11ef3a43',
+        '{{value0}} shortcut',
+        { value0: groupTitle }
+      )}
       keywords={[...item.searchKeywords]}
       className="group/shortcut relative flex min-h-[44px] max-w-none items-center gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/40 focus-within:bg-accent/40"
     >
@@ -118,7 +123,7 @@ export function ShortcutBindingRow({
           <span className="truncate text-sm text-foreground">{item.title}</span>
           {modified ? (
             <Badge variant="outline" className="shrink-0 text-[11px]">
-              Modified
+              {translate('auto.components.settings.ShortcutBindingRow.97dccee14e', 'Modified')}
             </Badge>
           ) : null}
           {terminalStatus ? (
@@ -164,14 +169,21 @@ export function ShortcutBindingRow({
                     variant="ghost"
                     size="icon-xs"
                     className="text-muted-foreground hover:text-foreground"
-                    aria-label={`Reset ${item.title} to default`}
+                    aria-label={translate(
+                      'auto.components.settings.ShortcutBindingRow.4f2c9b2a05',
+                      'Reset {{value0}} to default',
+                      { value0: item.title }
+                    )}
                     onClick={() => onReset(item.id)}
                   >
                     <RotateCcw className="size-3" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  Reset to default
+                  {translate(
+                    'auto.components.settings.ShortcutBindingRow.f75335b155',
+                    'Reset to default'
+                  )}
                 </TooltipContent>
               </Tooltip>
             ) : null}
@@ -182,14 +194,21 @@ export function ShortcutBindingRow({
                   variant="ghost"
                   size="icon-xs"
                   className="text-muted-foreground hover:text-destructive"
-                  aria-label={`Disable ${item.title}`}
+                  aria-label={translate(
+                    'auto.components.settings.ShortcutBindingRow.3b62c142fa',
+                    'Disable {{value0}}',
+                    { value0: item.title }
+                  )}
                   onClick={() => onDisable(item.id)}
                 >
                   <Ban className="size-3" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                Disable shortcut
+                {translate(
+                  'auto.components.settings.ShortcutBindingRow.9cdaaa3d8f',
+                  'Disable shortcut'
+                )}
               </TooltipContent>
             </Tooltip>
           </div>
@@ -221,7 +240,12 @@ export function ShortcutBindingRow({
               )}
             >
               {recording ? (
-                <span className="px-1 text-muted-foreground">Press keys…</span>
+                <span className="px-1 text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.ShortcutBindingRow.87381fd8f8',
+                    'Press keys…'
+                  )}
+                </span>
               ) : hasBinding ? (
                 <span className="flex flex-wrap items-center justify-end gap-1.5">
                   {effective.map((binding) => (
@@ -231,13 +255,29 @@ export function ShortcutBindingRow({
               ) : (
                 <span className="flex items-center gap-1">
                   <Plus className="size-3" />
-                  Add shortcut
+                  {translate(
+                    'auto.components.settings.ShortcutBindingRow.4a4c2c9d32',
+                    'Add shortcut'
+                  )}
                 </span>
               )}
             </button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {recording ? 'Listening for shortcut' : hasBinding ? 'Change shortcut' : 'Add shortcut'}
+            {recording
+              ? translate(
+                  'auto.components.settings.ShortcutBindingRow.6a7848fdac',
+                  'Listening for shortcut'
+                )
+              : hasBinding
+                ? translate(
+                    'auto.components.settings.ShortcutBindingRow.f6579be67b',
+                    'Change shortcut'
+                  )
+                : translate(
+                    'auto.components.settings.ShortcutBindingRow.4a4c2c9d32',
+                    'Add shortcut'
+                  )}
           </TooltipContent>
         </Tooltip>
       </div>

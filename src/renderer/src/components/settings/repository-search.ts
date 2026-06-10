@@ -1,185 +1,93 @@
 import type { Repo } from '../../../../shared/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import type { SettingsSearchEntry } from './settings-search'
+import { translate } from '@/i18n/i18n'
+import { translateSearchKeyword } from './settings-search-keywords'
+import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-search-entries'
+import { getRepositoryGitHooksSearchEntries } from './repository-git-hooks-search-entries'
+import { getRepositoryGitWorktreeSearchEntries } from './repository-git-worktree-search-entries'
 
 export function getRepositoryPaneSearchEntries(repo: Repo): SettingsSearchEntry[] {
   const isFolder = isFolderRepo(repo)
   return [
     {
-      title: 'Display Name',
-      description: 'Project-specific display details for the sidebar and tabs.',
-      keywords: [repo.displayName, repo.path, 'project name', 'repository name']
-    },
-    {
-      title: 'Project Icon',
-      description: 'Project icon and color used in the sidebar and tabs.',
+      title: translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
+      description: translate(
+        'auto.components.settings.repository.search.883aad2801',
+        'Project-specific display details for the sidebar and tabs.'
+      ),
       keywords: [
         repo.displayName,
-        'project icon',
-        'repository icon',
-        'color',
-        'hex',
-        'badge',
-        'avatar',
-        'github',
-        'emoji',
-        'favicon'
+        repo.path,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.92af66c7ce',
+          'project name'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.cd73b976d7',
+          'repository name'
+        )
+      ]
+    },
+    {
+      title: translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+      description: translate(
+        'auto.components.settings.repository.search.a1f3a2bd47',
+        'Project icon and color used in the sidebar and tabs.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.6438a94c63',
+          'project icon'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.b2546efab5',
+          'repository icon'
+        ),
+        ...translateSearchKeyword('auto.components.settings.repository.search.8d045419b1', 'color'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.6d8de2f090', 'hex'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.c1075178cf', 'badge'),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.cb4b4de666',
+          'avatar'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.9dc60d7f6d',
+          'github'
+        ),
+        ...translateSearchKeyword('auto.components.settings.repository.search.1e73e840ff', 'emoji'),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.27733eb6c1',
+          'favicon'
+        )
+      ]
+    },
+    ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo)),
+    {
+      title: translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),
+      description: translate(
+        'auto.components.settings.repository.search.c86478c3d8',
+        'Remove this project from Orca.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.3067595d82',
+          'delete'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.6469de5368',
+          'project'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.cc876ca5f2',
+          'repository'
+        )
       ]
     },
     ...(isFolder
       ? []
-      : [
-          {
-            title: 'Default Worktree Base',
-            description: 'Default base branch or ref when creating worktrees.',
-            keywords: [repo.displayName, 'base ref', 'branch']
-          },
-          {
-            title: 'Worktree Location',
-            description: 'Project-specific directory for new worktrees.',
-            keywords: [
-              repo.displayName,
-              'worktree path',
-              'workspace path',
-              'directory',
-              'relative',
-              '../worktrees'
-            ]
-          },
-          {
-            title: 'Sparse Checkout Presets',
-            description: 'Saved directory sets for sparse worktree creation.',
-            keywords: [
-              repo.displayName,
-              'sparse',
-              'checkout',
-              'preset',
-              'presets',
-              'directory',
-              'directories',
-              'monorepo'
-            ]
-          }
-        ]),
-    {
-      title: 'Remove Project',
-      description: 'Remove this project from Orca.',
-      keywords: [repo.displayName, 'delete', 'project', 'repository']
-    },
-    ...(isFolder
-      ? []
-      : [
-          {
-            title: 'Git AI Author',
-            description: 'Project-specific git generation overrides.',
-            keywords: [
-              repo.displayName,
-              'source control',
-              'ai',
-              'commit message',
-              'pull request',
-              'pr',
-              'branch name',
-              'rename',
-              'model',
-              'prompt'
-            ]
-          },
-          {
-            title: 'Worktree Symlinks',
-            description: 'Paths to symlink from the primary checkout into newly created worktrees.',
-            keywords: [
-              repo.displayName,
-              'symlink',
-              'symlinks',
-              'worktree',
-              'link',
-              'shared',
-              'env',
-              'node_modules'
-            ]
-          },
-          {
-            title: 'MCP Configs',
-            description: 'Inspect project-level MCP server config files.',
-            keywords: [
-              repo.displayName,
-              'mcp',
-              'model context protocol',
-              '.mcp.json',
-              '.cursor/mcp.json',
-              '.claude.json',
-              '.claude/mcp.json'
-            ]
-          },
-          {
-            title: 'Setup Script',
-            description: 'Local and shared scripts that run after a new worktree is created.',
-            keywords: [
-              repo.displayName,
-              'hooks',
-              'setup',
-              'setup script',
-              'setup command',
-              'local settings scripts',
-              'orca.yaml hooks',
-              'yaml'
-            ]
-          },
-          {
-            title: 'Archive Script',
-            description: 'Local and shared scripts that run before a worktree is archived.',
-            keywords: [
-              repo.displayName,
-              'hooks',
-              'archive',
-              'archive script',
-              'archive command',
-              'local settings scripts',
-              'orca.yaml hooks',
-              'yaml'
-            ]
-          },
-          {
-            title: 'Advanced',
-            description: 'Command source and orca.yaml details.',
-            keywords: [
-              repo.displayName,
-              'advanced',
-              'command source',
-              'local',
-              'orca.yaml',
-              'shared',
-              'both',
-              'source',
-              'authoritative'
-            ]
-          },
-          {
-            title: 'When to Run Setup',
-            description: 'Choose the default behavior when a setup script is available.',
-            keywords: [
-              repo.displayName,
-              'setup run policy',
-              'ask',
-              'run by default',
-              'skip by default'
-            ]
-          },
-          {
-            title: 'Custom GitHub Issue Command',
-            description:
-              'File-based linked-issue command configured via orca.yaml and optional local override.',
-            keywords: [
-              repo.displayName,
-              'github issue command',
-              'issue command',
-              'workflow',
-              'github',
-              'orca.yaml',
-              '.orca/issue-command'
-            ]
-          }
-        ])
+      : [...getRepositoryGitAuthorSearchEntries(repo), ...getRepositoryGitHooksSearchEntries(repo)])
   ]
 }

@@ -65,6 +65,7 @@ type StoreState = {
       suppressWhenFocused?: boolean
       customSoundPath?: string | null
     }
+    agentCmdOverrides?: Record<string, string>
   } | null
   codexRestartNoticeByPtyId: Record<
     string,
@@ -2848,6 +2849,100 @@ describe('connectPanePty', () => {
     // the daemon does not redeliver the cold-restore payload on the next
     // reattach.
     expect(window.api.pty.ackColdRestore).toHaveBeenCalledWith('tab-pty')
+  })
+
+  it('resumes the provider agent session when daemon reattach cold-restores a fresh shell', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('fresh-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return {
+          id: 'fresh-pty',
+          coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+        }
+      }
+      return 'fresh-pty'
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }]
+      },
+      settings: {
+        ...mockStoreState.settings,
+        agentCmdOverrides: {}
+      },
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'finish the task',
+          agentType: 'codex',
+          paneKey,
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('cold-payload', expect.any(Function))
+    expect(transport.sendInput).toHaveBeenCalledWith("codex 'resume' 'codex-session-1'\r")
+  })
+
+  it('does not resume the provider session when daemon reattach returns a live snapshot', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
+      if (sessionId) {
+        return { id: sessionId, snapshot: 'live-snapshot' }
+      }
+      return null
+    })
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      agentStatusByPaneKey: {
+        [paneKey]: {
+          state: 'working',
+          prompt: 'finish the task',
+          agentType: 'codex',
+          paneKey,
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'codex-session-1' }
+        }
+      }
+    } as StoreState
+
+    const pane = createPane(1)
+    const manager = createManager(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'tab-pty' }
+    })
+
+    connectPanePty(pane as never, manager as never, deps as never)
+    await flushAsyncTicks(20)
+    await new Promise((resolve) => setTimeout(resolve, 70))
+
+    expect(pane.terminal.write).toHaveBeenCalledWith('live-snapshot', expect.any(Function))
+    expect(transport.sendInput).not.toHaveBeenCalled()
   })
 
   it('keeps non-visible local PTY bytes on the live xterm path for release', async () => {

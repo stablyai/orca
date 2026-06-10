@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { toast } from 'sonner'
 import type { TreeNode } from './file-explorer-types'
+import { translate } from '@/i18n/i18n'
 
 type UseFileExplorerHandlersParams = {
   activeWorktreeId: string | null
@@ -74,7 +75,12 @@ export async function activateFileExplorerNode(args: {
     try {
       targetIsDirectory = (await statPath(node.path)).isDirectory
     } catch {
-      toast.error('Cannot open symlink target')
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991',
+          'Cannot open symlink target'
+        )
+      )
       return
     }
     if (targetIsDirectory) {
@@ -86,7 +92,12 @@ export async function activateFileExplorerNode(args: {
         markPathAsDirectory(node.path)
         toggleDir(activeWorktreeId, node.path)
       } else {
-        toast.error('Cannot open symlink target')
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.useFileExplorerHandlers.32cd9fd991',
+            'Cannot open symlink target'
+          )
+        )
       }
       return
     }

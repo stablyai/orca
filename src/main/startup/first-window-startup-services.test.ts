@@ -29,7 +29,7 @@ describe('startFirstWindowStartupServices', () => {
     expect(events).toEqual(['daemon-started', 'hooks-started'])
 
     let completed = false
-    started.then(() => {
+    started.firstWindowReady.then(() => {
       completed = true
     })
 
@@ -38,7 +38,8 @@ describe('startFirstWindowStartupServices', () => {
     expect(completed).toBe(false)
 
     resolveHooks()
-    await started
+    await started.firstWindowReady
+    await started.localPtyReady
     expect(completed).toBe(true)
   })
 
@@ -46,37 +47,67 @@ describe('startFirstWindowStartupServices', () => {
     const onDaemonError = vi.fn()
     const onAgentHookServerError = vi.fn()
 
-    await expect(
-      startFirstWindowStartupServices({
-        startDaemonPtyProvider: () => Promise.reject(new Error('daemon failed')),
-        startAgentHookServer: () => Promise.reject(new Error('hooks failed')),
-        onDaemonError,
-        onAgentHookServerError
-      })
-    ).resolves.toBeUndefined()
+    const started = startFirstWindowStartupServices({
+      startDaemonPtyProvider: () => Promise.reject(new Error('daemon failed')),
+      startAgentHookServer: () => Promise.reject(new Error('hooks failed')),
+      onDaemonError,
+      onAgentHookServerError
+    })
+
+    await expect(started.firstWindowReady).resolves.toBeUndefined()
+    await expect(started.localPtyReady).resolves.toBeUndefined()
 
     expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
     expect(onAgentHookServerError).toHaveBeenCalledWith(expect.any(Error))
   })
 
-  it('fails open when a pre-window startup service hangs', async () => {
-    vi.useFakeTimers()
+  it('logs synchronous service startup failures and still resolves the startup barrier', async () => {
     const onDaemonError = vi.fn()
     const onAgentHookServerError = vi.fn()
 
+    const started = startFirstWindowStartupServices({
+      startDaemonPtyProvider: () => {
+        throw new Error('daemon sync failed')
+      },
+      startAgentHookServer: () => {
+        throw new Error('hooks sync failed')
+      },
+      onDaemonError,
+      onAgentHookServerError
+    })
+
+    await expect(started.firstWindowReady).resolves.toBeUndefined()
+    await expect(started.localPtyReady).resolves.toBeUndefined()
+
+    expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
+    expect(onAgentHookServerError).toHaveBeenCalledWith(expect.any(Error))
+  })
+
+  it('fails open the first window and local PTY startup while aborting hung services', async () => {
+    vi.useFakeTimers()
+    const onDaemonError = vi.fn()
+    const onAgentHookServerError = vi.fn()
+    let daemonSignal: AbortSignal | undefined
+
     try {
       const started = startFirstWindowStartupServices({
-        startDaemonPtyProvider: () => new Promise<void>(() => {}),
+        startDaemonPtyProvider: (signal) => {
+          daemonSignal = signal
+          return new Promise<void>(() => {})
+        },
         startAgentHookServer: () => Promise.resolve(),
         onDaemonError,
         onAgentHookServerError
       })
 
+      await Promise.resolve()
       await vi.advanceTimersByTimeAsync(FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
-      await expect(started).resolves.toBeUndefined()
+      await expect(started.firstWindowReady).resolves.toBeUndefined()
+      await expect(started.localPtyReady).resolves.toBeUndefined()
 
       expect(onDaemonError).toHaveBeenCalledWith(expect.any(Error))
       expect(onAgentHookServerError).not.toHaveBeenCalled()
+      expect(daemonSignal?.aborted).toBe(true)
     } finally {
       vi.useRealTimers()
     }

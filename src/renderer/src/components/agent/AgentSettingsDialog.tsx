@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog'
 import { AgentsPane } from '@/components/settings/AgentsPane'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 type AgentSettingsDialogProps = {
   open: boolean
@@ -33,9 +34,14 @@ export default function AgentSettingsDialog({
           agents are detected. */}
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="text-sm">Agents</DialogTitle>
+          <DialogTitle className="text-sm">
+            {translate('auto.components.agent.AgentSettingsDialog.fc0268e4ed', 'Agents')}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            Manage AI agents, set a default, and customize commands.
+            {translate(
+              'auto.components.agent.AgentSettingsDialog.50cdb57c03',
+              'Manage AI agents, set a default, and customize commands.'
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="scrollbar-sleek -mr-2 max-h-[70vh] overflow-y-auto pr-2">

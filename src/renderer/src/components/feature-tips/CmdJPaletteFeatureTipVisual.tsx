@@ -2,6 +2,7 @@ import { Fragment, useEffect, useState, type JSX } from 'react'
 import { Plus, Search } from 'lucide-react'
 import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
 import { formatShortcutKeys, useShortcutKeys } from '@/hooks/useShortcutLabel'
+import { translate } from '@/i18n/i18n'
 
 const TYPED_QUERY = 'auth'
 // Why: the real palette lists recent worktrees on open; typing only narrows the
@@ -254,7 +255,11 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                   <Plus size={13} aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1 truncate text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
-                  {`Create worktree "${renderQuery.trim()}"`}
+                  {translate(
+                    'auto.components.feature.tips.CmdJPaletteFeatureTipVisual.ab94e16d44',
+                    'Create worktree "{{value0}}"',
+                    { value0: renderQuery.trim() }
+                  )}
                 </div>
               </div>
             ) : null}

@@ -9,6 +9,7 @@ import type { getEditorPanelRenderModel } from './editor-panel-render-model'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
+import { translate } from '@/i18n/i18n'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
@@ -184,7 +185,7 @@ export function EditorPanelShell({
 function EditorLoadingFallback(): JSX.Element {
   return (
     <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-      Loading editor...
+      {translate('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import SidebarWorkspaceOptionsMenu from './SidebarWorkspaceOptionsMenu'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { openWorkspaceCreationComposerWithTourHandoff } from '../contextual-tours/workspace-creation-tour-handoff'
+import { translate } from '@/i18n/i18n'
 
 const SidebarHeader = React.memo(function SidebarHeader() {
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
@@ -14,6 +15,7 @@ const SidebarHeader = React.memo(function SidebarHeader() {
   const [workspaceBoardMenuOpen, setWorkspaceBoardMenuOpen] = useState(false)
   const workspaceBoardOpenRef = useRef(workspaceBoardOpen)
   const groupBy = useAppStore((s) => s.groupBy)
+  const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const sidebarTitle = groupBy === 'repo' ? 'Projects' : 'Workspaces'
   workspaceBoardOpenRef.current = workspaceBoardOpen
 
@@ -108,7 +110,10 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                 variant={workspaceBoardOpen ? 'secondary' : 'ghost'}
                 size="icon-xs"
                 className="text-muted-foreground"
-                aria-label="Workspace board"
+                aria-label={translate(
+                  'auto.components.sidebar.SidebarHeader.49f62c5665',
+                  'Workspace board'
+                )}
                 aria-pressed={workspaceBoardOpen}
                 data-workspace-board-trigger=""
                 onClick={handleWorkspaceBoardToggle}
@@ -117,7 +122,12 @@ const SidebarHeader = React.memo(function SidebarHeader() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {workspaceBoardOpen ? 'Close workspace board' : 'Workspace board'}
+              {workspaceBoardOpen
+                ? translate(
+                    'auto.components.sidebar.SidebarHeader.a30e34eb5c',
+                    'Close workspace board'
+                  )
+                : translate('auto.components.sidebar.SidebarHeader.49f62c5665', 'Workspace board')}
             </TooltipContent>
           </Tooltip>
 
@@ -131,14 +141,27 @@ const SidebarHeader = React.memo(function SidebarHeader() {
                   // control so it can hand off to the workspace-creation tour.
                   openWorkspaceCreationComposerWithTourHandoff()
                 }}
-                aria-label="New workspace"
+                aria-label={translate(
+                  'auto.components.sidebar.SidebarHeader.92154beb7e',
+                  'New workspace'
+                )}
+                disabled={!canCreateWorkspace}
                 data-contextual-tour-target="workspace-create-control"
               >
                 <Plus className="size-3.5" strokeWidth={2.25} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={6}>
-              {`New workspace (${newWorktreeShortcutLabel})`}
+              {canCreateWorkspace
+                ? translate(
+                    'auto.components.sidebar.SidebarHeader.ca6f729da2',
+                    'New workspace ({{value0}})',
+                    { value0: newWorktreeShortcutLabel }
+                  )
+                : translate(
+                    'auto.components.sidebar.SidebarHeader.5c9c7c16aa',
+                    'Add a project to create workspaces'
+                  )}
             </TooltipContent>
           </Tooltip>
         </div>

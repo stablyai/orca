@@ -278,6 +278,31 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  /* Why: Sonner's dark-theme defaults can resolve the close icon and button
+     background to the same color; keep the X readable on both Orca themes. */
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border-color: rgb(0 0 0 / 0.14);
+}
+
+[data-sonner-toaster][data-sonner-theme='dark']
+  [data-sonner-toast][data-styled='true']
+  [data-close-button] {
+  color: var(--popover-foreground);
+  background: var(--popover);
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+  border-color: rgb(255 255 255 / 0.14);
+}
+
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+
 /* ── Base Layer ──────────────────────────────────────── */
 
 @layer base {

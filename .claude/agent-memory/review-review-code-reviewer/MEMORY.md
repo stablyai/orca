@@ -1,0 +1,2 @@
+- [max-lines disable is an accepted provider-module convention](max-lines-provider-convention.md) — AGENTS.md bans it but every Jira/Linear provider file uses it; don't flag in provider parity PRs
+- [Task provider parity pattern](task-provider-parity.md) — new issue-tracker providers must mirror Jira/Linear structure across main/ipc/rpc/preload/renderer/store/shared

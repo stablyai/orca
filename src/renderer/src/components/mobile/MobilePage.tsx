@@ -23,6 +23,7 @@ import {
   type MobilePageStage as FlowStage
 } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
+import { translate } from '@/i18n/i18n'
 
 async function renderQrDataUrl(text: string): Promise<string> {
   return QRCodeBrowser.toDataURL(text, {
@@ -151,14 +152,16 @@ export default function MobilePage(): React.JSX.Element {
         await window.api.mobile.revokeDevice({ deviceId })
         const remaining = await loadDevices()
         if (mountedRef.current) {
-          toast.success('Device revoked')
+          toast.success(translate('auto.components.mobile.MobilePage.255372e6e8', 'Device revoked'))
         }
         if (remaining.length === 0 && mountedRef.current) {
           showStage('intro')
         }
       } catch {
         if (mountedRef.current) {
-          toast.error('Failed to revoke device')
+          toast.error(
+            translate('auto.components.mobile.MobilePage.4e1eb5d55c', 'Failed to revoke device')
+          )
         }
       } finally {
         if (mountedRef.current) {
@@ -215,12 +218,22 @@ export default function MobilePage(): React.JSX.Element {
           hasGeneratedRef.current = true
         } else {
           if (mountedRef.current) {
-            toast.error('WebSocket transport is not running')
+            toast.error(
+              translate(
+                'auto.components.mobile.MobilePage.b353e18de1',
+                'WebSocket transport is not running'
+              )
+            )
           }
         }
       } catch {
         if (mountedRef.current) {
-          toast.error('Failed to generate pairing code')
+          toast.error(
+            translate(
+              'auto.components.mobile.MobilePage.4c8bd11c1a',
+              'Failed to generate pairing code'
+            )
+          )
         }
       } finally {
         if (mountedRef.current) {
@@ -282,12 +295,16 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(pairingUrl)
       if (mountedRef.current) {
-        toast.success('Pairing code copied')
+        toast.success(
+          translate('auto.components.mobile.MobilePage.3c1f7168bb', 'Pairing code copied')
+        )
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
       if (mountedRef.current) {
-        toast.error('Failed to copy pairing code')
+        toast.error(
+          translate('auto.components.mobile.MobilePage.6a66e38943', 'Failed to copy pairing code')
+        )
       }
     }
   }, [mountedRef, pairingUrl])
@@ -364,12 +381,16 @@ export default function MobilePage(): React.JSX.Element {
     try {
       await window.api.ui.writeClipboardText(PLATFORM_COPY[platform].url)
       if (mountedRef.current) {
-        toast.success('Install link copied')
+        toast.success(
+          translate('auto.components.mobile.MobilePage.fad833de8d', 'Install link copied')
+        )
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
       if (mountedRef.current) {
-        toast.error('Failed to copy link')
+        toast.error(
+          translate('auto.components.mobile.MobilePage.baea63c445', 'Failed to copy link')
+        )
       }
     }
   }
@@ -451,7 +472,10 @@ export default function MobilePage(): React.JSX.Element {
           )}
         </div>
 
-        <div className="mp-stage" aria-label="Phone preview">
+        <div
+          className="mp-stage"
+          aria-label={translate('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
+        >
           <PhoneCarousel />
         </div>
       </section>

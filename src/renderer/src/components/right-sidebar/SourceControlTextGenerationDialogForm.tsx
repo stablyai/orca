@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,
@@ -29,6 +29,7 @@ import {
   buildCommitMessageGenerationParams,
   type CommitMessageGenerationAgentChoice
 } from './SourceControlTextGenerationParams'
+import { translate } from '@/i18n/i18n'
 
 const UNCONFIGURED_AGENT_SELECT_VALUE = ''
 
@@ -44,6 +45,7 @@ type SourceControlTextGenerationDialogFormProps = {
   settings: GlobalSettings | null
   repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   baseParams: ResolvedSourceControlAiGenerationParams | null
+  basePromptPreview?: string
   saveTargets: SourceControlTextGenerationSaveTarget[]
   onGenerate: (params: ResolvedSourceControlAiGenerationParams) => void
   onOpenChange: (open: boolean) => void
@@ -53,12 +55,22 @@ type SourceControlTextGenerationDialogFormProps = {
   ) => Promise<void> | void
 }
 
-function sourceControlTextGenerationSaveTargetKey(target: SourceControlAiWriteTarget): string {
+export function sourceControlTextGenerationSaveTargetKey(
+  target: SourceControlAiWriteTarget
+): string {
   return target.type === 'repo' ? `repo:${target.repoId}` : 'global'
 }
 
+export function getDefaultSourceControlTextGenerationSaveTargetKey(
+  saveTargets: SourceControlTextGenerationSaveTarget[]
+): string {
+  const defaultTarget =
+    saveTargets.find((saveTarget) => saveTarget.target.type === 'global') ?? saveTargets[0]
+  return defaultTarget ? sourceControlTextGenerationSaveTargetKey(defaultTarget.target) : 'global'
+}
+
 function agentLabel(agentId: TuiAgent): string {
-  return AGENT_CATALOG.find((agent) => agent.id === agentId)?.label ?? agentId
+  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
 }
 
 export function SourceControlTextGenerationDialogForm({
@@ -67,6 +79,7 @@ export function SourceControlTextGenerationDialogForm({
   settings,
   repo,
   baseParams,
+  basePromptPreview,
   saveTargets,
   onGenerate,
   onOpenChange,
@@ -85,9 +98,7 @@ export function SourceControlTextGenerationDialogForm({
   const [agentArgs, setAgentArgs] = useState(baseParams?.agentArgs ?? '')
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [savingTargetKey, setSavingTargetKey] = useState<string | null>(null)
-  const defaultSaveTargetKey = saveTargets[0]
-    ? sourceControlTextGenerationSaveTargetKey(saveTargets[0].target)
-    : 'global'
+  const defaultSaveTargetKey = getDefaultSourceControlTextGenerationSaveTargetKey(saveTargets)
   const [saveTargetKey, setSaveTargetKey] = useState(defaultSaveTargetKey)
   const commandTemplateId = `source-control-${actionId}-command-template`
   const selectedSaveTarget =
@@ -185,7 +196,12 @@ export function SourceControlTextGenerationDialogForm({
     <>
       <div className="min-w-0 space-y-4">
         <div className="space-y-2">
-          <Label className="text-xs">Agent</Label>
+          <Label className="text-xs">
+            {translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.9c14186dd2',
+              'Agent'
+            )}
+          </Label>
           <Select
             value={agentId || UNCONFIGURED_AGENT_SELECT_VALUE}
             onValueChange={(value) => {
@@ -197,7 +213,12 @@ export function SourceControlTextGenerationDialogForm({
             }}
           >
             <SelectTrigger size="sm" className="h-8 text-xs">
-              <SelectValue placeholder="Choose agent" />
+              <SelectValue
+                placeholder={translate(
+                  'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.cce2cbd01d',
+                  'Choose agent'
+                )}
+              />
             </SelectTrigger>
             <SelectContent>
               {capabilities.map((capability) => (
@@ -212,7 +233,10 @@ export function SourceControlTextGenerationDialogForm({
                 <SelectItem value={CUSTOM_AGENT_ID}>
                   <span className="flex items-center gap-2">
                     <Terminal className="size-3.5 text-muted-foreground" />
-                    Custom command
+                    {translate(
+                      'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
+                      'Custom command'
+                    )}
                   </span>
                 </SelectItem>
               ) : null}
@@ -222,13 +246,19 @@ export function SourceControlTextGenerationDialogForm({
 
         <div className="space-y-2">
           <Label htmlFor={`source-control-${actionId}-cli-args`} className="text-xs">
-            CLI arguments
+            {translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.4eab815004',
+              'CLI arguments'
+            )}
           </Label>
           <Input
             id={`source-control-${actionId}-cli-args`}
             value={agentArgs}
             spellCheck={false}
-            placeholder="--model sonnet"
+            placeholder={translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.551ffd111b',
+              '--model sonnet'
+            )}
             onChange={(event) => {
               setAgentArgs(event.target.value)
               setGenerationError(null)
@@ -239,7 +269,10 @@ export function SourceControlTextGenerationDialogForm({
 
         <div className="space-y-2">
           <Label htmlFor={commandTemplateId} className="text-xs">
-            Command template
+            {translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.1f6fcfb6cf',
+              'Command template'
+            )}
           </Label>
           <textarea
             id={commandTemplateId}
@@ -254,6 +287,7 @@ export function SourceControlTextGenerationDialogForm({
           />
           <SourceControlActionVariableChips
             actionId={actionId}
+            variablePreviews={basePromptPreview ? { basePrompt: basePromptPreview } : undefined}
             onInsert={(variable) => {
               const separator =
                 commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '
@@ -265,7 +299,12 @@ export function SourceControlTextGenerationDialogForm({
 
         {showSaveRecipeControl ? (
           <div className="space-y-2">
-            <Label className="text-xs">Save recipe</Label>
+            <Label className="text-xs">
+              {translate(
+                'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.d91b0a189d',
+                'Save recipe'
+              )}
+            </Label>
             <Select value={saveTargetKey} onValueChange={setSaveTargetKey}>
               <SelectTrigger size="sm" className="h-8 w-full text-xs">
                 <SelectValue />
@@ -306,7 +345,10 @@ export function SourceControlTextGenerationDialogForm({
             ) : (
               <Save className="size-4" />
             )}
-            Save defaults
+            {translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.25fcd8e49a',
+              'Save defaults'
+            )}
           </Button>
         ) : null}
         <Button

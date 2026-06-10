@@ -30,6 +30,7 @@ import { useEmulatorControlStream } from './use-emulator-control-stream'
 import { useEmulatorPaneSize } from './use-emulator-pane-size'
 import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 type EmulatorDeviceFrameProps = {
   previewUrl?: string
@@ -388,8 +389,14 @@ export function EmulatorDeviceFrame({
             aria-label={
               isLive
                 ? keyboardCaptureActive
-                  ? 'Emulator screen, keyboard captured. Press Escape to release.'
-                  : 'Emulator screen'
+                  ? translate(
+                      'auto.components.emulator.pane.emulator.device.frame.8f25ffaf8a',
+                      'Emulator screen, keyboard captured. Press Escape to release.'
+                    )
+                  : translate(
+                      'auto.components.emulator.pane.emulator.device.frame.9406c15775',
+                      'Emulator screen'
+                    )
                 : undefined
             }
           >

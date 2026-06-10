@@ -6,7 +6,7 @@ import { grantDirAcl } from './win32-utils'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import os from 'node:os'
-import { app, BrowserWindow, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { electronApp, is } from '@electron-toolkit/utils'
 import * as QRCode from 'qrcode'
 import { Store, initDataPath } from './persistence'
@@ -37,6 +37,7 @@ import { OrcaRuntimeService } from './runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime/runtime-rpc'
 import { awaitRuntimeFileWatcherUnsubscribes } from './runtime/orca-runtime-files'
 import { clearRuntimeMetadataIfOwned } from './runtime/runtime-metadata'
+import { ensureMainI18n, setMainUiLanguage } from './i18n/main-i18n'
 import {
   getNextDefaultOnAppearanceSettingValue,
   registerAppMenu,
@@ -164,6 +165,8 @@ let watcherShutdownDone = false
 let automations: AutomationService | null = null
 let keybindings: KeybindingService | null = null
 let expectedRendererReload: { webContentsId: number; until: number } | null = null
+let firstWindowStartupServicesReady: Promise<void> = Promise.resolve()
+let localPtyStartupReady: Promise<void> = Promise.resolve()
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const isServeMode = process.argv.includes('--serve')
 const appImageCliRedirect = maybeRedirectAppImageCliLaunch({
@@ -398,6 +401,41 @@ if (hasSingleInstanceLock) {
   enableMainProcessGpuFeatures()
 }
 
+ipcMain.handle('app:awaitFirstWindowStartupServices', async () => {
+  await firstWindowStartupServicesReady
+})
+
+function startDesktopFirstWindowStartupServices(): Promise<void> {
+  const startupServices = startFirstWindowStartupServices({
+    // Why: the persistent-terminal daemon is desktop-only. Headless `orca serve`
+    // registers its PTY runtime separately and must not spawn the desktop daemon
+    // or hook loopback listener.
+    startDaemonPtyProvider: (signal) => initDaemonPtyProvider(signal),
+    // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state, so
+    // the renderer awaits this barrier before restored terminals reconnect.
+    startAgentHookServer: () =>
+      agentHookServer.start({
+        env: app.isPackaged ? 'production' : 'development',
+        // Why: hooks source this endpoint file at invocation time, so old PTY
+        // env still reaches the current Orca process after an app restart.
+        // Dev uses a namespace because all worktrees share `orca-dev`.
+        userDataPath: app.getPath('userData'),
+        endpointNamespace: devAgentHookEndpointNamespace
+      }),
+    onDaemonError: (error) => {
+      console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
+    },
+    onAgentHookServerError: (error) => {
+      // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
+      // enrichment only. Orca must still boot if the loopback receiver fails.
+      console.error('[agent-hooks] Failed to start local hook server:', error)
+    }
+  })
+  firstWindowStartupServicesReady = startupServices.firstWindowReady
+  localPtyStartupReady = startupServices.localPtyReady
+  return firstWindowStartupServicesReady
+}
+
 function prepareCodexRuntimeHomeForLaunch(target?: CodexAccountSelectionTarget): string | null {
   const runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target)
   const hooksEnabled = isAgentStatusHooksEnabled(store?.getSettings())
@@ -581,6 +619,7 @@ function openMainWindow(): BrowserWindow {
     prepareCodexRuntimeHomeForLaunch,
     (target) => claudeRuntimeAuth!.prepareForClaudeLaunch(target),
     {
+      awaitLocalPtyStartup: () => localPtyStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {
         if (window.webContents.id === webContentsId) {
           markExpectedRendererReload(webContentsId)
@@ -590,7 +629,10 @@ function openMainWindow(): BrowserWindow {
     }
   )
   rateLimits.attach(window)
-  rateLimits.start()
+  // Why: quota probes can spawn CLIs and hit network. The attached show/focus
+  // listeners refresh as soon as the window can present quota UI, so do not
+  // compete with first paint.
+  rateLimits.start({ fetchImmediately: false })
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
@@ -1234,6 +1276,9 @@ app.whenReady().then(async () => {
     })
   })
 
+  await ensureMainI18n()
+  await setMainUiLanguage(store.getSettings().uiLanguage)
+
   registerAppMenu({
     onCheckForUpdates: (options) => checkForUpdatesFromMenu(options),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
@@ -1343,31 +1388,7 @@ app.whenReady().then(async () => {
   registerMobileHandlers(runtimeRpc)
 
   if (!isServeMode) {
-    await startFirstWindowStartupServices({
-      // Why: the persistent-terminal daemon is desktop-only. Headless
-      // `orca serve` registers its PTY runtime below and must not spawn the
-      // desktop daemon or hook loopback listener.
-      startDaemonPtyProvider: () => initDaemonPtyProvider(),
-      // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from the live server state,
-      // so the hook server must start before restored terminals can mount.
-      startAgentHookServer: () =>
-        agentHookServer.start({
-          env: app.isPackaged ? 'production' : 'development',
-          // Why: hooks source this endpoint file at invocation time, so old PTY
-          // env still reaches the current Orca process after an app restart.
-          // Dev uses a namespace because all worktrees share `orca-dev`.
-          userDataPath: app.getPath('userData'),
-          endpointNamespace: devAgentHookEndpointNamespace
-        }),
-      onDaemonError: (error) => {
-        console.error('[daemon] Failed to start daemon PTY provider, falling back to local:', error)
-      },
-      onAgentHookServerError: (error) => {
-        // Why: Claude/Codex/Gemini/OpenCode/Cursor hook callbacks are sidebar
-        // enrichment only. Orca must still boot if the loopback receiver fails.
-        console.error('[agent-hooks] Failed to start local hook server:', error)
-      }
-    })
+    startDesktopFirstWindowStartupServices()
   }
 
   if (serveOptions) {
@@ -1391,8 +1412,9 @@ app.whenReady().then(async () => {
     return
   }
 
-  // Why: once the hook server is ready (or has already failed open), window
-  // creation and runtime RPC startup are independent.
+  // Why: window creation and runtime RPC startup are independent. Local PTY
+  // spawns are gated inside registerPtyHandlers so RPC can bind immediately
+  // without racing the daemon provider swap.
   const [win] = await Promise.all([
     Promise.resolve(openMainWindow()),
     runtimeRpc.start().catch((error) => {

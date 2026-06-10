@@ -21,6 +21,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 vi.mock('sonner', () => ({
   toast: {
     warning: vi.fn(),
+    info: vi.fn(),
     success: vi.fn(),
     error: vi.fn(),
     dismiss: vi.fn()
@@ -87,6 +88,7 @@ import {
   registerPersistentWebview,
   unregisterPersistentWebview
 } from '../../components/browser-pane/webview-registry'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
@@ -1339,22 +1341,19 @@ describe('createWorktree base status merge', () => {
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
-    expect(toast.warning).toHaveBeenCalledWith(
+    // The button workflow (Keep main up to date / Settings link) lives in the
+    // toast component's own test; here we just assert the sticky nudge is raised.
+    expect(toast.info).toHaveBeenCalledWith(
       'Local main is behind origin/main',
       expect.objectContaining({
         id: 'local-base-ref-update-suggestion:origin/main:main',
-        description: expect.stringContaining(
-          'Your new worktree is current, but local main is 2 commits behind. AI diffs may miss recent commits.'
-        ),
         duration: Infinity,
-        dismissible: true,
-        action: expect.objectContaining({ label: 'Keep main up to date' }),
-        cancel: expect.objectContaining({ label: 'Dismiss' })
+        dismissible: true
       })
     )
   })
 
-  it('persists the dismissal flag when the suggestion toast is dismissed', async () => {
+  it('persists the dismissal flag when the suggestion toast is closed or swiped', async () => {
     const store = createTestStore()
     store.setState({
       settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
@@ -1368,13 +1367,11 @@ describe('createWorktree base status merge', () => {
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
-    const options = vi.mocked(toast.warning).mock.calls.at(-1)?.[1] as unknown as {
+    const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
-      cancel: { onClick: () => void }
     }
-    // Both the close (X)/swipe path and the Dismiss button must persist the flag.
+    // The close (X)/swipe path persists the decline flag.
     options.onDismiss()
-    options.cancel.onClick()
     await Promise.resolve()
 
     expect(store.getState().updateSettings).toHaveBeenCalledWith({
@@ -1382,15 +1379,11 @@ describe('createWorktree base status merge', () => {
     })
   })
 
-  it('does not record a dismissal when Turn On has enabled the feature', async () => {
+  it('does not record a dismissal on close when the feature is already enabled', async () => {
     const store = createTestStore()
     store.setState({
-      settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
-      updateSettings: vi.fn().mockImplementation(async (updates) => {
-        store.setState({
-          settings: { ...store.getState().settings!, ...updates } as AppState['settings']
-        })
-      })
+      settings: { refreshLocalBaseRefOnWorktreeCreate: true } as AppState['settings'],
+      updateSettings: vi.fn().mockResolvedValue(undefined)
     } as Partial<AppState>)
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
     mockApi.worktrees.create.mockResolvedValue({
@@ -1400,13 +1393,9 @@ describe('createWorktree base status merge', () => {
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
 
-    const options = vi.mocked(toast.warning).mock.calls.at(-1)?.[1] as unknown as {
+    const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
-      action: { onClick: () => void }
     }
-    options.action.onClick()
-    await Promise.resolve()
-    await Promise.resolve()
     // The Turn On success path dismisses the toast, which fires onDismiss; that
     // must not be recorded as a decline now that the feature is enabled.
     options.onDismiss()
@@ -1414,86 +1403,6 @@ describe('createWorktree base status merge', () => {
 
     expect(store.getState().updateSettings).not.toHaveBeenCalledWith({
       localBaseRefSuggestionDismissed: true
-    })
-  })
-
-  it('turns on local main freshness from the suggestion toast action', async () => {
-    const store = createTestStore()
-    store.setState({
-      settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
-      updateSettings: vi.fn().mockImplementation(async (updates) => {
-        store.setState({
-          settings: {
-            ...store.getState().settings!,
-            ...updates
-          } as AppState['settings']
-        })
-      })
-    } as Partial<AppState>)
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1'
-    })
-    mockApi.worktrees.create.mockResolvedValue({
-      worktree: wt,
-      localBaseRefUpdateSuggestion: {
-        baseRef: 'origin/master',
-        localBranch: 'master',
-        behind: 1
-      }
-    })
-
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
-
-    const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as unknown as {
-      onClick: () => void
-    }
-    action.onClick()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(store.getState().updateSettings).toHaveBeenCalledWith({
-      refreshLocalBaseRefOnWorktreeCreate: true
-    })
-    expect(toast.dismiss).toHaveBeenCalledWith(
-      'local-base-ref-update-suggestion:origin/master:master'
-    )
-    expect(toast.success).toHaveBeenCalledWith('Keeping local master up to date')
-  })
-
-  it('reports failure when the suggestion toast action cannot persist the setting', async () => {
-    const store = createTestStore()
-    store.setState({
-      settings: { refreshLocalBaseRefOnWorktreeCreate: false } as AppState['settings'],
-      updateSettings: vi.fn().mockResolvedValue(undefined)
-    } as Partial<AppState>)
-    const wt = makeWorktree({
-      id: 'repo1::/path/wt1',
-      repoId: 'repo1',
-      path: '/path/wt1'
-    })
-    mockApi.worktrees.create.mockResolvedValue({
-      worktree: wt,
-      localBaseRefUpdateSuggestion: {
-        baseRef: 'origin/main',
-        localBranch: 'main',
-        behind: 1
-      }
-    })
-
-    await store.getState().createWorktree('repo1', 'feature', 'origin/main')
-
-    const action = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]?.action as unknown as {
-      onClick: () => void
-    }
-    action.onClick()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(toast.dismiss).not.toHaveBeenCalled()
-    expect(toast.error).toHaveBeenCalledWith('Could not keep local main up to date', {
-      description: 'Open Settings > Git and try again.'
     })
   })
 
@@ -3189,6 +3098,117 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     expect(mockApi.worktrees.list).toHaveBeenCalledTimes(4)
     expect(store.getState().tabsByWorktree['repoA::/a/new-zombie']).toBeDefined()
   })
+
+  it('preserves floating workspace state while purging a real stale worktree', async () => {
+    const store = createTestStore()
+    const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
+    const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
+    const staleId = 'repoA::/a/zombie'
+    const floatingFile = {
+      id: 'floating-file',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      filePath: '/floating/note.md',
+      relativePath: 'note.md',
+      language: 'markdown',
+      isDirty: false,
+      isPreview: false,
+      mode: 'edit' as const
+    }
+
+    mockApi.worktrees.list.mockImplementation(async ({ repoId }: { repoId: string }) =>
+      repoId === 'repoA' ? [wtA] : [wtB]
+    )
+
+    store.setState({
+      repos: [repoA, repoB],
+      activeWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      activeFileId: 'floating-file',
+      activeTabId: 'floating-terminal-tab',
+      activeTabType: 'editor' as const,
+      tabsByWorktree: {
+        [wtA.id]: [{ id: 'tab-A', worktreeId: wtA.id }],
+        [staleId]: [{ id: 'tab-zombie', worktreeId: staleId }],
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          { id: 'floating-terminal-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+        ]
+      },
+      browserTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
+      },
+      activeBrowserTabIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-browser'
+      },
+      openFiles: [
+        floatingFile,
+        {
+          id: 'stale-file',
+          worktreeId: staleId,
+          filePath: '/a/zombie/stale.ts',
+          relativePath: 'stale.ts',
+          language: 'typescript',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file',
+        [staleId]: 'stale-file'
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-unified-tab',
+            type: 'editor',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            fileId: 'floating-file'
+          }
+        ],
+        [staleId]: [{ id: 'stale-unified-tab', worktreeId: staleId }]
+      },
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'floating-unified-tab'
+          }
+        ],
+        [staleId]: [{ id: 'stale-group', worktreeId: staleId, activeTabId: 'stale-unified-tab' }]
+      },
+      layoutByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' },
+        [staleId]: { type: 'leaf', groupId: 'stale-group' }
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchAllWorktrees()
+
+    expect(store.getState().hasHydratedWorktreePurge).toBe(true)
+    expect(store.getState().tabsByWorktree).toEqual({
+      [wtA.id]: [{ id: 'tab-A', worktreeId: wtA.id }],
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        { id: 'floating-terminal-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+      ]
+    })
+    expect(store.getState().browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      { id: 'floating-browser', url: 'https://orca.test' }
+    ])
+    expect(store.getState().openFiles).toEqual([floatingFile])
+    expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
+      'floating-file'
+    )
+    expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual({
+      type: 'leaf',
+      groupId: 'floating-group'
+    })
+    expect(store.getState().activeWorktreeId).toBe(FLOATING_TERMINAL_WORKTREE_ID)
+    expect(store.getState().activeFileId).toBe('floating-file')
+    expect(store.getState().activeTabId).toBe('floating-terminal-tab')
+    expect(store.getState().activeTabType).toBe('editor')
+  })
 })
 
 // Why: design §4.4 — purgeWorktreeTerminalState wipes every worktree-scoped
@@ -3287,6 +3307,157 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     store.getState().purgeWorktreeTerminalState([])
 
     expect(store.getState().tabsByWorktree).toBe(before)
+  })
+
+  it('ignores the floating workspace sentinel while purging mixed real ids', () => {
+    const store = createTestStore()
+    const staleId = 'repoA::/a/wt1'
+    const floatingFile = {
+      id: 'floating-file',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      filePath: '/floating/note.md',
+      relativePath: 'note.md',
+      language: 'markdown',
+      isDirty: false,
+      isPreview: false,
+      mode: 'edit' as const
+    }
+
+    store.setState({
+      tabsByWorktree: {
+        [staleId]: [{ id: 'tab-1', worktreeId: staleId }],
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          { id: 'floating-terminal-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+        ]
+      },
+      browserTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
+      },
+      openFiles: [
+        floatingFile,
+        {
+          id: 'stale-file',
+          worktreeId: staleId,
+          filePath: '/a/wt1/stale.ts',
+          relativePath: 'stale.ts',
+          language: 'typescript',
+          isDirty: false,
+          isPreview: false,
+          mode: 'edit' as const
+        }
+      ],
+      activeFileIdByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file',
+        [staleId]: 'stale-file'
+      },
+      unifiedTabsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-unified-tab',
+            type: 'editor',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            fileId: 'floating-file'
+          }
+        ],
+        [staleId]: [{ id: 'stale-unified-tab', worktreeId: staleId }]
+      },
+      groupsByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          {
+            id: 'floating-group',
+            worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+            activeTabId: 'floating-unified-tab'
+          }
+        ],
+        [staleId]: [{ id: 'stale-group', worktreeId: staleId, activeTabId: 'stale-unified-tab' }]
+      },
+      layoutByWorktree: {
+        [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' },
+        [staleId]: { type: 'leaf', groupId: 'stale-group' }
+      }
+    } as unknown as Partial<AppState>)
+
+    store.getState().purgeWorktreeTerminalState([staleId, FLOATING_TERMINAL_WORKTREE_ID])
+
+    expect(store.getState().tabsByWorktree).toEqual({
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        { id: 'floating-terminal-tab', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+      ]
+    })
+    expect(store.getState().browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
+      { id: 'floating-browser', url: 'https://orca.test' }
+    ])
+    expect(store.getState().openFiles).toEqual([floatingFile])
+    expect(store.getState().activeFileIdByWorktree).toEqual({
+      [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file'
+    })
+    expect(store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toHaveLength(1)
+    expect(store.getState().layoutByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual({
+      type: 'leaf',
+      groupId: 'floating-group'
+    })
+  })
+
+  it('is a no-op when only the floating workspace sentinel is passed', () => {
+    const store = createTestStore()
+    const tabsByWorktree = {}
+    const browserTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
+    }
+    const openFiles = [
+      {
+        id: 'floating-file',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        filePath: '/floating/note.md',
+        relativePath: 'note.md',
+        language: 'markdown',
+        isDirty: false,
+        isPreview: false,
+        mode: 'edit' as const
+      }
+    ]
+    const unifiedTabsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: 'floating-unified-tab',
+          type: 'editor',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          fileId: 'floating-file'
+        }
+      ]
+    }
+    const groupsByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: [
+        {
+          id: 'floating-group',
+          worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+          activeTabId: 'floating-unified-tab'
+        }
+      ]
+    }
+    const layoutByWorktree = {
+      [FLOATING_TERMINAL_WORKTREE_ID]: { type: 'leaf', groupId: 'floating-group' }
+    }
+
+    store.setState({
+      tabsByWorktree,
+      browserTabsByWorktree,
+      openFiles,
+      activeFileIdByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: 'floating-file' },
+      unifiedTabsByWorktree,
+      groupsByWorktree,
+      layoutByWorktree
+    } as unknown as Partial<AppState>)
+
+    store.getState().purgeWorktreeTerminalState([FLOATING_TERMINAL_WORKTREE_ID])
+
+    expect(store.getState().tabsByWorktree).toBe(tabsByWorktree)
+    expect(store.getState().browserTabsByWorktree).toBe(browserTabsByWorktree)
+    expect(store.getState().openFiles).toBe(openFiles)
+    expect(store.getState().unifiedTabsByWorktree).toBe(unifiedTabsByWorktree)
+    expect(store.getState().groupsByWorktree).toBe(groupsByWorktree)
+    expect(store.getState().layoutByWorktree).toBe(layoutByWorktree)
   })
 })
 

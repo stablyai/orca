@@ -4,6 +4,7 @@ import {
   type SourceControlTextActionId
 } from '../../../shared/source-control-ai-actions'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
+import { translate } from '@/i18n/i18n'
 
 export type SourceControlGenerationPlanResult =
   | { ok: true; commandLabel: string; delivery: string; caveat: string }
@@ -59,7 +60,13 @@ export function planSourceControlTextGeneration(
         )
       : SYNTHETIC_BASE_PROMPTS[actionId]
   if (!prompt.trim()) {
-    return { ok: false, error: 'Command input is empty.' }
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.source.control.generation.plan.dc480d5897',
+        'Command input is empty.'
+      )
+    }
   }
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {

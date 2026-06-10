@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
+import { translate } from '@/i18n/i18n'
 
 export function ContextualTourProgressDots({
   current,
@@ -18,7 +19,11 @@ export function ContextualTourProgressDots({
       aria-valuemin={1}
       aria-valuemax={total}
       aria-valuenow={current}
-      aria-label={`Step ${current} of ${total}`}
+      aria-label={translate(
+        'auto.components.contextual.tours.ContextualTourProgressDots.dcd6e6b03e',
+        'Step {{value0}} of {{value1}}',
+        { value0: current, value1: total }
+      )}
     >
       <span className="flex items-center gap-1.5" aria-hidden="true">
         {Array.from({ length: total }).map((_, index) => {
@@ -40,7 +45,9 @@ export function ContextualTourProgressDots({
         })}
       </span>
       <span className="whitespace-nowrap text-[11px] font-medium leading-none text-muted-foreground">
-        {current} of {total}
+        {current}{' '}
+        {translate('auto.components.contextual.tours.ContextualTourProgressDots.7734cb8ad3', 'of')}
+        {total}
       </span>
     </div>
   )

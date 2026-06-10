@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { ExperimentalPane } from './ExperimentalPane'
-import { EXPERIMENTAL_PANE_SEARCH_ENTRIES } from './experimental-search'
+import { getExperimentalPaneSearchEntries } from './experimental-search'
 
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: { settingsSearchQuery: string }) => unknown) =>
@@ -16,7 +16,7 @@ describe('ExperimentalPane', () => {
     )
 
     expect(markup).not.toContain('Compact worktree cards')
-    expect(EXPERIMENTAL_PANE_SEARCH_ENTRIES.map((entry) => entry.title)).not.toContain(
+    expect(getExperimentalPaneSearchEntries().map((entry) => entry.title)).not.toContain(
       'Compact worktree cards'
     )
   })

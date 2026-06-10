@@ -6,6 +6,7 @@ import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import { translate } from '@/i18n/i18n'
 
 function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
   const state = useAppStore.getState()
@@ -44,7 +45,12 @@ function launchSleepingAgentSession(record: SleepingAgentSessionRecord): boolean
     platform: getResumeLaunchPlatform(record.worktreeId)
   })
   if (!startupPlan) {
-    toast.error('This agent session cannot be resumed.')
+    toast.error(
+      translate(
+        'auto.lib.resume.sleeping.agent.session.f235f604fd',
+        'This agent session cannot be resumed.'
+      )
+    )
     return false
   }
 

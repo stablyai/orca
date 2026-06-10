@@ -21,6 +21,16 @@ export type BrowserPageZoomEventDetail = {
   direction: BrowserPageZoomDirection
 }
 
+export type BrowserPageZoomIndicatorState = {
+  ariaHidden: boolean
+  opacityClassName: 'opacity-100' | 'opacity-0'
+}
+
+export type BrowserPageZoomIndicatorInput = {
+  feedbackVisible: boolean
+  isDefaultZoom: boolean
+}
+
 type BrowserPageZoomWebview = {
   getZoomLevel: () => number
   setZoomLevel: (level: number) => void
@@ -57,6 +67,17 @@ export function setBrowserPageZoomLevel(
     return next
   } catch {
     return null
+  }
+}
+
+export function getBrowserPageZoomIndicatorState({
+  feedbackVisible
+}: BrowserPageZoomIndicatorInput): BrowserPageZoomIndicatorState {
+  // Why: browser zoom percent is transient feedback; non-default page zoom
+  // should not leave a permanent badge over the webview.
+  return {
+    ariaHidden: !feedbackVisible,
+    opacityClassName: feedbackVisible ? 'opacity-100' : 'opacity-0'
   }
 }
 

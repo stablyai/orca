@@ -6,6 +6,12 @@ import {
 import { getSettingsSetupGuideProgress } from './settings-setup-guide-progress'
 
 describe('settings setup guide progress', () => {
+  function makePreBrowserDoneStepState(): Partial<Record<FeatureWallSetupStepId, boolean>> {
+    return Object.fromEntries(
+      FEATURE_WALL_SETUP_STEPS.map((step) => [step.id, step.id !== 'browser'])
+    ) as Partial<Record<FeatureWallSetupStepId, boolean>>
+  }
+
   it('tracks the full setup checklist total', () => {
     const progress = getSettingsSetupGuideProgress({
       ready: true,
@@ -33,7 +39,21 @@ describe('settings setup guide progress', () => {
       ready: true,
       doneCount: 5,
       total: FEATURE_WALL_SETUP_STEPS.length,
-      firstIncompleteStepId: 'agent-capabilities'
+      firstIncompleteStepId: 'browser'
+    })
+  })
+
+  it('does not mark Settings complete for fresh users when only the browser step is incomplete', () => {
+    expect(
+      getSettingsSetupGuideProgress({
+        ready: true,
+        stepDone: makePreBrowserDoneStepState()
+      })
+    ).toEqual({
+      ready: true,
+      doneCount: FEATURE_WALL_SETUP_STEPS.length - 1,
+      total: FEATURE_WALL_SETUP_STEPS.length,
+      firstIncompleteStepId: 'browser'
     })
   })
 

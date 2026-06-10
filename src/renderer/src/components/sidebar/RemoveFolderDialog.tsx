@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 
 const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -40,19 +41,27 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle className="text-sm">Remove Project</DialogTitle>
+          <DialogTitle className="text-sm">
+            {translate('auto.components.sidebar.RemoveFolderDialog.b79b39d865', 'Remove Project')}
+          </DialogTitle>
           <DialogDescription className="text-xs">
-            This only removes{' '}
-            <span className="break-all font-medium text-foreground">{displayName}</span> from Orca.
-            It is still on your disk.
+            {translate(
+              'auto.components.sidebar.RemoveFolderDialog.e62415c3d0',
+              'This only removes'
+            )}{' '}
+            <span className="break-all font-medium text-foreground">{displayName}</span>{' '}
+            {translate(
+              'auto.components.sidebar.RemoveFolderDialog.8c097ef04e',
+              'from Orca. It is still on your disk.'
+            )}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            Cancel
+            {translate('auto.components.sidebar.RemoveFolderDialog.d36883e046', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={handleConfirm}>
-            Remove
+            {translate('auto.components.sidebar.RemoveFolderDialog.4dc5b5065b', 'Remove')}
           </Button>
         </DialogFooter>
       </DialogContent>
