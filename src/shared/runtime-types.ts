@@ -111,6 +111,7 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
+  quickCommandLabel?: string | null
   parentTabId: string
   leafId: string
   ptyId?: string | null

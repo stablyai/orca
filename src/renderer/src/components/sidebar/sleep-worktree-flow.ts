@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { clearWorktreeSleepIntent, markWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { cancelPendingSidebarWorktreeActivation } from '@/lib/sidebar-worktree-activation'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import { translate } from '@/i18n/i18n'
 
 /**
  * Shared "sleep worktree" flow (close all panels to free memory / CPU)
@@ -143,7 +144,15 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
     // otherwise continue — the active-worktree reset already happened so we
     // don't leave the UI in a stale state.
     toast.error(
-      worktreeIds.length === 1 ? 'Failed to sleep workspace' : 'Failed to sleep some workspaces',
+      worktreeIds.length === 1
+        ? translate(
+            'auto.components.sidebar.sleep.worktree.flow.8bc3fc0671',
+            'Failed to sleep workspace'
+          )
+        : translate(
+            'auto.components.sidebar.sleep.worktree.flow.c460fecc4a',
+            'Failed to sleep some workspaces'
+          ),
       {
         description: errors.join('\n')
       }

@@ -72,6 +72,9 @@ describe('runQuickCommandInNewTab', () => {
     })
 
     expect(result).toEqual({ tabId: 'tab-new' })
+    expect(mockState.createTab).toHaveBeenCalledWith('wt-1', 'group-1', undefined, {
+      quickCommandLabel: 'Build'
+    })
     expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
       command: 'cd packages; bun run build; cd ..'
     })
@@ -120,7 +123,8 @@ describe('runQuickCommandInNewTab', () => {
       prompt: 'Review this diff',
       worktreeId: 'repo::worktree',
       groupId: 'group-1',
-      launchSource: 'quick_command'
+      launchSource: 'quick_command',
+      quickCommandLabel: 'Review'
     })
     expect(mockState.queueTabStartupCommand).not.toHaveBeenCalled()
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'agent-review')
@@ -148,7 +152,8 @@ describe('runQuickCommandInNewTab', () => {
       prompt: 'Review this diff',
       worktreeId: 'repo::worktree',
       groupId: undefined,
-      launchSource: 'quick_command'
+      launchSource: 'quick_command',
+      quickCommandLabel: 'Review'
     })
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
       'active-group',

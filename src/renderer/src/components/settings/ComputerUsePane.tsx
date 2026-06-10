@@ -29,7 +29,8 @@ import { useAppStore } from '@/store'
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-export { COMPUTER_USE_PANE_SEARCH_ENTRIES } from './computer-use-search'
+import { translate } from '@/i18n/i18n'
+export { getComputerUsePaneSearchEntries } from './computer-use-search'
 
 type PermissionDefinition = {
   id: ComputerUsePermissionId
@@ -41,14 +42,20 @@ type PermissionDefinition = {
 const PERMISSIONS: PermissionDefinition[] = [
   {
     id: 'accessibility',
-    label: 'Accessibility',
-    description: 'Read app interface trees and perform requested actions.',
+    label: translate('auto.components.settings.ComputerUsePane.6b5a2cd3a5', 'Accessibility'),
+    description: translate(
+      'auto.components.settings.ComputerUsePane.4d03dec2d0',
+      'Read app interface trees and perform requested actions.'
+    ),
     icon: <Accessibility className="size-4" />
   },
   {
     id: 'screenshots',
-    label: 'Screenshots',
-    description: 'Capture app windows so agents can inspect visual state.',
+    label: translate('auto.components.settings.ComputerUsePane.07bbe4c4cb', 'Screenshots'),
+    description: translate(
+      'auto.components.settings.ComputerUsePane.0c9a33f468',
+      'Capture app windows so agents can inspect visual state.'
+    ),
     icon: <Camera className="size-4" />
   }
 ]
@@ -152,7 +159,12 @@ export function ComputerUsePane(): React.JSX.Element {
         return
       }
       toast.error(
-        error instanceof Error ? error.message : 'Could not load Computer Use permissions'
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.ComputerUsePane.2168fa5ab0',
+              'Could not load Computer Use permissions'
+            )
       )
     } finally {
       if (operationId === permissionOperationSequence.current && mountedRef.current) {
@@ -184,18 +196,34 @@ export function ComputerUsePane(): React.JSX.Element {
         return
       }
       if (result.launchedHelper) {
-        toast.message('Opened macOS Privacy & Security')
+        toast.message(
+          translate(
+            'auto.components.settings.ComputerUsePane.697005758f',
+            'Opened macOS Privacy & Security'
+          )
+        )
       } else {
         toast.message(
           result.platform === 'darwin'
-            ? 'Computer Use setup is already complete'
-            : 'Computer Use permissions are only required on macOS'
+            ? translate(
+                'auto.components.settings.ComputerUsePane.740766c291',
+                'Computer Use setup is already complete'
+              )
+            : translate(
+                'auto.components.settings.ComputerUsePane.7801ac08ec',
+                'Computer Use permissions are only required on macOS'
+              )
         )
       }
     } catch (error) {
       if (mountedRef.current) {
         toast.error(
-          error instanceof Error ? error.message : 'Could not open Computer Use permissions'
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.ComputerUsePane.5c45349665',
+                'Could not open Computer Use permissions'
+              )
         )
       }
     } finally {
@@ -224,13 +252,23 @@ export function ComputerUsePane(): React.JSX.Element {
       setPlatform(result.platform)
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
-      toast.message('Reset Computer Use access')
+      toast.message(
+        translate(
+          'auto.components.settings.ComputerUsePane.f189f448a3',
+          'Reset Computer Use access'
+        )
+      )
     } catch (error) {
       if (operationId !== permissionOperationSequence.current || !mountedRef.current) {
         return
       }
       toast.error(
-        error instanceof Error ? error.message : 'Could not reset Computer Use permissions'
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.settings.ComputerUsePane.3383ea1aab',
+              'Could not reset Computer Use permissions'
+            )
       )
     } finally {
       if (operationId === permissionOperationSequence.current && mountedRef.current) {
@@ -257,7 +295,7 @@ export function ComputerUsePane(): React.JSX.Element {
                     variant="outline"
                     className="border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
                   >
-                    Ready
+                    {translate('auto.components.settings.ComputerUsePane.0c29da5805', 'Ready')}
                   </Badge>
                 ) : null}
               </div>
@@ -271,7 +309,7 @@ export function ComputerUsePane(): React.JSX.Element {
               onClick={() => void refresh()}
             >
               <RefreshCw className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
+              {translate('auto.components.settings.ComputerUsePane.d95d1cfab8', 'Refresh')}
             </Button>
           </div>
 
@@ -316,7 +354,7 @@ export function ComputerUsePane(): React.JSX.Element {
                         className="gap-1.5"
                       >
                         <ExternalLink className="size-3.5" />
-                        Open
+                        {translate('auto.components.settings.ComputerUsePane.45f8e22c2e', 'Open')}
                       </Button>
                     </div>
                   </div>
@@ -329,15 +367,26 @@ export function ComputerUsePane(): React.JSX.Element {
               onClick={() => void resetAccess()}
               className="ml-auto mr-4 block w-28 text-right text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             >
-              {resetting ? 'Resetting access...' : 'Reset access'}
+              {resetting
+                ? translate(
+                    'auto.components.settings.ComputerUsePane.506f2acf7a',
+                    'Resetting access...'
+                  )
+                : translate('auto.components.settings.ComputerUsePane.6b17602073', 'Reset access')}
             </button>
           </div>
         </>
       ) : null}
 
       <AgentSkillSetupPanel
-        title="Computer Use skill"
-        description="Enables agents to inspect and operate local desktop apps."
+        title={translate(
+          'auto.components.settings.ComputerUsePane.93255aaf18',
+          'Computer Use skill'
+        )}
+        description={translate(
+          'auto.components.settings.ComputerUsePane.1735461723',
+          'Enables agents to inspect and operate local desktop apps.'
+        )}
         command={COMPUTER_USE_SKILL_INSTALL_COMMAND}
         terminalTitle="Computer Use setup"
         terminalAriaLabel="Computer Use skill install terminal"

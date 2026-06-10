@@ -2,6 +2,7 @@ import React, { useEffect, useId, useRef, useState } from 'react'
 import mermaid from 'mermaid'
 import DOMPurify from 'dompurify'
 import { getMermaidConfig } from './mermaid-config'
+import { translate } from '@/i18n/i18n'
 
 type MermaidBlockProps = {
   content: string
@@ -83,7 +84,10 @@ export default function MermaidBlock({
   if (error) {
     return (
       <div className="mermaid-block">
-        <div className="mermaid-error">Diagram error: {error}</div>
+        <div className="mermaid-error">
+          {translate('auto.components.editor.MermaidBlock.dcc132e691', 'Diagram error:')}
+          {error}
+        </div>
         <pre>
           <code>{content}</code>
         </pre>

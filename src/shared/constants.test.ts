@@ -31,6 +31,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').terminalUseSeparateLightTheme).toBe(true)
   })
 
+  it('uses system language by default', () => {
+    expect(getDefaultSettings('/tmp').uiLanguage).toBe('system')
+  })
+
   it('enables Source Control AI by default without pinning a separate agent', () => {
     expect(getDefaultSettings('/tmp').commitMessageAi).toMatchObject({
       enabled: true,

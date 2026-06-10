@@ -32,9 +32,14 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     macOptionClickForcesSelection: true,
     drawBoldTextInBrightColors: true,
     scrollbar: {
-      // Why: xterm's DOM scrollbar overlays the terminal in Electron; reserving
-      // gutter width in FitAddon underfits wide table/TUI output by a column.
-      width: 0
+      // Why: slim VS Code-style scrollbar (VS Code uses 14). FitAddon reserves
+      // this as a gutter, costing ~1 column per pane — accepted tradeoff so the
+      // scrollbar never covers content (evidence in PR #5051). The v1.4.51
+      // table corruption #4877 fixed by zeroing this was actually the ZWJ
+      // width bug; it stays fixed by pane-terminal-unicode-provider.ts. Width
+      // also enables the overview ruler, whose border is hidden in
+      // composeActiveTerminalTheme.
+      width: 7
     },
     // Why: advertise kitty keyboard protocol support so CLIs that probe
     // (CSI ? u) know Orca accepts enhanced key reporting. Orca still writes

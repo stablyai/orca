@@ -3825,6 +3825,59 @@ export class OrcaRuntimeService {
     return rendererSnapshot ? { ...rendererSnapshot, source: 'renderer' } : null
   }
 
+  private async withVisibleSnapshotFallback(
+    ptyId: string,
+    read: RuntimeTerminalRead,
+    opts: { cursor?: number; limit?: number } = {}
+  ): Promise<RuntimeTerminalRead> {
+    if (!shouldFallbackToVisibleTerminalSnapshot(read, opts)) {
+      return read
+    }
+    const lines = await this.readRendererVisibleSnapshotLines(ptyId)
+    if (lines.length === 0) {
+      return read
+    }
+    return buildVisibleSnapshotReadFallback(read, lines, opts.limit)
+  }
+
+  private async readRendererVisibleSnapshotLines(ptyId: string): Promise<string[]> {
+    const controller = this.ptyController
+    if (!controller?.serializeBuffer) {
+      return []
+    }
+    if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
+      return []
+    }
+    try {
+      // Why: raw PTY tails can be whitespace-only while a full-screen TUI is
+      // visibly nonblank in renderer xterm. Ask the renderer for the active
+      // screen instead of reusing the headless transcript path.
+      const snapshot = await controller.serializeBuffer(ptyId, {
+        scrollbackRows: 0,
+        altScreenForcesZeroRows: false
+      })
+      if (!snapshot || snapshot.data.length === 0) {
+        return []
+      }
+      const emulator = new HeadlessEmulator({
+        cols: snapshot.cols,
+        rows: snapshot.rows,
+        scrollback: 0
+      })
+      try {
+        await emulator.write(snapshot.data)
+        return emulator
+          .getVisibleLines()
+          .map((line) => line.trimEnd())
+          .filter((line) => line.trim().length > 0)
+      } finally {
+        emulator.dispose()
+      }
+    } catch {
+      return []
+    }
+  }
+
   private async serializeHeadlessTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
@@ -4663,6 +4716,15 @@ export class OrcaRuntimeService {
     }
   }
 
+  markMobileActor(ptyId: string, clientId: string): void {
+    const inner = this.mobileSubscribers.get(ptyId)
+    const sub = inner?.get(clientId)
+    if (sub) {
+      sub.lastActedAt = Date.now()
+    }
+    this.setDriver(ptyId, { kind: 'mobile', clientId })
+  }
+
   // Why: invoked from mobile RPC method handlers (terminal.send / setDisplayMode /
   // resizeForClient / fresh subscribe with auto). Records the actor as the
   // most recent mobile driver and re-applies phone-fit if we were previously
@@ -4732,12 +4794,22 @@ export class OrcaRuntimeService {
     // to update lastActedAt-based ordering on later actor selection.
     this.setDriver(ptyId, { kind: 'mobile', clientId })
 
-    await this.enqueueLayout(ptyId, {
-      kind: 'phone',
-      cols: clampedCols,
-      rows: clampedRows,
-      ownerClientId: winner.clientId
-    })
+    const needsFreshSubscribeGuard = !this.layouts.has(ptyId)
+    if (needsFreshSubscribeGuard) {
+      this.freshSubscribeGuard.add(ptyId)
+    }
+    try {
+      await this.enqueueLayout(ptyId, {
+        kind: 'phone',
+        cols: clampedCols,
+        rows: clampedRows,
+        ownerClientId: winner.clientId
+      })
+    } finally {
+      if (needsFreshSubscribeGuard) {
+        this.freshSubscribeGuard.delete(ptyId)
+      }
+    }
     return true
   }
 
@@ -4748,15 +4820,18 @@ export class OrcaRuntimeService {
     ptyId: string,
     viewport: { cols: number; rows: number }
   ): Promise<boolean> {
-    if (
-      this.isResizeSuppressed() ||
-      this.getDriver(ptyId).kind === 'mobile' ||
-      this.terminalFitOverrides.has(ptyId)
-    ) {
-      return false
-    }
     const cols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
     const rows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
+    if (this.terminalFitOverrides.has(ptyId)) {
+      // Why: remote desktop panes do not have the local pty:reportGeometry
+      // IPC. While phone-fit holds the PTY, treat their viewport RPC as a
+      // measurement-only restore target, not a resize intent.
+      this.recordRendererGeometry(ptyId, cols, rows)
+      return true
+    }
+    if (this.isResizeSuppressed() || this.getDriver(ptyId).kind === 'mobile') {
+      return false
+    }
     let resized = false
     try {
       resized = this.ptyController?.resize?.(ptyId, cols, rows) ?? false
@@ -4801,14 +4876,14 @@ export class OrcaRuntimeService {
         clearTimeout(pending.timer)
         this.pendingRestoreTimers.delete(ptyId)
       }
-      // Why: with no subscribers, resolveDesktopRestoreTarget falls through
-      // to current PTY size — which is at phone dims (wrong). Prefer the
-      // baseline captured on the override at first phone-fit; this is the
-      // last desktop geometry the layout machine knew about. Then chain
-      // to the standard resolver for the residual fallbacks.
+      // Why: with no subscribers, resolveDesktopRestoreTarget can fall through
+      // to current PTY size — which is at phone dims (wrong). Prefer a fresh
+      // desktop renderer measurement when one exists; otherwise use the
+      // override's pre-fit baseline before falling back to current size.
       const fallback = this.resolveDesktopRestoreTarget(ptyId)
-      const cols = heldOverride.previousCols ?? fallback.cols
-      const rows = heldOverride.previousRows ?? fallback.rows
+      const renderer = this.lastRendererSizes.get(ptyId)
+      const cols = renderer?.cols ?? heldOverride.previousCols ?? fallback.cols
+      const rows = renderer?.rows ?? heldOverride.previousRows ?? fallback.rows
       await this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
       this.setDriver(ptyId, { kind: 'desktop' })
       // Why: a desktop-initiated reclaim is "I'm taking over right now",
@@ -5224,9 +5299,6 @@ export class OrcaRuntimeService {
     viewport?: { cols: number; rows: number }
   ): Promise<boolean> {
     const mode = this.mobileDisplayModes.get(ptyId) ?? 'auto'
-    if (!viewport) {
-      return false
-    }
 
     // Cancel pending restore timer for this ptyId — any new subscriber
     // supersedes any old client's pending restore.
@@ -5235,9 +5307,6 @@ export class OrcaRuntimeService {
       clearTimeout(pendingRestore.timer)
       this.pendingRestoreTimers.delete(ptyId)
     }
-
-    const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
-    const clampedRows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
 
     // Resubscribe-grace honor: same client returning within soft-leave
     // window restores prior record (preserving baseline so we don't capture
@@ -5253,11 +5322,16 @@ export class OrcaRuntimeService {
       }
       inner.set(clientId, {
         ...softLeaver.record,
-        viewport,
+        viewport: viewport ?? null,
         lastActedAt: Date.now()
       })
+      if (!viewport) {
+        return false
+      }
       this.setDriver(ptyId, { kind: 'mobile', clientId })
       if (mode !== 'desktop') {
+        const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
+        const clampedRows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
         this.freshSubscribeGuard.add(ptyId)
         try {
           await this.enqueueLayout(ptyId, {
@@ -5304,6 +5378,25 @@ export class OrcaRuntimeService {
       (someoneAlreadyFitted ? null : (rendererSize?.rows ?? currentSize?.rows ?? null))
     const now = Date.now()
     const subscribedAt = existing?.subscribedAt ?? now
+
+    if (!viewport) {
+      // Why: mobile can subscribe before its WebView has measured. Keep the
+      // subscriber + desktop baseline so updateViewport/setDisplayMode can
+      // late-bind the viewport without recapturing phone dims.
+      inner.set(clientId, {
+        clientId,
+        viewport: null,
+        wasResizedToPhone: false,
+        previousCols,
+        previousRows,
+        subscribedAt,
+        lastActedAt: now
+      })
+      return false
+    }
+
+    const clampedCols = Math.max(20, Math.min(240, Math.round(viewport.cols)))
+    const clampedRows = Math.max(8, Math.min(120, Math.round(viewport.rows)))
 
     if (mode === 'desktop') {
       // Passive watch — null baseline (we'll capture later if user toggles
@@ -5890,7 +5983,8 @@ export class OrcaRuntimeService {
   ): Promise<RuntimeTerminalRead> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
-      return this.readPtyTerminal(handle, pty.pty, opts)
+      const read = this.readPtyTerminal(handle, pty.pty, opts)
+      return this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -5904,7 +5998,7 @@ export class OrcaRuntimeService {
       cursor: opts.cursor,
       limit: opts.limit
     })
-    return read
+    return leaf.ptyId ? this.withVisibleSnapshotFallback(leaf.ptyId, read, opts) : read
   }
 
   async sendTerminal(
@@ -15344,6 +15438,41 @@ function readTerminalTail(args: {
     oldestCursor: String(oldestCursor),
     nextCursor: String(latestCursor),
     latestCursor: String(latestCursor),
+    returnedLineCount: charBoundedTail.tail.length
+  }
+}
+
+function shouldFallbackToVisibleTerminalSnapshot(
+  read: RuntimeTerminalRead,
+  opts: { cursor?: number; limit?: number }
+): boolean {
+  if (typeof opts.cursor === 'number') {
+    return false
+  }
+  if (read.tail.length === 0) {
+    return false
+  }
+  const hasSubstantialBlankTail =
+    read.limited === true || read.truncated || read.tail.length >= DEFAULT_TERMINAL_READ_LIMIT
+  return hasSubstantialBlankTail && read.tail.every((line) => line.trim().length === 0)
+}
+
+function buildVisibleSnapshotReadFallback(
+  read: RuntimeTerminalRead,
+  visibleLines: string[],
+  limit: number | undefined
+): RuntimeTerminalRead {
+  const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
+  const lineBoundedTail = visibleLines.slice(-lineLimit)
+  const charBoundedTail = trimTerminalPreviewToCharacterBudget(
+    lineBoundedTail,
+    MAX_TERMINAL_PREVIEW_CHARS
+  )
+  return {
+    ...read,
+    tail: charBoundedTail.tail,
+    limited:
+      read.limited || lineBoundedTail.length < visibleLines.length || charBoundedTail.limited,
     returnedLineCount: charBoundedTail.tail.length
   }
 }

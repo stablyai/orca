@@ -31,7 +31,7 @@ function refreshTerminalAfterWebglAttach(pane: ManagedPaneInternal): void {
     // resume/reparent/settings toggles do not look frozen until new output.
     pane.terminal.refresh(0, pane.terminal.rows - 1)
   } catch {
-    /* ignore — pane may have been disposed in the meantime */
+    /* ignore - pane may have been disposed in the meantime */
   }
 }
 
@@ -73,6 +73,21 @@ export function disposeWebgl(
 
 export function markComplexScriptOutput(pane: ManagedPaneInternal): void {
   pane.hasComplexScriptOutput = true
+}
+
+export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
+  if (!pane.webglAddon || pane.webglDisabledAfterContextLoss) {
+    return
+  }
+  try {
+    // Why: rapid TUI redraws can corrupt xterm's WebGL glyph atlas without a
+    // context-loss event. Clearing the atlas preserves GPU rendering and forces
+    // a fresh paint when the pane becomes visible/focused again.
+    pane.webglAddon.clearTextureAtlas()
+    pane.terminal.refresh(0, pane.terminal.rows - 1)
+  } catch {
+    /* ignore — pane may have been disposed in the meantime */
+  }
 }
 
 export function attachWebgl(pane: ManagedPaneInternal): void {

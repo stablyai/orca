@@ -94,6 +94,36 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Amp execute generation without the removed archive flag', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'amp',
+        model: 'large',
+        thinkingLevel: 'medium'
+      },
+      'PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'amp',
+        args: [
+          '--execute',
+          '--no-notifications',
+          '--no-ide',
+          '--no-jetbrains',
+          '--mode',
+          'large',
+          '--effort',
+          'medium'
+        ],
+        stdinPayload: 'PROMPT',
+        label: 'Amp'
+      }
+    })
+  })
+
   it('allows discovered dynamic models that are not in the seed catalog', () => {
     const result = planCommitMessageGeneration(
       {

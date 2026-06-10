@@ -68,17 +68,29 @@ function hydrateUnifiedFormat(
         .filter((tab) => tab.generatedTitle?.trim())
         .map((tab) => [tab.id, tab.generatedTitle!.trim()])
     )
+    const quickCommandLabelByTerminalId = new Map(
+      (session.tabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.quickCommandLabel?.trim())
+        .map((tab) => [tab.id, tab.quickCommandLabel!.trim()])
+    )
     tabsByWorktree[worktreeId] = [...tabs]
       .map((tab) => ({
         ...tab,
         entityId: tab.entityId ?? tab.id
       }))
       .map((tab) => {
-        if (tab.contentType !== 'terminal' || tab.generatedLabel?.trim()) {
+        if (tab.contentType !== 'terminal') {
           return tab
         }
+        const quickCommandLabel = tab.quickCommandLabel?.trim()
+          ? tab.quickCommandLabel.trim()
+          : quickCommandLabelByTerminalId.get(tab.entityId)
         const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
-        return generatedLabel ? { ...tab, generatedLabel } : tab
+        return {
+          ...tab,
+          ...(quickCommandLabel ? { quickCommandLabel } : {}),
+          ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})
+        }
       })
       .filter((tab) => {
         if (tab.contentType === 'terminal') {
@@ -205,6 +217,7 @@ function hydrateLegacyFormat(
         worktreeId,
         contentType: 'terminal',
         label: tt.title,
+        ...(tt.quickCommandLabel?.trim() ? { quickCommandLabel: tt.quickCommandLabel.trim() } : {}),
         ...(tt.generatedTitle?.trim() ? { generatedLabel: tt.generatedTitle.trim() } : {}),
         customLabel: tt.customTitle,
         color: tt.color,

@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { ClaudeIcon } from '../status-bar/icons'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import { CursorIcon } from './feature-tour-preview-glyphs'
+import { translate } from '@/i18n/i18n'
 
 type ComputerUsePhase = 'inspect' | 'target' | 'click' | 'verified'
 
@@ -81,7 +82,10 @@ export function ComputerUseAnimatedVisual(props: {
           <span className="size-2 rounded-full bg-amber-400/70" />
           <span className="size-2 rounded-full bg-emerald-400/70" />
           <span className="ml-1 truncate text-[11px] font-medium text-muted-foreground">
-            Local app
+            {translate(
+              'auto.components.feature.wall.ComputerUseAnimatedVisual.9cddfe96b2',
+              'Local app'
+            )}
           </span>
         </div>
 
@@ -100,7 +104,15 @@ export function ComputerUseAnimatedVisual(props: {
                     : 'border-border bg-muted/40 text-muted-foreground'
                 )}
               >
-                {verified ? 'Approved' : 'Pending'}
+                {verified
+                  ? translate(
+                      'auto.components.feature.wall.ComputerUseAnimatedVisual.c11dda000b',
+                      'Approved'
+                    )
+                  : translate(
+                      'auto.components.feature.wall.ComputerUseAnimatedVisual.bdd5312213',
+                      'Pending'
+                    )}
               </span>
             </div>
           </div>
@@ -131,7 +143,15 @@ export function ComputerUseAnimatedVisual(props: {
                     phase === 'click' ? 'scale-[0.97]' : null
                   )}
                 >
-                  {clicked ? 'Done' : 'Approve'}
+                  {clicked
+                    ? translate(
+                        'auto.components.feature.wall.ComputerUseAnimatedVisual.3cc2df3671',
+                        'Done'
+                      )
+                    : translate(
+                        'auto.components.feature.wall.ComputerUseAnimatedVisual.9634d870d1',
+                        'Approve'
+                      )}
                 </div>
               </div>
             </div>
@@ -159,7 +179,12 @@ function AgentWorktreeTerminal(props: {
     <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-background">
       <div className="flex h-7 items-center gap-1.5 border-b border-border bg-muted/40 px-2.5">
         <ClaudeIcon size={13} />
-        <span className="truncate text-[11px] font-medium text-muted-foreground">Claude Code</span>
+        <span className="truncate text-[11px] font-medium text-muted-foreground">
+          {translate(
+            'auto.components.feature.wall.ComputerUseAnimatedVisual.94787f01f8',
+            'Claude Code'
+          )}
+        </span>
         <span className="ml-auto inline-flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
           <GitBranch className="size-3" />
           <span className="truncate">{WORKTREE_LABEL}</span>
@@ -168,11 +193,19 @@ function AgentWorktreeTerminal(props: {
       <div className="space-y-1.5 p-3 font-mono text-[10.5px] leading-snug">
         <TerminalLine muted>
           <span className="mr-1.5 text-foreground">●</span>
-          Claude Code session started
+          {translate(
+            'auto.components.feature.wall.ComputerUseAnimatedVisual.2adb561b44',
+            'Claude Code session started'
+          )}
         </TerminalLine>
         <TerminalLine wrap>
-          <span className="mr-1.5 text-amber-600">&gt;</span>
-          approve the note in my app
+          <span className="mr-1.5 text-amber-600">
+            {translate('auto.components.feature.wall.ComputerUseAnimatedVisual.99a8624bcb', '>')}
+          </span>
+          {translate(
+            'auto.components.feature.wall.ComputerUseAnimatedVisual.79445f7512',
+            'approve the note in my app'
+          )}
         </TerminalLine>
         <ComputerActionLine
           action="Computer"
@@ -181,7 +214,11 @@ function AgentWorktreeTerminal(props: {
           done={props.targetVisible}
         />
         <TerminalLine visible={props.targetVisible} indent muted>
-          found &ldquo;Approve&rdquo; <span>[#7]</span>
+          {translate(
+            'auto.components.feature.wall.ComputerUseAnimatedVisual.1719b28a81',
+            'found "Approve"'
+          )}
+          <span>[#7]</span>
         </TerminalLine>
         <ComputerActionLine
           action="Computer"
@@ -190,7 +227,10 @@ function AgentWorktreeTerminal(props: {
           done={props.clicked}
         />
         <TerminalLine visible={props.clicked} indent muted>
-          click sent
+          {translate(
+            'auto.components.feature.wall.ComputerUseAnimatedVisual.6804cb356f',
+            'click sent'
+          )}
         </TerminalLine>
         <ComputerActionLine
           action="Computer"
@@ -199,7 +239,16 @@ function AgentWorktreeTerminal(props: {
           done={props.verified}
         />
         <TerminalLine visible={props.verified} indent muted>
-          status: <span className="text-foreground">approved</span>
+          {translate(
+            'auto.components.feature.wall.ComputerUseAnimatedVisual.f27676a92c',
+            'status:'
+          )}
+          <span className="text-foreground">
+            {translate(
+              'auto.components.feature.wall.ComputerUseAnimatedVisual.d8401975b1',
+              'approved'
+            )}
+          </span>
         </TerminalLine>
       </div>
     </div>

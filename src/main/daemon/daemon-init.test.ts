@@ -28,6 +28,7 @@ const {
   getProcessStartedAtMsMock,
   daemonClientMock,
   spawnerInstances,
+  ensureRunningOverrides,
   adapterInstances,
   setLocalPtyProviderMock,
   unbindLocalProviderListenersMock,
@@ -83,6 +84,7 @@ const {
   // Why: every DaemonSpawner constructed under test pushes into this array so
   // assertions can check "was the *same* spawner reused across restart?".
   const spawnerInstances: MockSpawner[] = []
+  const ensureRunningOverrides: (() => Promise<{ socketPath: string; tokenPath: string }>)[] = []
   // Same for DaemonPtyAdapter. The test asserts the replacement adapter is a
   // fresh instance whose respawn closure targets the *original* spawner.
   const adapterInstances: MockAdapter[] = []
@@ -107,6 +109,7 @@ const {
     getProcessStartedAtMsMock,
     daemonClientMock,
     spawnerInstances,
+    ensureRunningOverrides,
     adapterInstances,
     setLocalPtyProviderMock,
     unbindLocalProviderListenersMock,
@@ -193,6 +196,10 @@ vi.mock('./daemon-spawner', () => ({
       // so the test can verify the *replacement* adapter is constructed with
       // info from the second ensureRunning call, not stale info from the first.
       this.ensureRunning = vi.fn(async () => {
+        const override = ensureRunningOverrides.shift()
+        if (override) {
+          return override()
+        }
         this.socketCounter += 1
         return {
           socketPath: `/fake/socket-${this.socketCounter}`,
@@ -256,6 +263,7 @@ vi.mock('../ipc/pty', () => ({
 async function importFresh() {
   vi.resetModules()
   spawnerInstances.length = 0
+  ensureRunningOverrides.length = 0
   adapterInstances.length = 0
   setLocalPtyProviderMock.mockClear()
   unbindLocalProviderListenersMock.mockClear()
@@ -289,6 +297,44 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('re-binds listeners after the first daemon provider is installed', async () => {
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+
+    expect(setLocalPtyProviderMock).toHaveBeenCalledTimes(1)
+    expect(rebindLocalProviderListenersMock).toHaveBeenCalledTimes(1)
+    expect(rebindLocalProviderListenersMock.mock.invocationCallOrder[0]).toBeGreaterThan(
+      setLocalPtyProviderMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('does not install a late daemon provider after startup fallback aborts the init attempt', async () => {
+    const mod = await importFresh()
+    let resolveEnsureRunning!: (value: { socketPath: string; tokenPath: string }) => void
+    ensureRunningOverrides.push(
+      () =>
+        new Promise((resolve) => {
+          resolveEnsureRunning = resolve
+        })
+    )
+    const abortController = new AbortController()
+
+    const started = mod.initDaemonPtyProvider(abortController.signal)
+    await Promise.resolve()
+
+    expect(spawnerInstances).toHaveLength(1)
+    expect(spawnerInstances[0].ensureRunning).toHaveBeenCalledTimes(1)
+
+    abortController.abort()
+    resolveEnsureRunning({ socketPath: '/fake/socket-late', tokenPath: '/fake/token-late' })
+    await started
+
+    expect(adapterInstances).toHaveLength(0)
+    expect(setLocalPtyProviderMock).not.toHaveBeenCalled()
+    expect(rebindLocalProviderListenersMock).not.toHaveBeenCalled()
+    expect(mod.getDaemonProvider()).toBeNull()
   })
 
   it('fans pty:exit for every active session *before* unbinding listeners, and killedCount is captured pre-fanout', async () => {

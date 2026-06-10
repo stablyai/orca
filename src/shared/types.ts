@@ -26,6 +26,7 @@ import type {
 import type { AgentKind, LaunchSource, RequestKind } from './telemetry-events'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { UiLanguage } from './ui-language'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -471,6 +472,7 @@ export type Tab = {
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
+  quickCommandLabel?: string | null
   customLabel: string | null
   color: string | null
   sortOrder: number
@@ -505,6 +507,8 @@ export type TerminalTab = {
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
   generatedTitle?: string | null
+  /** Stable label from the tab-bar Quick Command that created this terminal. */
+  quickCommandLabel?: string | null
   customTitle: string | null
   color: string | null
   sortOrder: number
@@ -1994,6 +1998,7 @@ export type GlobalSettings = {
   branchPrefixCustom: string
   enableGitHubAttribution: boolean
   theme: 'system' | 'dark' | 'light'
+  uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
@@ -2660,6 +2665,13 @@ export type PersistedUIState = {
   /** User-hidden sidebar entry for the setup guide. The Help menu remains
    *  available so this is a reversible declutter preference, not completion. */
   setupGuideSidebarDismissed?: boolean
+  /** One-shot migration marker for the browser setup-guide milestone. Existing
+   *  profiles missing this marker are evaluated once in the renderer because
+   *  full checklist completion depends on runtime probes. */
+  setupGuideBrowserMilestoneMigrated?: boolean
+  /** Existing users who completed or dismissed the pre-browser checklist stay
+   *  complete after the browser milestone is added. */
+  setupGuideBrowserMilestoneLegacyComplete?: boolean
   /** User-dismissed browser import hint in the browser toolbar. Import remains
    *  available from Settings > Browser and the toolbar overflow menu. */
   browserImportHintHidden?: boolean

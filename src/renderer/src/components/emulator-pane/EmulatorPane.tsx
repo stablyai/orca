@@ -4,6 +4,7 @@ import { EmulatorUnavailablePane } from './emulator-unavailable-pane'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
+import { translate } from '@/i18n/i18n'
 
 type EmulatorPaneProps = {
   tab?: Tab
@@ -70,7 +71,12 @@ function EmulatorPaneContent({ tab, worktreeId, isActive = true }: EmulatorPaneP
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-muted px-3 py-6">
         {!isLive && !loading ? (
-          <p className="mb-4 text-center text-xs text-muted-foreground">No emulator connected</p>
+          <p className="mb-4 text-center text-xs text-muted-foreground">
+            {translate(
+              'auto.components.emulator.pane.EmulatorPane.59b08fa031',
+              'No emulator connected'
+            )}
+          </p>
         ) : null}
         <EmulatorDeviceFrame
           previewUrl={previewUrl}

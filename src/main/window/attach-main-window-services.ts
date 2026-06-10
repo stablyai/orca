@@ -51,6 +51,7 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    awaitLocalPtyStartup?: () => Promise<void>
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
   }
 ): void {
@@ -64,7 +65,10 @@ export function attachMainWindowServices(
     getSelectedCodexHomePath,
     () => store.getSettings(),
     prepareClaudeAuth,
-    store
+    store,
+    {
+      awaitLocalPtyStartup: options?.awaitLocalPtyStartup
+    }
   )
   // Why: the Manage Sessions settings panel (docs/daemon-staleness-ux.md §Phase 1)
   // uses a narrow `pty:management:*` IPC surface that reads the live
@@ -89,6 +93,17 @@ export function attachMainWindowServices(
   // function re-runs as the main window is recreated — does not redo the
   // git I/O or daemon RPC.
   void hydrateLocalPtyRegistryAtBoot(store)
+  const localPtyStartupReady = options?.awaitLocalPtyStartup?.()
+  if (localPtyStartupReady) {
+    void localPtyStartupReady
+      .then(() => hydrateLocalPtyRegistryAtBoot(store))
+      .catch((error) => {
+        console.warn(
+          '[memory] Deferred pty-registry hydration skipped:',
+          error instanceof Error ? error.message : String(error)
+        )
+      })
+  }
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)

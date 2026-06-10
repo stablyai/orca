@@ -27,8 +27,10 @@ import {
 } from './pane-tree-ops'
 import { toPublicPane } from './pane-public-view'
 import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
+import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
+  resetPaneWebglTextureAtlases,
   resumePaneRendering,
   setPaneGpuRenderingState,
   suspendPaneRendering
@@ -257,6 +259,18 @@ export class PaneManager {
 
   markPaneHasComplexScriptOutput(paneId: number): void {
     markPaneComplexScriptOutput(this.panes, paneId)
+  }
+
+  rebuildPaneWebgl(paneId: number): void {
+    const pane = this.panes.get(paneId)
+    if (!pane) {
+      return
+    }
+    rebuildAttachedWebgl(pane)
+  }
+
+  resetWebglTextureAtlases(): void {
+    resetPaneWebglTextureAtlases(this.panes.values())
   }
 
   suspendRendering(): void {

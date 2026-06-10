@@ -1048,6 +1048,9 @@ export function useTerminalPaneLifecycle({
       // so PTYs survive navigation. Creating WebGL for those offscreen panes
       // still consumes Chromium's context budget and can blank visible panes.
       initialRenderingSuspended: !isVisibleRef.current,
+      // Why: remote-runtime panes honor the user GPU setting too — snapshots
+      // that arrive after WebGL attaches are handled by the post-replay
+      // rebuildPaneWebgl in pty-connection's replay callback.
       terminalGpuAcceleration: settingsRef.current?.terminalGpuAcceleration ?? 'auto',
       debugLabel: `tab:${tabId}/wt:${worktreeId}`
     })

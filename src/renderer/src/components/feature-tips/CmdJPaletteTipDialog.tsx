@@ -12,6 +12,7 @@ import {
 import { formatShortcutLabel, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { CmdJPaletteFeatureTipVisual } from './CmdJPaletteFeatureTipVisual'
 import { FeatureTipActions } from './FeatureTipActions'
+import { translate } from '@/i18n/i18n'
 
 export function CmdJPaletteTipDialog({
   open,
@@ -66,27 +67,38 @@ export function CmdJPaletteTipDialog({
               >
                 {tip.eyebrow.toUpperCase()}
               </Badge>
+              {/* Why: flow the shortcut chip as inline text (not a flex item) so the
+                  short Mac label (⌘⇧J) stays on one line, while a wide label like
+                  "Ctrl+Shift+J" wraps to the next line only when it doesn't fit —
+                  instead of being pushed to the right edge on Win/Linux. */}
               <DialogTitle className="text-2xl font-semibold leading-tight tracking-tight md:text-[1.75rem]">
-                <span className="inline-flex flex-wrap items-center gap-x-2.5 gap-y-1 md:flex-nowrap">
-                  <span>{titlePrefix.trimEnd()}</span>
-                  {displayShortcutLabel ? (
-                    <kbd className="inline-flex shrink-0 items-center rounded-md border border-border bg-card px-2 py-0.5 font-mono text-base font-medium text-foreground">
+                {titlePrefix.trimEnd()}
+                {displayShortcutLabel ? (
+                  <>
+                    {' '}
+                    <kbd className="ml-0.5 inline-flex items-center whitespace-nowrap rounded-md border border-border bg-card px-2 py-0.5 align-middle font-mono text-base font-medium text-foreground">
                       {displayShortcutLabel}
                     </kbd>
-                  ) : null}
-                  {titleSuffix ? <span>{titleSuffix}</span> : null}
-                </span>
+                  </>
+                ) : null}
+                {titleSuffix ? ` ${titleSuffix}` : null}
               </DialogTitle>
               <DialogDescription className="mt-3 max-w-2xl space-y-3 text-sm leading-relaxed">
                 <span className="block">{tip.description}</span>
                 <span className="block text-muted-foreground">
-                  Rebind the shortcut anytime in{' '}
+                  {translate(
+                    'auto.components.feature.tips.CmdJPaletteTipDialog.8241897205',
+                    'Rebind the shortcut anytime in'
+                  )}{' '}
                   <button
                     type="button"
                     onClick={onRebindClick}
                     className="inline appearance-none border-0 bg-transparent p-0 font-medium text-foreground underline decoration-foreground/30 underline-offset-2 transition-colors hover:decoration-foreground focus-visible:outline-none focus-visible:decoration-foreground"
                   >
-                    Settings → Shortcuts
+                    {translate(
+                      'auto.components.feature.tips.CmdJPaletteTipDialog.c0bb9f869b',
+                      'Settings → Shortcuts'
+                    )}
                   </button>
                   .
                 </span>

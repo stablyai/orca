@@ -7,6 +7,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { basename, dirname } from '@/lib/path'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { translate } from '@/i18n/i18n'
 
 export function useLocalImagePick(
   editor: Editor | null,
@@ -36,7 +37,12 @@ export function useLocalImagePick(
       if (settings?.activeRuntimeEnvironmentId?.trim() || connectionId) {
         const worktreePath = getWorktreePath(worktreeId)
         if (settings?.activeRuntimeEnvironmentId?.trim() && !worktreePath) {
-          toast.error('Worktree path not available.')
+          toast.error(
+            translate(
+              'auto.components.editor.useLocalImagePick.91d835dc88',
+              'Worktree path not available.'
+            )
+          )
           return
         }
         // Why: picked images are client-local files while remote markdown lives
@@ -54,7 +60,12 @@ export function useLocalImagePick(
         )
         const imported = results.find((result) => result.status === 'imported')
         if (!imported) {
-          toast.error('Failed to insert image.')
+          toast.error(
+            translate(
+              'auto.components.editor.useLocalImagePick.175cb8b8ce',
+              'Failed to insert image.'
+            )
+          )
           return
         }
         editor

@@ -310,6 +310,8 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
     expect(ui.lastUpdateCheckAt).toBeNull()
     expect(ui.setupGuideSidebarDismissed).toBe(false)
+    expect(ui.setupGuideBrowserMilestoneMigrated).toBe(true)
+    expect(ui.setupGuideBrowserMilestoneLegacyComplete).toBe(false)
   })
 
   it('hides the setup guide sidebar entry for existing users backfilled as completed', async () => {
@@ -325,6 +327,8 @@ describe('Store', () => {
     expect(onboarding.outcome).toBe('completed')
     expect(onboarding.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
     expect(store.getUI().setupGuideSidebarDismissed).toBe(true)
+    expect(store.getUI().setupGuideBrowserMilestoneMigrated).toBe(false)
+    expect(store.getUI().setupGuideBrowserMilestoneLegacyComplete).toBe(false)
   })
 
   it('persists the existing-user onboarding backfill back to disk', async () => {

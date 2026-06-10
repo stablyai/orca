@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/feature-wall-workflows'
 import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-events'
 import { track } from '@/lib/telemetry'
+import { translate } from '@/i18n/i18n'
 
 export function PreviewMedia(props: {
   posterUrl: string | null
@@ -66,7 +67,10 @@ export function RelatedFeatures(props: {
   return (
     <div className="border-t border-border pt-3.5">
       <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        Also in this workflow
+        {translate(
+          'auto.components.feature.wall.FeatureWallPreview.a666384798',
+          'Also in this workflow'
+        )}
       </h4>
       <ul className="flex flex-col gap-1" role="list">
         {items.map((tile) => (

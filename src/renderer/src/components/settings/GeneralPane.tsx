@@ -10,19 +10,20 @@ import { GeneralSupportSection } from './GeneralSupportSection'
 import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSection'
 import {
-  GENERAL_CACHE_TIMER_SEARCH_ENTRIES,
-  GENERAL_CLI_SEARCH_ENTRIES,
-  GENERAL_EDITOR_SEARCH_ENTRIES,
-  GENERAL_NAVIGATION_SEARCH_ENTRIES,
-  GENERAL_NETWORK_SEARCH_ENTRIES,
-  GENERAL_PANE_SEARCH_ENTRIES,
-  GENERAL_SUPPORT_SEARCH_ENTRIES,
-  GENERAL_UPDATE_SEARCH_ENTRIES,
-  GENERAL_WORKSPACE_SEARCH_ENTRIES
+  getGeneralCacheTimerSearchEntries,
+  getGeneralCliSearchEntries,
+  getGeneralEditorSearchEntries,
+  getGeneralNavigationSearchEntries,
+  getGeneralNetworkSearchEntries,
+  getGeneralPaneSearchEntries,
+  getGeneralSupportSearchEntries,
+  getGeneralUpdateSearchEntries,
+  getGeneralWorkspaceSearchEntries
 } from './general-search'
 import { RecentTabOrderControl } from './RecentTabOrderControl'
 import { matchesSettingsSearch } from './settings-search'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
+import { translate } from '@/i18n/i18n'
 
 export {
   createAutoSaveDelayDraftState,
@@ -50,7 +51,7 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
   return 'other'
 }
 
-export { GENERAL_PANE_SEARCH_ENTRIES }
+export { getGeneralPaneSearchEntries }
 
 type GeneralPaneProps = {
   settings: GlobalSettings
@@ -70,12 +71,14 @@ export function GeneralPane({
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
 
   const visibleSections = [
-    matchesSettingsSearch(searchQuery, GENERAL_NAVIGATION_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getGeneralNavigationSearchEntries()) ? (
       <section key="navigation" className="space-y-4">
-        <SettingsSubsectionHeader title="Navigation" />
+        <SettingsSubsectionHeader
+          title={translate('auto.components.settings.GeneralPane.d58fccfd84', 'Navigation')}
+        />
         <RecentTabOrderControl
           ctrlTabOrderMode={settings.ctrlTabOrderMode ?? 'mru'}
-          keywords={GENERAL_NAVIGATION_SEARCH_ENTRIES.flatMap((entry) => [
+          keywords={getGeneralNavigationSearchEntries().flatMap((entry) => [
             entry.title,
             entry.description ?? '',
             ...(entry.keywords ?? [])
@@ -84,28 +87,28 @@ export function GeneralPane({
         />
       </section>
     ) : null,
-    matchesSettingsSearch(searchQuery, GENERAL_WORKSPACE_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (
       <GeneralWorkspaceSettingsSection
         key="workspace"
         settings={settings}
         updateSettings={updateSettings}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, GENERAL_NETWORK_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getGeneralNetworkSearchEntries()) ? (
       <GeneralNetworkSettingsSection
         key="network"
         settings={settings}
         updateSettings={updateSettings}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, GENERAL_EDITOR_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getGeneralEditorSearchEntries()) ? (
       <GeneralEditorSettingsSection
         key="editor"
         settings={settings}
         updateSettings={updateSettings}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, GENERAL_CLI_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getGeneralCliSearchEntries()) ? (
       <CliSection
         key="cli"
         currentPlatform={getDesktopPlatformFromUserAgent(navigator.userAgent)}
@@ -116,14 +119,14 @@ export function GeneralPane({
         wslCapabilitiesLoading={wslCapabilitiesLoading}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, GENERAL_CACHE_TIMER_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getGeneralCacheTimerSearchEntries()) ? (
       <GeneralCacheTimerSection
         key="cache-timer"
         settings={settings}
         updateSettings={updateSettings}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, GENERAL_UPDATE_SEARCH_ENTRIES) ? (
+    matchesSettingsSearch(searchQuery, getGeneralUpdateSearchEntries()) ? (
       <GeneralUpdateSettingsSection key="updates" />
     ) : null
     // Note: the Support section is rendered outside this array so it can own
@@ -140,7 +143,7 @@ export function GeneralPane({
           {section}
         </div>
       ))}
-      {matchesSettingsSearch(searchQuery, GENERAL_SUPPORT_SEARCH_ENTRIES) ? (
+      {matchesSettingsSearch(searchQuery, getGeneralSupportSearchEntries()) ? (
         <GeneralSupportSection hasPrecedingSections={visibleSections.length > 0} />
       ) : null}
     </div>

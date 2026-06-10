@@ -24,6 +24,10 @@ import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
 } from './browser-screencast-protocol'
+import {
+  buildTerminalUnsubscribeParams,
+  updateTerminalSubscriptionViewport as updateCachedTerminalSubscriptionViewport
+} from './rpc-client-terminal-subscription'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -74,6 +78,10 @@ export type RpcClient = {
     onData: StreamingListener,
     options?: SubscribeOptions
   ) => () => void
+  updateTerminalSubscriptionViewport: (
+    terminal: string,
+    viewport: { cols: number; rows: number }
+  ) => void
   getState: () => ConnectionState
   // Why: UI escalates "Reconnecting…" to "Can't connect" once attempts cross
   // a threshold. 0 means never failed; counter is reset on successful open.
@@ -1151,36 +1159,22 @@ export function connect(
           disposeBrowserScreencastStream(id)
           return
         }
-        if (
-          stream?.method === 'terminal.subscribe' &&
-          stream.params &&
-          typeof stream.params === 'object' &&
-          typeof (stream.params as { terminal?: unknown }).terminal === 'string'
-        ) {
+        if (stream?.method === 'terminal.subscribe') {
           // Why: the runtime registers cleanup under the composite key
           // `${terminal}:${clientId}` so two phones subscribing to the same
           // terminal handle don't evict each other. Echo that composite key
           // back on unsubscribe; also include `client.id` so the server can
           // reconstruct it if a stale build emits a bare-handle id. See
           // docs/mobile-presence-lock.md.
-          const subscribeParams = stream.params as {
-            terminal: string
-            client?: { id?: string }
+          const unsubscribeParams = buildTerminalUnsubscribeParams(stream.params)
+          if (unsubscribeParams) {
+            sendEncrypted({
+              id: nextId(),
+              deviceToken,
+              method: 'terminal.unsubscribe',
+              params: unsubscribeParams
+            })
           }
-          const clientId =
-            typeof subscribeParams.client?.id === 'string' ? subscribeParams.client.id : undefined
-          const subscriptionId = clientId
-            ? `${subscribeParams.terminal}:${clientId}`
-            : subscribeParams.terminal
-          sendEncrypted({
-            id: nextId(),
-            deviceToken,
-            method: 'terminal.unsubscribe',
-            params: {
-              subscriptionId,
-              ...(clientId ? { client: { id: clientId } } : {})
-            }
-          })
         } else if (
           stream?.method === 'session.tabs.subscribe' &&
           stream.params &&
@@ -1196,6 +1190,13 @@ export function connect(
         }
         removeStreamListener(id)
       }
+    },
+
+    updateTerminalSubscriptionViewport(
+      terminal: string,
+      viewport: { cols: number; rows: number }
+    ): void {
+      updateCachedTerminalSubscriptionViewport(streamListeners.values(), terminal, viewport)
     },
 
     getState(): ConnectionState {

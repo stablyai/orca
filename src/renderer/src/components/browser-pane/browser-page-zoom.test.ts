@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   applyBrowserPageZoom,
   browserPageZoomLevelToPercent,
+  getBrowserPageZoomIndicatorState,
   nextBrowserPageZoomLevel,
   normalizeBrowserPageZoomLevel,
   setBrowserPageZoomLevel
@@ -104,5 +105,22 @@ describe('setBrowserPageZoomLevel', () => {
 
     expect(setBrowserPageZoomLevel(webview, 1.26)).toBe(1.5)
     expect(webview.setZoomLevel).toHaveBeenCalledWith(1.5)
+  })
+})
+
+describe('getBrowserPageZoomIndicatorState', () => {
+  it('shows browser zoom percent only while feedback is active', () => {
+    expect(
+      getBrowserPageZoomIndicatorState({ feedbackVisible: true, isDefaultZoom: false })
+    ).toEqual({
+      ariaHidden: false,
+      opacityClassName: 'opacity-100'
+    })
+    expect(
+      getBrowserPageZoomIndicatorState({ feedbackVisible: false, isDefaultZoom: false })
+    ).toEqual({
+      ariaHidden: true,
+      opacityClassName: 'opacity-0'
+    })
   })
 })

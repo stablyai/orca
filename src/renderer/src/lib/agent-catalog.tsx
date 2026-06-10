@@ -10,6 +10,8 @@ import {
   OmpIcon,
   PiIcon
 } from './agent-icon-glyphs'
+import { translate } from '@/i18n/i18n'
+import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export type AgentCatalogEntry = {
   id: TuiAgent
@@ -24,22 +26,22 @@ export type AgentCatalogEntry = {
   homepageUrl: string
 }
 
-export const AGENT_CATALOG: AgentCatalogEntry[] = [
+export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] => [
   {
     id: 'claude',
-    label: 'Claude',
+    label: translate('auto.lib.agent.catalog.0708ed89f1', 'Claude'),
     cmd: 'claude',
     homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
   },
   {
     id: 'claude-agent-teams',
-    label: 'Claude Agent Teams',
+    label: translate('auto.lib.agent.catalog.bf53f09bf8', 'Claude Agent Teams'),
     cmd: 'orca claude-teams',
     homepageUrl: 'https://code.claude.com/docs/agent-teams'
   },
   {
     id: 'openclaude',
-    label: 'OpenClaude',
+    label: translate('auto.lib.agent.catalog.a5fc0cb622', 'OpenClaude'),
     cmd: 'openclaude',
     // Why: OpenClaude's published favicon has a padded 500px canvas; Orca
     // uses a cropped derivative of that official asset so 12px tab icons stay legible.
@@ -48,86 +50,86 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   },
   {
     id: 'codex',
-    label: 'Codex',
+    label: translate('auto.lib.agent.catalog.760bc6883d', 'Codex'),
     cmd: 'codex',
     homepageUrl: 'https://github.com/openai/codex'
   },
   {
     id: 'grok',
-    label: 'Grok',
+    label: translate('auto.lib.agent.catalog.0baad2d5d2', 'Grok'),
     cmd: 'grok',
     faviconDomain: 'x.ai',
     homepageUrl: 'https://x.ai/cli'
   },
   {
     id: 'copilot',
-    label: 'GitHub Copilot',
+    label: translate('auto.lib.agent.catalog.706b0fe68b', 'GitHub Copilot'),
     cmd: 'copilot',
     homepageUrl: 'https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli'
   },
   {
     id: 'opencode',
-    label: 'OpenCode',
+    label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
     faviconDomain: 'opencode.ai',
     homepageUrl: 'https://opencode.ai/docs/cli/'
   },
   {
     id: 'pi',
-    label: 'Pi',
+    label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',
     homepageUrl: 'https://pi.dev'
   },
   {
     id: 'omp',
-    label: 'OMP',
+    label: translate('auto.lib.agent.catalog.09973b4d84', 'OMP'),
     cmd: 'omp',
     faviconDomain: 'omp.sh',
     homepageUrl: 'https://omp.sh'
   },
   {
     id: 'gemini',
-    label: 'Gemini',
+    label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
     cmd: 'gemini',
     faviconDomain: 'gemini.google.com',
     homepageUrl: 'https://github.com/google-gemini/gemini-cli'
   },
   {
     id: 'antigravity',
-    label: 'Antigravity',
+    label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
     cmd: 'agy',
     faviconDomain: 'antigravity.google',
     homepageUrl: 'https://antigravity.google/docs/cli-overview'
   },
   {
     id: 'aider',
-    label: 'Aider',
+    label: translate('auto.lib.agent.catalog.b32627f09b', 'Aider'),
     cmd: 'aider',
     homepageUrl: 'https://aider.chat/docs/'
   },
   {
     id: 'goose',
-    label: 'Goose',
+    label: translate('auto.lib.agent.catalog.8da11d876c', 'Goose'),
     cmd: 'goose',
     faviconDomain: 'goose-docs.ai',
     homepageUrl: 'https://block.github.io/goose/docs/quickstart/'
   },
   {
     id: 'amp',
-    label: 'Amp',
+    label: translate('auto.lib.agent.catalog.c73c573939', 'Amp'),
     cmd: 'amp',
     faviconDomain: 'ampcode.com',
     homepageUrl: 'https://ampcode.com/manual#install'
   },
   {
     id: 'kilo',
-    label: 'Kilocode',
+    label: translate('auto.lib.agent.catalog.918ba4ffed', 'Kilocode'),
     cmd: 'kilo',
     homepageUrl: 'https://kilo.ai/docs/cli'
   },
   {
     id: 'kiro',
-    label: 'Kiro',
+    label: translate('auto.lib.agent.catalog.e0247254f2', 'Kiro'),
     // Why: the Kiro installer (https://cli.kiro.dev/install) ships a binary
     // named `kiro-cli`, not `kiro`. Match TUI_AGENT_CONFIG.kiro.detectCmd so
     // the settings pane's "default command" hint aligns with what Orca
@@ -138,42 +140,42 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   },
   {
     id: 'crush',
-    label: 'Charm',
+    label: translate('auto.lib.agent.catalog.9477377a2a', 'Charm'),
     cmd: 'crush',
     faviconDomain: 'charm.sh',
     homepageUrl: 'https://github.com/charmbracelet/crush'
   },
   {
     id: 'aug',
-    label: 'Auggie',
+    label: translate('auto.lib.agent.catalog.5e8eff11b3', 'Auggie'),
     cmd: 'auggie',
     faviconDomain: 'augmentcode.com',
     homepageUrl: 'https://docs.augmentcode.com/cli/overview'
   },
   {
     id: 'autohand',
-    label: 'Autohand Code',
+    label: translate('auto.lib.agent.catalog.1f8a19e9ad', 'Autohand Code'),
     cmd: 'autohand',
     faviconDomain: 'autohand.ai',
     homepageUrl: 'https://github.com/autohandai/code-cli'
   },
   {
     id: 'cline',
-    label: 'Cline',
+    label: translate('auto.lib.agent.catalog.cbaf0c2e0b', 'Cline'),
     cmd: 'cline',
     faviconDomain: 'cline.bot',
     homepageUrl: 'https://docs.cline.bot/cline-cli/overview'
   },
   {
     id: 'codebuff',
-    label: 'Codebuff',
+    label: translate('auto.lib.agent.catalog.4238b771b5', 'Codebuff'),
     cmd: 'codebuff',
     faviconDomain: 'codebuff.com',
     homepageUrl: 'https://www.codebuff.com/docs/help/quick-start'
   },
   {
     id: 'command-code',
-    label: 'Command Code',
+    label: translate('auto.lib.agent.catalog.6f8056a565', 'Command Code'),
     // Why: `npm i -g command-code` installs both `command-code` and the
     // shorter alias `cmd`. Show the full name in the settings hint so it
     // matches TUI_AGENT_CONFIG['command-code'].detectCmd and avoids any
@@ -184,34 +186,34 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   },
   {
     id: 'continue',
-    label: 'Continue',
+    label: translate('auto.lib.agent.catalog.9e2a9bb87b', 'Continue'),
     cmd: 'continue',
     faviconDomain: 'continue.dev',
     homepageUrl: 'https://docs.continue.dev/guides/cli'
   },
   {
     id: 'cursor',
-    label: 'Cursor',
+    label: translate('auto.lib.agent.catalog.667c104cff', 'Cursor'),
     cmd: 'cursor-agent',
     faviconDomain: 'cursor.com',
     homepageUrl: 'https://cursor.com/cli'
   },
   {
     id: 'droid',
-    label: 'Droid',
+    label: translate('auto.lib.agent.catalog.739a930554', 'Droid'),
     cmd: 'droid',
     homepageUrl: 'https://docs.factory.ai/cli/getting-started/quickstart'
   },
   {
     id: 'kimi',
-    label: 'Kimi',
+    label: translate('auto.lib.agent.catalog.28810273af', 'Kimi'),
     cmd: 'kimi',
     faviconDomain: 'moonshot.cn',
     homepageUrl: 'https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html'
   },
   {
     id: 'mistral-vibe',
-    label: 'Mistral Vibe',
+    label: translate('auto.lib.agent.catalog.ca73055bd0', 'Mistral Vibe'),
     // Why: `uv tool install mistral-vibe` exposes the interactive CLI as
     // `vibe`; the package name is not the executable users put on PATH.
     cmd: 'vibe',
@@ -220,14 +222,14 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   },
   {
     id: 'qwen-code',
-    label: 'Qwen Code',
+    label: translate('auto.lib.agent.catalog.bee242fe3d', 'Qwen Code'),
     cmd: 'qwen-code',
     faviconDomain: 'qwenlm.github.io',
     homepageUrl: 'https://github.com/QwenLM/qwen-code'
   },
   {
     id: 'rovo',
-    label: 'Rovo Dev',
+    label: translate('auto.lib.agent.catalog.4e63c7b956', 'Rovo Dev'),
     cmd: 'rovo',
     faviconDomain: 'atlassian.com',
     homepageUrl:
@@ -235,22 +237,25 @@ export const AGENT_CATALOG: AgentCatalogEntry[] = [
   },
   {
     id: 'hermes',
-    label: 'Hermes',
+    label: translate('auto.lib.agent.catalog.8a9ba743cc', 'Hermes'),
     cmd: 'hermes',
     faviconDomain: 'nousresearch.com',
     homepageUrl: 'https://hermes-agent.nousresearch.com/docs/'
   },
   {
     id: 'openclaw',
-    label: 'OpenClaw',
+    label: translate('auto.lib.agent.catalog.5dff448636', 'OpenClaw'),
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
   }
-]
+])
+
+// Why: tests and a few legacy call sites still import a catalog snapshot.
+export const AGENT_CATALOG: AgentCatalogEntry[] = getAgentCatalog()
 
 export function getAgentLabel(agent: TuiAgent): string {
-  return AGENT_CATALOG.find((entry) => entry.id === agent)?.label ?? agent
+  return getAgentCatalog().find((entry) => entry.id === agent)?.label ?? agent
 }
 
 export function AgentIcon({
@@ -291,7 +296,7 @@ export function AgentIcon({
   if (agent === 'copilot') {
     return <CopilotIcon size={size} />
   }
-  const catalogEntry = AGENT_CATALOG.find((a) => a.id === agent)
+  const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
   if (catalogEntry?.iconUrl) {
     return (
       <img

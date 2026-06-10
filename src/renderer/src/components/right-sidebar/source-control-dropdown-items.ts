@@ -4,6 +4,7 @@
 import type { PrimaryActionInputs } from './source-control-primary-action'
 import type { GitConflictOperation } from '../../../../shared/types'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
+import { translate } from '@/i18n/i18n'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
@@ -180,7 +181,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   const canCommit = !globalBusy && commitDisabledReason === null
   const commitItem: DropdownItem = {
     kind: 'commit',
-    label: 'Commit',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.2b8e6595fd',
+      'Commit'
+    ),
     title: commitDisabledReason ?? 'Commit staged changes',
     disabled: !canCommit
   }
@@ -249,7 +253,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
   })()
   const commitSyncItem: DropdownItem = {
     kind: 'commit_sync',
-    label: 'Commit & Sync',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.323bb614aa',
+      'Commit & Sync'
+    ),
     title: commitSyncTitle,
     disabled:
       globalBusy ||
@@ -404,7 +411,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const fetchItem: DropdownItem = {
     kind: 'fetch',
-    label: 'Fetch',
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.226b85a3a7',
+      'Fetch'
+    ),
     title: upstreamLoading ? 'Checking branch status…' : 'Fetch from remote without merging',
     disabled: globalBusy || upstreamLoading
   }
@@ -471,7 +481,11 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
 
   const createPRItem: DropdownItem = {
     kind: 'create_pr',
-    label: `Create ${createReviewCopy.shortLabel}`,
+    label: translate(
+      'auto.components.right.sidebar.source.control.dropdown.items.9e779995dd',
+      'Create {{value0}}',
+      { value0: createReviewCopy.shortLabel }
+    ),
     title: hostedReviewCreation?.canCreate
       ? `Create a ${createReviewCopy.reviewLabel} for this branch`
       : createBlockedHint,
@@ -537,7 +551,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       ? entry
       : {
           ...entry,
-          title: 'Hosted review operation in progress…',
+          title: translate(
+            'auto.components.right.sidebar.source.control.dropdown.items.7aad2c0240',
+            'Hosted review operation in progress…'
+          ),
           disabled: true
         }
   )

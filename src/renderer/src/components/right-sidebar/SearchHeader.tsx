@@ -3,6 +3,7 @@ import { Search as SearchIcon, CaseSensitive, WholeWord, Regex, X, Loader2 } fro
 import { Button } from '@/components/ui/button'
 import { SearchFilters } from './SearchFilters'
 import { ToggleButton } from './SearchResultItems'
+import { translate } from '@/i18n/i18n'
 
 type SearchHeaderProps = {
   inputRef: React.Ref<HTMLInputElement>
@@ -53,7 +54,7 @@ export function SearchHeader({
           ref={inputRef}
           type="text"
           className="flex-1 bg-transparent text-xs py-1.5 outline-none text-foreground placeholder:text-muted-foreground/50 min-w-0"
-          placeholder="Search"
+          placeholder={translate('auto.components.right.sidebar.SearchHeader.693cbeadd0', 'Search')}
           value={query}
           onChange={onQueryChange}
           onKeyDown={onKeyDown}
@@ -73,13 +74,31 @@ export function SearchHeader({
             <X size={12} />
           </Button>
         )}
-        <ToggleButton active={caseSensitive} onClick={onToggleCaseSensitive} title="Match Case">
+        <ToggleButton
+          active={caseSensitive}
+          onClick={onToggleCaseSensitive}
+          title={translate('auto.components.right.sidebar.SearchHeader.464ae3974f', 'Match Case')}
+        >
           <CaseSensitive size={14} />
         </ToggleButton>
-        <ToggleButton active={wholeWord} onClick={onToggleWholeWord} title="Match Whole Word">
+        <ToggleButton
+          active={wholeWord}
+          onClick={onToggleWholeWord}
+          title={translate(
+            'auto.components.right.sidebar.SearchHeader.4567e6e0b6',
+            'Match Whole Word'
+          )}
+        >
           <WholeWord size={14} />
         </ToggleButton>
-        <ToggleButton active={useRegex} onClick={onToggleRegex} title="Use Regular Expression">
+        <ToggleButton
+          active={useRegex}
+          onClick={onToggleRegex}
+          title={translate(
+            'auto.components.right.sidebar.SearchHeader.6234a5ef85',
+            'Use Regular Expression'
+          )}
+        >
           <Regex size={14} />
         </ToggleButton>
       </div>

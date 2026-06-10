@@ -553,6 +553,38 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(mirroredId)
   })
 
+  it('preserves quick command labels from host terminal surfaces', () => {
+    const patch = applyWebSessionTabsSnapshot(
+      makeState(),
+      makeSnapshot([
+        {
+          type: 'terminal',
+          id: HOST_SURFACE_ID,
+          title: 'Run tests',
+          quickCommandLabel: 'Run tests',
+          parentTabId: 'host-tab-1',
+          leafId: LEAF_ID,
+          isActive: true,
+          status: 'ready',
+          terminal: 'terminal-1'
+        }
+      ]),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const mirroredId = patch.tabsByWorktree?.[WT]?.[0]?.id
+    expect(patch.tabsByWorktree?.[WT]?.[0]).toMatchObject({
+      id: mirroredId,
+      quickCommandLabel: 'Run tests',
+      title: 'Run tests'
+    })
+    expect(
+      patch.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === mirroredId)
+        ?.quickCommandLabel
+    ).toBe('Run tests')
+  })
+
   it('removes stale scrollback refs from mirrored terminal layouts', () => {
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const ptyId = 'remote:web-env-1@@terminal-1'

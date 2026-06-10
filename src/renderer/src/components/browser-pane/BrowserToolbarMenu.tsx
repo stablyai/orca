@@ -34,6 +34,7 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
+import { translate } from '@/i18n/i18n'
 
 type BrowserToolbarMenuProps = {
   currentProfileId: string | null
@@ -131,7 +132,13 @@ export function BrowserToolbarMenu({
     onDestroyWebview()
     switchBrowserTabProfile(workspaceId, pendingSwitchProfileId)
     const profile = browserSessionProfiles.find((p) => p.id === targetId)
-    toast.success(`Switched to ${profile?.label ?? 'Default'} profile`)
+    toast.success(
+      translate(
+        'auto.components.browser.pane.BrowserToolbarMenu.3ccd29d771',
+        'Switched to {{value0}} profile',
+        { value0: profile?.label ?? 'Default' }
+      )
+    )
     setPendingSwitchProfileId(undefined)
   }
 
@@ -146,7 +153,12 @@ export function BrowserToolbarMenu({
       const profile = await createBrowserSessionProfile('isolated', trimmed)
       if (!profile) {
         if (mountedRef.current) {
-          toast.error('Failed to create profile.')
+          toast.error(
+            translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.4d2f9f13a7',
+              'Failed to create profile.'
+            )
+          )
         }
         return
       }
@@ -160,7 +172,13 @@ export function BrowserToolbarMenu({
 
       onDestroyWebview()
       switchBrowserTabProfile(workspaceId, profile.id)
-      toast.success(`Created and switched to ${profile.label} profile`)
+      toast.success(
+        translate(
+          'auto.components.browser.pane.BrowserToolbarMenu.a7a86702b3',
+          'Created and switched to {{value0}} profile',
+          { value0: profile.label }
+        )
+      )
     } finally {
       if (mountedRef.current) {
         setIsCreatingProfile(false)
@@ -176,7 +194,15 @@ export function BrowserToolbarMenu({
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       toast.success(
-        `Imported ${result.summary.importedCookies} cookies from ${browser?.label ?? browserFamily}${browserProfile ? ` (${browserProfile})` : ''}.`
+        translate(
+          'auto.components.browser.pane.BrowserToolbarMenu.6aa42813e4',
+          'Imported {{value0}} cookies from {{value1}}{{value2}}.',
+          {
+            value0: result.summary.importedCookies,
+            value1: browser?.label ?? browserFamily,
+            value2: browserProfile ? ` (${browserProfile})` : ''
+          }
+        )
       )
     } else {
       toast.error(result.reason)
@@ -186,7 +212,13 @@ export function BrowserToolbarMenu({
   const handleImportFromFile = async (): Promise<void> => {
     const result = await importCookiesToProfile(effectiveProfileId)
     if (result.ok) {
-      toast.success(`Imported ${result.summary.importedCookies} cookies from file.`)
+      toast.success(
+        translate(
+          'auto.components.browser.pane.BrowserToolbarMenu.6aa42813e4',
+          'Imported {{value0}} cookies from file.',
+          { value0: result.summary.importedCookies }
+        )
+      )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
     }
@@ -196,7 +228,15 @@ export function BrowserToolbarMenu({
     <>
       <DropdownMenu modal={false} open={menuOpen} onOpenChange={handleMenuOpenChange}>
         <DropdownMenuTrigger asChild>
-          <Button size="icon" variant="ghost" className="h-8 w-8" title="Browser menu">
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8"
+            title={translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.7b838540c7',
+              'Browser menu'
+            )}
+          >
             <Ellipsis className="size-4" />
           </Button>
         </DropdownMenuTrigger>
@@ -226,7 +266,10 @@ export function BrowserToolbarMenu({
 
           <DropdownMenuItem onSelect={() => setNewProfileDialogOpen(true)}>
             <Plus className="mr-2 size-3.5" />
-            New Profile…
+            {translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.cf7cdc67ef',
+              'New Profile…'
+            )}
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />
@@ -248,14 +291,23 @@ export function BrowserToolbarMenu({
               data-contextual-tour-target="browser-import-cookies-control"
             >
               <Import className="mr-2 size-3.5" />
-              Import Cookies
+              {translate(
+                'auto.components.browser.pane.BrowserToolbarMenu.2293adf620',
+                'Import Cookies'
+              )}
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
               <DropdownMenuSubContent>
                 {detectedBrowsers.map((browser) =>
                   browser.profiles.length > 1 ? (
                     <DropdownMenuSub key={browser.family}>
-                      <DropdownMenuSubTrigger>From {browser.label}</DropdownMenuSubTrigger>
+                      <DropdownMenuSubTrigger>
+                        {translate(
+                          'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
+                          'From'
+                        )}
+                        {browser.label}
+                      </DropdownMenuSubTrigger>
                       <DropdownMenuPortal>
                         <DropdownMenuSubContent>
                           {browser.profiles.map((profile) => (
@@ -276,13 +328,20 @@ export function BrowserToolbarMenu({
                       key={browser.family}
                       onSelect={() => void handleImportFromBrowser(browser.family)}
                     >
-                      From {browser.label}
+                      {translate(
+                        'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
+                        'From'
+                      )}
+                      {browser.label}
                     </DropdownMenuItem>
                   )
                 )}
                 {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
                 <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-                  From File…
+                  {translate(
+                    'auto.components.browser.pane.BrowserToolbarMenu.56f94f4ffa',
+                    'From File…'
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuPortal>
@@ -293,7 +352,10 @@ export function BrowserToolbarMenu({
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <Monitor className="mr-2 size-3.5" />
-              Viewport Size
+              {translate(
+                'auto.components.browser.pane.BrowserToolbarMenu.e5d31de1a9',
+                'Viewport Size'
+              )}
             </DropdownMenuSubTrigger>
             <DropdownMenuPortal>
               <DropdownMenuSubContent>
@@ -308,7 +370,12 @@ export function BrowserToolbarMenu({
                     applyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
                   }
                 >
-                  <DropdownMenuRadioItem value="default">Default</DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem value="default">
+                    {translate(
+                      'auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d',
+                      'Default'
+                    )}
+                  </DropdownMenuRadioItem>
                   <DropdownMenuSeparator />
                   {BROWSER_VIEWPORT_PRESETS.map((preset) => (
                     <DropdownMenuRadioItem key={preset.id} value={preset.id}>
@@ -329,7 +396,10 @@ export function BrowserToolbarMenu({
             }}
           >
             <Settings className="mr-2 size-3.5" />
-            Browser Settings…
+            {translate(
+              'auto.components.browser.pane.BrowserToolbarMenu.a771c2b6c8',
+              'Browser Settings…'
+            )}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -344,9 +414,17 @@ export function BrowserToolbarMenu({
       >
         <DialogContent className="sm:max-w-sm" showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle className="text-base">Switch Profile</DialogTitle>
+            <DialogTitle className="text-base">
+              {translate(
+                'auto.components.browser.pane.BrowserToolbarMenu.fe683eb3b4',
+                'Switch Profile'
+              )}
+            </DialogTitle>
             <DialogDescription className="text-xs">
-              Switching profiles will reload this page. Any unsaved form data will be lost.
+              {translate(
+                'auto.components.browser.pane.BrowserToolbarMenu.a38f217b46',
+                'Switching profiles will reload this page. Any unsaved form data will be lost.'
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -355,10 +433,10 @@ export function BrowserToolbarMenu({
               size="sm"
               onClick={() => setPendingSwitchProfileId(undefined)}
             >
-              Cancel
+              {translate('auto.components.browser.pane.BrowserToolbarMenu.429ef481f9', 'Cancel')}
             </Button>
             <Button size="sm" onClick={confirmSwitchProfile}>
-              Switch
+              {translate('auto.components.browser.pane.BrowserToolbarMenu.58f2c81542', 'Switch')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -367,7 +445,12 @@ export function BrowserToolbarMenu({
       <Dialog open={newProfileDialogOpen} onOpenChange={setNewProfileDialogOpen}>
         <DialogContent className="sm:max-w-sm" showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle className="text-base">New Browser Profile</DialogTitle>
+            <DialogTitle className="text-base">
+              {translate(
+                'auto.components.browser.pane.BrowserToolbarMenu.67e9b9fcd6',
+                'New Browser Profile'
+              )}
+            </DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(e) => {
@@ -378,7 +461,10 @@ export function BrowserToolbarMenu({
             <Input
               value={newProfileName}
               onChange={(e) => setNewProfileName(e.target.value)}
-              placeholder="Profile name"
+              placeholder={translate(
+                'auto.components.browser.pane.BrowserToolbarMenu.64f448fb6e',
+                'Profile name'
+              )}
               autoFocus
               maxLength={50}
               className="mb-4"
@@ -393,14 +479,22 @@ export function BrowserToolbarMenu({
                   setNewProfileName('')
                 }}
               >
-                Cancel
+                {translate('auto.components.browser.pane.BrowserToolbarMenu.429ef481f9', 'Cancel')}
               </Button>
               <Button
                 type="submit"
                 size="sm"
                 disabled={!newProfileName.trim() || isCreatingProfile}
               >
-                {isCreatingProfile ? 'Creating…' : 'Create'}
+                {isCreatingProfile
+                  ? translate(
+                      'auto.components.browser.pane.BrowserToolbarMenu.bf648471c5',
+                      'Creating…'
+                    )
+                  : translate(
+                      'auto.components.browser.pane.BrowserToolbarMenu.569bce8eb1',
+                      'Create'
+                    )}
               </Button>
             </DialogFooter>
           </form>

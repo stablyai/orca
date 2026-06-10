@@ -50,6 +50,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     theme: 'system',
+    uiLanguage: 'system',
     appIcon: overrides.appIcon ?? 'classic',
     editorAutoSave: false,
     editorAutoSaveDelayMs: 1000,

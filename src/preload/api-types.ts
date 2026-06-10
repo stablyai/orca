@@ -678,6 +678,9 @@ export type AppApi = {
   /** Reloads the current app renderer through main so expected renderer
    *  teardown can be classified before Electron emits process-gone events. */
   reload: () => Promise<void>
+  /** Resolves when the daemon PTY provider and hook receiver have either
+   *  started or failed open for the first BrowserWindow. */
+  awaitFirstWindowStartupServices: () => Promise<void>
   /** Returns the macOS `AppleCurrentKeyboardLayoutInputSourceID` when
    *  available (e.g. `com.apple.keylayout.PolishPro`). Used by the
    *  keyboard-layout probe to distinguish layouts whose base layer matches
@@ -1829,6 +1832,10 @@ export type PreloadApi = {
       filePath: string
       connectionId?: string
     }) => Promise<{ content: string; isBinary: boolean; isImage?: boolean; mimeType?: string }>
+    downloadFile: (args: {
+      filePath: string
+      connectionId: string
+    }) => Promise<{ canceled: true } | { canceled: false; destinationPath: string }>
     listMarkdownDocuments: (args: {
       rootPath: string
       connectionId?: string

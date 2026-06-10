@@ -15,6 +15,17 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
+vi.mock('@/components/ui/dropdown-menu', () => ({
+  DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuTrigger: ({ children }: { children: ReactNode; asChild?: boolean }) => (
+    <>{children}</>
+  ),
+  DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DropdownMenuItem: ({ children }: { children: ReactNode; onSelect?: () => void }) => (
+    <div>{children}</div>
+  )
+}))
+
 describe('WorktreeCardDetailsHover', () => {
   it('includes branch identity before metadata details', () => {
     const markup = renderToStaticMarkup(
@@ -46,7 +57,7 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('Fix stale GH PR')
   })
 
-  it('shows an unlink action for linked PR details when provided', () => {
+  it('puts unlink behind the first PR actions menu and keeps GitHub last', () => {
     const markup = renderToStaticMarkup(
       <WorktreeCardDetailsHover
         issue={null}
@@ -64,14 +75,50 @@ describe('WorktreeCardDetailsHover', () => {
         comment={null}
         onEditIssue={vi.fn()}
         onEditComment={vi.fn()}
+        onOpenReviewInOrca={vi.fn()}
         onUnlinkReview={vi.fn()}
       >
         <span>Linked PR</span>
       </WorktreeCardDetailsHover>
     )
 
-    expect(markup).toContain('aria-label="Unlink PR"')
+    const moreActionsIndex = markup.indexOf('aria-label="More PR actions"')
+    const openInOrcaIndex = markup.indexOf('aria-label="Open in Orca"')
+    const viewOnGitHubIndex = markup.indexOf('aria-label="View on GitHub"')
+
+    expect(moreActionsIndex).toBeGreaterThan(-1)
+    expect(markup).toContain('More PR actions')
     expect(markup).toContain('Unlink PR')
+    expect(moreActionsIndex).toBeLessThan(openInOrcaIndex)
+    expect(openInOrcaIndex).toBeLessThan(viewOnGitHubIndex)
+    expect(markup).not.toContain('aria-label="Unlink PR"')
+  })
+
+  it('labels GitLab unlink actions with MR terminology', () => {
+    const markup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={null}
+        linearIssue={null}
+        review={{
+          provider: 'gitlab',
+          number: 77,
+          title: 'Fix GitLab MR display',
+          state: 'open',
+          url: 'https://gitlab.com/acme/orca/-/merge_requests/77',
+          status: 'success'
+        }}
+        comment={null}
+        onEditIssue={vi.fn()}
+        onEditComment={vi.fn()}
+        onUnlinkReview={vi.fn()}
+      >
+        <span>Linked MR</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(markup).toContain('aria-label="More MR actions"')
+    expect(markup).toContain('Unlink MR')
+    expect(markup).toContain('View on GitLab')
   })
 
   it('displays Linear issue details with link', () => {

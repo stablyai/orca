@@ -20,6 +20,7 @@ import {
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
 import { Field } from './automation-page-parts'
+import { translate } from '@/i18n/i18n'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
 
@@ -171,7 +172,12 @@ export function AutomationSchedulePicker({
         className="popover-scroll-content scrollbar-sleek max-h-[var(--radix-popover-content-available-height)] w-[min(var(--radix-popover-trigger-width),calc(100vw-2rem))] min-w-[min(22rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)] overflow-y-auto p-3"
       >
         <div className="grid gap-3">
-          <Field label="Cadence">
+          <Field
+            label={translate(
+              'auto.components.automations.AutomationSchedulePicker.233b8c94b6',
+              'Cadence'
+            )}
+          >
             <Select
               value={draft.preset}
               onValueChange={(preset) =>
@@ -203,7 +209,12 @@ export function AutomationSchedulePicker({
           ) : (
             <>
               {draft.preset === 'weekly' ? (
-                <Field label="Day">
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.6b914c5fbb',
+                    'Day'
+                  )}
+                >
                   <Select
                     value={draft.dayOfWeek}
                     onValueChange={(dayOfWeek) =>
@@ -224,7 +235,12 @@ export function AutomationSchedulePicker({
                 </Field>
               ) : null}
               {draft.preset === 'hourly' ? (
-                <Field label="Minute">
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.9e677335b0',
+                    'Minute'
+                  )}
+                >
                   <Select
                     value={String(clockParts.minute)}
                     onValueChange={(minute) =>
@@ -248,7 +264,12 @@ export function AutomationSchedulePicker({
                   </Select>
                 </Field>
               ) : (
-                <Field label="Time">
+                <Field
+                  label={translate(
+                    'auto.components.automations.AutomationSchedulePicker.d90981f766',
+                    'Time'
+                  )}
+                >
                   <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-2">
                     <Select
                       value={String(clockParts.hour12)}
@@ -261,7 +282,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label="Hour"
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.6b802ecc99',
+                          'Hour'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />
@@ -285,7 +309,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label="Minute"
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.9e677335b0',
+                          'Minute'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />
@@ -309,7 +336,10 @@ export function AutomationSchedulePicker({
                       }
                     >
                       <SelectTrigger
-                        aria-label="AM or PM"
+                        aria-label={translate(
+                          'auto.components.automations.AutomationSchedulePicker.22359b186a',
+                          'AM or PM'
+                        )}
                         className={cn('w-full min-w-0', FIELD_CONTROL_CLASS)}
                       >
                         <SelectValue />

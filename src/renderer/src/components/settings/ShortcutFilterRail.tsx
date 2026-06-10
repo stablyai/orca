@@ -6,6 +6,7 @@ import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import type { ShortcutTerminalStatus } from './ShortcutBindingRow'
 import type { SettingsSearchEntry } from './settings-search'
+import { translate } from '@/i18n/i18n'
 
 export type ShortcutFilter = 'all' | 'modified' | 'unassigned' | 'conflicts'
 
@@ -33,7 +34,11 @@ const SHORTCUT_FILTER_LABELS: Record<ShortcutFilter, string> = {
 export function getShortcutSearchEntry(row: ShortcutRowModel): SettingsSearchEntry {
   return {
     title: row.item.title,
-    description: `${row.groupTitle} shortcut`,
+    description: translate(
+      'auto.components.settings.ShortcutFilterRail.1d5634ba31',
+      '{{value0}} shortcut',
+      { value0: row.groupTitle }
+    ),
     keywords: [...row.item.searchKeywords]
   }
 }
@@ -97,7 +102,7 @@ export function ShortcutFilterRail({
       <div className="shrink-0 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="shortcut-filter-search" className="text-xs font-medium">
-            Find shortcuts
+            {translate('auto.components.settings.ShortcutFilterRail.02dc7d4251', 'Find shortcuts')}
           </label>
           <span className="text-[11px] text-muted-foreground">
             {visibleCount}/{totalCount}
@@ -109,7 +114,10 @@ export function ShortcutFilterRail({
             id="shortcut-filter-search"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder="Search command or keys"
+            placeholder={translate(
+              'auto.components.settings.ShortcutFilterRail.f733c4b89f',
+              'Search command or keys'
+            )}
             className="h-8 pl-8 pr-8 text-sm"
           />
           {query ? (
@@ -117,7 +125,10 @@ export function ShortcutFilterRail({
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label="Clear shortcut search"
+              aria-label={translate(
+                'auto.components.settings.ShortcutFilterRail.df8466f3fc',
+                'Clear shortcut search'
+              )}
               onClick={() => onQueryChange('')}
               className="absolute top-1/2 right-1 -translate-y-1/2 text-muted-foreground"
             >
@@ -127,9 +138,15 @@ export function ShortcutFilterRail({
         </div>
       </div>
 
-      <nav aria-label="Shortcut status filters" className="shrink-0 space-y-2">
+      <nav
+        aria-label={translate(
+          'auto.components.settings.ShortcutFilterRail.8a1e78c14b',
+          'Shortcut status filters'
+        )}
+        className="shrink-0 space-y-2"
+      >
         <p className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-          Status
+          {translate('auto.components.settings.ShortcutFilterRail.28b63545bf', 'Status')}
         </p>
         <div className="grid gap-1">
           {filters.map((option) => (

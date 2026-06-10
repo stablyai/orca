@@ -4,6 +4,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { translate } from '@/i18n/i18n'
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
@@ -90,10 +91,22 @@ export function useFileExplorerImport({
 
           if (failed.length > 0) {
             const noun = failed.length === 1 ? 'file' : 'files'
-            toast.error(`Failed to import ${failed.length} ${noun}.`)
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.useFileExplorerImport.132fd0e1e9',
+                'Failed to import {{value0}} {{value1}}.',
+                { value0: failed.length, value1: noun }
+              )
+            )
           } else if (skipped.length > 0 && imported.length === 0) {
             const noun = skipped.length === 1 ? 'file' : 'files'
-            toast.error(`Skipped ${skipped.length} ${noun}.`)
+            toast.error(
+              translate(
+                'auto.components.right.sidebar.useFileExplorerImport.25919b2050',
+                'Skipped {{value0}} {{value1}}.',
+                { value0: skipped.length, value1: noun }
+              )
+            )
           }
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, 'Failed to import files.'))

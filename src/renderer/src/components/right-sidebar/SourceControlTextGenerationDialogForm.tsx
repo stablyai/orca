@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { CheckCircle2, RefreshCw, Save, Sparkles, Terminal, TriangleAlert } from 'lucide-react'
+import { RefreshCw, Save, Sparkles, Terminal, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { AGENT_CATALOG, AgentIcon } from '@/lib/agent-catalog'
+import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,
@@ -21,20 +21,17 @@ import {
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../shared/source-control-ai'
 import type { SourceControlTextActionId } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
 import { toast } from 'sonner'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
+import { sourceControlTextGenerationDefaultsMatchTarget } from './source-control-text-generation-defaults'
 import {
   buildCommitMessageGenerationParams,
   type CommitMessageGenerationAgentChoice
 } from './SourceControlTextGenerationParams'
+import { translate } from '@/i18n/i18n'
 
 const UNCONFIGURED_AGENT_SELECT_VALUE = ''
-
-type PlanState =
-  | { status: 'idle' }
-  | { status: 'success'; commandLabel: string; delivery: string; caveat: string }
-  | { status: 'error'; error: string }
 
 export type SourceControlTextGenerationSaveTarget = {
   target: SourceControlAiWriteTarget
@@ -46,7 +43,9 @@ type SourceControlTextGenerationDialogFormProps = {
   actionId: SourceControlTextActionId
   generateLabel: string
   settings: GlobalSettings | null
+  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   baseParams: ResolvedSourceControlAiGenerationParams | null
+  basePromptPreview?: string
   saveTargets: SourceControlTextGenerationSaveTarget[]
   onGenerate: (params: ResolvedSourceControlAiGenerationParams) => void
   onOpenChange: (open: boolean) => void
@@ -56,15 +55,31 @@ type SourceControlTextGenerationDialogFormProps = {
   ) => Promise<void> | void
 }
 
+export function sourceControlTextGenerationSaveTargetKey(
+  target: SourceControlAiWriteTarget
+): string {
+  return target.type === 'repo' ? `repo:${target.repoId}` : 'global'
+}
+
+export function getDefaultSourceControlTextGenerationSaveTargetKey(
+  saveTargets: SourceControlTextGenerationSaveTarget[]
+): string {
+  const defaultTarget =
+    saveTargets.find((saveTarget) => saveTarget.target.type === 'global') ?? saveTargets[0]
+  return defaultTarget ? sourceControlTextGenerationSaveTargetKey(defaultTarget.target) : 'global'
+}
+
 function agentLabel(agentId: TuiAgent): string {
-  return AGENT_CATALOG.find((agent) => agent.id === agentId)?.label ?? agentId
+  return getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId
 }
 
 export function SourceControlTextGenerationDialogForm({
   actionId,
   generateLabel,
   settings,
+  repo,
   baseParams,
+  basePromptPreview,
   saveTargets,
   onGenerate,
   onOpenChange,
@@ -81,9 +96,15 @@ export function SourceControlTextGenerationDialogForm({
     baseParams?.commandInputTemplate ?? '{basePrompt}'
   )
   const [agentArgs, setAgentArgs] = useState(baseParams?.agentArgs ?? '')
-  const [plan, setPlan] = useState<PlanState>({ status: 'idle' })
+  const [generationError, setGenerationError] = useState<string | null>(null)
   const [savingTargetKey, setSavingTargetKey] = useState<string | null>(null)
+  const defaultSaveTargetKey = getDefaultSourceControlTextGenerationSaveTargetKey(saveTargets)
+  const [saveTargetKey, setSaveTargetKey] = useState(defaultSaveTargetKey)
   const commandTemplateId = `source-control-${actionId}-command-template`
+  const selectedSaveTarget =
+    saveTargets.find((saveTarget) => {
+      return sourceControlTextGenerationSaveTargetKey(saveTarget.target) === saveTargetKey
+    }) ?? saveTargets[0]
 
   const params = buildCommitMessageGenerationParams({
     agentId,
@@ -96,23 +117,31 @@ export function SourceControlTextGenerationDialogForm({
   const paramsPlanResult = params ? planSourceControlTextGeneration(actionId, params) : null
   const canRunGeneration = Boolean(params && paramsPlanResult?.ok)
   const saving = savingTargetKey !== null
-
-  const handlePlan = (): void => {
-    if (!params || !paramsPlanResult) {
-      setPlan({ status: 'error', error: 'Choose an agent before checking generation.' })
-      return
-    }
-    setPlan(
-      paramsPlanResult.ok
-        ? {
-            status: 'success',
-            commandLabel: paramsPlanResult.commandLabel,
-            delivery: paramsPlanResult.delivery,
-            caveat: paramsPlanResult.caveat
-          }
-        : { status: 'error', error: paramsPlanResult.error }
+  const defaultsAlreadySaved = Boolean(
+    params &&
+    selectedSaveTarget &&
+    sourceControlTextGenerationDefaultsMatchTarget({
+      actionId,
+      target: selectedSaveTarget.target,
+      params,
+      settings,
+      repo
+    })
+  )
+  const allSaveTargetsAlreadySaved = Boolean(
+    params &&
+    saveTargets.length > 0 &&
+    saveTargets.every((saveTarget) =>
+      sourceControlTextGenerationDefaultsMatchTarget({
+        actionId,
+        target: saveTarget.target,
+        params,
+        settings,
+        repo
+      })
     )
-  }
+  )
+  const showSaveRecipeControl = Boolean(selectedSaveTarget && !allSaveTargetsAlreadySaved)
 
   const saveCurrentDefaults = useCallback(
     async (
@@ -120,13 +149,16 @@ export function SourceControlTextGenerationDialogForm({
       options: { showToast: boolean; showErrors: boolean }
     ): Promise<boolean> => {
       if (!params || saving || !paramsPlanResult?.ok) {
-        if (options.showErrors && paramsPlanResult && !paramsPlanResult.ok) {
-          setPlan({ status: 'error', error: paramsPlanResult.error })
+        if (options.showErrors) {
+          setGenerationError(
+            paramsPlanResult && !paramsPlanResult.ok
+              ? paramsPlanResult.error
+              : 'Choose an agent before saving defaults.'
+          )
         }
         return false
       }
-      const targetKey =
-        saveTarget.target.type === 'repo' ? `repo:${saveTarget.target.repoId}` : 'global'
+      const targetKey = sourceControlTextGenerationSaveTargetKey(saveTarget.target)
       setSavingTargetKey(targetKey)
       try {
         await onSaveDefaults(saveTarget.target, params)
@@ -143,9 +175,11 @@ export function SourceControlTextGenerationDialogForm({
 
   const handleGenerate = (): void => {
     if (!params || !paramsPlanResult?.ok) {
-      if (paramsPlanResult && !paramsPlanResult.ok) {
-        setPlan({ status: 'error', error: paramsPlanResult.error })
-      }
+      setGenerationError(
+        paramsPlanResult && !paramsPlanResult.ok
+          ? paramsPlanResult.error
+          : 'Choose an agent before generating.'
+      )
       return
     }
     onGenerate(params)
@@ -160,9 +194,14 @@ export function SourceControlTextGenerationDialogForm({
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="min-w-0 space-y-4">
         <div className="space-y-2">
-          <Label className="text-xs">Agent</Label>
+          <Label className="text-xs">
+            {translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.9c14186dd2',
+              'Agent'
+            )}
+          </Label>
           <Select
             value={agentId || UNCONFIGURED_AGENT_SELECT_VALUE}
             onValueChange={(value) => {
@@ -170,11 +209,16 @@ export function SourceControlTextGenerationDialogForm({
                 return
               }
               setAgentId(value === CUSTOM_AGENT_ID ? CUSTOM_AGENT_ID : (value as TuiAgent))
-              setPlan({ status: 'idle' })
+              setGenerationError(null)
             }}
           >
             <SelectTrigger size="sm" className="h-8 text-xs">
-              <SelectValue placeholder="Choose agent" />
+              <SelectValue
+                placeholder={translate(
+                  'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.cce2cbd01d',
+                  'Choose agent'
+                )}
+              />
             </SelectTrigger>
             <SelectContent>
               {capabilities.map((capability) => (
@@ -189,7 +233,10 @@ export function SourceControlTextGenerationDialogForm({
                 <SelectItem value={CUSTOM_AGENT_ID}>
                   <span className="flex items-center gap-2">
                     <Terminal className="size-3.5 text-muted-foreground" />
-                    Custom command
+                    {translate(
+                      'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
+                      'Custom command'
+                    )}
                   </span>
                 </SelectItem>
               ) : null}
@@ -199,16 +246,22 @@ export function SourceControlTextGenerationDialogForm({
 
         <div className="space-y-2">
           <Label htmlFor={`source-control-${actionId}-cli-args`} className="text-xs">
-            CLI arguments
+            {translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.4eab815004',
+              'CLI arguments'
+            )}
           </Label>
           <Input
             id={`source-control-${actionId}-cli-args`}
             value={agentArgs}
             spellCheck={false}
-            placeholder="--model sonnet"
+            placeholder={translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.551ffd111b',
+              '--model sonnet'
+            )}
             onChange={(event) => {
               setAgentArgs(event.target.value)
-              setPlan({ status: 'idle' })
+              setGenerationError(null)
             }}
             className="h-8 font-mono text-xs"
           />
@@ -216,7 +269,10 @@ export function SourceControlTextGenerationDialogForm({
 
         <div className="space-y-2">
           <Label htmlFor={commandTemplateId} className="text-xs">
-            Command template
+            {translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.1f6fcfb6cf',
+              'Command template'
+            )}
           </Label>
           <textarea
             id={commandTemplateId}
@@ -225,74 +281,76 @@ export function SourceControlTextGenerationDialogForm({
             spellCheck={false}
             onChange={(event) => {
               setCommandTemplate(event.target.value)
-              setPlan({ status: 'idle' })
+              setGenerationError(null)
             }}
-            className="w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+            className="box-border min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
           />
           <SourceControlActionVariableChips
             actionId={actionId}
+            variablePreviews={basePromptPreview ? { basePrompt: basePromptPreview } : undefined}
             onInsert={(variable) => {
               const separator =
                 commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '
               setCommandTemplate(`${commandTemplate}${separator}{${variable}}`)
-              setPlan({ status: 'idle' })
+              setGenerationError(null)
             }}
           />
         </div>
 
-        {plan.status !== 'idle' ? (
-          <div
-            className={
-              plan.status === 'error'
-                ? 'rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive'
-                : 'space-y-1 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground'
-            }
-          >
-            {plan.status === 'error' ? (
-              <span className="flex items-start gap-2">
-                <TriangleAlert className="mt-px size-3.5 shrink-0" />
-                {plan.error}
-              </span>
-            ) : (
-              <>
-                <div className="flex items-start gap-2 text-foreground">
-                  <CheckCircle2 className="mt-px size-3.5 shrink-0 text-status-success" />
-                  {plan.delivery}
-                </div>
-                <div className="truncate font-mono text-[11px]">Launch: {plan.commandLabel}</div>
-                <div className="text-[11px]">{plan.caveat}</div>
-              </>
-            )}
+        {showSaveRecipeControl ? (
+          <div className="space-y-2">
+            <Label className="text-xs">
+              {translate(
+                'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.d91b0a189d',
+                'Save recipe'
+              )}
+            </Label>
+            <Select value={saveTargetKey} onValueChange={setSaveTargetKey}>
+              <SelectTrigger size="sm" className="h-8 w-full text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {saveTargets.map((saveTarget) => {
+                  const targetKey = sourceControlTextGenerationSaveTargetKey(saveTarget.target)
+                  return (
+                    <SelectItem key={targetKey} value={targetKey}>
+                      {saveTarget.label}
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
           </div>
+        ) : null}
+
+        {generationError ? (
+          <p className="flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            <TriangleAlert className="mt-px size-3.5 shrink-0" />
+            {generationError}
+          </p>
         ) : null}
       </div>
 
-      <DialogFooter className="gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={handlePlan}>
-          <CheckCircle2 className="size-4" />
-          Check generation
-        </Button>
-        {saveTargets.map((saveTarget) => {
-          const targetKey =
-            saveTarget.target.type === 'repo' ? `repo:${saveTarget.target.repoId}` : 'global'
-          return (
-            <Button
-              key={targetKey}
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!canRunGeneration || saving}
-              onClick={() => void handleSaveDefaults(saveTarget)}
-            >
-              {savingTargetKey === targetKey ? (
-                <RefreshCw className="size-4 animate-spin" />
-              ) : (
-                <Save className="size-4" />
-              )}
-              {saveTarget.label}
-            </Button>
-          )
-        })}
+      <DialogFooter className="flex-wrap gap-2 sm:justify-end">
+        {selectedSaveTarget && !defaultsAlreadySaved ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!canRunGeneration || saving}
+            onClick={() => void handleSaveDefaults(selectedSaveTarget)}
+          >
+            {savingTargetKey === saveTargetKey ? (
+              <RefreshCw className="size-4 animate-spin" />
+            ) : (
+              <Save className="size-4" />
+            )}
+            {translate(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.25fcd8e49a',
+              'Save defaults'
+            )}
+          </Button>
+        ) : null}
         <Button
           type="button"
           size="sm"
