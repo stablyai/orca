@@ -15,8 +15,6 @@ vi.mock('./client', () => ({
   clearToken: (...args: unknown[]) => clearTokenMock(...args),
   getClients: (...args: unknown[]) => getClientsMock(...args),
   isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
-  shouldClearTokenAfterAuthError: (entry: JiraClientForSite) =>
-    entry.credentialProvenance === 'decrypted',
   jiraRequest: (...args: unknown[]) => jiraRequestMock(...args)
 }))
 
@@ -29,8 +27,7 @@ function makeEntry(): JiraClientForSite {
       displayName: 'Example Jira',
       accountId: 'account-1'
     },
-    authorization: 'Basic token',
-    credentialProvenance: 'decrypted'
+    authorization: 'Basic token'
   }
 }
 
@@ -61,30 +58,6 @@ describe('Jira issue operations', () => {
         title: 'Fix auth'
       })
     ).rejects.toThrow(error.message)
-  })
-
-  it('does not clear plaintext fallback Jira credentials after provider auth failure', async () => {
-    const error = new Error('Jira auth failed')
-    isAuthErrorMock.mockReturnValue(true)
-    getClientsMock.mockReturnValue([
-      {
-        ...makeEntry(),
-        credentialProvenance: 'plaintext-safeStorage-unavailable'
-      }
-    ])
-    jiraRequestMock.mockRejectedValueOnce(error)
-    const { createIssue } = await import('./issues')
-
-    await expect(
-      createIssue({
-        siteId: 'site-1',
-        projectId: '10000',
-        issueTypeId: '10001',
-        title: 'Fix auth'
-      })
-    ).rejects.toThrow(error.message)
-
-    expect(clearTokenMock).not.toHaveBeenCalled()
   })
 
   it('paginates Jira project search results before sorting them', async () => {

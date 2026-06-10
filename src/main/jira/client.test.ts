@@ -127,6 +127,8 @@ describe('Jira client credential storage', () => {
     expect(existsSync(tokenPath)).toBe(true)
     expect(jira.getStatus()).toMatchObject({
       connected: true,
+      credentialError:
+        'Could not decrypt saved Jira credential. Approve Keychain access or reconnect Jira.',
       sites: [{ id: siteId }]
     })
   })
@@ -151,6 +153,8 @@ describe('Jira client credential storage', () => {
     expect(existsSync(tokenPath)).toBe(true)
     expect(jira.getStatus()).toMatchObject({
       connected: true,
+      credentialError:
+        'Could not decrypt saved Jira credential. Approve Keychain access or reconnect Jira.',
       sites: [{ id: siteId }]
     })
   })
@@ -185,28 +189,20 @@ describe('Jira client credential storage', () => {
     })
   })
 
-  it('retries Jira decryption after a transient plaintext fallback auth failure', async () => {
+  it('clears the recorded credential error after Keychain access is approved', async () => {
     const siteId = 'site-alpha'
     let keychainApproved = false
-    writeJiraFiles(siteId, 'v10printable')
-    fetchMock
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ errorMessages: ['Jira authentication failed'] }), {
-          status: 401,
-          statusText: 'Unauthorized',
-          headers: { 'Content-Type': 'application/json' }
-        })
+    writeJiraFiles(siteId, Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]))
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          accountId: 'account-alpha',
+          displayName: 'Ada',
+          emailAddress: 'ada@example.com'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            accountId: 'account-alpha',
-            displayName: 'Ada',
-            emailAddress: 'ada@example.com'
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        )
-      )
+    )
     const jira = await loadClientModule({
       encryptionAvailable: true,
       decryptString: () => {
@@ -217,27 +213,15 @@ describe('Jira client credential storage', () => {
       }
     })
 
-    await expect(jira.testConnection(siteId)).resolves.toEqual({
-      ok: false,
-      error: 'Jira authentication failed'
-    })
+    await expect(jira.testConnection(siteId)).resolves.toMatchObject({ ok: false })
+    expect(jira.getStatus().credentialError).toContain('Could not decrypt')
 
     keychainApproved = true
     await expect(jira.testConnection(siteId)).resolves.toMatchObject({
       ok: true,
       viewer: { displayName: 'Ada' }
     })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    const firstHeaders = fetchMock.mock.calls[0][1]?.headers
-    const secondHeaders = fetchMock.mock.calls[1][1]?.headers
-    expect(firstHeaders).toBeInstanceOf(Headers)
-    expect(secondHeaders).toBeInstanceOf(Headers)
-    expect((firstHeaders as Headers).get('Authorization')).toBe(
-      `Basic ${Buffer.from('ada@example.com:v10printable').toString('base64')}`
-    )
-    expect((secondHeaders as Headers).get('Authorization')).toBe(
-      `Basic ${Buffer.from('ada@example.com:token-alpha').toString('base64')}`
-    )
+    expect(jira.getStatus().credentialError).toBeUndefined()
   })
 
   it('treats empty Jira token files as missing credentials', async () => {

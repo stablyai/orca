@@ -26,7 +26,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore } from '@/store'
-import { integrationCredentialDecryptionErrorMessage } from '../../../shared/integration-credential-errors'
 import {
   jiraAddIssueComment,
   jiraGetIssue,
@@ -189,12 +188,7 @@ export default function JiraIssueWorkspace({
           setLabelsDraft(result.labels.join(', '))
         }
       })
-      .catch((error) => {
-        const message = integrationCredentialDecryptionErrorMessage(error)
-        if (requestId === requestIdRef.current && message) {
-          toast.error(message)
-        }
-      })
+      .catch(() => {})
       .finally(() => {
         if (requestId === requestIdRef.current) {
           setIssueLoading(false)
@@ -214,12 +208,7 @@ export default function JiraIssueWorkspace({
         setPriorities(nextPriorities)
         setUsers(nextUsers)
       })
-      .catch((error) => {
-        const message = integrationCredentialDecryptionErrorMessage(error)
-        if (requestId === requestIdRef.current && message) {
-          toast.error(message)
-        }
-      })
+      .catch(() => {})
 
     void loadComments(issue, requestId)
   }, [issue, loadComments, settings])

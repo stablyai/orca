@@ -8,6 +8,7 @@ import { createJiraSlice } from './jira'
 const jiraGetIssue = vi.fn()
 const jiraListIssues = vi.fn()
 const jiraSearchIssues = vi.fn()
+const jiraStatus = vi.fn()
 
 vi.mock('@/runtime/runtime-jira-client', () => ({
   jiraConnect: vi.fn(),
@@ -16,7 +17,7 @@ vi.mock('@/runtime/runtime-jira-client', () => ({
   jiraListIssues: (...args: unknown[]) => jiraListIssues(...args),
   jiraSearchIssues: (...args: unknown[]) => jiraSearchIssues(...args),
   jiraSelectSite: vi.fn(),
-  jiraStatus: vi.fn(),
+  jiraStatus: (...args: unknown[]) => jiraStatus(...args),
   jiraTestConnection: vi.fn()
 }))
 
@@ -68,20 +69,27 @@ describe('createJiraSlice credential errors', () => {
     expect(jiraListIssues).not.toHaveBeenCalled()
   })
 
-  it('rejects Jira decrypt errors on cache miss instead of returning an empty list', async () => {
+  it('returns an empty list and surfaces the credential error in status on Jira decrypt errors', async () => {
     const store = createTestStore()
     const error = new Error(credentialDecryptionMessage('Jira'))
     store.setState({
       jiraStatus: { connected: true, viewer: null, selectedSiteId: 'site-1' }
     })
+    jiraStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      selectedSiteId: 'site-1',
+      credentialError: error.message
+    })
     jiraSearchIssues.mockRejectedValueOnce(error)
 
-    await expect(store.getState().searchJiraIssues('project = ALP', 30)).rejects.toThrow(
-      error.message
-    )
+    await expect(store.getState().searchJiraIssues('project = ALP', 30)).resolves.toEqual([])
+    await vi.waitFor(() => {
+      expect(store.getState().jiraStatus.credentialError).toBe(error.message)
+    })
   })
 
-  it('rejects Jira decrypt errors on stale detail refresh instead of returning null', async () => {
+  it('returns null and refreshes status on Jira decrypt errors during detail refresh', async () => {
     const store = createTestStore()
     const error = new Error(credentialDecryptionMessage('Jira'))
     store.setState({
@@ -90,8 +98,15 @@ describe('createJiraSlice credential errors', () => {
         'site-1::ALP-1': { data: issue('ALP-1'), fetchedAt: 1 }
       }
     })
+    jiraStatus.mockResolvedValue({
+      connected: true,
+      viewer: null,
+      selectedSiteId: 'site-1',
+      credentialError: error.message
+    })
     jiraGetIssue.mockRejectedValueOnce(error)
 
-    await expect(store.getState().fetchJiraIssue('ALP-1', 'site-1')).rejects.toThrow(error.message)
+    await expect(store.getState().fetchJiraIssue('ALP-1', 'site-1')).resolves.toBeNull()
+    expect(jiraStatus).toHaveBeenCalled()
   })
 })

@@ -8,10 +8,8 @@ import { join } from 'path'
 import { safeStorage } from 'electron'
 import {
   CredentialDecryptionError,
-  readStoredCredentialToken,
-  type StoredCredentialToken
+  readStoredCredentialToken
 } from '../integration-credential-file'
-import type { CredentialTokenProvenance } from '../../shared/integration-credential-errors'
 import type {
   JiraConnectArgs,
   JiraConnectionStatus,
@@ -55,7 +53,6 @@ type JiraSiteFile = {
 export type JiraClientForSite = {
   site: JiraSite
   authorization: string
-  credentialProvenance: CredentialTokenProvenance
 }
 
 export class JiraApiError extends Error {
@@ -69,7 +66,10 @@ export class JiraApiError extends Error {
 
 let cachedSiteFile: JiraSiteFile | null = null
 let siteFileLoaded = false
-const cachedTokens = new Map<string, StoredCredentialToken>()
+const cachedTokens = new Map<string, string>()
+// Why: decrypt failures are recorded per site so getStatus can explain
+// failing reads without re-touching the keychain on every status poll.
+const credentialErrors = new Map<string, string>()
 
 function getOrcaDir(): string {
   return join(homedir(), '.orca')
@@ -202,22 +202,18 @@ function writeSiteFile(file: JiraSiteFile): void {
   })
 }
 
-function writeEncryptedToken(path: string, apiToken: string): CredentialTokenProvenance {
+function writeEncryptedToken(path: string, apiToken: string): void {
   if (safeStorage.isEncryptionAvailable()) {
     writeFileSync(path, safeStorage.encryptString(apiToken), { mode: 0o600 })
-    return 'decrypted'
+    return
   }
   console.warn('[jira] safeStorage encryption unavailable — storing token in plaintext')
   writeFileSync(path, apiToken, { encoding: 'utf-8', mode: 0o600 })
-  return 'plaintext-safeStorage-unavailable'
 }
 
-function readToken(
-  siteId: string,
-  options: { force?: boolean } = {}
-): StoredCredentialToken | null {
+function readToken(siteId: string): string | null {
   const cached = cachedTokens.get(siteId)
-  if (cached !== undefined && (!options.force || cached.provenance === 'decrypted')) {
+  if (cached !== undefined) {
     return cached
   }
   const path = getTokenPath(siteId)
@@ -230,9 +226,11 @@ function readToken(
     if (token) {
       cachedTokens.set(siteId, token)
     }
+    credentialErrors.delete(siteId)
     return token
   } catch (error) {
     if (error instanceof CredentialDecryptionError) {
+      credentialErrors.set(siteId, error.message)
       throw error
     }
     return null
@@ -242,12 +240,14 @@ function readToken(
 function saveToken(siteId: string, apiToken: string): void {
   ensureOrcaDir()
   ensureTokenDir()
-  const provenance = writeEncryptedToken(getTokenPath(siteId), apiToken)
-  cachedTokens.set(siteId, { token: apiToken, provenance })
+  writeEncryptedToken(getTokenPath(siteId), apiToken)
+  cachedTokens.set(siteId, apiToken)
+  credentialErrors.delete(siteId)
 }
 
 function deleteToken(siteId: string): void {
   cachedTokens.delete(siteId)
+  credentialErrors.delete(siteId)
   try {
     unlinkSync(getTokenPath(siteId))
   } catch {
@@ -378,33 +378,25 @@ export function getClients(selection?: JiraSiteSelection | null): JiraClientForS
       : file.sites.filter((site) => site.id === (selected ?? file.activeSiteId))
 
   return sites.flatMap((site) => {
-    const credential = readToken(site.id, { force: true })
-    return credential
-      ? [
-          {
-            site,
-            authorization: authHeader(site.email, credential.token),
-            credentialProvenance: credential.provenance
-          }
-        ]
-      : []
+    const token = readToken(site.id)
+    return token ? [{ site, authorization: authHeader(site.email, token) }] : []
   })
-}
-
-export function shouldClearTokenAfterAuthError(entry: JiraClientForSite): boolean {
-  return entry.credentialProvenance === 'decrypted'
 }
 
 export function getStatus(): JiraConnectionStatus {
   const file = getSiteFile()
   const sites = file.sites.filter((site) => hasStoredToken(site.id))
   const activeSite = sites.find((site) => site.id === file.activeSiteId) ?? sites[0] ?? null
+  const credentialError = sites
+    .map((site) => credentialErrors.get(site.id))
+    .find((message) => message !== undefined)
   return {
     connected: sites.length > 0,
     viewer: siteToViewer(activeSite),
     sites,
     activeSiteId: activeSite?.id ?? null,
-    selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null
+    selectedSiteId: file.selectedSiteId ?? activeSite?.id ?? null,
+    ...(credentialError ? { credentialError } : {})
   }
 }
 

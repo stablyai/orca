@@ -556,6 +556,12 @@ export function IntegrationsPane(): React.JSX.Element {
                 ? `${linearWorkspaces.length} workspace${linearWorkspaces.length === 1 ? '' : 's'} connected`
                 : 'Add Linear access to browse and link issues.'}
             </p>
+            {linearStatus.credentialError ? (
+              <p className="flex items-center gap-1 text-xs text-destructive">
+                <AlertCircle className="size-3.5 shrink-0" />
+                <span className="min-w-0">{linearStatus.credentialError}</span>
+              </p>
+            ) : null}
           </div>
           {linearStatus.connected ? (
             <div className="flex shrink-0 items-center gap-1.5">

@@ -101,7 +101,6 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { parseTaskQuery, stripRepoQualifiers, withQualifier } from '../../../shared/task-query'
-import { integrationCredentialDecryptionErrorMessage } from '../../../shared/integration-credential-errors'
 import {
   buildLinearTeamUrl,
   getLinearOrganizationUrlKeyFromIssueUrl
@@ -577,14 +576,12 @@ function LinearStateCell({
             toast.error(result.error ?? 'Failed to update Linear state')
           }
         })
-        .catch((error) => {
+        .catch(() => {
           if (reqId !== reqRef.current) {
             return
           }
           patchLinearIssue(issue.id, { state: previousState })
-          toast.error(
-            integrationCredentialDecryptionErrorMessage(error) ?? 'Failed to update Linear state'
-          )
+          toast.error('Failed to update Linear state')
         })
         .finally(() => {
           if (reqId === reqRef.current) {
@@ -3480,12 +3477,8 @@ export default function TaskPage(): React.JSX.Element {
           setAvailableTeams(teams)
         }
       })
-      .catch((error) => {
+      .catch(() => {
         if (!cancelled) {
-          const message = integrationCredentialDecryptionErrorMessage(error)
-          if (message) {
-            toast.error(message)
-          }
           console.warn('[TaskPage] Failed to fetch Linear teams')
         }
       })
@@ -3524,12 +3517,8 @@ export default function TaskPage(): React.JSX.Element {
           setAvailableJiraProjects(projects)
         }
       })
-      .catch((error) => {
+      .catch(() => {
         if (!cancelled) {
-          const message = integrationCredentialDecryptionErrorMessage(error)
-          if (message) {
-            toast.error(message)
-          }
           console.warn('[TaskPage] Failed to fetch Jira projects')
         }
       })
@@ -3722,11 +3711,12 @@ export default function TaskPage(): React.JSX.Element {
         ? linearCustomViewContentsLoading
         : linearLoading
   const activeLinearIssueError =
-    selectedLinearProject && linearProjectTab === 'issues'
+    linearStatus.credentialError ??
+    (selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesError
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewContentsError
-        : linearError
+        : linearError)
   const activeLinearIssueCollectionErrors =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesResult.errors
@@ -4170,13 +4160,11 @@ export default function TaskPage(): React.JSX.Element {
           applyFallbackState(previousState)
           toast.error(result.error ?? 'Failed to update Linear state')
         }
-      } catch (error) {
+      } catch {
         patchLinearIssue(issue.id, { state: previousState })
         patchScopedLinearIssue(issue.id, { state: previousState })
         applyFallbackState(previousState)
-        toast.error(
-          integrationCredentialDecryptionErrorMessage(error) ?? 'Failed to update Linear state'
-        )
+        toast.error('Failed to update Linear state')
       } finally {
         setLinearBoardUpdatingIssueIds((prev) => {
           const next = new Set(prev)
@@ -4262,12 +4250,7 @@ export default function TaskPage(): React.JSX.Element {
           setNewLinearIssueProjects(p.items)
         }
       })
-      .catch((error) => {
-        const message = integrationCredentialDecryptionErrorMessage(error)
-        if (!cancelled && message) {
-          toast.error(message)
-        }
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) {
           setNewLinearIssueProjectsLoading(false)
@@ -4512,11 +4495,9 @@ export default function TaskPage(): React.JSX.Element {
         setAvailableJiraIssueTypes(issueTypes)
         setNewJiraIssueTypeId(issueTypes[0]?.id ?? null)
       })
-      .catch((error) => {
+      .catch(() => {
         if (!cancelled) {
-          toast.error(
-            integrationCredentialDecryptionErrorMessage(error) ?? 'Failed to load Jira issue types.'
-          )
+          toast.error('Failed to load Jira issue types.')
         }
       })
       .finally(() => {
@@ -4553,12 +4534,9 @@ export default function TaskPage(): React.JSX.Element {
           setJiraCreateFields(fields)
         }
       })
-      .catch((error) => {
+      .catch(() => {
         if (!cancelled) {
-          setJiraCreateFieldsError(
-            integrationCredentialDecryptionErrorMessage(error) ??
-              'Failed to load required Jira fields.'
-          )
+          setJiraCreateFieldsError('Failed to load required Jira fields.')
         }
       })
       .finally(() => {
@@ -5398,8 +5376,6 @@ export default function TaskPage(): React.JSX.Element {
           }
         })
         .catch(() => {})
-    } catch (error) {
-      toast.error(integrationCredentialDecryptionErrorMessage(error) ?? 'Failed to create issue.')
     } finally {
       setNewLinearIssueSubmitting(false)
     }
@@ -5468,10 +5444,6 @@ export default function TaskPage(): React.JSX.Element {
           }
         })
         .catch(() => {})
-    } catch (error) {
-      toast.error(
-        integrationCredentialDecryptionErrorMessage(error) ?? 'Failed to create Jira issue.'
-      )
     } finally {
       setNewJiraIssueSubmitting(false)
     }
@@ -6190,11 +6162,7 @@ export default function TaskPage(): React.JSX.Element {
       .then((teams) => {
         setAvailableTeams(teams)
       })
-      .catch((error) => {
-        const message = integrationCredentialDecryptionErrorMessage(error)
-        if (message) {
-          toast.error(message)
-        }
+      .catch(() => {
         console.warn('[TaskPage] Failed to refresh Linear teams')
       })
   }, [checkLinearConnection, listLinearTeams, selectedLinearWorkspaceId])
@@ -7918,9 +7886,9 @@ export default function TaskPage(): React.JSX.Element {
                   className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
                   style={{ scrollbarGutter: 'stable' }}
                 >
-                  {jiraError ? (
+                  {(jiraStatus.credentialError ?? jiraError) ? (
                     <div className="border-b border-border px-4 py-4 text-sm text-destructive">
-                      {jiraError}
+                      {jiraStatus.credentialError ?? jiraError}
                     </div>
                   ) : null}
 
@@ -7935,7 +7903,10 @@ export default function TaskPage(): React.JSX.Element {
                     </div>
                   ) : null}
 
-                  {!jiraLoading && jiraIssues.length === 0 && !jiraError ? (
+                  {!jiraLoading &&
+                  jiraIssues.length === 0 &&
+                  !jiraError &&
+                  !jiraStatus.credentialError ? (
                     <div className="px-4 py-10 text-center">
                       <p className="text-sm font-medium text-foreground">No Jira issues found</p>
                       <p className="mt-2 text-sm text-muted-foreground">

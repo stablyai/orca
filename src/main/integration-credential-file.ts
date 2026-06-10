@@ -1,14 +1,8 @@
 import { safeStorage } from 'electron'
 import {
   credentialDecryptionMessage,
-  type CredentialTokenProvenance,
   type IntegrationCredentialService
 } from '../shared/integration-credential-errors'
-
-export type StoredCredentialToken = {
-  token: string
-  provenance: CredentialTokenProvenance
-}
 
 export class CredentialDecryptionError extends Error {
   constructor(service: IntegrationCredentialService) {
@@ -17,44 +11,43 @@ export class CredentialDecryptionError extends Error {
   }
 }
 
+// Returns the stored token, null when the file is empty, and throws
+// CredentialDecryptionError when the file holds ciphertext we cannot decrypt
+// (e.g. the user denied the OS keychain prompt after an app re-sign).
 export function readStoredCredentialToken(
   service: IntegrationCredentialService,
   raw: Buffer
-): StoredCredentialToken | null {
+): string | null {
   if (raw.length === 0) {
     return null
   }
 
   if (safeStorage.isEncryptionAvailable()) {
     try {
-      return usableToken(safeStorage.decryptString(raw), 'decrypted')
+      return usableToken(safeStorage.decryptString(raw))
     } catch {
-      return readPlaintextLegacyCredential(service, raw, 'plaintext-after-decrypt-failure')
+      return readPlaintextLegacyCredential(service, raw)
     }
   }
 
-  return readPlaintextLegacyCredential(service, raw, 'plaintext-safeStorage-unavailable')
+  return readPlaintextLegacyCredential(service, raw)
 }
 
 function readPlaintextLegacyCredential(
   service: IntegrationCredentialService,
-  raw: Buffer,
-  provenance: CredentialTokenProvenance
-): StoredCredentialToken | null {
+  raw: Buffer
+): string | null {
   const plaintext = decodeUtf8(raw)
   // Why: legacy plaintext tokens are printable UTF-8; safeStorage ciphertext
   // such as macOS v10 blobs must not be decoded into auth-header junk.
   if (plaintext === null || hasControlCharacter(plaintext)) {
     throw new CredentialDecryptionError(service)
   }
-  return usableToken(plaintext, provenance)
+  return usableToken(plaintext)
 }
 
-function usableToken(
-  token: string,
-  provenance: CredentialTokenProvenance
-): StoredCredentialToken | null {
-  return token.length > 0 ? { token, provenance } : null
+function usableToken(token: string): string | null {
+  return token.length > 0 ? token : null
 }
 
 function decodeUtf8(raw: Buffer): string | null {

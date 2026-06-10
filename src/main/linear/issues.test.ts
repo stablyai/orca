@@ -12,8 +12,6 @@ vi.mock('./client', () => ({
   release: vi.fn(),
   getClients: (...args: unknown[]) => getClients(...args),
   isAuthError: (...args: unknown[]) => isAuthError(...args),
-  shouldClearTokenAfterAuthError: (entry: LinearClientForWorkspace) =>
-    entry.credentialProvenance === 'decrypted',
   clearToken: (...args: unknown[]) => clearToken(...args)
 }))
 
@@ -30,7 +28,6 @@ function makeEntry(options?: {
       displayName: 'Ada',
       email: 'ada@example.com'
     },
-    credentialProvenance: 'decrypted',
     client: {
       client: { rawRequest: options?.request ?? rawRequest }
     }
@@ -185,27 +182,6 @@ describe('Linear issue queries', () => {
     await expect(createIssue('team-1', 'Fix auth', undefined, 'workspace-1')).rejects.toThrow(
       error.message
     )
-  })
-
-  it('does not clear plaintext fallback Linear credentials after provider auth failure', async () => {
-    const error = new Error('Linear auth failed')
-    isAuthError.mockReturnValue(true)
-    getClients.mockReturnValue([
-      {
-        ...makeEntry(),
-        credentialProvenance: 'plaintext-after-decrypt-failure',
-        client: {
-          createIssue: vi.fn().mockRejectedValue(error)
-        }
-      } as unknown as LinearClientForWorkspace
-    ])
-    const { createIssue } = await import('./issues')
-
-    await expect(createIssue('team-1', 'Fix auth', undefined, 'workspace-1')).rejects.toThrow(
-      error.message
-    )
-
-    expect(clearToken).not.toHaveBeenCalled()
   })
 
   it('marks plain list results as having more when Linear has a next page', async () => {

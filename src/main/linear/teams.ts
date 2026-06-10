@@ -12,7 +12,6 @@ import {
   getClients,
   isAuthError,
   clearToken,
-  shouldClearTokenAfterAuthError,
   type LinearClientForWorkspace
 } from './client'
 
@@ -52,9 +51,7 @@ export async function listTeams(
         return fetchAllTeamsForWorkspace(entry)
       } catch (error) {
         if (isAuthError(error)) {
-          if (shouldClearTokenAfterAuthError(entry)) {
-            clearToken(entry.workspace.id)
-          }
+          clearToken(entry.workspace.id)
           if (workspaceId !== 'all') {
             throw error
           }
@@ -94,9 +91,7 @@ export async function getTeamStates(
       .sort((a, b) => a.position - b.position)
   } catch (error) {
     if (isAuthError(error)) {
-      if (shouldClearTokenAfterAuthError(entry)) {
-        clearToken(entry.workspace.id)
-      }
+      clearToken(entry.workspace.id)
       throw error
     }
     console.warn('[linear] getTeamStates failed:', error)
@@ -122,9 +117,7 @@ export async function getTeamLabels(
     return labels.nodes.map((l) => ({ id: l.id, name: l.name, color: l.color }))
   } catch (error) {
     if (isAuthError(error)) {
-      if (shouldClearTokenAfterAuthError(entry)) {
-        clearToken(entry.workspace.id)
-      }
+      clearToken(entry.workspace.id)
       throw error
     }
     console.warn('[linear] getTeamLabels failed:', error)
@@ -154,9 +147,7 @@ export async function getTeamMembers(
     }))
   } catch (error) {
     if (isAuthError(error)) {
-      if (shouldClearTokenAfterAuthError(entry)) {
-        clearToken(entry.workspace.id)
-      }
+      clearToken(entry.workspace.id)
       throw error
     }
     console.warn('[linear] getTeamMembers failed:', error)

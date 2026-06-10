@@ -12,8 +12,6 @@ vi.mock('./client', () => ({
   release: vi.fn(),
   getClients: (...args: unknown[]) => getClients(...args),
   isAuthError: (...args: unknown[]) => isAuthError(...args),
-  shouldClearTokenAfterAuthError: (entry: LinearClientForWorkspace) =>
-    entry.credentialProvenance === 'decrypted',
   clearToken: (...args: unknown[]) => clearToken(...args)
 }))
 
@@ -26,7 +24,6 @@ function makeEntry(): LinearClientForWorkspace {
       displayName: 'Ada',
       email: 'ada@example.com'
     },
-    credentialProvenance: 'decrypted',
     client: {
       client: { rawRequest }
     }

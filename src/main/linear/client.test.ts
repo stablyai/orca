@@ -19,7 +19,6 @@ let linearClientMock: ReturnType<typeof vi.fn>
 type SafeStorageMockOptions = {
   encryptionAvailable?: boolean
   decryptString?: (value: Buffer) => string
-  authFailureTokens?: string[]
 }
 
 function writeLegacyLinearFiles(token: string, viewer: Record<string, unknown>): void {
@@ -41,9 +40,6 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     this: { viewer: Promise<unknown> },
     { apiKey }: { apiKey: string }
   ) {
-    if (options.authFailureTokens?.includes(apiKey)) {
-      throw new AuthenticationLinearError('Linear authentication failed')
-    }
     const fixture = fixtures.get(apiKey)
     if (!fixture) {
       throw new Error('Invalid API key')
@@ -222,6 +218,8 @@ describe('Linear client workspace storage', () => {
     expect(existsSync(tokenPath)).toBe(true)
     expect(linear.getStatus()).toMatchObject({
       connected: true,
+      credentialError:
+        'Could not decrypt saved Linear credential. Approve Keychain access or reconnect Linear.',
       workspaces: [{ id: 'legacy' }]
     })
   })
@@ -250,47 +248,21 @@ describe('Linear client workspace storage', () => {
     expect(existsSync(tokenPath)).toBe(true)
     expect(linear.getStatus()).toMatchObject({
       connected: true,
+      credentialError:
+        'Could not decrypt saved Linear credential. Approve Keychain access or reconnect Linear.',
       workspaces: [{ id: 'legacy' }]
     })
   })
 
-  it('does not clear plaintext fallback credentials on Linear auth failure after decrypt failure', async () => {
-    const tokenPath = join(tempHome, '.orca', 'linear-token.enc')
-    writeLegacyLinearFiles('token-revoked', {
-      displayName: 'Ada',
-      email: 'ada@example.com',
-      organizationName: 'Alpha'
-    })
-    const linear = await loadClientModule({
-      encryptionAvailable: true,
-      authFailureTokens: ['token-revoked'],
-      decryptString: () => {
-        throw new Error('userCanceledErr')
-      }
-    })
-
-    await expect(linear.testConnection('legacy')).resolves.toEqual({
-      ok: false,
-      error: 'Linear authentication failed'
-    })
-
-    expect(existsSync(tokenPath)).toBe(true)
-    expect(linear.getStatus()).toMatchObject({
-      connected: true,
-      workspaces: [{ id: 'legacy' }]
-    })
-  })
-
-  it('retries Linear decryption after a transient plaintext fallback auth failure', async () => {
+  it('clears the recorded credential error after Keychain access is approved', async () => {
     let keychainApproved = false
-    writeLegacyLinearFiles('v10printable', {
+    writeLegacyLinearToken(Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]), {
       displayName: 'Ada',
       email: 'ada@example.com',
       organizationName: 'Alpha'
     })
     const linear = await loadClientModule({
       encryptionAvailable: true,
-      authFailureTokens: ['v10printable'],
       decryptString: () => {
         if (!keychainApproved) {
           throw new Error('userCanceledErr')
@@ -301,40 +273,17 @@ describe('Linear client workspace storage', () => {
 
     await expect(linear.testConnection('legacy')).resolves.toEqual({
       ok: false,
-      error: 'Linear authentication failed'
+      error:
+        'Could not decrypt saved Linear credential. Approve Keychain access or reconnect Linear.'
     })
+    expect(linear.getStatus().credentialError).toContain('Could not decrypt')
 
     keychainApproved = true
     await expect(linear.testConnection('legacy')).resolves.toMatchObject({
       ok: true,
       workspace: { id: 'org-alpha', organizationName: 'Alpha' }
     })
-    expect(linearClientMock).toHaveBeenNthCalledWith(1, { apiKey: 'v10printable' })
-    expect(linearClientMock).toHaveBeenNthCalledWith(2, { apiKey: 'token-alpha' })
-  })
-
-  it('does not clear plaintext credentials on Linear auth failure when safeStorage is unavailable', async () => {
-    const tokenPath = join(tempHome, '.orca', 'linear-token.enc')
-    writeLegacyLinearFiles('token-revoked', {
-      displayName: 'Ada',
-      email: 'ada@example.com',
-      organizationName: 'Alpha'
-    })
-    const linear = await loadClientModule({
-      encryptionAvailable: false,
-      authFailureTokens: ['token-revoked']
-    })
-
-    await expect(linear.testConnection('legacy')).resolves.toEqual({
-      ok: false,
-      error: 'Linear authentication failed'
-    })
-
-    expect(existsSync(tokenPath)).toBe(true)
-    expect(linear.getStatus()).toMatchObject({
-      connected: true,
-      workspaces: [{ id: 'legacy' }]
-    })
+    expect(linear.getStatus().credentialError).toBeUndefined()
   })
 
   it('treats empty Linear token files as missing credentials', async () => {
