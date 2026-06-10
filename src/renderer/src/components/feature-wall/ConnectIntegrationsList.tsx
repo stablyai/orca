@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
   AzureDevOpsIntegrationCard,
   BitbucketIntegrationCard,
@@ -11,14 +11,33 @@ import {
   LinearIntegrationCard
 } from '@/components/settings/task-tracker-integration-cards'
 import { useIntegrationProviderStatusRefresh } from '@/components/settings/use-integration-provider-status-refresh'
-import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
-import { useAppStore } from '@/store'
 import { CodeHostTaskNote, IntegrationProgress, IntegrationStep } from './connect-integration-step'
 import {
   deriveIntegrationFlowState,
   useIntegrationConnectionStatus
 } from './use-integration-connection-status'
 import { translate } from '@/i18n/i18n'
+
+// Bold provider names joined into a natural-language list ("Linear and
+// GitHub", "Linear, Jira, and GitHub") for the task-step summary.
+function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Element {
+  return (
+    <>
+      {props.names.map((name, index) => (
+        <Fragment key={name}>
+          {index > 0
+            ? index === props.names.length - 1
+              ? props.names.length > 2
+                ? translate('auto.components.feature.wall.ConnectIntegrationsList.list_end', ', and ')
+                : translate('auto.components.feature.wall.ConnectIntegrationsList.list_pair', ' and ')
+              : translate('auto.components.feature.wall.ConnectIntegrationsList.list_mid', ', ')
+            : null}
+          <span className="font-semibold text-foreground">{name}</span>
+        </Fragment>
+      ))}
+    </>
+  )
+}
 
 // Progressive two-step integration setup: first connect a code host for review
 // status, then a task source. Only one step is active at a time — connecting a
@@ -27,9 +46,6 @@ import { translate } from '@/i18n/i18n'
 export function ConnectIntegrationsList(): React.JSX.Element {
   useIntegrationProviderStatusRefresh()
   const status = useIntegrationConnectionStatus()
-  const preflightContextKey = useAppStore((s) =>
-    localPreflightContextKey(getLocalPreflightContext(s))
-  )
   // Lets a done step reopen inline via "Change" without losing its connected
   // state. Cleared once the user collapses it again.
   const [reopened, setReopened] = useState<{ review: boolean; task: boolean }>({
@@ -37,23 +53,13 @@ export function ConnectIntegrationsList(): React.JSX.Element {
     task: false
   })
 
-  // A code host doubles as a task source, so once it connects the parent
-  // checklist already counts tasks as satisfied. Step 2 still invites a
-  // dedicated tracker; it resolves when one connects or the user accepts the
-  // code host via "Use … issues". This stays truthful — we never claim a
-  // tracker is connected when it isn't.
-  const [acceptedCodeHostTaskProvider, setAcceptedCodeHostTaskProvider] = useState<{
-    provider: 'GitHub' | 'GitLab'
-    preflightContextKey: string
-  } | null>(null)
-  const taskAccepted =
-    acceptedCodeHostTaskProvider?.provider === status.codeHostTaskProviderName &&
-    acceptedCodeHostTaskProvider.preflightContextKey === preflightContextKey
-
+  // A code host doubles as a task source, so a connected GitHub/GitLab
+  // resolves step 2 on its own. The collapsed summary still invites a
+  // dedicated tracker, and "Change" reopens the step to connect one.
   const flow = deriveIntegrationFlowState({
     reviewConnected: status.reviewConnected,
     trackerProviderName: status.trackerProviderName,
-    taskAccepted,
+    codeHostTaskProviderName: status.codeHostTaskProviderName,
     trackerChecking: status.trackerChecking
   })
   const reviewDone = status.reviewConnected
@@ -122,7 +128,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
         summary={
           status.trackerProviderName ? (
             <>
-              <span className="font-semibold text-foreground">{status.trackerProviderName}</span>{' '}
+              <TaskSourceNameList names={status.taskSourceNames} />{' '}
               {translate(
                 'auto.components.feature.wall.ConnectIntegrationsList.3dddb2d565',
                 'connected for tasks'
@@ -134,8 +140,8 @@ export function ConnectIntegrationsList(): React.JSX.Element {
                 {status.codeHostTaskProviderName}
               </span>{' '}
               {translate(
-                'auto.components.feature.wall.ConnectIntegrationsList.bad3bbce10',
-                'issues available as tasks'
+                'auto.components.feature.wall.ConnectIntegrationsList.code_host_tasks_summary',
+                'issues available as tasks · add Linear or Jira if your team plans work there'
               )}
             </>
           )
@@ -146,19 +152,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
         <LinearIntegrationCard />
         <JiraIntegrationCard />
         {status.codeHostTaskProviderName && !trackerDone ? (
-          <CodeHostTaskNote
-            providerName={status.codeHostTaskProviderName}
-            onAccept={() => {
-              if (!status.codeHostTaskProviderName) {
-                return
-              }
-              setAcceptedCodeHostTaskProvider({
-                provider: status.codeHostTaskProviderName,
-                preflightContextKey
-              })
-              setReopened((r) => ({ ...r, task: false }))
-            }}
-          />
+          <CodeHostTaskNote providerName={status.codeHostTaskProviderName} />
         ) : null}
       </IntegrationStep>
     </div>

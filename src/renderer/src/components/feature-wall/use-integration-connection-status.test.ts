@@ -49,17 +49,17 @@ describe('deriveIntegrationStepStates', () => {
       deriveIntegrationStepStates({
         reviewConnected: false,
         trackerConnected: false,
-        taskAccepted: false
+        codeHostTaskConnected: false
       })
     ).toEqual({ review: 'active', task: 'upcoming', complete: false })
   })
 
-  it('promotes tasks to active once a code host connects for review', () => {
+  it('promotes tasks to active once a non-task review provider connects', () => {
     expect(
       deriveIntegrationStepStates({
         reviewConnected: true,
         trackerConnected: false,
-        taskAccepted: false
+        codeHostTaskConnected: false
       })
     ).toEqual({ review: 'done', task: 'active', complete: false })
   })
@@ -69,31 +69,31 @@ describe('deriveIntegrationStepStates', () => {
       deriveIntegrationStepStates({
         reviewConnected: true,
         trackerConnected: true,
-        taskAccepted: false
+        codeHostTaskConnected: false
       })
     ).toEqual({ review: 'done', task: 'done', complete: true })
   })
 
-  it('completes the task step when the user accepts the code host for tasks', () => {
-    // A code host doubles as a task source; accepting it resolves step 2
-    // without a dedicated tracker, so the flow can complete.
+  it('completes the task step from a connected code host without a tracker', () => {
+    // GitHub/GitLab issues double as a task source, so a connected code host
+    // resolves step 2 outright instead of asking for an extra acknowledgement.
     expect(
       deriveIntegrationStepStates({
         reviewConnected: true,
         trackerConnected: false,
-        taskAccepted: true
+        codeHostTaskConnected: true
       })
     ).toEqual({ review: 'done', task: 'done', complete: true })
   })
 
-  it('ignores code-host acceptance until review is connected', () => {
-    // Step 2 is unreachable until step 1 is done, so acceptance alone must not
-    // resolve tasks or complete the flow.
+  it('ignores the code host for tasks until review is connected', () => {
+    // Step 2 is unreachable until step 1 is done, so the code host alone must
+    // not resolve tasks or complete the flow.
     expect(
       deriveIntegrationStepStates({
         reviewConnected: false,
         trackerConnected: false,
-        taskAccepted: true
+        codeHostTaskConnected: true
       })
     ).toEqual({ review: 'active', task: 'upcoming', complete: false })
   })
@@ -105,7 +105,7 @@ describe('deriveIntegrationStepStates', () => {
       deriveIntegrationStepStates({
         reviewConnected: false,
         trackerConnected: true,
-        taskAccepted: false
+        codeHostTaskConnected: false
       })
     ).toEqual({ review: 'active', task: 'done', complete: false })
   })
@@ -242,7 +242,41 @@ describe('deriveIntegrationConnectionStatus', () => {
       codeHostTaskProviderName: 'GitHub',
       trackerConnected: true,
       trackerProviderName: 'Linear',
+      // Trackers lead, but the code host stays listed so task summaries do not
+      // under-report what is usable.
+      taskSourceNames: ['Linear', 'GitHub'],
       checking: false
+    })
+  })
+
+  it('lists every connected task source with trackers before code hosts', () => {
+    expect(
+      deriveIntegrationConnectionStatus(
+        statusFacts({
+          preflightStatus: {
+            gh: { installed: true, authenticated: true },
+            glab: { installed: true, authenticated: true }
+          },
+          linearStatus: { connected: true },
+          jiraStatus: { connected: true }
+        })
+      )
+    ).toMatchObject({
+      taskSourceNames: ['Linear', 'Jira', 'GitHub', 'GitLab']
+    })
+
+    expect(
+      deriveIntegrationConnectionStatus(
+        statusFacts({
+          preflightStatus: {
+            gh: { installed: true, authenticated: true },
+            glab: { installed: false, authenticated: false }
+          }
+        })
+      )
+    ).toMatchObject({
+      trackerProviderName: null,
+      taskSourceNames: ['GitHub']
     })
   })
 
@@ -364,7 +398,7 @@ describe('deriveCliProviderCardState', () => {
 })
 
 describe('deriveIntegrationFlowState', () => {
-  it('does not complete progress or banner state from accepted code-host tasks while tracker facts are unresolved', () => {
+  it('does not complete progress from the code host while tracker facts are unresolved', () => {
     const status = deriveIntegrationConnectionStatus(
       statusFacts({
         preflightStatus: {
@@ -380,7 +414,7 @@ describe('deriveIntegrationFlowState', () => {
       deriveIntegrationFlowState({
         reviewConnected: status.reviewConnected,
         trackerProviderName: status.trackerProviderName,
-        taskAccepted: true,
+        codeHostTaskProviderName: status.codeHostTaskProviderName,
         trackerChecking: status.trackerChecking
       })
     ).toMatchObject({
@@ -390,12 +424,37 @@ describe('deriveIntegrationFlowState', () => {
     })
   })
 
+  it('completes the flow from a connected code host once tracker checks settle', () => {
+    const status = deriveIntegrationConnectionStatus(
+      statusFacts({
+        preflightStatus: {
+          gh: { installed: true, authenticated: true },
+          glab: { installed: false, authenticated: false }
+        }
+      })
+    )
+
+    expect(
+      deriveIntegrationFlowState({
+        reviewConnected: status.reviewConnected,
+        trackerProviderName: status.trackerProviderName,
+        codeHostTaskProviderName: status.codeHostTaskProviderName,
+        trackerChecking: status.trackerChecking
+      })
+    ).toMatchObject({
+      review: 'done',
+      task: 'done',
+      complete: true,
+      taskResolved: true
+    })
+  })
+
   it('keeps tracker-before-code-host completion scoped to the task step only', () => {
     expect(
       deriveIntegrationFlowState({
         reviewConnected: false,
         trackerProviderName: 'Jira',
-        taskAccepted: false,
+        codeHostTaskProviderName: null,
         trackerChecking: false
       })
     ).toMatchObject({

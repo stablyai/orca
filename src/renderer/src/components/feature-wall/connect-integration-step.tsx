@@ -1,5 +1,4 @@
 import { Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { IntegrationStepState } from './use-integration-connection-status'
 import { translate } from '@/i18n/i18n'
@@ -108,12 +107,9 @@ export function IntegrationProgress(props: {
 }
 
 // Acknowledges the step-1 code host as an already-usable task source so we
-// don't ask the user to connect the same gh/glab auth twice. "Use … issues"
-// resolves the step without a tracker; the copy never claims a tracker exists.
-export function CodeHostTaskNote(props: {
-  providerName: string
-  onAccept?: () => void
-}): React.JSX.Element {
+// don't ask the user to connect the same gh/glab auth twice. The step resolves
+// from the connection itself; the copy never claims a tracker exists.
+export function CodeHostTaskNote(props: { providerName: string }): React.JSX.Element {
   return (
     <div className="flex items-start gap-2.5 border-t border-border px-1 pb-1 pt-3 text-[13px] leading-snug text-muted-foreground">
       <Check className="mt-px size-3.5 shrink-0 text-status-success" />
@@ -131,20 +127,6 @@ export function CodeHostTaskNote(props: {
             'Connect a tracker above only if your team plans work there.'
           )}
         </span>
-        {props.onAccept ? (
-          <Button
-            variant="ghost"
-            size="xs"
-            className="mt-1.5 h-auto px-0 text-[12px] text-foreground hover:bg-transparent hover:underline"
-            onClick={props.onAccept}
-          >
-            {translate(
-              'auto.components.feature.wall.connect.integration.step.use_provider_issues',
-              'Use {{value0}} issues for tasks',
-              { value0: props.providerName }
-            )}
-          </Button>
-        ) : null}
       </div>
     </div>
   )

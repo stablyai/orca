@@ -147,13 +147,29 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).not.toContain('Run in terminal')
   })
 
-  it('renders Linear, Jira, and code-host task acknowledgement after review connects', async () => {
+  it('auto-resolves the task step from a connected code host with a tracker invitation', async () => {
     installStore(makePreflightStatus({ gh: { installed: true, authenticated: true } }))
 
     const { markup } = await renderConnectIntegrationsList()
 
+    expect(markup).toContain('GitHub')
+    expect(markup).toContain('issues available as tasks')
+    expect(markup).toContain('add Linear or Jira if your team plans work there')
+    expect(markup).not.toContain('Use GitHub issues')
+  })
+
+  it('lists the code host alongside a connected tracker in the task summary', async () => {
+    installStore(makePreflightStatus({ gh: { installed: true, authenticated: true } }))
+    if (!storeState.current) {
+      throw new Error('Store state was not installed')
+    }
+    storeState.current.linearStatus = { connected: true, workspaces: [] }
+
+    const { markup } = await renderConnectIntegrationsList()
+
     expect(markup).toContain('Linear')
-    expect(markup).toContain('Jira')
-    expect(markup).toContain('Use GitHub issues')
+    expect(markup).toContain('GitHub')
+    expect(markup).toContain('connected for tasks')
+    expect(markup).toContain(' and ')
   })
 })

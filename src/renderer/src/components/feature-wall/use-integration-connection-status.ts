@@ -6,16 +6,18 @@ export type IntegrationStepState = 'active' | 'done' | 'upcoming'
 
 // Pure derivation of the two-step flow's step states from connection facts,
 // extracted so the progressive logic is testable without the store or DOM.
-// `taskAccepted` is the user's explicit "use my code host for tasks" choice.
+// `codeHostTaskConnected` means a connected code host whose issues double as
+// a task source (GitHub/GitLab), which resolves step 2 without a tracker.
 export function deriveIntegrationStepStates(input: {
   reviewConnected: boolean
   trackerConnected: boolean
-  taskAccepted: boolean
+  codeHostTaskConnected: boolean
 }): { review: IntegrationStepState; task: IntegrationStepState; complete: boolean } {
   const review: IntegrationStepState = input.reviewConnected ? 'done' : 'active'
-  // A dedicated tracker resolves tasks outright. Accepting the code host only
-  // counts once review is connected, since step 2 is unreachable before then.
-  const taskResolved = input.trackerConnected || (input.reviewConnected && input.taskAccepted)
+  // A dedicated tracker resolves tasks outright. The code host only counts
+  // once review is connected, since step 2 is unreachable before then.
+  const taskResolved =
+    input.trackerConnected || (input.reviewConnected && input.codeHostTaskConnected)
   const task: IntegrationStepState = taskResolved
     ? 'done'
     : input.reviewConnected
@@ -27,7 +29,7 @@ export function deriveIntegrationStepStates(input: {
 export function deriveIntegrationFlowState(input: {
   reviewConnected: boolean
   trackerProviderName: 'Linear' | 'Jira' | null
-  taskAccepted: boolean
+  codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
   trackerChecking: boolean
 }): {
   review: IntegrationStepState
@@ -36,13 +38,14 @@ export function deriveIntegrationFlowState(input: {
   taskResolved: boolean
 } {
   const trackerConnected = input.trackerProviderName !== null
-  // Code-host acceptance is local acknowledgement, so it can complete the task
-  // step only after dedicated tracker facts have resolved for this runtime.
-  const taskAcceptedReady = input.taskAccepted && !input.trackerChecking
+  // The code host resolves the task step only after dedicated tracker facts
+  // have settled for this runtime, so the collapsed summary names the right
+  // completion reason instead of flashing the code-host fallback copy.
+  const codeHostTaskReady = input.codeHostTaskProviderName !== null && !input.trackerChecking
   const stepStates = deriveIntegrationStepStates({
     reviewConnected: input.reviewConnected,
     trackerConnected,
-    taskAccepted: taskAcceptedReady
+    codeHostTaskConnected: codeHostTaskReady
   })
   return {
     ...stepStates,
@@ -102,6 +105,9 @@ export type IntegrationConnectionStatus = {
   // Display name of the connected tracker, or null. Code hosts are surfaced
   // via reviewProviderName, so this only names Linear/Jira.
   trackerProviderName: 'Linear' | 'Jira' | null
+  // Every connected task source, trackers first, for "Linear and GitHub
+  // connected for tasks" summaries that don't under-report what's usable.
+  taskSourceNames: ('Linear' | 'Jira' | 'GitHub' | 'GitLab')[]
   // True while the code-host check is unresolved, stale, loading, or errored.
   reviewChecking: boolean
   // True while either dedicated tracker check is unresolved or stale.
@@ -179,7 +185,13 @@ export function deriveIntegrationConnectionStatus(
             : null
   const codeHostTaskProviderName = githubConnected ? 'GitHub' : gitlabConnected ? 'GitLab' : null
   const trackerProviderName = linearConnected ? 'Linear' : jiraConnected ? 'Jira' : null
-  const hasUsableTaskSource = githubConnected || gitlabConnected || linearConnected || jiraConnected
+  const taskSourceNames: IntegrationConnectionStatus['taskSourceNames'] = [
+    ...(linearConnected ? (['Linear'] as const) : []),
+    ...(jiraConnected ? (['Jira'] as const) : []),
+    ...(githubConnected ? (['GitHub'] as const) : []),
+    ...(gitlabConnected ? (['GitLab'] as const) : [])
+  ]
+  const hasUsableTaskSource = taskSourceNames.length > 0
   // Why: one resolved task source is enough for parent setup readiness, but the
   // local "use code host issues" acknowledgement waits until tracker checks
   // settle so the banner uses the right completion reason.
@@ -196,6 +208,7 @@ export function deriveIntegrationConnectionStatus(
     codeHostTaskProviderName,
     trackerConnected: hasUsableTaskSource,
     trackerProviderName,
+    taskSourceNames,
     reviewChecking,
     trackerChecking,
     checking: !hasUsableTaskSource && (reviewChecking || trackerChecking)
