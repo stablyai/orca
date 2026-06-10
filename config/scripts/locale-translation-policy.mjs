@@ -125,13 +125,27 @@ export const BRAND_MISTRANSLATIONS = {
     'GitHub Copilot': ['GitHub コパイロット', 'コパイロット'],
     Discord: ['不和'],
     Linear: ['線形']
+  },
+  es: {
+    Codex: ['códice', 'Códice'],
+    Gemini: ['Géminis'],
+    Claude: ['claudia', 'Claudia'],
+    Orca: ['orca', 'Orcas', 'orcas'],
+    OpenCode: ['código abierto', 'Código abierto'],
+    OpenClaude: ['Openclaude'],
+    Antigravity: ['antigravedad', 'Antigravedad'],
+    'GitHub Copilot': ['Copiloto de GitHub'],
+    Discord: ['discordia'],
+    Linear: ['lineal', 'Lineal'],
+    Jira: ['jira']
   }
 }
 
 export const NATIVE_PICKER_LABELS = {
-  zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語' },
-  ko: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語' },
-  ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語' }
+  zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
+  ko: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
+  ja: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
+  es: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' }
 }
 
 export function isEnglishOnlyKey(key) {

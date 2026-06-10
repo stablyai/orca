@@ -29,6 +29,11 @@ const LOCALE_CONFIG = {
     targetLanguage: 'ja',
     displayName: 'Japanese',
     cacheFile: '.ja-catalog-cache.json'
+  },
+  es: {
+    targetLanguage: 'es',
+    displayName: 'Spanish',
+    cacheFile: '.es-catalog-cache.json'
   }
 }
 

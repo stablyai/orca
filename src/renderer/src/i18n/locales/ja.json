@@ -16,7 +16,8 @@
         "english": "English",
         "chinese": "中文（简体）",
         "korean": "한국어",
-        "japanese": "日本語"
+        "japanese": "日本語",
+        "spanish": "Español"
       },
       "statusBar": {
         "claudeToggleDescription": "アクティブなワークスペースのClaude トークンとコストの使用状況を表示します。",
