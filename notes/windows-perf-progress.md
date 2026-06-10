@@ -27,6 +27,24 @@ All changes must be proven with before/after benchmark numbers.
   on env-store reads", #4526 "Avoid OpenCode config cleanup freezes on Windows", b240d5eee
   "Measure startup hydration phases"
 
+## Follow-ups / known issues (out of scope for this branch)
+
+- Pre-existing Windows-only unit test failures: `daemon-pty-adapter.test.ts` (61) and
+  `history-manager.test.ts` (3, chmod-based fs-error simulation is a no-op on Windows).
+  Identical with/without this branch's changes. CI never sees them (ubuntu-only).
+- Consider a Windows CI lane for the terminal-perf e2e suite (F6/F7) and these unit suites.
+- Typing-latency load-sensitivity (F7): possible deeper work on daemon checkpoint
+  scheduling/priority if user reports persist after D3.
+- Audit leftovers (F4): non-recursive `grantDirAcl` execFileSync on hook install
+  (installer-utils.ts:210) could be async; readHooksJson caching unnecessary (not hot).
+
+### D3 — Async checkpoint writes (implemented)
+
+`HistoryManager.checkpoint` (every ~5s per dirty session, Electron main process) switched
+from writeFileSync+renameSync (~1MB snapshot JSON, inflated by Defender on Windows) to
+fs.promises with the same tmp+rename atomicity; ordering preserved by the adapter's
+checkpointInFlight guard.
+
 ## Suspects (startup)
 
 1. **`grantDirAcl(userData, { recursive: true })`** — `src/main/index.ts:517-523`, win32 only,
