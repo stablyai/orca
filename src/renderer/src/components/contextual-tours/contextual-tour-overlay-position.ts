@@ -13,6 +13,10 @@ export type ContextualTourOverlayPanelPosition = {
   panelPlacement: ContextualTourPanelPlacement
 }
 
+/**
+ * Returns the CSS position and placement for a tour panel rendered inside an overlay host,
+ * clamping coordinates to host space so clipped containers don't obscure the panel.
+ */
 export function getContextualTourOverlayPanelPosition(args: {
   targetRect: DOMRect
   panelElement: HTMLElement | null

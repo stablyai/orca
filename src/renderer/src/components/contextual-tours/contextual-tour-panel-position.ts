@@ -17,6 +17,10 @@ type PanelSize = {
   height: number
 }
 
+/**
+ * Computes the position and placement for a tour panel relative to a target element,
+ * choosing the best side and clamping the panel within the viewport.
+ */
 export function clampContextualTourPanelPosition(args: {
   targetRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>
   viewport: ViewportSize
@@ -90,6 +94,7 @@ export function clampContextualTourPanelPosition(args: {
   return { left: clampedLeft, top: clampedTop, placement, arrowOffset }
 }
 
+/** Returns the raw (unclamped) top-left position for a panel at the given placement side. */
 function getUnclampedPanelPosition(args: {
   placement: ContextualTourPanelPlacement
   targetRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>
@@ -121,6 +126,7 @@ function getUnclampedPanelPosition(args: {
   }
 }
 
+/** Translates a target rect from viewport coordinates into the host element's local coordinate space. */
 export function getContextualTourTargetRectInHost(
   targetRect: Pick<DOMRect, 'left' | 'right' | 'top' | 'bottom' | 'width' | 'height'>,
   hostRect: Pick<DOMRect, 'left' | 'top'>
@@ -135,6 +141,7 @@ export function getContextualTourTargetRectInHost(
   }
 }
 
+/** Clamps a number between min and max, inclusive. */
 function clampNumber(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
