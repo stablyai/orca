@@ -8948,7 +8948,9 @@
             "integration": {
               "step": {
                 "0f47ff17c6": "Change",
-                "5538eb6743": "Done"
+                "5538eb6743": "Done",
+                "open_step": "Open",
+                "close_step": "Close"
               }
             }
           }

@@ -147,6 +147,31 @@ describe('ConnectIntegrationsList', () => {
     expect(markup).not.toContain('Run in terminal')
   })
 
+  it('keeps the upcoming task step collapsed but openable, not inert', async () => {
+    installStore(makePreflightStatus())
+
+    const { markup } = await renderConnectIntegrationsList()
+
+    // Step 1 is not a prerequisite: the task step starts collapsed but offers
+    // an "Open" affordance instead of a disabled, dimmed row.
+    expect(markup).toContain('Open')
+    expect(markup).not.toContain('opacity-55')
+    expect(markup).not.toContain('Add Linear access')
+  })
+
+  it('collapses the task step to its summary when a tracker connects first', async () => {
+    installStore(makePreflightStatus())
+    if (!storeState.current) {
+      throw new Error('Store state was not installed')
+    }
+    storeState.current.linearStatus = { connected: true, workspaces: [] }
+
+    const { markup } = await renderConnectIntegrationsList()
+
+    expect(markup).toContain('connected for tasks')
+    expect(markup).not.toContain('Connect Jira')
+  })
+
   it('auto-resolves the task step from a connected code host but keeps it open for trackers', async () => {
     installStore(makePreflightStatus({ gh: { installed: true, authenticated: true } }))
 

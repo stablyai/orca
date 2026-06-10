@@ -40,10 +40,12 @@ function TaskSourceNameList(props: { names: readonly string[] }): React.JSX.Elem
 }
 
 // Progressive two-step integration setup: first connect a code host for review
-// status, then a task source. Connecting step 1 collapses it to a summary and
-// promotes step 2, which stays open until a dedicated tracker connects so
-// Linear/Jira remain discoverable. Done-state is driven by real provider
-// connection status, never an optimistic click.
+// status, then a task source. The order is a recommendation, not a gate — step
+// 2 starts collapsed but opens on click so tracker-first users aren't blocked.
+// Connecting step 1 collapses it to a summary and expands step 2, which stays
+// open until a dedicated tracker connects so Linear/Jira remain discoverable.
+// Done-state is driven by real provider connection status, never an
+// optimistic click.
 export function ConnectIntegrationsList(): React.JSX.Element {
   useIntegrationProviderStatusRefresh()
   const status = useIntegrationConnectionStatus()
@@ -64,18 +66,23 @@ export function ConnectIntegrationsList(): React.JSX.Element {
   const trackerDone = status.trackerProviderName !== null
   const reviewExpanded = !reviewDone || reviewReopened
   const reviewCanToggle = reviewDone
-  // User's explicit expand/collapse of step 2, snapshotted against the tracker
-  // state so a tracker connecting (or disconnecting) restores the default.
+  // User's explicit expand/collapse of step 2, snapshotted against the
+  // connection state so a provider connecting (or disconnecting) restores the
+  // default for the new state instead of keeping a stale manual choice.
   const [taskToggle, setTaskToggle] = useState<{
     expanded: boolean
     whenTrackerDone: boolean
+    whenReviewDone: boolean
   } | null>(null)
-  const taskToggleCurrent = taskToggle !== null && taskToggle.whenTrackerDone === trackerDone
-  // Step 2 only becomes reachable once review status is connected. It stays
-  // open even when the code host already resolved it — many teams plan work in
-  // Linear/Jira and would otherwise never see those options — and collapses by
-  // default only once a dedicated tracker connects.
-  const taskExpanded = reviewDone && (taskToggleCurrent ? taskToggle.expanded : !trackerDone)
+  const taskToggleCurrent =
+    taskToggle !== null &&
+    taskToggle.whenTrackerDone === trackerDone &&
+    taskToggle.whenReviewDone === reviewDone
+  // Step 2 defaults collapsed while step 1 is still active (but opens on
+  // click — review is not a prerequisite for connecting a tracker), stays open
+  // even when the code host already resolved it so Linear/Jira remain
+  // discoverable, and collapses only once a dedicated tracker connects.
+  const taskExpanded = taskToggleCurrent ? taskToggle.expanded : reviewDone && !trackerDone
 
   return (
     <div className="space-y-2.5">
@@ -153,8 +160,13 @@ export function ConnectIntegrationsList(): React.JSX.Element {
             </>
           )
         }
-        onToggle={() => setTaskToggle({ expanded: !taskExpanded, whenTrackerDone: trackerDone })}
-        canToggle={reviewDone}
+        onToggle={() =>
+          setTaskToggle({
+            expanded: !taskExpanded,
+            whenTrackerDone: trackerDone,
+            whenReviewDone: reviewDone
+          })
+        }
       >
         <LinearIntegrationCard />
         <JiraIntegrationCard />
