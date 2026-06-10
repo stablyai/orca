@@ -298,7 +298,7 @@ function mirrorWorkspaceFromActivePage(
       activePageId: null,
       pageIds: pages.map((page) => page.id),
       url: 'about:blank',
-      title: translate('auto.store.slices.browser.08fc23631d', 'Browser'),
+      title: translate("auto.store.slices.browser.08fc23631d", "Browser"),
       loading: false,
       faviconUrl: null,
       canGoBack: false,
@@ -545,7 +545,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       return
     }
     get().createBrowserTab(worktreeId, defaultUrl, {
-      title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
+      title: translate("auto.store.slices.browser.d175274b6d", "New Browser Tab"),
       focusAddressBar: true,
       targetGroupId: groupId
     })

@@ -26,15 +26,8 @@ export default function WorkspaceKanbanPinDropTarget({
       onDragLeave={onDragLeave}
     >
       <Pin className="size-3.5" />
-      <span className="font-medium">
-        {translate('auto.components.sidebar.WorkspaceKanbanPinDropTarget.8fae2d0862', 'Pinned')}
-      </span>
-      <span className="truncate">
-        {translate(
-          'auto.components.sidebar.WorkspaceKanbanPinDropTarget.c30151c5ee',
-          'Drop here to pin without changing status.'
-        )}
-      </span>
+      <span className="font-medium">{translate("auto.components.sidebar.WorkspaceKanbanPinDropTarget.8fae2d0862", "Pinned")}</span>
+      <span className="truncate">{translate("auto.components.sidebar.WorkspaceKanbanPinDropTarget.c30151c5ee", "Drop here to pin without changing status.")}</span>
     </div>
   )
 }

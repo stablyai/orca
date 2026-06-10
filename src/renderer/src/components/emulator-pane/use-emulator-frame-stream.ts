@@ -47,13 +47,7 @@ export function useEmulatorFrameStream(
       setState((current) =>
         current.streamIdentity !== streamIdentity || current.frameUrl
           ? current
-          : {
-              ...current,
-              error: translate(
-                'auto.components.emulator.pane.use.emulator.frame.stream.f1c0179002',
-                'Stream is not producing frames.'
-              )
-            }
+          : { ...current, error: translate("auto.components.emulator.pane.use.emulator.frame.stream.f1c0179002", "Stream is not producing frames.") }
       )
     }, FIRST_FRAME_TIMEOUT_MS)
 

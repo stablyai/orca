@@ -653,10 +653,7 @@ export function FloatingTerminalPanel({
         return
       }
       createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, url, {
-        title: translate(
-          'auto.components.floating.terminal.FloatingTerminalPanel.8b14ba6c17',
-          'New Browser Tab'
-        ),
+        title: translate("auto.components.floating.terminal.FloatingTerminalPanel.8b14ba6c17", "New Browser Tab"),
         focusAddressBar: true,
         targetGroupId: activeGroup?.id
       })
@@ -1389,11 +1386,7 @@ export function FloatingTerminalPanel({
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    {translate(
-                      'auto.components.floating.terminal.FloatingTerminalPanel.d6b563ae24',
-                      'Loading editor...'
-                    )}
-                  </div>
+                    {translate("auto.components.floating.terminal.FloatingTerminalPanel.d6b563ae24", "Loading editor...")}</div>
                 }
               >
                 {/* Why: floating workspace markdown is scratch/local context,
@@ -1423,25 +1416,16 @@ export function FloatingTerminalPanel({
           ) : null}
         </div>
       </div>
-      {showOrchestrationSetup && activeTabType === 'terminal' ? (
+      {showOrchestrationSetup && activeTabType === "terminal" ? (
         <div
           className="absolute right-4 bottom-4 z-10 w-[280px] rounded-md border border-border/60 bg-card/95 p-3 text-card-foreground shadow-xs"
           data-floating-terminal-no-drag
         >
           <div className="space-y-2">
             <div className="space-y-0.5">
-              <p className="text-sm font-medium">
-                {translate(
-                  'auto.components.floating.terminal.FloatingTerminalPanel.2a3c5ddf5e',
-                  'Enable orchestration'
-                )}
-              </p>
+              <p className="text-sm font-medium">{translate("auto.components.floating.terminal.FloatingTerminalPanel.2a3c5ddf5e", "Enable orchestration")}</p>
               <p className="text-xs leading-5 text-muted-foreground">
-                {translate(
-                  'auto.components.floating.terminal.FloatingTerminalPanel.8cf80db43b',
-                  'Set up the Orca CLI and agent skill so agents can coordinate through Orca.'
-                )}
-              </p>
+                {translate("auto.components.floating.terminal.FloatingTerminalPanel.8cf80db43b", "Set up the Orca CLI and agent skill so agents can coordinate through Orca.")}</p>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -1451,11 +1435,7 @@ export function FloatingTerminalPanel({
                 className="flex-1"
                 onClick={dismissOrchestrationSetup}
               >
-                {translate(
-                  'auto.components.floating.terminal.FloatingTerminalPanel.adc281394d',
-                  'Dismiss'
-                )}
-              </Button>
+                {translate("auto.components.floating.terminal.FloatingTerminalPanel.adc281394d", "Dismiss")}</Button>
               <Button
                 type="button"
                 variant="default"
@@ -1463,11 +1443,7 @@ export function FloatingTerminalPanel({
                 className="flex-1"
                 onClick={() => setOrchestrationDialogOpen(true)}
               >
-                {translate(
-                  'auto.components.floating.terminal.FloatingTerminalPanel.bbc177f98f',
-                  'Enable'
-                )}
-              </Button>
+                {translate("auto.components.floating.terminal.FloatingTerminalPanel.bbc177f98f", "Enable")}</Button>
             </div>
           </div>
         </div>
@@ -1494,23 +1470,11 @@ export function FloatingTerminalPanel({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-sm">
-              {translate(
-                'auto.components.floating.terminal.FloatingTerminalPanel.690b6fb98a',
-                'Unsaved Changes'
-              )}
-            </DialogTitle>
+            <DialogTitle className="text-sm">{translate("auto.components.floating.terminal.FloatingTerminalPanel.690b6fb98a", "Unsaved Changes")}</DialogTitle>
             <DialogDescription className="text-xs">
               {saveDialogFile
-                ? translate(
-                    'auto.components.floating.terminal.FloatingTerminalPanel.5ddc688c52',
-                    '"{{value0}}" has unsaved changes. Do you want to save before closing?',
-                    { value0: saveDialogFile.relativePath.split('/').pop() }
-                  )
-                : translate(
-                    'auto.components.floating.terminal.FloatingTerminalPanel.b085fb58b5',
-                    'This file has unsaved changes.'
-                  )}
+                ? translate("auto.components.floating.terminal.FloatingTerminalPanel.5ddc688c52", "\"{{value0}}\" has unsaved changes. Do you want to save before closing?", { value0: saveDialogFile.relativePath.split('/').pop() })
+                : translate("auto.components.floating.terminal.FloatingTerminalPanel.b085fb58b5", "This file has unsaved changes.")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -1520,28 +1484,16 @@ export function FloatingTerminalPanel({
               size="sm"
               onClick={handleFloatingSaveDialogCancel}
             >
-              {translate(
-                'auto.components.floating.terminal.FloatingTerminalPanel.e7bf09d4d4',
-                'Cancel'
-              )}
-            </Button>
+              {translate("auto.components.floating.terminal.FloatingTerminalPanel.e7bf09d4d4", "Cancel")}</Button>
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={handleFloatingSaveDialogDiscard}
             >
-              {translate(
-                'auto.components.floating.terminal.FloatingTerminalPanel.918c2139f3',
-                "Don't Save"
-              )}
-            </Button>
+              {translate("auto.components.floating.terminal.FloatingTerminalPanel.918c2139f3", "Don't Save")}</Button>
             <Button type="button" size="sm" onClick={handleFloatingSaveDialogSave}>
-              {translate(
-                'auto.components.floating.terminal.FloatingTerminalPanel.da508bd7f5',
-                'Save'
-              )}
-            </Button>
+              {translate("auto.components.floating.terminal.FloatingTerminalPanel.da508bd7f5", "Save")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1589,12 +1541,7 @@ function FloatingTerminalEmptyState({
           onClick={onNewTerminal}
         >
           <TerminalSquare className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.3215fc73e9',
-              'New Terminal'
-            )}
-          </span>
+          <span className="truncate text-left leading-none">{translate("auto.components.floating.terminal.FloatingTerminalPanel.3215fc73e9", "New Terminal")}</span>
           <FloatingEmptyStateShortcut keys={newTerminalShortcutKeys} />
         </Button>
         <Button
@@ -1604,12 +1551,7 @@ function FloatingTerminalEmptyState({
           onClick={onNewMarkdown}
         >
           <FileText className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.629528690b',
-              'New Markdown Note'
-            )}
-          </span>
+          <span className="truncate text-left leading-none">{translate("auto.components.floating.terminal.FloatingTerminalPanel.629528690b", "New Markdown Note")}</span>
           <FloatingEmptyStateShortcut keys={newMarkdownShortcutKeys} />
         </Button>
         <Button
@@ -1619,12 +1561,7 @@ function FloatingTerminalEmptyState({
           onClick={onOpenMarkdown}
         >
           <FileText className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.88ffb502e5',
-              'Open Markdown Note'
-            )}
-          </span>
+          <span className="truncate text-left leading-none">{translate("auto.components.floating.terminal.FloatingTerminalPanel.88ffb502e5", "Open Markdown Note")}</span>
           <FloatingEmptyStateShortcut keys={openMarkdownShortcutKeys} />
         </Button>
         <Button
@@ -1634,12 +1571,7 @@ function FloatingTerminalEmptyState({
           onClick={onNewBrowser}
         >
           <Globe className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.8b07759314',
-              'New Browser'
-            )}
-          </span>
+          <span className="truncate text-left leading-none">{translate("auto.components.floating.terminal.FloatingTerminalPanel.8b07759314", "New Browser")}</span>
           <FloatingEmptyStateShortcut keys={newBrowserShortcutKeys} />
         </Button>
         <Button
@@ -1649,12 +1581,7 @@ function FloatingTerminalEmptyState({
           onClick={onClose}
         >
           <Minus className="size-3.5 opacity-90" />
-          <span className="truncate text-left leading-none">
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.fc1042e92b',
-              'Minimize'
-            )}
-          </span>
+          <span className="truncate text-left leading-none">{translate("auto.components.floating.terminal.FloatingTerminalPanel.fc1042e92b", "Minimize")}</span>
           <FloatingEmptyStateShortcut keys={closeShortcutKeys} />
         </Button>
       </div>
