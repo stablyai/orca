@@ -10,7 +10,8 @@ import {
   getTerminalPaneAppearanceSearchEntries,
   getTerminalTypographySearchEntries,
   getTerminalWarpImportSearchEntries,
-  getTerminalWindowSearchEntries
+  getTerminalWindowSearchEntries,
+  getTerminalYamlImportSearchEntries
 } from './terminal-search'
 import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
 import { TerminalWindowSection } from './TerminalWindowSection'
@@ -79,7 +80,8 @@ export function TerminalAppearanceSection({
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalDarkThemeSearchEntries()) ||
     (showWarpThemeImport &&
-      matchesSettingsSearch(searchQuery, getTerminalWarpImportSearchEntries())) ? (
+      (matchesSettingsSearch(searchQuery, getTerminalWarpImportSearchEntries()) ||
+        matchesSettingsSearch(searchQuery, getTerminalYamlImportSearchEntries()))) ? (
       <DarkTerminalThemeSection
         key="dark-theme"
         settings={settings}

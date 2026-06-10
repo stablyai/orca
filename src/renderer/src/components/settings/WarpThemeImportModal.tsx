@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 type WarpThemeImportModalProps = Pick<
   UseWarpThemeImportReturn,
   | 'open'
+  | 'mode'
   | 'preview'
   | 'loading'
   | 'desktopOnly'
@@ -56,6 +57,7 @@ function ThemeSwatches({ theme }: { theme: WarpThemeImportPreviewTheme }): React
 
 export function WarpThemeImportModal({
   open,
+  mode,
   preview,
   loading,
   desktopOnly,
@@ -77,16 +79,26 @@ export function WarpThemeImportModal({
       <DialogContent className="max-w-2xl sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate(
-              'auto.components.settings.WarpThemeImportModal.title',
-              'Import themes from Warp'
-            )}
+            {mode === 'yaml'
+              ? translate(
+                  'auto.components.settings.WarpThemeImportModal.yaml_title',
+                  'Import theme YAML'
+                )
+              : translate(
+                  'auto.components.settings.WarpThemeImportModal.title',
+                  'Import themes from Warp'
+                )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
-              'auto.components.settings.WarpThemeImportModal.description',
-              'Import Warp themes as Orca terminal themes.'
-            )}
+            {mode === 'yaml'
+              ? translate(
+                  'auto.components.settings.WarpThemeImportModal.yaml_description',
+                  'Import theme YAML files (Warp format) as Orca terminal themes.'
+                )
+              : translate(
+                  'auto.components.settings.WarpThemeImportModal.description',
+                  'Import Warp themes as Orca terminal themes.'
+                )}
           </DialogDescription>
         </DialogHeader>
 
@@ -228,12 +240,17 @@ export function WarpThemeImportModal({
             <div className="space-y-2 text-xs text-muted-foreground">
               <p>
                 {preview.error ??
-                  translate(
-                    'auto.components.settings.WarpThemeImportModal.no_themes_found',
-                    'No custom Warp themes found.'
-                  )}
+                  (mode === 'yaml'
+                    ? translate(
+                        'auto.components.settings.WarpThemeImportModal.yaml_no_themes_found',
+                        'No themes found in the selected files.'
+                      )
+                    : translate(
+                        'auto.components.settings.WarpThemeImportModal.no_themes_found',
+                        'No custom Warp themes found.'
+                      ))}
               </p>
-              {!preview.error ? (
+              {!preview.error && mode !== 'yaml' ? (
                 <p>
                   {translate(
                     'auto.components.settings.WarpThemeImportModal.builtin_themes_hint',
@@ -245,7 +262,7 @@ export function WarpThemeImportModal({
                 <p>
                   {translate(
                     'auto.components.settings.WarpThemeImportModal.choose_manually',
-                    'Choose a Warp theme file or folder to import manually.'
+                    'Choose a theme YAML file or folder to import manually.'
                   )}
                 </p>
               ) : null}

@@ -249,6 +249,14 @@ describe('previewWarpThemeImport', () => {
     expect(ids.every((id) => id.startsWith('warp:duplicate:duplicate-yaml-'))).toBe(true)
   })
 
+  it('marks dismissed file pickers as canceled', async () => {
+    showOpenDialogMock.mockResolvedValueOnce({ canceled: true, filePaths: [] })
+
+    const preview = await previewWarpThemeImport({} as Store, { kind: 'chooseFile' })
+
+    expect(preview).toEqual({ found: false, canceled: true, themes: [], skippedFiles: [] })
+  })
+
   it('starts the preview budget after a manual file picker returns', async () => {
     let currentTime = 0
     showOpenDialogMock.mockImplementationOnce(() => {

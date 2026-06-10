@@ -11,8 +11,12 @@ import {
 import { useMountedRef } from '../../hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
+/** Which entry point opened the import flow; only affects modal copy. */
+export type ThemeImportMode = 'warp' | 'yaml'
+
 export type UseWarpThemeImportReturn = {
   open: boolean
+  mode: ThemeImportMode
   preview: WarpThemeImportPreview | null
   loading: boolean
   desktopOnly: boolean
@@ -22,6 +26,7 @@ export type UseWarpThemeImportReturn = {
   importSignal: number
   selectedThemeIds: Set<string>
   handleClick: () => Promise<void>
+  handleImportYamlClick: () => Promise<void>
   handlePreviewSource: (source: WarpThemeImportSource) => Promise<void>
   handleToggleTheme: (id: string) => void
   handleToggleAll: (checked: boolean) => void
@@ -34,6 +39,7 @@ export function useWarpThemeImport(
   settings: GlobalSettings | null
 ): UseWarpThemeImportReturn {
   const [open, setOpen] = useState(false)
+  const [mode, setMode] = useState<ThemeImportMode>('warp')
   const [preview, setPreview] = useState<WarpThemeImportPreview | null>(null)
   const [loading, setLoading] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
@@ -41,24 +47,34 @@ export function useWarpThemeImport(
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(() => new Set())
   const mountedRef = useMountedRef()
 
-  async function handlePreviewSource(source: WarpThemeImportSource): Promise<void> {
+  async function previewSource(source: WarpThemeImportSource): Promise<WarpThemeImportPreview> {
     setLoading(true)
     setApplyError(null)
     try {
       const result = await window.api.settings.previewWarpThemeImport(source)
-      if (mountedRef.current) {
+      // Why: a dismissed native picker keeps whatever preview was already
+      // showing instead of wiping it with an empty result.
+      if (mountedRef.current && !result.canceled) {
         setPreview(result)
         setSelectedThemeIds(new Set(result.themes.map((theme) => theme.id)))
       }
+      return result
     } catch (err) {
       const message =
         err instanceof Error
           ? err.message
           : translate('auto.components.settings.useWarpThemeImport.unknown_error', 'Unknown error')
+      const failure: WarpThemeImportPreview = {
+        found: false,
+        themes: [],
+        skippedFiles: [],
+        error: message
+      }
       if (mountedRef.current) {
-        setPreview({ found: false, themes: [], skippedFiles: [], error: message })
+        setPreview(failure)
         setSelectedThemeIds(new Set())
       }
+      return failure
     } finally {
       if (mountedRef.current) {
         setLoading(false)
@@ -66,9 +82,24 @@ export function useWarpThemeImport(
     }
   }
 
+  async function handlePreviewSource(source: WarpThemeImportSource): Promise<void> {
+    await previewSource(source)
+  }
+
   async function handleClick(): Promise<void> {
+    setMode('warp')
     setOpen(true)
-    await handlePreviewSource({ kind: 'auto' })
+    await previewSource({ kind: 'auto' })
+  }
+
+  async function handleImportYamlClick(): Promise<void> {
+    setMode('yaml')
+    // Why: go straight to the native picker and only surface the modal once
+    // there is a selection to preview — canceling leaves settings untouched.
+    const result = await previewSource({ kind: 'chooseFile' })
+    if (mountedRef.current && !result.canceled) {
+      setOpen(true)
+    }
   }
 
   function handleToggleTheme(id: string): void {
@@ -132,11 +163,11 @@ export function useWarpThemeImport(
         count === 1
           ? translate(
               'auto.components.settings.useWarpThemeImport.imported_one',
-              'Imported 1 Warp theme'
+              'Imported 1 theme'
             )
           : translate(
               'auto.components.settings.useWarpThemeImport.imported_other',
-              'Imported {{value0}} Warp themes',
+              'Imported {{value0}} themes',
               { value0: count }
             )
       )
@@ -151,7 +182,7 @@ export function useWarpThemeImport(
           ? err.message
           : translate(
               'auto.components.settings.useWarpThemeImport.import_failed',
-              'Failed to import Warp themes'
+              'Failed to import themes'
             )
       if (mountedRef.current) {
         setApplyError(message)
@@ -171,6 +202,7 @@ export function useWarpThemeImport(
 
   return {
     open,
+    mode,
     preview,
     loading,
     desktopOnly: Boolean(preview?.desktopOnly),
@@ -178,6 +210,7 @@ export function useWarpThemeImport(
     importSignal,
     selectedThemeIds,
     handleClick,
+    handleImportYamlClick,
     handlePreviewSource,
     handleToggleTheme,
     handleToggleAll,

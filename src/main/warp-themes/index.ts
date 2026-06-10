@@ -169,7 +169,7 @@ export async function previewWarpThemeImport(
 
   const { selection, budget } = await resolveThemeSource(validatedSource, webContents, options)
   if (selection.canceled) {
-    return { found: false, themes: [], skippedFiles: [] }
+    return { found: false, canceled: true, themes: [], skippedFiles: [] }
   }
 
   const skippedFiles = [...selection.skippedFiles]

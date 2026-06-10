@@ -4,6 +4,7 @@ import { ColorField, SettingsSubsectionHeader, ThemePicker } from './SettingsFor
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalSettingsPreview } from './TerminalSettingsPreview'
 import { WarpThemeImportButton } from './WarpThemeImportButton'
+import { YamlThemeImportButton } from './YamlThemeImportButton'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 import { getAvailableTerminalThemeOptions } from '@/lib/terminal-theme'
 import { translate } from '@/i18n/i18n'
@@ -57,7 +58,12 @@ export function DarkTerminalThemeSection({
               'Choose the theme used for terminal panes in dark mode.'
             )}
           />
-          {showWarpThemeImport ? <WarpThemeImportButton warpThemes={warpThemes} /> : null}
+          {showWarpThemeImport ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <WarpThemeImportButton warpThemes={warpThemes} />
+              <YamlThemeImportButton warpThemes={warpThemes} />
+            </div>
+          ) : null}
         </div>
 
         <SearchableSetting

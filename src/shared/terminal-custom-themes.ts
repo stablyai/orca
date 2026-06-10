@@ -34,6 +34,8 @@ export type WarpThemeImportSkippedFile = {
 
 export type WarpThemeImportPreview = {
   found: boolean
+  /** True when the user dismissed the native picker without selecting anything. */
+  canceled?: boolean
   desktopOnly?: boolean
   sourceLabel?: string
   themes: WarpThemeImportPreviewTheme[]

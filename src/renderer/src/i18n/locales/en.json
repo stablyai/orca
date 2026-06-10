@@ -4354,6 +4354,9 @@
         "WarpThemeImportModal": {
           "title": "Import themes from Warp",
           "description": "Import Warp themes as Orca terminal themes.",
+          "yaml_title": "Import theme YAML",
+          "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
+          "yaml_no_themes_found": "No themes found in the selected files.",
           "choose_file": "Choose File",
           "choose_folder": "Choose Folder",
           "loading": "Loading Warp themes...",
@@ -4365,7 +4368,7 @@
           "colors_only": "Colors only",
           "no_themes_found": "No custom Warp themes found.",
           "builtin_themes_hint": "Warp's preloaded themes are part of the Warp app and can't be read from disk. Orca already includes most of them, like Dracula, Gruvbox, Solarized, and Tokyo Night.",
-          "choose_manually": "Choose a Warp theme file or folder to import manually.",
+          "choose_manually": "Choose a theme YAML file or folder to import manually.",
           "skipped_files": "Skipped files",
           "more_skipped_files": "{{value0}} more skipped files.",
           "cancel": "Cancel",
@@ -4375,11 +4378,14 @@
         },
         "useWarpThemeImport": {
           "unknown_error": "Unknown error",
-          "imported_one": "Imported 1 Warp theme",
-          "imported_other": "Imported {{value0}} Warp themes",
-          "import_failed": "Failed to import Warp themes",
+          "imported_one": "Imported 1 theme",
+          "imported_other": "Imported {{value0}} themes",
+          "import_failed": "Failed to import themes",
           "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.",
           "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+        },
+        "YamlThemeImportButton": {
+          "label": "Import from YAML"
         },
         "GitPane": {
           "d2eede4c54": "Add Orca attribution to commits, PRs, and issues.",
@@ -6983,6 +6989,12 @@
               "keyword_warp": "warp",
               "keyword_themes": "themes",
               "keyword_yaml": "yaml"
+            },
+            "yaml_import": {
+              "title": "Import from YAML",
+              "description": "Import theme YAML files as Orca terminal themes.",
+              "keyword_yaml": "yaml",
+              "keyword_custom": "custom"
             },
             "4cec42dbf7": "intl",
             "b495dc6a9f": "jis",

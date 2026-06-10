@@ -17,6 +17,7 @@ type ReactElementLike = {
 
 const warpThemesMock: UseWarpThemeImportReturn = {
   open: false,
+  mode: 'warp',
   preview: null,
   loading: false,
   desktopOnly: false,
@@ -24,6 +25,7 @@ const warpThemesMock: UseWarpThemeImportReturn = {
   importSignal: 0,
   selectedThemeIds: new Set<string>(),
   handleClick: vi.fn(),
+  handleImportYamlClick: vi.fn(),
   handlePreviewSource: vi.fn(),
   handleToggleTheme: vi.fn(),
   handleToggleAll: vi.fn(),
@@ -42,6 +44,9 @@ function findButtonTexts(node: unknown): string[] {
   const typeName = typeof element.type === 'function' ? element.type.name : String(element.type)
   if (typeName === 'WarpThemeImportButton') {
     return ['Import themes from Warp']
+  }
+  if (typeName === 'YamlThemeImportButton') {
+    return ['Import from YAML']
   }
   return [...findButtonTexts(element.props?.children), ...findButtonTexts(element.props?.action)]
 }
@@ -112,15 +117,17 @@ describe('LightTerminalThemeSection preview lifecycle', () => {
 })
 
 describe('DarkTerminalThemeSection Warp import affordance', () => {
-  it('renders the Warp import button alongside the theme picker on desktop', () => {
-    const element = renderDarkSection(true)
+  it('renders the Warp and YAML import buttons alongside the theme picker on desktop', () => {
+    const buttonTexts = findButtonTexts(renderDarkSection(true))
 
-    expect(findButtonTexts(element)).toContain('Import themes from Warp')
+    expect(buttonTexts).toContain('Import themes from Warp')
+    expect(buttonTexts).toContain('Import from YAML')
   })
 
-  it('hides the Warp import button on paired web clients', () => {
-    const element = renderDarkSection(false)
+  it('hides the Warp and YAML import buttons on paired web clients', () => {
+    const buttonTexts = findButtonTexts(renderDarkSection(false))
 
-    expect(findButtonTexts(element)).not.toContain('Import themes from Warp')
+    expect(buttonTexts).not.toContain('Import themes from Warp')
+    expect(buttonTexts).not.toContain('Import from YAML')
   })
 })

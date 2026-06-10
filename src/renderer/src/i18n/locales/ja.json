@@ -4322,6 +4322,9 @@
         "WarpThemeImportModal": {
           "title": "Warp からテーマをインポート",
           "description": "Warp テーマを Orca のターミナルテーマとしてインポートします。",
+          "yaml_title": "テーマ YAML をインポート",
+          "yaml_description": "テーマ YAML ファイル（Warp 形式）を Orca のターミナルテーマとしてインポートします。",
+          "yaml_no_themes_found": "選択したファイルにテーマが見つかりませんでした。",
           "choose_file": "ファイルを選択",
           "choose_folder": "フォルダーを選択",
           "loading": "Warp テーマを読み込み中...",
@@ -4333,7 +4336,7 @@
           "colors_only": "カラーのみ",
           "no_themes_found": "カスタム Warp テーマが見つかりませんでした。",
           "builtin_themes_hint": "Warp のプリロードテーマは Warp アプリ本体に含まれており、ディスクから読み取ることはできません。Dracula、Gruvbox、Solarized、Tokyo Night など、その多くは Orca の組み込みテーマとして既に利用できます。",
-          "choose_manually": "Warp テーマのファイルまたはフォルダーを選択して手動でインポートします。",
+          "choose_manually": "テーマ YAML ファイルまたはフォルダーを選択して手動でインポートします。",
           "skipped_files": "スキップされたファイル",
           "more_skipped_files": "他 {{value0}} 件のファイルがスキップされました。",
           "cancel": "キャンセル",
@@ -4343,11 +4346,14 @@
         },
         "useWarpThemeImport": {
           "unknown_error": "不明なエラー",
-          "imported_one": "1 件の Warp テーマをインポートしました",
-          "imported_other": "{{value0}} 件の Warp テーマをインポートしました",
-          "import_failed": "Warp テーマのインポートに失敗しました",
+          "imported_one": "1 件のテーマをインポートしました",
+          "imported_other": "{{value0}} 件のテーマをインポートしました",
+          "import_failed": "テーマのインポートに失敗しました",
           "over_limit_one": "これらのテーマをインポートすると、カスタムターミナルテーマの上限（{{value0}} 件）を超えます。新しいテーマを 1 件選択解除して、もう一度お試しください。",
           "over_limit_other": "これらのテーマをインポートすると、カスタムターミナルテーマの上限（{{value0}} 件）を超えます。新しいテーマを {{value1}} 件選択解除して、もう一度お試しください。"
+        },
+        "YamlThemeImportButton": {
+          "label": "YAML からインポート"
         },
         "GitPane": {
           "d2eede4c54": "Orca の帰属をコミット、PR、イシューに追加します。",
@@ -6951,6 +6957,12 @@
               "keyword_warp": "warp",
               "keyword_themes": "テーマ",
               "keyword_yaml": "yaml"
+            },
+            "yaml_import": {
+              "title": "YAML からインポート",
+              "description": "テーマ YAML ファイルを Orca のターミナルテーマとしてインポートします。",
+              "keyword_yaml": "yaml",
+              "keyword_custom": "カスタム"
             },
             "4cec42dbf7": "国際",
             "b495dc6a9f": "JIS",

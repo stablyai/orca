@@ -112,7 +112,7 @@ describe('useWarpThemeImport', () => {
       ]
     })
     // Success is reported via a toast, and the modal closes itself.
-    expect(toastSuccess).toHaveBeenCalledWith('Imported 1 Warp theme')
+    expect(toastSuccess).toHaveBeenCalledWith('Imported 1 theme')
 
     resetMockState()
     warp = useWarpThemeImport(updateSettings, baseSettings)
@@ -238,6 +238,95 @@ describe('useWarpThemeImport', () => {
     expect(warp.selectedThemeIds.size).toBe(0)
     expect(warp.preview?.found).toBe(false)
     expect(warp.preview?.error).toBeUndefined()
+  })
+
+  it('opens the modal in yaml mode once the picker returns a selection', async () => {
+    const previewResponse: WarpThemeImportPreview = {
+      found: true,
+      sourceLabel: 'My Custom Theme.yaml',
+      skippedFiles: [],
+      themes: [
+        {
+          id: 'warp:my-custom-theme',
+          selectionValue: 'custom:warp:my-custom-theme',
+          name: 'My Custom Theme',
+          source: 'warp',
+          mode: 'dark',
+          terminal: { background: '#10141c', foreground: '#d8dee9', black: '#1c2230' },
+          importedAt: '2026-06-09T00:00:00.000Z',
+          sourceLabel: 'My Custom Theme.yaml'
+        }
+      ]
+    }
+    const previewMock = vi.fn().mockResolvedValue(previewResponse)
+    vi.stubGlobal('window', {
+      api: { settings: { previewWarpThemeImport: previewMock } }
+    })
+
+    let warp = useWarpThemeImport(vi.fn(), baseSettings)
+    await warp.handleImportYamlClick()
+    expect(previewMock).toHaveBeenCalledWith({ kind: 'chooseFile' })
+
+    resetMockState()
+    warp = useWarpThemeImport(vi.fn(), baseSettings)
+    expect(warp.open).toBe(true)
+    expect(warp.mode).toBe('yaml')
+    expect(warp.selectedThemeIds.has('warp:my-custom-theme')).toBe(true)
+  })
+
+  it('keeps the modal closed when the yaml picker is canceled', async () => {
+    const previewMock = vi
+      .fn()
+      .mockResolvedValue({ found: false, canceled: true, themes: [], skippedFiles: [] })
+    vi.stubGlobal('window', {
+      api: { settings: { previewWarpThemeImport: previewMock } }
+    })
+
+    let warp = useWarpThemeImport(vi.fn(), baseSettings)
+    await warp.handleImportYamlClick()
+
+    resetMockState()
+    warp = useWarpThemeImport(vi.fn(), baseSettings)
+    expect(warp.open).toBe(false)
+    expect(warp.preview).toBeNull()
+  })
+
+  it('keeps the current preview when an in-modal picker is canceled', async () => {
+    const autoResponse: WarpThemeImportPreview = {
+      found: true,
+      sourceLabel: 'Warp themes',
+      skippedFiles: [],
+      themes: [
+        {
+          id: 'warp:tokyo-night',
+          selectionValue: 'custom:warp:tokyo-night',
+          name: 'Tokyo Night',
+          source: 'warp',
+          mode: 'dark',
+          terminal: { background: '#1a1b26', foreground: '#c0caf5', black: '#15161e' },
+          importedAt: '2026-06-05T00:00:00.000Z',
+          sourceLabel: 'Warp themes'
+        }
+      ]
+    }
+    const previewMock = vi
+      .fn()
+      .mockResolvedValueOnce(autoResponse)
+      .mockResolvedValueOnce({ found: false, canceled: true, themes: [], skippedFiles: [] })
+    vi.stubGlobal('window', {
+      api: { settings: { previewWarpThemeImport: previewMock } }
+    })
+
+    let warp = useWarpThemeImport(vi.fn(), baseSettings)
+    await warp.handleClick()
+    resetMockState()
+    warp = useWarpThemeImport(vi.fn(), baseSettings)
+    await warp.handlePreviewSource({ kind: 'chooseFile' })
+
+    resetMockState()
+    warp = useWarpThemeImport(vi.fn(), baseSettings)
+    expect(warp.preview?.found).toBe(true)
+    expect(warp.selectedThemeIds.has('warp:tokyo-night')).toBe(true)
   })
 
   it('blocks applying new distinct themes that exceed the custom theme cap', async () => {
