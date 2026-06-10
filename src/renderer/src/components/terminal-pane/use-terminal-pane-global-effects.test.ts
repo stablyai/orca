@@ -2,6 +2,10 @@
 import type * as ReactModule from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import {
+  registerLivePaneManager,
+  unregisterLivePaneManager
+} from '@/lib/pane-manager/pane-manager-registry'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 
 const mocks = vi.hoisted(() => ({
@@ -189,6 +193,10 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
     mocks.fitAndFocusPanes.mockImplementation(() => order.push('fit-focus'))
 
+    // Why: the resume path resets atlases through the live-manager registry
+    // (shared glyph atlas), so the fake manager must be registered to observe
+    // its reset in the ordering assertion.
+    registerLivePaneManager(manager)
     const isActiveRef = { current: false }
     const isVisibleRef = { current: false }
     beginHookRender()
@@ -220,6 +228,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       'restore:terminal-b',
       'reset-atlas'
     ])
+    unregisterLivePaneManager(manager)
     expect(mocks.flushTerminalOutput).toHaveBeenNthCalledWith(1, terminalA, {
       maxChars: 256 * 1024
     })
@@ -328,6 +337,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null)
     }
 
+    // Why: focus recovery resets every registered manager (shared glyph
+    // atlas), so the fake manager observes the reset through the registry.
+    registerLivePaneManager(manager)
     beginHookRender()
     useTerminalPaneGlobalEffects({
       tabId: 'tab-1',
@@ -357,6 +369,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     listener(new Event('focus'))
 
     expect(manager.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    unregisterLivePaneManager(manager)
   })
 
   it('ignores terminal file drops for another terminal tab', () => {
