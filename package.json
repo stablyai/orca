@@ -45,6 +45,7 @@
     "verify:computer-native": "node config/scripts/verify-computer-native.mjs",
     "verify:cli-bin": "node config/scripts/verify-cli-bin.mjs",
     "verify:localization-catalog": "node config/scripts/verify-localization-catalog.mjs",
+    "sync:localization-catalog": "node config/scripts/verify-localization-catalog.mjs --fix",
     "bootstrap:locale-catalog": "node config/scripts/bootstrap-locale-catalog.mjs",
     "bootstrap:zh-catalog": "node config/scripts/bootstrap-zh-catalog.mjs",
     "bootstrap:ko-catalog": "node config/scripts/bootstrap-locale-catalog.mjs --locale ko",

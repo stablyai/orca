@@ -3004,7 +3004,9 @@
                   "f15fd80989": "Su nuevo árbol de trabajo está actualizado, pero el {{value0}} local está {{value1}} {{value2}} atrás, por lo que las diferencias de IA pueden compararse con el historial obsoleto. Deja que Orca lo mantenga actualizado automáticamente. Cambie esto en cualquier momento en",
                   "3d260e1a5d": "Configuración › {{value0}}",
                   "34a03a6565": "Mantenga {{value0}} actualizado",
-                  "4a18052018": "El local {{value0}} está detrás de {{value1}}"
+                  "4a18052018": "El local {{value0}} está detrás de {{value1}}",
+                  "commit": "commit",
+                  "commits": "commits"
                 }
               }
             }
@@ -4943,7 +4945,13 @@
           "2b6356e744": "Guardado",
           "81057d5f71": "Ahorro...",
           "da37d6f10e": "Copiar",
-          "3149964b66": "copiado"
+          "3149964b66": "copiado",
+          "56f9a4a1d0": "Using `orca.yaml`",
+          "623e0c9f31": "`orca.yaml` could not be parsed",
+          "5a67e4793d": "No `orca.yaml` detected",
+          "07ba35bc68": "Check the indentation under `scripts:`. Hook keys should use two spaces, and command lines should use four.",
+          "787ca433ef": "Define only the supported keys: `scripts`, `setup`, `archive`, and `issueCommand`.",
+          "ecc73d9125": "Compare your file against the working template below and copy that shape if needed."
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Utilice el color del repositorio {{value0}}",
