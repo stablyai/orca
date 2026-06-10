@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   registerLivePaneManager,
   unregisterLivePaneManager
@@ -8,8 +8,8 @@ import { scheduleImagePasteWebglAtlasRecovery } from './terminal-webgl-paste-rec
 describe('terminal image paste WebGL recovery', () => {
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
 
-  function registerManager(): { resetWebglTextureAtlases: ReturnType<typeof vi.fn> } {
-    const manager = { resetWebglTextureAtlases: vi.fn() }
+  function registerManager(): { resetWebglTextureAtlases: Mock<() => void> } {
+    const manager = { resetWebglTextureAtlases: vi.fn<() => void>() }
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
     return manager

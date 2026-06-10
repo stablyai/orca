@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
 import {
   registerLivePaneManager,
   resetAllTerminalWebglAtlases,
@@ -10,8 +10,8 @@ describe('pane manager registry', () => {
   // assertion cannot leak fake managers into later tests.
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
 
-  function registerManager(): { resetWebglTextureAtlases: ReturnType<typeof vi.fn> } {
-    const manager = { resetWebglTextureAtlases: vi.fn() }
+  function registerManager(): { resetWebglTextureAtlases: Mock<() => void> } {
+    const manager = { resetWebglTextureAtlases: vi.fn<() => void>() }
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
     return manager
