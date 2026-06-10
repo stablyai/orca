@@ -2,7 +2,6 @@
  * React/store environment directly so close and bootstrap behavior can be
  * asserted without mounting the full Electron renderer. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESET_TERMINAL_WEBGL_ATLAS_EVENT } from '@/constants/terminal'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { BrowserTab, Tab, TabGroup, TerminalTab } from '../../../../shared/types'
 import type { OpenFile } from '@/store/slices/editor'
@@ -594,9 +593,6 @@ describe('FloatingTerminalPanel close behavior', () => {
     }
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),
-      // Why: the open-transition effect dispatches the WebGL atlas recovery
-      // event; the stubbed window needs a sink for it.
-      dispatchEvent: vi.fn(),
       api: {
         app: {
           getFloatingMarkdownDirectory: mocks.getFloatingMarkdownDirectory,
@@ -956,30 +952,23 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('created-tab')
   })
 
-  it('dispatches WebGL atlas recovery for the active terminal on reopen', async () => {
+  it('hides the active terminal pane from the renderer while the panel is closed', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
 
+    // Why: the closed panel stays mounted but CSS-hidden; gating isVisible on
+    // `open` routes the terminal through the standard hidden-terminal WebGL
+    // suspend/resume path so no live glyph atlas can corrupt while hidden.
     await renderPanel(false)
     runEffects()
-    vi.mocked(window.dispatchEvent).mockClear()
+    await Promise.resolve()
+    const closedElement = await renderPanel(false)
+    const closedPane = findByTypeName(closedElement, 'TerminalPane')
+    expect(closedPane.props.isActive).toBe(true)
+    expect(closedPane.props.isVisible).toBe(false)
 
-    const countResetEvents = (): CustomEvent<{ tabId?: string }>[] =>
-      vi
-        .mocked(window.dispatchEvent)
-        .mock.calls.map(([event]) => event as CustomEvent<{ tabId?: string }>)
-        .filter((event) => event.type === RESET_TERMINAL_WEBGL_ATLAS_EVENT)
-
-    await renderPanel(true)
-    runEffects()
-
-    const resetEvents = countResetEvents()
-    expect(resetEvents).toHaveLength(1)
-    expect(resetEvents[0]?.detail?.tabId).toBe('tab-1')
-
-    // Why: re-renders while the panel stays open must not re-clear the atlas.
-    await renderPanel(true)
-    runEffects()
-    expect(countResetEvents()).toHaveLength(1)
+    const openElement = await renderPanel(true)
+    const openPane = findByTypeName(openElement, 'TerminalPane')
+    expect(openPane.props.isVisible).toBe(true)
   })
 
   it('routes titlebar Cmd+T to the floating workspace', async () => {

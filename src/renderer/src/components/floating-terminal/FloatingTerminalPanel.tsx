@@ -19,10 +19,6 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane from '@/components/terminal-pane/TerminalPane'
-import {
-  RESET_TERMINAL_WEBGL_ATLAS_EVENT,
-  type ResetTerminalWebglAtlasDetail
-} from '@/constants/terminal'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useShortcutKeys } from '@/hooks/useShortcutLabel'
@@ -530,31 +526,6 @@ export function FloatingTerminalPanel({
       return
     }
     focusTerminalTabSurface(activeTerminalId)
-  }, [activeTerminalId, open])
-
-  const wasOpenForAtlasRecoveryRef = useRef(false)
-  useEffect(() => {
-    if (!open) {
-      wasOpenForAtlasRecoveryRef.current = false
-      return
-    }
-    if (wasOpenForAtlasRecoveryRef.current) {
-      return
-    }
-    wasOpenForAtlasRecoveryRef.current = true
-    if (!activeTerminalId) {
-      return
-    }
-    // Why: closing the panel only hides it with CSS, so the active terminal
-    // keeps a live WebGL context while hidden and reopening never flips
-    // TerminalPane visibility. A glyph atlas corrupted while hidden (no
-    // context-loss event) would otherwise stay garbled until another
-    // recovery trigger such as window refocus.
-    window.dispatchEvent(
-      new CustomEvent<ResetTerminalWebglAtlasDetail>(RESET_TERMINAL_WEBGL_ATLAS_EVENT, {
-        detail: { tabId: activeTerminalId }
-      })
-    )
   }, [activeTerminalId, open])
 
   useEffect(() => {
@@ -1393,7 +1364,13 @@ export function FloatingTerminalPanel({
                       worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
                       cwd={cwd}
                       isActive={isActive}
-                      isVisible={isActive}
+                      // Why: the closed panel is only CSS-hidden, so gate
+                      // visibility on `open` too. This routes the floating
+                      // terminal through the standard hidden-terminal
+                      // suspend/resume path: no live WebGL context (or glyph
+                      // atlas to corrupt) while hidden, and the resume on
+                      // reopen rebuilds the renderer from scratch.
+                      isVisible={isActive && open}
                       onPtyExit={() => closeTab(tab.id)}
                       onCloseTab={() => closeFloatingItem(tab.id)}
                     />

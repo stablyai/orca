@@ -368,11 +368,10 @@ test.describe('floating workspace reopen WebGL recovery @headful', () => {
   test('reopening the floating workspace recovers a corrupted glyph atlas', async ({
     orcaPage
   }, testInfo) => {
-    // Why: the floating panel hides via CSS visibility only — its terminal
-    // keeps isVisible=true and a live WebGL context while hidden, so the
-    // visibility-resume/window-focus/paste recovery triggers never run on
-    // reopen. The panel dispatches RESET_TERMINAL_WEBGL_ATLAS_EVENT when it
-    // opens; this guards that a glyph atlas corrupted while hidden repaints.
+    // Why: the floating panel hides via CSS visibility only. Gating the
+    // terminal's isVisible on `open` suspends its WebGL renderer while
+    // hidden, so a glyph atlas corrupted with no context-loss event is
+    // discarded with the context and the resume on reopen repaints clean.
     const shots = await setUpCorruptedFloatingTerminal(orcaPage, 'REOPEN')
     test.skip(!shots, 'WebGL was not active or atlas corruption could not be injected')
     const { baseline, corrupted } = shots!
@@ -381,16 +380,17 @@ test.describe('floating workspace reopen WebGL recovery @headful', () => {
     expect(await instrumentRecoveryCounters(orcaPage)).toBe(true)
 
     await toggleFloatingPanel(orcaPage, false)
-    // Why: the bug's precondition — the hidden floating terminal keeps its
-    // WebGL addon attached because closing the panel never suspends rendering.
-    const webglStillAttached = await orcaPage.evaluate((worktreeId) => {
+    // Why: the prevention invariant — closing the panel suspends rendering,
+    // so no live WebGL context (or corruptible glyph atlas) exists while the
+    // floating terminal is hidden.
+    const webglAttachedWhileClosed = await orcaPage.evaluate((worktreeId) => {
       const state = window.__store?.getState()
       const tab = (state?.tabsByWorktree?.[worktreeId] ?? [])[0]
       const manager = tab ? window.__paneManagers?.get(tab.id) : null
       const diagnostics = manager?.getRenderingDiagnostics?.() ?? []
       return diagnostics.some((diagnostic) => diagnostic.hasWebgl)
     }, FLOATING_WORKTREE_ID)
-    expect(webglStillAttached).toBe(true)
+    expect(webglAttachedWhileClosed, 'closing the panel should suspend WebGL rendering').toBe(false)
 
     await toggleFloatingPanel(orcaPage, true)
     await settleRecoveryWindows(orcaPage)
