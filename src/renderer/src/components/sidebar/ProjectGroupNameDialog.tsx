@@ -95,7 +95,8 @@ export function ProjectGroupNameDialog({
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
             <Label htmlFor={inputId} className="text-[11px] text-muted-foreground">
-              {translate("auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313", "Group Name")}</Label>
+              {translate('auto.components.sidebar.ProjectGroupNameDialog.83dfbc5313', 'Group Name')}
+            </Label>
             <Input
               id={inputId}
               ref={inputRef}
@@ -112,14 +113,20 @@ export function ProjectGroupNameDialog({
               className="text-xs"
               onClick={() => onOpenChange(false)}
             >
-              {translate("auto.components.sidebar.ProjectGroupNameDialog.d99a034073", "Cancel")}</Button>
+              {translate('auto.components.sidebar.ProjectGroupNameDialog.d99a034073', 'Cancel')}
+            </Button>
             <Button
               type="submit"
               size="sm"
               className="text-xs"
               disabled={!trimmedName || submitting}
             >
-              {submitting ? translate("auto.components.sidebar.ProjectGroupNameDialog.4a64e78822", "Saving...") : confirmLabel}
+              {submitting
+                ? translate(
+                    'auto.components.sidebar.ProjectGroupNameDialog.4a64e78822',
+                    'Saving...'
+                  )
+                : confirmLabel}
             </Button>
           </DialogFooter>
         </form>

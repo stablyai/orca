@@ -13,9 +13,17 @@ const EXAMPLE_PROMPTS: string[] = [
 async function handleCopyText(text: string, label: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
-    toast.success(translate("auto.components.settings.BrowserUseExamples.a602d43069", "Copied {{value0}}.", { value0: label }))
+    toast.success(
+      translate('auto.components.settings.BrowserUseExamples.a602d43069', 'Copied {{value0}}.', {
+        value0: label
+      })
+    )
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : translate("auto.components.settings.BrowserUseExamples.5ec620ccc4", "Failed to copy."))
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : translate('auto.components.settings.BrowserUseExamples.5ec620ccc4', 'Failed to copy.')
+    )
   }
 }
 
@@ -24,10 +32,19 @@ export function BrowserUseExamples(): React.JSX.Element {
     <div className="rounded-xl border border-border/60 bg-card/50 p-4">
       <div className="flex items-center gap-2">
         <Sparkles className="size-3.5 text-muted-foreground" />
-        <p className="text-sm font-medium">{translate("auto.components.settings.BrowserUseExamples.2a180694f7", "Try it — example prompts")}</p>
+        <p className="text-sm font-medium">
+          {translate(
+            'auto.components.settings.BrowserUseExamples.2a180694f7',
+            'Try it — example prompts'
+          )}
+        </p>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        {translate("auto.components.settings.BrowserUseExamples.c5325e91f6", "Paste any of these into Claude Code, Codex, or another agent in a project where the skill is installed.")}</p>
+        {translate(
+          'auto.components.settings.BrowserUseExamples.c5325e91f6',
+          'Paste any of these into Claude Code, Codex, or another agent in a project where the skill is installed.'
+        )}
+      </p>
       <ul className="mt-3 space-y-2">
         {EXAMPLE_PROMPTS.map((prompt) => (
           <li
@@ -35,7 +52,10 @@ export function BrowserUseExamples(): React.JSX.Element {
             className="flex items-start gap-2 rounded-lg border border-border/50 bg-background/60 px-3 py-2"
           >
             <p className="flex-1 text-[11px] leading-relaxed text-foreground/90">
-              {translate("auto.components.settings.BrowserUseExamples.59722f31b4", "\"")}{prompt}{translate("auto.components.settings.BrowserUseExamples.b84807f228", "\"")}</p>
+              {translate('auto.components.settings.BrowserUseExamples.59722f31b4', '"')}
+              {prompt}
+              {translate('auto.components.settings.BrowserUseExamples.b84807f228', '"')}
+            </p>
             <TooltipProvider delayDuration={250}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -43,13 +63,17 @@ export function BrowserUseExamples(): React.JSX.Element {
                     variant="ghost"
                     size="icon-xs"
                     onClick={() => void handleCopyText(prompt, 'prompt')}
-                    aria-label={translate("auto.components.settings.BrowserUseExamples.1188e56af4", "Copy example prompt")}
+                    aria-label={translate(
+                      'auto.components.settings.BrowserUseExamples.1188e56af4',
+                      'Copy example prompt'
+                    )}
                   >
                     <Copy className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={6}>
-                  {translate("auto.components.settings.BrowserUseExamples.1199258ace", "Copy")}</TooltipContent>
+                  {translate('auto.components.settings.BrowserUseExamples.1199258ace', 'Copy')}
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </li>

@@ -30,30 +30,54 @@ export function getAddRepoLocalStartActions({
   const primaryAction = {
     kind: 'browse' as const,
     icon: FolderOpen,
-    title: translate("auto.components.sidebar.add.repo.local.start.actions.2281fdc8c7", "Browse folder"),
-    description: translate("auto.components.sidebar.add.repo.local.start.actions.fb4fc5380e", "Local project, Git repo, or folder with many repos"),
+    title: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.2281fdc8c7',
+      'Browse folder'
+    ),
+    description: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.fb4fc5380e',
+      'Local project, Git repo, or folder with many repos'
+    ),
     onClick: onBrowse
   }
 
   const remote = {
     kind: 'remote' as const,
     icon: Monitor,
-    title: translate("auto.components.sidebar.add.repo.local.start.actions.3d162cc76f", "Remote project"),
-    description: translate("auto.components.sidebar.add.repo.local.start.actions.a6c20dca96", "Open a project from an SSH target"),
+    title: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.3d162cc76f',
+      'Remote project'
+    ),
+    description: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.a6c20dca96',
+      'Open a project from an SSH target'
+    ),
     onClick: onOpenRemoteStep
   }
   const clone = {
     kind: 'clone' as const,
     icon: Globe,
-    title: translate("auto.components.sidebar.add.repo.local.start.actions.7edb8ebe24", "Clone from URL"),
-    description: translate("auto.components.sidebar.add.repo.local.start.actions.5f9ffac036", "Clone a remote Git repository"),
+    title: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.7edb8ebe24',
+      'Clone from URL'
+    ),
+    description: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.5f9ffac036',
+      'Clone a remote Git repository'
+    ),
     onClick: onOpenCloneStep
   }
   const create = {
     kind: 'create' as const,
     icon: Plus,
-    title: translate("auto.components.sidebar.add.repo.local.start.actions.c709860596", "Create new project"),
-    description: translate("auto.components.sidebar.add.repo.local.start.actions.d72789705e", "Start from an empty folder"),
+    title: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.c709860596',
+      'Create new project'
+    ),
+    description: translate(
+      'auto.components.sidebar.add.repo.local.start.actions.d72789705e',
+      'Start from an empty folder'
+    ),
     onClick: onOpenCreateStep
   }
 

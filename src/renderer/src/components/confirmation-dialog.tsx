@@ -99,14 +99,16 @@ export function ConfirmationDialogProvider({
           </DialogHeader>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => settleActiveRequest(false)}>
-              {displayedRequest?.options.cancelLabel ?? translate("auto.components.confirmation.dialog.56f5c60e0c", "Cancel")}
+              {displayedRequest?.options.cancelLabel ??
+                translate('auto.components.confirmation.dialog.56f5c60e0c', 'Cancel')}
             </Button>
             <Button
               type="button"
               variant={displayedRequest?.options.confirmVariant ?? 'default'}
               onClick={() => settleActiveRequest(true)}
             >
-              {displayedRequest?.options.confirmLabel ?? translate("auto.components.confirmation.dialog.8490e5d36a", "Confirm")}
+              {displayedRequest?.options.confirmLabel ??
+                translate('auto.components.confirmation.dialog.8490e5d36a', 'Confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

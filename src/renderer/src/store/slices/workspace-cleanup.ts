@@ -398,7 +398,10 @@ async function preflightWorkspaceCleanupCandidate(
       failure: {
         worktreeId,
         displayName: worktreeId,
-        message: translate("auto.store.slices.workspace.cleanup.9d6e531da6", "Workspace no longer exists.")
+        message: translate(
+          'auto.store.slices.workspace.cleanup.9d6e531da6',
+          'Workspace no longer exists.'
+        )
       }
     }
   }

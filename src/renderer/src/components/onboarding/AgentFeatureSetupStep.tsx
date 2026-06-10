@@ -41,7 +41,11 @@ export function AgentFeatureSetupStep({
             onClick={onStartFeatureSetup}
           >
             {setupBusyLabel ? <Loader2 className="size-4 animate-spin" /> : null}
-            {setupBusyLabel ?? translate("auto.components.onboarding.AgentFeatureSetupStep.97dcdc010f", "Enable capabilities")}
+            {setupBusyLabel ??
+              translate(
+                'auto.components.onboarding.AgentFeatureSetupStep.97dcdc010f',
+                'Enable capabilities'
+              )}
           </Button>
         </div>
       ) : null}

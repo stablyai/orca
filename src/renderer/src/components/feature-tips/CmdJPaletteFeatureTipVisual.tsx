@@ -209,7 +209,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
           <div className="h-5 min-w-0 flex-1 overflow-hidden text-[13px] leading-5 text-foreground/90">
             <span className="block truncate">
               {renderQuery}
-              {!reducedMotion && (phase === 'open' || phase === "typing") ? (
+              {!reducedMotion && (phase === 'open' || phase === 'typing') ? (
                 <span className="ml-px inline-block h-[14px] w-px -translate-y-px align-middle bg-foreground/75 animate-cmd-j-tip-caret" />
               ) : null}
             </span>
@@ -224,7 +224,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                 className={`flex shrink-0 items-center gap-2.5 rounded-lg border border-transparent px-2.5 py-1.5 ${resultEnterClass}`}
               >
                 <span className="flex w-4 shrink-0 items-center justify-center">
-                  {result.status === "done" ? (
+                  {result.status === 'done' ? (
                     <span className="size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
                   ) : (
                     // Why: yellow border spinner mirrors StatusIndicator's
@@ -255,7 +255,11 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                   <Plus size={13} aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1 truncate text-[12.5px] font-semibold tracking-[-0.01em] text-foreground">
-                  {translate("auto.components.feature.tips.CmdJPaletteFeatureTipVisual.ab94e16d44", "Create worktree \"{{value0}}\"", { value0: renderQuery.trim() })}
+                  {translate(
+                    'auto.components.feature.tips.CmdJPaletteFeatureTipVisual.ab94e16d44',
+                    'Create worktree "{{value0}}"',
+                    { value0: renderQuery.trim() }
+                  )}
                 </div>
               </div>
             ) : null}

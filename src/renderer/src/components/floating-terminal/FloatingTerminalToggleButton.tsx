@@ -202,7 +202,17 @@ export function FloatingTerminalToggleButton({
             // bright hairline ring to define the edge.
             className="cursor-grab rounded-lg border-transparent text-foreground bg-card shadow-[0_4px_12px_rgb(0_0_0_/_0.22),0_0_0_1px_color-mix(in_srgb,var(--foreground)_12%,transparent)] hover:-translate-y-0.5 hover:bg-accent active:translate-y-0 active:cursor-grabbing dark:bg-accent dark:shadow-[0_6px_16px_rgb(0_0_0_/_0.55),0_0_0_1px_rgb(255_255_255_/_0.22)] dark:hover:bg-[color-mix(in_srgb,var(--accent)_82%,white)]"
             data-floating-terminal-toggle
-            aria-label={open ? translate("auto.components.floating.terminal.FloatingTerminalToggleButton.5785dd9148", "Minimize floating workspace") : translate("auto.components.floating.terminal.FloatingTerminalToggleButton.3b04b065b5", "Show floating workspace")}
+            aria-label={
+              open
+                ? translate(
+                    'auto.components.floating.terminal.FloatingTerminalToggleButton.5785dd9148',
+                    'Minimize floating workspace'
+                  )
+                : translate(
+                    'auto.components.floating.terminal.FloatingTerminalToggleButton.3b04b065b5',
+                    'Show floating workspace'
+                  )
+            }
             aria-pressed={open}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -213,10 +223,13 @@ export function FloatingTerminalToggleButton({
             <PanelsTopLeft className="size-4" />
           </Button>
         </TooltipTrigger>
-        <TooltipContent
-          side="left"
-          sideOffset={6}
-        >{translate("auto.components.floating.terminal.FloatingTerminalToggleButton.bfe7809a70", "{{value0}} floating workspace ({{value1}})", { value0: open ? 'Minimize' : 'Show', value1: shortcutLabel })}</TooltipContent>
+        <TooltipContent side="left" sideOffset={6}>
+          {translate(
+            'auto.components.floating.terminal.FloatingTerminalToggleButton.bfe7809a70',
+            '{{value0}} floating workspace ({{value1}})',
+            { value0: open ? 'Minimize' : 'Show', value1: shortcutLabel }
+          )}
+        </TooltipContent>
       </Tooltip>
     </FloatingTerminalIconContextMenu>
   )

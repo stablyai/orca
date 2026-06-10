@@ -106,7 +106,10 @@ function getSingleCommentSendScopes(
   return [
     {
       id: 'note',
-      label: translate("auto.components.diff.comments.useDiffCommentDecorator.995fa28b50", "This note"),
+      label: translate(
+        'auto.components.diff.comments.useDiffCommentDecorator.995fa28b50',
+        'This note'
+      ),
       notes: comment.sentAt ? [] : [comment],
       prompt: formatCommentPrompt ? formatCommentPrompt(comment) : formatDiffComments([comment])
     }

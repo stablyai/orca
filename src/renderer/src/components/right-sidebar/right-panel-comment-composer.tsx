@@ -167,11 +167,46 @@ export function RightPanelCommentComposer({
   )
 
   const toolbar = [
-    { action: 'bold' as const, label: translate("auto.components.right.sidebar.right.panel.comment.composer.256300f8ea", "Bold"), icon: Bold },
-    { action: 'italic' as const, label: translate("auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2", "Italic"), icon: Italic },
-    { action: 'code' as const, label: translate("auto.components.right.sidebar.right.panel.comment.composer.f49e0a21e0", "Code"), icon: Code2 },
-    { action: 'quote' as const, label: translate("auto.components.right.sidebar.right.panel.comment.composer.d6d9c3c947", "Quote"), icon: Quote },
-    { action: 'list' as const, label: translate("auto.components.right.sidebar.right.panel.comment.composer.cf5a7aba6f", "List"), icon: List }
+    {
+      action: 'bold' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.256300f8ea',
+        'Bold'
+      ),
+      icon: Bold
+    },
+    {
+      action: 'italic' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2',
+        'Italic'
+      ),
+      icon: Italic
+    },
+    {
+      action: 'code' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.f49e0a21e0',
+        'Code'
+      ),
+      icon: Code2
+    },
+    {
+      action: 'quote' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.d6d9c3c947',
+        'Quote'
+      ),
+      icon: Quote
+    },
+    {
+      action: 'list' as const,
+      label: translate(
+        'auto.components.right.sidebar.right.panel.comment.composer.cf5a7aba6f',
+        'List'
+      ),
+      icon: List
+    }
   ]
 
   return (
@@ -225,7 +260,11 @@ export function RightPanelCommentComposer({
       <div className="flex min-w-0 items-center justify-end gap-1 border-t border-border px-2 py-1.5">
         {onCancel && (
           <Button type="button" variant="ghost" size="xs" disabled={submitting} onClick={onCancel}>
-            {translate("auto.components.right.sidebar.right.panel.comment.composer.9bca633dee", "Cancel")}</Button>
+            {translate(
+              'auto.components.right.sidebar.right.panel.comment.composer.9bca633dee',
+              'Cancel'
+            )}
+          </Button>
         )}
         <Tooltip>
           <TooltipTrigger asChild>
@@ -236,7 +275,12 @@ export function RightPanelCommentComposer({
               disabled={disabled || submitting || body.trim().length === 0}
               onClick={() => void submit()}
             >
-              {submitting ? translate("auto.components.right.sidebar.right.panel.comment.composer.87aff03d63", "Sending...") : submitLabel}
+              {submitting
+                ? translate(
+                    'auto.components.right.sidebar.right.panel.comment.composer.87aff03d63',
+                    'Sending...'
+                  )
+                : submitLabel}
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>

@@ -57,7 +57,8 @@ export function SshDestructiveActionDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isBusy}>
-            {translate("auto.components.settings.SshDestructiveActionDialog.895b216267", "Cancel")}</Button>
+            {translate('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
+          </Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isBusy} className="gap-1.5">
             {isBusy ? <Loader2 className="size-3 animate-spin" /> : null}
             {isBusy ? (busyLabel ?? actionLabel) : actionLabel}

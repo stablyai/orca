@@ -595,7 +595,7 @@ export default function MarkdownPreview({
     () => [
       {
         id: 'all',
-        label: translate("auto.components.editor.MarkdownPreview.ddf087d12e", "All unsent notes"),
+        label: translate('auto.components.editor.MarkdownPreview.ddf087d12e', 'All unsent notes'),
         notes: unsentMarkdownReviewNotes,
         prompt: unsentMarkdownReviewPrompt
       }
@@ -1035,8 +1035,8 @@ export default function MarkdownPreview({
           <button
             type="button"
             className="markdown-annotation-add"
-            aria-label={translate("auto.components.editor.MarkdownPreview.13f94d760c", "Add note")}
-            title={translate("auto.components.editor.MarkdownPreview.13f94d760c", "Add note")}
+            aria-label={translate('auto.components.editor.MarkdownPreview.13f94d760c', 'Add note')}
+            title={translate('auto.components.editor.MarkdownPreview.13f94d760c', 'Add note')}
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
@@ -1081,10 +1081,26 @@ export default function MarkdownPreview({
                         type="button"
                         className="orca-diff-comment-pill-btn"
                         title={
-                          copiedReviewNoteId === comment.id ? translate("auto.components.editor.MarkdownPreview.94b520a96a", "Copied note") : translate("auto.components.editor.MarkdownPreview.f961e94057", "Copy note for agent")
+                          copiedReviewNoteId === comment.id
+                            ? translate(
+                                'auto.components.editor.MarkdownPreview.94b520a96a',
+                                'Copied note'
+                              )
+                            : translate(
+                                'auto.components.editor.MarkdownPreview.f961e94057',
+                                'Copy note for agent'
+                              )
                         }
                         aria-label={
-                          copiedReviewNoteId === comment.id ? translate("auto.components.editor.MarkdownPreview.94b520a96a", "Copied note") : translate("auto.components.editor.MarkdownPreview.f961e94057", "Copy note for agent")
+                          copiedReviewNoteId === comment.id
+                            ? translate(
+                                'auto.components.editor.MarkdownPreview.94b520a96a',
+                                'Copied note'
+                              )
+                            : translate(
+                                'auto.components.editor.MarkdownPreview.f961e94057',
+                                'Copy note for agent'
+                              )
                         }
                         onClick={(event) => {
                           event.preventDefault()
@@ -1264,7 +1280,11 @@ export default function MarkdownPreview({
                 void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
                   if (!exists) {
                     toast.error(
-                      translate("auto.components.editor.MarkdownPreview.6c043947ae", "File not found: {{value0}}", { value0: classified.relativePath ?? classified.absolutePath })
+                      translate(
+                        'auto.components.editor.MarkdownPreview.6c043947ae',
+                        'File not found: {{value0}}',
+                        { value0: classified.relativePath ?? classified.absolutePath }
+                      )
                     )
                     return
                   }
@@ -1356,11 +1376,23 @@ export default function MarkdownPreview({
               absolutePath
             )
             if (stats.isDirectory) {
-              toast.error(translate("auto.components.editor.MarkdownPreview.759463a221", "Cannot open directory: {{value0}}", { value0: relativePath }))
+              toast.error(
+                translate(
+                  'auto.components.editor.MarkdownPreview.759463a221',
+                  'Cannot open directory: {{value0}}',
+                  { value0: relativePath }
+                )
+              )
               return
             }
           } catch {
-            toast.error(translate("auto.components.editor.MarkdownPreview.6c043947ae", "File not found: {{value0}}", { value0: relativePath }))
+            toast.error(
+              translate(
+                'auto.components.editor.MarkdownPreview.6c043947ae',
+                'File not found: {{value0}}',
+                { value0: relativePath }
+              )
+            )
             return
           }
 
@@ -1663,14 +1695,20 @@ export default function MarkdownPreview({
                     rootRef.current?.focus()
                   }
                 }}
-                placeholder={translate("auto.components.editor.MarkdownPreview.517aea303b", "Find in preview")}
+                placeholder={translate(
+                  'auto.components.editor.MarkdownPreview.517aea303b',
+                  'Find in preview'
+                )}
                 className="markdown-preview-search-input h-7 !border-0 bg-transparent px-2 shadow-none focus-visible:!border-0 focus-visible:ring-0"
-                aria-label={translate("auto.components.editor.MarkdownPreview.ec77985138", "Find in markdown preview")}
+                aria-label={translate(
+                  'auto.components.editor.MarkdownPreview.ec77985138',
+                  'Find in markdown preview'
+                )}
               />
             </div>
             <div className="markdown-preview-search-status">
               {query && matchCount === 0
-                ? translate("auto.components.editor.MarkdownPreview.c5dc92cfe3", "No results")
+                ? translate('auto.components.editor.MarkdownPreview.c5dc92cfe3', 'No results')
                 : `${matchCount === 0 ? 0 : activeMatchIndex + 1}/${matchCount}`}
             </div>
             <Button
@@ -1679,8 +1717,14 @@ export default function MarkdownPreview({
               size="icon-xs"
               onClick={() => moveToMatch(-1)}
               disabled={matchCount === 0}
-              title={translate("auto.components.editor.MarkdownPreview.1febd97f5c", "Previous match")}
-              aria-label={translate("auto.components.editor.MarkdownPreview.1febd97f5c", "Previous match")}
+              title={translate(
+                'auto.components.editor.MarkdownPreview.1febd97f5c',
+                'Previous match'
+              )}
+              aria-label={translate(
+                'auto.components.editor.MarkdownPreview.1febd97f5c',
+                'Previous match'
+              )}
               className="markdown-preview-search-button"
             >
               <ChevronUp size={14} />
@@ -1691,8 +1735,11 @@ export default function MarkdownPreview({
               size="icon-xs"
               onClick={() => moveToMatch(1)}
               disabled={matchCount === 0}
-              title={translate("auto.components.editor.MarkdownPreview.b42c41bd0d", "Next match")}
-              aria-label={translate("auto.components.editor.MarkdownPreview.b42c41bd0d", "Next match")}
+              title={translate('auto.components.editor.MarkdownPreview.b42c41bd0d', 'Next match')}
+              aria-label={translate(
+                'auto.components.editor.MarkdownPreview.b42c41bd0d',
+                'Next match'
+              )}
               className="markdown-preview-search-button"
             >
               <ChevronDown size={14} />
@@ -1703,8 +1750,11 @@ export default function MarkdownPreview({
               variant="ghost"
               size="icon-xs"
               onClick={closeSearch}
-              title={translate("auto.components.editor.MarkdownPreview.12052c639c", "Close search")}
-              aria-label={translate("auto.components.editor.MarkdownPreview.12052c639c", "Close search")}
+              title={translate('auto.components.editor.MarkdownPreview.12052c639c', 'Close search')}
+              aria-label={translate(
+                'auto.components.editor.MarkdownPreview.12052c639c',
+                'Close search'
+              )}
               className="markdown-preview-search-button"
             >
               <X size={14} />
@@ -1723,11 +1773,19 @@ export default function MarkdownPreview({
                 }
               }}
               disabled={markdownReviewNotes.length === 0}
-              title={translate("auto.components.editor.MarkdownPreview.0f9969a159", "Jump to first review note")}
-              aria-label={translate("auto.components.editor.MarkdownPreview.0f9969a159", "Jump to first review note")}
+              title={translate(
+                'auto.components.editor.MarkdownPreview.0f9969a159',
+                'Jump to first review note'
+              )}
+              aria-label={translate(
+                'auto.components.editor.MarkdownPreview.0f9969a159',
+                'Jump to first review note'
+              )}
             >
               <MessageSquare className="size-3.5" />
-              <span>{translate("auto.components.editor.MarkdownPreview.322afab6ff", "Review notes")}</span>
+              <span>
+                {translate('auto.components.editor.MarkdownPreview.322afab6ff', 'Review notes')}
+              </span>
               <span className="markdown-review-count">{markdownReviewNotes.length}</span>
             </button>
             <button
@@ -1735,8 +1793,14 @@ export default function MarkdownPreview({
               className="markdown-review-icon-button"
               onClick={() => void handleCopyMarkdownReviewNotes()}
               disabled={markdownReviewNotes.length === 0}
-              title={translate("auto.components.editor.MarkdownPreview.bb629de58a", "Copy notes for agent")}
-              aria-label={translate("auto.components.editor.MarkdownPreview.bb629de58a", "Copy notes for agent")}
+              title={translate(
+                'auto.components.editor.MarkdownPreview.bb629de58a',
+                'Copy notes for agent'
+              )}
+              aria-label={translate(
+                'auto.components.editor.MarkdownPreview.bb629de58a',
+                'Copy notes for agent'
+              )}
             >
               {reviewNotesCopied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             </button>
@@ -1759,7 +1823,8 @@ export default function MarkdownPreview({
           {frontMatter && frontmatterVisible ? (
             <div className="mb-4 rounded border border-border/60 bg-muted/40 px-3 py-2">
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                {translate("auto.components.editor.MarkdownPreview.2b2b31382c", "Front Matter")}</div>
+                {translate('auto.components.editor.MarkdownPreview.2b2b31382c', 'Front Matter')}
+              </div>
               <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
                 {frontMatterInner}
               </pre>
@@ -1820,7 +1885,7 @@ function MarkdownSingleNoteSendMenu({
       scopes={[
         {
           id: 'note',
-          label: translate("auto.components.editor.MarkdownPreview.f37b98999e", "This note"),
+          label: translate('auto.components.editor.MarkdownPreview.f37b98999e', 'This note'),
           notes: note.sentAt ? [] : [note],
           prompt: formatMarkdownReviewNotes([note], content)
         }
@@ -1876,11 +1941,16 @@ function MarkdownAnnotationComposer({
 
   return (
     <div className="markdown-annotation-composer" onClick={(event) => event.stopPropagation()}>
-      <div className="orca-diff-comment-popover-label">{translate("auto.components.editor.MarkdownPreview.b1bfc04034", "Selected text")}</div>
+      <div className="orca-diff-comment-popover-label">
+        {translate('auto.components.editor.MarkdownPreview.b1bfc04034', 'Selected text')}
+      </div>
       <textarea
         ref={focusTextareaRef}
         className="orca-diff-comment-popover-textarea"
-        placeholder={translate("auto.components.editor.MarkdownPreview.d737791433", "Add note for the AI")}
+        placeholder={translate(
+          'auto.components.editor.MarkdownPreview.d737791433',
+          'Add note for the AI'
+        )}
         value={body}
         onChange={(event) => {
           setBody(event.target.value)
@@ -1903,9 +1973,12 @@ function MarkdownAnnotationComposer({
       />
       <div className="orca-diff-comment-popover-footer">
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
-          {translate("auto.components.editor.MarkdownPreview.e4683f70c4", "Cancel")}</Button>
+          {translate('auto.components.editor.MarkdownPreview.e4683f70c4', 'Cancel')}
+        </Button>
         <Button size="sm" onClick={() => void submit()} disabled={submitting || !trimmed}>
-          {submitting ? translate("auto.components.editor.MarkdownPreview.d652c87c91", "Saving…") : translate("auto.components.editor.MarkdownPreview.13f94d760c", "Add note")}
+          {submitting
+            ? translate('auto.components.editor.MarkdownPreview.d652c87c91', 'Saving…')
+            : translate('auto.components.editor.MarkdownPreview.13f94d760c', 'Add note')}
           {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
         </Button>
       </div>

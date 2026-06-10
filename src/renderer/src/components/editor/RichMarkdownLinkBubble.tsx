@@ -81,7 +81,10 @@ function LinkEditInput({
           onCancel()
         }
       }}
-      placeholder={translate("auto.components.editor.RichMarkdownLinkBubble.7b0b945fdc", "Paste or type a link…")}
+      placeholder={translate(
+        'auto.components.editor.RichMarkdownLinkBubble.7b0b945fdc',
+        'Paste or type a link…'
+      )}
       className="rich-markdown-link-input"
     />
   )
@@ -130,7 +133,10 @@ export function RichMarkdownLinkBubble({
             type="button"
             className="rich-markdown-link-button"
             onClick={onOpen}
-            title={translate("auto.components.editor.RichMarkdownLinkBubble.bfc813e909", "Open link")}
+            title={translate(
+              'auto.components.editor.RichMarkdownLinkBubble.bfc813e909',
+              'Open link'
+            )}
           >
             <ExternalLink size={14} />
           </button>
@@ -138,7 +144,10 @@ export function RichMarkdownLinkBubble({
             type="button"
             className="rich-markdown-link-button"
             onClick={onEditStart}
-            title={translate("auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f", "Edit link")}
+            title={translate(
+              'auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f',
+              'Edit link'
+            )}
           >
             <Pencil size={14} />
           </button>
@@ -146,7 +155,10 @@ export function RichMarkdownLinkBubble({
             type="button"
             className="rich-markdown-link-button"
             onClick={onRemove}
-            title={translate("auto.components.editor.RichMarkdownLinkBubble.1c99b726e0", "Remove link")}
+            title={translate(
+              'auto.components.editor.RichMarkdownLinkBubble.1c99b726e0',
+              'Remove link'
+            )}
           >
             <Unlink size={14} />
           </button>

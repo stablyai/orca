@@ -118,28 +118,38 @@ export default function ProjectRow({
               <button
                 type="button"
                 onClick={onOpenInBrowser}
-                aria-label={translate("auto.components.github.project.ProjectRow.e12be8b4d4", "Open in GitHub")}
+                aria-label={translate(
+                  'auto.components.github.project.ProjectRow.e12be8b4d4',
+                  'Open in GitHub'
+                )}
                 className="rounded p-1 hover:bg-muted"
               >
                 <ExternalLink className="size-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>{translate("auto.components.github.project.ProjectRow.e12be8b4d4", "Open in GitHub")}</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.github.project.ProjectRow.e12be8b4d4', 'Open in GitHub')}
+            </TooltipContent>
           </Tooltip>
         ) : null}
-        {!disabled && row.itemType !== "DRAFT_ISSUE" && row.content.number != null ? (
+        {!disabled && row.itemType !== 'DRAFT_ISSUE' && row.content.number != null ? (
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={onStartWork}
-                aria-label={translate("auto.components.github.project.ProjectRow.75b5d816e3", "Start work")}
+                aria-label={translate(
+                  'auto.components.github.project.ProjectRow.75b5d816e3',
+                  'Start work'
+                )}
                 className="rounded p-1 hover:bg-muted"
               >
                 <Play className="size-3.5" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>{translate("auto.components.github.project.ProjectRow.75b5d816e3", "Start work")}</TooltipContent>
+            <TooltipContent>
+              {translate('auto.components.github.project.ProjectRow.75b5d816e3', 'Start work')}
+            </TooltipContent>
           </Tooltip>
         ) : null}
       </div>

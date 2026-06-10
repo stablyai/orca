@@ -92,7 +92,8 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
   if (parsed.rows.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-        {translate("auto.components.editor.CsvViewer.a233d55b77", "Empty file")}</div>
+        {translate('auto.components.editor.CsvViewer.a233d55b77', 'Empty file')}
+      </div>
     )
   }
 
@@ -178,8 +179,13 @@ export default function CsvViewer({ content, filePath }: CsvViewerProps): React.
         </div>
       </div>
       <div className="flex items-center gap-4 border-t border-border/60 px-3 py-1 text-xs text-muted-foreground">
-        <span>{bodyRows.length.toLocaleString()} {translate("auto.components.editor.CsvViewer.ac31d2cd60", "rows")}</span>
-        <span>{columnCount} {translate("auto.components.editor.CsvViewer.eedd0d37a7", "columns")}</span>
+        <span>
+          {bodyRows.length.toLocaleString()}{' '}
+          {translate('auto.components.editor.CsvViewer.ac31d2cd60', 'rows')}
+        </span>
+        <span>
+          {columnCount} {translate('auto.components.editor.CsvViewer.eedd0d37a7', 'columns')}
+        </span>
       </div>
     </div>
   )

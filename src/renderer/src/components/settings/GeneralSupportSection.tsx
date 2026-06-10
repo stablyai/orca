@@ -103,7 +103,12 @@ function SupportSection({
         <div className="space-y-8">
           {hasPrecedingSections ? <Separator /> : null}
           <div className="space-y-4">
-            <SettingsSubsectionHeader title={translate("auto.components.settings.GeneralSupportSection.55a87e5fd1", "Support Orca")} />
+            <SettingsSubsectionHeader
+              title={translate(
+                'auto.components.settings.GeneralSupportSection.55a87e5fd1',
+                'Support Orca'
+              )}
+            />
             {state === 'loading' ? <SupportRowSkeleton /> : null}
             {state !== 'loading' && state !== 'hidden' ? (
               <SupportRow state={state} onStarClick={onStarClick} />
@@ -136,12 +141,23 @@ function SupportRow({
   // starring it is a button; after success it becomes a small confirmation.
   return (
     <SearchableSetting
-      title={translate("auto.components.settings.GeneralSupportSection.6922c1fa2b", "Star Orca on GitHub")}
-      description={translate("auto.components.settings.GeneralSupportSection.511782265b", "Support the project with a GitHub star via the gh CLI.")}
+      title={translate(
+        'auto.components.settings.GeneralSupportSection.6922c1fa2b',
+        'Star Orca on GitHub'
+      )}
+      description={translate(
+        'auto.components.settings.GeneralSupportSection.511782265b',
+        'Support the project with a GitHub star via the gh CLI.'
+      )}
       keywords={['star', 'github', 'support', 'feedback', 'like']}
       className="flex items-center justify-between gap-4 py-2"
     >
-      <Label>{translate("auto.components.settings.GeneralSupportSection.6922c1fa2b", "Star Orca on GitHub")}</Label>
+      <Label>
+        {translate(
+          'auto.components.settings.GeneralSupportSection.6922c1fa2b',
+          'Star Orca on GitHub'
+        )}
+      </Label>
       {state === 'starred' ? (
         <SupportRowThanks />
       ) : (
@@ -157,7 +173,11 @@ function SupportRow({
           ) : (
             <Star className="size-3.5" />
           )}
-          {state === 'starring' ? translate("auto.components.settings.GeneralSupportSection.397719bee5", "Starring...") : state === 'error' ? translate("auto.components.settings.GeneralSupportSection.73b327e793", "Try Again") : translate("auto.components.settings.GeneralSupportSection.964acc6bb4", "Star")}
+          {state === 'starring'
+            ? translate('auto.components.settings.GeneralSupportSection.397719bee5', 'Starring...')
+            : state === 'error'
+              ? translate('auto.components.settings.GeneralSupportSection.73b327e793', 'Try Again')
+              : translate('auto.components.settings.GeneralSupportSection.964acc6bb4', 'Star')}
         </Button>
       )}
     </SearchableSetting>
@@ -175,6 +195,10 @@ function SupportRowThanks(): React.JSX.Element {
       aria-live="polite"
     >
       <Star className="size-3.5 fill-amber-400/80 text-amber-400/80" aria-hidden="true" />
-      {translate("auto.components.settings.GeneralSupportSection.af7d9f4396", "Thanks for the support!")}</div>
+      {translate(
+        'auto.components.settings.GeneralSupportSection.af7d9f4396',
+        'Thanks for the support!'
+      )}
+    </div>
   )
 }

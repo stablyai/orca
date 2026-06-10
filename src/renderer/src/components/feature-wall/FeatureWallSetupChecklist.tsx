@@ -253,7 +253,11 @@ function TaskSourcesAction(): React.JSX.Element {
           }}
         >
           <ArrowUpRight className="size-3.5" />
-          {translate("auto.components.feature.wall.FeatureWallSetupChecklist.b1f1981c5e", "See tasks")}</Button>
+          {translate(
+            'auto.components.feature.wall.FeatureWallSetupChecklist.b1f1981c5e',
+            'See tasks'
+          )}
+        </Button>
       </div>
     </div>
   )
@@ -296,7 +300,10 @@ export function FeatureWallSetupChecklist(
         )}
       >
         <SetupSection
-          title={translate("auto.components.feature.wall.FeatureWallSetupChecklist.713cc529a5", "Milestones")}
+          title={translate(
+            'auto.components.feature.wall.FeatureWallSetupChecklist.713cc529a5',
+            'Milestones'
+          )}
           steps={parallelWorkSteps}
           startOrdinal={1}
           activeStepId={activeStep?.id ?? null}
@@ -305,7 +312,10 @@ export function FeatureWallSetupChecklist(
           layout={layout}
         />
         <SetupSection
-          title={translate("auto.components.feature.wall.FeatureWallSetupChecklist.1a6a7d6c80", "Setup")}
+          title={translate(
+            'auto.components.feature.wall.FeatureWallSetupChecklist.1a6a7d6c80',
+            'Setup'
+          )}
           steps={setupSteps}
           startOrdinal={parallelWorkSteps.length + 1}
           activeStepId={activeStep?.id ?? null}
@@ -339,7 +349,15 @@ export function FeatureWallSetupChecklist(
                     : 'border-border bg-muted/30 text-muted-foreground'
                 )}
               >
-                {activeDone ? translate("auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405", "Done") : translate("auto.components.feature.wall.FeatureWallSetupChecklist.0235b268b2", "Not done yet")}
+                {activeDone
+                  ? translate(
+                      'auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405',
+                      'Done'
+                    )
+                  : translate(
+                      'auto.components.feature.wall.FeatureWallSetupChecklist.0235b268b2',
+                      'Not done yet'
+                    )}
               </span>
             </div>
             <div
@@ -358,7 +376,7 @@ export function FeatureWallSetupChecklist(
                 >
                   {activeStep.description}
                 </p>
-                {activeStep.id === "split-terminal" ? (
+                {activeStep.id === 'split-terminal' ? (
                   <div className="mt-3">
                     <SplitTerminalShortcutHint />
                   </div>

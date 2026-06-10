@@ -46,7 +46,11 @@ export function AddReposAction(): React.JSX.Element {
   return (
     <Button type="button" size="sm" className="w-fit gap-2" onClick={() => openModal('add-repo')}>
       <Plus className="size-3.5" />
-      {translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.522cce9e33", "Add project")}</Button>
+      {translate(
+        'auto.components.feature.wall.FeatureWallSetupWorkflowActions.522cce9e33',
+        'Add project'
+      )}
+    </Button>
   )
 }
 
@@ -80,7 +84,11 @@ export function TwoAgentsAction(props: { done: boolean }): React.JSX.Element | n
   return (
     <Button type="button" size="sm" className="w-fit gap-2" onClick={handlePrimaryAction}>
       <ArrowUpRight className="size-3.5" />
-      {translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.f0bbf7da77", "Try it out")}</Button>
+      {translate(
+        'auto.components.feature.wall.FeatureWallSetupWorkflowActions.f0bbf7da77',
+        'Try it out'
+      )}
+    </Button>
   )
 }
 
@@ -96,8 +104,21 @@ export function SplitTerminalShortcutHint(): React.JSX.Element {
   return (
     <div className="space-y-1.5 text-[13px] leading-relaxed text-muted-foreground">
       <p>
-        {translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.971775f639", "Split right with")}<kbd className={SETUP_HINT_KBD_CLASS}>{splitRight}</kbd> {translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.29e64f111d", "or down with")}{' '}
-        <kbd className={SETUP_HINT_KBD_CLASS}>{splitDown}</kbd>{translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.364430eb3d", ", or right-click a pane and choose a split. Close the active pane with")}<kbd className={SETUP_HINT_KBD_CLASS}>{closePane}</kbd>.
+        {translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.971775f639',
+          'Split right with'
+        )}
+        <kbd className={SETUP_HINT_KBD_CLASS}>{splitRight}</kbd>{' '}
+        {translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.29e64f111d',
+          'or down with'
+        )}{' '}
+        <kbd className={SETUP_HINT_KBD_CLASS}>{splitDown}</kbd>
+        {translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.364430eb3d',
+          ', or right-click a pane and choose a split. Close the active pane with'
+        )}
+        <kbd className={SETUP_HINT_KBD_CLASS}>{closePane}</kbd>.
       </p>
     </div>
   )
@@ -139,7 +160,11 @@ export function WorkspacesAction(props: { done: boolean }): React.JSX.Element | 
       }}
     >
       <ArrowUpRight className="size-3.5" />
-      {translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.f0bbf7da77", "Try it out")}</Button>
+      {translate(
+        'auto.components.feature.wall.FeatureWallSetupWorkflowActions.f0bbf7da77',
+        'Try it out'
+      )}
+    </Button>
   )
 }
 
@@ -197,9 +222,19 @@ export function SetupScriptAction(): React.JSX.Element {
     }
     const updated = await updateRepo(repo.id, { hookSettings: nextHookSettings })
     if (updated) {
-      toast.success(translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.6299297dac", "Setup script saved"))
+      toast.success(
+        translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.6299297dac',
+          'Setup script saved'
+        )
+      )
     } else {
-      toast.error(translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.a7463915b6", "Failed to save setup script"))
+      toast.error(
+        translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.a7463915b6',
+          'Failed to save setup script'
+        )
+      )
     }
   }, [repo, setupScript, updateRepo])
 
@@ -210,8 +245,14 @@ export function SetupScriptAction(): React.JSX.Element {
           value={setupScript}
           disabled={!canConfigure}
           onChange={(event) => setSetupScript(event.target.value)}
-          placeholder={translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.5c5b65044e", "pnpm install")}
-          aria-label={translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.88469e926b", "Setup script")}
+          placeholder={translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.5c5b65044e',
+            'pnpm install'
+          )}
+          aria-label={translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.88469e926b',
+            'Setup script'
+          )}
           className="font-mono text-sm"
         />
         <Button
@@ -222,7 +263,11 @@ export function SetupScriptAction(): React.JSX.Element {
           onClick={() => void handleSaveSetupScript()}
         >
           <Save className="size-3.5" />
-          {translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.14327073cc", "Save")}</Button>
+          {translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.14327073cc',
+            'Save'
+          )}
+        </Button>
       </div>
       <Button
         type="button"
@@ -233,10 +278,18 @@ export function SetupScriptAction(): React.JSX.Element {
         onClick={openLocalCommandSettings}
       >
         <Settings className="size-3.5" />
-        {translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.00078a6134", "View in settings")}</Button>
+        {translate(
+          'auto.components.feature.wall.FeatureWallSetupWorkflowActions.00078a6134',
+          'View in settings'
+        )}
+      </Button>
       {!canConfigure ? (
         <p className="text-xs text-muted-foreground">
-          {translate("auto.components.feature.wall.FeatureWallSetupWorkflowActions.486c2f4d8d", "Add a git project first, then configure the setup script for that repository.")}</p>
+          {translate(
+            'auto.components.feature.wall.FeatureWallSetupWorkflowActions.486c2f4d8d',
+            'Add a git project first, then configure the setup script for that repository.'
+          )}
+        </p>
       ) : null}
     </div>
   )

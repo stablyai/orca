@@ -23,12 +23,31 @@ export function getFeatureWallUsageProviderConnection(args: {
   provider: ProviderRateLimits | null
 }): FeatureWallUsageProviderConnection {
   if (args.managedAccountCount > 0) {
-    return { connected: true, label: translate("auto.components.feature.wall.feature.wall.usage.tracking.00087eecb2", "Connected · {{value0}}", { value0: args.managedAccountCount }) }
+    return {
+      connected: true,
+      label: translate(
+        'auto.components.feature.wall.feature.wall.usage.tracking.00087eecb2',
+        'Connected · {{value0}}',
+        { value0: args.managedAccountCount }
+      )
+    }
   }
   if (hasFeatureWallProviderUsageTracking(args.provider)) {
-    return { connected: true, label: translate("auto.components.feature.wall.feature.wall.usage.tracking.cc39a87288", "Connected · System default") }
+    return {
+      connected: true,
+      label: translate(
+        'auto.components.feature.wall.feature.wall.usage.tracking.cc39a87288',
+        'Connected · System default'
+      )
+    }
   }
-  return { connected: false, label: translate("auto.components.feature.wall.feature.wall.usage.tracking.b94ec70eda", "Tracking not set up") }
+  return {
+    connected: false,
+    label: translate(
+      'auto.components.feature.wall.feature.wall.usage.tracking.b94ec70eda',
+      'Tracking not set up'
+    )
+  }
 }
 
 export function hasFeatureWallUsageTracking(args: {

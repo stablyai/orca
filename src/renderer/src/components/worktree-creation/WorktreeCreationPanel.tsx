@@ -45,8 +45,14 @@ export default function WorktreeCreationPanel({
           <span className="truncate font-medium text-foreground">{title}</span>
           <button
             type="button"
-            title={translate("auto.components.worktree.creation.WorktreeCreationPanel.532aea14ce", "Cancel")}
-            aria-label={translate("auto.components.worktree.creation.WorktreeCreationPanel.a3346fc6ed", "Cancel worktree creation")}
+            title={translate(
+              'auto.components.worktree.creation.WorktreeCreationPanel.532aea14ce',
+              'Cancel'
+            )}
+            aria-label={translate(
+              'auto.components.worktree.creation.WorktreeCreationPanel.a3346fc6ed',
+              'Cancel worktree creation'
+            )}
             onClick={dismiss}
             className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
           >
@@ -61,9 +67,18 @@ export default function WorktreeCreationPanel({
       <div className="min-h-0 flex-1 p-3">
         {isError ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            <span className="font-medium text-destructive">{translate("auto.components.worktree.creation.WorktreeCreationPanel.ed2a664f8b", "Couldn’t create worktree")}</span>
+            <span className="font-medium text-destructive">
+              {translate(
+                'auto.components.worktree.creation.WorktreeCreationPanel.ed2a664f8b',
+                'Couldn’t create worktree'
+              )}
+            </span>
             <span className="text-muted-foreground">
-              {entry.error ?? translate("auto.components.worktree.creation.WorktreeCreationPanel.767951265d", "Something went wrong while creating the worktree.")}
+              {entry.error ??
+                translate(
+                  'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
+                  'Something went wrong while creating the worktree.'
+                )}
             </span>
             <button
               type="button"
@@ -71,13 +86,21 @@ export default function WorktreeCreationPanel({
               className="inline-flex items-center gap-1 text-foreground hover:underline"
             >
               <RotateCcw className="size-3" />
-              {translate("auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b", "Retry")}</button>
+              {translate(
+                'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
+                'Retry'
+              )}
+            </button>
             <button
               type="button"
               onClick={dismiss}
               className="text-muted-foreground hover:text-foreground hover:underline"
             >
-              {translate("auto.components.worktree.creation.WorktreeCreationPanel.dabd226118", "Dismiss")}</button>
+              {translate(
+                'auto.components.worktree.creation.WorktreeCreationPanel.dabd226118',
+                'Dismiss'
+              )}
+            </button>
           </div>
         ) : (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">

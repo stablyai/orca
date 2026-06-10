@@ -17,10 +17,22 @@ export function getCronScheduleStatusLabel(
 ): { kind: 'empty' | 'invalid' | 'valid'; label: string } {
   const trimmed = schedule.trim()
   if (!trimmed) {
-    return { kind: 'empty', label: translate("auto.components.automations.AutomationCustomCronPanel.968e66d686", "Enter a five-field cron.") }
+    return {
+      kind: 'empty',
+      label: translate(
+        'auto.components.automations.AutomationCustomCronPanel.968e66d686',
+        'Enter a five-field cron.'
+      )
+    }
   }
   if (!validateSchedule(trimmed)) {
-    return { kind: 'invalid', label: translate("auto.components.automations.AutomationCustomCronPanel.e81a02d61b", "Enter a valid five-field cron before saving.") }
+    return {
+      kind: 'invalid',
+      label: translate(
+        'auto.components.automations.AutomationCustomCronPanel.e81a02d61b',
+        'Enter a valid five-field cron before saving.'
+      )
+    }
   }
   const formatted = formatAutomationSchedule(trimmed)
   return { kind: 'valid', label: formatted === 'Custom schedule' ? 'Valid custom cron' : formatted }
@@ -50,7 +62,12 @@ export function AutomationCustomCronPanel({
 
   return (
     <div className="grid gap-3">
-      <Field label={translate("auto.components.automations.AutomationCustomCronPanel.3e3b2c369f", "Cron expression")}>
+      <Field
+        label={translate(
+          'auto.components.automations.AutomationCustomCronPanel.3e3b2c369f',
+          'Cron expression'
+        )}
+      >
         <Input
           value={draft.customSchedule}
           placeholder="0 9 * * 1-5"
@@ -88,7 +105,7 @@ export function AutomationCustomCronPanel({
               : 'border-border/70 bg-muted/30 text-muted-foreground'
           )}
         >
-          {customScheduleStatus.kind === "invalid" ? (
+          {customScheduleStatus.kind === 'invalid' ? (
             <CircleAlert className="size-3.5 shrink-0" />
           ) : (
             <CheckCircle2 className="size-3.5 shrink-0" />

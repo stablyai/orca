@@ -31,12 +31,25 @@ export function NestedRepoScanLimitNotice({ scan }: { scan: NestedRepoScanResult
       onFocusCapture={() => setDetailsOpen(true)}
       onBlurCapture={() => setDetailsOpen(false)}
     >
-      <span>{scan.stopped ? translate("auto.components.repo.NestedRepoScanLimitNotice.03e9beab7b", "Scan stopped early.") : translate("auto.components.repo.NestedRepoScanLimitNotice.574eb5408b", "Showing partial scan results.")}</span>
+      <span>
+        {scan.stopped
+          ? translate(
+              'auto.components.repo.NestedRepoScanLimitNotice.03e9beab7b',
+              'Scan stopped early.'
+            )
+          : translate(
+              'auto.components.repo.NestedRepoScanLimitNotice.574eb5408b',
+              'Showing partial scan results.'
+            )}
+      </span>
       <Popover open={detailsOpen} onOpenChange={setDetailsOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            aria-label={translate("auto.components.repo.NestedRepoScanLimitNotice.642a43c139", "Nested repository scan limits")}
+            aria-label={translate(
+              'auto.components.repo.NestedRepoScanLimitNotice.642a43c139',
+              'Nested repository scan limits'
+            )}
             aria-expanded={detailsOpen}
             title={detailsText}
             className="inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"

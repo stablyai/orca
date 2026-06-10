@@ -78,7 +78,9 @@ export function SingleSelectList({
             onSelect={() => onSelect(trimmed)}
             className="items-center gap-2 px-3 py-1.5 text-xs"
           >
-            <span className="text-muted-foreground">{translate("auto.components.github.PRFilterPickers.2d1f58eda6", "Use")}</span>
+            <span className="text-muted-foreground">
+              {translate('auto.components.github.PRFilterPickers.2d1f58eda6', 'Use')}
+            </span>
             <span className="truncate font-medium">{trimmed}</span>
           </CommandItem>
         ) : null}
@@ -88,7 +90,8 @@ export function SingleSelectList({
             onSelect={() => onSelect(null)}
             className="gap-2 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            {translate("auto.components.github.PRFilterPickers.472c12ae03", "Clear")}</CommandItem>
+            {translate('auto.components.github.PRFilterPickers.472c12ae03', 'Clear')}
+          </CommandItem>
         ) : null}
         {filtered.map((opt) => {
           const isActive = opt.key === activeValue
@@ -162,7 +165,8 @@ export function MultiSelectList({
             onSelect={() => onChange([])}
             className="gap-2 px-3 py-1.5 text-xs text-muted-foreground"
           >
-            {translate("auto.components.github.PRFilterPickers.fdf387297c", "Clear (")}{selected.length})
+            {translate('auto.components.github.PRFilterPickers.fdf387297c', 'Clear (')}
+            {selected.length})
           </CommandItem>
         ) : null}
         {filtered.map((opt) => {

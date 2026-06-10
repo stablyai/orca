@@ -34,6 +34,7 @@ function createEditorStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    recordFeatureInteraction: vi.fn(),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
 }
@@ -46,6 +47,7 @@ function createEditorTabsStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    recordFeatureInteraction: vi.fn(),
     ...createTabsSlice(...(args as Parameters<typeof createTabsSlice>)),
     ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
   })) as unknown as StoreApi<AppState>
@@ -66,6 +68,22 @@ function ownedEditorFileId(
 }
 
 describe('createEditorSlice right sidebar state', () => {
+  it('does not record markdown-file-created when opening an existing markdown file', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile({
+      filePath: '/repo/docs/existing.md',
+      relativePath: 'docs/existing.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+
+    expect(store.getState().recordFeatureInteraction).not.toHaveBeenCalledWith(
+      'markdown-file-created'
+    )
+  })
+
   it('right sidebar is closed by default', () => {
     const store = createEditorStore()
     expect(store.getState().rightSidebarOpen).toBe(false)

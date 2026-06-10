@@ -344,7 +344,12 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
     if (parentDroppedToasted.has(currentCacheKey)) {
       return
     }
-    toast.message(translate("auto.components.github.project.ProjectViewWrapper.22df63c393", "Sub-issue data is unavailable for your token."))
+    toast.message(
+      translate(
+        'auto.components.github.project.ProjectViewWrapper.22df63c393',
+        'Sub-issue data is unavailable for your token.'
+      )
+    )
     setParentDroppedToasted((prev) => {
       const next = new Set(prev)
       next.add(currentCacheKey)
@@ -675,7 +680,10 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
                 size="icon"
                 className="h-7 w-7"
                 onClick={() => void window.api.shell.openUrl(selectedViewUrl)}
-                aria-label={translate("auto.components.github.project.ProjectViewWrapper.fd15491034", "Open view in GitHub")}
+                aria-label={translate(
+                  'auto.components.github.project.ProjectViewWrapper.fd15491034',
+                  'Open view in GitHub'
+                )}
               >
                 <ExternalLink className="size-3.5" />
               </Button>
@@ -706,8 +714,28 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
               }}
               disabled={loading}
               aria-busy={loading}
-              aria-label={loading ? translate("auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5", "Refreshing") : translate("auto.components.github.project.ProjectViewWrapper.71fb69926c", "Refresh")}
-              title={loading ? translate("auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5", "Refreshing") : translate("auto.components.github.project.ProjectViewWrapper.71fb69926c", "Refresh")}
+              aria-label={
+                loading
+                  ? translate(
+                      'auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5',
+                      'Refreshing'
+                    )
+                  : translate(
+                      'auto.components.github.project.ProjectViewWrapper.71fb69926c',
+                      'Refresh'
+                    )
+              }
+              title={
+                loading
+                  ? translate(
+                      'auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5',
+                      'Refreshing'
+                    )
+                  : translate(
+                      'auto.components.github.project.ProjectViewWrapper.71fb69926c',
+                      'Refresh'
+                    )
+              }
             >
               <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
             </Button>
@@ -732,7 +760,11 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
 
       {!activeProject ? (
         <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-          {translate("auto.components.github.project.ProjectViewWrapper.512fc171d6", "Choose a project to get started.")}</div>
+          {translate(
+            'auto.components.github.project.ProjectViewWrapper.512fc171d6',
+            'Choose a project to get started.'
+          )}
+        </div>
       ) : loading && !table ? (
         <ProjectTableSkeleton />
       ) : error ? (
@@ -809,16 +841,29 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
       >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{translate("auto.components.github.project.ProjectViewWrapper.7037c8f5f1", "Repository not in Orca")}</DialogTitle>
+            <DialogTitle>
+              {translate(
+                'auto.components.github.project.ProjectViewWrapper.7037c8f5f1',
+                'Repository not in Orca'
+              )}
+            </DialogTitle>
             <DialogDescription>
               {resolvedMissingRepoDialogs.repoNotInOrca
-                ? translate("auto.components.github.project.ProjectViewWrapper.1850fceac8", "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub.", { value0: resolvedMissingRepoDialogs.repoNotInOrca.owner, value1: resolvedMissingRepoDialogs.repoNotInOrca.repo })
+                ? translate(
+                    'auto.components.github.project.ProjectViewWrapper.1850fceac8',
+                    "{{value0}}/{{value1}} isn't added to Orca. Add it to start work, or open in GitHub.",
+                    {
+                      value0: resolvedMissingRepoDialogs.repoNotInOrca.owner,
+                      value1: resolvedMissingRepoDialogs.repoNotInOrca.repo
+                    }
+                  )
                 : null}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:justify-end">
             <Button variant="ghost" onClick={() => setRepoNotInOrca(null)}>
-              {translate("auto.components.github.project.ProjectViewWrapper.dffa899f36", "Cancel")}</Button>
+              {translate('auto.components.github.project.ProjectViewWrapper.dffa899f36', 'Cancel')}
+            </Button>
             {resolvedMissingRepoDialogs.repoNotInOrca?.url ? (
               <Button
                 variant="outline"
@@ -829,7 +874,11 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
                   setRepoNotInOrca(null)
                 }}
               >
-                {translate("auto.components.github.project.ProjectViewWrapper.23b87ba9f7", "Open in GitHub")}</Button>
+                {translate(
+                  'auto.components.github.project.ProjectViewWrapper.23b87ba9f7',
+                  'Open in GitHub'
+                )}
+              </Button>
             ) : null}
             <Button
               onClick={async () => {
@@ -842,7 +891,11 @@ export default function ProjectViewWrapper(_props: Props = {} as Props): React.J
                 await addRepoFromStore()
               }}
             >
-              {translate("auto.components.github.project.ProjectViewWrapper.840c268665", "Add repo")}</Button>
+              {translate(
+                'auto.components.github.project.ProjectViewWrapper.840c268665',
+                'Add repo'
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -937,8 +990,22 @@ function ProjectSearchInput({
             apply(value)
           }
         }}
-        placeholder={viewFilter || translate("auto.components.github.project.ProjectViewWrapper.067119985c", "GitHub search, e.g. assignee:@me is:open")}
-        title={viewFilter ? translate("auto.components.github.project.ProjectViewWrapper.c5bc7ec007", "View filter: {{value0}}", { value0: viewFilter }) : undefined}
+        placeholder={
+          viewFilter ||
+          translate(
+            'auto.components.github.project.ProjectViewWrapper.067119985c',
+            'GitHub search, e.g. assignee:@me is:open'
+          )
+        }
+        title={
+          viewFilter
+            ? translate(
+                'auto.components.github.project.ProjectViewWrapper.c5bc7ec007',
+                'View filter: {{value0}}',
+                { value0: viewFilter }
+              )
+            : undefined
+        }
         className={cn(
           'h-7 rounded-md border-border/50 bg-background pl-8 pr-7 text-[11px]',
           dirty && 'border-amber-500/50'
@@ -947,7 +1014,10 @@ function ProjectSearchInput({
       {value ? (
         <button
           type="button"
-          aria-label={translate("auto.components.github.project.ProjectViewWrapper.7245c3d7ac", "Clear search")}
+          aria-label={translate(
+            'auto.components.github.project.ProjectViewWrapper.7245c3d7ac',
+            'Clear search'
+          )}
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => {
             setValue('')
@@ -1001,7 +1071,11 @@ function ViewTabStrip({
             title={
               supported
                 ? v.name
-                : translate("auto.components.github.project.ProjectViewWrapper.2edf5e7e77", "{{value0}} — Orca doesn't support {{value1}} project views yet. File a feature request at {{value2}}.", { value0: v.name, value1: layoutLabel, value2: ORCA_FEATURE_REQUEST_URL })
+                : translate(
+                    'auto.components.github.project.ProjectViewWrapper.2edf5e7e77',
+                    "{{value0}} — Orca doesn't support {{value1}} project views yet. File a feature request at {{value2}}.",
+                    { value0: v.name, value1: layoutLabel, value2: ORCA_FEATURE_REQUEST_URL }
+                  )
             }
             className={cn(
               'inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md border-x border-t px-3 py-1.5 text-xs',
@@ -1025,7 +1099,11 @@ function ViewTabStrip({
             <HoverCardTrigger asChild>
               <span
                 tabIndex={0}
-                aria-label={translate("auto.components.github.project.ProjectViewWrapper.55de4fb57a", "{{value0}}. {{value1}} File a feature request at {{value2}}.", { value0: v.name, value1: unsupportedMessage, value2: ORCA_FEATURE_REQUEST_URL })}
+                aria-label={translate(
+                  'auto.components.github.project.ProjectViewWrapper.55de4fb57a',
+                  '{{value0}}. {{value1}} File a feature request at {{value2}}.',
+                  { value0: v.name, value1: unsupportedMessage, value2: ORCA_FEATURE_REQUEST_URL }
+                )}
                 className="inline-flex shrink-0 cursor-not-allowed rounded-t-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               >
                 {tab}
@@ -1034,14 +1112,23 @@ function ViewTabStrip({
             <HoverCardContent side="bottom" align="start" sideOffset={8} className="w-72 p-3">
               <div className="space-y-2">
                 <p className="text-xs leading-5 text-muted-foreground">
-                  {unsupportedMessage} {translate("auto.components.github.project.ProjectViewWrapper.1bf8c01c8b", "Switch to a Table view to work with this project in Orca.")}</p>
+                  {unsupportedMessage}{' '}
+                  {translate(
+                    'auto.components.github.project.ProjectViewWrapper.1bf8c01c8b',
+                    'Switch to a Table view to work with this project in Orca.'
+                  )}
+                </p>
                 <Button
                   type="button"
                   size="xs"
                   variant="outline"
                   onClick={() => void window.api.shell.openUrl(ORCA_FEATURE_REQUEST_URL)}
                 >
-                  {translate("auto.components.github.project.ProjectViewWrapper.4d2a77a119", "File feature request")}<ExternalLink className="size-3" />
+                  {translate(
+                    'auto.components.github.project.ProjectViewWrapper.4d2a77a119',
+                    'File feature request'
+                  )}
+                  <ExternalLink className="size-3" />
                 </Button>
               </div>
             </HoverCardContent>
@@ -1071,7 +1158,12 @@ function ErrorState({
           error={error as GitHubProjectViewError & { type: 'auth_required' | 'scope_missing' }}
         />
         <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
-          <ExternalLink className="mr-1 size-3.5" /> {translate("auto.components.github.project.ProjectViewWrapper.23b87ba9f7", "Open in GitHub")}</Button>
+          <ExternalLink className="mr-1 size-3.5" />{' '}
+          {translate(
+            'auto.components.github.project.ProjectViewWrapper.23b87ba9f7',
+            'Open in GitHub'
+          )}
+        </Button>
       </div>
     )
   }
@@ -1090,7 +1182,12 @@ function ErrorState({
       <div className="text-muted-foreground">{copy}</div>
       <div className="flex gap-2">
         <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
-          <ExternalLink className="mr-1 size-3.5" /> {translate("auto.components.github.project.ProjectViewWrapper.23b87ba9f7", "Open in GitHub")}</Button>
+          <ExternalLink className="mr-1 size-3.5" />{' '}
+          {translate(
+            'auto.components.github.project.ProjectViewWrapper.23b87ba9f7',
+            'Open in GitHub'
+          )}
+        </Button>
       </div>
     </div>
   )
@@ -1105,7 +1202,10 @@ function ProjectTableSkeleton(): React.JSX.Element {
   return (
     <div
       aria-busy="true"
-      aria-label={translate("auto.components.github.project.ProjectViewWrapper.463f1205c0", "Loading project view")}
+      aria-label={translate(
+        'auto.components.github.project.ProjectViewWrapper.463f1205c0',
+        'Loading project view'
+      )}
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
     >
       <div className="grid items-center gap-3 border-b border-border/60 bg-background/95 px-3 py-2">

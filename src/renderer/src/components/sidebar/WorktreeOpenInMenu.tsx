@@ -49,18 +49,41 @@ export function getWorktreeOpenInEntries(
 
 function showOpenFailureToast(reason: ShellOpenLocalPathFailureReason): void {
   if (reason === 'not-absolute') {
-    toast.error(translate("auto.components.sidebar.WorktreeOpenInMenu.f387af445b", "Workspace path is not a valid local path."))
+    toast.error(
+      translate(
+        'auto.components.sidebar.WorktreeOpenInMenu.f387af445b',
+        'Workspace path is not a valid local path.'
+      )
+    )
     return
   }
   if (reason === 'not-found') {
-    toast.error(translate("auto.components.sidebar.WorktreeOpenInMenu.3921d3d9a5", "Workspace folder was not found."), {
-      description: translate("auto.components.sidebar.WorktreeOpenInMenu.0bed8727db", "It may have been moved or deleted. Refresh workspaces or remove it from Orca.")
-    })
+    toast.error(
+      translate(
+        'auto.components.sidebar.WorktreeOpenInMenu.3921d3d9a5',
+        'Workspace folder was not found.'
+      ),
+      {
+        description: translate(
+          'auto.components.sidebar.WorktreeOpenInMenu.0bed8727db',
+          'It may have been moved or deleted. Refresh workspaces or remove it from Orca.'
+        )
+      }
+    )
     return
   }
-  toast.error(translate("auto.components.sidebar.WorktreeOpenInMenu.9a5381eb09", "Could not open workspace folder."), {
-    description: translate("auto.components.sidebar.WorktreeOpenInMenu.bd0e8159f8", "Check the editor command or file manager configuration on this machine.")
-  })
+  toast.error(
+    translate(
+      'auto.components.sidebar.WorktreeOpenInMenu.9a5381eb09',
+      'Could not open workspace folder.'
+    ),
+    {
+      description: translate(
+        'auto.components.sidebar.WorktreeOpenInMenu.bd0e8159f8',
+        'Check the editor command or file manager configuration on this machine.'
+      )
+    }
+  )
 }
 
 function stopMenuPropagation(event: React.SyntheticEvent): void {
@@ -138,7 +161,7 @@ export function WorktreeOpenInMenuItems({
           }}
           disabled={disabled}
         >
-          {entry.target === "file-manager" ? (
+          {entry.target === 'file-manager' ? (
             <FolderOpen className="size-3.5" />
           ) : entry.command ? (
             <OpenInApplicationIcon application={{ command: entry.command }} size={14} />
@@ -162,7 +185,8 @@ export function WorktreeOpenInSubMenu({
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={disabled}>
         <FolderOpen className="size-3.5" />
-        {translate("auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6", "Open in")}</DropdownMenuSubTrigger>
+        {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
+      </DropdownMenuSubTrigger>
       <DropdownMenuSubContent
         className="w-52"
         onClick={stopMenuPropagation}
@@ -179,7 +203,8 @@ export function WorktreeOpenInSubMenu({
           onSelect={openOpenInAppsSettings}
           disabled={disabled}
         >
-          {translate("auto.components.sidebar.WorktreeOpenInMenu.1417fd8380", "Customize apps...")}</DropdownMenuItem>
+          {translate('auto.components.sidebar.WorktreeOpenInMenu.1417fd8380', 'Customize apps...')}
+        </DropdownMenuItem>
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )

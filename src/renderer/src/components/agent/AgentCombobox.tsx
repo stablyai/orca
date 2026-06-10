@@ -102,7 +102,9 @@ function renderItem({
       <ContextMenuContent className="z-[70]">
         <ContextMenuItem onSelect={onSetDefault} disabled={isDefault}>
           <Star className="size-3.5" />
-          {isDefault ? translate("auto.components.agent.AgentCombobox.1b0d6965fa", "Current default") : translate("auto.components.agent.AgentCombobox.9c6b59fe58", "Set as default")}
+          {isDefault
+            ? translate('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
+            : translate('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -286,7 +288,9 @@ export default function AgentCombobox({
             ) : (
               <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
                 <Terminal className="size-3.5" />
-                <span className="truncate">{translate("auto.components.agent.AgentCombobox.986f946354", "Blank Terminal")}</span>
+                <span className="truncate">
+                  {translate('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+                </span>
               </span>
             )}
             <ChevronsUpDown className="size-3.5 opacity-50" />
@@ -307,12 +311,20 @@ export default function AgentCombobox({
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
               ref={setInputNode}
-              placeholder={translate("auto.components.agent.AgentCombobox.48c6a5a9b4", "Search agents...")}
+              placeholder={translate(
+                'auto.components.agent.AgentCombobox.48c6a5a9b4',
+                'Search agents...'
+              )}
               value={query}
               onValueChange={setQuery}
             />
             <CommandList>
-              <CommandEmpty>{translate("auto.components.agent.AgentCombobox.579c768bde", "No agents match your search.")}</CommandEmpty>
+              <CommandEmpty>
+                {translate(
+                  'auto.components.agent.AgentCombobox.579c768bde',
+                  'No agents match your search.'
+                )}
+              </CommandEmpty>
               {blankMatchesQuery
                 ? renderItem({
                     key: BLANK_VALUE,
@@ -322,7 +334,10 @@ export default function AgentCombobox({
                     onSelect: () => handleSelect(null),
                     onSetDefault: onSetDefault ? () => onSetDefault('blank') : undefined,
                     icon: <Terminal className="size-3.5" />,
-                    label: translate("auto.components.agent.AgentCombobox.986f946354", "Blank Terminal")
+                    label: translate(
+                      'auto.components.agent.AgentCombobox.986f946354',
+                      'Blank Terminal'
+                    )
                   })
                 : null}
               {filteredAgents.map((agent) =>
@@ -348,7 +363,8 @@ export default function AgentCombobox({
                   onMouseEnter={() => setCommandValue('')}
                   className="h-9 w-full justify-start rounded-none px-3 text-xs font-normal text-muted-foreground"
                 >
-                  {translate("auto.components.agent.AgentCombobox.19522e25ee", "Manage agents")}<ArrowRight className="ml-auto size-3" />
+                  {translate('auto.components.agent.AgentCombobox.19522e25ee', 'Manage agents')}
+                  <ArrowRight className="ml-auto size-3" />
                 </Button>
               </div>
             ) : null}

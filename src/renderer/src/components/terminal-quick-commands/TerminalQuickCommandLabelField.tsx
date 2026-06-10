@@ -15,11 +15,19 @@ export function TerminalQuickCommandLabelField({
 }: TerminalQuickCommandLabelFieldProps): React.JSX.Element {
   return (
     <div className="space-y-2">
-      <Label>{translate("auto.components.terminal.quick.commands.TerminalQuickCommandLabelField.db17f1e41e", "Label")}</Label>
+      <Label>
+        {translate(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandLabelField.db17f1e41e',
+          'Label'
+        )}
+      </Label>
       <Input
         value={label}
         onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
-        placeholder={translate("auto.components.terminal.quick.commands.TerminalQuickCommandLabelField.66ea254301", "Start dev server")}
+        placeholder={translate(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandLabelField.66ea254301',
+          'Start dev server'
+        )}
       />
     </div>
   )

@@ -69,7 +69,12 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim()
   const worktreePath = resolveWorktreePath(worktreeId, cwd)
   if (!worktreePath) {
-    toast.error(translate("auto.components.terminal.pane.terminal.drop.handler.ce8248b835", "Worktree path not available."))
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.ce8248b835',
+        'Worktree path not available.'
+      )
+    )
     return
   }
 
@@ -77,7 +82,11 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
     const targetShell = getTerminalTargetShellForWorktreePath(worktreePath)
     const destinationDir = joinRuntimeDropDir(worktreePath)
     const pending = toast.loading(
-      translate("auto.components.terminal.pane.terminal.drop.handler.29c031b49a", "Uploading {{value0}} file{{value1}} to runtime…", { value0: data.paths.length, value1: data.paths.length === 1 ? '' : 's' })
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
+        'Uploading {{value0}} file{{value1}} to runtime…',
+        { value0: data.paths.length, value1: data.paths.length === 1 ? '' : 's' }
+      )
     )
     try {
       const { results } = await importExternalPathsToRuntime(
@@ -117,7 +126,12 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   // silently paste local paths into a remote shell.
   const connectionId = getConnectionId(worktreeId)
   if (connectionId === undefined) {
-    toast.error(translate("auto.components.terminal.pane.terminal.drop.handler.0c77693641", "Worktree not ready — try again in a moment."))
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.0c77693641',
+        'Worktree not ready — try again in a moment.'
+      )
+    )
     return
   }
   const isRemote = connectionId !== null
@@ -139,7 +153,11 @@ export async function handleTerminalFileDrop(args: Args): Promise<void> {
   }
 
   const pending = toast.loading(
-    translate("auto.components.terminal.pane.terminal.drop.handler.29c031b49a", "Uploading {{value0}} file{{value1}} to remote…", { value0: data.paths.length, value1: data.paths.length === 1 ? '' : 's' })
+    translate(
+      'auto.components.terminal.pane.terminal.drop.handler.29c031b49a',
+      'Uploading {{value0}} file{{value1}} to remote…',
+      { value0: data.paths.length, value1: data.paths.length === 1 ? '' : 's' }
+    )
   )
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
@@ -178,13 +196,27 @@ function reportUploadSkipsAndFailures(
     const noun = skipped.length === 1 ? 'item' : 'items'
     toast.message(
       symlinkCount === skipped.length
-        ? translate("auto.components.terminal.pane.terminal.drop.handler.53f015fd85", "Skipped {{value0}} symlink{{value1}}.", { value0: skipped.length, value1: skipped.length === 1 ? '' : 's' })
-        : translate("auto.components.terminal.pane.terminal.drop.handler.53f015fd85", "Skipped {{value0}} {{value1}}.", { value0: skipped.length, value1: noun })
+        ? translate(
+            'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
+            'Skipped {{value0}} symlink{{value1}}.',
+            { value0: skipped.length, value1: skipped.length === 1 ? '' : 's' }
+          )
+        : translate(
+            'auto.components.terminal.pane.terminal.drop.handler.53f015fd85',
+            'Skipped {{value0}} {{value1}}.',
+            { value0: skipped.length, value1: noun }
+          )
     )
   }
   if (failed.length > 0) {
     const noun = failed.length === 1 ? 'file' : 'files'
-    toast.error(translate("auto.components.terminal.pane.terminal.drop.handler.1e072f611e", "Failed to upload {{value0}} {{value1}}.", { value0: failed.length, value1: noun }))
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.terminal.drop.handler.1e072f611e',
+        'Failed to upload {{value0}} {{value1}}.',
+        { value0: failed.length, value1: noun }
+      )
+    )
   }
 }
 

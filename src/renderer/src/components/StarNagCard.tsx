@@ -101,25 +101,39 @@ export function StarNagCard(): React.JSX.Element | null {
             <div className="flex items-center gap-2">
               <Star className="size-4 fill-amber-400/60 text-amber-400/80" />
               <h3 id="star-nag-heading" className="text-sm font-semibold">
-                {translate("auto.components.StarNagCard.5f6df21046", "Enjoying Orca?")}</h3>
+                {translate('auto.components.StarNagCard.5f6df21046', 'Enjoying Orca?')}
+              </h3>
             </div>
             <Button
               variant="ghost"
               size="icon"
               className="size-7 shrink-0"
               onClick={handleClose}
-              aria-label={translate("auto.components.StarNagCard.b5e685e4d9", "Dismiss")}
+              aria-label={translate('auto.components.StarNagCard.b5e685e4d9', 'Dismiss')}
             >
               <X className="size-3.5" />
             </Button>
           </div>
 
           <p className="text-sm text-muted-foreground">
-            {translate("auto.components.StarNagCard.30c36231c1", "If Orca has saved you time, a GitHub star goes a long way. It helps other developers discover the project and keeps the team motivated to ship improvements.")}</p>
+            {translate(
+              'auto.components.StarNagCard.30c36231c1',
+              'If Orca has saved you time, a GitHub star goes a long way. It helps other developers discover the project and keeps the team motivated to ship improvements.'
+            )}
+          </p>
 
           {error ? (
             <p className="text-xs text-destructive">
-              {translate("auto.components.StarNagCard.cf82170065", "Could not star the repo. Make sure")}<code>{translate("auto.components.StarNagCard.cd8c34aac1", "gh")}</code> {translate("auto.components.StarNagCard.92b0f9d921", "is authenticated and try again.")}</p>
+              {translate(
+                'auto.components.StarNagCard.cf82170065',
+                'Could not star the repo. Make sure'
+              )}
+              <code>{translate('auto.components.StarNagCard.cd8c34aac1', 'gh')}</code>{' '}
+              {translate(
+                'auto.components.StarNagCard.92b0f9d921',
+                'is authenticated and try again.'
+              )}
+            </p>
           ) : null}
 
           <Button
@@ -130,7 +144,9 @@ export function StarNagCard(): React.JSX.Element | null {
             className="mt-0.5 w-full gap-1.5"
           >
             <Star className="size-3.5" />
-            {busy ? translate("auto.components.StarNagCard.af3c9bbb37", "Starring…") : translate("auto.components.StarNagCard.2d67b6c849", "Star on GitHub")}
+            {busy
+              ? translate('auto.components.StarNagCard.af3c9bbb37', 'Starring…')
+              : translate('auto.components.StarNagCard.2d67b6c849', 'Star on GitHub')}
           </Button>
         </div>
       </Card>

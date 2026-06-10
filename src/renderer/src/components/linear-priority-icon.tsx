@@ -53,7 +53,10 @@ export function LinearPriorityIcon({
         title={label}
       >
         <span aria-hidden="true">!</span>
-        <span className="sr-only">{translate("auto.components.linear.priority.icon.c43d3e065b", "Priority:")}{label}</span>
+        <span className="sr-only">
+          {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')}
+          {label}
+        </span>
       </span>
     )
   }
@@ -68,7 +71,10 @@ export function LinearPriorityIcon({
           aria-hidden="true"
           className="size-3 rounded-full border border-muted-foreground/55"
         />
-        <span className="sr-only">{translate("auto.components.linear.priority.icon.c43d3e065b", "Priority:")}{label}</span>
+        <span className="sr-only">
+          {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')}
+          {label}
+        </span>
       </span>
     )
   }
@@ -103,7 +109,10 @@ export function LinearPriorityIcon({
           )
         })}
       </svg>
-      <span className="sr-only">{translate("auto.components.linear.priority.icon.c43d3e065b", "Priority:")}{label}</span>
+      <span className="sr-only">
+        {translate('auto.components.linear.priority.icon.c43d3e065b', 'Priority:')}
+        {label}
+      </span>
     </span>
   )
 }

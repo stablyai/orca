@@ -46,7 +46,7 @@ function WorkspaceKanbanCard({
         <Badge
           variant="outline"
           className="pointer-events-none absolute right-2 top-1.5 z-10 flex size-4 items-center justify-center rounded-full bg-background/90 p-0 text-muted-foreground"
-          aria-label={translate("auto.components.sidebar.WorkspaceKanbanCard.cefae8983e", "Pinned")}
+          aria-label={translate('auto.components.sidebar.WorkspaceKanbanCard.cefae8983e', 'Pinned')}
         >
           <Pin className="size-2.5" />
         </Badge>

@@ -26,7 +26,11 @@ export function DeleteWorktreeDirtyChangeHint({
         </div>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate("auto.components.sidebar.DeleteWorktreeDirtyChangeHint.8e2994ce28", "Deleting this workspace permanently removes these changes from disk.")}</TooltipContent>
+        {translate(
+          'auto.components.sidebar.DeleteWorktreeDirtyChangeHint.8e2994ce28',
+          'Deleting this workspace permanently removes these changes from disk.'
+        )}
+      </TooltipContent>
     </Tooltip>
   )
 }

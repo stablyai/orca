@@ -320,10 +320,18 @@ export function OrchestrationPage(props: {
           <span
             className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-1.5 text-muted-foreground"
             style={{ height: 18, fontSize: 10, fontWeight: 500 }}
-            aria-label={translate("auto.components.feature.wall.agents.orchestration.OrchestrationPage.862605d066", "2 child workspaces")}
+            aria-label={translate(
+              'auto.components.feature.wall.agents.orchestration.OrchestrationPage.862605d066',
+              '2 child workspaces'
+            )}
           >
             <Workflow className="size-2.5" aria-hidden />
-            <span className="truncate">{translate("auto.components.feature.wall.agents.orchestration.OrchestrationPage.30b509a467", "2 children")}</span>
+            <span className="truncate">
+              {translate(
+                'auto.components.feature.wall.agents.orchestration.OrchestrationPage.30b509a467',
+                '2 children'
+              )}
+            </span>
             <ChevronDown className="size-2.5" aria-hidden />
           </span>
         </div>

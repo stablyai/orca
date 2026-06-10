@@ -64,23 +64,32 @@ export function showTerminalShortcutCaptureNotification({
   )
   // Why: this toast stays up longer than normal, so keep it compact while still
   // exposing the captured shortcut and the edit path.
-  toast.message(translate("auto.lib.terminal.shortcut.capture.notification.141ad6c004", "Terminal shortcut handled"), {
-    description: `${definition.title} (${bindingLabel})`,
-    // Why: this is the user's one-time rebind path for a captured shortcut; it
-    // needs enough reading time without becoming persistent chrome.
-    duration: NOTICE_DURATION_MS,
-    dismissible: true,
-    className: '!w-[420px] !max-w-[calc(100vw-2rem)] !gap-2 !py-2 !pl-3 !pr-2',
-    classNames: {
-      content: 'min-w-0 flex-1 !gap-0.5',
-      title: 'truncate !leading-5',
-      description: 'truncate !leading-4',
-      actionButton: '!h-7 !shrink-0 !rounded-md !px-2.5'
-    },
-    icon: <Keyboard className="size-4 text-muted-foreground" />,
-    action: {
-      label: translate("auto.lib.terminal.shortcut.capture.notification.b0536028c9", "Open Shortcuts"),
-      onClick: openShortcutSettings
+  toast.message(
+    translate(
+      'auto.lib.terminal.shortcut.capture.notification.141ad6c004',
+      'Terminal shortcut handled'
+    ),
+    {
+      description: `${definition.title} (${bindingLabel})`,
+      // Why: this is the user's one-time rebind path for a captured shortcut; it
+      // needs enough reading time without becoming persistent chrome.
+      duration: NOTICE_DURATION_MS,
+      dismissible: true,
+      className: '!w-[420px] !max-w-[calc(100vw-2rem)] !gap-2 !py-2 !pl-3 !pr-2',
+      classNames: {
+        content: 'min-w-0 flex-1 !gap-0.5',
+        title: 'truncate !leading-5',
+        description: 'truncate !leading-4',
+        actionButton: '!h-7 !shrink-0 !rounded-md !px-2.5'
+      },
+      icon: <Keyboard className="size-4 text-muted-foreground" />,
+      action: {
+        label: translate(
+          'auto.lib.terminal.shortcut.capture.notification.b0536028c9',
+          'Open Shortcuts'
+        ),
+        onClick: openShortcutSettings
+      }
     }
-  })
+  )
 }

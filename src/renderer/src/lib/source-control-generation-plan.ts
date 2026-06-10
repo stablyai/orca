@@ -60,7 +60,13 @@ export function planSourceControlTextGeneration(
         )
       : SYNTHETIC_BASE_PROMPTS[actionId]
   if (!prompt.trim()) {
-    return { ok: false, error: translate("auto.lib.source.control.generation.plan.dc480d5897", "Command input is empty.") }
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.source.control.generation.plan.dc480d5897',
+        'Command input is empty.'
+      )
+    }
   }
   const planned = planCommitMessageGeneration(params, prompt)
   if (!planned.ok) {

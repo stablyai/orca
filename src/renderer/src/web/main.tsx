@@ -58,7 +58,10 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
     boundaryId="web.root"
     surface="web-root"
     title={translate('app.recoverableError.webTitle', 'Orca web hit a renderer error.')}
-    description={translate('app.recoverableError.webDescription', 'Retry the web client or reconnect to the paired runtime.')}
+    description={translate(
+      'app.recoverableError.webDescription',
+      'Retry the web client or reconnect to the paired runtime.'
+    )}
   >
     <WebRoot />
   </RecoverableRenderErrorBoundary>

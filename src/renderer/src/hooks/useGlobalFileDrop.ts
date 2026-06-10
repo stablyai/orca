@@ -41,7 +41,12 @@ export function useGlobalFileDrop(): void {
       const runtimeEnvironmentId = dropSettings?.activeRuntimeEnvironmentId?.trim() || undefined
       if (shouldUploadRemoteEditorFileDrop(dropSettings, connectionId)) {
         if (!worktreePath) {
-          toast.error(translate("auto.hooks.useGlobalFileDrop.245faa95b9", "No remote workspace path is available for dropped files."))
+          toast.error(
+            translate(
+              'auto.hooks.useGlobalFileDrop.245faa95b9',
+              'No remote workspace path is available for dropped files.'
+            )
+          )
           return
         }
         void (async () => {
@@ -80,10 +85,20 @@ export function useGlobalFileDrop(): void {
               )
             }
             if (results.some((result) => result.status !== 'imported')) {
-              toast.error(translate("auto.hooks.useGlobalFileDrop.d720e2f855", "Some dropped files could not be uploaded."))
+              toast.error(
+                translate(
+                  'auto.hooks.useGlobalFileDrop.d720e2f855',
+                  'Some dropped files could not be uploaded.'
+                )
+              )
             }
           } catch {
-            toast.error(translate("auto.hooks.useGlobalFileDrop.38c9f034ff", "Failed to upload dropped files."))
+            toast.error(
+              translate(
+                'auto.hooks.useGlobalFileDrop.38c9f034ff',
+                'Failed to upload dropped files.'
+              )
+            )
           }
         })()
         return

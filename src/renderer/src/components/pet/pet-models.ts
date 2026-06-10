@@ -21,17 +21,17 @@ export type BundledPet = {
 export const BUNDLED_PETS: readonly BundledPet[] = [
   {
     id: DEFAULT_PET_ID,
-    label: translate("auto.components.pet.pet.models.2528586aa7", "Claudino"),
+    label: translate('auto.components.pet.pet.models.2528586aa7', 'Claudino'),
     url: claudeUrl
   },
   {
     id: OPENCODE_PET_ID,
-    label: translate("auto.components.pet.pet.models.a84d5677ff", "OpenCode"),
+    label: translate('auto.components.pet.pet.models.a84d5677ff', 'OpenCode'),
     url: opencodeUrl
   },
   {
     id: GREMLIN_PET_ID,
-    label: translate("auto.components.pet.pet.models.7433516faf", "Gremlin"),
+    label: translate('auto.components.pet.pet.models.7433516faf', 'Gremlin'),
     url: gremlinUrl
   }
 ] as const

@@ -189,7 +189,14 @@ export function WorktreeTitleInlineRename({
       }
     } catch (err) {
       if (mountedRef.current) {
-        toast.error(err instanceof Error ? err.message : translate("auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d", "Failed to rename workspace."))
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.sidebar.WorktreeTitleInlineRename.8df295a78d',
+                'Failed to rename workspace.'
+              )
+        )
       }
     } finally {
       savingRef.current = false
@@ -237,7 +244,10 @@ export function WorktreeTitleInlineRename({
           value={value}
           style={{ font: 'inherit' }}
           disabled={saving}
-          aria-label={translate("auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c", "Rename workspace")}
+          aria-label={translate(
+            'auto.components.sidebar.WorktreeTitleInlineRename.bff3bdd00c',
+            'Rename workspace'
+          )}
           data-worktree-title-rename-input="true"
           onChange={(event) => setValue(event.target.value)}
           onBlur={() => void commitRename()}
@@ -273,7 +283,11 @@ export function WorktreeTitleInlineRename({
       tabIndex={disabled ? undefined : 0}
     >
       {/* Why: visible text alone misses the unread state for assistive tech. */}
-      {showUnreadEmphasis && <span className="sr-only">{translate("auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f", "Unread:")}</span>}
+      {showUnreadEmphasis && (
+        <span className="sr-only">
+          {translate('auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f', 'Unread:')}
+        </span>
+      )}
       {displayName}
     </span>
   )

@@ -35,7 +35,8 @@ export function useContextualCopySetup() {
       className="pointer-events-none fixed z-50 rounded-md bg-foreground px-2 py-1 text-xs text-background shadow-sm"
       style={{ left: copyToast.left, top: copyToast.top }}
     >
-      {translate("auto.components.editor.useContextualCopySetup.059bfb0d94", "Context copied")}</div>
+      {translate('auto.components.editor.useContextualCopySetup.059bfb0d94', 'Context copied')}
+    </div>
   ) : null
 
   return { setupCopy, toastNode }

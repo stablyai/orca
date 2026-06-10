@@ -66,22 +66,46 @@ export function AutoRenameFailedDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertCircle className="size-4 shrink-0" />
-            {translate("auto.components.sidebar.AutoRenameFailedDialog.ca3b225195", "Branch auto-name failed")}</DialogTitle>
+            {translate(
+              'auto.components.sidebar.AutoRenameFailedDialog.ca3b225195',
+              'Branch auto-name failed'
+            )}
+          </DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          {translate("auto.components.sidebar.AutoRenameFailedDialog.ff62a18580", "Orca couldn't generate a branch name for")}{' '}
-          <span className="font-medium text-foreground">{worktreeName}</span> {translate("auto.components.sidebar.AutoRenameFailedDialog.3afcad0497", "from the first agent message.")}</p>
+          {translate(
+            'auto.components.sidebar.AutoRenameFailedDialog.ff62a18580',
+            "Orca couldn't generate a branch name for"
+          )}{' '}
+          <span className="font-medium text-foreground">{worktreeName}</span>{' '}
+          {translate(
+            'auto.components.sidebar.AutoRenameFailedDialog.3afcad0497',
+            'from the first agent message.'
+          )}
+        </p>
         {/* Why: agent-CLI output is literal and often multi-line, so render it
             verbatim (mono, wrapped) inside a height-capped scroll region. */}
         <div className="space-y-1.5">
-          <p className="text-xs font-medium text-foreground">{translate("auto.components.sidebar.AutoRenameFailedDialog.74fc00776f", "Error details")}</p>
+          <p className="text-xs font-medium text-foreground">
+            {translate(
+              'auto.components.sidebar.AutoRenameFailedDialog.74fc00776f',
+              'Error details'
+            )}
+          </p>
           <div className="relative">
             <Button
               type="button"
               variant="ghost"
               size="icon-xs"
               onClick={handleCopy}
-              aria-label={copied ? translate("auto.components.sidebar.AutoRenameFailedDialog.a23b22d16f", "Copied") : translate("auto.components.sidebar.AutoRenameFailedDialog.eab8b45238", "Copy error")}
+              aria-label={
+                copied
+                  ? translate('auto.components.sidebar.AutoRenameFailedDialog.a23b22d16f', 'Copied')
+                  : translate(
+                      'auto.components.sidebar.AutoRenameFailedDialog.eab8b45238',
+                      'Copy error'
+                    )
+              }
               // Why: float over the scroll region's top-right; pad the text so
               // long lines never slide under the button.
               className="absolute right-1.5 top-1.5 text-muted-foreground hover:text-foreground"
@@ -97,7 +121,8 @@ export function AutoRenameFailedDialog({
           {/* Why: Close backs the user out, so it stays quiet (outline, not a
               solid CTA) — matching the sibling SshDisconnectedDialog. */}
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-            {translate("auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e", "Close")}</Button>
+            {translate('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

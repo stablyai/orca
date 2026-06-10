@@ -74,7 +74,11 @@ export default function CodexRestartChip({
     <div className="pointer-events-none absolute right-3 top-3 z-20">
       <div className="pointer-events-auto flex items-center gap-2 rounded-lg border border-border/80 bg-popover/95 px-2 py-1.5 shadow-lg backdrop-blur-sm">
         <span className="text-[11px] text-muted-foreground">
-          {translate("auto.components.CodexRestartChip.9263e75f49", "Codex is using the previous account")}</span>
+          {translate(
+            'auto.components.CodexRestartChip.9263e75f49',
+            'Codex is using the previous account'
+          )}
+        </span>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -82,13 +86,15 @@ export default function CodexRestartChip({
             className="inline-flex items-center gap-1.5 rounded-md bg-foreground px-2 py-1 text-[11px] font-medium text-background transition-colors hover:opacity-90"
           >
             <RefreshCw className="size-3" />
-            {translate("auto.components.CodexRestartChip.c72a5fb234", "Restart")}</button>
+            {translate('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
+          </button>
           <button
             type="button"
             onClick={() => dismissStaleWorktreePtyIds(staleWorktreePtyIds, clearCodexRestartNotice)}
             className="rounded-md px-1.5 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
           >
-            {translate("auto.components.CodexRestartChip.9132779820", "Dismiss")}</button>
+            {translate('auto.components.CodexRestartChip.9132779820', 'Dismiss')}
+          </button>
         </div>
       </div>
     </div>

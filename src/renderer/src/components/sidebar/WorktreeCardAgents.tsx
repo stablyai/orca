@@ -394,7 +394,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         onMouseDown={stopBubble}
         onPointerDown={stopBubble}
         role={hasLineage ? 'tree' : 'group'}
-        aria-label={translate("auto.components.sidebar.WorktreeCardAgents.1b0a156717", "Agents")}
+        aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
         data-compact-agent-list="true"
       >
         {agents.length === 0 ? null : shouldUseSummaryRow ? (
@@ -436,7 +436,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       onMouseDown={stopBubble}
       onPointerDown={stopBubble}
       role={hasLineage ? 'tree' : 'group'}
-      aria-label={translate("auto.components.sidebar.WorktreeCardAgents.1b0a156717", "Agents")}
+      aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
     >
       {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
     </div>

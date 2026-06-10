@@ -53,7 +53,12 @@ export function useCreateRepo(
     if (useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim()) {
       // Why: the native folder picker returns a client-local path. Runtime
       // project creation needs an explicit server parent path.
-      toast.error(translate("auto.components.sidebar.AddRepoCreateStep.875dda0995", "Enter a server parent path."))
+      toast.error(
+        translate(
+          'auto.components.sidebar.AddRepoCreateStep.875dda0995',
+          'Enter a server parent path.'
+        )
+      )
       return
     }
     const gen = createGenRef.current
@@ -119,13 +124,22 @@ export function useCreateRepo(
         useAppStore.setState({ repos: updated })
       }
       if (wasDeduped) {
-        toast.info(translate("auto.components.sidebar.AddRepoCreateStep.2c12db1511", "Project already added"), {
-          description: repo.displayName
-        })
+        toast.info(
+          translate(
+            'auto.components.sidebar.AddRepoCreateStep.2c12db1511',
+            'Project already added'
+          ),
+          {
+            description: repo.displayName
+          }
+        )
       } else {
-        toast.success(translate("auto.components.sidebar.AddRepoCreateStep.5e97f0c4b9", "Project created"), {
-          description: repo.displayName
-        })
+        toast.success(
+          translate('auto.components.sidebar.AddRepoCreateStep.5e97f0c4b9', 'Project created'),
+          {
+            description: repo.displayName
+          }
+        )
       }
       if (isGitRepoKind(repo)) {
         // Why: Git repos use the shared default-checkout completion path.
@@ -336,9 +350,15 @@ export function CreateStep({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{translate("auto.components.sidebar.AddRepoCreateStep.db9be12229", "Start a new project")}</DialogTitle>
+        <DialogTitle>
+          {translate('auto.components.sidebar.AddRepoCreateStep.db9be12229', 'Start a new project')}
+        </DialogTitle>
         <DialogDescription>
-          {translate("auto.components.sidebar.AddRepoCreateStep.d877ece0d6", "Create a Git repository or a plain folder and open it in Orca.")}</DialogDescription>
+          {translate(
+            'auto.components.sidebar.AddRepoCreateStep.d877ece0d6',
+            'Create a Git repository or a plain folder and open it in Orca.'
+          )}
+        </DialogDescription>
       </DialogHeader>
 
       {/* Why: DialogContent is a CSS grid; grid items default to min-width:auto
@@ -350,7 +370,10 @@ export function CreateStep({
         <div
           ref={setRadioGroupNode}
           role="radiogroup"
-          aria-label={translate("auto.components.sidebar.AddRepoCreateStep.180e9b5e48", "Project kind")}
+          aria-label={translate(
+            'auto.components.sidebar.AddRepoCreateStep.180e9b5e48',
+            'Project kind'
+          )}
           className="grid grid-cols-2 gap-2"
         >
           <KindCard
@@ -360,7 +383,10 @@ export function CreateStep({
             onSelect={() => onKindChange('git')}
             onArrowNav={cycleKind}
             icon={<GitBranch className="size-4" />}
-            title={translate("auto.components.sidebar.AddRepoCreateStep.11fd2a7db8", "Git repository")}
+            title={translate(
+              'auto.components.sidebar.AddRepoCreateStep.11fd2a7db8',
+              'Git repository'
+            )}
             caption="Initializes an empty Git repo"
           />
           <KindCard
@@ -370,7 +396,7 @@ export function CreateStep({
             onSelect={() => onKindChange('folder')}
             onArrowNav={cycleKind}
             icon={<Folder className="size-4" />}
-            title={translate("auto.components.sidebar.AddRepoCreateStep.038729c107", "Folder")}
+            title={translate('auto.components.sidebar.AddRepoCreateStep.038729c107', 'Folder')}
             caption="Create a new folder"
           />
         </div>
@@ -381,12 +407,16 @@ export function CreateStep({
             htmlFor="create-project-name"
             className="text-[11px] font-medium text-muted-foreground block"
           >
-            {translate("auto.components.sidebar.AddRepoCreateStep.a8149a3a5a", "Name")}</label>
+            {translate('auto.components.sidebar.AddRepoCreateStep.a8149a3a5a', 'Name')}
+          </label>
           <Input
             id="create-project-name"
             value={createName}
             onChange={(e) => onNameChange(e.target.value)}
-            placeholder={translate("auto.components.sidebar.AddRepoCreateStep.0ae45b8238", "my-project")}
+            placeholder={translate(
+              'auto.components.sidebar.AddRepoCreateStep.0ae45b8238',
+              'my-project'
+            )}
             className="h-11 text-sm font-mono"
             disabled={isCreating}
             autoFocus
@@ -413,7 +443,9 @@ export function CreateStep({
         )}
 
         <Button onClick={onCreate} disabled={!canSubmit} size="lg" className="w-full">
-          {isCreating ? translate("auto.components.sidebar.AddRepoCreateStep.85085d74d2", "Creating…") : translate("auto.components.sidebar.AddRepoCreateStep.45b7c26034", "Create project")}
+          {isCreating
+            ? translate('auto.components.sidebar.AddRepoCreateStep.85085d74d2', 'Creating…')
+            : translate('auto.components.sidebar.AddRepoCreateStep.45b7c26034', 'Create project')}
         </Button>
       </div>
     </>

@@ -25,9 +25,17 @@ export function TerminalQuickCommandActionToggle({
       variant="outline"
     >
       <ToggleGroupItem value="terminal-command" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
-        {translate("auto.components.terminal.quick.commands.TerminalQuickCommandActionToggle.b5ea4d64f6", "Terminal Command")}</ToggleGroupItem>
+        {translate(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandActionToggle.b5ea4d64f6',
+          'Terminal Command'
+        )}
+      </ToggleGroupItem>
       <ToggleGroupItem value="agent-prompt" className={QUICK_COMMAND_TOGGLE_ITEM_CLASS}>
-        {translate("auto.components.terminal.quick.commands.TerminalQuickCommandActionToggle.b0d58e37ed", "Agent Prompt")}</ToggleGroupItem>
+        {translate(
+          'auto.components.terminal.quick.commands.TerminalQuickCommandActionToggle.b0d58e37ed',
+          'Agent Prompt'
+        )}
+      </ToggleGroupItem>
     </ToggleGroup>
   )
 }

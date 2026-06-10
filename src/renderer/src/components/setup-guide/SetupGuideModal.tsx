@@ -124,7 +124,10 @@ export default function SetupGuideModal(): JSX.Element | null {
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={translate("auto.components.setup.guide.SetupGuideModal.f3b5ffb2a6", "Hide checklist from sidebar")}
+              aria-label={translate(
+                'auto.components.setup.guide.SetupGuideModal.f3b5ffb2a6',
+                'Hide checklist from sidebar'
+              )}
               onClick={handleHideFromSidebar}
               className="absolute right-10 top-3.5 text-muted-foreground"
             >
@@ -132,11 +135,20 @@ export default function SetupGuideModal(): JSX.Element | null {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate("auto.components.setup.guide.SetupGuideModal.28cf59fcb4", "This will hide the checklist from the sidebar")}</TooltipContent>
+            {translate(
+              'auto.components.setup.guide.SetupGuideModal.28cf59fcb4',
+              'This will hide the checklist from the sidebar'
+            )}
+          </TooltipContent>
         </Tooltip>
         <DialogHeader className="gap-1 border-b border-border px-7 py-4">
           <div className="flex items-center gap-2">
-            <DialogTitle className="text-lg">{translate("auto.components.setup.guide.SetupGuideModal.48a9e5ef2d", "Getting started")}</DialogTitle>
+            <DialogTitle className="text-lg">
+              {translate(
+                'auto.components.setup.guide.SetupGuideModal.48a9e5ef2d',
+                'Getting started'
+              )}
+            </DialogTitle>
             <SetupGuideProgressRing
               done={progress.coreDoneCount}
               total={progress.coreTotal}
@@ -145,7 +157,11 @@ export default function SetupGuideModal(): JSX.Element | null {
             />
           </div>
           <DialogDescription className="text-sm text-muted-foreground">
-            {translate("auto.components.setup.guide.SetupGuideModal.3598a3ca0c", "Finish the core workflows that make Orca useful for parallel agent work.")}</DialogDescription>
+            {translate(
+              'auto.components.setup.guide.SetupGuideModal.3598a3ca0c',
+              'Finish the core workflows that make Orca useful for parallel agent work.'
+            )}
+          </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 overflow-hidden px-7 py-6">
           <FeatureWallSetupChecklist

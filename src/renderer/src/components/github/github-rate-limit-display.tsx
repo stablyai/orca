@@ -18,9 +18,30 @@ type BucketMeta = {
 }
 
 const BUCKETS: BucketMeta[] = [
-  { key: 'core', label: translate("auto.components.github.github.rate.limit.display.bb227706a6", "REST"), description: translate("auto.components.github.github.rate.limit.display.c392c749a6", "REST API") },
-  { key: 'search', label: translate("auto.components.github.github.rate.limit.display.c377a4f06a", "Search"), description: translate("auto.components.github.github.rate.limit.display.1f2f28a4de", "Search API") },
-  { key: 'graphql', label: translate("auto.components.github.github.rate.limit.display.1daf0f22a9", "GraphQL"), description: translate("auto.components.github.github.rate.limit.display.01f7323e58", "GraphQL API") }
+  {
+    key: 'core',
+    label: translate('auto.components.github.github.rate.limit.display.bb227706a6', 'REST'),
+    description: translate(
+      'auto.components.github.github.rate.limit.display.c392c749a6',
+      'REST API'
+    )
+  },
+  {
+    key: 'search',
+    label: translate('auto.components.github.github.rate.limit.display.c377a4f06a', 'Search'),
+    description: translate(
+      'auto.components.github.github.rate.limit.display.1f2f28a4de',
+      'Search API'
+    )
+  },
+  {
+    key: 'graphql',
+    label: translate('auto.components.github.github.rate.limit.display.1daf0f22a9', 'GraphQL'),
+    description: translate(
+      'auto.components.github.github.rate.limit.display.01f7323e58',
+      'GraphQL API'
+    )
+  }
 ]
 
 export function formatGitHubRateLimitReset(resetAt: number): string {
@@ -127,7 +148,14 @@ function GitHubRateLimitRows({
                 tone === 'warn' && 'text-amber-700 dark:text-amber-300'
               )}
             >
-              {v.remaining} {translate("auto.components.github.github.rate.limit.display.f42790d150", "of")}{v.limit} {translate("auto.components.github.github.rate.limit.display.6da1858354", "left · resets in")}{formatGitHubRateLimitReset(v.resetAt)}
+              {v.remaining}{' '}
+              {translate('auto.components.github.github.rate.limit.display.f42790d150', 'of')}
+              {v.limit}{' '}
+              {translate(
+                'auto.components.github.github.rate.limit.display.6da1858354',
+                'left · resets in'
+              )}
+              {formatGitHubRateLimitReset(v.resetAt)}
             </span>
           </div>
         )
@@ -145,26 +173,47 @@ export function GitHubRateLimitPanel({ className }: { className?: string }): Rea
         <div className="space-y-0.5">
           <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
             <Gauge className="size-4" />
-            {translate("auto.components.github.github.rate.limit.display.58c5f88216", "GitHub API Budget")}</div>
+            {translate(
+              'auto.components.github.github.rate.limit.display.58c5f88216',
+              'GitHub API Budget'
+            )}
+          </div>
           <p className="text-xs text-muted-foreground">
-            {translate("auto.components.github.github.rate.limit.display.d5e5de9070", "Orca uses REST, Search, and GraphQL through the GitHub CLI.")}</p>
+            {translate(
+              'auto.components.github.github.rate.limit.display.d5e5de9070',
+              'Orca uses REST, Search, and GraphQL through the GitHub CLI.'
+            )}
+          </p>
         </div>
         <button
           type="button"
           onClick={() => void refresh(true)}
           disabled={isFetching}
           className="inline-flex size-7 items-center justify-center rounded-md border border-border bg-secondary text-secondary-foreground transition hover:bg-accent disabled:opacity-50"
-          aria-label={translate("auto.components.github.github.rate.limit.display.d12d3d6f33", "Refresh GitHub API budget")}
+          aria-label={translate(
+            'auto.components.github.github.rate.limit.display.d12d3d6f33',
+            'Refresh GitHub API budget'
+          )}
         >
           <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
         </button>
       </div>
       {hasError ? (
-        <div className="text-xs text-muted-foreground">{translate("auto.components.github.github.rate.limit.display.34973d4695", "GitHub API budget is unavailable.")}</div>
+        <div className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.github.github.rate.limit.display.34973d4695',
+            'GitHub API budget is unavailable.'
+          )}
+        </div>
       ) : snapshot ? (
         <GitHubRateLimitRows snapshot={snapshot} />
       ) : (
-        <div className="text-xs text-muted-foreground">{translate("auto.components.github.github.rate.limit.display.5509443543", "Loading GitHub API budget…")}</div>
+        <div className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.github.github.rate.limit.display.5509443543',
+            'Loading GitHub API budget…'
+          )}
+        </div>
       )}
     </div>
   )

@@ -44,8 +44,14 @@ export const ShareUsageCard = forwardRef<HTMLDivElement, ShareUsageCardProps>(
 
     const turnsOrEvents =
       provider === 'claude'
-        ? { label: translate("auto.components.stats.ShareUsageCard.6adac63cfe", "turns"), count: (summary as ClaudeUsageSummary).turns }
-        : { label: translate("auto.components.stats.ShareUsageCard.960324e9b8", "events"), count: (summary as CodexUsageSummary).events }
+        ? {
+            label: translate('auto.components.stats.ShareUsageCard.6adac63cfe', 'turns'),
+            count: (summary as ClaudeUsageSummary).turns
+          }
+        : {
+            label: translate('auto.components.stats.ShareUsageCard.960324e9b8', 'events'),
+            count: (summary as CodexUsageSummary).events
+          }
 
     const providerLabel = provider === 'claude' ? 'Claude' : 'Codex'
 
@@ -106,9 +112,12 @@ function CardHeader(props: { providerLabel: string; range: string }): React.JSX.
         </div>
         <div style={{ display: 'inline-block', verticalAlign: 'middle', marginLeft: 10 }}>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#fafafa', lineHeight: 1.2 }}>
-            {translate("auto.components.stats.ShareUsageCard.0eb31e79ee", "Orca IDE")}</div>
+            {translate('auto.components.stats.ShareUsageCard.0eb31e79ee', 'Orca IDE')}
+          </div>
           <div style={{ fontSize: 10, color: '#555', letterSpacing: 0.3 }}>
-            {props.providerLabel} {translate("auto.components.stats.ShareUsageCard.da62578d9d", "Usage")}</div>
+            {props.providerLabel}{' '}
+            {translate('auto.components.stats.ShareUsageCard.da62578d9d', 'Usage')}
+          </div>
         </div>
       </div>
       <div style={{ display: 'table-cell', verticalAlign: 'middle', textAlign: 'right' }}>
@@ -138,7 +147,7 @@ function StatsGrid(props: {
   const cards = [
     {
       value: formatCost(props.summary.estimatedCostUsd ?? null),
-      label: translate("auto.components.stats.ShareUsageCard.beb6f24f37", "Est. cost"),
+      label: translate('auto.components.stats.ShareUsageCard.beb6f24f37', 'Est. cost'),
       bg: 'rgba(20, 71, 230, 0.1)',
       border: '1px solid rgba(20, 71, 230, 0.2)',
       valueColor: '#93b4ff',
@@ -146,7 +155,7 @@ function StatsGrid(props: {
     },
     {
       value: formatTokens(props.totalTokens),
-      label: translate("auto.components.stats.ShareUsageCard.2d9eb39264", "Total tokens"),
+      label: translate('auto.components.stats.ShareUsageCard.2d9eb39264', 'Total tokens'),
       bg: 'rgba(255, 255, 255, 0.04)',
       border: '1px solid rgba(255, 255, 255, 0.06)',
       valueColor: '#fafafa',
@@ -154,7 +163,7 @@ function StatsGrid(props: {
     },
     {
       value: props.topModel,
-      label: translate("auto.components.stats.ShareUsageCard.b760c0b622", "Top model"),
+      label: translate('auto.components.stats.ShareUsageCard.b760c0b622', 'Top model'),
       bg: 'rgba(255, 255, 255, 0.04)',
       border: '1px solid rgba(255, 255, 255, 0.06)',
       valueColor: '#fafafa',
@@ -218,11 +227,14 @@ function ChartHeader(props: {
             textTransform: 'uppercase' as const
           }}
         >
-          {translate("auto.components.stats.ShareUsageCard.66c83284cf", "Daily tokens")}</span>
+          {translate('auto.components.stats.ShareUsageCard.66c83284cf', 'Daily tokens')}
+        </span>
       </div>
       <div style={{ display: 'table-cell', verticalAlign: 'bottom', textAlign: 'right' }}>
         <span style={{ fontSize: 10, color: '#444' }}>
-          {props.sessions} {translate("auto.components.stats.ShareUsageCard.4a4c6c79a3", "sessions ·")}{props.turnsOrEvents.count} {props.turnsOrEvents.label}
+          {props.sessions}{' '}
+          {translate('auto.components.stats.ShareUsageCard.4a4c6c79a3', 'sessions ·')}
+          {props.turnsOrEvents.count} {props.turnsOrEvents.label}
         </span>
       </div>
     </div>
