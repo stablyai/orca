@@ -85,7 +85,7 @@ export function BrowserToolbarMenuDropdown({
               />
               <span className="truncate">{profile.label}</span>
               {profile.source?.browserFamily && (
-                <span className="ml-auto pl-2 text-[10px] text-muted-foreground">
+                <span className="ml-auto pl-2 text-[11px] text-muted-foreground">
                   {BROWSER_FAMILY_LABELS[profile.source.browserFamily] ??
                     profile.source.browserFamily}
                 </span>
@@ -133,9 +133,9 @@ export function BrowserToolbarMenuDropdown({
                     <DropdownMenuSubTrigger>
                       {translate(
                         'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
-                        'From'
+                        'From {{value0}}',
+                        { value0: browser.label }
                       )}
-                      {browser.label}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuPortal>
                       <DropdownMenuSubContent>
@@ -157,9 +157,9 @@ export function BrowserToolbarMenuDropdown({
                   >
                     {translate(
                       'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
-                      'From'
+                      'From {{value0}}',
+                      { value0: browser.label }
                     )}
-                    {browser.label}
                   </DropdownMenuItem>
                 )
               )}

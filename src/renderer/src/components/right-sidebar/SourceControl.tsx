@@ -195,7 +195,10 @@ import {
 } from './source-control-text-generation-defaults'
 import { useSourceControlAi } from './use-source-control-ai'
 import { translate } from '@/i18n/i18n'
-import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
+import {
+  localizedHostedReviewCopy,
+  resolveSupportedHostedReviewCopyProvider
+} from '@/i18n/hosted-review-localized-copy'
 
 export {
   appendCommitFailureCustomInstruction,
@@ -1949,7 +1952,9 @@ function SourceControlInner(): React.JSX.Element {
       if (!activeRepo || !branchName) {
         return
       }
-      const copy = localizedHostedReviewCopy(result.provider)
+      const copy = localizedHostedReviewCopy(
+        resolveSupportedHostedReviewCopyProvider(result.provider)
+      )
       setRightSidebarOpen(true)
       setRightSidebarTab('checks')
       try {
@@ -4714,7 +4719,7 @@ function PullRequestComposer({
   onPrimaryAction,
   onDropdownAction
 }: PullRequestComposerProps): React.JSX.Element {
-  const copy = localizedHostedReviewCopy(provider)
+  const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
   const ReviewIcon = provider === 'gitlab' ? GitMerge : GitPullRequestArrow
   const normalizedBase = stripBaseRef(base)
   const strippedBranch = stripBaseRef(branch)

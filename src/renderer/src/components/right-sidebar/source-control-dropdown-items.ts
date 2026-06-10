@@ -5,7 +5,10 @@ import type { PrimaryActionInputs } from './source-control-primary-action'
 import type { GitConflictOperation } from '../../../../shared/types'
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import { translate } from '@/i18n/i18n'
-import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
+import {
+  localizedHostedReviewCopy,
+  resolveSupportedHostedReviewCopyProvider
+} from '@/i18n/hosted-review-localized-copy'
 
 export type DropdownActionInputs = PrimaryActionInputs & {
   conflictOperation?: GitConflictOperation
@@ -96,7 +99,7 @@ function reviewCopy(
   authCommand: 'gh auth login' | 'glab auth login'
 } {
   return {
-    ...localizedHostedReviewCopy(provider),
+    ...localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider)),
     authCommand: provider === 'gitlab' ? 'glab auth login' : 'gh auth login'
   }
 }

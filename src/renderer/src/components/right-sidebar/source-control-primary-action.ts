@@ -2,7 +2,10 @@
 
 import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
 import { translate } from '@/i18n/i18n'
-import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
+import {
+  localizedHostedReviewCopy,
+  resolveSupportedHostedReviewCopyProvider
+} from '@/i18n/hosted-review-localized-copy'
 import { type PrimaryAction, type PrimaryActionInputs } from './source-control-primary-action-types'
 import { resolvePrimaryActionDuringRemoteOp } from './source-control-primary-action-in-flight'
 import {
@@ -295,7 +298,9 @@ export function resolvePrimaryAction(inputs: PrimaryActionInputs): PrimaryAction
   }
 
   if (hostedReviewCreation?.canCreate) {
-    const copy = localizedHostedReviewCopy(hostedReviewCreation.provider)
+    const copy = localizedHostedReviewCopy(
+      resolveSupportedHostedReviewCopyProvider(hostedReviewCreation.provider)
+    )
     return {
       kind: 'create_pr',
       label: translate(

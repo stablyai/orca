@@ -92,7 +92,7 @@ export function SparsePresetSettingsRow({
             )}
             onClick={() => void onDelete(preset)}
             onBlur={onClearDeleteConfirm}
-            disabled={submitting || (deletingPresetId !== null && !isDeleting)}
+            disabled={submitting || deletingPresetId !== null}
             className={cn(
               'w-[6.5rem] px-2 text-xs',
               confirmingDeleteId !== preset.id && 'text-muted-foreground'
