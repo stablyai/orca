@@ -17,8 +17,6 @@ type DarkTerminalThemeSectionProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => void
   previewFontFamily: string | null
   importedHighlightSignal: number
-  warpThemes: UseWarpThemeImportReturn
-  showWarpThemeImport: boolean
 }
 
 type LightTerminalThemeSectionProps = {
@@ -29,6 +27,34 @@ type LightTerminalThemeSectionProps = {
   previewFontFamily: string | null
 }
 
+/** Shared import affordance for terminal themes. Why: imported themes land in
+ *  one pool used by both the dark and light pickers, so the buttons live above
+ *  both sections rather than implying a mode-specific import. */
+export function TerminalThemeImportSection({
+  warpThemes
+}: {
+  warpThemes: UseWarpThemeImportReturn
+}): React.JSX.Element {
+  return (
+    <section className="space-y-3">
+      <SettingsSubsectionHeader
+        title={translate(
+          'auto.components.settings.TerminalThemeSections.import_themes_title',
+          'Import Themes'
+        )}
+        description={translate(
+          'auto.components.settings.TerminalThemeSections.import_themes_description',
+          'Imported themes are available in both the dark and light theme pickers.'
+        )}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <WarpThemeImportButton warpThemes={warpThemes} />
+        <YamlThemeImportButton warpThemes={warpThemes} />
+      </div>
+    </section>
+  )
+}
+
 export function DarkTerminalThemeSection({
   settings,
   systemPrefersDark,
@@ -36,35 +62,23 @@ export function DarkTerminalThemeSection({
   setThemeSearchDark,
   updateSettings,
   previewFontFamily,
-  importedHighlightSignal,
-  warpThemes,
-  showWarpThemeImport
+  importedHighlightSignal
 }: DarkTerminalThemeSectionProps): React.JSX.Element {
   const themeOptions = getAvailableTerminalThemeOptions(settings)
 
   return (
     <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <div className="space-y-6">
-        {/* Why: Warp import produces terminal themes, so its button lives with
-            the theme pickers rather than in the Typography header. */}
-        <div className="space-y-3">
-          <SettingsSubsectionHeader
-            title={translate(
-              'auto.components.settings.TerminalThemeSections.9499ad1dc4',
-              'Dark Theme'
-            )}
-            description={translate(
-              'auto.components.settings.TerminalThemeSections.f012172e21',
-              'Choose the theme used for terminal panes in dark mode.'
-            )}
-          />
-          {showWarpThemeImport ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <WarpThemeImportButton warpThemes={warpThemes} />
-              <YamlThemeImportButton warpThemes={warpThemes} />
-            </div>
-          ) : null}
-        </div>
+        <SettingsSubsectionHeader
+          title={translate(
+            'auto.components.settings.TerminalThemeSections.9499ad1dc4',
+            'Dark Theme'
+          )}
+          description={translate(
+            'auto.components.settings.TerminalThemeSections.f012172e21',
+            'Choose the theme used for terminal panes in dark mode.'
+          )}
+        />
 
         <SearchableSetting
           title={translate(

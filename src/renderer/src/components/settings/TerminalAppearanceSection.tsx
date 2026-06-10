@@ -13,7 +13,11 @@ import {
   getTerminalWindowSearchEntries,
   getTerminalYamlImportSearchEntries
 } from './terminal-search'
-import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
+import {
+  DarkTerminalThemeSection,
+  LightTerminalThemeSection,
+  TerminalThemeImportSection
+} from './TerminalThemeSections'
 import { TerminalWindowSection } from './TerminalWindowSection'
 import { TerminalTypographyAppearanceSection } from './TerminalTypographyAppearanceSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
@@ -78,10 +82,12 @@ export function TerminalAppearanceSection({
     matchesSettingsSearch(searchQuery, getTerminalWindowSearchEntries()) ? (
       <TerminalWindowSection key="window" settings={settings} updateSettings={updateSettings} />
     ) : null,
-    matchesSettingsSearch(searchQuery, getTerminalDarkThemeSearchEntries()) ||
-    (showWarpThemeImport &&
-      (matchesSettingsSearch(searchQuery, getTerminalWarpImportSearchEntries()) ||
-        matchesSettingsSearch(searchQuery, getTerminalYamlImportSearchEntries()))) ? (
+    showWarpThemeImport &&
+    (matchesSettingsSearch(searchQuery, getTerminalWarpImportSearchEntries()) ||
+      matchesSettingsSearch(searchQuery, getTerminalYamlImportSearchEntries())) ? (
+      <TerminalThemeImportSection key="theme-import" warpThemes={warpThemes} />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getTerminalDarkThemeSearchEntries()) ? (
       <DarkTerminalThemeSection
         key="dark-theme"
         settings={settings}
@@ -91,8 +97,6 @@ export function TerminalAppearanceSection({
         updateSettings={updateSettings}
         previewFontFamily={previewFontFamily}
         importedHighlightSignal={warpThemes.importSignal}
-        warpThemes={warpThemes}
-        showWarpThemeImport={showWarpThemeImport}
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalLightThemeSearchEntries()) ? (

@@ -5535,6 +5535,8 @@
           "d06664e889": "dark"
         },
         "TerminalThemeSections": {
+          "import_themes_title": "Import Themes",
+          "import_themes_description": "Imported themes are available in both the dark and light theme pickers.",
           "db210115c5": "Light Mode Preview",
           "5e0c24b5c8": "Controls the split divider line between panes in light mode.",
           "ec2e33ad80": "Light Divider Color",

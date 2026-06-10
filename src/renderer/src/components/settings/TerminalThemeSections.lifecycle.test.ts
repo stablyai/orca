@@ -8,7 +8,11 @@ vi.mock('./TerminalSettingsPreview', () => ({
   }
 }))
 
-import { DarkTerminalThemeSection, LightTerminalThemeSection } from './TerminalThemeSections'
+import {
+  DarkTerminalThemeSection,
+  LightTerminalThemeSection,
+  TerminalThemeImportSection
+} from './TerminalThemeSections'
 
 type ReactElementLike = {
   type: unknown
@@ -51,7 +55,7 @@ function findButtonTexts(node: unknown): string[] {
   return [...findButtonTexts(element.props?.children), ...findButtonTexts(element.props?.action)]
 }
 
-function renderDarkSection(showWarpThemeImport: boolean): React.JSX.Element {
+function renderDarkSection(): React.JSX.Element {
   return DarkTerminalThemeSection({
     settings: {
       terminalThemeDark: 'Ghostty Default Style Dark',
@@ -62,9 +66,7 @@ function renderDarkSection(showWarpThemeImport: boolean): React.JSX.Element {
     setThemeSearchDark: () => {},
     updateSettings: () => {},
     previewFontFamily: null,
-    importedHighlightSignal: 0,
-    warpThemes: warpThemesMock,
-    showWarpThemeImport
+    importedHighlightSignal: 0
   })
 }
 
@@ -116,18 +118,15 @@ describe('LightTerminalThemeSection preview lifecycle', () => {
   })
 })
 
-describe('DarkTerminalThemeSection Warp import affordance', () => {
-  it('renders the Warp and YAML import buttons alongside the theme picker on desktop', () => {
-    const buttonTexts = findButtonTexts(renderDarkSection(true))
+describe('TerminalThemeImportSection', () => {
+  it('renders the Warp and YAML import buttons in the shared import section', () => {
+    const buttonTexts = findButtonTexts(TerminalThemeImportSection({ warpThemes: warpThemesMock }))
 
     expect(buttonTexts).toContain('Import themes from Warp')
     expect(buttonTexts).toContain('Import from YAML')
   })
 
-  it('hides the Warp and YAML import buttons on paired web clients', () => {
-    const buttonTexts = findButtonTexts(renderDarkSection(false))
-
-    expect(buttonTexts).not.toContain('Import themes from Warp')
-    expect(buttonTexts).not.toContain('Import from YAML')
+  it('keeps the import buttons out of the mode-specific theme sections', () => {
+    expect(findButtonTexts(renderDarkSection())).toEqual([])
   })
 })

@@ -110,6 +110,9 @@ vi.mock('./TerminalThemeSections', () => ({
   },
   LightTerminalThemeSection: function LightTerminalThemeSection() {
     return null
+  },
+  TerminalThemeImportSection: function TerminalThemeImportSection() {
+    return null
   }
 }))
 
@@ -300,6 +303,30 @@ function findGhosttyImportModal(node: unknown): ReactElementLike | null {
   return null
 }
 
+function findTerminalThemeImportSection(node: unknown): ReactElementLike | null {
+  if (node == null) {
+    return null
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findTerminalThemeImportSection(child)
+      if (found) {
+        return found
+      }
+    }
+    return null
+  }
+  const el = node as ReactElementLike
+  const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+  if (typeName === 'TerminalThemeImportSection') {
+    return el
+  }
+  if (el.props?.children) {
+    return findTerminalThemeImportSection(el.props.children)
+  }
+  return null
+}
+
 function findWarpThemeImportModal(node: unknown): ReactElementLike | null {
   if (node == null) {
     return null
@@ -351,7 +378,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
     expect(ghosttyMock.handleClick).toHaveBeenCalled()
   })
 
-  it('hands the Warp import affordance to the Dark Theme section on desktop', () => {
+  it('renders the shared theme import section above the theme pickers on desktop', () => {
     const element = TerminalAppearanceSection({
       settings: {} as never,
       updateSettings: () => {},
@@ -361,17 +388,17 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       warpThemes: warpThemesMock
     })
 
-    // Why: Warp import produces themes, so its button is rendered by the Dark
-    // Theme section (next to the pickers) rather than the Typography header.
+    // Why: imports land in one pool shared by both pickers, so the buttons
+    // live in their own section rather than inside the Dark Theme section.
     const buttons = findButtons(element)
     expect(buttons.some((button) => button.text === 'Import themes from Warp')).toBe(false)
 
-    const darkSection = findDarkTerminalThemeSection(element)
-    expect(darkSection?.props.showWarpThemeImport).toBe(true)
-    expect(darkSection?.props.warpThemes).toBe(warpThemesMock)
+    const importSection = findTerminalThemeImportSection(element)
+    expect(importSection?.props.warpThemes).toBe(warpThemesMock)
+    expect(findDarkTerminalThemeSection(element)).not.toBeNull()
   })
 
-  it('hides the Warp import affordance on paired web clients', () => {
+  it('hides the theme import affordance on paired web clients', () => {
     vi.stubGlobal('window', {
       __ORCA_WEB_CLIENT__: true,
       location: { pathname: '/web-index.html' }
@@ -386,8 +413,7 @@ describe('TerminalAppearanceSection ghostty import wiring', () => {
       warpThemes: warpThemesMock
     })
 
-    const darkSection = findDarkTerminalThemeSection(element)
-    expect(darkSection?.props.showWarpThemeImport).toBe(false)
+    expect(findTerminalThemeImportSection(element)).toBeNull()
     expect(findWarpThemeImportModal(element)).toBeNull()
   })
 
